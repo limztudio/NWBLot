@@ -321,8 +321,8 @@ TEST(EcsGraphics, DeferredGraphMeasuresDeclarationAttemptBeforeCoreCompile){
 
 
 // The renderer label must enumerate the immutable compiled plan, not the live Device registry: compile, transaction,
-// and recording telemetry are generation-bound to that plan. Keep only terminal-work queues so idle topology entries
-// do not turn the persistent FrameGraph label into zero-only noise.
+// and recording telemetry are generation-bound to that plan. Retain terminal-work and logical ownership boundary
+// queues while keeping truly idle topology entries out of the persistent FrameGraph label.
 TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -397,25 +397,39 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
-        "if(\n"
-        "                !queueStatistics.valid()\n"
-        "                || (queueStatistics.acceptedPacketCount == 0u && queueStatistics.rejectedPacketCount == 0u)\n"
-        "            )"
+        "if(!queueStatistics.valid() || !queueCompileStatistics.valid())\n"
+        "                continue;"
     ));
-    EXPECT_TRUE(ContainsText(frameGraph, "if(!queueCompileStatistics.valid())\n                continue;"));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "const bool hasTerminalSubmissionWork =\n"
+        "                queueStatistics.acceptedPacketCount != 0u || queueStatistics.rejectedPacketCount != 0u\n"
+        "            ;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "const bool hasLogicalOwnershipTelemetry =\n"
+        "                queueCompileStatistics.incomingLogicalOwnershipTransferCount != 0u\n"
+        "                || queueCompileStatistics.outgoingLogicalOwnershipTransferCount != 0u"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "if(!hasTerminalSubmissionWork && !hasLogicalOwnershipTelemetry)\n"
+        "                continue;"
+    ));
     EXPECT_TRUE(ContainsText(frameGraph, "if(!queueRecordingStatistics.valid())\n                continue;"));
     EXPECT_TRUE(ContainsText(
         frameGraph,
         "m_graphics.getDevice().getCommandArenaStatistics(queueInfo.id)"
     ));
     EXPECT_TRUE(ContainsText(frameGraph, "if(!commandArenaStatistics.valid())\n                continue;"));
-    const usize terminalSubmissionGateOffset = frameGraph.find(
-        "queueStatistics.acceptedPacketCount == 0u && queueStatistics.rejectedPacketCount == 0u"
-    );
     const usize queueCompileQueryOffset = frameGraph.find(
         "m_deferredLightingCompiledGraph.physicalQueueCompileStatistics(queueInfo.id)"
     );
     const usize queueCompileGateOffset = frameGraph.find("queueCompileStatistics.valid()");
+    const usize terminalSubmissionGateOffset = frameGraph.find("const bool hasTerminalSubmissionWork =");
+    const usize logicalOwnershipGateOffset = frameGraph.find("const bool hasLogicalOwnershipTelemetry =");
+    const usize idleQueueGateOffset = frameGraph.find("if(!hasTerminalSubmissionWork && !hasLogicalOwnershipTelemetry)");
     const usize queueRecordingQueryOffset = frameGraph.find(
         "m_deferredLightingRecordedGraph.physicalQueueRecordingStatistics("
     );
@@ -423,17 +437,21 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     const usize queueFamilyIndexOffset = frameGraph.find("queueInfo.familyIndex,");
     const usize queueNativeIndexOffset = frameGraph.find("queueInfo.queueIndex,");
     const usize queueDedicatedOffset = frameGraph.find("queueInfo.dedicated,");
-    ASSERT_NE(terminalSubmissionGateOffset, AStringView::npos);
     ASSERT_NE(queueCompileQueryOffset, AStringView::npos);
     ASSERT_NE(queueCompileGateOffset, AStringView::npos);
+    ASSERT_NE(terminalSubmissionGateOffset, AStringView::npos);
+    ASSERT_NE(logicalOwnershipGateOffset, AStringView::npos);
+    ASSERT_NE(idleQueueGateOffset, AStringView::npos);
     ASSERT_NE(queueRecordingQueryOffset, AStringView::npos);
     ASSERT_NE(queueRecordingGateOffset, AStringView::npos);
     ASSERT_NE(queueFamilyIndexOffset, AStringView::npos);
     ASSERT_NE(queueNativeIndexOffset, AStringView::npos);
     ASSERT_NE(queueDedicatedOffset, AStringView::npos);
-    EXPECT_LT(terminalSubmissionGateOffset, queueCompileQueryOffset);
     EXPECT_LT(queueCompileQueryOffset, queueCompileGateOffset);
-    EXPECT_LT(queueCompileGateOffset, queueRecordingQueryOffset);
+    EXPECT_LT(queueCompileGateOffset, terminalSubmissionGateOffset);
+    EXPECT_LT(terminalSubmissionGateOffset, logicalOwnershipGateOffset);
+    EXPECT_LT(logicalOwnershipGateOffset, idleQueueGateOffset);
+    EXPECT_LT(idleQueueGateOffset, queueRecordingQueryOffset);
     EXPECT_LT(queueRecordingQueryOffset, queueRecordingGateOffset);
     EXPECT_LT(queueRecordingGateOffset, queueFamilyIndexOffset);
     EXPECT_LT(queueFamilyIndexOffset, queueNativeIndexOffset);
@@ -451,7 +469,11 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     EXPECT_TRUE(ContainsText(frameGraph, "accepted frontier={} CPU={:.3f} ms"));
     EXPECT_TRUE(ContainsText(
         frameGraph,
-        "  Compile plan: tasks={} packets={} merged tasks={} prologue barriers={} epilogue barriers={} ownership release barriers (subset)={} ownership acquire barriers (subset)={}"
+        "  Compile plan: tasks={} packets={} merged tasks={} prologue barriers={} epilogue barriers={} raw ownership release barriers (subset)={} raw ownership acquire barriers (subset)={}"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "  Logical ownership: incoming/outgoing records={}/{} signatures={}/{} repeated signatures={}/{} attributed advice resources={}"
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
@@ -512,6 +534,13 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
         "queueCompileStatistics.epilogueBarrierCount,\n"
         "                queueCompileStatistics.ownershipReleaseBarrierCount,\n"
         "                queueCompileStatistics.ownershipAcquireBarrierCount,\n"
+        "                queueCompileStatistics.incomingLogicalOwnershipTransferCount,\n"
+        "                queueCompileStatistics.outgoingLogicalOwnershipTransferCount,\n"
+        "                queueCompileStatistics.incomingLogicalOwnershipTransferSignatureCount,\n"
+        "                queueCompileStatistics.outgoingLogicalOwnershipTransferSignatureCount,\n"
+        "                queueCompileStatistics.incomingRepeatedOwnershipTransferSignatureCount,\n"
+        "                queueCompileStatistics.outgoingRepeatedOwnershipTransferSignatureCount,\n"
+        "                queueCompileStatistics.concurrentSharingAdviceResourceCount,\n"
         "                queueRecordingStatistics.packetCount,"
     ));
     EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.packetCount,"));
@@ -524,6 +553,143 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.graphBarrierRecordingSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.taskRecordSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.recordingSeconds * 1000.0"));
+}
+
+
+// Logical ownership records are plan-level movements, not a restatement of their raw release/acquire markers. Export
+// the immutable records and both aggregation layers so diagnostics preserve resource identity, the exact route, and
+// enough queue-family and sharing evidence to make concurrent-sharing advice actionable.
+TEST(EcsGraphics, DeferredGraphFrameTelemetryReportsLogicalOwnershipPlan){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString frameGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "frame_graph_export.cpp", frameGraphSource));
+    const AStringView frameGraph(frameGraphSource.data(), frameGraphSource.size());
+    const usize logicalOwnershipEnumerationOffset = frameGraph.find("const usize logicalOwnershipTransferCount =");
+    const usize logicalOwnershipEnumerationEndOffset = frameGraph.find(
+        "const Core::GpuDescriptorHeapLifecycleStatistics descriptorHeapLifecycleStatistics =",
+        logicalOwnershipEnumerationOffset
+    );
+    ASSERT_NE(logicalOwnershipEnumerationOffset, AStringView::npos);
+    ASSERT_NE(logicalOwnershipEnumerationEndOffset, AStringView::npos);
+    const AStringView logicalOwnershipEnumeration = frameGraph.substr(
+        logicalOwnershipEnumerationOffset,
+        logicalOwnershipEnumerationEndOffset - logicalOwnershipEnumerationOffset
+    );
+
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "Raw barriers: transitions={} UAV={} ownership releases={} ownership acquires={} state exports={}"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "Logical ownership transfers: records={} signatures={} repeated signatures={} concurrent-sharing candidate records={} advised repeated resources={} route records internal/import/export={}/{}/{}"
+    ));
+    // This positional sequence requires the logical count from the compiler snapshot directly. Summing the raw
+    // release/acquire marker counters would double-count an internal movement and cannot satisfy this contract.
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "compileStatistics.transitionBarrierCount,\n"
+        "            compileStatistics.uavBarrierCount,\n"
+        "            compileStatistics.ownershipReleaseBarrierCount,\n"
+        "            compileStatistics.ownershipAcquireBarrierCount,\n"
+        "            compileStatistics.stateExportBarrierCount,\n"
+        "            compileStatistics.logicalOwnershipTransferCount,\n"
+        "            compileStatistics.logicalOwnershipTransferSignatureCount,\n"
+        "            compileStatistics.repeatedOwnershipTransferSignatureCount,\n"
+        "            compileStatistics.concurrentSharingCouldAvoidTransferCount,\n"
+        "            compileStatistics.concurrentSharingAdviceResourceCount,\n"
+        "            compileStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::Internal],\n"
+        "            compileStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::ExternalImport],\n"
+        "            compileStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::ExternalExport],"
+    ));
+    EXPECT_EQ(CountText(frameGraph, "compileStatistics.logicalOwnershipTransferCount,"), 1u);
+    EXPECT_EQ(CountText(frameGraph, "compileStatistics.logicalOwnershipTransferCountByRoute["), 3u);
+
+    EXPECT_EQ(CountText(frameGraph, "m_deferredLightingCompiledGraph.logicalOwnershipTransfers()"), 1u);
+    EXPECT_EQ(CountText(frameGraph, "m_deferredLightingCompiledGraph.logicalOwnershipTransferAt("), 0u);
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "const Core::GpuCompiledOwnershipTransfer* const logicalOwnershipTransfers =\n"
+        "            m_deferredLightingCompiledGraph.logicalOwnershipTransfers()"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "for(usize transferIndex = 0u; transferIndex < logicalOwnershipTransferCount; ++transferIndex){\n"
+        "                const Core::GpuCompiledOwnershipTransfer& transfer = logicalOwnershipTransfers[transferIndex];"
+    ));
+    EXPECT_TRUE(ContainsText(logicalOwnershipEnumeration, "NWB_ASSERT(transfer.valid());"));
+    EXPECT_EQ(CountText(logicalOwnershipEnumeration, "transfer.valid()"), 1u);
+    EXPECT_FALSE(ContainsText(logicalOwnershipEnumeration, "if(!transfer.valid())"));
+    EXPECT_EQ(CountText(logicalOwnershipEnumeration, "continue;"), 0u);
+    EXPECT_FALSE(ContainsText(logicalOwnershipEnumeration, "taskPrologueBarriers("));
+    EXPECT_FALSE(ContainsText(logicalOwnershipEnumeration, "taskEpilogueBarriers("));
+    EXPECT_FALSE(ContainsText(logicalOwnershipEnumeration, "GpuCompiledBarrier"));
+    EXPECT_FALSE(ContainsText(logicalOwnershipEnumeration, "m_deferredLightingTaskGraph."));
+    EXPECT_FALSE(ContainsText(logicalOwnershipEnumeration, "resourceAt("));
+    EXPECT_FALSE(ContainsText(logicalOwnershipEnumeration, "queueInfo("));
+    EXPECT_FALSE(ContainsText(logicalOwnershipEnumeration, "queueTopology"));
+    EXPECT_FALSE(ContainsText(logicalOwnershipEnumeration, "m_graphics.getDevice()"));
+    EXPECT_FALSE(ContainsText(logicalOwnershipEnumeration, "sameTransferSignature"));
+    EXPECT_FALSE(ContainsText(logicalOwnershipEnumeration, "signatureAlreadyCounted"));
+    EXPECT_FALSE(ContainsText(logicalOwnershipEnumeration, "hasEarlierDistinctSignature"));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "Logical ownership transfer {}: resource identity={} route={} source physical queue index={} generation={} family={} destination physical queue index={} generation={} family={} declared sharing={} mask={} concurrent sharing could avoid={}"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "transfer.resourceIdentity.c_str(),\n"
+        "                    __hidden_frame_graph_export::OwnershipTransferRouteLabel(transfer.route),\n"
+        "                    transfer.sourceQueue.index,\n"
+        "                    transfer.sourceQueue.deviceGeneration,\n"
+        "                    transfer.sourceQueueFamilyIndex,\n"
+        "                    transfer.destinationQueue.index,\n"
+        "                    transfer.destinationQueue.deviceGeneration,\n"
+        "                    transfer.destinationQueueFamilyIndex,\n"
+        "                    __hidden_frame_graph_export::ResourceQueueSharingLabel(transfer.declaredQueueSharing),\n"
+        "                    static_cast<u32>(transfer.declaredQueueSharing),\n"
+        "                    transfer.concurrentSharingCouldAvoid"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "case Core::GpuOwnershipTransferRoute::Internal:\n"
+        "        return \"Internal\";"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "case Core::GpuOwnershipTransferRoute::ExternalImport:\n"
+        "        return \"ExternalImport\";"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "case Core::GpuOwnershipTransferRoute::ExternalExport:\n"
+        "        return \"ExternalExport\";\n"
+        "    default:\n"
+        "        return \"Unknown\";"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "case Core::ResourceQueueSharing::Exclusive:\n"
+        "        return \"Exclusive\";\n"
+        "    case Core::ResourceQueueSharing::Graphics:\n"
+        "        return \"Graphics\";\n"
+        "    case Core::ResourceQueueSharing::AsyncCompute:\n"
+        "        return \"AsyncCompute\";\n"
+        "    case Core::ResourceQueueSharing::Transfer:\n"
+        "        return \"Transfer\";\n"
+        "    case Core::ResourceQueueSharing::GraphicsAndAsyncCompute:\n"
+        "        return \"GraphicsAndAsyncCompute\";\n"
+        "    case Core::ResourceQueueSharing::GraphicsAndTransfer:\n"
+        "        return \"GraphicsAndTransfer\";\n"
+        "    case Core::ResourceQueueSharing::AsyncComputeAndTransfer:\n"
+        "        return \"AsyncComputeAndTransfer\";\n"
+        "    case Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer:\n"
+        "        return \"GraphicsAsyncComputeAndTransfer\";\n"
+        "    default:\n"
+        "        return \"Unknown\";"
+    ));
 }
 
 

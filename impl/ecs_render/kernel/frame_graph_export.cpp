@@ -38,6 +38,46 @@ namespace __hidden_frame_graph_export{
     }
 }
 
+[[nodiscard]] static AStringView OwnershipTransferRouteLabel(
+    const Core::GpuOwnershipTransferRoute::Enum route
+)noexcept{
+    switch(route){
+    case Core::GpuOwnershipTransferRoute::Internal:
+        return "Internal";
+    case Core::GpuOwnershipTransferRoute::ExternalImport:
+        return "ExternalImport";
+    case Core::GpuOwnershipTransferRoute::ExternalExport:
+        return "ExternalExport";
+    default:
+        return "Unknown";
+    }
+}
+
+[[nodiscard]] static AStringView ResourceQueueSharingLabel(
+    const Core::ResourceQueueSharing::Mask queueSharing
+)noexcept{
+    switch(queueSharing){
+    case Core::ResourceQueueSharing::Exclusive:
+        return "Exclusive";
+    case Core::ResourceQueueSharing::Graphics:
+        return "Graphics";
+    case Core::ResourceQueueSharing::AsyncCompute:
+        return "AsyncCompute";
+    case Core::ResourceQueueSharing::Transfer:
+        return "Transfer";
+    case Core::ResourceQueueSharing::GraphicsAndAsyncCompute:
+        return "GraphicsAndAsyncCompute";
+    case Core::ResourceQueueSharing::GraphicsAndTransfer:
+        return "GraphicsAndTransfer";
+    case Core::ResourceQueueSharing::AsyncComputeAndTransfer:
+        return "AsyncComputeAndTransfer";
+    case Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer:
+        return "GraphicsAsyncComputeAndTransfer";
+    default:
+        return "Unknown";
+    }
+}
+
 static void AppendCommandArenaWorkerStatistics(
     AString<Core::Alloc::GlobalArena>& label,
     const Core::GpuCommandArenaWorkerStatistics& statistics
@@ -102,6 +142,8 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             "Task graph: tasks={} packets={} deps={} transitions={}\n"
             "Declarations: resource sets={} resource-set members={} direct uses={} declared set uses={} expanded set-member uses={} materialized uses={}\n"
             "Data: payload objects={} payload object bytes={} upload blobs={} upload blob bytes={}\n"
+            "Raw barriers: transitions={} UAV={} ownership releases={} ownership acquires={} state exports={}\n"
+            "Logical ownership transfers: records={} signatures={} repeated signatures={} concurrent-sharing candidate records={} advised repeated resources={} route records internal/import/export={}/{}/{}\n"
             "Recording: packets={} tasks={} command lists={} barriers={} worker-routed={} overlapped={}\n"
             "Submission: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} submissions={} command lists={} waits={} failed submissions={}\n"
             "CPU: declaration={:.3f} ms compile={:.3f} ms native recording elapsed={:.3f} ms submit={:.3f} ms\n"
@@ -124,6 +166,19 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             compileStatistics.payloadObjectBytes,
             compileStatistics.uploadBlobCount,
             compileStatistics.uploadBlobBytes,
+            compileStatistics.transitionBarrierCount,
+            compileStatistics.uavBarrierCount,
+            compileStatistics.ownershipReleaseBarrierCount,
+            compileStatistics.ownershipAcquireBarrierCount,
+            compileStatistics.stateExportBarrierCount,
+            compileStatistics.logicalOwnershipTransferCount,
+            compileStatistics.logicalOwnershipTransferSignatureCount,
+            compileStatistics.repeatedOwnershipTransferSignatureCount,
+            compileStatistics.concurrentSharingCouldAvoidTransferCount,
+            compileStatistics.concurrentSharingAdviceResourceCount,
+            compileStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::Internal],
+            compileStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::ExternalImport],
+            compileStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::ExternalExport],
             recordingStatistics.packetCount,
             recordingStatistics.taskCount,
             recordingStatistics.commandListCount,
@@ -175,15 +230,24 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
                     m_deferredLightingCompiledGraph,
                     queueInfo.id
                 );
-            if(
-                !queueStatistics.valid()
-                || (queueStatistics.acceptedPacketCount == 0u && queueStatistics.rejectedPacketCount == 0u)
-            )
-                continue;
             const Core::GpuTaskGraphPhysicalQueueCompileStatistics queueCompileStatistics =
                 m_deferredLightingCompiledGraph.physicalQueueCompileStatistics(queueInfo.id)
             ;
-            if(!queueCompileStatistics.valid())
+            if(!queueStatistics.valid() || !queueCompileStatistics.valid())
+                continue;
+            const bool hasTerminalSubmissionWork =
+                queueStatistics.acceptedPacketCount != 0u || queueStatistics.rejectedPacketCount != 0u
+            ;
+            const bool hasLogicalOwnershipTelemetry =
+                queueCompileStatistics.incomingLogicalOwnershipTransferCount != 0u
+                || queueCompileStatistics.outgoingLogicalOwnershipTransferCount != 0u
+                || queueCompileStatistics.incomingLogicalOwnershipTransferSignatureCount != 0u
+                || queueCompileStatistics.outgoingLogicalOwnershipTransferSignatureCount != 0u
+                || queueCompileStatistics.incomingRepeatedOwnershipTransferSignatureCount != 0u
+                || queueCompileStatistics.outgoingRepeatedOwnershipTransferSignatureCount != 0u
+                || queueCompileStatistics.concurrentSharingAdviceResourceCount != 0u
+            ;
+            if(!hasTerminalSubmissionWork && !hasLogicalOwnershipTelemetry)
                 continue;
             const Core::GpuTaskGraphPhysicalQueueRecordingStatistics queueRecordingStatistics =
                 m_deferredLightingRecordedGraph.physicalQueueRecordingStatistics(
@@ -201,7 +265,8 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             StringAppendFormat(
                 m_frameGraphRendererLabel,
                 "\nPhysical queue index={} generation={} class={} family index={} native queue index={} dedicated={}: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} native submissions={} rejected submit paths={} command lists={} planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={} accepted frontier={} CPU={:.3f} ms"
-                "\n  Compile plan: tasks={} packets={} merged tasks={} prologue barriers={} epilogue barriers={} ownership release barriers (subset)={} ownership acquire barriers (subset)={}"
+                "\n  Compile plan: tasks={} packets={} merged tasks={} prologue barriers={} epilogue barriers={} raw ownership release barriers (subset)={} raw ownership acquire barriers (subset)={}"
+                "\n  Logical ownership: incoming/outgoing records={}/{} signatures={}/{} repeated signatures={}/{} attributed advice resources={}"
                 "\n  Recording: packets={} tasks={} command lists={} barriers={} worker-routed={} overlapped={} CPU summed spans: command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task={:.3f} ms packet={:.3f} ms"
                 "\n  Command arena: workers={} epochs={} pending epochs={} command buffers current/high-water={}/{} reusable={} leased={} pending={} growth={} resets={} native handle storage lower bound={} bytes",
                 queueStatistics.queue.index,
@@ -230,6 +295,13 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
                 queueCompileStatistics.epilogueBarrierCount,
                 queueCompileStatistics.ownershipReleaseBarrierCount,
                 queueCompileStatistics.ownershipAcquireBarrierCount,
+                queueCompileStatistics.incomingLogicalOwnershipTransferCount,
+                queueCompileStatistics.outgoingLogicalOwnershipTransferCount,
+                queueCompileStatistics.incomingLogicalOwnershipTransferSignatureCount,
+                queueCompileStatistics.outgoingLogicalOwnershipTransferSignatureCount,
+                queueCompileStatistics.incomingRepeatedOwnershipTransferSignatureCount,
+                queueCompileStatistics.outgoingRepeatedOwnershipTransferSignatureCount,
+                queueCompileStatistics.concurrentSharingAdviceResourceCount,
                 queueRecordingStatistics.packetCount,
                 queueRecordingStatistics.taskCount,
                 queueRecordingStatistics.commandListCount,
@@ -307,6 +379,36 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
                         m_frameGraphRendererLabel,
                         workerCommandArenaStatistics
                     );
+            }
+        }
+
+        const usize logicalOwnershipTransferCount =
+            m_deferredLightingCompiledGraph.logicalOwnershipTransferCount()
+        ;
+        const Core::GpuCompiledOwnershipTransfer* const logicalOwnershipTransfers =
+            m_deferredLightingCompiledGraph.logicalOwnershipTransfers()
+        ;
+        if(logicalOwnershipTransfers){
+            for(usize transferIndex = 0u; transferIndex < logicalOwnershipTransferCount; ++transferIndex){
+                const Core::GpuCompiledOwnershipTransfer& transfer = logicalOwnershipTransfers[transferIndex];
+                NWB_ASSERT(transfer.valid());
+
+                StringAppendFormat(
+                    m_frameGraphRendererLabel,
+                    "\nLogical ownership transfer {}: resource identity={} route={} source physical queue index={} generation={} family={} destination physical queue index={} generation={} family={} declared sharing={} mask={} concurrent sharing could avoid={}",
+                    transferIndex,
+                    transfer.resourceIdentity.c_str(),
+                    __hidden_frame_graph_export::OwnershipTransferRouteLabel(transfer.route),
+                    transfer.sourceQueue.index,
+                    transfer.sourceQueue.deviceGeneration,
+                    transfer.sourceQueueFamilyIndex,
+                    transfer.destinationQueue.index,
+                    transfer.destinationQueue.deviceGeneration,
+                    transfer.destinationQueueFamilyIndex,
+                    __hidden_frame_graph_export::ResourceQueueSharingLabel(transfer.declaredQueueSharing),
+                    static_cast<u32>(transfer.declaredQueueSharing),
+                    transfer.concurrentSharingCouldAvoid
+                );
             }
         }
     }

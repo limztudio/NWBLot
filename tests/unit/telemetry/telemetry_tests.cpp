@@ -2667,18 +2667,36 @@ TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
     EXPECT_TRUE(ContainsText(
         changedJson,
         "\"runtimeStatistics\": {\"graphGeneration\": 51, \"planGeneration\": 52, "
-        "\"recordingAttemptGeneration\": 53, \"deviceGeneration\": 17, \"compile\": {\"taskCount\": 78, "
-        "\"resourceCount\": 2, \"resourceUseCount\": 50, \"explicitDependencyCount\": 4"
+        "\"recordingAttemptGeneration\": 53, \"deviceGeneration\": 17"
     ));
     EXPECT_TRUE(ContainsText(
         changedJson,
-        "\"payloadObjectBytes\": 28, \"uploadBlobCount\": 29, \"uploadBlobBytes\": 30, "
-        "\"declarationSeconds\": 0.001"
+        "\"compile\": {\"taskCount\": 78, \"resourceCount\": 2, \"resourceUseCount\": 50, "
+        "\"explicitDependencyCount\": 4, \"inferredDependencyCount\": 5, \"packetCount\": 76, "
+        "\"packetDependencyCount\": 7, \"mergedTaskCount\": 2, \"transitionBarrierCount\": 9, "
+        "\"uavBarrierCount\": 10, \"ownershipReleaseBarrierCount\": 11, \"ownershipAcquireBarrierCount\": 12, "
+        "\"stateExportBarrierCount\": 13, \"logicalOwnershipTransferCount\": 60, "
+        "\"logicalOwnershipTransferSignatureCount\": 15, \"repeatedOwnershipTransferSignatureCount\": 14, "
+        "\"concurrentSharingCouldAvoidTransferCount\": 17, \"concurrentSharingAdviceResourceCount\": 2, "
+        "\"logicalOwnershipTransferInternalCount\": 19, \"logicalOwnershipTransferExternalImportCount\": 20, "
+        "\"logicalOwnershipTransferExternalExportCount\": 21, \"resourceSetCount\": 22, "
+        "\"resourceSetMemberCount\": 23, \"directResourceUseCount\": 24, \"declaredResourceSetUseCount\": 25, "
+        "\"expandedResourceSetMemberUseCount\": 26, \"payloadObjectCount\": 27, \"payloadObjectBytes\": 28, "
+        "\"uploadBlobCount\": 29, \"uploadBlobBytes\": 30, \"declarationSeconds\": 0.001, "
+        "\"analysisSeconds\": 0.002, \"validationSeconds\": 0.003, \"dependencyAnalysisSeconds\": 0.004, "
+        "\"hazardAnalysisSeconds\": 0.005, \"topologicalOrderSeconds\": 0.006, "
+        "\"queueAssignmentSeconds\": 0.007, \"planningSeconds\": 0.008, \"packetizationSeconds\": 0.009, "
+        "\"resourceStatePlanningSeconds\": 0.01, \"packetDependencyPlanningSeconds\": 0.011, "
+        "\"totalSeconds\": 0.012}"
     ));
     EXPECT_TRUE(ContainsText(
         changedJson,
         "\"recording\": {\"packetCount\": 31, \"taskCount\": 32, \"commandListCount\": 33, "
-        "\"barrierCount\": 34, \"workerRoutedPacketCount\": 30, \"parallelPacketCount\": 29"
+        "\"barrierCount\": 34, \"workerRoutedPacketCount\": 30, \"parallelPacketCount\": 29, "
+        "\"commandListAcquisitionSeconds\": 0.013, \"graphBarrierRecordingSeconds\": 0.014, "
+        "\"taskRecordSeconds\": 0.015, \"recordingSeconds\": 0.016, \"recordingElapsedSeconds\": 0.017, "
+        "\"readyFrontierElapsedSeconds\": 0.018, \"readyFrontierWorkerBusySeconds\": 0.019, "
+        "\"readyFrontierWorkerCapacitySeconds\": 0.02}"
     ));
     EXPECT_TRUE(ContainsText(
         changedJson,
@@ -2688,7 +2706,12 @@ TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
         "\"sameQueueWaitElisionCount\": 12, \"timelineWaitCount\": 14, \"mergedTimelineWaitCount\": 18, "
         "\"acceptedFrontierSubmissionCount\": 28, \"submissionSeconds\": 0.021}"
     ));
-    EXPECT_TRUE(ContainsText(unassignedJson, "\"runtimeStatistics\": null"));
+    EXPECT_TRUE(ContainsText(
+        unassignedJson,
+        "\"kind\": \"resource\", \"flags\": 0, \"queueAssignment\": null, \"compiledTask\": null, "
+        "\"runtimeStatistics\": null"
+    ));
+    EXPECT_FALSE(ContainsText(unassignedJson, "\"runtimeStatistics\": {"));
     EXPECT_TRUE(ContainsText(
         rejectedJson,
         "\"runtimeStatistics\": {\"graphGeneration\": 61, \"planGeneration\": 62, "
@@ -2768,8 +2791,52 @@ TEST(Telemetry, TelemetryReportMarksLegacyRuntimeStatisticsAbsent){
 
     Log::TelemetryReport report(testArena.arena);
     ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
-    EXPECT_TRUE(ContainsText(AStringView(report.json.data(), report.json.size()), "\"runtimeStatistics\": null"));
-    EXPECT_TRUE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "runtime_statistics=\"none\""));
+
+    const AStringView json(report.json.data(), report.json.size());
+    const usize firstPassJsonOffset = json.find("\"label\": \"GBuffer Pass\"");
+    const usize resourceJsonOffset = json.find("\"label\": \"Albedo Texture\"");
+    const usize secondPassJsonOffset = json.find("\"label\": \"Lighting Pass\"");
+    const usize jsonEdgesOffset = json.find("\"edges\": [", secondPassJsonOffset);
+    ASSERT_NE(firstPassJsonOffset, AStringView::npos);
+    ASSERT_NE(resourceJsonOffset, AStringView::npos);
+    ASSERT_NE(secondPassJsonOffset, AStringView::npos);
+    ASSERT_NE(jsonEdgesOffset, AStringView::npos);
+    ASSERT_LT(firstPassJsonOffset, resourceJsonOffset);
+    ASSERT_LT(resourceJsonOffset, secondPassJsonOffset);
+    ASSERT_LT(secondPassJsonOffset, jsonEdgesOffset);
+
+    const AStringView firstPassJson = json.substr(firstPassJsonOffset, resourceJsonOffset - firstPassJsonOffset);
+    const AStringView resourceJson = json.substr(resourceJsonOffset, secondPassJsonOffset - resourceJsonOffset);
+    const AStringView secondPassJson = json.substr(secondPassJsonOffset, jsonEdgesOffset - secondPassJsonOffset);
+    EXPECT_TRUE(ContainsText(firstPassJson, "\"kind\": \"pass\""));
+    EXPECT_TRUE(ContainsText(firstPassJson, "\"runtimeStatistics\": null"));
+    EXPECT_TRUE(ContainsText(
+        resourceJson,
+        "\"kind\": \"resource\", \"flags\": 0, \"queueAssignment\": null, \"compiledTask\": null, "
+        "\"runtimeStatistics\": null"
+    ));
+    EXPECT_TRUE(ContainsText(secondPassJson, "\"kind\": \"pass\""));
+    EXPECT_TRUE(ContainsText(secondPassJson, "\"runtimeStatistics\": null"));
+
+    const AStringView dot(report.graph.data(), report.graph.size());
+    const usize firstPassDotOffset = dot.find("  n0 [");
+    const usize resourceDotOffset = dot.find("  n1 [");
+    const usize secondPassDotOffset = dot.find("  n2 [");
+    const usize dotEdgesOffset = dot.find("  n0 ->", secondPassDotOffset);
+    ASSERT_NE(firstPassDotOffset, AStringView::npos);
+    ASSERT_NE(resourceDotOffset, AStringView::npos);
+    ASSERT_NE(secondPassDotOffset, AStringView::npos);
+    ASSERT_NE(dotEdgesOffset, AStringView::npos);
+    ASSERT_LT(firstPassDotOffset, resourceDotOffset);
+    ASSERT_LT(resourceDotOffset, secondPassDotOffset);
+    ASSERT_LT(secondPassDotOffset, dotEdgesOffset);
+
+    const AStringView firstPassDot = dot.substr(firstPassDotOffset, resourceDotOffset - firstPassDotOffset);
+    const AStringView resourceDot = dot.substr(resourceDotOffset, secondPassDotOffset - resourceDotOffset);
+    const AStringView secondPassDot = dot.substr(secondPassDotOffset, dotEdgesOffset - secondPassDotOffset);
+    EXPECT_TRUE(ContainsText(firstPassDot, "runtime_statistics=\"none\""));
+    EXPECT_TRUE(ContainsText(resourceDot, "runtime_statistics=\"none\""));
+    EXPECT_TRUE(ContainsText(secondPassDot, "runtime_statistics=\"none\""));
 }
 
 TEST(Telemetry, TelemetryIngestStoresRawAndReports){

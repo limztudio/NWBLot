@@ -313,46 +313,56 @@ TEST(EcsGraphics, DeferredGraphAttachesStructuredRuntimeStatisticsOnlyToRenderer
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString frameGraphSource;
+    AString runtimeStatisticsSource;
     AString systemHeaderSource;
     AString renderSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "frame_graph_export.cpp", frameGraphSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "kernel" / "frame_graph_runtime_statistics.cpp",
+        runtimeStatisticsSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", systemHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system_render.cpp", renderSource));
     const AStringView frameGraph(frameGraphSource.data(), frameGraphSource.size());
+    const AStringView runtimeStatistics(runtimeStatisticsSource.data(), runtimeStatisticsSource.size());
     const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
     const AStringView render(renderSource.data(), renderSource.size());
 
     EXPECT_TRUE(ContainsText(
-        frameGraph,
-        "static Core::Telemetry::FrameGraphRuntimeStatistics BuildFrameGraphRuntimeStatistics("
+        runtimeStatistics,
+        "Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRuntimeStatistics("
     ));
-    EXPECT_TRUE(ContainsText(frameGraph, "if(!statistics.valid())\n        return {};"));
-    EXPECT_TRUE(ContainsText(frameGraph, ".graphGeneration = compileStatistics.graphGeneration,"));
-    EXPECT_TRUE(ContainsText(frameGraph, ".planGeneration = compileStatistics.planGeneration,"));
     EXPECT_TRUE(ContainsText(
-        frameGraph,
+        runtimeStatistics,
+        "if(captureFrameIndex != sourceFrameIndex || !statistics.valid())\n        return {};"
+    ));
+    EXPECT_TRUE(ContainsText(runtimeStatistics, ".graphGeneration = compileStatistics.graphGeneration,"));
+    EXPECT_TRUE(ContainsText(runtimeStatistics, ".planGeneration = compileStatistics.planGeneration,"));
+    EXPECT_TRUE(ContainsText(
+        runtimeStatistics,
         ".recordingAttemptGeneration = recordingStatistics.recordingAttemptGeneration,"
     ));
-    EXPECT_TRUE(ContainsText(frameGraph, ".deviceGeneration = compileStatistics.deviceGeneration,"));
-    EXPECT_TRUE(ContainsText(frameGraph, ".taskCount = static_cast<u64>(compileStatistics.taskCount),"));
-    EXPECT_TRUE(ContainsText(frameGraph, ".resourceCount = static_cast<u64>(compileStatistics.resourceCount),"));
+    EXPECT_TRUE(ContainsText(runtimeStatistics, ".deviceGeneration = compileStatistics.deviceGeneration,"));
+    EXPECT_TRUE(ContainsText(runtimeStatistics, ".taskCount = static_cast<u64>(compileStatistics.taskCount),"));
+    EXPECT_TRUE(ContainsText(runtimeStatistics, ".resourceCount = static_cast<u64>(compileStatistics.resourceCount),"));
     EXPECT_TRUE(ContainsText(
-        frameGraph,
+        runtimeStatistics,
         "compileStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::Internal]"
     ));
-    EXPECT_TRUE(ContainsText(frameGraph, ".totalSeconds = compileStatistics.totalSeconds,"));
+    EXPECT_EQ(CountText(runtimeStatistics, "compileStatistics.logicalOwnershipTransferCountByRoute["), 3u);
+    EXPECT_TRUE(ContainsText(runtimeStatistics, ".totalSeconds = compileStatistics.totalSeconds,"));
     EXPECT_TRUE(ContainsText(
-        frameGraph,
+        runtimeStatistics,
         ".recordingElapsedSeconds = recordingStatistics.recordingElapsedSeconds,"
     ));
     EXPECT_TRUE(ContainsText(
-        frameGraph,
+        runtimeStatistics,
         ".acceptedFrontierSubmissionCount = static_cast<u64>("
     ));
-    EXPECT_TRUE(ContainsText(frameGraph, ".submissionSeconds = submissionStatistics.submissionSeconds,"));
-    EXPECT_TRUE(ContainsText(frameGraph, ".present = true,"));
+    EXPECT_TRUE(ContainsText(runtimeStatistics, ".submissionSeconds = submissionStatistics.submissionSeconds,"));
+    EXPECT_TRUE(ContainsText(runtimeStatistics, ".present = true,"));
     EXPECT_TRUE(ContainsText(
-        frameGraph,
+        runtimeStatistics,
         "if(!Core::Telemetry::IsValidFrameGraphRuntimeStatistics(result))\n        return {};"
     ));
 
@@ -369,8 +379,10 @@ TEST(EcsGraphics, DeferredGraphAttachesStructuredRuntimeStatisticsOnlyToRenderer
     EXPECT_TRUE(ContainsText(frameGraph, "Core::Telemetry::FrameGraphPassMetadata rendererFrameMetadata;"));
     EXPECT_TRUE(ContainsText(
         frameGraph,
-        "rendererFrameMetadata.runtimeStatistics = __hidden_frame_graph_export::BuildFrameGraphRuntimeStatistics(\n"
-        "        deferredRuntimeStatistics\n"
+        "rendererFrameMetadata.runtimeStatistics = ECSRenderDetail::BuildFrameGraphRuntimeStatistics(\n"
+        "        deferredRuntimeStatistics,\n"
+        "        builder.frameIndex(),\n"
+        "        m_frameGraphSourceFrameIndex\n"
         "    );"
     ));
     EXPECT_TRUE(ContainsText(
@@ -863,8 +875,8 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryReportsLogicalOwnershipPlan){
         "            compileStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::ExternalExport],"
     ));
     EXPECT_EQ(CountText(frameGraph, "compileStatistics.logicalOwnershipTransferCount,"), 1u);
-    // Three routes appear in both the human-readable label triplet and the structured runtime-statistics triplet.
-    EXPECT_EQ(CountText(frameGraph, "compileStatistics.logicalOwnershipTransferCountByRoute["), 6u);
+    // The human-readable route triplet stays here; the structured triplet has its own mapper owner and contract.
+    EXPECT_EQ(CountText(frameGraph, "compileStatistics.logicalOwnershipTransferCountByRoute["), 3u);
 
     EXPECT_EQ(CountText(frameGraph, "m_deferredLightingCompiledGraph.logicalOwnershipTransfers()"), 1u);
     EXPECT_EQ(CountText(frameGraph, "m_deferredLightingCompiledGraph.logicalOwnershipTransferAt("), 0u);

@@ -90,6 +90,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/deferred/deferred_targets.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/deferred_lighting.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/frame_graph_export.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/kernel/frame_graph_runtime_statistics.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/kernel/frame_graph_runtime_statistics.h"
     "${CMAKE_CURRENT_LIST_DIR}/material/material_pipeline.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material/material_pass_draw.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material/material_pass_resources.cpp"

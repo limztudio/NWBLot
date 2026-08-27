@@ -31,6 +31,11 @@ namespace ECSRenderDetail{
     u64 captureFrameIndex,
     u64 sourceFrameIndex
 )noexcept;
+[[nodiscard]] Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord
+BuildFrameGraphPacketSubmissionStatistics(
+    const Core::GpuTaskGraphPacketSubmissionStatistics& statistics,
+    u32 ownerNodeIndex
+)noexcept;
 [[nodiscard]] Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics
 BuildFrameGraphPhysicalQueueRuntimeStatistics(
     const Core::GpuTaskGraphPhysicalQueueCompileStatistics& compileStatistics,

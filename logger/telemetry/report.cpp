@@ -44,6 +44,7 @@ static constexpr usize s_JsonReportBytesPerNode = 896u;
 static constexpr usize s_JsonReportBytesPerEdge = 96u;
 static constexpr usize s_JsonReportRuntimeStatisticsBytes = 4096u;
 static constexpr usize s_JsonReportPhysicalQueueRuntimeStatisticsBytes = 2048u;
+static constexpr usize s_JsonReportPacketSubmissionStatisticsBytes = 512u;
 
 struct FrameGraphReportRecord{
     u32 streamId = 0u;
@@ -201,6 +202,9 @@ using GraphTimingMap = HashMap<GraphTimingKey, f64, GraphTimingKeyHasher, EqualT
         }
         reserveBytes += graph.payload.physicalQueueRuntimeStatistics.size()
             * s_JsonReportPhysicalQueueRuntimeStatisticsBytes
+        ;
+        reserveBytes += graph.payload.packetSubmissionStatistics.size()
+            * s_JsonReportPacketSubmissionStatisticsBytes
         ;
     }
     return reserveBytes;
@@ -674,12 +678,47 @@ void AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(
     out += '}';
 }
 
+void AppendFrameGraphPacketSubmissionStatisticsJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphPacketSubmissionStatisticsRecord& statistics
+){
+    StringAppendFormat(
+        out,
+        "{{\"packet\": {{\"index\": {}, \"generation\": {}}}, \"queue\": ",
+        statistics.packetIndex,
+        statistics.packetGeneration
+    );
+    AppendFrameGraphPhysicalQueueJson(out, statistics.queue);
+    out += ", \"queueClass\": ";
+    AppendJsonQuotedText(out, AStringView(FrameGraphQueueClassText(statistics.queueClass)));
+    StringAppendFormat(
+        out,
+        ", \"taskCount\": {}, \"commandListCount\": {}, \"plannedWaitTokenCount\": {}, "
+        "\"sameQueueWaitElisionCount\": {}, \"timelineWaitCount\": {}, \"mergedTimelineWaitCount\": {}",
+        statistics.taskCount,
+        statistics.commandListCount,
+        statistics.plannedWaitTokenCount,
+        statistics.sameQueueWaitElisionCount,
+        statistics.timelineWaitCount,
+        statistics.mergedTimelineWaitCount
+    );
+    StringAppendFormat(
+        out,
+        ", \"joinsAcceptedQueueFrontier\": {}, \"recoverySubmission\": {}, \"submissionSeconds\": {:.9}}}",
+        statistics.joinsAcceptedQueueFrontier ? "true" : "false",
+        statistics.recoverySubmission ? "true" : "false",
+        statistics.submissionSeconds
+    );
+}
+
 void AppendFrameGraphRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
     const Telemetry::FrameGraphRuntimeStatistics& statistics,
     const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    const Telemetry::FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
     const u32 ownerNodeIndex,
     const bool physicalQueueRuntimeStatisticsPresent,
+    const bool packetSubmissionStatisticsPresent,
     const bool recoverySubmissionCountPresent
 ){
     if(!statistics.present){
@@ -702,22 +741,38 @@ void AppendFrameGraphRuntimeStatisticsJson(
     out += ", \"submission\": ";
     AppendFrameGraphSubmissionRuntimeStatisticsJson(out, statistics.submission, recoverySubmissionCountPresent);
     out += ", \"physicalQueues\": ";
-    if(!physicalQueueRuntimeStatisticsPresent){
-        out += "null}";
-        return;
+    if(!physicalQueueRuntimeStatisticsPresent)
+        out += "null";
+    else{
+        out += '[';
+        bool firstPhysicalQueue = true;
+        for(const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord& record : physicalQueueRuntimeStatistics){
+            if(record.ownerNodeIndex != ownerNodeIndex)
+                continue;
+            if(!firstPhysicalQueue)
+                out += ", ";
+            AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(out, record.statistics, recoverySubmissionCountPresent);
+            firstPhysicalQueue = false;
+        }
+        out += ']';
     }
 
-    out += '[';
-    bool firstPhysicalQueue = true;
-    for(const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord& record : physicalQueueRuntimeStatistics){
-        if(record.ownerNodeIndex != ownerNodeIndex)
-            continue;
-        if(!firstPhysicalQueue)
-            out += ", ";
-        AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(out, record.statistics, recoverySubmissionCountPresent);
-        firstPhysicalQueue = false;
+    out += ", \"packetSubmissions\": ";
+    if(!packetSubmissionStatisticsPresent)
+        out += "null";
+    else{
+        out += '[';
+        bool firstPacketSubmission = true;
+        for(const Telemetry::FrameGraphPacketSubmissionStatisticsRecord& record : packetSubmissionStatistics){
+            if(record.ownerNodeIndex != ownerNodeIndex)
+                continue;
+            if(!firstPacketSubmission)
+                out += ", ";
+            AppendFrameGraphPacketSubmissionStatisticsJson(out, record);
+            firstPacketSubmission = false;
+        }
+        out += ']';
     }
-    out += ']';
     out += '}';
 }
 
@@ -727,6 +782,18 @@ void AppendFrameGraphRuntimeStatisticsJson(
 )noexcept{
     usize count = 0u;
     for(const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord& record : physicalQueueRuntimeStatistics){
+        if(record.ownerNodeIndex == ownerNodeIndex)
+            ++count;
+    }
+    return count;
+}
+
+[[nodiscard]] usize FrameGraphPacketSubmissionStatisticsCount(
+    const Telemetry::FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
+    const u32 ownerNodeIndex
+)noexcept{
+    usize count = 0u;
+    for(const Telemetry::FrameGraphPacketSubmissionStatisticsRecord& record : packetSubmissionStatistics){
         if(record.ownerNodeIndex == ownerNodeIndex)
             ++count;
     }
@@ -808,7 +875,9 @@ void AppendFrameGraphRuntimeStatisticsDot(
     AString<TelemetryArena>& out,
     const Telemetry::FrameGraphRuntimeStatistics& statistics,
     const usize physicalQueueRuntimeStatisticsCount,
-    const bool physicalQueueRuntimeStatisticsPresent
+    const usize packetSubmissionStatisticsCount,
+    const bool physicalQueueRuntimeStatisticsPresent,
+    const bool packetSubmissionStatisticsPresent
 ){
     if(!statistics.present){
         out += ", runtime_statistics=\"none\"";
@@ -828,6 +897,10 @@ void AppendFrameGraphRuntimeStatisticsDot(
         StringAppendFormat(out, ", runtime_physical_queue_count={}", physicalQueueRuntimeStatisticsCount);
     else
         out += ", runtime_physical_queue_count=\"unknown\"";
+    if(packetSubmissionStatisticsPresent)
+        StringAppendFormat(out, ", runtime_packet_submission_count={}", packetSubmissionStatisticsCount);
+    else
+        out += ", runtime_packet_submission_count=\"unknown\"";
 }
 
 // Joins each decoded frame-graph topology with timing from its exact frame and scope Name while retaining every
@@ -877,11 +950,17 @@ void AppendTimedGraphDot(
             graph.physicalQueueRuntimeStatistics,
             static_cast<u32>(i)
         );
+        const usize packetSubmissionStatisticsCount = FrameGraphPacketSubmissionStatisticsCount(
+            graph.packetSubmissionStatistics,
+            static_cast<u32>(i)
+        );
         AppendFrameGraphRuntimeStatisticsDot(
             out,
             node.runtimeStatistics,
             physicalQueueRuntimeStatisticsCount,
-            graph.physicalQueueRuntimeStatisticsPresent && physicalQueueRuntimeStatisticsCount != 0u
+            packetSubmissionStatisticsCount,
+            graph.physicalQueueRuntimeStatisticsPresent && physicalQueueRuntimeStatisticsCount != 0u,
+            graph.packetSubmissionStatisticsPresent
         );
         out += "];\n";
     }
@@ -946,8 +1025,10 @@ void AppendFrameGraphJson(
             out,
             node.runtimeStatistics,
             graph.physicalQueueRuntimeStatistics,
+            graph.packetSubmissionStatistics,
             static_cast<u32>(nodeIndex),
             graph.physicalQueueRuntimeStatisticsPresent && physicalQueueRuntimeStatisticsCount != 0u,
+            graph.packetSubmissionStatisticsPresent,
             graph.wireVersion >= Telemetry::s_FrameGraphRecoverySubmissionCountPayloadVersion
         );
         StringAppendFormat(out, "}}{}\n", nodeIndex + 1u == graph.nodes.size() ? "" : ",");

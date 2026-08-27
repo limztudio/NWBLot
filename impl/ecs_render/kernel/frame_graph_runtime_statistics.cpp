@@ -170,6 +170,42 @@ Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRun
     return result;
 }
 
+Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord
+ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(
+    const Core::GpuTaskGraphPacketSubmissionStatistics& statistics,
+    const u32 ownerNodeIndex
+)noexcept{
+    if(!statistics.valid() || ownerNodeIndex == Limit<u32>::s_Max)
+        return {};
+
+    Core::Telemetry::FrameGraphQueueClass::Enum queueClass = Core::Telemetry::FrameGraphQueueClass::Unknown;
+    if(!__hidden_frame_graph_runtime_statistics::TranslateQueueClass(statistics.queueClass, queueClass))
+        return {};
+
+    const Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord result{
+        .ownerNodeIndex = ownerNodeIndex,
+        .packetIndex = statistics.packet.index,
+        .packetGeneration = statistics.packet.generation,
+        .queue = {
+            .index = statistics.queue.index,
+            .deviceGeneration = statistics.queue.deviceGeneration,
+        },
+        .queueClass = queueClass,
+        .taskCount = static_cast<u64>(statistics.taskCount),
+        .commandListCount = static_cast<u64>(statistics.nativeCommandListCount),
+        .plannedWaitTokenCount = static_cast<u64>(statistics.plannedWaitTokenCount),
+        .sameQueueWaitElisionCount = static_cast<u64>(statistics.sameQueueWaitElisionCount),
+        .timelineWaitCount = static_cast<u64>(statistics.timelineWaitCount),
+        .mergedTimelineWaitCount = static_cast<u64>(statistics.mergedTimelineWaitCount),
+        .joinsAcceptedQueueFrontier = statistics.joinsAcceptedQueueFrontier,
+        .recoverySubmission = statistics.isRecoverySubmission,
+        .submissionSeconds = statistics.submissionSeconds,
+    };
+    if(!Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(result))
+        return {};
+    return result;
+}
+
 Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics
 ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
     const Core::GpuTaskGraphPhysicalQueueCompileStatistics& compileStatistics,

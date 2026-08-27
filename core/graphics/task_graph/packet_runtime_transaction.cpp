@@ -169,6 +169,52 @@ GpuTaskGraphSubmissionStatistics GpuGraphSubmissionTransaction::submissionStatis
     return m_submissionStatistics;
 }
 
+GpuTaskGraphPacketSubmissionStatistics GpuGraphSubmissionTransaction::packetSubmissionStatistics(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId& packetID
+)const noexcept{
+    ScopedLock lock(m_mutex);
+    if(
+        !validForLocked(compiledGraph)
+        || !compiledGraph.validPacket(packetID)
+        || packetID.index >= m_packets.size()
+    )
+        return {};
+
+    const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
+    const GpuPhysicalQueueInfo* const queueInfo = compiledGraph.queueInfo(packet.queue);
+    const GpuPacketRuntime& runtime = m_packets[packetID.index];
+    if(
+        !queueInfo
+        || queueInfo->queueClass >= CommandQueue::kCount
+        || runtime.state != GpuPacketRuntimeState::Accepted
+        || !runtime.hasNativeSubmission
+        || !runtime.token.valid()
+        || runtime.token.queue != queueInfo->queueClass
+        || !runtime.token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration)
+    )
+        return {};
+
+    return GpuTaskGraphPacketSubmissionStatistics{
+        .graphGeneration = m_generation,
+        .planGeneration = m_planGeneration,
+        .recordingAttemptGeneration = m_recordingAttemptGeneration,
+        .deviceGeneration = m_deviceGeneration,
+        .packet = packetID,
+        .queue = packet.queue,
+        .queueClass = queueInfo->queueClass,
+        .taskCount = packet.taskCount,
+        .nativeCommandListCount = runtime.nativeCommandListCount,
+        .plannedWaitTokenCount = runtime.plannedWaitTokenCount,
+        .sameQueueWaitElisionCount = runtime.sameQueueWaitElisionCount,
+        .timelineWaitCount = runtime.timelineWaitCount,
+        .mergedTimelineWaitCount = runtime.mergedTimelineWaitCount,
+        .submissionSeconds = runtime.submissionSeconds,
+        .joinsAcceptedQueueFrontier = packet.joinsAcceptedQueueFrontier,
+        .isRecoverySubmission = packet.isRecoverySubmission,
+    };
+}
+
 GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::physicalQueueSubmissionStatistics(
     const GpuCompiledGraph& compiledGraph,
     const GpuPhysicalQueueId& queue

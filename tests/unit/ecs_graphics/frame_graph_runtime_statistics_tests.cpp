@@ -4,6 +4,9 @@
 
 #include <impl/ecs_render/kernel/frame_graph_runtime_statistics.h>
 
+#include <core/telemetry/frame_graph_registry.h>
+#include <core/telemetry/session.h>
+
 #include <tests/common/test_context.h>
 
 #include <global/filesystem/operations.h>
@@ -112,10 +115,73 @@ struct PhysicalQueueRuntimeSnapshots{
     statistics.submission.acceptedTaskCount = 1u;
     statistics.submission.nativeSubmissionCount = 1u;
     statistics.submission.nativeCommandListCount = 1u;
+    statistics.submission.plannedWaitTokenCount = 2u;
+    statistics.submission.sameQueueWaitElisionCount = 1u;
+    statistics.submission.timelineWaitCount = 1u;
     statistics.submission.acceptedFrontierSubmissionCount = 1u;
     statistics.submission.recoverySubmissionCount = 1u;
+    statistics.submission.submissionSeconds = 0.002;
     return statistics;
 }
+
+[[nodiscard]] static NWB::Core::GpuTaskGraphPacketSubmissionStatistics
+MakeValidPacketSubmissionStatistics()noexcept{
+    return NWB::Core::GpuTaskGraphPacketSubmissionStatistics{
+        .graphGeneration = 11u,
+        .planGeneration = 12u,
+        .recordingAttemptGeneration = 13u,
+        .deviceGeneration = 7u,
+        .packet = { .index = 0u, .generation = 12u },
+        .queue = { .index = 2u, .deviceGeneration = 7u },
+        .queueClass = NWB::Core::CommandQueue::Compute,
+        .taskCount = 1u,
+        .nativeCommandListCount = 1u,
+        .plannedWaitTokenCount = 2u,
+        .sameQueueWaitElisionCount = 1u,
+        .timelineWaitCount = 1u,
+        .mergedTimelineWaitCount = 0u,
+        .submissionSeconds = 0.002,
+        .joinsAcceptedQueueFrontier = true,
+        .isRecoverySubmission = true,
+    };
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PacketSubmissionStatisticsFrameGraphContributor final
+    : public NWB::Core::Telemetry::IFrameGraphContributor{
+public:
+    virtual bool appendFrameGraph(NWB::Core::Telemetry::FrameGraphBuilder& builder)override{
+        const NWB::Core::Telemetry::FrameGraphRuntimeStatistics runtimeStatistics =
+            NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(
+                MakeValidRuntimeStatistics(),
+                builder.frameIndex(),
+                builder.frameIndex()
+            )
+        ;
+        const NWB::Core::Telemetry::FrameGraphNodeHandle owner = builder.addPass(
+            Name("packet_submission_owner"),
+            "Packet submission owner",
+            NWB::Core::Telemetry::FrameGraphPassMetadata{
+                .queueAssignment = {},
+                .compiledTask = {},
+                .runtimeStatistics = runtimeStatistics,
+            }
+        );
+        if(!owner.valid())
+            return false;
+
+        return builder.addPacketSubmissionStatistics(
+            owner,
+            NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(
+                MakeValidPacketSubmissionStatistics(),
+                owner.index
+            )
+        );
+    }
+};
 
 TEST(EcsGraphics, FrameGraphPhysicalQueueRuntimeStatisticsMapsCoherentSnapshots){
     const PhysicalQueueRuntimeSnapshots snapshots = MakeValidPhysicalQueueRuntimeSnapshots();
@@ -186,6 +252,136 @@ TEST(EcsGraphics, FrameGraphPhysicalQueueRuntimeStatisticsRejectsMixedSnapshots)
     ));
 }
 
+TEST(EcsGraphics, FrameGraphPacketSubmissionStatisticsMapsExactNativePacket){
+    const NWB::Core::GpuTaskGraphPacketSubmissionStatistics statistics =
+        MakeValidPacketSubmissionStatistics()
+    ;
+    const NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord telemetry =
+        NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(statistics, 4u)
+    ;
+
+    ASSERT_TRUE(NWB::Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(telemetry));
+    EXPECT_EQ(telemetry.ownerNodeIndex, 4u);
+    EXPECT_EQ(telemetry.packetIndex, 0u);
+    EXPECT_EQ(telemetry.packetGeneration, 12u);
+    EXPECT_EQ(telemetry.queue.index, 2u);
+    EXPECT_EQ(telemetry.queue.deviceGeneration, 7u);
+    EXPECT_EQ(telemetry.queueClass, NWB::Core::Telemetry::FrameGraphQueueClass::Compute);
+    EXPECT_EQ(telemetry.taskCount, 1u);
+    EXPECT_EQ(telemetry.commandListCount, 1u);
+    EXPECT_EQ(telemetry.plannedWaitTokenCount, 2u);
+    EXPECT_EQ(telemetry.sameQueueWaitElisionCount, 1u);
+    EXPECT_EQ(telemetry.timelineWaitCount, 1u);
+    EXPECT_EQ(telemetry.mergedTimelineWaitCount, 0u);
+    EXPECT_TRUE(telemetry.joinsAcceptedQueueFrontier);
+    EXPECT_TRUE(telemetry.recoverySubmission);
+    EXPECT_DOUBLE_EQ(telemetry.submissionSeconds, 0.002);
+
+    NWB::Core::GpuTaskGraphPacketSubmissionStatistics invalid = statistics;
+    invalid.queueClass = NWB::Core::CommandQueue::kCount;
+    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(
+        NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(invalid, 4u)
+    ));
+    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(
+        NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(
+            statistics,
+            Limit<u32>::s_Max
+        )
+    ));
+}
+
+TEST(EcsGraphics, FrameGraphBuilderCopiesOwnerBoundPacketSubmissionStatistics){
+    NWB::Tests::TestArena<> testArena;
+    NWB::Core::Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    NWB::Core::Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    NWB::Core::Telemetry::FrameGraphPendingNameEdges pendingNameEdges(testArena.arena);
+    NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueStatistics(testArena.arena);
+    NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(testArena.arena);
+    NWB::Core::Telemetry::FrameGraphBuilder builder(
+        nodes,
+        edges,
+        pendingNameEdges,
+        physicalQueueStatistics,
+        packetStatistics,
+        41u
+    );
+
+    const NWB::Core::Telemetry::FrameGraphNodeHandle owner = builder.addPass(
+        Name("packet_owner"),
+        "Packet owner",
+        NWB::Core::Telemetry::FrameGraphPassMetadata{
+            .queueAssignment = {},
+            .compiledTask = {},
+            .runtimeStatistics = NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(
+                MakeValidRuntimeStatistics(),
+                41u,
+                41u
+            ),
+        }
+    );
+    ASSERT_TRUE(owner.valid());
+    NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord statistics =
+        NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(
+            MakeValidPacketSubmissionStatistics(),
+            owner.index
+        )
+    ;
+    NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord excessiveDuration = statistics;
+    excessiveDuration.submissionSeconds = 0.003;
+    EXPECT_FALSE(builder.addPacketSubmissionStatistics(owner, excessiveDuration));
+    ASSERT_TRUE(builder.addPacketSubmissionStatistics(owner, statistics));
+    statistics.commandListCount = 3u;
+
+    ASSERT_EQ(packetStatistics.size(), 1u);
+    EXPECT_EQ(packetStatistics[0u].commandListCount, 1u);
+    EXPECT_FALSE(builder.addPacketSubmissionStatistics(owner, packetStatistics[0u]));
+
+    const NWB::Core::Telemetry::FrameGraphNodeHandle resource = builder.addResource(
+        Name("packet_resource"),
+        "Packet resource"
+    );
+    ASSERT_TRUE(resource.valid());
+    statistics = packetStatistics[0u];
+    statistics.ownerNodeIndex = resource.index;
+    EXPECT_FALSE(builder.addPacketSubmissionStatistics(resource, statistics));
+
+    statistics = packetStatistics[0u];
+    ++statistics.packetGeneration;
+    EXPECT_FALSE(builder.addPacketSubmissionStatistics(owner, statistics));
+}
+
+TEST(EcsGraphics, FrameGraphRegistryRecordsExactPacketSubmissionStatistics){
+    NWB::Tests::TestArena<> testArena;
+    NWB::Core::Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(NWB::Core::Telemetry::CaptureOptions::FrameGraphOnly());
+    session.setFrameIndex(41u);
+
+    NWB::Core::Telemetry::FrameGraphRegistry registry(testArena.arena);
+    PacketSubmissionStatisticsFrameGraphContributor contributor;
+    registry.registerContributor(contributor);
+    ASSERT_TRUE(registry.record(session));
+    ASSERT_EQ(session.eventCount(), 1u);
+
+    const NWB::Core::Telemetry::EventRecord* const event = session.view().eventAt(0u);
+    ASSERT_NE(event, nullptr);
+    NWB::Core::Telemetry::FrameGraphPayload payload(testArena.arena);
+    ASSERT_TRUE(NWB::Core::Telemetry::ParseFrameGraphPayload(
+        testArena.arena,
+        event->payload.data(),
+        event->payload.size(),
+        payload
+    ));
+    EXPECT_EQ(
+        payload.wireVersion,
+        NWB::Core::Telemetry::s_FrameGraphPacketSubmissionStatisticsPayloadVersion
+    );
+    EXPECT_TRUE(payload.packetSubmissionStatisticsPresent);
+    ASSERT_EQ(payload.packetSubmissionStatistics.size(), 1u);
+    EXPECT_EQ(payload.packetSubmissionStatistics[0u].ownerNodeIndex, 0u);
+    EXPECT_EQ(payload.packetSubmissionStatistics[0u].packetIndex, 0u);
+    EXPECT_EQ(payload.packetSubmissionStatistics[0u].plannedWaitTokenCount, 2u);
+}
+
 TEST(EcsGraphics, FrameGraphExportsEveryCompiledPhysicalQueueAsStructuredRuntimeTelemetry){
     NWB::Tests::TestArena<> testArena;
     const TestPath repoRoot = TestPath(testArena.arena, __FILE__)
@@ -211,9 +407,17 @@ TEST(EcsGraphics, FrameGraphExportsEveryCompiledPhysicalQueueAsStructuredRuntime
         runtimeTopologyOffset
     );
     const usize rendererFrameOffset = frameGraph.find("const Handle rendererFrame = builder.addPass(");
+    const usize packetSnapshotLoopOffset = frameGraph.find(
+        "for(usize packetIndex = 0u; packetIndex < m_deferredLightingCompiledGraph.packetCount(); ++packetIndex){",
+        snapshotLoopOffset
+    );
     const usize structuredLoopOffset = frameGraph.find(
         ": physicalQueueRuntimeStatistics",
         rendererFrameOffset
+    );
+    const usize packetStructuredLoopOffset = frameGraph.find(
+        ": packetSubmissionStatistics",
+        structuredLoopOffset
     );
     const usize frameSetupOffset = frameGraph.find(
         "const Handle frameSetup = builder.addPass(",
@@ -221,13 +425,19 @@ TEST(EcsGraphics, FrameGraphExportsEveryCompiledPhysicalQueueAsStructuredRuntime
     );
     ASSERT_NE(runtimeTopologyOffset, AStringView::npos);
     ASSERT_NE(snapshotLoopOffset, AStringView::npos);
+    ASSERT_NE(packetSnapshotLoopOffset, AStringView::npos);
     ASSERT_NE(rendererFrameOffset, AStringView::npos);
     ASSERT_NE(structuredLoopOffset, AStringView::npos);
+    ASSERT_NE(packetStructuredLoopOffset, AStringView::npos);
     ASSERT_NE(frameSetupOffset, AStringView::npos);
     EXPECT_LT(runtimeTopologyOffset, snapshotLoopOffset);
     EXPECT_LT(snapshotLoopOffset, rendererFrameOffset);
+    EXPECT_LT(snapshotLoopOffset, packetSnapshotLoopOffset);
+    EXPECT_LT(packetSnapshotLoopOffset, rendererFrameOffset);
     EXPECT_LT(rendererFrameOffset, structuredLoopOffset);
+    EXPECT_LT(structuredLoopOffset, packetStructuredLoopOffset);
     EXPECT_LT(structuredLoopOffset, frameSetupOffset);
+    EXPECT_LT(packetStructuredLoopOffset, frameSetupOffset);
 
     const AStringView queueSnapshotExport = frameGraph.substr(
         runtimeTopologyOffset,
@@ -239,6 +449,12 @@ TEST(EcsGraphics, FrameGraphExportsEveryCompiledPhysicalQueueAsStructuredRuntime
     EXPECT_NE(queueSnapshotExport.find(
         "physicalQueueRuntimeStatistics.push_back(queueStatistics);"
     ), AStringView::npos);
+    EXPECT_NE(queueSnapshotExport.find(
+        "m_deferredLightingSubmissionTransaction.packetSubmissionStatistics("
+    ), AStringView::npos);
+    EXPECT_NE(queueSnapshotExport.find(
+        "packetSubmissionStatistics.size() != deferredRuntimeStatistics.submission.nativeSubmissionCount"
+    ), AStringView::npos);
 
     const AStringView structuredExport = frameGraph.substr(
         rendererFrameOffset,
@@ -246,6 +462,12 @@ TEST(EcsGraphics, FrameGraphExportsEveryCompiledPhysicalQueueAsStructuredRuntime
     );
     EXPECT_NE(structuredExport.find(
         "builder.addPhysicalQueueRuntimeStatistics(rendererFrame, queueStatistics)"
+    ), AStringView::npos);
+    EXPECT_NE(structuredExport.find(
+        "ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(packetStatistics, rendererFrame.index)"
+    ), AStringView::npos);
+    EXPECT_NE(structuredExport.find(
+        "builder.addPacketSubmissionStatistics(rendererFrame, telemetryStatistics)"
     ), AStringView::npos);
     EXPECT_EQ(
         structuredExport.find("BuildFrameGraphPhysicalQueueRuntimeStatistics("),

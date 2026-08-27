@@ -146,6 +146,10 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
         Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics,
         Core::Alloc::ScratchArena
     > physicalQueueRuntimeStatistics(physicalQueueRuntimeStatisticsScratch);
+    Vector<
+        Core::GpuTaskGraphPacketSubmissionStatistics,
+        Core::Alloc::ScratchArena
+    > packetSubmissionStatistics(physicalQueueRuntimeStatisticsScratch);
     if(
         rendererFrameMetadata.runtimeStatistics.present
         && (!runtimeQueueTopology.queues || runtimeQueueTopology.queueCount == 0u)
@@ -177,6 +181,35 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
                 break;
             }
             physicalQueueRuntimeStatistics.push_back(queueStatistics);
+        }
+    }
+    if(rendererFrameMetadata.runtimeStatistics.present){
+        packetSubmissionStatistics.reserve(m_deferredLightingCompiledGraph.packetCount());
+        for(usize packetIndex = 0u; packetIndex < m_deferredLightingCompiledGraph.packetCount(); ++packetIndex){
+            const Core::GpuSubmissionPacketId packet = m_deferredLightingCompiledGraph.packetIdAt(packetIndex);
+            if(!packet.valid()){
+                rendererFrameMetadata.runtimeStatistics = {};
+                physicalQueueRuntimeStatistics.clear();
+                packetSubmissionStatistics.clear();
+                break;
+            }
+
+            const Core::GpuTaskGraphPacketSubmissionStatistics packetStatistics =
+                m_deferredLightingSubmissionTransaction.packetSubmissionStatistics(
+                    m_deferredLightingCompiledGraph,
+                    packet
+                )
+            ;
+            if(packetStatistics.valid())
+                packetSubmissionStatistics.push_back(packetStatistics);
+        }
+        if(
+            rendererFrameMetadata.runtimeStatistics.present
+            && packetSubmissionStatistics.size() != deferredRuntimeStatistics.submission.nativeSubmissionCount
+        ){
+            rendererFrameMetadata.runtimeStatistics = {};
+            physicalQueueRuntimeStatistics.clear();
+            packetSubmissionStatistics.clear();
         }
     }
     m_frameGraphRendererLabel.clear();
@@ -542,6 +575,15 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
         : physicalQueueRuntimeStatistics
     ){
         if(!builder.addPhysicalQueueRuntimeStatistics(rendererFrame, queueStatistics)){
+            NWB_ASSERT(false);
+            return false;
+        }
+    }
+    for(const Core::GpuTaskGraphPacketSubmissionStatistics& packetStatistics : packetSubmissionStatistics){
+        const Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord telemetryStatistics =
+            ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(packetStatistics, rendererFrame.index)
+        ;
+        if(!builder.addPacketSubmissionStatistics(rendererFrame, telemetryStatistics)){
             NWB_ASSERT(false);
             return false;
         }

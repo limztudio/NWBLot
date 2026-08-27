@@ -42,6 +42,50 @@ bool FrameGraphBuilder::addPhysicalQueueRuntimeStatistics(
     return true;
 }
 
+bool FrameGraphBuilder::addPacketSubmissionStatistics(
+    const FrameGraphNodeHandle owner,
+    const FrameGraphPacketSubmissionStatisticsRecord& statistics
+){
+    if(
+        !m_packetSubmissionStatistics
+        || !owner.valid()
+        || owner.index >= m_nodes.size()
+        || m_nodes[owner.index].kind != FrameGraphNodeKind::Pass
+        || statistics.ownerNodeIndex != owner.index
+        || !IsValidFrameGraphPacketSubmissionStatistics(statistics)
+    )
+        return false;
+
+    const FrameGraphRuntimeStatistics& ownerStatistics = m_nodes[owner.index].runtimeStatistics;
+    if(
+        !IsValidFrameGraphRuntimeStatistics(ownerStatistics)
+        || statistics.packetGeneration != ownerStatistics.planGeneration
+        || statistics.packetIndex >= ownerStatistics.compile.packetCount
+        || statistics.queue.deviceGeneration != ownerStatistics.deviceGeneration
+        || statistics.taskCount > ownerStatistics.submission.acceptedTaskCount
+        || statistics.commandListCount > ownerStatistics.submission.nativeCommandListCount
+        || statistics.plannedWaitTokenCount > ownerStatistics.submission.plannedWaitTokenCount
+        || statistics.sameQueueWaitElisionCount > ownerStatistics.submission.sameQueueWaitElisionCount
+        || statistics.timelineWaitCount > ownerStatistics.submission.timelineWaitCount
+        || statistics.mergedTimelineWaitCount > ownerStatistics.submission.mergedTimelineWaitCount
+        || statistics.submissionSeconds > ownerStatistics.submission.submissionSeconds
+        || (
+            statistics.joinsAcceptedQueueFrontier
+            && ownerStatistics.submission.acceptedFrontierSubmissionCount == 0u
+        )
+        || (statistics.recoverySubmission && ownerStatistics.submission.recoverySubmissionCount == 0u)
+    )
+        return false;
+
+    for(const FrameGraphPacketSubmissionStatisticsRecord& record : *m_packetSubmissionStatistics){
+        if(record.ownerNodeIndex == owner.index && record.packetIndex == statistics.packetIndex)
+            return false;
+    }
+
+    m_packetSubmissionStatistics->push_back(statistics);
+    return true;
+}
+
 void FrameGraphBuilder::addEdge(const FrameGraphNodeHandle from, const FrameGraphNodeHandle to, const FrameGraphEdgeKind::Enum kind, const u8 flags){
     if(!from.valid() || !to.valid())
         return;

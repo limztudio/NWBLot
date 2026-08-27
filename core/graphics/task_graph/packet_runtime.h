@@ -624,6 +624,44 @@ struct GpuTaskGraphSubmissionStatistics{
 };
 
 
+// Immutable-by-value native submission telemetry for one compiler packet. The query accepts only an exact current
+// compiled-plan handle whose packet reached Accepted through Device::executeCommandLists(); manual acceptance and
+// every rejected or unresolved lifecycle state deliberately return an invalid value. Wait counters preserve the
+// native submitter decomposition: planned tokens equal same-queue elisions plus emitted and merged timeline waits.
+struct GpuTaskGraphPacketSubmissionStatistics{
+    u64 graphGeneration = 0u;
+    u64 planGeneration = 0u;
+    u64 recordingAttemptGeneration = 0u;
+    u16 deviceGeneration = 0u;
+    GpuSubmissionPacketId packet;
+    GpuPhysicalQueueId queue;
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
+    usize taskCount = 0u;
+    usize nativeCommandListCount = 0u;
+    usize plannedWaitTokenCount = 0u;
+    usize sameQueueWaitElisionCount = 0u;
+    usize timelineWaitCount = 0u;
+    usize mergedTimelineWaitCount = 0u;
+    f64 submissionSeconds = 0.0;
+    bool joinsAcceptedQueueFrontier = false;
+    bool isRecoverySubmission = false;
+
+    [[nodiscard]] bool valid()const noexcept{
+        return graphGeneration != 0u
+            && planGeneration != 0u
+            && recordingAttemptGeneration != 0u
+            && deviceGeneration != 0u
+            && packet.valid()
+            && packet.generation == planGeneration
+            && queue.valid()
+            && queue.deviceGeneration == deviceGeneration
+            && queueClass < CommandQueue::kCount
+            && taskCount != 0u
+        ;
+    }
+};
+
+
 // Immutable-by-value native submission telemetry for one exact physical queue in one graph transaction. The queue
 // identity includes its device generation, so an auxiliary same-class queue or a recreated device cannot alias this
 // result. Native-success counters intentionally exclude manual diagnostic packet acceptance. `rejectedSubmissionCount`
@@ -814,6 +852,13 @@ public:
     }
 #endif
     [[nodiscard]] GpuTaskGraphSubmissionStatistics submissionStatistics()const noexcept;
+    // Copies one accepted native packet's exact wait decomposition and compiler role while holding the transaction
+    // mutex. The result owns every field, but resolving its packet and queue borrows immutable compiled-plan storage;
+    // callers must externally serialize the query with compiled-graph reset/recompile.
+    [[nodiscard]] GpuTaskGraphPacketSubmissionStatistics packetSubmissionStatistics(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuSubmissionPacketId& packet
+    )const noexcept;
     // Aggregates one full physical-queue snapshot while holding the transaction mutex. Invalid/stale queue IDs and
     // a transaction from another compiled plan return an empty result instead of borrowing packet-runtime storage.
     // The result owns every transaction field, but aggregation borrows compiled-graph plan storage. Callers must

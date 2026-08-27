@@ -371,6 +371,21 @@ TEST(EcsGraphics, DeferredGraphAttachesStructuredRuntimeStatisticsOnlyToRenderer
         runtimeStatistics,
         "if(!Core::Telemetry::IsValidFrameGraphRuntimeStatistics(result))\n        return {};"
     ));
+    EXPECT_TRUE(ContainsText(
+        runtimeStatistics,
+        "ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics("
+    ));
+    EXPECT_TRUE(ContainsText(runtimeStatistics, ".packetIndex = statistics.packet.index,"));
+    EXPECT_TRUE(ContainsText(runtimeStatistics, ".packetGeneration = statistics.packet.generation,"));
+    EXPECT_TRUE(ContainsText(
+        runtimeStatistics,
+        ".commandListCount = static_cast<u64>(statistics.nativeCommandListCount),"
+    ));
+    EXPECT_TRUE(ContainsText(
+        runtimeStatistics,
+        ".plannedWaitTokenCount = static_cast<u64>(statistics.plannedWaitTokenCount),"
+    ));
+    EXPECT_TRUE(ContainsText(runtimeStatistics, ".recoverySubmission = statistics.isRecoverySubmission,"));
 
     EXPECT_TRUE(ContainsText(systemHeader, "u64 m_frameGraphSourceFrameIndex = Limit<u64>::s_Max;"));
     EXPECT_TRUE(ContainsText(render, "m_frameGraphSourceFrameIndex = m_graphics.getFrameIndex();"));
@@ -407,6 +422,22 @@ TEST(EcsGraphics, DeferredGraphAttachesStructuredRuntimeStatisticsOnlyToRenderer
         frameGraph,
         "rendererFrameMetadata.runtimeStatistics = ECSRenderDetail::BuildFrameGraphRuntimeStatistics("
     ), 1u);
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "m_deferredLightingSubmissionTransaction.packetSubmissionStatistics("
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "packetSubmissionStatistics.size() != deferredRuntimeStatistics.submission.nativeSubmissionCount"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(packetStatistics, rendererFrame.index)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "builder.addPacketSubmissionStatistics(rendererFrame, telemetryStatistics)"
+    ));
 }
 
 

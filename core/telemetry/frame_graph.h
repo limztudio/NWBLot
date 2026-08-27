@@ -23,7 +23,8 @@ inline constexpr u16 s_FrameGraphCompiledTaskPayloadVersion = 3u;
 inline constexpr u16 s_FrameGraphRuntimeStatisticsPayloadVersion = 4u;
 inline constexpr u16 s_FrameGraphPhysicalQueueRuntimeStatisticsPayloadVersion = 5u;
 inline constexpr u16 s_FrameGraphRecoverySubmissionCountPayloadVersion = 6u;
-inline constexpr u16 s_FrameGraphPayloadVersion = s_FrameGraphRecoverySubmissionCountPayloadVersion;
+inline constexpr u16 s_FrameGraphPacketSubmissionStatisticsPayloadVersion = 7u;
+inline constexpr u16 s_FrameGraphPayloadVersion = s_FrameGraphPacketSubmissionStatisticsPayloadVersion;
 inline constexpr u32 s_FrameGraphPayloadMagic = 0x4E574647u; // NWFG
 
 namespace FrameGraphNodeKind{
@@ -329,6 +330,26 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsRecord{
     FrameGraphPhysicalQueueRuntimeStatistics statistics;
 };
 
+// Exact native-submission telemetry for one compiler-generated packet. V7 payloads contain every native submission
+// for every runtime-statistics owner, including an exact empty table when no owner submitted native work. Packet
+// generation is the immutable plan generation. Wait counts exclude backend-internal waits outside the graph.
+struct FrameGraphPacketSubmissionStatisticsRecord{
+    u32 ownerNodeIndex = Limit<u32>::s_Max;
+    u32 packetIndex = Limit<u32>::s_Max;
+    u64 packetGeneration = 0u;
+    FrameGraphPhysicalQueueId queue;
+    FrameGraphQueueClass::Enum queueClass = FrameGraphQueueClass::Unknown;
+    u64 taskCount = 0u;
+    u64 commandListCount = 0u;
+    u64 plannedWaitTokenCount = 0u;
+    u64 sameQueueWaitElisionCount = 0u;
+    u64 timelineWaitCount = 0u;
+    u64 mergedTimelineWaitCount = 0u;
+    bool joinsAcceptedQueueFrontier = false;
+    bool recoverySubmission = false;
+    f64 submissionSeconds = 0.0;
+};
+
 #pragma pack(push, 1)
 struct EncodedFrameGraphPayloadHeader{
     u32 magic = s_FrameGraphPayloadMagic;
@@ -402,6 +423,21 @@ struct EncodedFrameGraphPayloadHeaderV6{
     u32 compiledTaskCount = 0u;
     u32 runtimeStatisticsCount = 0u;
     u32 physicalQueueRuntimeStatisticsCount = 0u;
+};
+
+struct EncodedFrameGraphPayloadHeaderV7{
+    u32 magic = s_FrameGraphPayloadMagic;
+    u16 version = s_FrameGraphPacketSubmissionStatisticsPayloadVersion;
+    u16 reserved = 0u;
+    u64 frameIndex = 0u;
+    u32 nodeCount = 0u;
+    u32 edgeCount = 0u;
+    u32 stringTableBytes = 0u;
+    u32 queueAssignmentCount = 0u;
+    u32 compiledTaskCount = 0u;
+    u32 runtimeStatisticsCount = 0u;
+    u32 physicalQueueRuntimeStatisticsCount = 0u;
+    u32 packetSubmissionStatisticsCount = 0u;
 };
 
 struct EncodedFrameGraphNode{
@@ -655,6 +691,24 @@ struct EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6{
     EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics recording;
     EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6 submission;
 };
+
+struct EncodedFrameGraphPacketSubmissionStatistics{
+    u32 ownerNodeIndex = Limit<u32>::s_Max;
+    u32 packetIndex = Limit<u32>::s_Max;
+    u64 packetGeneration = 0u;
+    EncodedFrameGraphPhysicalQueueId queue;
+    u8 queueClass = FrameGraphQueueClass::Unknown;
+    u8 joinsAcceptedQueueFrontier = 0u;
+    u8 recoverySubmission = 0u;
+    u8 reserved = 0u;
+    u64 taskCount = 0u;
+    u64 commandListCount = 0u;
+    u64 plannedWaitTokenCount = 0u;
+    u64 sameQueueWaitElisionCount = 0u;
+    u64 timelineWaitCount = 0u;
+    u64 mergedTimelineWaitCount = 0u;
+    f64 submissionSeconds = 0.0;
+};
 #pragma pack(pop)
 static_assert(sizeof(EncodedFrameGraphPayloadHeader) == 28u, "EncodedFrameGraphPayloadHeader wire layout drifted");
 static_assert(alignof(EncodedFrameGraphPayloadHeader) == 1u, "EncodedFrameGraphPayloadHeader must stay packed");
@@ -707,6 +761,25 @@ static_assert(
     && offsetof(EncodedFrameGraphPayloadHeaderV6, runtimeStatisticsCount) == 36u
     && offsetof(EncodedFrameGraphPayloadHeaderV6, physicalQueueRuntimeStatisticsCount) == 40u,
     "EncodedFrameGraphPayloadHeaderV6 field order drifted"
+);
+static_assert(sizeof(EncodedFrameGraphPayloadHeaderV7) == 48u, "EncodedFrameGraphPayloadHeaderV7 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPayloadHeaderV7) == 1u, "EncodedFrameGraphPayloadHeaderV7 must stay packed");
+static_assert(IsStandardLayout_V<EncodedFrameGraphPayloadHeaderV7>, "EncodedFrameGraphPayloadHeaderV7 must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPayloadHeaderV7>, "EncodedFrameGraphPayloadHeaderV7 must stay binary-serializable");
+static_assert(
+    offsetof(EncodedFrameGraphPayloadHeaderV7, magic) == 0u
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, version) == 4u
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, reserved) == 6u
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, frameIndex) == 8u
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, nodeCount) == 16u
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, edgeCount) == 20u
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, stringTableBytes) == 24u
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, queueAssignmentCount) == 28u
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, compiledTaskCount) == 32u
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, runtimeStatisticsCount) == 36u
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, physicalQueueRuntimeStatisticsCount) == 40u
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, packetSubmissionStatisticsCount) == 44u,
+    "EncodedFrameGraphPayloadHeaderV7 field order drifted"
 );
 static_assert(sizeof(EncodedFrameGraphNode) == 72u, "EncodedFrameGraphNode wire layout drifted");
 static_assert(alignof(EncodedFrameGraphNode) == 1u, "EncodedFrameGraphNode must stay packed");
@@ -986,6 +1059,28 @@ static_assert(
         + offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, recoverySubmissionCount) == 312u,
     "EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6 field order drifted"
 );
+static_assert(sizeof(EncodedFrameGraphPacketSubmissionStatistics) == 80u, "EncodedFrameGraphPacketSubmissionStatistics wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPacketSubmissionStatistics) == 1u, "EncodedFrameGraphPacketSubmissionStatistics must stay packed");
+static_assert(IsStandardLayout_V<EncodedFrameGraphPacketSubmissionStatistics>, "EncodedFrameGraphPacketSubmissionStatistics must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPacketSubmissionStatistics>, "EncodedFrameGraphPacketSubmissionStatistics must stay binary-serializable");
+static_assert(
+    offsetof(EncodedFrameGraphPacketSubmissionStatistics, ownerNodeIndex) == 0u
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, packetIndex) == 4u
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, packetGeneration) == 8u
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, queue) == 16u
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, queueClass) == 20u
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, joinsAcceptedQueueFrontier) == 21u
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, recoverySubmission) == 22u
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, reserved) == 23u
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, taskCount) == 24u
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, commandListCount) == 32u
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, plannedWaitTokenCount) == 40u
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, sameQueueWaitElisionCount) == 48u
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, timelineWaitCount) == 56u
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, mergedTimelineWaitCount) == 64u
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, submissionSeconds) == 72u,
+    "EncodedFrameGraphPacketSubmissionStatistics field order drifted"
+);
 
 struct FrameGraphNodeDesc{
     Name name = NAME_NONE;
@@ -1031,12 +1126,15 @@ struct FrameGraphPayload{
     Vector<FrameGraphNodePayload, TelemetryArena> nodes;
     Vector<FrameGraphEdgePayload, TelemetryArena> edges;
     Vector<FrameGraphPhysicalQueueRuntimeStatisticsRecord, TelemetryArena> physicalQueueRuntimeStatistics;
+    Vector<FrameGraphPacketSubmissionStatisticsRecord, TelemetryArena> packetSubmissionStatistics;
     bool physicalQueueRuntimeStatisticsPresent = false;
+    bool packetSubmissionStatisticsPresent = false;
 
     explicit FrameGraphPayload(TelemetryArena& arena)
         : nodes(arena)
         , edges(arena)
         , physicalQueueRuntimeStatistics(arena)
+        , packetSubmissionStatistics(arena)
     {}
 };
 
@@ -1044,6 +1142,9 @@ using FrameGraphNodeDescs = Vector<FrameGraphNodeDesc, TelemetryArena>;
 using FrameGraphEdgeDescs = Vector<FrameGraphEdgeDesc, TelemetryArena>;
 using FrameGraphPhysicalQueueRuntimeStatisticsRecords =
     Vector<FrameGraphPhysicalQueueRuntimeStatisticsRecord, TelemetryArena>
+;
+using FrameGraphPacketSubmissionStatisticsRecords =
+    Vector<FrameGraphPacketSubmissionStatisticsRecord, TelemetryArena>
 ;
 
 
@@ -1066,6 +1167,9 @@ using FrameGraphPhysicalQueueRuntimeStatisticsRecords =
     const FrameGraphPhysicalQueueRuntimeStatistics& statistics,
     const FrameGraphRuntimeStatistics& ownerStatistics
 )noexcept;
+[[nodiscard]] bool IsValidFrameGraphPacketSubmissionStatistics(
+    const FrameGraphPacketSubmissionStatisticsRecord& statistics
+)noexcept;
 [[nodiscard]] bool BuildFrameGraphPayload(
     TelemetryArena& arena,
     u64 frameIndex,
@@ -1079,6 +1183,15 @@ using FrameGraphPhysicalQueueRuntimeStatisticsRecords =
     const FrameGraphNodeDescs& nodes,
     const FrameGraphEdgeDescs& edges,
     const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    TelemetryBytes& outPayload
+);
+[[nodiscard]] bool BuildFrameGraphPayload(
+    TelemetryArena& arena,
+    u64 frameIndex,
+    const FrameGraphNodeDescs& nodes,
+    const FrameGraphEdgeDescs& edges,
+    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
     TelemetryBytes& outPayload
 );
 [[nodiscard]] bool ParseFrameGraphPayload(TelemetryArena& arena, const void* payload, usize payloadBytes, FrameGraphPayload& outPayload);
@@ -1095,6 +1208,15 @@ using FrameGraphPhysicalQueueRuntimeStatisticsRecords =
     const FrameGraphNodeDescs& nodes,
     const FrameGraphEdgeDescs& edges,
     const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    u32 streamId = 0u
+);
+[[nodiscard]] bool RecordFrameGraph(
+    Recorder& recorder,
+    u64 frameIndex,
+    const FrameGraphNodeDescs& nodes,
+    const FrameGraphEdgeDescs& edges,
+    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
     u32 streamId = 0u
 );
 

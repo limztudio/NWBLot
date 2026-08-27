@@ -70,6 +70,21 @@ public:
         , m_physicalQueueRuntimeStatistics(&physicalQueueRuntimeStatistics)
         , m_frameIndex(frameIndex)
     {}
+    FrameGraphBuilder(
+        FrameGraphNodeDescs& nodes,
+        FrameGraphEdgeDescs& edges,
+        FrameGraphPendingNameEdges& pendingNameEdges,
+        FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+        FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
+        const u64 frameIndex = 0u
+    )
+        : m_nodes(nodes)
+        , m_edges(edges)
+        , m_pendingNameEdges(pendingNameEdges)
+        , m_physicalQueueRuntimeStatistics(&physicalQueueRuntimeStatistics)
+        , m_packetSubmissionStatistics(&packetSubmissionStatistics)
+        , m_frameIndex(frameIndex)
+    {}
 
 
 public:
@@ -77,6 +92,10 @@ public:
     [[nodiscard]] bool addPhysicalQueueRuntimeStatistics(
         FrameGraphNodeHandle owner,
         const FrameGraphPhysicalQueueRuntimeStatistics& statistics
+    );
+    [[nodiscard]] bool addPacketSubmissionStatistics(
+        FrameGraphNodeHandle owner,
+        const FrameGraphPacketSubmissionStatisticsRecord& statistics
     );
 
     [[nodiscard]] FrameGraphNodeHandle addPass(const Name& scope, const AStringView label, const u8 flags = 0u){
@@ -128,6 +147,7 @@ private:
     FrameGraphEdgeDescs& m_edges;
     FrameGraphPendingNameEdges& m_pendingNameEdges;
     FrameGraphPhysicalQueueRuntimeStatisticsRecords* m_physicalQueueRuntimeStatistics = nullptr;
+    FrameGraphPacketSubmissionStatisticsRecords* m_packetSubmissionStatistics = nullptr;
     u64 m_frameIndex = 0u;
 };
 

@@ -558,11 +558,12 @@ struct GpuTaskGraphTaskRecordedCallback{
 };
 
 
-// Describes one graph-owned execution of every ordinary packet in compiler order. The executor derives the normal
-// prefix itself and leaves any terminal accepted-frontier suffix declared for the caller's explicit recovery or
-// finalization policy. Semantic timing, completion, and callback bindings keep that ordinary execution independent
-// from compiler packet splitting and merging.
+// Describes one graph-owned execution of an ordinary packet prefix in compiler order. An optional terminal task
+// includes its complete packet and leaves every later packet declared for caller-owned late-tail policy. Without an
+// endpoint, the executor derives every ordinary packet before the terminal accepted-frontier suffix. Semantic timing,
+// completion, and callback bindings keep execution independent from compiler packet splitting and merging.
 struct GpuTaskGraphNormalExecutionDesc{
+    GpuTaskId terminalTask;
     const GpuNativePacketRecordDesc* recordOverrides = nullptr;
     usize recordOverrideCount = 0u;
     const GpuTaskPacketStateBinding* taskStateBindings = nullptr;
@@ -1108,9 +1109,9 @@ public:
         const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr,
         usize taskAcceptedCallbackCount = 0u
     )const;
-    // Records then submits every ordinary compiler packet. Accepted-frontier packets must form one terminal suffix;
-    // the executor rejects a non-terminal frontier before recording so recovery/finalization remains explicit and
-    // retry-safe. It never discards remaining work or submits the frontier suffix on the caller's behalf.
+    // Records then submits the descriptor-selected ordinary compiler prefix. Without a semantic terminal task,
+    // accepted-frontier packets must form one terminal suffix. The executor rejects a frontier inside its selected
+    // prefix before recording and never discards or submits later caller-owned work on the caller's behalf.
     [[nodiscard]] bool recordAndSubmitNormalGraph(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

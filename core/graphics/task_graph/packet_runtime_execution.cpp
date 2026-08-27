@@ -51,10 +51,12 @@ namespace __hidden_gpu_packet_runtime_execution{
     return true;
 }
 // A frontier packet is meaningful only as an explicit recovery/finalization tail. The compiler prevents it from
-// merging with ordinary work, but does not force declaration order, so normal graph execution verifies that the
-// packets form one terminal suffix before it opens any native command list.
+// merging with ordinary work, but does not force declaration order, so normal graph execution rejects one inside
+// either its semantic endpoint prefix or its automatically derived ordinary prefix before recording begins.
 [[nodiscard]] bool FindNormalGraphPacketRange(
+    const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId& terminalTask,
     GpuSubmissionPacketRange& outRange,
     GpuSubmissionPacketId* const outFailedPacket
 ){
@@ -65,6 +67,25 @@ namespace __hidden_gpu_packet_runtime_execution{
     const usize packetCount = compiledGraph.packetCount();
     if(packetCount == 0u)
         return false;
+
+    if(terminalTask.valid()){
+        if(!graph.validTask(terminalTask) || !compiledGraph.findTask(terminalTask))
+            return false;
+        const GpuSubmissionPacketId terminalPacket = compiledGraph.packetForTask(terminalTask);
+        if(!terminalPacket.valid())
+            return false;
+        for(usize packetIndex = 0u; packetIndex <= terminalPacket.index; ++packetIndex){
+            const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
+            if(!compiledGraph.packet(packet).joinsAcceptedQueueFrontier)
+                continue;
+            if(outFailedPacket)
+                *outFailedPacket = packet;
+            return false;
+        }
+
+        outRange = compiledGraph.packetRange(compiledGraph.packetIdAt(0u), terminalPacket);
+        return compiledGraph.validPacketRange(outRange);
+    }
 
     usize firstFrontierPacketIndex = packetCount;
     for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex){
@@ -178,7 +199,9 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
     GpuSubmissionPacketRange normalRange;
     GpuSubmissionPacketId failedPacket;
     if(!__hidden_gpu_packet_runtime_execution::FindNormalGraphPacketRange(
+        graph,
         compiledGraph,
+        desc.terminalTask,
         normalRange,
         &failedPacket
     )){

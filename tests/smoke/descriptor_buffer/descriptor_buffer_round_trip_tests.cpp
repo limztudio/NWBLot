@@ -50636,6 +50636,189 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorSubmitsOrdinaryPrefix){
 }
 
 
+// A semantic endpoint lets the normal executor stop before ordinary late tails without retaining a compiler packet
+// identity. The endpoint includes its complete packet; every later ordinary/frontier packet remains caller-owned.
+TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsAtSemanticTerminalTask){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+
+    bool prefixShouldRecord = true;
+    bool prefixRecorded = false;
+    const GpuTaskId prefixTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/normal_executor_endpoint_prefix"))
+            .setMarkerLabel("Normal Executor Endpoint Prefix")
+            .setQueue(graphicsQueue)
+            .setScheduling(scheduling),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &prefixShouldRecord,
+            .attempted = &prefixRecorded,
+        }
+    );
+    ASSERT_TRUE(prefixTask.valid());
+
+    bool terminalShouldRecord = true;
+    bool terminalRecorded = false;
+    const GpuTaskId terminalDependencies[] = { prefixTask };
+    const GpuTaskId terminalTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/normal_executor_endpoint_terminal"))
+            .setMarkerLabel("Normal Executor Endpoint Terminal")
+            .setQueue(graphicsQueue)
+            .setScheduling(scheduling)
+            .setDependencies(terminalDependencies, LengthOf(terminalDependencies)),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &terminalShouldRecord,
+            .attempted = &terminalRecorded,
+        }
+    );
+    ASSERT_TRUE(terminalTask.valid());
+
+    bool lateTailShouldRecord = true;
+    bool lateTailRecorded = false;
+    const GpuTaskId lateTailDependencies[] = { terminalTask };
+    const GpuTaskId lateTailTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/normal_executor_endpoint_late_tail"))
+            .setMarkerLabel("Normal Executor Endpoint Late Tail")
+            .setQueue(graphicsQueue)
+            .setScheduling(scheduling)
+            .setDependencies(lateTailDependencies, LengthOf(lateTailDependencies)),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &lateTailShouldRecord,
+            .attempted = &lateTailRecorded,
+        }
+    );
+    ASSERT_TRUE(lateTailTask.valid());
+
+    bool frontierShouldRecord = true;
+    bool frontierRecorded = false;
+    GpuTaskSchedulingHint frontierScheduling = scheduling;
+    frontierScheduling.joinsAcceptedQueueFrontier = true;
+    const GpuTaskId frontierTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/normal_executor_endpoint_frontier"))
+            .setMarkerLabel("Normal Executor Endpoint Frontier")
+            .setQueue(graphicsQueue)
+            .setScheduling(frontierScheduling),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &frontierShouldRecord,
+            .attempted = &frontierRecorded,
+        }
+    );
+    ASSERT_TRUE(frontierTask.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/normal_executor_endpoint_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+
+    const GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefixTask);
+    const GpuSubmissionPacketId terminalPacket = compiledGraph.packetForTask(terminalTask);
+    const GpuSubmissionPacketId lateTailPacket = compiledGraph.packetForTask(lateTailTask);
+    const GpuSubmissionPacketId frontierPacket = compiledGraph.packetForTask(frontierTask);
+    ASSERT_TRUE(prefixPacket.valid());
+    ASSERT_TRUE(terminalPacket.valid());
+    ASSERT_TRUE(lateTailPacket.valid());
+    ASSERT_TRUE(frontierPacket.valid());
+    ASSERT_EQ(compiledGraph.packetCount(), 4u);
+    EXPECT_EQ(compiledGraph.packetIdAt(0u), prefixPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(1u), terminalPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(2u), lateTailPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(3u), frontierPacket);
+
+    const GpuNativePacketRecorder recorder(device);
+    const GpuTaskGraphSubmitter submitter(device);
+    GpuTaskGraphNormalExecutionDesc staleExecution;
+    staleExecution.terminalTask = terminalTask;
+    ++staleExecution.terminalTask.generation;
+    GpuRecordedGraph staleRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction staleTransaction(DescriptorBufferRoundTripTest::arena());
+    staleTransaction.reset(compiledGraph);
+    GpuSubmissionPacketId staleFailedPacket;
+    EXPECT_FALSE(submitter.recordAndSubmitNormalGraph(
+        graph,
+        compiledGraph,
+        recorder,
+        staleRecordedGraph,
+        staleExecution,
+        staleTransaction,
+        scratchArena,
+        &staleFailedPacket
+    ));
+    EXPECT_FALSE(staleFailedPacket.valid());
+    EXPECT_EQ(staleRecordedGraph.recordingAttemptGeneration(), 0u);
+    EXPECT_FALSE(staleTransaction.hasAcceptedPackets());
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    GpuTaskGraphNormalExecutionDesc normalExecution;
+    normalExecution.terminalTask = terminalTask;
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(submitter.recordAndSubmitNormalGraph(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        normalExecution,
+        transaction,
+        scratchArena,
+        &failedPacket
+    ));
+    EXPECT_FALSE(failedPacket.valid());
+    EXPECT_TRUE(prefixRecorded);
+    EXPECT_TRUE(terminalRecorded);
+    EXPECT_FALSE(lateTailRecorded);
+    EXPECT_FALSE(frontierRecorded);
+    ASSERT_TRUE(transaction.packetToken(prefixPacket).valid());
+    ASSERT_TRUE(transaction.packetToken(terminalPacket).valid());
+    EXPECT_FALSE(transaction.packetToken(lateTailPacket).valid());
+    EXPECT_FALSE(transaction.packetToken(frontierPacket).valid());
+    ASSERT_NE(transaction.packetRuntime(lateTailPacket), nullptr);
+    ASSERT_NE(transaction.packetRuntime(frontierPacket), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(lateTailPacket)->state, GpuPacketRuntimeState::Declared);
+    EXPECT_EQ(transaction.packetRuntime(frontierPacket)->state, GpuPacketRuntimeState::Declared);
+
+    ASSERT_TRUE(submitter.recordAndSubmitTask(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        lateTailTask,
+        nullptr,
+        0u,
+        nullptr,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(lateTailRecorded);
+    EXPECT_TRUE(transaction.packetToken(lateTailPacket).valid());
+    EXPECT_FALSE(frontierRecorded);
+    EXPECT_TRUE(transaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        recordedGraph.recordingAttemptGeneration()
+    ));
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Recorded-state validation belongs to the ordinary graph transaction. A rejected candidate stops before the first
 // native submit and identifies its semantic packet while the caller retains explicit discard ownership.
 TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsBeforeRejectedRecordedCallbackSubmission){
@@ -50975,18 +51158,20 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorRejectsNonTerminalFront
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
     const GpuTaskGraphSubmitter submitter(device);
+    GpuTaskGraphNormalExecutionDesc normalExecution;
+    normalExecution.terminalTask = normalTask;
     GpuSubmissionPacketId failedPacket;
     EXPECT_FALSE(submitter.recordAndSubmitNormalGraph(
         graph,
         compiledGraph,
         recorder,
         recordedGraph,
-        {},
+        normalExecution,
         transaction,
         scratchArena,
         &failedPacket
     ));
-    EXPECT_EQ(failedPacket, normalPacket);
+    EXPECT_EQ(failedPacket, frontierPacket);
     EXPECT_FALSE(frontierRecorded);
     EXPECT_FALSE(normalRecorded);
     EXPECT_EQ(recordedGraph.recordingAttemptGeneration(), 0u);

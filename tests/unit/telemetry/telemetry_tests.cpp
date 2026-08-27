@@ -1726,7 +1726,10 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
     ));
 
     const Name cpuScopeName("gbuffer");
-    const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
+    NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
+    stats.sampleCount = 1u;
+    stats.firstSampleFrameIndex = stats.publishFrameIndex;
+    stats.lastSampleFrameIndex = stats.publishFrameIndex;
     EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, "gbuffer", stats, 2u));
 
     const Name memoryScopeName("memory/project_arena");
@@ -1774,6 +1777,7 @@ TEST(Telemetry, TelemetryReportPreservesEveryFrameGraphAndCorrelatesTimingByFram
     const Name gbufferScopeName("gbuffer");
     NWB::Core::Perf::TimingStats firstTiming = MakeTestTimingStats();
     firstTiming.seconds = 0.041;
+    firstTiming.sampleCount = 1u;
     firstTiming.publishFrameIndex = 41u;
     firstTiming.firstSampleFrameIndex = 40u;
     firstTiming.lastSampleFrameIndex = 40u;
@@ -1789,10 +1793,11 @@ TEST(Telemetry, TelemetryReportPreservesEveryFrameGraphAndCorrelatesTimingByFram
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
-    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 41u, nodes, edges, 7u));
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 40u, nodes, edges, 7u));
 
     NWB::Core::Perf::TimingStats secondTiming = MakeTestTimingStats();
     secondTiming.seconds = 0.042;
+    secondTiming.sampleCount = 1u;
     secondTiming.publishFrameIndex = 42u;
     secondTiming.firstSampleFrameIndex = 41u;
     secondTiming.lastSampleFrameIndex = 41u;
@@ -1809,19 +1814,19 @@ TEST(Telemetry, TelemetryReportPreservesEveryFrameGraphAndCorrelatesTimingByFram
     nodes[0u].flags = 129u;
     edges[0u].flags = 64u;
     edges[1u].flags = 3u;
-    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 42u, nodes, edges, 8u));
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 41u, nodes, edges, 8u));
 
     nodes[0u].label = "Unmatched GBuffer Pass";
-    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 43u, nodes, edges, 9u));
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 42u, nodes, edges, 9u));
 
     Log::TelemetryReport report(testArena.arena);
     ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
     EXPECT_EQ(report.summary.frameGraphFrameCount, 3u);
 
     const AStringView json(report.json.data(), report.json.size());
-    const usize firstJsonGraph = json.find("\"frameIndex\": 41");
-    const usize secondJsonGraph = json.find("\"frameIndex\": 42");
-    const usize thirdJsonGraph = json.find("\"frameIndex\": 43");
+    const usize firstJsonGraph = json.find("\"frameIndex\": 40");
+    const usize secondJsonGraph = json.find("\"frameIndex\": 41");
+    const usize thirdJsonGraph = json.find("\"frameIndex\": 42");
     ASSERT_NE(firstJsonGraph, AStringView::npos);
     ASSERT_NE(secondJsonGraph, AStringView::npos);
     ASSERT_NE(thirdJsonGraph, AStringView::npos);
@@ -1852,9 +1857,9 @@ TEST(Telemetry, TelemetryReportPreservesEveryFrameGraphAndCorrelatesTimingByFram
     );
 
     const AStringView dot(report.graph.data(), report.graph.size());
-    const usize firstDotGraph = dot.find("digraph frame_graph_41_7_0");
-    const usize secondDotGraph = dot.find("digraph frame_graph_42_8_1");
-    const usize thirdDotGraph = dot.find("digraph frame_graph_43_9_2");
+    const usize firstDotGraph = dot.find("digraph frame_graph_40_7_0");
+    const usize secondDotGraph = dot.find("digraph frame_graph_41_8_1");
+    const usize thirdDotGraph = dot.find("digraph frame_graph_42_9_2");
     ASSERT_NE(firstDotGraph, AStringView::npos);
     ASSERT_NE(secondDotGraph, AStringView::npos);
     ASSERT_NE(thirdDotGraph, AStringView::npos);
@@ -1877,6 +1882,45 @@ TEST(Telemetry, TelemetryReportPreservesEveryFrameGraphAndCorrelatesTimingByFram
     EXPECT_TRUE(ContainsText(secondDotRecord, "label=\"reads\", flags=3"));
     EXPECT_TRUE(ContainsText(firstDotRecord, "label=\"writes\", flags=0"));
     EXPECT_TRUE(ContainsText(secondDotRecord, "label=\"writes\", flags=64"));
+}
+
+TEST(Telemetry, TelemetryReportDoesNotAttachAggregatedTimingToOneGraph){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    NWB::Core::Perf::TimingStats aggregatedTiming = MakeTestTimingStats();
+    aggregatedTiming.seconds = 0.043;
+    aggregatedTiming.sampleCount = 2u;
+    aggregatedTiming.publishFrameIndex = 44u;
+    aggregatedTiming.firstSampleFrameIndex = 43u;
+    aggregatedTiming.lastSampleFrameIndex = 43u;
+    ASSERT_TRUE(Telemetry::RecordPerfTiming(
+        recorder,
+        Telemetry::PerfTimingSource::Gpu,
+        Name("gbuffer"),
+        "gbuffer",
+        aggregatedTiming,
+        70u
+    ));
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 43u, nodes, edges, 7u));
+    nodes[0u].label = "Publish Frame GBuffer Pass";
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 44u, nodes, edges, 8u));
+
+    Log::TelemetryReport report(testArena.arena);
+    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    const AStringView dot(report.graph.data(), report.graph.size());
+    EXPECT_TRUE(ContainsText(dot, "digraph frame_graph_43_7_0"));
+    EXPECT_TRUE(ContainsText(dot, "digraph frame_graph_44_8_1"));
+    EXPECT_FALSE(ContainsText(dot, " ms"));
+    EXPECT_EQ(report.summary.gpuTimingEventCount, 1u);
+    EXPECT_EQ(report.summary.gpuTimingSampleCount, aggregatedTiming.sampleCount);
+    EXPECT_EQ(report.summary.gpuTimingSeconds, aggregatedTiming.seconds);
+    EXPECT_TRUE(ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "gpu,gbuffer"));
 }
 
 TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){

@@ -742,10 +742,17 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
             }
             __hidden_telemetry_report::AddTiming(outReport.summary, payload);
             __hidden_telemetry_report::AppendPerfCsvRow(outReport.perfCsv, payload.source, payload);
-            timingByFrameAndScope.insert_or_assign(
-                __hidden_telemetry_report::GraphTimingKey{ payload.stats.publishFrameIndex, payload.scopeName },
-                payload.stats.seconds
-            );
+            // first/last are arrival endpoints, so only one sample proves an exact source-frame association when
+            // different queues complete out of order. Aggregated windows remain available in the Perf CSV.
+            if(
+                payload.stats.sampleCount == 1u
+                && payload.stats.firstSampleFrameIndex == payload.stats.lastSampleFrameIndex
+            ){
+                timingByFrameAndScope.insert_or_assign(
+                    __hidden_telemetry_report::GraphTimingKey{ payload.stats.firstSampleFrameIndex, payload.scopeName },
+                    payload.stats.seconds
+                );
+            }
             break;
         }
         case Telemetry::EventKind::MemoryFrame: {

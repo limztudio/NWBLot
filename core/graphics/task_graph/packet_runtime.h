@@ -22,6 +22,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class GpuTimingRecorder;
 class GpuTimingSubmissionTicket;
 class GpuTaskGraph;
 class GpuTaskGraphSubmitter;
@@ -137,6 +138,7 @@ struct GpuTaskGraphPhysicalQueueRecordingStatistics{
 
 class GpuRecordedGraph final : NoCopy{
     friend class GpuNativePacketRecorder;
+    friend class GpuTaskGraphSubmitter;
 
 private:
     // Every ready-frontier worker receives isolated state-handoff scratch. This is separate from the per-packet
@@ -159,13 +161,8 @@ private:
 
 
 public:
-    explicit GpuRecordedGraph(GraphicsArena& arena)
-        : m_arena(arena)
-        , m_packets(arena)
-        , m_packetStateSeeds(arena)
-        , m_serialRecordingScratch(arena)
-        , m_packetRecordingScratch(arena)
-    {}
+    explicit GpuRecordedGraph(GraphicsArena& arena);
+    ~GpuRecordedGraph();
 
 
 public:
@@ -204,6 +201,11 @@ public:
 
 
 private:
+    [[nodiscard]] bool prepareTimingTickets(const GpuCompiledGraph& compiledGraph, GpuTimingRecorder& recorder);
+    void discardPacketTimingTicket(const GpuSubmissionPacketId& packet);
+    [[nodiscard]] GpuTimingSubmissionTicket* packetTimingTicket(
+        const GpuSubmissionPacketId& packet
+    )const noexcept;
     [[nodiscard]] bool buildPacketInitialStateSeed(
         PacketRecordingScratch& scratch,
         const GpuTaskGraph& graph,
@@ -222,7 +224,9 @@ private:
 
 private:
     GraphicsArena& m_arena;
+    GpuTimingRecorder* m_timingRecorder = nullptr;
     GraphicsVector<GpuRecordedPacket> m_packets;
+    GraphicsVector<GlobalUniquePtr<GpuTimingSubmissionTicket>> m_packetTimingTickets;
     GraphicsVector<CommandListResourceStateHandoff> m_packetStateSeeds;
     PacketRecordingScratch m_serialRecordingScratch;
     GraphicsVector<PacketRecordingScratch> m_packetRecordingScratch;
@@ -273,6 +277,10 @@ class GpuNativePacketRecorder final : NoCopy{
 public:
     explicit GpuNativePacketRecorder(Device& device)
         : m_device(device)
+    {}
+    GpuNativePacketRecorder(Device& device, GpuTimingRecorder& timingRecorder)
+        : m_device(device)
+        , m_timingRecorder(&timingRecorder)
     {}
 
 
@@ -372,6 +380,9 @@ private:
         usize taskStateBindingCount
     )const;
     Device& m_device;
+    // Optional because all-None graphs retain the existing recorder path. A timing-aware recorder must outlive every
+    // GpuRecordedGraph ticket created through this instance.
+    GpuTimingRecorder* m_timingRecorder = nullptr;
 };
 
 

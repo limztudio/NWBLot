@@ -252,6 +252,13 @@ bool GpuTaskGraphSubmitter::submitPacketWithinSubmissionOperation(
         return false;
 
     const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
+    GpuTimingSubmissionTicket* const ownedTimingTicket = recordedGraph.packetTimingTicket(packetID);
+    if(
+        packet.recordsTiming != static_cast<bool>(ownedTimingTicket)
+        || (ownedTimingTicket && timingTicket && timingTicket != ownedTimingTicket)
+    )
+        return false;
+    GpuTimingSubmissionTicket* const effectiveTimingTicket = ownedTimingTicket ? ownedTimingTicket : timingTicket;
     if(!graph.packetReadyForSubmission(
         compiledGraph,
         packetID,
@@ -384,8 +391,8 @@ bool GpuTaskGraphSubmitter::submitPacketWithinSubmissionOperation(
     if(preSubmitHook)
         submitDesc.setPreSubmitHook(*preSubmitHook);
     const Timer submissionBegin = TimerNow();
-    const QueueSubmissionToken token = timingTicket
-        ? timingTicket->submit(
+    const QueueSubmissionToken token = effectiveTimingTicket
+        ? effectiveTimingTicket->submit(
             m_device,
             recordedPacket->commandLists,
             recordedPacket->commandListCount,
@@ -508,7 +515,33 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
         )
             return false;
         for(usize previousIndex = 0u; previousIndex < ticketIndex; ++previousIndex){
-            if(timingTickets[previousIndex].packet == ticket.packet)
+            if(
+                timingTickets[previousIndex].packet == ticket.packet
+                || timingTickets[previousIndex].timingTicket == ticket.timingTicket
+            )
+                return false;
+        }
+    }
+    const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
+    for(usize packetIndex = range.first.index; packetIndex < rangeEnd; ++packetIndex){
+        const GpuSubmissionPacketId packetID = compiledGraph.packetIdAt(packetIndex);
+        const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
+        GpuTimingSubmissionTicket* const ownedTimingTicket = recordedGraph.packetTimingTicket(packetID);
+        if(packet.recordsTiming != static_cast<bool>(ownedTimingTicket))
+            return false;
+        for(usize ticketIndex = 0u; ticketIndex < timingTicketCount; ++ticketIndex){
+            const GpuTaskGraphPacketTimingTicket& timingTicket = timingTickets[ticketIndex];
+            if(
+                ownedTimingTicket
+                && timingTicket.timingTicket == ownedTimingTicket
+                && timingTicket.packet != packetID
+            )
+                return false;
+            if(
+                timingTicket.packet == packetID
+                && ownedTimingTicket
+                && timingTicket.timingTicket != ownedTimingTicket
+            )
                 return false;
         }
     }

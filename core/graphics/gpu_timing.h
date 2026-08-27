@@ -715,6 +715,9 @@ public:
     // A timing scope may span ordered primary command buffers. Close its debug marker on the command list that
     // opened it before that list is closed, then emit the ending timestamp on the later command list.
     void finishMarker();
+    // Recording failure recovery can reset the command list's marker stack before this object unwinds. Relinquish
+    // marker ownership in that path so the destructor does not emit an unmatched marker end after recovery.
+    void abandonMarker()noexcept{ m_markerOpen = false; }
     void finishTiming(CommandList& commandList);
     // Discards a started scope when its producer command buffer cannot be finalized or submitted.
     void discardTiming();

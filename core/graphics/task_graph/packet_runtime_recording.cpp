@@ -8,6 +8,7 @@
 
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/capture/command_ir.h>
+#include <core/graphics/gpu_timing.h>
 
 #include <global/timer.h>
 
@@ -25,6 +26,140 @@ namespace __hidden_gpu_packet_runtime_recording{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr AStringView s_PacketMarkerLabel = "GPU Task Packet";
+inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
+
+
+[[nodiscard]] GpuTimingScopeDefinition TimingScopeDefinition(
+    const Name& identity,
+    const AStringView markerLabel
+)noexcept{
+    GpuTimingScopeDefinition definition;
+    definition.identity = identity;
+    definition.markerLabel = markerLabel;
+    return definition;
+}
+
+[[nodiscard]] Name PacketTimingScopeName(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId& packet
+){
+    const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
+    const GpuTaskId* const tasks = compiledGraph.packetTasks(packet);
+    if(packetPlan.taskCount == 0u || !tasks)
+        return NAME_NONE;
+    return GpuTaskPacketTimingScopeName(graph.taskAt(tasks[0u].index).identity);
+}
+
+[[nodiscard]] bool CountTimingScopeOccurrences(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const Name& scopeName,
+    usize& outOccurrenceCount
+){
+    outOccurrenceCount = 0u;
+    for(usize packetIndex = 0u; packetIndex < compiledGraph.packetCount(); ++packetIndex){
+        const GpuSubmissionPacketId packetID = compiledGraph.packetIdAt(packetIndex);
+        const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
+        const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
+        if(packet.taskCount == 0u || !tasks)
+            return false;
+
+        bool recordsTiming = false;
+        for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
+            const GpuTaskId task = tasks[taskIndex];
+            const GpuTaskGraphTaskView taskView = graph.taskAt(task.index);
+            const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+            if(
+                !compiledTask
+                || compiledTask->packet != packetID
+                || compiledTask->timingPolicy != taskView.timing.policy
+                || compiledTask->timingPolicy >= GpuTaskTimingPolicy::kCount
+            )
+                return false;
+            recordsTiming = recordsTiming || compiledTask->timingPolicy != GpuTaskTimingPolicy::None;
+            if(compiledTask->timingPolicy == GpuTaskTimingPolicy::Task && taskView.identity == scopeName)
+                ++outOccurrenceCount;
+        }
+        if(packet.recordsTiming != recordsTiming)
+            return false;
+        if(packet.recordsTiming && PacketTimingScopeName(graph, compiledGraph, packetID) == scopeName)
+            ++outOccurrenceCount;
+    }
+    return true;
+}
+
+[[nodiscard]] bool PrepareTimingScopeQueries(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    GpuTimingRecorder& timingRecorder,
+    Device& device,
+    const Name& scopeName
+){
+    usize occurrenceCount = 0u;
+    if(
+        !scopeName
+        || !CountTimingScopeOccurrences(graph, compiledGraph, scopeName, occurrenceCount)
+        || occurrenceCount == 0u
+        || occurrenceCount > Limit<u32>::s_Max / s_MaxFramesInFlight
+    )
+        return false;
+    return timingRecorder.prepareScopeQueries(
+        scopeName,
+        device,
+        static_cast<u32>(occurrenceCount) * s_MaxFramesInFlight
+    );
+}
+
+[[nodiscard]] bool PrepareCompiledTimingQueries(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    GpuTimingRecorder* const timingRecorder,
+    Device& device
+){
+    bool recordsTiming = false;
+    for(usize packetIndex = 0u; packetIndex < compiledGraph.packetCount(); ++packetIndex)
+        recordsTiming = recordsTiming || compiledGraph.packet(compiledGraph.packetIdAt(packetIndex)).recordsTiming;
+    if(!recordsTiming)
+        return true;
+    if(!timingRecorder)
+        return false;
+
+    for(usize packetIndex = 0u; packetIndex < compiledGraph.packetCount(); ++packetIndex){
+        const GpuSubmissionPacketId packetID = compiledGraph.packetIdAt(packetIndex);
+        const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
+        if(!packet.recordsTiming)
+            continue;
+        const Name packetScopeName = PacketTimingScopeName(graph, compiledGraph, packetID);
+        if(!PrepareTimingScopeQueries(graph, compiledGraph, *timingRecorder, device, packetScopeName))
+            return false;
+
+        const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
+        if(!tasks)
+            return false;
+        for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
+            const GpuTaskId task = tasks[taskIndex];
+            const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+            if(!compiledTask)
+                return false;
+            if(
+                compiledTask->timingPolicy == GpuTaskTimingPolicy::Task
+                && !PrepareTimingScopeQueries(
+                    graph,
+                    compiledGraph,
+                    *timingRecorder,
+                    device,
+                    graph.taskAt(task.index).identity
+                )
+            )
+                return false;
+        }
+    }
+    return true;
+}
 
 
 [[nodiscard]] static bool HasExplicitKnownInitialState(
@@ -239,17 +374,27 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     const GpuSubmissionPacket& packet = compiledGraph.packet(desc.packet);
     const GpuTaskId* const tasks = compiledGraph.packetTasks(desc.packet);
     const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packet.queue);
+    GpuTimingSubmissionTicket* const packetTimingTicket = outRecordedGraph.packetTimingTicket(desc.packet);
     if(
         !tasks
         || packet.taskCount == 0u
         || !queue
         || queue->queueClass >= CommandQueue::kCount
         || !m_device.matchesPhysicalQueueIdentity(packet.queue)
+        || packet.recordsTiming != static_cast<bool>(packetTimingTicket)
+        || (
+            packetTimingTicket
+            && (
+                !m_timingRecorder
+                || outRecordedGraph.m_timingRecorder != m_timingRecorder
+            )
+        )
     )
         return false;
     const CommandListResourceStateHandoff* initialStates = nullptr;
     GpuTaskPacketRecordingLease recordingLease;
     const auto abortPacketRecording = [&]{
+        outRecordedGraph.discardPacketTimingTicket(desc.packet);
         graph.abortPacketRecording(compiledGraph, desc.packet, recordingLease);
     };
     if(!graph.beginPacketRecording(
@@ -315,6 +460,31 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     commandList->open(initialStates);
     const f64 commandListAcquisitionSeconds = DurationInSeconds<f64>(TimerNow(), commandListAcquisitionBegin);
     bool recorded = commandList->hasCommandBuffer();
+    const u64 packetRecordingLeaseSerial = commandList->recordingLeaseSerial();
+    bool packetRecordingLeaseIntact = commandList->matchesRecordingLease(packetRecordingLeaseSerial);
+    Optional<GpuTimingSubmissionTicket::RecordingScope> packetTimingRecordingScope;
+    Optional<GpuTimingMeasure> packetTiming;
+    bool packetMarkerStarted = false;
+    if(recorded && packetTimingTicket){
+        packetTimingRecordingScope.emplace(*packetTimingTicket);
+        packetTiming.emplace(
+            *m_timingRecorder,
+            __hidden_gpu_packet_runtime_recording::TimingScopeDefinition(
+                __hidden_gpu_packet_runtime_recording::PacketTimingScopeName(graph, compiledGraph, desc.packet),
+                __hidden_gpu_packet_runtime_recording::s_PacketMarkerLabel
+            ),
+            m_device,
+            *commandList
+        );
+    }
+    else if(recorded){
+        commandList->beginMarker(__hidden_gpu_packet_runtime_recording::s_PacketMarkerLabel);
+    }
+    packetRecordingLeaseIntact = commandList->matchesRecordingLease(packetRecordingLeaseSerial);
+    if(!packetTimingTicket)
+        packetMarkerStarted = packetRecordingLeaseIntact && !commandList->commandRecordingFailed();
+    if(recorded && (!packetRecordingLeaseIntact || commandList->commandRecordingFailed()))
+        recorded = false;
     u32 barrierCount = 0u;
     f64 graphBarrierRecordingSeconds = 0.0;
     f64 taskRecordSeconds = 0.0;
@@ -322,7 +492,11 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         const GpuTaskId task = tasks[taskIndex];
         const GpuTaskGraphTaskView taskView = graph.taskAt(task.index);
         const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        if(!compiledTask || compiledTask->packet != desc.packet){
+        if(
+            !compiledTask
+            || compiledTask->packet != desc.packet
+            || compiledTask->timingPolicy != taskView.timing.policy
+        ){
             recorded = false;
             break;
         }
@@ -382,12 +556,29 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
             );
             recorded = false;
         }
+        Optional<GpuTimingMeasure> taskTiming;
         bool taskMarkerStarted = false;
         if(recorded){
-            commandList->beginMarker(taskView.markerLabel);
+            if(compiledTask->timingPolicy == GpuTaskTimingPolicy::Task){
+                taskTiming.emplace(
+                    *m_timingRecorder,
+                    __hidden_gpu_packet_runtime_recording::TimingScopeDefinition(
+                        taskView.identity,
+                        taskView.markerLabel.empty()
+                            ? __hidden_gpu_packet_runtime_recording::s_DefaultTaskMarkerLabel
+                            : taskView.markerLabel
+                    ),
+                    m_device,
+                    *commandList
+                );
+            }
+            else{
+                commandList->beginMarker(taskView.markerLabel);
+            }
             taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
-            taskMarkerStarted = taskRecordingLeaseIntact && !commandList->commandRecordingFailed();
-            if(!taskMarkerStarted){
+            if(compiledTask->timingPolicy != GpuTaskTimingPolicy::Task)
+                taskMarkerStarted = taskRecordingLeaseIntact && !commandList->commandRecordingFailed();
+            if(!taskRecordingLeaseIntact || commandList->commandRecordingFailed()){
                 NWB_LOGGER_CRITICAL_WARNING(
                     NWB_TEXT("Gpu task graph: rejecting task '{}' because its marker invalidated or replaced the native command buffer"),
                     StringConvert(taskView.markerLabel)
@@ -438,6 +629,9 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         }
         if(recorded)
             commandList->endRenderPass();
+        taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
+        if(recorded && (!taskRecordingLeaseIntact || commandList->commandRecordingFailed()))
+            recorded = false;
 #if defined(NWB_DEBUG)
         GpuQueueCapability::Mask usedCapabilities = GpuQueueCapability::None;
         if(taskCapabilityTrackingStarted){
@@ -468,7 +662,21 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
             recorded = false;
         }
 #endif
-        if(taskMarkerStarted && taskRecordingLeaseIntact)
+        if(taskTiming.has_value()){
+            if(taskRecordingLeaseIntact){
+                if(recorded)
+                    taskTiming.value().finishTiming(*commandList);
+                else
+                    taskTiming.value().discardTiming();
+                taskTiming.value().finishMarker();
+            }
+            else{
+                taskTiming.value().discardTiming();
+                taskTiming.value().abandonMarker();
+            }
+            taskTiming.reset();
+        }
+        else if(taskMarkerStarted && taskRecordingLeaseIntact)
             commandList->endMarker();
         const GpuCompiledBarrier* const epilogueBarriers = compiledGraph.taskEpilogueBarriers(task);
         if(compiledTask->epilogueBarrierCount > 0u && !epilogueBarriers)
@@ -481,6 +689,28 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
             commandList->commitBarriers();
         graphBarrierRecordingSeconds += DurationInSeconds<f64>(TimerNow(), graphEpilogueRecordingBegin);
     }
+    packetRecordingLeaseIntact = commandList->matchesRecordingLease(packetRecordingLeaseSerial);
+    if(recorded && (!packetRecordingLeaseIntact || commandList->commandRecordingFailed()))
+        recorded = false;
+    if(packetTiming.has_value()){
+        if(packetRecordingLeaseIntact){
+            if(recorded)
+                packetTiming.value().finishTiming(*commandList);
+            else
+                packetTiming.value().discardTiming();
+            packetTiming.value().finishMarker();
+        }
+        else{
+            packetTiming.value().discardTiming();
+            packetTiming.value().abandonMarker();
+        }
+        packetTiming.reset();
+    }
+    else if(packetMarkerStarted && packetRecordingLeaseIntact)
+        commandList->endMarker();
+    packetTimingRecordingScope.reset();
+    if(recorded && commandList->commandRecordingFailed())
+        recorded = false;
     commandList->close(packetStateSeed);
     if(!recorded || !commandList->hasCommandBuffer()){
         packetStateSeed->reset();
@@ -529,6 +759,13 @@ bool GpuNativePacketRecorder::prepareRecordingAttempt(
 )const{
     if(!compiledGraph.validFor(graph) || !compiledGraph.validPacketRange(range))
         return false;
+    if(!__hidden_gpu_packet_runtime_recording::PrepareCompiledTimingQueries(
+        graph,
+        compiledGraph,
+        m_timingRecorder,
+        m_device
+    ))
+        return false;
 
     const usize rangeBegin = range.first.index;
     const usize rangeEnd = rangeBegin + range.packetCount;
@@ -540,6 +777,11 @@ bool GpuNativePacketRecorder::prepareRecordingAttempt(
 
     if(!outRecordedGraph.validFor(graph, compiledGraph))
         outRecordedGraph.resetForRecording(graph, compiledGraph);
+    if(
+        m_timingRecorder
+        && !outRecordedGraph.prepareTimingTickets(compiledGraph, *m_timingRecorder)
+    )
+        return false;
     return outRecordedGraph.validFor(graph, compiledGraph);
 }
 

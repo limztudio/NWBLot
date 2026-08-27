@@ -288,7 +288,12 @@ bool GpuTaskGraphCompiler::analyze(
     }
     for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
         const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
-        if(!task.identity || !IsValidQueueRequest(task.queue) || !IsValidSchedulingHint(task.scheduling))
+        if(
+            !task.identity
+            || !IsValidQueueRequest(task.queue)
+            || !IsValidSchedulingHint(task.scheduling)
+            || task.timing.policy >= GpuTaskTimingPolicy::kCount
+        )
             return fail(GpuTaskGraphAnalysisStatus::InvalidTask, task.id);
         for(usize dependencyIndex = 0u; dependencyIndex < task.dependencyCount; ++dependencyIndex){
             if(!graph.validTask(task.dependencies[dependencyIndex]))

@@ -90,6 +90,7 @@ namespace GpuTaskGraphCompilerDetail{
             return false;
 
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
+        const bool taskRecordsTiming = task.timing.policy != GpuTaskTimingPolicy::None;
         GpuSubmissionPacketId packetID;
         GpuTaskPacketizationDecision::Enum packetizationDecision = compiledPlan.packets.empty()
             ? GpuTaskPacketizationDecision::FirstTask
@@ -237,6 +238,7 @@ namespace GpuTaskGraphCompilerDetail{
                     compiledPlan.planGeneration,
                 };
                 ++precedingPacket.taskCount;
+                precedingPacket.recordsTiming = precedingPacket.recordsTiming || taskRecordsTiming;
                 packetizationDecision = scoredMergeRequested
                     ? GpuTaskPacketizationDecision::MergedFrontierScored
                     : GpuTaskPacketizationDecision::MergedExplicit
@@ -254,6 +256,7 @@ namespace GpuTaskGraphCompilerDetail{
                 .taskOffset = static_cast<u32>(compiledPlan.packetTasks.size()),
                 .taskCount = 1u,
                 .joinsAcceptedQueueFrontier = task.scheduling.joinsAcceptedQueueFrontier,
+                .recordsTiming = taskRecordsTiming,
             });
         }
         compiledPlan.packetTasks.push_back(taskID);
@@ -262,6 +265,7 @@ namespace GpuTaskGraphCompilerDetail{
             .queue = assignment->queue,
             .packet = packetID,
             .packetizationDecision = packetizationDecision,
+            .timingPolicy = task.timing.policy,
         });
     }
     return true;

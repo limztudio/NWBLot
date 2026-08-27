@@ -6,6 +6,8 @@
 
 #include "task_graph.h"
 
+#include <core/graphics/gpu_timing.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -71,9 +73,23 @@ namespace __hidden_gpu_packet_runtime_recorded_graph{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+GpuRecordedGraph::GpuRecordedGraph(GraphicsArena& arena)
+    : m_arena(arena)
+    , m_packets(arena)
+    , m_packetTimingTickets(arena)
+    , m_packetStateSeeds(arena)
+    , m_serialRecordingScratch(arena)
+    , m_packetRecordingScratch(arena)
+{}
+GpuRecordedGraph::~GpuRecordedGraph() = default;
+
+
 void GpuRecordedGraph::reset(const GpuCompiledGraph& compiledGraph){
     m_packets.clear();
     m_packets.resize(compiledGraph.packetCount());
+    m_packetTimingTickets.clear();
+    m_timingRecorder = nullptr;
+    m_packetTimingTickets.resize(compiledGraph.packetCount());
     m_packetStateSeeds.clear();
     m_packetStateSeeds.reserve(compiledGraph.packetCount());
     m_packetRecordingScratch.clear();
@@ -119,6 +135,7 @@ bool GpuRecordedGraph::validFor(const GpuCompiledGraph& compiledGraph)const noex
         && m_planGeneration == compiledGraph.planGeneration()
         && m_deviceGeneration == compiledGraph.deviceGeneration()
         && m_packets.size() == compiledGraph.packetCount()
+        && m_packetTimingTickets.size() == compiledGraph.packetCount()
         && m_packetStateSeeds.size() == compiledGraph.packetCount()
         && m_packetRecordingScratch.size() == compiledGraph.packetCount()
     ;
@@ -377,6 +394,58 @@ const CommandListResourceStateHandoff* GpuRecordedGraph::taskFinalStateSeed(
     if(!validFor(compiledGraph) || !compiledGraph.findTask(task))
         return nullptr;
     return packetFinalStateSeed(compiledGraph.packetForTask(task));
+}
+
+bool GpuRecordedGraph::prepareTimingTickets(
+    const GpuCompiledGraph& compiledGraph,
+    GpuTimingRecorder& recorder
+){
+    if(!validFor(compiledGraph))
+        return false;
+
+    bool recordsTiming = false;
+    for(usize packetIndex = 0u; packetIndex < compiledGraph.packetCount(); ++packetIndex){
+        recordsTiming = recordsTiming || compiledGraph.packet(compiledGraph.packetIdAt(packetIndex)).recordsTiming;
+    }
+    if(recordsTiming && m_timingRecorder && m_timingRecorder != &recorder)
+        return false;
+    if(recordsTiming)
+        m_timingRecorder = &recorder;
+
+    for(usize packetIndex = 0u; packetIndex < compiledGraph.packetCount(); ++packetIndex){
+        GlobalUniquePtr<GpuTimingSubmissionTicket>& ticket = m_packetTimingTickets[packetIndex];
+        const GpuSubmissionPacket& packet = compiledGraph.packet(compiledGraph.packetIdAt(packetIndex));
+        if(!packet.recordsTiming){
+            if(ticket)
+                return false;
+            continue;
+        }
+        if(!ticket)
+            ticket = MakeGlobalUnique<GpuTimingSubmissionTicket>(m_arena, recorder);
+        if(!ticket)
+            return false;
+    }
+    return true;
+}
+
+void GpuRecordedGraph::discardPacketTimingTicket(const GpuSubmissionPacketId& packet){
+    GpuTimingSubmissionTicket* const ticket = packetTimingTicket(packet);
+    if(!ticket)
+        return;
+    ticket->discard();
+    m_packetTimingTickets[packet.index].reset();
+}
+
+GpuTimingSubmissionTicket* GpuRecordedGraph::packetTimingTicket(
+    const GpuSubmissionPacketId& packet
+)const noexcept{
+    if(
+        !packet.valid()
+        || packet.generation != m_planGeneration
+        || packet.index >= m_packetTimingTickets.size()
+    )
+        return nullptr;
+    return m_packetTimingTickets[packet.index].get();
 }
 
 CommandListResourceStateHandoff* GpuRecordedGraph::packetStateSeed(const GpuSubmissionPacketId& packet)noexcept{

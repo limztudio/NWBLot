@@ -97,13 +97,30 @@ struct GpuTaskSchedulingHint{
     Name frontierScoredMergeDomain = {};
 };
 
+namespace GpuTaskTimingPolicy{
+    enum Enum : u8{
+        None,
+        PacketOnly,
+        Task,
+
+        kCount,
+    };
+};
+
 // Optional dimensions for immutable timing-history keys. Variant distinguishes compatible task implementations;
-// resolutionClass groups a renderer-defined resolution bucket or exact target extent. Both default to zero for
-// existing declarations that intentionally use one stable timing dimension.
+// resolutionClass groups a renderer-defined resolution bucket or exact target extent. Policy selects graph-owned
+// packet/task query scopes and defaults to None so existing manually timed declarations remain unchanged.
 struct GpuTaskTimingMetadata{
     u32 variant = 0u;
     u32 resolutionClass = 0u;
+    GpuTaskTimingPolicy::Enum policy = GpuTaskTimingPolicy::None;
 };
+
+// Packet timing identities are derived from the first semantic task rather than compiler packet IDs, preserving
+// one stable telemetry key when an equivalent graph is recompiled into a new plan generation.
+[[nodiscard]] inline Name GpuTaskPacketTimingScopeName(const Name& firstTaskIdentity){
+    return DeriveName(firstTaskIdentity, AStringView(".packet"));
+}
 
 // One immutable external ownership source for an imported texture range. Multiple sources let a later graph consume
 // a prior graph's disjoint terminal texture exports without collapsing them into one fake physical owner. Every

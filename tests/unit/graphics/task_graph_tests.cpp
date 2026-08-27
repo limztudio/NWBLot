@@ -17931,6 +17931,138 @@ TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
 }
 
 
+TEST(GpuTaskGraph, CompilesHierarchicalGraphOwnedTimingPolicies){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuQueueRequest graphicsRequest;
+    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+    graphicsRequest.allowFallback = false;
+    graphicsRequest.compilerMayOverridePreference = false;
+
+    Graphics::GpuTaskTimingMetadata packetTiming;
+    packetTiming.policy = Graphics::GpuTaskTimingPolicy::PacketOnly;
+    Graphics::GpuTaskTimingMetadata taskTiming;
+    taskTiming.policy = Graphics::GpuTaskTimingPolicy::Task;
+
+    const Name untimedIdentity("tests/task_graph/timing_policy_untimed");
+    const Graphics::GpuTaskId untimed = AddTaskWithQueue(
+        graph,
+        untimedIdentity,
+        "Timing Policy Untimed",
+        graphicsRequest
+    );
+    ASSERT_TRUE(untimed.valid());
+
+    const Name packetOnlyIdentity("tests/task_graph/timing_policy_packet_only");
+    const Graphics::GpuTaskId packetOnly = AddTaskWithQueue(
+        graph,
+        packetOnlyIdentity,
+        "Timing Policy Packet Only",
+        graphicsRequest,
+        {},
+        packetTiming,
+        &untimed,
+        1u
+    );
+    ASSERT_TRUE(packetOnly.valid());
+
+    Graphics::GpuTaskSchedulingHint mergedTaskScheduling;
+    mergedTaskScheduling.mergeWithPrevious = true;
+    const Name taskIdentity("tests/task_graph/timing_policy_task");
+    const Graphics::GpuTaskId task = AddTaskWithQueue(
+        graph,
+        taskIdentity,
+        "Timing Policy Task",
+        graphicsRequest,
+        mergedTaskScheduling,
+        taskTiming,
+        &packetOnly,
+        1u
+    );
+    ASSERT_TRUE(task.valid());
+
+    const Name finalUntimedIdentity("tests/task_graph/timing_policy_final_untimed");
+    const Graphics::GpuTaskId finalUntimed = AddTaskWithQueue(
+        graph,
+        finalUntimedIdentity,
+        "Timing Policy Final Untimed",
+        graphicsRequest,
+        {},
+        {},
+        &task,
+        1u
+    );
+    ASSERT_TRUE(finalUntimed.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+
+    const Graphics::GpuSubmissionPacketId untimedPacket = compiledGraph.packetForTask(untimed);
+    const Graphics::GpuSubmissionPacketId timedPacket = compiledGraph.packetForTask(packetOnly);
+    const Graphics::GpuSubmissionPacketId taskPacket = compiledGraph.packetForTask(task);
+    const Graphics::GpuSubmissionPacketId finalUntimedPacket = compiledGraph.packetForTask(finalUntimed);
+    ASSERT_TRUE(untimedPacket.valid());
+    ASSERT_TRUE(timedPacket.valid());
+    ASSERT_TRUE(finalUntimedPacket.valid());
+    EXPECT_NE(untimedPacket, timedPacket);
+    EXPECT_EQ(timedPacket, taskPacket);
+    EXPECT_NE(timedPacket, finalUntimedPacket);
+    EXPECT_FALSE(compiledGraph.packet(untimedPacket).recordsTiming);
+    EXPECT_TRUE(compiledGraph.packet(timedPacket).recordsTiming);
+    EXPECT_FALSE(compiledGraph.packet(finalUntimedPacket).recordsTiming);
+
+    const Graphics::GpuCompiledTask* const compiledUntimed = compiledGraph.findTask(untimed);
+    const Graphics::GpuCompiledTask* const compiledPacketOnly = compiledGraph.findTask(packetOnly);
+    const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+    const Graphics::GpuCompiledTask* const compiledFinalUntimed = compiledGraph.findTask(finalUntimed);
+    ASSERT_NE(compiledUntimed, nullptr);
+    ASSERT_NE(compiledPacketOnly, nullptr);
+    ASSERT_NE(compiledTask, nullptr);
+    ASSERT_NE(compiledFinalUntimed, nullptr);
+    EXPECT_EQ(compiledUntimed->timingPolicy, Graphics::GpuTaskTimingPolicy::None);
+    EXPECT_EQ(compiledPacketOnly->timingPolicy, Graphics::GpuTaskTimingPolicy::PacketOnly);
+    EXPECT_EQ(compiledTask->timingPolicy, Graphics::GpuTaskTimingPolicy::Task);
+    EXPECT_EQ(compiledFinalUntimed->timingPolicy, Graphics::GpuTaskTimingPolicy::None);
+
+    const Name packetScope = Graphics::GpuTaskPacketTimingScopeName(packetOnlyIdentity);
+    EXPECT_TRUE(packetScope);
+    EXPECT_NE(packetScope, packetOnlyIdentity);
+    EXPECT_NE(packetScope, taskIdentity);
+    EXPECT_EQ(packetScope, Graphics::GpuTaskPacketTimingScopeName(packetOnlyIdentity));
+}
+
+TEST(GpuTaskGraph, RejectsInvalidGraphOwnedTimingPolicy){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuTaskTimingMetadata invalidTiming;
+    invalidTiming.policy = static_cast<Graphics::GpuTaskTimingPolicy::Enum>(
+        Graphics::GpuTaskTimingPolicy::kCount
+    );
+    const Graphics::GpuTaskId task = AddTaskWithQueue(
+        graph,
+        Name("tests/task_graph/timing_policy_invalid"),
+        "Timing Policy Invalid",
+        {},
+        {},
+        invalidTiming
+    );
+    ASSERT_TRUE(task.valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    EXPECT_FALSE(Analyze(graph, analysis));
+    EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidTask);
+}
+
 TEST(GpuTaskGraph, MergesExplicitCompatibleSuccessorIntoOnePacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

@@ -39,7 +39,7 @@ struct GpuSubmissionPacket{
     // A late recovery/finalization packet receives waits for the latest accepted packet on every other physical
     // queue directly from GpuGraphSubmissionTransaction. It is a graph runtime policy, not a renderer token ladder.
     bool joinsAcceptedQueueFrontier = false;
-    bool recordsTiming = true;
+    bool recordsTiming = false;
 };
 
 struct GpuPacketDependency{
@@ -73,6 +73,7 @@ struct GpuCompiledTask{
     GpuPhysicalQueueId queue;
     GpuSubmissionPacketId packet;
     GpuTaskPacketizationDecision::Enum packetizationDecision = GpuTaskPacketizationDecision::Unknown;
+    GpuTaskTimingPolicy::Enum timingPolicy = GpuTaskTimingPolicy::None;
     u32 prologueStateSeedOffset = 0u;
     u32 prologueStateSeedCount = 0u;
     u32 prologueBarrierOffset = 0u;

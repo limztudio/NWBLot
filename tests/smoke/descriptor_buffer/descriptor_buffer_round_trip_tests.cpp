@@ -74,6 +74,7 @@ inline constexpr GpuTimingScopeDefinition s_TimerQueryUnsupportedQueueScope("tes
 inline constexpr GpuTimingScopeDefinition s_TimerQueryComparableEpochScope("tests/timing_query_comparable_epoch");
 inline constexpr GpuTimingScopeDefinition s_AcceptedCompletionScope("tests/timing_accepted_completion");
 inline constexpr GpuTimingScopeDefinition s_AuxiliaryCompletionScope("tests/timing_auxiliary_completion");
+inline constexpr GpuTimingScopeDefinition s_AbandonedTimingMarkerScope("tests/timing_abandoned_marker_ownership");
 inline constexpr GpuTimingScopeDefinition s_SharedOpaqueComputeEmulationScope(
     "tests/timing_shared_opaque_compute_emulation"
 );
@@ -46765,6 +46766,314 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingStatisticsDistinguishSkipsOutcome
 }
 
 
+// A failed packet can hand its still-open marker stack to CommandList::close() recovery before timing RAII unwinds.
+// Relinquishing marker ownership must keep that later destructor from issuing a second, unmatched marker end.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingMeasureRelinquishesMarkerToCommandListRecovery){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    ASSERT_TRUE(s_logger.has_value());
+    EXPECT_FALSE(s_logger->sawMessageContaining(NWB_TEXT("Ignoring an unmatched command-list marker end")));
+#if !defined(NWB_FINAL)
+    const u32 messageCountBeforeRecovery = s_logger->messageCount();
+#endif
+
+    CommandListHandle commandList = device.createCommandList();
+    ASSERT_NE(commandList.get(), nullptr);
+    {
+        GpuTimingSubmissionTicket timingTicket(timing);
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
+        commandList->open();
+        {
+            GpuTimingMeasure timingMeasure(timing, s_AbandonedTimingMarkerScope, device, *commandList);
+            EXPECT_FALSE(timingMeasure.valid());
+            timingMeasure.discardTiming();
+            timingMeasure.abandonMarker();
+            commandList->close();
+        }
+    }
+
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+    EXPECT_FALSE(commandList->isRecording());
+#if !defined(NWB_FINAL)
+    EXPECT_GT(s_logger->messageCount(), messageCountBeforeRecovery);
+    EXPECT_TRUE(s_logger->sawMessageContaining(NWB_TEXT("Recovering 1 unterminated command-list marker scope(s)")));
+#endif
+    EXPECT_FALSE(s_logger->sawMessageContaining(NWB_TEXT("Ignoring an unmatched command-list marker end")));
+
+    commandList->open();
+    commandList->beginMarker("tests/timing_abandoned_marker_ownership/reused");
+    commandList->endMarker();
+    commandList->close();
+    CommandList* commandLists[] = { commandList.get() };
+    bool submitted = false;
+    EXPECT_GT(device.executeCommandLists(commandLists, LengthOf(commandLists), CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_TRUE(submitted);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Automatic graph timing owns one submission ticket per timed packet. A legacy recorder must reject the plan before
+// invoking any thunk, external tickets must not replace graph-owned packet tickets, and the timing-aware path must
+// publish exactly the packet/task scopes selected by each task's policy.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicyScopesAndOwnsPacketTickets){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+    const GpuPhysicalQueueInfo* const graphicsQueueInfo = device.getPhysicalQueueInfo(graphicsQueue);
+    ASSERT_NE(graphicsQueueInfo, nullptr);
+    if(graphicsQueueInfo->timestampValidBits == 0u)
+        GTEST_SKIP() << "Graph-owned automatic timing: primary Graphics queue exposes no timestamp bits.";
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+    s_scope->setGpuTimingEnabled(true);
+    timing.beginFrame(260u);
+
+    const Name packetOnlyIdentity("tests/descriptor_buffer/automatic_timing_packet_only");
+    const Name taskIdentity("tests/descriptor_buffer/automatic_timing_task");
+    const Name packetOnlyPacketScope = GpuTaskPacketTimingScopeName(packetOnlyIdentity);
+    const Name taskPacketScope = GpuTaskPacketTimingScopeName(taskIdentity);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint forcedPacketScheduling;
+    forcedPacketScheduling.forceSubmissionBoundary = true;
+    forcedPacketScheduling.allowPacketMerge = false;
+
+    bool shouldRecord = true;
+    bool packetOnlyRecorded = false;
+    bool taskRecorded = false;
+    const GpuTaskId packetOnlyTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(packetOnlyIdentity)
+            .setMarkerLabel("Automatic Timing Packet Only")
+            .setQueue(graphicsRequest)
+            .setScheduling(forcedPacketScheduling)
+            .setTimingMetadata(GpuTaskTimingMetadata{ .policy = GpuTaskTimingPolicy::PacketOnly }),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &packetOnlyRecorded,
+        }
+    );
+    ASSERT_TRUE(packetOnlyTask.valid());
+
+    const GpuTaskId taskDependencies[] = { packetOnlyTask };
+    const GpuTaskId timedTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(taskIdentity)
+            .setMarkerLabel("Automatic Timing Task")
+            .setQueue(graphicsRequest)
+            .setScheduling(forcedPacketScheduling)
+            .setDependencies(taskDependencies, LengthOf(taskDependencies))
+            .setTimingMetadata(GpuTaskTimingMetadata{ .policy = GpuTaskTimingPolicy::Task }),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &taskRecorded,
+        }
+    );
+    ASSERT_TRUE(timedTask.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/automatic_timing_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+
+    const GpuSubmissionPacketId packetOnlyPacket = compiledGraph.packetForTask(packetOnlyTask);
+    const GpuSubmissionPacketId taskPacket = compiledGraph.packetForTask(timedTask);
+    ASSERT_TRUE(packetOnlyPacket.valid());
+    ASSERT_TRUE(taskPacket.valid());
+    EXPECT_EQ(compiledGraph.packetIdAt(0u), packetOnlyPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(1u), taskPacket);
+    EXPECT_NE(packetOnlyPacket, taskPacket);
+    EXPECT_TRUE(compiledGraph.packet(packetOnlyPacket).recordsTiming);
+    EXPECT_TRUE(compiledGraph.packet(taskPacket).recordsTiming);
+    const GpuCompiledTask* const compiledPacketOnlyTask = compiledGraph.findTask(packetOnlyTask);
+    const GpuCompiledTask* const compiledTimedTask = compiledGraph.findTask(timedTask);
+    ASSERT_NE(compiledPacketOnlyTask, nullptr);
+    ASSERT_NE(compiledTimedTask, nullptr);
+    EXPECT_EQ(compiledPacketOnlyTask->timingPolicy, GpuTaskTimingPolicy::PacketOnly);
+    EXPECT_EQ(compiledTimedTask->timingPolicy, GpuTaskTimingPolicy::Task);
+    const GpuSubmissionPacketRange range = compiledGraph.packetRangeForTasks(packetOnlyTask, timedTask);
+    ASSERT_TRUE(range.valid());
+    EXPECT_EQ(range.first, packetOnlyPacket);
+    EXPECT_EQ(range.packetCount, 2u);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuSubmissionPacketId failedRecordingPacket;
+    const GpuNativePacketRecorder legacyRecorder(device);
+    EXPECT_FALSE(legacyRecorder.recordTaskRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        packetOnlyTask,
+        timedTask,
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedRecordingPacket
+    ));
+    EXPECT_FALSE(failedRecordingPacket.valid());
+    EXPECT_EQ(recordedGraph.recordingAttemptGeneration(), 0u);
+    EXPECT_FALSE(packetOnlyRecorded);
+    EXPECT_FALSE(taskRecorded);
+
+    const GpuNativePacketRecorder timingRecorder(device, timing);
+    {
+        GpuTimingRecorder alternateTiming(DescriptorBufferRoundTripTest::arena(), timingSink);
+        alternateTiming.setQueryCollectionEnabled(true);
+        alternateTiming.beginFrame(260u);
+        ASSERT_TRUE(timingRecorder.recordTaskRangeInCompileOrder(
+            graph,
+            compiledGraph,
+            packetOnlyTask,
+            packetOnlyTask,
+            nullptr,
+            0u,
+            recordedGraph,
+            &failedRecordingPacket
+        ));
+        EXPECT_FALSE(failedRecordingPacket.valid());
+        EXPECT_TRUE(packetOnlyRecorded);
+        EXPECT_FALSE(taskRecorded);
+        EXPECT_NE(recordedGraph.find(packetOnlyPacket), nullptr);
+        EXPECT_EQ(recordedGraph.find(taskPacket), nullptr);
+        const u64 firstRecorderAttemptGeneration = recordedGraph.recordingAttemptGeneration();
+        EXPECT_GT(firstRecorderAttemptGeneration, 0u);
+
+        const GpuNativePacketRecorder alternateRecorder(device, alternateTiming);
+        EXPECT_FALSE(alternateRecorder.recordTaskRangeInCompileOrder(
+            graph,
+            compiledGraph,
+            timedTask,
+            timedTask,
+            nullptr,
+            0u,
+            recordedGraph,
+            &failedRecordingPacket
+        ));
+        EXPECT_FALSE(failedRecordingPacket.valid());
+        EXPECT_EQ(recordedGraph.recordingAttemptGeneration(), firstRecorderAttemptGeneration);
+        EXPECT_TRUE(packetOnlyRecorded);
+        EXPECT_FALSE(taskRecorded);
+        EXPECT_NE(recordedGraph.find(packetOnlyPacket), nullptr);
+        EXPECT_EQ(recordedGraph.find(taskPacket), nullptr);
+        const GpuTimingRecorderStatistics alternateTimingStatistics = alternateTiming.statistics(device);
+        ASSERT_TRUE(alternateTimingStatistics.valid());
+        EXPECT_EQ(alternateTimingStatistics.preparedScopeCount, 3u);
+        EXPECT_GT(alternateTimingStatistics.requestedQueryCount, 0u);
+        EXPECT_EQ(
+            alternateTimingStatistics.materializedQueryCount,
+            alternateTimingStatistics.requestedQueryCount
+        );
+        EXPECT_EQ(alternateTimingStatistics.queryMaterializationFailureCount, 0u);
+        EXPECT_EQ(alternateTimingStatistics.scopeAttemptCount, 0u);
+        EXPECT_EQ(alternateTimingStatistics.recordedScopeCount, 0u);
+        alternateTiming.setQueryCollectionEnabled(false);
+        alternateTiming.resetQueries();
+    }
+
+    ASSERT_TRUE(timingRecorder.recordTaskRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        timedTask,
+        timedTask,
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedRecordingPacket
+    ));
+    EXPECT_FALSE(failedRecordingPacket.valid());
+    EXPECT_GT(recordedGraph.recordingAttemptGeneration(), 0u);
+    EXPECT_TRUE(packetOnlyRecorded);
+    EXPECT_TRUE(taskRecorded);
+    EXPECT_NE(recordedGraph.find(packetOnlyPacket), nullptr);
+    EXPECT_NE(recordedGraph.find(taskPacket), nullptr);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    GpuSubmissionPacketId failedSubmissionPacket;
+    GpuTimingSubmissionTicket conflictingAutomaticTicket(timing);
+    const GpuTaskGraphPacketTimingTicket conflictingAutomaticBinding{
+        .packet = packetOnlyPacket,
+        .timingTicket = &conflictingAutomaticTicket,
+    };
+    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        range,
+        nullptr,
+        0u,
+        &conflictingAutomaticBinding,
+        1u,
+        transaction,
+        scratchArena,
+        &failedSubmissionPacket
+    ));
+    EXPECT_FALSE(failedSubmissionPacket.valid());
+    EXPECT_FALSE(transaction.hasAcceptedPackets());
+    GpuTaskGraphSubmissionStatistics rejectedStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(rejectedStatistics.valid());
+    EXPECT_EQ(rejectedStatistics.acceptedPacketCount, 0u);
+    EXPECT_EQ(rejectedStatistics.nativeSubmissionCount, 0u);
+    EXPECT_EQ(rejectedStatistics.rejectedSubmissionCount, 0u);
+    ASSERT_NE(transaction.packetRuntime(packetOnlyPacket), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(packetOnlyPacket)->state, GpuPacketRuntimeState::Declared);
+
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        range,
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena,
+        &failedSubmissionPacket
+    ));
+    EXPECT_FALSE(failedSubmissionPacket.valid());
+    EXPECT_TRUE(transaction.hasAcceptedPackets());
+    const GpuTaskGraphSubmissionStatistics acceptedStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(acceptedStatistics.valid());
+    EXPECT_EQ(acceptedStatistics.acceptedPacketCount, 2u);
+    EXPECT_EQ(acceptedStatistics.acceptedTaskCount, 2u);
+    EXPECT_EQ(acceptedStatistics.nativeSubmissionCount, 2u);
+    EXPECT_TRUE(transaction.packetToken(packetOnlyPacket).valid());
+    EXPECT_TRUE(transaction.packetToken(taskPacket).valid());
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 261u);
+
+    const auto packetOnlyPacketStatistics = timingSink.stats(packetOnlyPacketScope);
+    const auto taskPacketStatistics = timingSink.stats(taskPacketScope);
+    const auto taskStatistics = timingSink.stats(taskIdentity);
+    ASSERT_TRUE(packetOnlyPacketStatistics.valid());
+    ASSERT_TRUE(taskPacketStatistics.valid());
+    ASSERT_TRUE(taskStatistics.valid());
+    EXPECT_EQ(packetOnlyPacketStatistics.sampleCount, 1u);
+    EXPECT_EQ(taskPacketStatistics.sampleCount, 1u);
+    EXPECT_EQ(taskStatistics.sampleCount, 1u);
+    EXPECT_FALSE(timingSink.stats(packetOnlyIdentity).valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
 // Renderer systems declare their timing capacities while resources validate, often before a project enables capture.
 // The next Graphics preamble must materialize those declarations before the first dynamic-rendering scope records.
 TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQueriesAfterCaptureActivation){
@@ -50395,6 +50704,29 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
         scratchArena
     ));
     EXPECT_FALSE(transaction.hasAcceptedPackets());
+    const GpuTaskGraphTaskTimingTicket aliasedTaskTimingTickets[] = {
+        GpuTaskGraphTaskTimingTicket{ .task = beginTask, .timingTicket = &beginTicket },
+        GpuTaskGraphTaskTimingTicket{ .task = endTask, .timingTicket = &beginTicket },
+    };
+    EXPECT_FALSE(submitter.submitTaskRangeInCompileOrderFromTasks(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        beginTask,
+        endTask,
+        nullptr,
+        0u,
+        aliasedTaskTimingTickets,
+        LengthOf(aliasedTaskTimingTickets),
+        transaction,
+        scratchArena
+    ));
+    EXPECT_FALSE(transaction.hasAcceptedPackets());
+    const GpuTaskGraphSubmissionStatistics aliasedTicketStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(aliasedTicketStatistics.valid());
+    EXPECT_EQ(aliasedTicketStatistics.acceptedPacketCount, 0u);
+    EXPECT_EQ(aliasedTicketStatistics.nativeSubmissionCount, 0u);
+    EXPECT_EQ(aliasedTicketStatistics.rejectedSubmissionCount, 0u);
     const GpuTaskGraphTaskAcceptedCallback duplicateTaskAcceptedCallbacks[] = {
         taskAcceptedCallbacks[0],
         taskAcceptedCallbacks[0],

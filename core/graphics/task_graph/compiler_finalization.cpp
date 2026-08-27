@@ -26,6 +26,9 @@ namespace GpuTaskGraphCompilerDetail{
     Alloc::ScratchArena& scratchArena = plan.scratchArena;
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedResourceStates = plan.trackedResourceStates;
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena>& pendingEpilogueBarriers = plan.pendingEpilogueBarriers;
+    Vector<GpuPacketDependency, Alloc::ScratchArena>& terminalFinalizationDependencies =
+        plan.terminalFinalizationDependencies
+    ;
     Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& stateFragments = plan.stateFragments;
 
     // Imported texture/buffer/acceleration-structure metadata can require a graph-owned terminal state for code
@@ -52,11 +55,78 @@ namespace GpuTaskGraphCompilerDetail{
             compiledPlan.externalResourceExportSources.size()
         );
         u32 externalExportSourceCount = 0u;
-        const auto appendTerminalState = [&](const TrackedCompiledResourceState& state, const GpuTaskResourceRange& terminalRange){
+        const auto appendTerminalState = [&](
+            const TrackedCompiledResourceState& state,
+            const usize terminalStateIndex,
+            const GpuTaskResourceRange& terminalRange
+        ){
+            if(
+                terminalStateIndex >= trackedResourceStates.size()
+                || &trackedResourceStates[terminalStateIndex] != &state
+            )
+                return false;
+
+            const GpuSubmissionPacketId terminalPacket = FindCompiledPacketForTask(compiledPlan, state.task);
+            if(
+                !terminalPacket.valid()
+                || terminalPacket.generation != compiledPlan.planGeneration
+                || terminalPacket.index >= compiledPlan.packets.size()
+            )
+                return false;
+
+            const bool performsFinalization = state.state != resource.externalFinalState
+                || (
+                    hasExternalFinalRelease
+                    && state.queue != resource.externalFinalReleaseDestinationQueue
+                )
+            ;
+            if(performsFinalization){
+                // The selected terminal task owns the external transition/release for this exact fragment. Any
+                // earlier overlapping terminal user that was shadowed by it must finish before that operation; a
+                // matching state alone does not otherwise order concurrent read-only packets.
+                for(usize earlierStateIndex = 0u; earlierStateIndex < terminalStateIndex; ++earlierStateIndex){
+                    const TrackedCompiledResourceState& earlierState = trackedResourceStates[earlierStateIndex];
+                    if(
+                        earlierState.resource != resource.id
+                        || !RangesOverlap(resource, earlierState.range, terminalRange)
+                    )
+                        continue;
+
+                    const GpuSubmissionPacketId earlierPacket = FindCompiledPacketForTask(
+                        compiledPlan,
+                        earlierState.task
+                    );
+                    if(
+                        !earlierPacket.valid()
+                        || earlierPacket.generation != compiledPlan.planGeneration
+                        || earlierPacket.index >= compiledPlan.packets.size()
+                    )
+                        return false;
+                    if(earlierPacket == terminalPacket)
+                        continue;
+                    if(earlierPacket.index >= terminalPacket.index)
+                        return false;
+
+                    bool alreadyAdded = false;
+                    for(const GpuPacketDependency& dependency : terminalFinalizationDependencies){
+                        if(
+                            dependency.producer == earlierPacket
+                            && dependency.consumer == terminalPacket
+                        ){
+                            alreadyAdded = true;
+                            break;
+                        }
+                    }
+                    if(!alreadyAdded){
+                        terminalFinalizationDependencies.push_back(GpuPacketDependency{
+                            .producer = earlierPacket,
+                            .consumer = terminalPacket,
+                        });
+                    }
+                }
+            }
+
             if(hasExternalFinalRelease){
-                const GpuSubmissionPacketId terminalPacket = FindCompiledPacketForTask(compiledPlan, state.task);
-                if(!terminalPacket.valid())
-                    return false;
                 if(!externalExportTask.valid()){
                     externalExportTask = state.task;
                     externalExportPacket = terminalPacket;
@@ -147,7 +217,10 @@ namespace GpuTaskGraphCompilerDetail{
             ))
                 return false;
             for(const TrackedTextureStateFragment& fragment : stateFragments){
-                if(!fragment.state || !appendTerminalState(*fragment.state, fragment.range))
+                if(
+                    !fragment.state
+                    || !appendTerminalState(*fragment.state, fragment.stateIndex, fragment.range)
+                )
                     return false;
             }
         }
@@ -173,7 +246,7 @@ namespace GpuTaskGraphCompilerDetail{
                 }
                 if(hasLaterOverlappingUse)
                     continue;
-                if(!appendTerminalState(state, state.range))
+                if(!appendTerminalState(state, stateIndex, state.range))
                     return false;
             }
         }
@@ -240,8 +313,55 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
     const GpuTaskGraph& graph,
     const GpuTaskGraphAnalysis& analysis,
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies,
-    GpuTaskGraphCompiledPlanStorage& compiledPlan
+    const Vector<GpuPacketDependency, Alloc::ScratchArena>& terminalFinalizationDependencies,
+    GpuTaskGraphCompiledPlanStorage& compiledPlan,
+    Alloc::ScratchArena& scratchArena
 ){
+    const usize packetCount = compiledPlan.packets.size();
+    const bool plansTerminalFinalizationDependencies = !terminalFinalizationDependencies.empty();
+    if(
+        plansTerminalFinalizationDependencies
+        && packetCount != 0u
+        && packetCount > Limit<usize>::s_Max / packetCount
+    )
+        return false;
+
+    for(const GpuPacketDependency& dependency : terminalFinalizationDependencies){
+        if(
+            !dependency.producer.valid()
+            || !dependency.consumer.valid()
+            || dependency.producer.generation != compiledPlan.planGeneration
+            || dependency.consumer.generation != compiledPlan.planGeneration
+            || dependency.producer.index >= dependency.consumer.index
+            || dependency.consumer.index >= packetCount
+        )
+            return false;
+    }
+
+    Vector<u8, Alloc::ScratchArena> packetReachability(scratchArena);
+    if(plansTerminalFinalizationDependencies)
+        packetReachability.resize(packetCount * packetCount);
+    for(usize reachabilityIndex = 0u; reachabilityIndex < packetReachability.size(); ++reachabilityIndex)
+        packetReachability[reachabilityIndex] = 0u;
+    const auto publishPacketDependency = [&](const GpuSubmissionPacketId producer, const GpuSubmissionPacketId consumer){
+        if(
+            !producer.valid()
+            || !consumer.valid()
+            || producer.generation != compiledPlan.planGeneration
+            || consumer.generation != compiledPlan.planGeneration
+            || producer.index >= consumer.index
+            || consumer.index >= packetCount
+        )
+            return false;
+
+        packetReachability[producer.index * packetCount + consumer.index] = 1u;
+        for(usize ancestorIndex = 0u; ancestorIndex < producer.index; ++ancestorIndex){
+            if(packetReachability[ancestorIndex * packetCount + producer.index] != 0u)
+                packetReachability[ancestorIndex * packetCount + consumer.index] = 1u;
+        }
+        return true;
+    };
+
     for(usize consumerPacketIndex = 0u; consumerPacketIndex < compiledPlan.packets.size(); ++consumerPacketIndex){
         GpuSubmissionPacket& consumerPacket = compiledPlan.packets[consumerPacketIndex];
         const GpuSubmissionPacketId consumerPacketID{
@@ -322,6 +442,46 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
                 if(edge.consumer == consumerTask)
                     appendExternalDependency(edge);
             }
+        }
+        if(!plansTerminalFinalizationDependencies)
+            continue;
+
+        for(u32 dependencyIndex = 0u; dependencyIndex < consumerPacket.dependencyCount; ++dependencyIndex){
+            const GpuPacketDependency& dependency = compiledPlan.packetDependencies[
+                consumerPacket.dependencyOffset + dependencyIndex
+            ];
+            if(!publishPacketDependency(dependency.producer, dependency.consumer))
+                return false;
+        }
+
+        // Visit the nearest shadowed producers first. If an existing or newly added path already joins an older
+        // producer into this terminal packet, avoid adding a redundant direct edge while retaining deterministic
+        // dependency order.
+        for(usize producerPacketIndex = consumerPacketIndex; producerPacketIndex > 0u; --producerPacketIndex){
+            const GpuSubmissionPacketId producerPacketID{
+                static_cast<u32>(producerPacketIndex - 1u),
+                compiledPlan.planGeneration,
+            };
+            bool needsTerminalFinalizationDependency = false;
+            for(const GpuPacketDependency& dependency : terminalFinalizationDependencies){
+                if(
+                    dependency.producer == producerPacketID
+                    && dependency.consumer == consumerPacketID
+                ){
+                    needsTerminalFinalizationDependency = true;
+                    break;
+                }
+            }
+            if(
+                !needsTerminalFinalizationDependency
+                || packetReachability[producerPacketID.index * packetCount + consumerPacketIndex] != 0u
+            )
+                continue;
+            if(
+                !appendPacketDependency(producerPacketID)
+                || !publishPacketDependency(producerPacketID, consumerPacketID)
+            )
+                return false;
         }
     }
 

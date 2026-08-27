@@ -438,11 +438,13 @@ bool GpuTaskGraphCompiler::compile(
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena> trackedResourceStates(scratchArena);
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena> pendingEpilogueBarriers(scratchArena);
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialOwnershipDependencies(scratchArena);
+    Vector<GpuPacketDependency, Alloc::ScratchArena> terminalFinalizationDependencies(scratchArena);
     Vector<TrackedTextureStateFragment, Alloc::ScratchArena> stateFragments(scratchArena);
     Vector<GpuTaskResourceRange, Alloc::ScratchArena> taskFirstUseRanges(scratchArena);
     trackedResourceStates.reserve(graph.taskCount());
     pendingEpilogueBarriers.reserve(graph.taskCount());
     initialOwnershipDependencies.reserve(graph.taskCount());
+    terminalFinalizationDependencies.reserve(graph.taskCount());
     stateFragments.reserve(graph.taskCount());
     taskFirstUseRanges.reserve(graph.taskCount());
     GpuTaskGraphResourceStatePlan resourceStatePlan{
@@ -454,6 +456,7 @@ bool GpuTaskGraphCompiler::compile(
         .trackedResourceStates = trackedResourceStates,
         .pendingEpilogueBarriers = pendingEpilogueBarriers,
         .initialOwnershipDependencies = initialOwnershipDependencies,
+        .terminalFinalizationDependencies = terminalFinalizationDependencies,
         .stateFragments = stateFragments,
         .taskFirstUseRanges = taskFirstUseRanges,
     };
@@ -472,7 +475,9 @@ bool GpuTaskGraphCompiler::compile(
         graph,
         outAnalysis,
         initialOwnershipDependencies,
-        compiledPlan
+        terminalFinalizationDependencies,
+        compiledPlan,
+        scratchArena
     )){
         outCompiledGraph.reset();
         return false;

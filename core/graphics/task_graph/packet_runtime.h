@@ -483,17 +483,18 @@ struct GpuTaskGraphExternalResourceHandoff{
 };
 
 
-// Associates one compiler-generated packet with the timing ticket that must submit its native command list.  A
-// packet omitted from a compile-order submission uses the ordinary non-timing transport.
+// Associates one compiler-generated packet with an external timing ticket whose scopes share that packet's exact
+// native acceptance token. A graph-owned automatic ticket remains authoritative and is resolved alongside this
+// compatibility ticket rather than being replaced by it.
 struct GpuTaskGraphPacketTimingTicket{
     GpuSubmissionPacketId packet;
     GpuTimingSubmissionTicket* timingTicket = nullptr;
 };
 
 // Binds a timing submission ticket to semantic graph work instead of a compiler-generated packet ID.  The
-// submitter resolves the task to its current packet after compilation and rejects a range that would assign
-// conflicting tickets to the same packet.  This is the migration path for renderer code that should not mirror
-// packetization merely to route its timing transaction.
+// submitter resolves the task to its current packet after compilation. Semantic anchors sharing a packet must bind
+// the same external ticket; the graph may additionally own its automatic packet ticket. This is the migration path
+// for renderer code that should not mirror packetization merely to route its timing transaction.
 struct GpuTaskGraphTaskTimingTicket{
     GpuTaskId task;
     GpuTimingSubmissionTicket* timingTicket = nullptr;

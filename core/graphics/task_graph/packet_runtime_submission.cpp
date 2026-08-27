@@ -253,12 +253,21 @@ bool GpuTaskGraphSubmitter::submitPacketWithinSubmissionOperation(
 
     const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
     GpuTimingSubmissionTicket* const ownedTimingTicket = recordedGraph.packetTimingTicket(packetID);
-    if(
-        packet.recordsTiming != static_cast<bool>(ownedTimingTicket)
-        || (ownedTimingTicket && timingTicket && timingTicket != ownedTimingTicket)
-    )
+    if(packet.recordsTiming != static_cast<bool>(ownedTimingTicket))
         return false;
-    GpuTimingSubmissionTicket* const effectiveTimingTicket = ownedTimingTicket ? ownedTimingTicket : timingTicket;
+    if(timingTicket){
+        for(usize ownerIndex = 0u; ownerIndex < compiledGraph.packetCount(); ++ownerIndex){
+            const GpuSubmissionPacketId ownerPacket = compiledGraph.packetIdAt(ownerIndex);
+            if(ownerPacket != packetID && recordedGraph.packetTimingTicket(ownerPacket) == timingTicket)
+                return false;
+        }
+    }
+    GpuTimingSubmissionTicket* submissionTimingTickets[2u] = {};
+    usize submissionTimingTicketCount = 0u;
+    if(ownedTimingTicket)
+        submissionTimingTickets[submissionTimingTicketCount++] = ownedTimingTicket;
+    if(timingTicket && timingTicket != ownedTimingTicket)
+        submissionTimingTickets[submissionTimingTicketCount++] = timingTicket;
     if(!graph.packetReadyForSubmission(
         compiledGraph,
         packetID,
@@ -372,6 +381,20 @@ bool GpuTaskGraphSubmitter::submitPacketWithinSubmissionOperation(
             ++nativeSubmissionInfo.timelineWaitCount;
     }
 
+    // Ticket preparation is still retryable: it claims every independent query transaction before graph state
+    // becomes submitting, and rolls those claims back if another operation wins the packet lease.
+    usize preparedTimingTicketCount = 0u;
+    for(; preparedTimingTicketCount < submissionTimingTicketCount; ++preparedTimingTicketCount){
+        if(submissionTimingTickets[preparedTimingTicketCount]->prepareSubmission(
+            recordedPacket->commandLists,
+            recordedPacket->commandListCount
+        ))
+            continue;
+        while(preparedTimingTicketCount > 0u)
+            submissionTimingTickets[--preparedTimingTicketCount]->rollbackPreparedSubmission();
+        return false;
+    }
+
     // A bad dependency or external completion is a pre-submit input error. Preserve the completed native packet
     // so the caller can retry it with corrected tokens; the graph-owned reservation starts only once submission is
     // unavoidable and keeps cancellation from racing Device::executeCommandLists().
@@ -382,8 +405,11 @@ bool GpuTaskGraphSubmitter::submitPacketWithinSubmissionOperation(
         packetID,
         recordedGraph.recordingAttemptGeneration(),
         submissionLease
-    ))
+    )){
+        while(preparedTimingTicketCount > 0u)
+            submissionTimingTickets[--preparedTimingTicketCount]->rollbackPreparedSubmission();
         return false;
+    }
 
     QueueSubmissionDesc submitDesc;
     if(!waitTokens.empty())
@@ -391,21 +417,14 @@ bool GpuTaskGraphSubmitter::submitPacketWithinSubmissionOperation(
     if(preSubmitHook)
         submitDesc.setPreSubmitHook(*preSubmitHook);
     const Timer submissionBegin = TimerNow();
-    const QueueSubmissionToken token = effectiveTimingTicket
-        ? effectiveTimingTicket->submit(
-            m_device,
-            recordedPacket->commandLists,
-            recordedPacket->commandListCount,
-            packet.queue,
-            submitDesc
-        )
-        : m_device.executeCommandLists(
-            recordedPacket->commandLists,
-            recordedPacket->commandListCount,
-            packet.queue,
-            submitDesc
-        )
-    ;
+    const QueueSubmissionToken token = m_device.executeCommandLists(
+        recordedPacket->commandLists,
+        recordedPacket->commandListCount,
+        packet.queue,
+        submitDesc
+    );
+    for(usize timingTicketIndex = 0u; timingTicketIndex < submissionTimingTicketCount; ++timingTicketIndex)
+        submissionTimingTickets[timingTicketIndex]->resolveSubmission(token);
     if(!token.valid()){
         transaction.rejectSubmittingPacket(graph, compiledGraph, packetID, submissionLease);
         return false;
@@ -521,6 +540,14 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
             )
                 return false;
         }
+        for(usize ownerIndex = 0u; ownerIndex < compiledGraph.packetCount(); ++ownerIndex){
+            const GpuSubmissionPacketId ownerPacket = compiledGraph.packetIdAt(ownerIndex);
+            if(
+                ownerPacket != ticket.packet
+                && recordedGraph.packetTimingTicket(ownerPacket) == ticket.timingTicket
+            )
+                return false;
+        }
     }
     const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
     for(usize packetIndex = range.first.index; packetIndex < rangeEnd; ++packetIndex){
@@ -529,21 +556,6 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
         GpuTimingSubmissionTicket* const ownedTimingTicket = recordedGraph.packetTimingTicket(packetID);
         if(packet.recordsTiming != static_cast<bool>(ownedTimingTicket))
             return false;
-        for(usize ticketIndex = 0u; ticketIndex < timingTicketCount; ++ticketIndex){
-            const GpuTaskGraphPacketTimingTicket& timingTicket = timingTickets[ticketIndex];
-            if(
-                ownedTimingTicket
-                && timingTicket.timingTicket == ownedTimingTicket
-                && timingTicket.packet != packetID
-            )
-                return false;
-            if(
-                timingTicket.packet == packetID
-                && ownedTimingTicket
-                && timingTicket.timingTicket != ownedTimingTicket
-            )
-                return false;
-        }
     }
     for(usize hookIndex = 0u; hookIndex < submissionHookCount; ++hookIndex){
         const GpuTaskGraphPacketSubmissionHook& hook = submissionHooks[hookIndex];

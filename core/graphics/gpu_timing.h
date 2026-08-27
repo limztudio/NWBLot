@@ -26,6 +26,7 @@ class GpuTimingMeasure;
 class GpuTimingRecorder;
 class GpuTimingRecorderDiagnosticPeer;
 class GpuTimingSubmissionTicket;
+class GpuTaskGraphSubmitter;
 
 struct GpuTimingScope{
     Name scopeName = NAME_NONE;
@@ -524,6 +525,8 @@ private:
 // successful submission retains them until collect() observes their results. This supports a timing scope whose
 // start and end timestamps live in separate primary command buffers.
 class GpuTimingSubmissionTicket final : NoCopy{
+    friend class GpuTaskGraphSubmitter;
+
 public:
     class RecordingScope final : NoCopy{
     public:
@@ -534,6 +537,7 @@ public:
     private:
         GpuTimingSubmissionTicket& m_ticket;
         GpuTimingSubmissionTicket* m_previousTicket = nullptr;
+        bool m_activated = false;
     };
 
 
@@ -585,12 +589,15 @@ private:
     friend class GpuTimingRecorder;
 
     // Rejects incomplete batches before they can partially submit a split timing scope. Invalid command-list input
-    // releases reservations; a ticket that is already resolved or still recording is left unchanged.
+    // releases reservations. Successful preparation atomically blocks recording and any competing submission until
+    // the caller either resolves the native attempt or rolls preparation back before reaching the device.
     [[nodiscard]] bool prepareSubmission(CommandList* const* commandLists, usize commandListCount);
+    void rollbackPreparedSubmission();
+    void discardPreparedSubmission();
     void resolveSubmission(const QueueSubmissionToken& token);
     void trackScope(const GpuTimingScope& scope);
-    [[nodiscard]] GpuTimingSubmissionTicket* activateOnCurrentThread();
-    void deactivateOnCurrentThread(GpuTimingSubmissionTicket* previousTicket);
+    [[nodiscard]] bool activateOnCurrentThread(GpuTimingSubmissionTicket*& outPreviousTicket);
+    void deactivateOnCurrentThread(GpuTimingSubmissionTicket* previousTicket, bool activated);
     void confirm(const QueueSubmissionToken& token);
 
 
@@ -599,6 +606,7 @@ private:
     Vector<GpuTimingScope, Alloc::GlobalArena> m_scopes;
     Futex m_mutex;
     u32 m_recordingScopeCount = 0u;
+    bool m_submissionPrepared = false;
     bool m_resolved = false;
 };
 

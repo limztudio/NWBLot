@@ -3806,6 +3806,43 @@ struct NativePacketCaptureRetryTask{
 };
 
 
+// Records one legacy/manual scope inside the graph-owned packet scope so submission must resolve two independent
+// tickets with the same native token.
+struct NativePacketCompanionTimingCaptureRetryTask{
+    struct Payload{
+        const bool* shouldRecord = nullptr;
+        bool* attempted = nullptr;
+        Device* device = nullptr;
+        GpuTimingRecorder* timing = nullptr;
+        GpuTimingSubmissionTicket* timingTicket = nullptr;
+        const GpuTimingScopeDefinition* timingScope = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(payload.attempted)
+            *payload.attempted = true;
+        if(
+            !payload.shouldRecord
+            || !*payload.shouldRecord
+            || !payload.device
+            || !payload.timing
+            || !payload.timingTicket
+            || !payload.timingScope
+        )
+            return false;
+
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        GpuTimingMeasure timingMeasure(*payload.timing, *payload.timingScope, *payload.device, commandList);
+        return timingMeasure.valid();
+    }
+};
+
+
 struct NativeTaskAcceptanceOrder{
     u32 invocationCount = 0u;
     u32 markers[8] = {};
@@ -24817,12 +24854,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationPair
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
     bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    EXPECT_GT(device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
         &timingResetSubmitted
-    );
+    ), 0u);
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
@@ -25154,12 +25191,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
     bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    EXPECT_GT(device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
         &timingResetSubmitted
-    );
+    ), 0u);
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
@@ -46491,6 +46528,7 @@ inline constexpr GpuTimingScopeDefinition s_FrameTimingRejectedGraphResetScope("
 inline constexpr GpuTimingScopeDefinition s_UnpreparedTimingScope("tests/timing_unprepared_scope");
 inline constexpr GpuTimingScopeDefinition s_TimingStatisticsScope("tests/timing_statistics_scope");
 inline constexpr GpuTimingScopeDefinition s_SubmissionTicketScope("tests/timing_submission_ticket");
+inline constexpr GpuTimingScopeDefinition s_GraphCompanionSubmissionTicketScope("tests/timing_graph_companion_submission_ticket");
 inline constexpr GpuTimingScopeDefinition s_ConcurrentSubmissionTicketScope("tests/timing_submission_ticket_concurrent");
 inline constexpr GpuTimingScopeDefinition s_StableSubmissionTicketScope("tests/timing_stable_submission_ticket");
 inline constexpr GpuTimingScopeDefinition s_StableFrameTransactionScope("tests/timing_stable_frame_transaction");
@@ -46814,8 +46852,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingMeasureRelinquishesMarkerToComman
 
 
 // Automatic graph timing owns one submission ticket per timed packet. A legacy recorder must reject the plan before
-// invoking any thunk, external tickets must not replace graph-owned packet tickets, and the timing-aware path must
-// publish exactly the packet/task scopes selected by task policies and the compiler-owned packet timing envelope.
+// invoking any thunk, while an independently recorded compatibility ticket shares the packet's native token. The
+// timing-aware path publishes both that manual scope and the packet/task scopes selected by compiler-owned policy.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicyScopesAndOwnsPacketTickets){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
@@ -46843,6 +46881,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
     const Name packetOnlyPacketScope = GpuTaskPacketTimingScopeName(packetOnlyIdentity);
     const Name taskPacketScope = GpuTaskPacketTimingScopeName(taskIdentity);
     const Name outsideSuffixPacketScope = GpuTaskPacketTimingScopeName(outsideSuffixIdentity);
+    GpuTimingSubmissionTicket companionTimingTicket(timing);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuQueueRequest graphicsRequest{
@@ -46875,16 +46914,20 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
     ASSERT_TRUE(outsidePrefixTask.valid());
 
     const GpuTaskId envelopeOnlyDependencies[] = { outsidePrefixTask };
-    const GpuTaskId envelopeOnlyTask = graph.addTask<NativePacketCaptureRetryTask>(
+    const GpuTaskId envelopeOnlyTask = graph.addTask<NativePacketCompanionTimingCaptureRetryTask>(
         GpuTaskDesc{}
             .setIdentity(envelopeOnlyIdentity)
             .setMarkerLabel("Automatic Timing Envelope Only")
             .setQueue(graphicsRequest)
             .setScheduling(forcedPacketScheduling)
             .setDependencies(envelopeOnlyDependencies, LengthOf(envelopeOnlyDependencies)),
-        NativePacketCaptureRetryTask::Payload{
+        NativePacketCompanionTimingCaptureRetryTask::Payload{
             .shouldRecord = &shouldRecord,
             .attempted = &envelopeOnlyRecorded,
+            .device = &device,
+            .timing = &timing,
+            .timingTicket = &companionTimingTicket,
+            .timingScope = &s_GraphCompanionSubmissionTicketScope,
         }
     );
     ASSERT_TRUE(envelopeOnlyTask.valid());
@@ -47001,6 +47044,27 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
     EXPECT_EQ(compiledGraph.packetTimingEnvelopeRange().first, range.first);
     EXPECT_EQ(compiledGraph.packetTimingEnvelopeRange().packetCount, range.packetCount);
 
+    ASSERT_TRUE(timing.prepareScopeQueries(envelopeOnlyPacketScope, device, s_MaxFramesInFlight));
+    ASSERT_TRUE(timing.prepareScopeQueries(packetOnlyPacketScope, device, s_MaxFramesInFlight));
+    ASSERT_TRUE(timing.prepareScopeQueries(taskPacketScope, device, s_MaxFramesInFlight));
+    ASSERT_TRUE(timing.prepareScopeQueries(taskIdentity, device, s_MaxFramesInFlight));
+    ASSERT_TRUE(timing.prepareScopeQueries(s_GraphCompanionSubmissionTicketScope.identity, device, 1u));
+    auto timingResetCommandList = device.createCommandList();
+    ASSERT_NE(timingResetCommandList.get(), nullptr);
+    timingResetCommandList->open();
+    timing.recordFrameReset(*timingResetCommandList);
+    timingResetCommandList->close();
+    CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
+    bool timingResetSubmitted = false;
+    device.executeCommandLists(
+        timingResetCommandLists,
+        LengthOf(timingResetCommandLists),
+        CommandQueue::Graphics,
+        &timingResetSubmitted
+    );
+    ASSERT_TRUE(timingResetSubmitted);
+    timing.confirmFrameReset();
+
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuSubmissionPacketId failedRecordingPacket;
     const GpuNativePacketRecorder legacyRecorder(device);
@@ -47114,40 +47178,47 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
     transaction.reset(compiledGraph);
     const GpuTaskGraphSubmitter submitter(device);
     GpuSubmissionPacketId failedSubmissionPacket;
-    GpuTimingSubmissionTicket conflictingAutomaticTicket(timing);
-    const GpuTaskGraphPacketTimingTicket conflictingAutomaticBinding{
-        .packet = envelopeOnlyPacket,
-        .timingTicket = &conflictingAutomaticTicket,
-    };
-    const GpuSubmissionPacketRange submissionRange = compiledGraph.packetRangeForTasks(
-        outsidePrefixTask,
-        outsideSuffixTask
-    );
-    ASSERT_TRUE(submissionRange.valid());
-    ASSERT_EQ(submissionRange.packetCount, 5u);
-    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
+    GpuTimingSubmissionTicket resolvedCompanionTicket(timing);
+    resolvedCompanionTicket.discard();
+    ASSERT_TRUE(submitter.submitPacket(
         graph,
         compiledGraph,
         recordedGraph,
-        submissionRange,
+        outsidePrefixPacket,
         nullptr,
         0u,
-        &conflictingAutomaticBinding,
-        1u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_FALSE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        envelopeOnlyPacket,
+        nullptr,
+        0u,
         transaction,
         scratchArena,
-        &failedSubmissionPacket
+        &resolvedCompanionTicket
     ));
-    EXPECT_FALSE(failedSubmissionPacket.valid());
-    EXPECT_FALSE(transaction.hasAcceptedPackets());
-    GpuTaskGraphSubmissionStatistics rejectedStatistics = transaction.submissionStatistics();
-    ASSERT_TRUE(rejectedStatistics.valid());
-    EXPECT_EQ(rejectedStatistics.acceptedPacketCount, 0u);
-    EXPECT_EQ(rejectedStatistics.nativeSubmissionCount, 0u);
-    EXPECT_EQ(rejectedStatistics.rejectedSubmissionCount, 0u);
-    ASSERT_NE(transaction.packetRuntime(packetOnlyPacket), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(packetOnlyPacket)->state, GpuPacketRuntimeState::Declared);
+    ASSERT_NE(transaction.packetRuntime(envelopeOnlyPacket), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(envelopeOnlyPacket)->state, GpuPacketRuntimeState::Declared);
+    const GpuTaskGraphSubmissionStatistics retryableStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(retryableStatistics.valid());
+    EXPECT_EQ(retryableStatistics.acceptedPacketCount, 1u);
+    EXPECT_EQ(retryableStatistics.nativeSubmissionCount, 1u);
+    EXPECT_EQ(retryableStatistics.rejectedSubmissionCount, 0u);
 
+    const GpuTaskGraphPacketTimingTicket companionTimingBinding{
+        .packet = envelopeOnlyPacket,
+        .timingTicket = &companionTimingTicket,
+    };
+    const GpuSubmissionPacketRange submissionRange = compiledGraph.packetRangeForTasks(
+        envelopeOnlyTask,
+        outsideSuffixTask
+    );
+    ASSERT_TRUE(submissionRange.valid());
+    ASSERT_EQ(submissionRange.packetCount, 4u);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -47155,8 +47226,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
         submissionRange,
         nullptr,
         0u,
-        nullptr,
-        0u,
+        &companionTimingBinding,
+        1u,
         transaction,
         scratchArena,
         &failedSubmissionPacket
@@ -47180,14 +47251,17 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
     const auto packetOnlyPacketStatistics = timingSink.stats(packetOnlyPacketScope);
     const auto taskPacketStatistics = timingSink.stats(taskPacketScope);
     const auto taskStatistics = timingSink.stats(taskIdentity);
+    const auto companionTimingStatistics = timingSink.stats(s_GraphCompanionSubmissionTicketScope.identity);
     ASSERT_TRUE(envelopeOnlyPacketStatistics.valid());
     ASSERT_TRUE(packetOnlyPacketStatistics.valid());
     ASSERT_TRUE(taskPacketStatistics.valid());
     ASSERT_TRUE(taskStatistics.valid());
+    ASSERT_TRUE(companionTimingStatistics.valid());
     EXPECT_EQ(envelopeOnlyPacketStatistics.sampleCount, 1u);
     EXPECT_EQ(packetOnlyPacketStatistics.sampleCount, 1u);
     EXPECT_EQ(taskPacketStatistics.sampleCount, 1u);
     EXPECT_EQ(taskStatistics.sampleCount, 1u);
+    EXPECT_EQ(companionTimingStatistics.sampleCount, 1u);
     EXPECT_FALSE(timingSink.stats(outsidePrefixPacketScope).valid());
     EXPECT_FALSE(timingSink.stats(outsidePrefixIdentity).valid());
     EXPECT_FALSE(timingSink.stats(envelopeOnlyIdentity).valid());
@@ -48024,6 +48098,181 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
 
 
 #if !defined(NWB_FINAL)
+
+// A backend rejection happens after both automatic and manual tickets are prepared. The one failed native attempt
+// must discard both transactions, and the next frame reset must make both query slots reusable.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingRejectsAndReusesCompanionQueriesTogether){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = s_scope->graphics().gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+    s_scope->setGpuTimingEnabled(true);
+    timing.beginFrame(270u);
+
+    GpuTimingSubmissionTicket companionTimingTicket(timing);
+    bool shouldRecord = true;
+    bool taskRecorded = false;
+    const Name taskIdentity("tests/timing_graph_companion_rejection");
+    GpuTimingScopeDefinition packetTimingScope;
+    packetTimingScope.identity = GpuTaskPacketTimingScopeName(taskIdentity);
+    packetTimingScope.markerLabel = "Rejected Automatic Companion Timing Packet";
+    ASSERT_TRUE(packetTimingScope.valid());
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const GpuTaskId task = graph.addTask<NativePacketCompanionTimingCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(taskIdentity)
+            .setMarkerLabel("Rejected Automatic Companion Timing")
+            .setQueue(graphicsRequest)
+            .setScheduling(scheduling)
+            .setTimingMetadata(GpuTaskTimingMetadata{ .policy = GpuTaskTimingPolicy::PacketOnly }),
+        NativePacketCompanionTimingCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &taskRecorded,
+            .device = &device,
+            .timing = &timing,
+            .timingTicket = &companionTimingTicket,
+            .timingScope = &s_GraphCompanionSubmissionTicketScope,
+        }
+    );
+    ASSERT_TRUE(task.valid());
+
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/rejected_companion_timing_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(
+        graph,
+        analysis,
+        device.getPhysicalQueueTopology(),
+        assignments,
+        compiledGraph,
+        scratchArena
+    ));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_TRUE(compiledGraph.packet(packet).recordsTiming);
+
+    ASSERT_TRUE(timing.prepareScopeQueries(packetTimingScope.identity, device, s_MaxFramesInFlight));
+    ASSERT_TRUE(timing.prepareScopeQueries(s_GraphCompanionSubmissionTicketScope.identity, device, 1u));
+    auto resetCommandList = device.createCommandList();
+    ASSERT_NE(resetCommandList.get(), nullptr);
+    resetCommandList->open();
+    timing.recordFrameReset(*resetCommandList);
+    resetCommandList->close();
+    CommandList* resetCommandLists[] = { resetCommandList.get() };
+    bool resetSubmitted = false;
+    EXPECT_GT(device.executeCommandLists(
+        resetCommandLists,
+        LengthOf(resetCommandLists),
+        CommandQueue::Graphics,
+        &resetSubmitted
+    ), 0u);
+    ASSERT_TRUE(resetSubmitted);
+    timing.confirmFrameReset();
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device, timing);
+    ASSERT_TRUE(recorder.recordTaskRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        task,
+        task,
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+    ASSERT_TRUE(taskRecorded);
+    const GpuTimingRecorderStatistics recordedStatistics = timing.statistics(device);
+    ASSERT_TRUE(recordedStatistics.valid());
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    EXPECT_FALSE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        packet,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena,
+        &companionTimingTicket
+    ));
+    ASSERT_NE(transaction.packetRuntime(packet), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(packet)->state, GpuPacketRuntimeState::Rejected);
+    const GpuTaskGraphSubmissionStatistics submissionStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(submissionStatistics.valid());
+    EXPECT_EQ(submissionStatistics.acceptedPacketCount, 0u);
+    EXPECT_EQ(submissionStatistics.nativeSubmissionCount, 0u);
+    EXPECT_EQ(submissionStatistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(submissionStatistics.rejectedSubmissionCount, 1u);
+    const GpuTimingRecorderStatistics rejectedStatistics = timing.statistics(device);
+    ASSERT_TRUE(rejectedStatistics.valid());
+    EXPECT_EQ(rejectedStatistics.discardedScopeCount, recordedStatistics.discardedScopeCount + 2u);
+    timing.collect(device, 271u);
+    EXPECT_FALSE(timingSink.stats(packetTimingScope.identity).valid());
+    EXPECT_FALSE(timingSink.stats(s_GraphCompanionSubmissionTicketScope.identity).valid());
+
+    timing.beginFrame(271u);
+    auto retryResetCommandList = device.createCommandList();
+    ASSERT_NE(retryResetCommandList.get(), nullptr);
+    retryResetCommandList->open();
+    timing.recordFrameReset(*retryResetCommandList);
+    retryResetCommandList->close();
+    CommandList* retryResetCommandLists[] = { retryResetCommandList.get() };
+    bool retryResetSubmitted = false;
+    EXPECT_GT(device.executeCommandLists(
+        retryResetCommandLists,
+        LengthOf(retryResetCommandLists),
+        CommandQueue::Graphics,
+        &retryResetSubmitted
+    ), 0u);
+    ASSERT_TRUE(retryResetSubmitted);
+    timing.confirmFrameReset();
+
+    auto retryCommandList = device.createCommandList();
+    ASSERT_NE(retryCommandList.get(), nullptr);
+    GpuTimingSubmissionTicket retryTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(retryTicket);
+        retryCommandList->open();
+        {
+            GpuTimingMeasure packetTiming(timing, packetTimingScope, device, *retryCommandList);
+            EXPECT_TRUE(packetTiming.valid());
+        }
+        {
+            GpuTimingMeasure companionTiming(timing, s_GraphCompanionSubmissionTicketScope, device, *retryCommandList);
+            EXPECT_TRUE(companionTiming.valid());
+        }
+        retryCommandList->close();
+    }
+    CommandList* retryCommandLists[] = { retryCommandList.get() };
+    ASSERT_TRUE(retryTicket.submit(device, retryCommandLists, LengthOf(retryCommandLists)));
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 272u);
+    EXPECT_EQ(timingSink.stats(packetTimingScope.identity).sampleCount, 1u);
+    EXPECT_EQ(timingSink.stats(s_GraphCompanionSubmissionTicketScope.identity).sampleCount, 1u);
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
 
 // Texture uploads must leave ImGui's create/update status pending if the Vulkan submission is rejected. The next
 // recording batch then retries the request and commits its status only after the device accepts that retry.

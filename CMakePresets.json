@@ -288,5 +288,55 @@
       "configurePreset": "linux-clang-namesym-x64",
       "configuration": "fin"
     }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-clang-dbg",
+      "configurePreset": "windows-clang-x64",
+      "configuration": "dbg",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-clang-opt",
+      "configurePreset": "windows-clang-x64",
+      "configuration": "opt",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-clang-fin",
+      "configurePreset": "windows-clang-x64",
+      "configuration": "fin",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-clang-dbg",
+      "configurePreset": "linux-clang-x64",
+      "configuration": "dbg",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-clang-opt",
+      "configurePreset": "linux-clang-x64",
+      "configuration": "opt",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-clang-fin",
+      "configurePreset": "linux-clang-x64",
+      "configuration": "fin",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
   ]
 }

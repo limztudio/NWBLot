@@ -14200,6 +14200,85 @@ TEST(GpuTaskGraph, ExportsDetailedQueueAssignmentTelemetry){
     );
 }
 
+TEST(GpuTaskGraph, ExportsCompiledPacketMembershipAndPacketizationDecisions){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuTaskSchedulingHint prefixScheduling;
+    prefixScheduling.allowPacketMerge = true;
+    Graphics::GpuTaskDesc prefixDesc;
+    prefixDesc
+        .setIdentity(Name("tests/task_graph/telemetry_compiled_prefix"))
+        .setMarkerLabel("Telemetry Compiled Prefix")
+        .setScheduling(prefixScheduling)
+    ;
+    const Graphics::GpuTaskId prefix = graph.addTask(prefixDesc);
+    ASSERT_TRUE(prefix.valid());
+
+    Graphics::GpuTaskSchedulingHint suffixScheduling;
+    suffixScheduling.allowPacketMerge = true;
+    suffixScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskDesc suffixDesc;
+    suffixDesc
+        .setIdentity(Name("tests/task_graph/telemetry_compiled_suffix"))
+        .setMarkerLabel("Telemetry Compiled Suffix")
+        .setScheduling(suffixScheduling)
+        .setDependencies(&prefix, 1u)
+    ;
+    const Graphics::GpuTaskId suffix = graph.addTask(suffixDesc);
+    ASSERT_TRUE(suffix.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    Telemetry::FrameGraphPendingNameEdges pendingEdges(testArena.arena);
+    Telemetry::FrameGraphBuilder builder(nodes, edges, pendingEdges);
+    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
+    const Graphics::GpuTaskGraphTelemetryOptions telemetryOptions{
+        .queueAssignments = nullptr,
+        .compiledGraph = &compiledGraph,
+        .queueAssignmentTelemetry = nullptr,
+    };
+    ASSERT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
+
+    ASSERT_EQ(nodes.size(), 2u);
+    EXPECT_FALSE(nodes[prefix.index].queueAssignment.present);
+    ASSERT_TRUE(nodes[prefix.index].compiledTask.present);
+    ASSERT_TRUE(nodes[suffix.index].compiledTask.present);
+    EXPECT_EQ(nodes[prefix.index].compiledTask.planGeneration, compiledGraph.planGeneration());
+    EXPECT_EQ(nodes[suffix.index].compiledTask.planGeneration, compiledGraph.planGeneration());
+    EXPECT_EQ(nodes[prefix.index].compiledTask.packetIndex, 0u);
+    EXPECT_EQ(nodes[suffix.index].compiledTask.packetIndex, 0u);
+    EXPECT_EQ(
+        nodes[prefix.index].compiledTask.packetizationDecision,
+        Telemetry::FrameGraphTaskPacketizationDecision::FirstTask
+    );
+    EXPECT_EQ(
+        nodes[suffix.index].compiledTask.packetizationDecision,
+        Telemetry::FrameGraphTaskPacketizationDecision::MergedExplicit
+    );
+
+    Graphics::GpuTaskGraphQueueAssignments replacementAssignments(testArena.arena);
+    Graphics::GpuCompiledGraph replacementCompiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, replacementAssignments, replacementCompiledGraph));
+    const Graphics::GpuTaskGraphTelemetryOptions mismatchedOptions{
+        .queueAssignments = &assignments,
+        .compiledGraph = &replacementCompiledGraph,
+        .queueAssignmentTelemetry = nullptr,
+    };
+    EXPECT_FALSE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena, mismatchedOptions));
+}
+
 TEST(GpuTaskGraph, TracksAcceptedExactQueueAssignmentsAcrossGraphGenerations){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -14331,12 +14410,19 @@ TEST(GpuTaskGraph, TracksAcceptedExactQueueAssignmentsAcrossGraphGenerations){
         .compiledGraph = nullptr,
         .queueAssignmentTelemetry = &tracker,
     };
-    EXPECT_FALSE(graph.appendFrameGraphTelemetry(
+    ASSERT_TRUE(graph.appendFrameGraphTelemetry(
         builder,
         analysis,
         trackerScratchArena,
         compiledOnlyTelemetryOptions
     ));
+    ASSERT_EQ(nodes.size(), 3u);
+    EXPECT_TRUE(nodes[routeTask.index].compiledTask.present);
+    EXPECT_TRUE(nodes[routeTask.index].queueAssignment.present);
+    EXPECT_FALSE(nodes[routeTask.index].queueAssignment.acceptedQueue.valid());
+    nodes.clear();
+    edges.clear();
+    pendingEdges.clear();
     EXPECT_FALSE(graph.appendFrameGraphTelemetry(
         builder,
         analysis,

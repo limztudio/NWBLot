@@ -721,6 +721,7 @@ static void BuildTestFrameGraph(
         .kind = Telemetry::FrameGraphNodeKind::Pass,
         .flags = 1u,
         .queueAssignment = {},
+        .compiledTask = {},
     });
     nodes.push_back(Telemetry::FrameGraphNodeDesc{
         .name = Name("albedo"),
@@ -728,6 +729,7 @@ static void BuildTestFrameGraph(
         .kind = Telemetry::FrameGraphNodeKind::Resource,
         .flags = 0u,
         .queueAssignment = {},
+        .compiledTask = {},
     });
     nodes.push_back(Telemetry::FrameGraphNodeDesc{
         .name = Name("lighting"),
@@ -735,6 +737,7 @@ static void BuildTestFrameGraph(
         .kind = Telemetry::FrameGraphNodeKind::Pass,
         .flags = 0u,
         .queueAssignment = {},
+        .compiledTask = {},
     });
 
     edges.push_back(Telemetry::FrameGraphEdgeDesc{
@@ -796,6 +799,19 @@ static Telemetry::FrameGraphQueueAssignment MakeNotAcceptedFrameGraphQueueAssign
     return assignment;
 }
 
+static Telemetry::FrameGraphCompiledTask MakeFrameGraphCompiledTask(
+    const u64 planGeneration,
+    const u32 packetIndex,
+    const Telemetry::FrameGraphTaskPacketizationDecision::Enum packetizationDecision
+){
+    return Telemetry::FrameGraphCompiledTask{
+        .planGeneration = planGeneration,
+        .packetIndex = packetIndex,
+        .packetizationDecision = packetizationDecision,
+        .present = true,
+    };
+}
+
 static void BuildTestAssignedFrameGraph(
     Telemetry::TelemetryArena& arena,
     Telemetry::FrameGraphNodeDescs& nodes,
@@ -804,6 +820,24 @@ static void BuildTestAssignedFrameGraph(
     BuildTestFrameGraph(arena, nodes, edges);
     nodes[0u].queueAssignment = MakeChangedFrameGraphQueueAssignment();
     nodes[2u].queueAssignment = MakeNotAcceptedFrameGraphQueueAssignment();
+}
+
+static void BuildTestCompiledFrameGraph(
+    Telemetry::TelemetryArena& arena,
+    Telemetry::FrameGraphNodeDescs& nodes,
+    Telemetry::FrameGraphEdgeDescs& edges
+){
+    BuildTestAssignedFrameGraph(arena, nodes, edges);
+    nodes[0u].compiledTask = MakeFrameGraphCompiledTask(
+        41u,
+        7u,
+        Telemetry::FrameGraphTaskPacketizationDecision::FirstTask
+    );
+    nodes[2u].compiledTask = MakeFrameGraphCompiledTask(
+        41u,
+        7u,
+        Telemetry::FrameGraphTaskPacketizationDecision::MergedExplicit
+    );
 }
 
 class PendingNameFrameGraphContributor final : public Telemetry::IFrameGraphContributor{
@@ -946,7 +980,7 @@ TEST(Telemetry, FrameGraphQueueAssignmentPayloadRoundTrip){
 
     Telemetry::EncodedFrameGraphPayloadHeaderV2 header;
     NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
-    EXPECT_EQ(header.version, Telemetry::s_FrameGraphPayloadVersion);
+    EXPECT_EQ(header.version, Telemetry::s_FrameGraphQueueAssignmentPayloadVersion);
     EXPECT_EQ(header.queueAssignmentCount, 2u);
 
     Telemetry::FrameGraphPayload parsed(testArena.arena);
@@ -986,6 +1020,49 @@ TEST(Telemetry, FrameGraphQueueAssignmentPayloadRoundTrip){
     EXPECT_FALSE(notAccepted.dedicated);
     EXPECT_EQ(notAccepted.score.total, 1);
     EXPECT_EQ(notAccepted.acceptance, Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted);
+}
+
+TEST(Telemetry, FrameGraphCompiledTaskPayloadRoundTrip){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 907u, nodes, edges, payload));
+    EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV3)
+            + (sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size())
+            + (sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size())
+            + (sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u)
+            + (sizeof(Telemetry::EncodedFrameGraphCompiledTask) * 2u)
+            + sizeof("GBuffer Pass")
+            + sizeof("Albedo Texture")
+            + sizeof("Lighting Pass"));
+
+    Telemetry::EncodedFrameGraphPayloadHeaderV3 header;
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    EXPECT_EQ(header.version, Telemetry::s_FrameGraphPayloadVersion);
+    EXPECT_EQ(header.queueAssignmentCount, 2u);
+    EXPECT_EQ(header.compiledTaskCount, 2u);
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    ASSERT_EQ(parsed.nodes.size(), 3u);
+    EXPECT_TRUE(parsed.nodes[0u].compiledTask.present);
+    EXPECT_EQ(parsed.nodes[0u].compiledTask.planGeneration, 41u);
+    EXPECT_EQ(parsed.nodes[0u].compiledTask.packetIndex, 7u);
+    EXPECT_EQ(
+        parsed.nodes[0u].compiledTask.packetizationDecision,
+        Telemetry::FrameGraphTaskPacketizationDecision::FirstTask
+    );
+    EXPECT_FALSE(parsed.nodes[1u].compiledTask.present);
+    EXPECT_TRUE(parsed.nodes[2u].compiledTask.present);
+    EXPECT_EQ(parsed.nodes[2u].compiledTask.planGeneration, 41u);
+    EXPECT_EQ(parsed.nodes[2u].compiledTask.packetIndex, 7u);
+    EXPECT_EQ(
+        parsed.nodes[2u].compiledTask.packetizationDecision,
+        Telemetry::FrameGraphTaskPacketizationDecision::MergedExplicit
+    );
 }
 
 TEST(Telemetry, FrameGraphPayloadRejectsUnknownVersion){
@@ -1087,6 +1164,76 @@ TEST(Telemetry, FrameGraphQueueAssignmentPayloadRejectsMalformedRecords){
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 }
 
+TEST(Telemetry, FrameGraphCompiledTaskPayloadRejectsMalformedRecords){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 909u, nodes, edges, payload));
+    const usize compiledTaskOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV3)
+        + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
+        + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
+        + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u
+    ;
+    Telemetry::EncodedFrameGraphCompiledTask first;
+    Telemetry::EncodedFrameGraphCompiledTask second;
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
+    NWB_MEMCPY(
+        &second,
+        sizeof(second),
+        payload.data() + compiledTaskOffset + sizeof(first),
+        sizeof(second)
+    );
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    second.nodeIndex = first.nodeIndex;
+    NWB_MEMCPY(
+        payload.data() + compiledTaskOffset + sizeof(first),
+        payload.size() - compiledTaskOffset - sizeof(first),
+        &second,
+        sizeof(second)
+    );
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 909u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
+    first.nodeIndex = 1u;
+    NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 909u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
+    first.planGeneration = 0u;
+    NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 909u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
+    first.packetIndex = Limit<u32>::s_Max;
+    NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 909u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
+    first.packetizationDecision = Telemetry::FrameGraphTaskPacketizationDecision::Unknown;
+    NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 909u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
+    first.packetizationDecision = Telemetry::FrameGraphTaskPacketizationDecision::kCount;
+    NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 909u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
+    first.reserved[0u] = 1u;
+    NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+}
+
 TEST(Telemetry, FrameGraphPayloadRejectsInvalidInput){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
@@ -1111,6 +1258,14 @@ TEST(Telemetry, FrameGraphPayloadRejectsInvalidInput){
 
     BuildTestAssignedFrameGraph(testArena.arena, nodes, edges);
     nodes[1u].queueAssignment = MakeChangedFrameGraphQueueAssignment();
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
+
+    BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
+    nodes[1u].compiledTask = MakeFrameGraphCompiledTask(
+        41u,
+        7u,
+        Telemetry::FrameGraphTaskPacketizationDecision::FirstTask
+    );
     EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
 }
 
@@ -1731,7 +1886,7 @@ TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
 
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
-    BuildTestAssignedFrameGraph(testArena.arena, nodes, edges);
+    BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
     nodes[2u].queueAssignment.previousAcceptedQueue = {};
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 52u, nodes, edges, 12u));
 
@@ -1765,6 +1920,17 @@ TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
         "\"outgoingCrossings\": 1, \"ownershipTransfers\": 4, \"total\": 8}}"
     ));
     EXPECT_TRUE(ContainsText(unassignedJson, "\"queueAssignment\": null"));
+    EXPECT_TRUE(ContainsText(
+        changedJson,
+        "\"compiledTask\": {\"planGeneration\": 41, \"packetIndex\": 7, "
+        "\"packetizationDecision\": \"firstTask\"}"
+    ));
+    EXPECT_TRUE(ContainsText(unassignedJson, "\"compiledTask\": null"));
+    EXPECT_TRUE(ContainsText(
+        rejectedJson,
+        "\"compiledTask\": {\"planGeneration\": 41, \"packetIndex\": 7, "
+        "\"packetizationDecision\": \"mergedExplicit\"}"
+    ));
     EXPECT_TRUE(ContainsText(
         rejectedJson,
         "\"queueAssignment\": {\"initialQueue\": {\"index\": 4, \"deviceGeneration\": 17}, "
@@ -1802,6 +1968,17 @@ TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
         "queue_score_outgoing_crossings=1, queue_score_ownership_transfers=4, queue_score_total=8"
     ));
     EXPECT_TRUE(ContainsText(unassignedDot, "queue_assignment=\"none\""));
+    EXPECT_TRUE(ContainsText(
+        changedDot,
+        "compiled_task=\"present\", compiled_plan_generation=41, compiled_packet_index=7, "
+        "packetization_decision=\"firstTask\""
+    ));
+    EXPECT_TRUE(ContainsText(unassignedDot, "compiled_task=\"none\""));
+    EXPECT_TRUE(ContainsText(
+        rejectedDot,
+        "compiled_task=\"present\", compiled_plan_generation=41, compiled_packet_index=7, "
+        "packetization_decision=\"mergedExplicit\""
+    ));
     EXPECT_TRUE(ContainsText(
         rejectedDot,
         "queue_assignment=\"present\", queue_initial_index=4, queue_initial_device_generation=17, "

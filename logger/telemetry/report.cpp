@@ -34,12 +34,12 @@ static constexpr usize s_PerfCsvFixedReserveBytes = 128u;
 static constexpr usize s_PerfCsvBytesPerEvent = 128u;
 static constexpr usize s_TimedGraphDotFixedReserveBytes = 96u;
 static constexpr usize s_TimedGraphDotBytesPerGraph = 128u;
-static constexpr usize s_TimedGraphDotBytesPerNode = 640u;
+static constexpr usize s_TimedGraphDotBytesPerNode = 768u;
 static constexpr usize s_TimedGraphDotBytesPerEdge = 40u;
 static constexpr usize s_TimedGraphDotTimingLabelExtraBytes = 16u;
 static constexpr usize s_JsonReportReserveBytes = 1024u;
 static constexpr usize s_JsonReportBytesPerGraph = 128u;
-static constexpr usize s_JsonReportBytesPerNode = 768u;
+static constexpr usize s_JsonReportBytesPerNode = 896u;
 static constexpr usize s_JsonReportBytesPerEdge = 96u;
 
 struct FrameGraphReportRecord{
@@ -300,6 +300,38 @@ using GraphTimingMap = HashMap<GraphTimingKey, f64, GraphTimingKeyHasher, EqualT
     }
 }
 
+[[nodiscard]] const char* FrameGraphTaskPacketizationDecisionText(
+    const Telemetry::FrameGraphTaskPacketizationDecision::Enum decision
+)noexcept{
+    switch(decision){
+    case Telemetry::FrameGraphTaskPacketizationDecision::FirstTask:
+        return "firstTask";
+    case Telemetry::FrameGraphTaskPacketizationDecision::MergeNotRequested:
+        return "mergeNotRequested";
+    case Telemetry::FrameGraphTaskPacketizationDecision::TaskForcesBoundary:
+        return "taskForcesBoundary";
+    case Telemetry::FrameGraphTaskPacketizationDecision::QueueChanged:
+        return "queueChanged";
+    case Telemetry::FrameGraphTaskPacketizationDecision::PrecedingTaskForcesBoundary:
+        return "precedingTaskForcesBoundary";
+    case Telemetry::FrameGraphTaskPacketizationDecision::ScoredMergeIneligible:
+        return "scoredMergeIneligible";
+    case Telemetry::FrameGraphTaskPacketizationDecision::MergeRequiresExplicitImmediateDependency:
+        return "mergeRequiresExplicitImmediateDependency";
+    case Telemetry::FrameGraphTaskPacketizationDecision::CrossQueueConsumerFrontier:
+        return "crossQueueConsumerFrontier";
+    case Telemetry::FrameGraphTaskPacketizationDecision::MergedExplicit:
+        return "mergedExplicit";
+    case Telemetry::FrameGraphTaskPacketizationDecision::MergedFrontierScored:
+        return "mergedFrontierScored";
+    case Telemetry::FrameGraphTaskPacketizationDecision::ScoredMergeDomainMismatch:
+        return "scoredMergeDomainMismatch";
+    case Telemetry::FrameGraphTaskPacketizationDecision::Unknown:
+    default:
+        return "unknown";
+    }
+}
+
 void AppendFrameGraphPhysicalQueueJson(
     AString<TelemetryArena>& out,
     const Telemetry::FrameGraphPhysicalQueueId& queue
@@ -351,6 +383,28 @@ void AppendFrameGraphQueueAssignmentJson(
     );
 }
 
+void AppendFrameGraphCompiledTaskJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphCompiledTask& compiledTask
+){
+    if(!compiledTask.present){
+        out += "null";
+        return;
+    }
+
+    StringAppendFormat(
+        out,
+        "{{\"planGeneration\": {}, \"packetIndex\": {}, \"packetizationDecision\": ",
+        compiledTask.planGeneration,
+        compiledTask.packetIndex
+    );
+    AppendJsonQuotedText(
+        out,
+        AStringView(FrameGraphTaskPacketizationDecisionText(compiledTask.packetizationDecision))
+    );
+    out += '}';
+}
+
 void AppendFrameGraphPhysicalQueueDot(
     AString<TelemetryArena>& out,
     const AStringView prefix,
@@ -400,6 +454,28 @@ void AppendFrameGraphQueueAssignmentDot(
     );
 }
 
+void AppendFrameGraphCompiledTaskDot(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphCompiledTask& compiledTask
+){
+    if(!compiledTask.present){
+        out += ", compiled_task=\"none\"";
+        return;
+    }
+
+    StringAppendFormat(
+        out,
+        ", compiled_task=\"present\", compiled_plan_generation={}, compiled_packet_index={}",
+        compiledTask.planGeneration,
+        compiledTask.packetIndex
+    );
+    out += ", packetization_decision=";
+    AppendDotQuotedText(
+        out,
+        AStringView(FrameGraphTaskPacketizationDecisionText(compiledTask.packetizationDecision))
+    );
+}
+
 // Joins each decoded frame-graph topology with timing from its exact frame and scope Name while retaining every
 // capture, stable identity, and opaque producer-owned flag byte. A timing stream need not match the graph stream.
 void AppendTimedGraphDot(
@@ -442,6 +518,7 @@ void AppendTimedGraphDot(
         AppendDotQuotedText(out, AStringView(FrameGraphNodeKindText(node.kind)));
         StringAppendFormat(out, ", flags={}", static_cast<u32>(node.flags));
         AppendFrameGraphQueueAssignmentDot(out, node.queueAssignment);
+        AppendFrameGraphCompiledTaskDot(out, node.compiledTask);
         out += "];\n";
     }
 
@@ -494,6 +571,8 @@ void AppendFrameGraphJson(
         AppendJsonQuotedText(out, AStringView(FrameGraphNodeKindText(node.kind)));
         StringAppendFormat(out, ", \"flags\": {}, \"queueAssignment\": ", static_cast<u32>(node.flags));
         AppendFrameGraphQueueAssignmentJson(out, node.queueAssignment);
+        out += ", \"compiledTask\": ";
+        AppendFrameGraphCompiledTaskJson(out, node.compiledTask);
         StringAppendFormat(out, "}}{}\n", nodeIndex + 1u == graph.nodes.size() ? "" : ",");
     }
     out += "        ],\n";

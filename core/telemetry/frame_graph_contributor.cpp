@@ -42,7 +42,7 @@ FrameGraphNodeHandle FrameGraphBuilder::addNode(
     const Name& name,
     const AStringView label,
     const FrameGraphNodeKind::Enum kind,
-    const FrameGraphQueueAssignment& queueAssignment,
+    const FrameGraphPassMetadata& metadata,
     const u8 flags
 ){
     const u32 index = static_cast<u32>(m_nodes.size());
@@ -51,7 +51,8 @@ FrameGraphNodeHandle FrameGraphBuilder::addNode(
         .label = label,
         .kind = kind,
         .flags = flags,
-        .queueAssignment = queueAssignment,
+        .queueAssignment = metadata.queueAssignment,
+        .compiledTask = metadata.compiledTask,
     });
     return FrameGraphNodeHandle{ .index = index };
 }

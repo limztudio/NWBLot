@@ -133,6 +133,49 @@ namespace __hidden_task_graph_telemetry{
     }
 }
 
+[[nodiscard]] static bool TranslatePacketizationDecision(
+    const GpuTaskPacketizationDecision::Enum decision,
+    Telemetry::FrameGraphTaskPacketizationDecision::Enum& outDecision
+)noexcept{
+    switch(decision){
+    case GpuTaskPacketizationDecision::FirstTask:
+        outDecision = Telemetry::FrameGraphTaskPacketizationDecision::FirstTask;
+        return true;
+    case GpuTaskPacketizationDecision::MergeNotRequested:
+        outDecision = Telemetry::FrameGraphTaskPacketizationDecision::MergeNotRequested;
+        return true;
+    case GpuTaskPacketizationDecision::TaskForcesBoundary:
+        outDecision = Telemetry::FrameGraphTaskPacketizationDecision::TaskForcesBoundary;
+        return true;
+    case GpuTaskPacketizationDecision::QueueChanged:
+        outDecision = Telemetry::FrameGraphTaskPacketizationDecision::QueueChanged;
+        return true;
+    case GpuTaskPacketizationDecision::PrecedingTaskForcesBoundary:
+        outDecision = Telemetry::FrameGraphTaskPacketizationDecision::PrecedingTaskForcesBoundary;
+        return true;
+    case GpuTaskPacketizationDecision::ScoredMergeIneligible:
+        outDecision = Telemetry::FrameGraphTaskPacketizationDecision::ScoredMergeIneligible;
+        return true;
+    case GpuTaskPacketizationDecision::MergeRequiresExplicitImmediateDependency:
+        outDecision = Telemetry::FrameGraphTaskPacketizationDecision::MergeRequiresExplicitImmediateDependency;
+        return true;
+    case GpuTaskPacketizationDecision::CrossQueueConsumerFrontier:
+        outDecision = Telemetry::FrameGraphTaskPacketizationDecision::CrossQueueConsumerFrontier;
+        return true;
+    case GpuTaskPacketizationDecision::MergedExplicit:
+        outDecision = Telemetry::FrameGraphTaskPacketizationDecision::MergedExplicit;
+        return true;
+    case GpuTaskPacketizationDecision::MergedFrontierScored:
+        outDecision = Telemetry::FrameGraphTaskPacketizationDecision::MergedFrontierScored;
+        return true;
+    case GpuTaskPacketizationDecision::ScoredMergeDomainMismatch:
+        outDecision = Telemetry::FrameGraphTaskPacketizationDecision::ScoredMergeDomainMismatch;
+        return true;
+    default:
+        return false;
+    }
+}
+
 [[nodiscard]] static bool BuildQueueAssignment(
     const GpuTaskQueueAssignment& assignment,
     const GpuTaskQueueAssignmentTelemetry* const accepted,
@@ -180,6 +223,27 @@ namespace __hidden_task_graph_telemetry{
     return Telemetry::IsValidFrameGraphQueueAssignment(outAssignment);
 }
 
+[[nodiscard]] static bool BuildCompiledTask(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId task,
+    Telemetry::FrameGraphCompiledTask& outCompiledTask
+)noexcept{
+    const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+    if(!compiledTask || !compiledGraph.validPacket(compiledTask->packet))
+        return false;
+
+    outCompiledTask = {
+        .planGeneration = compiledTask->packet.generation,
+        .packetIndex = compiledTask->packet.index,
+        .packetizationDecision = Telemetry::FrameGraphTaskPacketizationDecision::Unknown,
+        .present = true,
+    };
+    return TranslatePacketizationDecision(
+        compiledTask->packetizationDecision,
+        outCompiledTask.packetizationDecision
+    ) && Telemetry::IsValidFrameGraphCompiledTask(outCompiledTask);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -199,18 +263,28 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
     if(
         !analysis.validFor(*this)
         || m_tasks.empty()
-        || (options.queueAssignments && !options.queueAssignments->validFor(*this))
-        || ((options.compiledGraph == nullptr) != (options.queueAssignmentTelemetry == nullptr))
-        || (
-            options.queueAssignmentTelemetry
-            && (
-                !options.queueAssignments
-                || !options.compiledGraph
-                || !options.queueAssignmentTelemetry->validFor(
-                    *this,
-                    *options.queueAssignments,
-                    *options.compiledGraph
-                )
+    )
+        return false;
+    if(options.compiledGraph && !options.compiledGraph->validFor(*this))
+        return false;
+    if(
+        options.queueAssignments
+        && (
+            options.compiledGraph
+            ? !options.queueAssignments->validFor(*this, *options.compiledGraph)
+            : !options.queueAssignments->validFor(*this)
+        )
+    )
+        return false;
+    if(
+        options.queueAssignmentTelemetry
+        && (
+            !options.queueAssignments
+            || !options.compiledGraph
+            || !options.queueAssignmentTelemetry->validFor(
+                *this,
+                *options.queueAssignments,
+                *options.compiledGraph
             )
         )
     )
@@ -245,7 +319,16 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
     for(usize taskIndex = 0u; taskIndex < m_tasks.size(); ++taskIndex){
         const GpuTaskGraphTaskView task = taskAt(taskIndex);
         u8 flags = GpuTaskGraphTelemetryNodeFlag::None;
-        Telemetry::FrameGraphQueueAssignment telemetryAssignment;
+        Telemetry::FrameGraphPassMetadata metadata;
+        if(
+            options.compiledGraph
+            && !__hidden_task_graph_telemetry::BuildCompiledTask(
+                *options.compiledGraph,
+                task.id,
+                metadata.compiledTask
+            )
+        )
+            return false;
         if(options.queueAssignments){
             const GpuTaskQueueAssignment* const assignment = options.queueAssignments->find(task.id);
             NWB_ASSERT(assignment);
@@ -256,7 +339,7 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
             if(!__hidden_task_graph_telemetry::BuildQueueAssignment(
                 *assignment,
                 accepted,
-                telemetryAssignment
+                metadata.queueAssignment
             ))
                 return false;
             switch(assignment->queueClass){
@@ -292,10 +375,7 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
             )
                 flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentTimingRouting;
         }
-        taskNodes.push_back(options.queueAssignments
-            ? builder.addPass(task.identity, task.markerLabel, telemetryAssignment, flags)
-            : builder.addPass(task.identity, task.markerLabel, flags)
-        );
+        taskNodes.push_back(builder.addPass(task.identity, task.markerLabel, metadata, flags));
     }
 
     for(usize taskIndex = 0u; taskIndex < m_tasks.size(); ++taskIndex){

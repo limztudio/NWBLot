@@ -18,7 +18,8 @@ NWB_TELEMETRY_BEGIN
 
 
 inline constexpr u16 s_FrameGraphLegacyPayloadVersion = 1u;
-inline constexpr u16 s_FrameGraphPayloadVersion = 2u;
+inline constexpr u16 s_FrameGraphQueueAssignmentPayloadVersion = 2u;
+inline constexpr u16 s_FrameGraphPayloadVersion = 3u;
 inline constexpr u32 s_FrameGraphPayloadMagic = 0x4E574647u; // NWFG
 
 namespace FrameGraphNodeKind{
@@ -97,6 +98,25 @@ namespace FrameGraphQueueAssignmentAcceptance{
     };
 };
 
+namespace FrameGraphTaskPacketizationDecision{
+    enum Enum : u8{
+        Unknown = 0u,
+        FirstTask = 1u,
+        MergeNotRequested = 2u,
+        TaskForcesBoundary = 3u,
+        QueueChanged = 4u,
+        PrecedingTaskForcesBoundary = 5u,
+        ScoredMergeIneligible = 6u,
+        MergeRequiresExplicitImmediateDependency = 7u,
+        CrossQueueConsumerFrontier = 8u,
+        MergedExplicit = 9u,
+        MergedFrontierScored = 10u,
+        ScoredMergeDomainMismatch = 11u,
+
+        kCount = 12u,
+    };
+};
+
 struct FrameGraphPhysicalQueueId{
     u16 index = Limit<u16>::s_Max;
     u16 deviceGeneration = 0u;
@@ -136,6 +156,13 @@ struct FrameGraphQueueAssignment{
     bool present = false;
 };
 
+struct FrameGraphCompiledTask{
+    u64 planGeneration = 0u;
+    u32 packetIndex = Limit<u32>::s_Max;
+    FrameGraphTaskPacketizationDecision::Enum packetizationDecision = FrameGraphTaskPacketizationDecision::Unknown;
+    bool present = false;
+};
+
 #pragma pack(push, 1)
 struct EncodedFrameGraphPayloadHeader{
     u32 magic = s_FrameGraphPayloadMagic;
@@ -149,6 +176,17 @@ struct EncodedFrameGraphPayloadHeader{
 
 struct EncodedFrameGraphPayloadHeaderV2{
     u32 magic = s_FrameGraphPayloadMagic;
+    u16 version = s_FrameGraphQueueAssignmentPayloadVersion;
+    u16 reserved = 0u;
+    u64 frameIndex = 0u;
+    u32 nodeCount = 0u;
+    u32 edgeCount = 0u;
+    u32 stringTableBytes = 0u;
+    u32 queueAssignmentCount = 0u;
+};
+
+struct EncodedFrameGraphPayloadHeaderV3{
+    u32 magic = s_FrameGraphPayloadMagic;
     u16 version = s_FrameGraphPayloadVersion;
     u16 reserved = 0u;
     u64 frameIndex = 0u;
@@ -156,6 +194,7 @@ struct EncodedFrameGraphPayloadHeaderV2{
     u32 edgeCount = 0u;
     u32 stringTableBytes = 0u;
     u32 queueAssignmentCount = 0u;
+    u32 compiledTaskCount = 0u;
 };
 
 struct EncodedFrameGraphNode{
@@ -199,6 +238,14 @@ struct EncodedFrameGraphQueueAssignment{
     u8 dedicated = 0u;
     u8 reserved[3u] = {};
 };
+
+struct EncodedFrameGraphCompiledTask{
+    u32 nodeIndex = 0u;
+    u32 packetIndex = Limit<u32>::s_Max;
+    u64 planGeneration = 0u;
+    u8 packetizationDecision = FrameGraphTaskPacketizationDecision::Unknown;
+    u8 reserved[3u] = {};
+};
 #pragma pack(pop)
 static_assert(sizeof(EncodedFrameGraphPayloadHeader) == 28u, "EncodedFrameGraphPayloadHeader wire layout drifted");
 static_assert(alignof(EncodedFrameGraphPayloadHeader) == 1u, "EncodedFrameGraphPayloadHeader must stay packed");
@@ -208,6 +255,10 @@ static_assert(sizeof(EncodedFrameGraphPayloadHeaderV2) == 32u, "EncodedFrameGrap
 static_assert(alignof(EncodedFrameGraphPayloadHeaderV2) == 1u, "EncodedFrameGraphPayloadHeaderV2 must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPayloadHeaderV2>, "EncodedFrameGraphPayloadHeaderV2 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPayloadHeaderV2>, "EncodedFrameGraphPayloadHeaderV2 must stay binary-serializable");
+static_assert(sizeof(EncodedFrameGraphPayloadHeaderV3) == 36u, "EncodedFrameGraphPayloadHeaderV3 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPayloadHeaderV3) == 1u, "EncodedFrameGraphPayloadHeaderV3 must stay packed");
+static_assert(IsStandardLayout_V<EncodedFrameGraphPayloadHeaderV3>, "EncodedFrameGraphPayloadHeaderV3 must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPayloadHeaderV3>, "EncodedFrameGraphPayloadHeaderV3 must stay binary-serializable");
 static_assert(sizeof(EncodedFrameGraphNode) == 72u, "EncodedFrameGraphNode wire layout drifted");
 static_assert(alignof(EncodedFrameGraphNode) == 1u, "EncodedFrameGraphNode must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphNode>, "EncodedFrameGraphNode must stay binary-serializable");
@@ -224,6 +275,10 @@ static_assert(sizeof(EncodedFrameGraphQueueAssignment) == 56u, "EncodedFrameGrap
 static_assert(alignof(EncodedFrameGraphQueueAssignment) == 1u, "EncodedFrameGraphQueueAssignment must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphQueueAssignment>, "EncodedFrameGraphQueueAssignment must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphQueueAssignment>, "EncodedFrameGraphQueueAssignment must stay binary-serializable");
+static_assert(sizeof(EncodedFrameGraphCompiledTask) == 20u, "EncodedFrameGraphCompiledTask wire layout drifted");
+static_assert(alignof(EncodedFrameGraphCompiledTask) == 1u, "EncodedFrameGraphCompiledTask must stay packed");
+static_assert(IsStandardLayout_V<EncodedFrameGraphCompiledTask>, "EncodedFrameGraphCompiledTask must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<EncodedFrameGraphCompiledTask>, "EncodedFrameGraphCompiledTask must stay binary-serializable");
 
 struct FrameGraphNodeDesc{
     Name name = NAME_NONE;
@@ -231,6 +286,7 @@ struct FrameGraphNodeDesc{
     FrameGraphNodeKind::Enum kind = FrameGraphNodeKind::Unknown;
     u8 flags = 0u;
     FrameGraphQueueAssignment queueAssignment;
+    FrameGraphCompiledTask compiledTask;
 };
 
 struct FrameGraphEdgeDesc{
@@ -246,6 +302,7 @@ struct FrameGraphNodePayload{
     FrameGraphNodeKind::Enum kind = FrameGraphNodeKind::Unknown;
     u8 flags = 0u;
     FrameGraphQueueAssignment queueAssignment;
+    FrameGraphCompiledTask compiledTask;
 
     explicit FrameGraphNodePayload(TelemetryArena& arena)
         : label(arena)
@@ -282,7 +339,9 @@ using FrameGraphEdgeDescs = Vector<FrameGraphEdgeDesc, TelemetryArena>;
 [[nodiscard]] bool IsValidFrameGraphQueueClass(FrameGraphQueueClass::Enum queueClass)noexcept;
 [[nodiscard]] bool IsValidFrameGraphQueueAssignmentReason(FrameGraphQueueAssignmentReason::Enum reason)noexcept;
 [[nodiscard]] bool IsValidFrameGraphQueueAssignmentAcceptance(FrameGraphQueueAssignmentAcceptance::Enum acceptance)noexcept;
+[[nodiscard]] bool IsValidFrameGraphTaskPacketizationDecision(FrameGraphTaskPacketizationDecision::Enum decision)noexcept;
 [[nodiscard]] bool IsValidFrameGraphQueueAssignment(const FrameGraphQueueAssignment& assignment)noexcept;
+[[nodiscard]] bool IsValidFrameGraphCompiledTask(const FrameGraphCompiledTask& compiledTask)noexcept;
 [[nodiscard]] bool BuildFrameGraphPayload(
     TelemetryArena& arena,
     u64 frameIndex,

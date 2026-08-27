@@ -64,6 +64,10 @@ namespace __hidden_telemetry_frame_graph{
             node.kind == FrameGraphNodeKind::Pass
             && IsValidFrameGraphQueueAssignment(node.queueAssignment)
         ))
+        && (!node.compiledTask.present || (
+            node.kind == FrameGraphNodeKind::Pass
+            && IsValidFrameGraphCompiledTask(node.compiledTask)
+        ))
     ;
 }
 
@@ -160,6 +164,34 @@ namespace __hidden_telemetry_frame_graph{
     return IsValidFrameGraphQueueAssignment(outAssignment);
 }
 
+[[nodiscard]] static EncodedFrameGraphCompiledTask EncodeCompiledTask(
+    const u32 nodeIndex,
+    const FrameGraphCompiledTask& compiledTask
+)noexcept{
+    EncodedFrameGraphCompiledTask encoded;
+    encoded.nodeIndex = nodeIndex;
+    encoded.packetIndex = compiledTask.packetIndex;
+    encoded.planGeneration = compiledTask.planGeneration;
+    encoded.packetizationDecision = compiledTask.packetizationDecision;
+    return encoded;
+}
+
+[[nodiscard]] static bool DecodeCompiledTask(
+    const EncodedFrameGraphCompiledTask& encoded,
+    FrameGraphCompiledTask& outCompiledTask
+)noexcept{
+    if(encoded.reserved[0u] != 0u || encoded.reserved[1u] != 0u || encoded.reserved[2u] != 0u)
+        return false;
+
+    outCompiledTask.planGeneration = encoded.planGeneration;
+    outCompiledTask.packetIndex = encoded.packetIndex;
+    outCompiledTask.packetizationDecision = static_cast<FrameGraphTaskPacketizationDecision::Enum>(
+        encoded.packetizationDecision
+    );
+    outCompiledTask.present = true;
+    return IsValidFrameGraphCompiledTask(outCompiledTask);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -234,6 +266,27 @@ bool IsValidFrameGraphQueueAssignmentAcceptance(
     }
 }
 
+bool IsValidFrameGraphTaskPacketizationDecision(
+    const FrameGraphTaskPacketizationDecision::Enum decision
+)noexcept{
+    switch(decision){
+    case FrameGraphTaskPacketizationDecision::FirstTask:
+    case FrameGraphTaskPacketizationDecision::MergeNotRequested:
+    case FrameGraphTaskPacketizationDecision::TaskForcesBoundary:
+    case FrameGraphTaskPacketizationDecision::QueueChanged:
+    case FrameGraphTaskPacketizationDecision::PrecedingTaskForcesBoundary:
+    case FrameGraphTaskPacketizationDecision::ScoredMergeIneligible:
+    case FrameGraphTaskPacketizationDecision::MergeRequiresExplicitImmediateDependency:
+    case FrameGraphTaskPacketizationDecision::CrossQueueConsumerFrontier:
+    case FrameGraphTaskPacketizationDecision::MergedExplicit:
+    case FrameGraphTaskPacketizationDecision::MergedFrontierScored:
+    case FrameGraphTaskPacketizationDecision::ScoredMergeDomainMismatch:
+        return true;
+    default:
+        return false;
+    }
+}
+
 bool IsValidFrameGraphQueueAssignment(const FrameGraphQueueAssignment& assignment)noexcept{
     if(
         !assignment.present
@@ -278,6 +331,14 @@ bool IsValidFrameGraphQueueAssignment(const FrameGraphQueueAssignment& assignmen
     }
 }
 
+bool IsValidFrameGraphCompiledTask(const FrameGraphCompiledTask& compiledTask)noexcept{
+    return compiledTask.present
+        && compiledTask.planGeneration != 0u
+        && compiledTask.packetIndex != Limit<u32>::s_Max
+        && IsValidFrameGraphTaskPacketizationDecision(compiledTask.packetizationDecision)
+    ;
+}
+
 bool BuildFrameGraphPayload(
     TelemetryArena& arena,
     const u64 frameIndex,
@@ -292,6 +353,7 @@ bool BuildFrameGraphPayload(
 
     usize stringTableBytes = 0u;
     usize queueAssignmentCount = 0u;
+    usize compiledTaskCount = 0u;
     for(const FrameGraphNodeDesc& node : nodes){
         if(!__hidden_telemetry_frame_graph::ValidateNodeInput(node))
             return false;
@@ -299,8 +361,10 @@ bool BuildFrameGraphPayload(
             return false;
         if(node.queueAssignment.present)
             ++queueAssignmentCount;
+        if(node.compiledTask.present)
+            ++compiledTaskCount;
     }
-    if(!FitsU32(queueAssignmentCount))
+    if(!FitsU32(queueAssignmentCount) || !FitsU32(compiledTaskCount))
         return false;
 
     for(const FrameGraphEdgeDesc& edge : edges){
@@ -309,9 +373,10 @@ bool BuildFrameGraphPayload(
     }
 
     const bool hasQueueAssignments = queueAssignmentCount != 0u;
-    usize payloadBytes = hasQueueAssignments
-        ? sizeof(EncodedFrameGraphPayloadHeaderV2)
-        : sizeof(EncodedFrameGraphPayloadHeader)
+    const bool hasCompiledTasks = compiledTaskCount != 0u;
+    usize payloadBytes = hasCompiledTasks
+        ? sizeof(EncodedFrameGraphPayloadHeaderV3)
+        : (hasQueueAssignments ? sizeof(EncodedFrameGraphPayloadHeaderV2) : sizeof(EncodedFrameGraphPayloadHeader))
     ;
     if(
         !AddBinaryRepeatedReserveBytes(payloadBytes, nodes.size(), sizeof(EncodedFrameGraphNode))
@@ -320,6 +385,11 @@ bool BuildFrameGraphPayload(
             payloadBytes,
             queueAssignmentCount,
             sizeof(EncodedFrameGraphQueueAssignment)
+        )
+        || !AddBinaryRepeatedReserveBytes(
+            payloadBytes,
+            compiledTaskCount,
+            sizeof(EncodedFrameGraphCompiledTask)
         )
         || !AddBinaryReserveBytes(payloadBytes, stringTableBytes)
     )
@@ -344,7 +414,17 @@ bool BuildFrameGraphPayload(
     }
 
     outPayload.reserve(payloadBytes);
-    if(hasQueueAssignments){
+    if(hasCompiledTasks){
+        EncodedFrameGraphPayloadHeaderV3 header;
+        header.frameIndex = frameIndex;
+        header.nodeCount = static_cast<u32>(nodes.size());
+        header.edgeCount = static_cast<u32>(edges.size());
+        header.stringTableBytes = static_cast<u32>(stringTable.size());
+        header.queueAssignmentCount = static_cast<u32>(queueAssignmentCount);
+        header.compiledTaskCount = static_cast<u32>(compiledTaskCount);
+        AppendPOD(outPayload, header);
+    }
+    else if(hasQueueAssignments){
         EncodedFrameGraphPayloadHeaderV2 header;
         header.frameIndex = frameIndex;
         header.nodeCount = static_cast<u32>(nodes.size());
@@ -378,6 +458,13 @@ bool BuildFrameGraphPayload(
                 __hidden_telemetry_frame_graph::EncodeQueueAssignment(nodeIndex, nodes[nodeIndex].queueAssignment)
             );
     }
+    for(u32 nodeIndex = 0u; nodeIndex < static_cast<u32>(nodes.size()); ++nodeIndex){
+        if(nodes[nodeIndex].compiledTask.present)
+            AppendPOD(
+                outPayload,
+                __hidden_telemetry_frame_graph::EncodeCompiledTask(nodeIndex, nodes[nodeIndex].compiledTask)
+            );
+    }
     if(!stringTable.empty())
         BinaryDetail::AppendBytesNoReserveUnchecked(outPayload, stringTable.data(), stringTable.size());
 
@@ -406,11 +493,12 @@ bool ParseFrameGraphPayload(
 
     usize headerBytes = 0u;
     u32 queueAssignmentCount = 0u;
+    u32 compiledTaskCount = 0u;
     switch(legacyHeader.version){
     case s_FrameGraphLegacyPayloadVersion:
         headerBytes = sizeof(EncodedFrameGraphPayloadHeader);
         break;
-    case s_FrameGraphPayloadVersion: {
+    case s_FrameGraphQueueAssignmentPayloadVersion: {
         cursor = 0u;
         EncodedFrameGraphPayloadHeaderV2 header;
         if(!ReadPOD(encoded, cursor, header))
@@ -425,10 +513,26 @@ bool ParseFrameGraphPayload(
         queueAssignmentCount = header.queueAssignmentCount;
         break;
     }
+    case s_FrameGraphPayloadVersion: {
+        cursor = 0u;
+        EncodedFrameGraphPayloadHeaderV3 header;
+        if(!ReadPOD(encoded, cursor, header))
+            return false;
+        if(!__hidden_telemetry_frame_graph::ValidateHeader(header.magic, header.reserved))
+            return false;
+        legacyHeader.frameIndex = header.frameIndex;
+        legacyHeader.nodeCount = header.nodeCount;
+        legacyHeader.edgeCount = header.edgeCount;
+        legacyHeader.stringTableBytes = header.stringTableBytes;
+        headerBytes = sizeof(EncodedFrameGraphPayloadHeaderV3);
+        queueAssignmentCount = header.queueAssignmentCount;
+        compiledTaskCount = header.compiledTaskCount;
+        break;
+    }
     default:
         return false;
     }
-    if(queueAssignmentCount > legacyHeader.nodeCount)
+    if(queueAssignmentCount > legacyHeader.nodeCount || compiledTaskCount > legacyHeader.nodeCount)
         return false;
 
     usize expectedBytes = headerBytes;
@@ -439,6 +543,11 @@ bool ParseFrameGraphPayload(
             expectedBytes,
             queueAssignmentCount,
             sizeof(EncodedFrameGraphQueueAssignment)
+        )
+        || !AddBinaryRepeatedReserveBytes(
+            expectedBytes,
+            compiledTaskCount,
+            sizeof(EncodedFrameGraphCompiledTask)
         )
         || !AddBinaryReserveBytes(expectedBytes, legacyHeader.stringTableBytes)
         || expectedBytes != payloadBytes
@@ -453,11 +562,19 @@ bool ParseFrameGraphPayload(
     if(!AddBinaryRepeatedReserveBytes(queueAssignmentOffset, legacyHeader.edgeCount, sizeof(EncodedFrameGraphEdge)))
         return false;
 
-    usize stringTableOffset = queueAssignmentOffset;
+    usize compiledTaskOffset = queueAssignmentOffset;
     if(!AddBinaryRepeatedReserveBytes(
-        stringTableOffset,
+        compiledTaskOffset,
         queueAssignmentCount,
         sizeof(EncodedFrameGraphQueueAssignment)
+    ))
+        return false;
+
+    usize stringTableOffset = compiledTaskOffset;
+    if(!AddBinaryRepeatedReserveBytes(
+        stringTableOffset,
+        compiledTaskCount,
+        sizeof(EncodedFrameGraphCompiledTask)
     ))
         return false;
 
@@ -519,6 +636,24 @@ bool ParseFrameGraphPayload(
         )
             return false;
         previousNodeIndex = encodedAssignment.nodeIndex;
+    }
+
+    previousNodeIndex = 0u;
+    for(u32 compiledTaskIndex = 0u; compiledTaskIndex < compiledTaskCount; ++compiledTaskIndex){
+        EncodedFrameGraphCompiledTask encodedCompiledTask;
+        if(!ReadPOD(encoded, cursor, encodedCompiledTask))
+            return false;
+        if(
+            encodedCompiledTask.nodeIndex >= legacyHeader.nodeCount
+            || (compiledTaskIndex != 0u && encodedCompiledTask.nodeIndex <= previousNodeIndex)
+            || outPayload.nodes[encodedCompiledTask.nodeIndex].kind != FrameGraphNodeKind::Pass
+            || !__hidden_telemetry_frame_graph::DecodeCompiledTask(
+                encodedCompiledTask,
+                outPayload.nodes[encodedCompiledTask.nodeIndex].compiledTask
+            )
+        )
+            return false;
+        previousNodeIndex = encodedCompiledTask.nodeIndex;
     }
 
     return cursor == stringTableOffset;

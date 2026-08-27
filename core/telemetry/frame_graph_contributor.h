@@ -34,6 +34,11 @@ struct FrameGraphPendingNameEdge{
 
 using FrameGraphPendingNameEdges = Vector<FrameGraphPendingNameEdge, TelemetryArena>;
 
+struct FrameGraphPassMetadata{
+    FrameGraphQueueAssignment queueAssignment;
+    FrameGraphCompiledTask compiledTask;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -53,7 +58,7 @@ public:
 
 public:
     [[nodiscard]] FrameGraphNodeHandle addPass(const Name& scope, const AStringView label, const u8 flags = 0u){
-        return addNode(scope, label, FrameGraphNodeKind::Pass, FrameGraphQueueAssignment{}, flags);
+        return addNode(scope, label, FrameGraphNodeKind::Pass, FrameGraphPassMetadata{}, flags);
     }
     [[nodiscard]] FrameGraphNodeHandle addPass(
         const Name& scope,
@@ -61,13 +66,27 @@ public:
         const FrameGraphQueueAssignment& queueAssignment,
         const u8 flags = 0u
     ){
-        return addNode(scope, label, FrameGraphNodeKind::Pass, queueAssignment, flags);
+        return addNode(
+            scope,
+            label,
+            FrameGraphNodeKind::Pass,
+            FrameGraphPassMetadata{ .queueAssignment = queueAssignment, .compiledTask = {} },
+            flags
+        );
+    }
+    [[nodiscard]] FrameGraphNodeHandle addPass(
+        const Name& scope,
+        const AStringView label,
+        const FrameGraphPassMetadata& metadata,
+        const u8 flags = 0u
+    ){
+        return addNode(scope, label, FrameGraphNodeKind::Pass, metadata, flags);
     }
     [[nodiscard]] FrameGraphNodeHandle addResource(const Name& id, const AStringView label, const u8 flags = 0u){
-        return addNode(id, label, FrameGraphNodeKind::Resource, FrameGraphQueueAssignment{}, flags);
+        return addNode(id, label, FrameGraphNodeKind::Resource, FrameGraphPassMetadata{}, flags);
     }
     [[nodiscard]] FrameGraphNodeHandle addExternal(const Name& id, const AStringView label, const u8 flags = 0u){
-        return addNode(id, label, FrameGraphNodeKind::External, FrameGraphQueueAssignment{}, flags);
+        return addNode(id, label, FrameGraphNodeKind::External, FrameGraphPassMetadata{}, flags);
     }
 
     void addEdge(FrameGraphNodeHandle from, FrameGraphNodeHandle to, FrameGraphEdgeKind::Enum kind, u8 flags = 0u);
@@ -78,7 +97,7 @@ private:
         const Name& name,
         AStringView label,
         FrameGraphNodeKind::Enum kind,
-        const FrameGraphQueueAssignment& queueAssignment,
+        const FrameGraphPassMetadata& metadata,
         u8 flags
     );
 

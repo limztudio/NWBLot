@@ -18,6 +18,8 @@
 #include <core/graphics/vulkan/device_detail.h>
 #include <core/graphics/vulkan/state_tracking_detail.h>
 #include <core/telemetry/frame_graph_contributor.h>
+#include <global/filesystem/operations.h>
+#include <global/filesystem/path.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -104,8 +106,19 @@ namespace __hidden_task_graph_tests{
 using TestArena = ::NWB::Tests::TestArena<struct TaskGraphTestsTag>;
 namespace Graphics = Core;
 namespace Telemetry = Core::Telemetry;
+using TestPath = ::Path<Graphics::Alloc::GlobalArena>;
 
 inline constexpr Name s_TaskGraphScratchArena("tests/graphics/task_graph_scratch");
+
+
+static void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryStats& actual){
+    EXPECT_EQ(actual.reservedBytes, expected.reservedBytes);
+    EXPECT_EQ(actual.usedBytes, expected.usedBytes);
+    EXPECT_EQ(actual.peakUsedBytes, expected.peakUsedBytes);
+    EXPECT_EQ(actual.allocationCount, expected.allocationCount);
+    EXPECT_EQ(actual.reallocationCount, expected.reallocationCount);
+    EXPECT_EQ(actual.deallocationCount, expected.deallocationCount);
+}
 
 
 struct ImportedTexturePair{
@@ -2833,6 +2846,154 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
 }
 
 
+TEST(GpuTaskGraph, AcceptsEveryDefinedQueueSharingMaskForMetadataResources){
+    constexpr Graphics::ResourceQueueSharing::Mask s_ValidQueueSharingMasks[] = {
+        Graphics::ResourceQueueSharing::Exclusive,
+        Graphics::ResourceQueueSharing::Graphics,
+        Graphics::ResourceQueueSharing::AsyncCompute,
+        Graphics::ResourceQueueSharing::Transfer,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        Graphics::ResourceQueueSharing::GraphicsAndTransfer,
+        Graphics::ResourceQueueSharing::AsyncComputeAndTransfer,
+        Graphics::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer,
+    };
+    constexpr Graphics::GpuGraphResourceType::Enum s_MetadataResourceTypes[] = {
+        Graphics::GpuGraphResourceType::Texture,
+        Graphics::GpuGraphResourceType::Buffer,
+        Graphics::GpuGraphResourceType::AccelStruct,
+        Graphics::GpuGraphResourceType::HazardDomain,
+    };
+
+    for(const Graphics::GpuGraphResourceType::Enum resourceType : s_MetadataResourceTypes){
+        for(const Graphics::ResourceQueueSharing::Mask queueSharing : s_ValidQueueSharingMasks){
+            SCOPED_TRACE(static_cast<u32>(resourceType));
+            SCOPED_TRACE(static_cast<u32>(queueSharing));
+            TestArena testArena;
+            Graphics::GpuTaskGraph graph(testArena.arena);
+            const u64 declarationRevision = graph.declarationRevision();
+            const Graphics::GpuGraphResourceId resource = graph.importResource(
+                Graphics::GpuGraphResourceDesc{}
+                    .setIdentity(Name("tests/task_graph/valid_queue_sharing_metadata"))
+                    .setMarkerLabel("Valid Queue Sharing Metadata")
+                    .setType(resourceType)
+                    .setInitialState(
+                        resourceType == Graphics::GpuGraphResourceType::HazardDomain
+                            ? Graphics::ResourceStates::Unknown
+                            : Graphics::ResourceStates::Common
+                    )
+                    .setQueueSharing(queueSharing)
+            );
+            ASSERT_TRUE(resource.valid());
+            EXPECT_EQ(graph.resourceCount(), 1u);
+            EXPECT_NE(graph.declarationRevision(), declarationRevision);
+            EXPECT_EQ(graph.resourceAt(resource.index).queueSharing, queueSharing);
+        }
+    }
+}
+
+
+TEST(GpuTaskGraph, RejectsMalformedQueueSharingWithoutDeclarationMutation){
+    constexpr u8 s_UnknownQueueSharingBit = 1u << 7u;
+    constexpr Graphics::ResourceQueueSharing::Mask s_InvalidQueueSharingMasks[] = {
+        static_cast<Graphics::ResourceQueueSharing::Mask>(s_UnknownQueueSharingBit),
+        static_cast<Graphics::ResourceQueueSharing::Mask>(
+            static_cast<u8>(Graphics::ResourceQueueSharing::Graphics) | s_UnknownQueueSharingBit
+        ),
+    };
+    constexpr Graphics::GpuGraphResourceType::Enum s_MetadataResourceTypes[] = {
+        Graphics::GpuGraphResourceType::Texture,
+        Graphics::GpuGraphResourceType::Buffer,
+        Graphics::GpuGraphResourceType::AccelStruct,
+        Graphics::GpuGraphResourceType::HazardDomain,
+    };
+    const auto expectRejectedWithoutMutation = [](
+        const Graphics::GpuGraphResourceType::Enum resourceType,
+        const Graphics::ResourceQueueSharing::Mask queueSharing,
+        const bool useHazardDomainWrapper
+    ){
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceDesc desc = Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/invalid_queue_sharing_metadata"))
+            .setMarkerLabel("Invalid Queue Sharing Metadata")
+            .setType(resourceType)
+            .setInitialState(
+                resourceType == Graphics::GpuGraphResourceType::HazardDomain
+                    ? Graphics::ResourceStates::Unknown
+                    : Graphics::ResourceStates::Common
+            )
+            .setQueueSharing(queueSharing)
+        ;
+        const usize resourceCount = graph.resourceCount();
+        const u64 declarationRevision = graph.declarationRevision();
+        const ArenaMemoryStats memoryStats = testArena.arena.memoryStats();
+        const Graphics::GpuGraphResourceId resource = useHazardDomainWrapper
+            ? graph.importHazardDomain(desc)
+            : graph.importResource(desc)
+        ;
+
+        EXPECT_FALSE(resource.valid());
+        EXPECT_EQ(graph.resourceCount(), resourceCount);
+        EXPECT_EQ(graph.declarationRevision(), declarationRevision);
+        ExpectMemoryStatsEqual(memoryStats, testArena.arena.memoryStats());
+    };
+
+    for(const Graphics::ResourceQueueSharing::Mask queueSharing : s_InvalidQueueSharingMasks){
+        SCOPED_TRACE(static_cast<u32>(queueSharing));
+        for(const Graphics::GpuGraphResourceType::Enum resourceType : s_MetadataResourceTypes){
+            SCOPED_TRACE(static_cast<u32>(resourceType));
+            expectRejectedWithoutMutation(resourceType, queueSharing, false);
+        }
+        expectRejectedWithoutMutation(Graphics::GpuGraphResourceType::HazardDomain, queueSharing, true);
+    }
+}
+
+
+TEST(GpuTaskGraph, CompilerOwnershipTransferDefenseRejectsMalformedSharingBeforeSameFamilyNoOp){
+    TestArena testArena;
+    const TestPath repoRoot = TestPath(testArena.arena, __FILE__)
+        .parent_path()
+        .parent_path()
+        .parent_path()
+        .parent_path()
+        .lexically_normal()
+    ;
+    TestAString compilerSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "task_graph" / "compiler.cpp", compilerSource));
+    const AStringView source(compilerSource.data(), compilerSource.size());
+    const usize functionBegin = source.find("[[nodiscard]] bool AppendCompiledOwnershipTransfer(");
+    const usize functionEnd = source.find("////////////////////////////////////////////////////////////////", functionBegin);
+    ASSERT_NE(functionBegin, AStringView::npos);
+    ASSERT_NE(functionEnd, AStringView::npos);
+    ASSERT_LT(functionBegin, functionEnd);
+
+    const usize invalidSharingGuard = source.find("static_cast<u8>(resource.queueSharing)", functionBegin);
+    const usize unknownBitMaskOperator = source.find("& ~static_cast<u8>(", invalidSharingGuard);
+    const usize validMask = source.find("ResourceQueueSharing::GraphicsAsyncComputeAndTransfer", unknownBitMaskOperator);
+    const usize nonzeroComparison = source.find(")) != 0u", validMask);
+    const usize invalidSharingRejection = source.find("return false;", nonzeroComparison);
+    const usize declaredResourceLookup = source.find("const GpuTaskGraphResourceView declaredResource", validMask);
+    const usize sameFamilyNoOp = source.find(
+        "if(sourceQueueInfo->familyIndex == destinationQueueInfo->familyIndex)",
+        declaredResourceLookup
+    );
+    ASSERT_NE(invalidSharingGuard, AStringView::npos);
+    ASSERT_NE(unknownBitMaskOperator, AStringView::npos);
+    ASSERT_NE(validMask, AStringView::npos);
+    ASSERT_NE(nonzeroComparison, AStringView::npos);
+    ASSERT_NE(invalidSharingRejection, AStringView::npos);
+    ASSERT_NE(declaredResourceLookup, AStringView::npos);
+    ASSERT_NE(sameFamilyNoOp, AStringView::npos);
+    EXPECT_LT(invalidSharingGuard, unknownBitMaskOperator);
+    EXPECT_LT(unknownBitMaskOperator, validMask);
+    EXPECT_LT(validMask, nonzeroComparison);
+    EXPECT_LT(nonzeroComparison, invalidSharingRejection);
+    EXPECT_LT(invalidSharingRejection, declaredResourceLookup);
+    EXPECT_LT(declaredResourceLookup, sameFamilyNoOp);
+    EXPECT_LT(sameFamilyNoOp, functionEnd);
+}
+
+
 TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
     constexpr Graphics::ResourceQueueSharing::Mask s_NativeQueueSharing =
         Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute;
@@ -3052,6 +3213,101 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
         Name("tests/task_graph/native_queue_sharing_accel_struct"),
         "Native Queue Sharing Accel Struct"
     );
+}
+
+
+TEST(GpuTaskGraph, TypedImportsRejectMalformedInheritedNativeQueueSharing){
+    constexpr u8 s_UnknownQueueSharingBit = 1u << 7u;
+    constexpr Graphics::ResourceQueueSharing::Mask s_InvalidQueueSharingMasks[] = {
+        static_cast<Graphics::ResourceQueueSharing::Mask>(s_UnknownQueueSharingBit),
+        static_cast<Graphics::ResourceQueueSharing::Mask>(
+            static_cast<u8>(Graphics::ResourceQueueSharing::Graphics) | s_UnknownQueueSharingBit
+        ),
+    };
+
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+
+    for(const Graphics::ResourceQueueSharing::Mask queueSharing : s_InvalidQueueSharingMasks){
+        SCOPED_TRACE(static_cast<u32>(queueSharing));
+        Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+            testArena.arena,
+            context,
+            allocator,
+            Graphics::TextureDesc().setQueueSharing(queueSharing)
+        );
+        Graphics::Buffer* const bufferObject = NewArenaObject<Graphics::Buffer>(
+            testArena.arena,
+            context,
+            allocator,
+            Graphics::BufferDesc().setQueueSharing(queueSharing)
+        );
+        Graphics::RayTracingAccelStruct* const accelStructObject = NewArenaObject<Graphics::RayTracingAccelStruct>(
+            testArena.arena,
+            context,
+            queueSharing
+        );
+        ASSERT_NE(textureObject, nullptr);
+        ASSERT_NE(bufferObject, nullptr);
+        ASSERT_NE(accelStructObject, nullptr);
+
+        Graphics::TextureHandle texture(
+            textureObject,
+            Graphics::TextureHandle::deleter_type(&testArena.arena),
+            AdoptRef
+        );
+        Graphics::BufferHandle buffer(
+            bufferObject,
+            Graphics::BufferHandle::deleter_type(&testArena.arena),
+            AdoptRef
+        );
+        Graphics::RayTracingAccelStructHandle accelStruct(
+            accelStructObject,
+            Graphics::RayTracingAccelStructHandle::deleter_type(&testArena.arena),
+            AdoptRef
+        );
+        ASSERT_TRUE(texture->descriptionMatchesCreation());
+        ASSERT_TRUE(buffer->descriptionMatchesCreation());
+        ASSERT_TRUE(accelStruct->queueSharingMatchesCreation());
+        ASSERT_EQ(texture->getCreationDescription().queueSharing, queueSharing);
+        ASSERT_EQ(buffer->getCreationDescription().queueSharing, queueSharing);
+        ASSERT_EQ(accelStruct->getCreationQueueSharing(), queueSharing);
+
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const usize resourceCount = graph.resourceCount();
+        const u64 declarationRevision = graph.declarationRevision();
+        const ArenaMemoryStats memoryStats = testArena.arena.memoryStats();
+        EXPECT_FALSE(graph.importTexture(
+            texture,
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/invalid_inherited_queue_sharing_texture"))
+                .setMarkerLabel("Invalid Inherited Queue Sharing Texture")
+                .setType(Graphics::GpuGraphResourceType::Texture)
+                .setInitialState(Graphics::ResourceStates::Common)
+        ).valid());
+        EXPECT_FALSE(graph.importBuffer(
+            buffer,
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/invalid_inherited_queue_sharing_buffer"))
+                .setMarkerLabel("Invalid Inherited Queue Sharing Buffer")
+                .setType(Graphics::GpuGraphResourceType::Buffer)
+                .setInitialState(Graphics::ResourceStates::Common)
+        ).valid());
+        EXPECT_FALSE(graph.importAccelStruct(
+            accelStruct,
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/invalid_inherited_queue_sharing_accel_struct"))
+                .setMarkerLabel("Invalid Inherited Queue Sharing Accel Struct")
+                .setType(Graphics::GpuGraphResourceType::AccelStruct)
+                .setInitialState(Graphics::ResourceStates::Common)
+        ).valid());
+        EXPECT_EQ(graph.resourceCount(), resourceCount);
+        EXPECT_EQ(graph.declarationRevision(), declarationRevision);
+        ExpectMemoryStatsEqual(memoryStats, testArena.arena.memoryStats());
+    }
 }
 
 
@@ -12506,10 +12762,6 @@ TEST(GpuTaskGraph, CompilesMultiSourceInitialTextureOwnershipHandoff){
         sameFamilyQueues[1u].queueIndex = 1u;
         ASSERT_NE(sameFamilyQueues[0u].id, sameFamilyQueues[1u].id);
         ASSERT_EQ(sameFamilyQueues[0u].familyIndex, sameFamilyQueues[1u].familyIndex);
-        const Graphics::GpuTaskGraphQueueTopology sameFamilyTopology{
-            .queues = sameFamilyQueues,
-            .queueCount = LengthOf(sameFamilyQueues),
-        };
         const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
             Graphics::GpuExternalCompletionDesc{}
                 .setIdentity(Name("tests/task_graph/invalid_sharing_same_family_completion"))
@@ -12526,50 +12778,25 @@ TEST(GpuTaskGraph, CompilesMultiSourceInitialTextureOwnershipHandoff){
         constexpr Graphics::ResourceQueueSharing::Mask s_InvalidQueueSharing =
             static_cast<Graphics::ResourceQueueSharing::Mask>(1u << 7u)
         ;
-        const Graphics::GpuGraphResourceId buffer = graph.importResource(
-            Graphics::GpuGraphResourceDesc{}
-                .setIdentity(Name("tests/task_graph/invalid_sharing_same_family_buffer"))
-                .setMarkerLabel("Invalid Sharing Same Family Buffer")
-                .setType(Graphics::GpuGraphResourceType::Buffer)
-                .setInitialState(Graphics::ResourceStates::Common)
-                .setInitialOwnerQueue(sameFamilyQueues[0u].id)
-                .setInitialOwnerReleaseDestinationQueue(sameFamilyQueues[1u].id)
-                .setInitialOwnerCompletion(completion)
-                .setInitialOwnerMinimumCompletionToken(minimumCompletionToken)
-                .setInitialOwnerStateSource(&stateSource)
-                .setQueueSharing(s_InvalidQueueSharing)
-        );
-        ASSERT_TRUE(buffer.valid());
-        EXPECT_EQ(graph.resourceAt(buffer.index).queueSharing, s_InvalidQueueSharing);
-        const Graphics::GpuTaskResourceUse use{
-            .resource = buffer,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::CopyDest,
-            .access = Graphics::GpuTaskResourceAccess::Write,
-        };
-        Graphics::GpuTaskDesc taskDesc;
-        taskDesc
-            .setIdentity(Name("tests/task_graph/invalid_sharing_same_family_use"))
-            .setMarkerLabel("Invalid Sharing Same Family Use")
-            .setQueue(Graphics::GpuQueueRequest{
-                Graphics::GpuQueueCapability::Compute,
-                Graphics::GpuQueuePreference::Compute,
-                false,
-                false,
-            })
-            .setResourceUses(&use, 1u)
+        const Graphics::GpuGraphResourceDesc bufferDesc = Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/invalid_sharing_same_family_buffer"))
+            .setMarkerLabel("Invalid Sharing Same Family Buffer")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::Common)
+            .setInitialOwnerQueue(sameFamilyQueues[0u].id)
+            .setInitialOwnerReleaseDestinationQueue(sameFamilyQueues[1u].id)
+            .setInitialOwnerCompletion(completion)
+            .setInitialOwnerMinimumCompletionToken(minimumCompletionToken)
+            .setInitialOwnerStateSource(&stateSource)
+            .setQueueSharing(s_InvalidQueueSharing)
         ;
-        const Graphics::GpuTaskId task = graph.addTask(taskDesc);
-        ASSERT_TRUE(task.valid());
-
-        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        EXPECT_FALSE(Compile(graph, analysis, sameFamilyTopology, assignments, compiledGraph));
-        EXPECT_FALSE(compiledGraph.valid());
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransfers(), nullptr);
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), nullptr);
+        const usize resourceCount = graph.resourceCount();
+        const u64 declarationRevision = graph.declarationRevision();
+        const ArenaMemoryStats memoryStats = testArena.arena.memoryStats();
+        EXPECT_FALSE(graph.importResource(bufferDesc).valid());
+        EXPECT_EQ(graph.resourceCount(), resourceCount);
+        EXPECT_EQ(graph.declarationRevision(), declarationRevision);
+        ExpectMemoryStatsEqual(memoryStats, testArena.arena.memoryStats());
     }
 
     {

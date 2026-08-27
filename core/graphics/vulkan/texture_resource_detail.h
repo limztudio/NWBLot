@@ -349,6 +349,8 @@ inline bool ValidateTextureCreateDesc(
     TextureCreateMetadata& outMetadata
 ){
     outMetadata = {};
+    if(!ResourceQueueSharing::IsValid(desc.queueSharing))
+        return ReportTextureCreateDescError(operationName, NWB_TEXT("queue sharing contains unknown bits"), assertFailure);
     if(!IsTextureCreationStateMaskValid(desc.initialState))
         return ReportTextureCreateDescError(operationName, NWB_TEXT("initial state is invalid for a texture"), assertFailure);
     if(!VulkanDetail::ValidateTextureShape(desc, operationName)){

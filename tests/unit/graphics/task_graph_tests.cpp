@@ -2967,27 +2967,24 @@ TEST(GpuTaskGraph, CompilerOwnershipTransferDefenseRejectsMalformedSharingBefore
     ASSERT_NE(functionEnd, AStringView::npos);
     ASSERT_LT(functionBegin, functionEnd);
 
-    const usize invalidSharingGuard = source.find("static_cast<u8>(resource.queueSharing)", functionBegin);
-    const usize unknownBitMaskOperator = source.find("& ~static_cast<u8>(", invalidSharingGuard);
-    const usize validMask = source.find("ResourceQueueSharing::GraphicsAsyncComputeAndTransfer", unknownBitMaskOperator);
-    const usize nonzeroComparison = source.find(")) != 0u", validMask);
-    const usize invalidSharingRejection = source.find("return false;", nonzeroComparison);
-    const usize declaredResourceLookup = source.find("const GpuTaskGraphResourceView declaredResource", validMask);
+    const usize invalidSharingGuard = source.find(
+        "|| !ResourceQueueSharing::IsValid(resource.queueSharing)",
+        functionBegin
+    );
+    const usize invalidSharingRejection = source.find("return false;", invalidSharingGuard);
+    const usize declaredResourceLookup = source.find(
+        "const GpuTaskGraphResourceView declaredResource",
+        invalidSharingGuard
+    );
     const usize sameFamilyNoOp = source.find(
         "if(sourceQueueInfo->familyIndex == destinationQueueInfo->familyIndex)",
         declaredResourceLookup
     );
     ASSERT_NE(invalidSharingGuard, AStringView::npos);
-    ASSERT_NE(unknownBitMaskOperator, AStringView::npos);
-    ASSERT_NE(validMask, AStringView::npos);
-    ASSERT_NE(nonzeroComparison, AStringView::npos);
     ASSERT_NE(invalidSharingRejection, AStringView::npos);
     ASSERT_NE(declaredResourceLookup, AStringView::npos);
     ASSERT_NE(sameFamilyNoOp, AStringView::npos);
-    EXPECT_LT(invalidSharingGuard, unknownBitMaskOperator);
-    EXPECT_LT(unknownBitMaskOperator, validMask);
-    EXPECT_LT(validMask, nonzeroComparison);
-    EXPECT_LT(nonzeroComparison, invalidSharingRejection);
+    EXPECT_LT(invalidSharingGuard, invalidSharingRejection);
     EXPECT_LT(invalidSharingRejection, declaredResourceLookup);
     EXPECT_LT(declaredResourceLookup, sameFamilyNoOp);
     EXPECT_LT(sameFamilyNoOp, functionEnd);

@@ -249,6 +249,73 @@ TEST_F(BufferGpuReadinessTest, ExplicitTransferOnlyNativeUsageDoesNotInferOtherC
 }
 
 
+TEST_F(BufferGpuReadinessTest, CreationRejectsUnknownQueueSharingBeforeAllocationOrNativeIdentity){
+    auto& device = BufferGpuReadinessTest::device();
+    const auto expectDiagnosticRejection = [](const auto& operation){
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+        EXPECT_DEATH_IF_SUPPORTED({ EXPECT_FALSE(operation()); }, "");
+#else
+        EXPECT_FALSE(operation());
+#endif
+    };
+    constexpr u8 s_UnknownQueueSharingBit = 1u << 7u;
+    constexpr ResourceQueueSharing::Mask s_UnknownQueueSharing =
+        static_cast<ResourceQueueSharing::Mask>(s_UnknownQueueSharingBit);
+    constexpr ResourceQueueSharing::Mask s_MixedQueueSharing = static_cast<ResourceQueueSharing::Mask>(
+        static_cast<u8>(ResourceQueueSharing::GraphicsAndTransfer) | s_UnknownQueueSharingBit
+    );
+
+    const BufferDesc managedDesc = BufferDesc()
+        .setByteSize(256u)
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(s_UnknownQueueSharing)
+    ;
+    expectDiagnosticRejection([&](){ return device.createBuffer(managedDesc).get() != nullptr; });
+
+    const BufferDesc virtualDesc = BufferDesc()
+        .setByteSize(256u)
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(s_MixedQueueSharing)
+        .setIsVirtual(true)
+    ;
+    expectDiagnosticRejection([&](){ return device.createBuffer(virtualDesc).get() != nullptr; });
+
+    const Object nativeBuffer(static_cast<u64>(0x22d0000eu));
+    const BufferDesc invalidNativeDesc = BufferDesc()
+        .setByteSize(256u)
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(s_MixedQueueSharing)
+    ;
+    constexpr VkBufferUsageFlags s_NativeUsage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    expectDiagnosticRejection([&](){
+        return device.createHandleForNativeBuffer(
+            GraphicsBackend::ObjectTypes::VK_Buffer,
+            nativeBuffer,
+            invalidNativeDesc,
+            s_NativeUsage
+        ).get() != nullptr;
+    });
+
+    const BufferDesc validNativeDesc = BufferDesc()
+        .setByteSize(256u)
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
+    ;
+    BufferHandle retry = device.createHandleForNativeBuffer(
+        GraphicsBackend::ObjectTypes::VK_Buffer,
+        nativeBuffer,
+        validNativeDesc,
+        s_NativeUsage
+    );
+    ASSERT_TRUE(retry);
+    EXPECT_EQ(
+        retry->getCreationDescription().queueSharing,
+        ResourceQueueSharing::GraphicsAsyncComputeAndTransfer
+    );
+    EXPECT_TRUE(retry->descriptionMatchesCreation());
+}
+
+
 TEST_F(BufferGpuReadinessTest, NativeUsageMismatchRejectionDoesNotRetainIdentity){
     auto& device = BufferGpuReadinessTest::device();
     const auto expectDiagnosticRejection = [](const auto& operation){

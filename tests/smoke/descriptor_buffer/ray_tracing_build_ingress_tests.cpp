@@ -399,6 +399,27 @@ TEST_F(RayTracingBuildIngressTest, OpacityMicromapCommandDependenciesAreRetained
     }
 }
 
+
+TEST_F(RayTracingBuildIngressTest, AccelerationStructureQueueSharingIsValidatedBeforeFeatureGate){
+    constexpr u8 s_UnknownQueueSharingBit = 1u << 7u;
+    const ResourceQueueSharing::Mask invalidQueueSharing = static_cast<ResourceQueueSharing::Mask>(
+        static_cast<u8>(ResourceQueueSharing::GraphicsAndTransfer) | s_UnknownQueueSharingBit
+    );
+    RayTracingAccelStructDesc desc(arena());
+    desc.setQueueSharing(invalidQueueSharing);
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        EXPECT_FALSE(device().createAccelStruct(desc));
+    }, "");
+#else
+    CapturingLogger logger;
+    Common::LoggerRegistrationGuard loggerGuard(logger);
+    EXPECT_FALSE(device().createAccelStruct(desc));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("queue sharing")));
+#endif
+}
+
+
 TEST_F(RayTracingBuildIngressTest, AccelerationStructureBuildFlagsAreValidatedBeforeAllocationAndRetention){
     if(!device().queryFeatureSupport(Feature::RayTracingAccelStruct))
         GTEST_SKIP() << "AS ingress: VK_KHR_acceleration_structure is unavailable.";

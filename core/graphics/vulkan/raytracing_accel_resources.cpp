@@ -170,6 +170,13 @@ Object AccelStruct::getNativeHandle(ObjectType objectType){
 }
 
 RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStructDesc& desc){
+    if(!ResourceQueueSharing::IsValid(desc.queueSharing)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to create acceleration structure: queue sharing contains unknown bits")
+        );
+        return nullptr;
+    }
+
     VkResult res = VK_SUCCESS;
 
     if(!m_context.extensions.KHR_acceleration_structure || !m_context.accelerationStructureFeatureEnabled){

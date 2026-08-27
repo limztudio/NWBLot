@@ -39,9 +39,7 @@ namespace GpuTaskGraphCompilerDetail{
         || resource.id.generation != compiledPlan.graphGeneration
         || resource.identity == NAME_NONE
         || resource.type >= GpuGraphResourceType::HazardDomain
-        || (static_cast<u8>(resource.queueSharing) & ~static_cast<u8>(
-            ResourceQueueSharing::GraphicsAsyncComputeAndTransfer
-        )) != 0u
+        || !ResourceQueueSharing::IsValid(resource.queueSharing)
     )
         return false;
 

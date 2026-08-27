@@ -110,13 +110,7 @@ inline bool BuildStagingTextureQueueFamilies(
     outFamilies.clear();
     outMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    constexpr u8 s_KnownSharingBits = static_cast<u8>(ResourceQueueSharing::Graphics)
-        | static_cast<u8>(ResourceQueueSharing::AsyncCompute)
-        | static_cast<u8>(ResourceQueueSharing::Transfer)
-    ;
-    const u8 sharingBits = static_cast<u8>(sharing);
-    if((sharingBits & static_cast<u8>(~s_KnownSharingBits)) != 0u)
-        return false;
+    NWB_ASSERT(ResourceQueueSharing::IsValid(sharing));
 
     if(sharing == ResourceQueueSharing::Exclusive){
         const GpuPhysicalQueueId primaryGraphics = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
@@ -327,6 +321,11 @@ bool BuildStagingTextureRange(
 
 
 StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess){
+    if(!ResourceQueueSharing::IsValid(d.queueSharing)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: queue sharing contains unknown bits"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: queue sharing contains unknown bits"));
+        return nullptr;
+    }
     if(cpuAccess != CpuAccessMode::Read && cpuAccess != CpuAccessMode::Write){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: CPU access must be Read or Write"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid CPU access"));
@@ -396,8 +395,8 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
         admittedFamilies,
         sharingMode
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: invalid or unavailable queue sharing"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid queue sharing"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: requested queue sharing is unavailable"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: unavailable queue sharing"));
         return nullptr;
     }
 

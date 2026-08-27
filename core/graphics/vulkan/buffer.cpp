@@ -193,6 +193,11 @@ VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
 BufferHandle Device::createBuffer(const BufferDesc& d){
     VkResult res = VK_SUCCESS;
 
+    if(!ResourceQueueSharing::IsValid(d.queueSharing)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: queue sharing contains unknown bits"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: queue sharing contains unknown bits"));
+        return nullptr;
+    }
     if(d.byteSize == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: byte size is zero"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: byte size is zero"));
@@ -307,6 +312,12 @@ BufferHandle Device::createHandleForNativeBuffer(
     const BufferDesc& desc,
     const VkBufferUsageFlags nativeUsage
 ){
+    if(!ResourceQueueSharing::IsValid(desc.queueSharing)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: queue sharing contains unknown bits")
+        );
+        return nullptr;
+    }
     if(objectType != ObjectTypes::VK_Buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: object type is not VK_Buffer"));
         return nullptr;

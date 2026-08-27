@@ -327,16 +327,40 @@ Optional<Common::LoggerRegistrationGuard> StagingTextureProvenanceTest::s_logger
 
 
 TEST_F(StagingTextureProvenanceTest, CreationRejectsUnknownQueueSharingBits){
-    TextureDesc desc = arrayTextureDesc();
-    desc.queueSharing = static_cast<ResourceQueueSharing::Mask>(1u << 7u);
+    const auto expectDiagnosticRejection = [](const auto& operation){
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
-    EXPECT_DEATH_IF_SUPPORTED({
-        const StagingTextureHandle rejected = device().createStagingTexture(desc, CpuAccessMode::Write);
-        EXPECT_FALSE(rejected);
-    }, "");
+        EXPECT_DEATH_IF_SUPPORTED({ EXPECT_FALSE(operation()); }, "");
 #else
-    EXPECT_FALSE(device().createStagingTexture(desc, CpuAccessMode::Write));
+        EXPECT_FALSE(operation());
 #endif
+    };
+    constexpr u8 s_UnknownQueueSharingBit = 1u << 7u;
+    constexpr ResourceQueueSharing::Mask s_InvalidQueueSharingMasks[] = {
+        static_cast<ResourceQueueSharing::Mask>(s_UnknownQueueSharingBit),
+        static_cast<ResourceQueueSharing::Mask>(
+            static_cast<u8>(ResourceQueueSharing::GraphicsAndTransfer) | s_UnknownQueueSharingBit
+        ),
+    };
+    for(const ResourceQueueSharing::Mask queueSharing : s_InvalidQueueSharingMasks){
+        SCOPED_TRACE(static_cast<u32>(queueSharing));
+        TextureDesc desc = arrayTextureDesc();
+        desc.queueSharing = queueSharing;
+        expectDiagnosticRejection([&](){
+            return device().createStagingTexture(desc, CpuAccessMode::Write).get() != nullptr;
+        });
+    }
+
+    TextureDesc validRetryDesc = arrayTextureDesc();
+    validRetryDesc.queueSharing = ResourceQueueSharing::GraphicsAsyncComputeAndTransfer;
+    const StagingTextureHandle validRetry = device().createStagingTexture(
+        validRetryDesc,
+        CpuAccessMode::Write
+    );
+    ASSERT_TRUE(validRetry);
+    EXPECT_EQ(
+        validRetry->getDescription().queueSharing,
+        ResourceQueueSharing::GraphicsAsyncComputeAndTransfer
+    );
 }
 
 

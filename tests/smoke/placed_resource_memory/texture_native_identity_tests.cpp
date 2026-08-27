@@ -149,6 +149,64 @@ TEST_F(TextureNativeIdentityTest, ManagedOrdinaryAndVirtualTexturesKeepCanonical
 }
 
 
+TEST_F(TextureNativeIdentityTest, CreationRejectsUnknownQueueSharingBeforeAllocationOrNativeIdentity){
+    auto& device = TextureNativeIdentityTest::device();
+    const auto expectDiagnosticRejection = [](const auto& operation){
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+        EXPECT_DEATH_IF_SUPPORTED({ EXPECT_FALSE(operation()); }, "");
+#else
+        EXPECT_FALSE(operation());
+#endif
+    };
+    constexpr u8 s_UnknownQueueSharingBit = 1u << 7u;
+    constexpr ResourceQueueSharing::Mask s_UnknownQueueSharing =
+        static_cast<ResourceQueueSharing::Mask>(s_UnknownQueueSharingBit);
+    constexpr ResourceQueueSharing::Mask s_MixedQueueSharing = static_cast<ResourceQueueSharing::Mask>(
+        static_cast<u8>(ResourceQueueSharing::GraphicsAndTransfer) | s_UnknownQueueSharingBit
+    );
+    const TextureDesc baseDesc = TextureDesc()
+        .setWidth(16u)
+        .setHeight(16u)
+        .setFormat(Format::RGBA8_UNORM)
+        .setInitialState(ResourceStates::Common)
+    ;
+
+    TextureDesc managedDesc = baseDesc;
+    managedDesc.setQueueSharing(s_UnknownQueueSharing);
+    expectDiagnosticRejection([&](){ return device.createTexture(managedDesc).get() != nullptr; });
+
+    TextureDesc virtualDesc = baseDesc;
+    virtualDesc.setQueueSharing(s_MixedQueueSharing);
+    virtualDesc.isVirtual = true;
+    expectDiagnosticRejection([&](){ return device.createTexture(virtualDesc).get() != nullptr; });
+
+    const Object nativeImage(static_cast<u64>(0x22d0000fu));
+    TextureDesc invalidNativeDesc = baseDesc;
+    invalidNativeDesc.setQueueSharing(s_MixedQueueSharing);
+    expectDiagnosticRejection([&](){
+        return device.createHandleForNativeTexture(
+            GraphicsBackend::ObjectTypes::VK_Image,
+            nativeImage,
+            invalidNativeDesc
+        ).get() != nullptr;
+    });
+
+    TextureDesc validNativeDesc = baseDesc;
+    validNativeDesc.setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer);
+    TextureHandle retry = device.createHandleForNativeTexture(
+        GraphicsBackend::ObjectTypes::VK_Image,
+        nativeImage,
+        validNativeDesc
+    );
+    ASSERT_TRUE(retry);
+    EXPECT_EQ(
+        retry->getCreationDescription().queueSharing,
+        ResourceQueueSharing::GraphicsAsyncComputeAndTransfer
+    );
+    EXPECT_TRUE(retry->descriptionMatchesCreation());
+}
+
+
 TEST_F(TextureNativeIdentityTest, CreationDescriptorAndNativeUsageRemainImmutable){
     auto& device = TextureNativeIdentityTest::device();
     const TextureDesc desc = TextureDesc()

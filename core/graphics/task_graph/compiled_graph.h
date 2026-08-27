@@ -164,9 +164,7 @@ struct GpuCompiledOwnershipTransfer{
             || sourceQueueFamilyIndex == Limit<u32>::s_Max
             || destinationQueueFamilyIndex == Limit<u32>::s_Max
             || sourceQueueFamilyIndex == destinationQueueFamilyIndex
-            || (static_cast<u8>(declaredQueueSharing) & ~static_cast<u8>(
-                ResourceQueueSharing::GraphicsAsyncComputeAndTransfer
-            )) != 0u
+            || !ResourceQueueSharing::IsValid(declaredQueueSharing)
         )
             return false;
 

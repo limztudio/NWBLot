@@ -82,6 +82,10 @@ namespace ResourceQueueSharing{
     };
 
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
+
+    [[nodiscard]] inline constexpr bool IsValid(const Mask sharing)noexcept{
+        return (static_cast<u8>(sharing) & ~static_cast<u8>(GraphicsAsyncComputeAndTransfer)) == 0u;
+    }
 };
 
 namespace ResourceStates{

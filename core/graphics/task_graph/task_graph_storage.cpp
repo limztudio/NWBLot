@@ -240,9 +240,7 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
         !desc.identity
         || desc.markerLabel.empty()
         || desc.type >= GpuGraphResourceType::kCount
-        || (static_cast<u8>(desc.queueSharing) & ~static_cast<u8>(
-            ResourceQueueSharing::GraphicsAsyncComputeAndTransfer
-        )) != 0u
+        || !ResourceQueueSharing::IsValid(desc.queueSharing)
         || (
             desc.externalFinalState != ResourceStates::Unknown
             && desc.type != GpuGraphResourceType::Texture

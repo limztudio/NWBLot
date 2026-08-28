@@ -85,6 +85,263 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct VulkanTestSemaphoreSubmitInfo{
+    VkSemaphore semaphore = VK_NULL_HANDLE;
+    u64 value = 0u;
+    VkPipelineStageFlags2 stageMask = 0u;
+    u32 deviceIndex = 0u;
+};
+
+struct VulkanTestCommandBufferSubmitInfo{
+    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+    u32 deviceMask = 0u;
+};
+
+struct VulkanTestSubmitInfo2{
+    Array<VulkanTestSemaphoreSubmitInfo, 8u> waits = {};
+    Array<VulkanTestCommandBufferSubmitInfo, 8u> commandBuffers = {};
+    Array<VulkanTestSemaphoreSubmitInfo, 8u> signals = {};
+    VkSubmitFlags flags = 0u;
+    u32 waitCount = 0u;
+    u32 commandBufferCount = 0u;
+    u32 signalCount = 0u;
+    bool overflowed = false;
+};
+
+struct VulkanTestQueueSubmit2Capture{
+    Array<VulkanTestSubmitInfo2, 2u> submits = {};
+    VkQueue queue = VK_NULL_HANDLE;
+    VkFence fence = VK_NULL_HANDLE;
+    VkResult result = VK_ERROR_UNKNOWN;
+    u32 submitCount = 0u;
+    bool overflowed = false;
+};
+
+
+class VulkanTestQueueSubmit2Observer final : NoCopy{
+private:
+    inline static Atomic<VulkanTestQueueSubmit2Observer*> s_activeObserver{ nullptr };
+    inline static PFN_vkQueueSubmit2 s_forwardQueueSubmit2 = nullptr;
+    inline static Futex s_installMutex;
+
+    [[nodiscard]] static VKAPI_ATTR VkResult VKAPI_CALL interceptQueueSubmit2(
+        const VkQueue queue,
+        const u32 submitCount,
+        const VkSubmitInfo2* const submits,
+        const VkFence fence
+    ){
+        PFN_vkQueueSubmit2 const forward = s_forwardQueueSubmit2;
+        if(!forward)
+            return VK_ERROR_INITIALIZATION_FAILED;
+
+        VulkanTestQueueSubmit2Observer* const observer = s_activeObserver.load(MemoryOrder::acquire);
+        if(!observer)
+            return forward(queue, submitCount, submits, fence);
+        return observer->captureAndForward(forward, queue, submitCount, submits, fence);
+    }
+
+    [[nodiscard]] VkResult captureAndForward(
+        const PFN_vkQueueSubmit2 forward,
+        const VkQueue queue,
+        const u32 submitCount,
+        const VkSubmitInfo2* const submits,
+        const VkFence fence
+    ){
+        const u32 captureIndex = m_reservedCaptureCount.fetch_add(1u, MemoryOrder::acq_rel);
+        if(captureIndex >= LengthOf(m_captures)){
+            m_overflowed.store(true, MemoryOrder::release);
+            return forward(queue, submitCount, submits, fence);
+        }
+
+        VulkanTestQueueSubmit2Capture& capture = m_captures[captureIndex];
+        capture = VulkanTestQueueSubmit2Capture{};
+        capture.queue = queue;
+        capture.fence = fence;
+        capture.submitCount = submitCount;
+        if(submitCount > LengthOf(capture.submits) || (submitCount > 0u && !submits))
+            capture.overflowed = true;
+
+        const u32 copiedSubmitCount = submitCount < LengthOf(capture.submits)
+            ? submitCount
+            : static_cast<u32>(LengthOf(capture.submits))
+        ;
+        for(u32 submitIndex = 0u; submitIndex < copiedSubmitCount && submits; ++submitIndex){
+            const VkSubmitInfo2& source = submits[submitIndex];
+            VulkanTestSubmitInfo2& destination = capture.submits[submitIndex];
+            destination.flags = source.flags;
+            destination.waitCount = source.waitSemaphoreInfoCount;
+            destination.commandBufferCount = source.commandBufferInfoCount;
+            destination.signalCount = source.signalSemaphoreInfoCount;
+            if(
+                source.waitSemaphoreInfoCount > LengthOf(destination.waits)
+                || source.commandBufferInfoCount > LengthOf(destination.commandBuffers)
+                || source.signalSemaphoreInfoCount > LengthOf(destination.signals)
+                || (source.waitSemaphoreInfoCount > 0u && !source.pWaitSemaphoreInfos)
+                || (source.commandBufferInfoCount > 0u && !source.pCommandBufferInfos)
+                || (source.signalSemaphoreInfoCount > 0u && !source.pSignalSemaphoreInfos)
+            )
+                destination.overflowed = true;
+
+            const u32 copiedWaitCount = source.waitSemaphoreInfoCount < LengthOf(destination.waits)
+                ? source.waitSemaphoreInfoCount
+                : static_cast<u32>(LengthOf(destination.waits))
+            ;
+            for(u32 waitIndex = 0u; waitIndex < copiedWaitCount && source.pWaitSemaphoreInfos; ++waitIndex){
+                const VkSemaphoreSubmitInfo& wait = source.pWaitSemaphoreInfos[waitIndex];
+                destination.waits[waitIndex] = VulkanTestSemaphoreSubmitInfo{
+                    .semaphore = wait.semaphore,
+                    .value = wait.value,
+                    .stageMask = wait.stageMask,
+                    .deviceIndex = wait.deviceIndex,
+                };
+            }
+
+            const u32 copiedCommandBufferCount = source.commandBufferInfoCount < LengthOf(destination.commandBuffers)
+                ? source.commandBufferInfoCount
+                : static_cast<u32>(LengthOf(destination.commandBuffers))
+            ;
+            for(
+                u32 commandBufferIndex = 0u;
+                commandBufferIndex < copiedCommandBufferCount && source.pCommandBufferInfos;
+                ++commandBufferIndex
+            ){
+                const VkCommandBufferSubmitInfo& commandBuffer = source.pCommandBufferInfos[commandBufferIndex];
+                destination.commandBuffers[commandBufferIndex] = VulkanTestCommandBufferSubmitInfo{
+                    .commandBuffer = commandBuffer.commandBuffer,
+                    .deviceMask = commandBuffer.deviceMask,
+                };
+            }
+
+            const u32 copiedSignalCount = source.signalSemaphoreInfoCount < LengthOf(destination.signals)
+                ? source.signalSemaphoreInfoCount
+                : static_cast<u32>(LengthOf(destination.signals))
+            ;
+            for(u32 signalIndex = 0u; signalIndex < copiedSignalCount && source.pSignalSemaphoreInfos; ++signalIndex){
+                const VkSemaphoreSubmitInfo& signal = source.pSignalSemaphoreInfos[signalIndex];
+                destination.signals[signalIndex] = VulkanTestSemaphoreSubmitInfo{
+                    .semaphore = signal.semaphore,
+                    .value = signal.value,
+                    .stageMask = signal.stageMask,
+                    .deviceIndex = signal.deviceIndex,
+                };
+            }
+
+            capture.overflowed = capture.overflowed || destination.overflowed;
+        }
+        if(capture.overflowed)
+            m_overflowed.store(true, MemoryOrder::release);
+
+        capture.result = forward(queue, submitCount, submits, fence);
+        m_captureComplete[captureIndex].store(true, MemoryOrder::release);
+        return capture.result;
+    }
+
+
+public:
+    VulkanTestQueueSubmit2Observer(){
+        ScopedLock lock(s_installMutex);
+        if(s_activeObserver.load(MemoryOrder::acquire))
+            return;
+
+        m_originalQueueSubmit2 = vkQueueSubmit2;
+        if(!m_originalQueueSubmit2)
+            return;
+
+        s_forwardQueueSubmit2 = m_originalQueueSubmit2;
+        s_activeObserver.store(this, MemoryOrder::release);
+        vkQueueSubmit2 = &VulkanTestQueueSubmit2Observer::interceptQueueSubmit2;
+        m_armed = true;
+    }
+    ~VulkanTestQueueSubmit2Observer(){
+        ScopedLock lock(s_installMutex);
+        if(!m_armed)
+            return;
+
+        vkQueueSubmit2 = m_originalQueueSubmit2;
+        s_activeObserver.store(nullptr, MemoryOrder::release);
+    }
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{ return m_armed; }
+    [[nodiscard]] bool overflowed()const noexcept{ return m_overflowed.load(MemoryOrder::acquire); }
+    [[nodiscard]] usize capturedSubmissionCount()const noexcept{
+        const u32 reservedCount = m_reservedCaptureCount.load(MemoryOrder::acquire);
+        const u32 boundedCount = reservedCount < LengthOf(m_captures)
+            ? reservedCount
+            : static_cast<u32>(LengthOf(m_captures))
+        ;
+        usize completedCount = 0u;
+        for(u32 captureIndex = 0u; captureIndex < boundedCount; ++captureIndex){
+            if(m_captureComplete[captureIndex].load(MemoryOrder::acquire))
+                ++completedCount;
+        }
+        return completedCount;
+    }
+    [[nodiscard]] usize successfulSubmissionCount()const noexcept{
+        const u32 reservedCount = m_reservedCaptureCount.load(MemoryOrder::acquire);
+        const u32 boundedCount = reservedCount < LengthOf(m_captures)
+            ? reservedCount
+            : static_cast<u32>(LengthOf(m_captures))
+        ;
+        usize successfulCount = 0u;
+        for(u32 captureIndex = 0u; captureIndex < boundedCount; ++captureIndex){
+            if(
+                m_captureComplete[captureIndex].load(MemoryOrder::acquire)
+                && m_captures[captureIndex].result == VK_SUCCESS
+            )
+                ++successfulCount;
+        }
+        return successfulCount;
+    }
+    [[nodiscard]] usize successfulWaitCount()const noexcept{
+        const u32 reservedCount = m_reservedCaptureCount.load(MemoryOrder::acquire);
+        const u32 boundedCount = reservedCount < LengthOf(m_captures)
+            ? reservedCount
+            : static_cast<u32>(LengthOf(m_captures))
+        ;
+        usize waitCount = 0u;
+        for(u32 captureIndex = 0u; captureIndex < boundedCount; ++captureIndex){
+            if(
+                !m_captureComplete[captureIndex].load(MemoryOrder::acquire)
+                || m_captures[captureIndex].result != VK_SUCCESS
+            )
+                continue;
+
+            const VulkanTestQueueSubmit2Capture& capture = m_captures[captureIndex];
+            const u32 submitCount = capture.submitCount < LengthOf(capture.submits)
+                ? capture.submitCount
+                : static_cast<u32>(LengthOf(capture.submits))
+            ;
+            for(u32 submitIndex = 0u; submitIndex < submitCount; ++submitIndex)
+                waitCount += capture.submits[submitIndex].waitCount;
+        }
+        return waitCount;
+    }
+    [[nodiscard]] bool capturedSubmission(
+        const usize index,
+        VulkanTestQueueSubmit2Capture& outCapture
+    )const noexcept{
+        if(index >= LengthOf(m_captures) || !m_captureComplete[index].load(MemoryOrder::acquire))
+            return false;
+        outCapture = m_captures[index];
+        return true;
+    }
+
+
+private:
+    PFN_vkQueueSubmit2 m_originalQueueSubmit2 = nullptr;
+    Array<VulkanTestQueueSubmit2Capture, 16u> m_captures = {};
+    Array<Atomic<bool>, 16u> m_captureComplete = {};
+    Atomic<u32> m_reservedCaptureCount = 0u;
+    Atomic<bool> m_overflowed = false;
+    bool m_armed = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class VulkanTestBinarySemaphore final : NoCopy{
 private:
     [[nodiscard]] static Core::Object encode(const VkSemaphore semaphore)noexcept{

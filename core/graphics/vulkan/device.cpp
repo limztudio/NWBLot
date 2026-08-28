@@ -136,9 +136,6 @@ Device::Device(const DeviceDesc& desc)
     , m_pipelineCacheVolumeName(m_context.objectArena)
     , m_physicalQueues(m_context.objectArena)
     , m_physicalQueueInfos(m_context.objectArena)
-#if !defined(NWB_FINAL)
-    , m_submissionWaitTokensForTesting(m_context.objectArena)
-#endif
     , m_uploadManager(*this, s_DefaultUploadChunkSize, 0, false)
     , m_scratchManager(*this, s_DefaultScratchChunkSize, s_ScratchMemoryLimit, true)
 {

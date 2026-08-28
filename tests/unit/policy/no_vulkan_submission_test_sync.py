@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep retired Vulkan submission-sync test helpers out of the production backend."""
+"""Keep retired Vulkan submission synchronization and observation test seams out of production."""
 
 from __future__ import annotations
 
@@ -27,7 +27,12 @@ SOURCE_SUFFIXES = frozenset((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", "
 RETIRED_IDENTIFIER = re.compile(
     r"\b(?:createSubmissionSignalForTesting|destroySubmissionSignalForTesting|"
     r"createSubmissionTimelineForTesting|signalSubmissionTimelineForTesting|"
-    r"destroySubmissionTimelineForTesting|EncodeSubmissionNativeSemaphore)\b"
+    r"destroySubmissionTimelineForTesting|EncodeSubmissionNativeSemaphore|"
+    r"clearSubmissionWaitTokensForTesting|armSubmissionWaitCaptureForTesting|"
+    r"lastSubmissionWaitTokenCountForTesting|lastSubmissionWaitTokenForTesting|"
+    r"captureSubmissionWaitTokensForTesting|m_submissionWaitCaptureArmedForTesting|"
+    r"m_submissionWaitTokensForTestingMutex|m_submissionWaitQueueForTesting|"
+    r"m_submissionWaitTokensForTesting)\b"
 )
 
 
@@ -56,9 +61,85 @@ def run_self_test() -> int:
         ("timeline signal", "device.signalSubmissionTimelineForTesting(wait);", ((1, "signalSubmissionTimelineForTesting"),)),
         ("timeline destruction", "device.destroySubmissionTimelineForTesting(wait);", ((1, "destroySubmissionTimelineForTesting"),)),
         ("native encoding", "Object EncodeSubmissionNativeSemaphore(VkSemaphore semaphore);", ((1, "EncodeSubmissionNativeSemaphore"),)),
-        ("comment", "// device.createSubmissionSignalForTesting(signal);", ()),
-        ("literal", 'const char* text = "destroySubmissionTimelineForTesting";', ()),
-        ("near names", "void createSubmissionSignalForTestingAgain();", ()),
+        ("wait capture clear", "device.clearSubmissionWaitTokensForTesting();", ((1, "clearSubmissionWaitTokensForTesting"),)),
+        ("wait capture arm", "device.armSubmissionWaitCaptureForTesting();", ((1, "armSubmissionWaitCaptureForTesting"),)),
+        (
+            "wait token count",
+            "device.lastSubmissionWaitTokenCountForTesting(queue);",
+            ((1, "lastSubmissionWaitTokenCountForTesting"),),
+        ),
+        (
+            "wait token lookup",
+            "device.lastSubmissionWaitTokenForTesting(queue, 0u);",
+            ((1, "lastSubmissionWaitTokenForTesting"),),
+        ),
+        (
+            "wait token capture",
+            "captureSubmissionWaitTokensForTesting(queue, waits, waitCount);",
+            ((1, "captureSubmissionWaitTokensForTesting"),),
+        ),
+        (
+            "wait capture armed state",
+            "Atomic<bool> m_submissionWaitCaptureArmedForTesting = false;",
+            ((1, "m_submissionWaitCaptureArmedForTesting"),),
+        ),
+        (
+            "wait token mutex",
+            "Futex m_submissionWaitTokensForTestingMutex;",
+            ((1, "m_submissionWaitTokensForTestingMutex"),),
+        ),
+        (
+            "wait queue state",
+            "GpuPhysicalQueueId m_submissionWaitQueueForTesting;",
+            ((1, "m_submissionWaitQueueForTesting"),),
+        ),
+        (
+            "wait token state",
+            "GraphicsVector<QueueSubmissionToken> m_submissionWaitTokensForTesting;",
+            ((1, "m_submissionWaitTokensForTesting"),),
+        ),
+        (
+            "multiple wait capture references",
+            "device.armSubmissionWaitCaptureForTesting();\n"
+            "device.lastSubmissionWaitTokenForTesting(queue, 0u);\n"
+            "device.armSubmissionWaitCaptureForTesting();",
+            (
+                (1, "armSubmissionWaitCaptureForTesting"),
+                (2, "lastSubmissionWaitTokenForTesting"),
+                (3, "armSubmissionWaitCaptureForTesting"),
+            ),
+        ),
+        (
+            "comments",
+            "// device.clearSubmissionWaitTokensForTesting();\n"
+            "/* device.armSubmissionWaitCaptureForTesting(); */",
+            (),
+        ),
+        (
+            "literals",
+            'const char* text = "lastSubmissionWaitTokenForTesting";\n'
+            'const char* raw = R"tag(m_submissionWaitTokensForTesting)tag";',
+            (),
+        ),
+        (
+            "near names",
+            "void clearSubmissionWaitTokensForTestingAgain();\n"
+            "void lastSubmissionWaitTokenForTestings();\n"
+            "bool m_submissionWaitCaptureArmedForTestingState = false;\n"
+            "void captureSubmissionWaitTokenForTesting();",
+            (),
+        ),
+        (
+            "remaining submission rejection hooks",
+            "device.rejectNextSubmissionForTesting(CommandQueue::Graphics);\n"
+            "device.clearSubmissionRejectionsForTesting();\n"
+            "device.consumeSubmissionRejectionForTesting(CommandQueue::Graphics);\n"
+            "Atomic<u32> m_submissionRejectionsForTesting;",
+            (),
+        ),
+        ("legacy comment", "// device.createSubmissionSignalForTesting(signal);", ()),
+        ("legacy literal", 'const char* text = "destroySubmissionTimelineForTesting";', ()),
+        ("legacy near name", "void createSubmissionSignalForTestingAgain();", ()),
     )
     failed = False
     for name, source, expected in cases:
@@ -83,7 +164,7 @@ def main() -> int:
             )
 
     if violations:
-        print("Production Vulkan submission must not expose test-owned semaphore lifecycle helpers.", file=sys.stderr)
+        print("Production Vulkan submission must not expose retired test-owned synchronization or observation seams.", file=sys.stderr)
         print("\n".join(violations), file=sys.stderr)
         return 1
     return 0

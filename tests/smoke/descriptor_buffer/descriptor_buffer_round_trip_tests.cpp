@@ -156,6 +156,48 @@ private:
 };
 
 
+static void ExpectNativeTimelineDependency(
+    const VulkanTestQueueSubmit2Capture& producerCapture,
+    const VkQueue expectedProducerQueue,
+    const QueueSubmissionToken& producerToken,
+    const VulkanTestQueueSubmit2Capture& consumerCapture,
+    const VkQueue expectedConsumerQueue,
+    const QueueSubmissionToken& consumerToken
+){
+    ASSERT_EQ(producerCapture.result, VK_SUCCESS);
+    ASSERT_FALSE(producerCapture.overflowed);
+    ASSERT_EQ(producerCapture.queue, expectedProducerQueue);
+    ASSERT_EQ(producerCapture.submitCount, 1u);
+    const VulkanTestSubmitInfo2& producerSubmit = producerCapture.submits[0u];
+    ASSERT_FALSE(producerSubmit.overflowed);
+    ASSERT_GT(producerSubmit.signalCount, 0u);
+    const VulkanTestSemaphoreSubmitInfo& producerSignal = producerSubmit.signals[0u];
+    ASSERT_NE(producerSignal.semaphore, VK_NULL_HANDLE);
+    EXPECT_EQ(producerSignal.value, producerToken.value);
+    EXPECT_EQ(producerSignal.stageMask, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+    EXPECT_EQ(producerSignal.deviceIndex, 0u);
+
+    ASSERT_EQ(consumerCapture.result, VK_SUCCESS);
+    ASSERT_FALSE(consumerCapture.overflowed);
+    ASSERT_EQ(consumerCapture.queue, expectedConsumerQueue);
+    ASSERT_EQ(consumerCapture.submitCount, 1u);
+    const VulkanTestSubmitInfo2& consumerSubmit = consumerCapture.submits[0u];
+    ASSERT_FALSE(consumerSubmit.overflowed);
+    ASSERT_EQ(consumerSubmit.waitCount, 1u);
+    const VulkanTestSemaphoreSubmitInfo& consumerWait = consumerSubmit.waits[0u];
+    EXPECT_EQ(consumerWait.semaphore, producerSignal.semaphore);
+    EXPECT_EQ(consumerWait.value, producerSignal.value);
+    EXPECT_EQ(consumerWait.stageMask, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+    EXPECT_EQ(consumerWait.deviceIndex, 0u);
+    ASSERT_GT(consumerSubmit.signalCount, 0u);
+    const VulkanTestSemaphoreSubmitInfo& consumerSignal = consumerSubmit.signals[0u];
+    ASSERT_NE(consumerSignal.semaphore, VK_NULL_HANDLE);
+    EXPECT_EQ(consumerSignal.value, consumerToken.value);
+    EXPECT_EQ(consumerSignal.stageMask, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+    EXPECT_EQ(consumerSignal.deviceIndex, 0u);
+}
+
+
 #if !defined(NWB_FINAL)
 
 
@@ -911,11 +953,9 @@ struct StandaloneGraphTextureUploadContext{
 
 #if !defined(NWB_FINAL)
 // The public standalone boundary normally owns no renderer tail.  This probe makes a Transfer packet accept before
-// a dependent Graphics packet is rejected, then arms the backend's one-shot wait capture from that rejection so it
-// observes the standalone helper's subsequently submitted recovery frontier exactly.
+// a dependent Graphics packet is rejected, then observes the standalone helper's recovery frontier submission.
 struct StandaloneGraphAcceptedFrontierRecoveryCompletionTask{
     struct Payload{
-        GraphicsBackend::Device& device;
         bool* recorded = nullptr;
         bool* accepted = nullptr;
         bool* discarded = nullptr;
@@ -941,9 +981,6 @@ struct StandaloneGraphAcceptedFrontierRecoveryCompletionTask{
     static void discarded(Payload& payload){
         if(payload.discarded)
             *payload.discarded = true;
-
-        payload.device.clearSubmissionWaitTokensForTesting();
-        payload.device.armSubmissionWaitCaptureForTesting();
     }
 };
 
@@ -951,7 +988,6 @@ struct StandaloneGraphAcceptedFrontierRecoveryContext{
     BufferHandle destination;
     const void* bytes = nullptr;
     usize byteCount = 0u;
-    GraphicsBackend::Device& device;
     QueueSubmissionToken* acceptedTransferToken = nullptr;
     bool* graphicsRecorded = nullptr;
     bool* graphicsAccepted = nullptr;
@@ -1027,7 +1063,6 @@ struct StandaloneGraphAcceptedFrontierRecoveryContext{
             .setScheduling(packetScheduling)
             .setDependencies(&transferTask, 1u),
         StandaloneGraphAcceptedFrontierRecoveryCompletionTask::Payload{
-            .device = context->device,
             .recorded = context->graphicsRecorded,
             .accepted = context->graphicsAccepted,
             .discarded = context->graphicsDiscarded,
@@ -1579,32 +1614,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePhysicalQueueRegistryDrivesExactSubm
     ASSERT_TRUE(token.valid());
     EXPECT_TRUE(token.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
     EXPECT_EQ(token.queue, CommandQueue::Graphics);
-
-#if !defined(NWB_FINAL)
-    // The recovery proof reads the same Device-boundary capture below. Exercise it on the always-available
-    // Graphics transport too, so the test seam itself remains live on hosts without a dedicated Transfer family.
-    auto waitConsumer = nativeDevice.createCommandList(parameters);
-    ASSERT_NE(waitConsumer.get(), nullptr);
-    waitConsumer->open();
-    waitConsumer->close();
-    const QueueSubmissionToken waitTokens[] = { token };
-    CommandList* const waitConsumerLists[] = { waitConsumer.get() };
-    nativeDevice.clearSubmissionWaitTokensForTesting();
-    nativeDevice.armSubmissionWaitCaptureForTesting();
-    const QueueSubmissionToken waitConsumerToken = nativeDevice.executeCommandLists(
-        waitConsumerLists,
-        LengthOf(waitConsumerLists),
-        graphicsQueue,
-        QueueSubmissionDesc().setWaitTokens(waitTokens, LengthOf(waitTokens))
-    );
-    ASSERT_TRUE(waitConsumerToken.valid());
-    ASSERT_EQ(nativeDevice.lastSubmissionWaitTokenCountForTesting(graphicsQueue), 1u);
-    const QueueSubmissionToken capturedWait = nativeDevice.lastSubmissionWaitTokenForTesting(graphicsQueue, 0u);
-    EXPECT_EQ(capturedWait.queue, token.queue);
-    EXPECT_EQ(capturedWait.value, token.value);
-    EXPECT_EQ(capturedWait.physicalQueueIndex, token.physicalQueueIndex);
-    EXPECT_EQ(capturedWait.deviceGeneration, token.deviceGeneration);
-#endif
 
     EXPECT_TRUE(nativeDevice.waitForIdle());
 }
@@ -9842,6 +9851,17 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalStateOrdersOverlappingIndepen
     );
     finalStateProbe->close();
 
+    const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+    );
+    const VkQueue nativeComputeQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, computeQueue).pointer
+    );
+    ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+    ASSERT_NE(nativeComputeQueue, VK_NULL_HANDLE);
+    VulkanTestQueueSubmit2Observer submissionObserver;
+    ASSERT_TRUE(submissionObserver.valid());
+
     const GpuTaskGraphSubmitter submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
@@ -9858,10 +9878,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalStateOrdersOverlappingIndepen
     const QueueSubmissionToken graphicsToken = transaction.packetToken(graphicsPacket);
     ASSERT_TRUE(graphicsToken.valid());
     EXPECT_TRUE(graphicsToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
-#if !defined(NWB_FINAL)
-    device.clearSubmissionWaitTokensForTesting();
-    device.armSubmissionWaitCaptureForTesting();
-#endif
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 1u);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -9877,14 +9894,22 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalStateOrdersOverlappingIndepen
     const QueueSubmissionToken computeToken = transaction.packetToken(computePacket);
     ASSERT_TRUE(computeToken.valid());
     EXPECT_TRUE(computeToken.matchesPhysicalQueue(computeQueue.index, computeQueue.deviceGeneration));
-#if !defined(NWB_FINAL)
-    ASSERT_EQ(device.lastSubmissionWaitTokenCountForTesting(computeQueue), 1u);
-    const QueueSubmissionToken capturedWait = device.lastSubmissionWaitTokenForTesting(computeQueue, 0u);
-    EXPECT_EQ(capturedWait.queue, graphicsToken.queue);
-    EXPECT_EQ(capturedWait.value, graphicsToken.value);
-    EXPECT_EQ(capturedWait.physicalQueueIndex, graphicsToken.physicalQueueIndex);
-    EXPECT_EQ(capturedWait.deviceGeneration, graphicsToken.deviceGeneration);
-#endif
+    EXPECT_FALSE(submissionObserver.overflowed());
+    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
+    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 2u);
+    EXPECT_EQ(submissionObserver.successfulWaitCount(), 1u);
+    VulkanTestQueueSubmit2Capture graphicsCapture;
+    VulkanTestQueueSubmit2Capture computeCapture;
+    ASSERT_TRUE(submissionObserver.capturedSubmission(0u, graphicsCapture));
+    ASSERT_TRUE(submissionObserver.capturedSubmission(1u, computeCapture));
+    __hidden_descriptor_buffer_round_trip_tests::ExpectNativeTimelineDependency(
+        graphicsCapture,
+        nativeGraphicsQueue,
+        graphicsToken,
+        computeCapture,
+        nativeComputeQueue,
+        computeToken
+    );
 
     const GpuTaskGraphSubmissionStatistics submissionStatistics = transaction.submissionStatistics();
     ASSERT_TRUE(submissionStatistics.valid());
@@ -10985,11 +11010,17 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerMatchesFirstPacketQueu
 
 
 // A completion with an authoritative graph-owned token must reject caller-side rebinding before acceptance, then
-// forward the stored token into the real Device submission when no compatibility array is supplied.
-TEST_F(DescriptorBufferRoundTripTest, GraphOwnedExternalCompletionSuppliesNativeWaitWithoutFallback){
+// retain the stored dependency while the same physical queue safely elides its redundant native timeline wait.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedExternalCompletionUsesStoredTokenAndElidesSameQueueWait){
     auto& device = DescriptorBufferRoundTripTest::device();
     const GpuPhysicalQueueId graphicsQueue = BackendQueueId(device, CommandQueue::Graphics);
     ASSERT_TRUE(graphicsQueue.valid());
+    const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+    );
+    ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+    VulkanTestQueueSubmit2Observer submissionObserver;
+    ASSERT_TRUE(submissionObserver.valid());
 
     CommandListParameters producerParameters;
     producerParameters.setPhysicalQueue(graphicsQueue);
@@ -11006,6 +11037,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedExternalCompletionSuppliesNative
     );
     ASSERT_TRUE(producerToken.valid());
     ASSERT_TRUE(producerToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 1u);
 
     const BufferHandle buffer = device.createBuffer(
         BufferDesc()
@@ -11107,12 +11139,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedExternalCompletionSuppliesNative
     EXPECT_FALSE(transaction.hasAcceptedPackets());
     EXPECT_FALSE(transaction.packetToken(packet).valid());
     EXPECT_FALSE(acceptedToken.valid());
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 1u);
     transaction.reset(compiledGraph);
 
-#if !defined(NWB_FINAL)
-    device.clearSubmissionWaitTokensForTesting();
-    device.armSubmissionWaitCaptureForTesting();
-#endif
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -11126,16 +11155,30 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedExternalCompletionSuppliesNative
         scratchArena
     ));
     EXPECT_TRUE(transaction.hasAcceptedPackets());
-    EXPECT_TRUE(transaction.packetToken(packet).valid());
+    const QueueSubmissionToken consumerToken = transaction.packetToken(packet);
+    EXPECT_TRUE(consumerToken.valid());
     EXPECT_TRUE(acceptedToken.valid());
-#if !defined(NWB_FINAL)
-    ASSERT_EQ(device.lastSubmissionWaitTokenCountForTesting(graphicsQueue), 1u);
-    const QueueSubmissionToken capturedWait = device.lastSubmissionWaitTokenForTesting(graphicsQueue, 0u);
-    EXPECT_EQ(capturedWait.queue, producerToken.queue);
-    EXPECT_EQ(capturedWait.value, producerToken.value);
-    EXPECT_EQ(capturedWait.physicalQueueIndex, producerToken.physicalQueueIndex);
-    EXPECT_EQ(capturedWait.deviceGeneration, producerToken.deviceGeneration);
-#endif
+    EXPECT_FALSE(submissionObserver.overflowed());
+    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
+    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 2u);
+    EXPECT_EQ(submissionObserver.successfulWaitCount(), 0u);
+    VulkanTestQueueSubmit2Capture consumerCapture;
+    ASSERT_TRUE(submissionObserver.capturedSubmission(1u, consumerCapture));
+    ASSERT_EQ(consumerCapture.result, VK_SUCCESS);
+    ASSERT_FALSE(consumerCapture.overflowed);
+    EXPECT_EQ(consumerCapture.queue, nativeGraphicsQueue);
+    ASSERT_EQ(consumerCapture.submitCount, 1u);
+    ASSERT_FALSE(consumerCapture.submits[0u].overflowed);
+    EXPECT_EQ(consumerCapture.submits[0u].waitCount, 0u);
+    ASSERT_GT(consumerCapture.submits[0u].signalCount, 0u);
+    EXPECT_EQ(consumerCapture.submits[0u].signals[0u].value, consumerToken.value);
+    EXPECT_EQ(consumerCapture.submits[0u].signals[0u].stageMask, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+    EXPECT_EQ(consumerCapture.submits[0u].signals[0u].deviceIndex, 0u);
+    const GpuTaskGraphSubmissionStatistics submissionStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(submissionStatistics.valid());
+    EXPECT_EQ(submissionStatistics.plannedWaitTokenCount, 1u);
+    EXPECT_EQ(submissionStatistics.sameQueueWaitElisionCount, 1u);
+    EXPECT_EQ(submissionStatistics.timelineWaitCount, 0u);
     EXPECT_TRUE(device.waitForIdle());
 }
 
@@ -50012,12 +50055,21 @@ TEST_F(DescriptorBufferRoundTripTest, DirectCommandListCanRetryAfterRejectedSubm
 }
 
 
+#endif
+
+
 // A structurally exact token can still name a producer value that was never submitted. Reject that dependency
 // before graph submission reservation so the packet and lifecycle hooks remain available for a real token.
 TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsRetryable){
     auto& device = DescriptorBufferRoundTripTest::device();
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     ASSERT_TRUE(graphicsQueue.valid());
+    const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+    );
+    ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+    VulkanTestQueueSubmit2Observer submissionObserver;
+    ASSERT_TRUE(submissionObserver.valid());
 
     CommandListParameters producerParameters;
     producerParameters.setPhysicalQueue(graphicsQueue);
@@ -50035,6 +50087,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsRetr
     ASSERT_TRUE(producerToken.valid());
     ASSERT_LT(producerToken.value, Limit<u64>::s_Max);
     ASSERT_TRUE(device.validateSubmissionWaitToken(producerToken));
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 1u);
 
     QueueSubmissionToken futureToken = producerToken;
     ++futureToken.value;
@@ -50139,8 +50192,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsRetr
         .token = futureToken,
     };
     const GpuTaskGraphSubmitter submitter(device);
-    device.clearSubmissionWaitTokensForTesting();
-    device.armSubmissionWaitCaptureForTesting();
     EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -50156,7 +50207,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsRetr
     EXPECT_FALSE(transaction.packetToken(packet).valid());
     EXPECT_FALSE(acceptedToken.valid());
     EXPECT_EQ(discardedCount, 0u);
-    EXPECT_EQ(device.lastSubmissionWaitTokenCountForTesting(graphicsQueue), 0u);
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 1u);
     const GpuTaskGraphSubmissionStatistics rejectedStatistics = transaction.submissionStatistics();
     EXPECT_EQ(rejectedStatistics.acceptedPacketCount, 0u);
     EXPECT_EQ(rejectedStatistics.rejectedPacketCount, 0u);
@@ -50194,14 +50245,32 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsRetr
     ASSERT_TRUE(consumerToken.valid());
     EXPECT_EQ(acceptedToken.value, consumerToken.value);
     EXPECT_EQ(discardedCount, 0u);
-    ASSERT_EQ(device.lastSubmissionWaitTokenCountForTesting(graphicsQueue), 1u);
-    const QueueSubmissionToken capturedWait = device.lastSubmissionWaitTokenForTesting(graphicsQueue, 0u);
-    EXPECT_EQ(capturedWait.queue, producerToken.queue);
-    EXPECT_EQ(capturedWait.value, producerToken.value);
-    EXPECT_EQ(capturedWait.physicalQueueIndex, producerToken.physicalQueueIndex);
-    EXPECT_EQ(capturedWait.deviceGeneration, producerToken.deviceGeneration);
+    EXPECT_FALSE(submissionObserver.overflowed());
+    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
+    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 2u);
+    EXPECT_EQ(submissionObserver.successfulWaitCount(), 0u);
+    VulkanTestQueueSubmit2Capture consumerCapture;
+    ASSERT_TRUE(submissionObserver.capturedSubmission(1u, consumerCapture));
+    ASSERT_EQ(consumerCapture.result, VK_SUCCESS);
+    ASSERT_FALSE(consumerCapture.overflowed);
+    EXPECT_EQ(consumerCapture.queue, nativeGraphicsQueue);
+    ASSERT_EQ(consumerCapture.submitCount, 1u);
+    ASSERT_FALSE(consumerCapture.submits[0u].overflowed);
+    EXPECT_EQ(consumerCapture.submits[0u].waitCount, 0u);
+    ASSERT_GT(consumerCapture.submits[0u].signalCount, 0u);
+    EXPECT_EQ(consumerCapture.submits[0u].signals[0u].value, consumerToken.value);
+    EXPECT_EQ(consumerCapture.submits[0u].signals[0u].stageMask, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+    EXPECT_EQ(consumerCapture.submits[0u].signals[0u].deviceIndex, 0u);
+    const GpuTaskGraphSubmissionStatistics acceptedStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(acceptedStatistics.valid());
+    EXPECT_EQ(acceptedStatistics.plannedWaitTokenCount, 1u);
+    EXPECT_EQ(acceptedStatistics.sameQueueWaitElisionCount, 1u);
+    EXPECT_EQ(acceptedStatistics.timelineWaitCount, 0u);
     ASSERT_TRUE(device.waitForIdle());
 }
+
+
+#if !defined(NWB_FINAL)
 
 
 // Frame acquisition is a queue-global binary wait. A pre-driver rejection must leave global synchronization owned
@@ -53058,6 +53127,14 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     ASSERT_TRUE(graphicsQueue.valid());
     ASSERT_TRUE(device.matchesPhysicalQueueIdentity(graphicsQueue));
     ASSERT_TRUE(device.matchesPhysicalQueueIdentity(transferQueue));
+    const VkQueue nativeTransferQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, transferQueue).pointer
+    );
+    const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+    );
+    ASSERT_NE(nativeTransferQueue, VK_NULL_HANDLE);
+    ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
 
     static constexpr u32 s_TransferWords[] = {
         0x1e35a7c9u,
@@ -53216,6 +53293,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     ));
     EXPECT_TRUE(rejectedSuffixRecorded);
 
+    VulkanTestQueueSubmit2Observer submissionObserver;
+    ASSERT_TRUE(submissionObserver.valid());
+
     const GpuTaskGraphSubmitter submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
@@ -53235,6 +53315,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_EQ(acceptedTransferToken.value, transferToken.value);
     EXPECT_EQ(transferToken.queue, CommandQueue::Transfer);
     EXPECT_TRUE(transferToken.matchesPhysicalQueue(transferQueue.index, transferQueue.deviceGeneration));
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 1u);
 
     device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
     EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
@@ -53266,11 +53347,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_EQ(rejectedGraphicsQueueStatistics.nativeCommandListCount, 0u);
     EXPECT_EQ(rejectedGraphicsQueueStatistics.acceptedFrontierSubmissionCount, 0u);
     EXPECT_EQ(rejectedGraphicsQueueStatistics.recoverySubmissionCount, 0u);
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 1u);
 
-    // The preceding rejected suffix also carried the Transfer dependency. Clear that capture so this assertion
-    // observes only the late recovery helper's submitter call, after it has assembled its accepted-frontier waits.
-    device.clearSubmissionWaitTokensForTesting();
-    device.armSubmissionWaitCaptureForTesting();
     ASSERT_TRUE(submitter.recordAndSubmitAcceptedFrontierTask(
         graph,
         compiledGraph,
@@ -53283,14 +53361,24 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_TRUE(recoveryRecorded);
     const QueueSubmissionToken recoveryToken = transaction.packetToken(recoveryPacket);
     ASSERT_TRUE(recoveryToken.valid());
-    ASSERT_EQ(device.lastSubmissionWaitTokenCountForTesting(graphicsQueue), 1u);
-    const QueueSubmissionToken recoverySubmissionWait = device.lastSubmissionWaitTokenForTesting(graphicsQueue, 0u);
-    EXPECT_EQ(recoverySubmissionWait.queue, CommandQueue::Transfer);
-    EXPECT_EQ(recoverySubmissionWait.value, transferToken.value);
-    EXPECT_EQ(recoverySubmissionWait.physicalQueueIndex, transferQueue.index);
-    EXPECT_EQ(recoverySubmissionWait.deviceGeneration, transferQueue.deviceGeneration);
     EXPECT_EQ(recoveryToken.queue, CommandQueue::Graphics);
     EXPECT_TRUE(recoveryToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
+    EXPECT_FALSE(submissionObserver.overflowed());
+    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
+    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 2u);
+    EXPECT_EQ(submissionObserver.successfulWaitCount(), 1u);
+    VulkanTestQueueSubmit2Capture transferCapture;
+    VulkanTestQueueSubmit2Capture recoveryCapture;
+    ASSERT_TRUE(submissionObserver.capturedSubmission(0u, transferCapture));
+    ASSERT_TRUE(submissionObserver.capturedSubmission(1u, recoveryCapture));
+    __hidden_descriptor_buffer_round_trip_tests::ExpectNativeTimelineDependency(
+        transferCapture,
+        nativeTransferQueue,
+        transferToken,
+        recoveryCapture,
+        nativeGraphicsQueue,
+        recoveryToken
+    );
     ASSERT_TRUE(device.waitForIdle());
 
     const GpuTaskGraphPhysicalQueueSubmissionStatistics recoveredGraphicsQueueStatistics =
@@ -53547,6 +53635,16 @@ TEST_F(DescriptorBufferRoundTripTest, NativeTaskAcceptedCallbacksGateAcceptedFro
     };
     GpuSubmissionPacketId failedSubmissionPacket;
     bool rangeSubmissionResult = true;
+    const VkQueue nativeTransferQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, transferQueue).pointer
+    );
+    const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+    );
+    ASSERT_NE(nativeTransferQueue, VK_NULL_HANDLE);
+    ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+    VulkanTestQueueSubmit2Observer submissionObserver;
+    ASSERT_TRUE(submissionObserver.valid());
     Thread rangeSubmissionThread([&](){
         Alloc::ScratchArena submissionScratch(
             Name("tests/descriptor_buffer/submission_serialization_transfer_thread_scratch")
@@ -53594,8 +53692,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativeTaskAcceptedCallbacksGateAcceptedFro
     EXPECT_EQ(acceptanceOrder.markers[1u], 2u);
     EXPECT_EQ(acceptanceOrder.markers[2u], 3u);
 
-    device.clearSubmissionWaitTokensForTesting();
-    device.armSubmissionWaitCaptureForTesting();
     AtomicFlag recoveryReadyToSubmit;
     bool recoverySubmissionResult = false;
     Thread recoverySubmissionThread([&](){
@@ -53645,12 +53741,22 @@ TEST_F(DescriptorBufferRoundTripTest, NativeTaskAcceptedCallbacksGateAcceptedFro
     EXPECT_EQ(transferToken.value, serializationContext.typedAcceptedToken.value);
     EXPECT_EQ(transferToken.value, serializationContext.taskAcceptedToken.value);
     EXPECT_EQ(transferToken.value, secondTaskAcceptance.lastToken.value);
-    ASSERT_EQ(device.lastSubmissionWaitTokenCountForTesting(graphicsQueue), 1u);
-    const QueueSubmissionToken recoveryWait = device.lastSubmissionWaitTokenForTesting(graphicsQueue, 0u);
-    EXPECT_EQ(recoveryWait.queue, transferToken.queue);
-    EXPECT_EQ(recoveryWait.value, transferToken.value);
-    EXPECT_EQ(recoveryWait.physicalQueueIndex, transferToken.physicalQueueIndex);
-    EXPECT_EQ(recoveryWait.deviceGeneration, transferToken.deviceGeneration);
+    EXPECT_FALSE(submissionObserver.overflowed());
+    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
+    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 2u);
+    EXPECT_EQ(submissionObserver.successfulWaitCount(), 1u);
+    VulkanTestQueueSubmit2Capture transferCapture;
+    VulkanTestQueueSubmit2Capture recoveryCapture;
+    ASSERT_TRUE(submissionObserver.capturedSubmission(0u, transferCapture));
+    ASSERT_TRUE(submissionObserver.capturedSubmission(1u, recoveryCapture));
+    __hidden_descriptor_buffer_round_trip_tests::ExpectNativeTimelineDependency(
+        transferCapture,
+        nativeTransferQueue,
+        transferToken,
+        recoveryCapture,
+        nativeGraphicsQueue,
+        recoveryToken
+    );
 
     const u32 acceptedOrderCount = acceptanceOrder.invocationCount;
     Alloc::ScratchArena retryScratch(Name("tests/descriptor_buffer/submission_serialization_retry_scratch"));
@@ -55777,6 +55883,14 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphRecoversAcceptedTransferFro
     ASSERT_TRUE(graphicsQueue.valid());
     ASSERT_TRUE(device.matchesPhysicalQueueIdentity(graphicsQueue));
     ASSERT_TRUE(device.matchesPhysicalQueueIdentity(transferQueue));
+    const VkQueue nativeTransferQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, transferQueue).pointer
+    );
+    const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+    );
+    ASSERT_NE(nativeTransferQueue, VK_NULL_HANDLE);
+    ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
 
     static constexpr u32 s_TransferWords[] = {
         0x1e35a7c9u,
@@ -55800,36 +55914,66 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphRecoversAcceptedTransferFro
         .destination = recoveredDestination,
         .bytes = s_TransferWords,
         .byteCount = sizeof(s_TransferWords),
-        .device = device,
         .acceptedTransferToken = &acceptedTransferToken,
         .graphicsRecorded = &graphicsRecorded,
         .graphicsAccepted = &graphicsAccepted,
         .graphicsDiscarded = &graphicsDiscarded,
     };
     QueueSubmissionToken terminalToken;
-    device.clearSubmissionWaitTokensForTesting();
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
-    EXPECT_FALSE(graphics.submitStandaloneTaskGraph(
-        &recoveredContext,
-        &DeclareStandaloneGraphAcceptedFrontierRecovery,
-        terminalToken,
-        graphicsQueue
-    ));
-    EXPECT_FALSE(terminalToken.valid());
-    EXPECT_TRUE(graphicsRecorded);
-    EXPECT_FALSE(graphicsAccepted);
-    EXPECT_TRUE(graphicsDiscarded);
-    ASSERT_TRUE(acceptedTransferToken.valid());
-    EXPECT_EQ(acceptedTransferToken.queue, CommandQueue::Transfer);
-    EXPECT_TRUE(acceptedTransferToken.matchesPhysicalQueue(transferQueue.index, transferQueue.deviceGeneration));
-    EXPECT_FALSE(graphics.isDeviceRecreationRequested());
-    ASSERT_EQ(device.lastSubmissionWaitTokenCountForTesting(graphicsQueue), 1u);
-    const QueueSubmissionToken recoveryWait = device.lastSubmissionWaitTokenForTesting(graphicsQueue, 0u);
-    EXPECT_EQ(recoveryWait.queue, CommandQueue::Transfer);
-    EXPECT_EQ(recoveryWait.value, acceptedTransferToken.value);
-    EXPECT_EQ(recoveryWait.physicalQueueIndex, transferQueue.index);
-    EXPECT_EQ(recoveryWait.deviceGeneration, transferQueue.deviceGeneration);
-    ASSERT_TRUE(device.waitForIdle());
+    {
+        VulkanTestQueueSubmit2Observer submissionObserver;
+        ASSERT_TRUE(submissionObserver.valid());
+        device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+        EXPECT_FALSE(graphics.submitStandaloneTaskGraph(
+            &recoveredContext,
+            &DeclareStandaloneGraphAcceptedFrontierRecovery,
+            terminalToken,
+            graphicsQueue
+        ));
+        EXPECT_FALSE(terminalToken.valid());
+        EXPECT_TRUE(graphicsRecorded);
+        EXPECT_FALSE(graphicsAccepted);
+        EXPECT_TRUE(graphicsDiscarded);
+        ASSERT_TRUE(acceptedTransferToken.valid());
+        EXPECT_EQ(acceptedTransferToken.queue, CommandQueue::Transfer);
+        EXPECT_TRUE(acceptedTransferToken.matchesPhysicalQueue(transferQueue.index, transferQueue.deviceGeneration));
+        EXPECT_FALSE(graphics.isDeviceRecreationRequested());
+        EXPECT_FALSE(submissionObserver.overflowed());
+        ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
+        EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 2u);
+        EXPECT_EQ(submissionObserver.successfulWaitCount(), 1u);
+        VulkanTestQueueSubmit2Capture transferCapture;
+        VulkanTestQueueSubmit2Capture recoveryCapture;
+        ASSERT_TRUE(submissionObserver.capturedSubmission(0u, transferCapture));
+        ASSERT_TRUE(submissionObserver.capturedSubmission(1u, recoveryCapture));
+        ASSERT_EQ(transferCapture.result, VK_SUCCESS);
+        ASSERT_FALSE(transferCapture.overflowed);
+        ASSERT_EQ(transferCapture.queue, nativeTransferQueue);
+        ASSERT_EQ(transferCapture.submitCount, 1u);
+        ASSERT_GT(transferCapture.submits[0u].signalCount, 0u);
+        const VulkanTestSemaphoreSubmitInfo& transferSignal = transferCapture.submits[0u].signals[0u];
+        ASSERT_NE(transferSignal.semaphore, VK_NULL_HANDLE);
+        EXPECT_EQ(transferSignal.value, acceptedTransferToken.value);
+        EXPECT_EQ(transferSignal.stageMask, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+        EXPECT_EQ(transferSignal.deviceIndex, 0u);
+        ASSERT_EQ(recoveryCapture.result, VK_SUCCESS);
+        ASSERT_FALSE(recoveryCapture.overflowed);
+        ASSERT_EQ(recoveryCapture.queue, nativeGraphicsQueue);
+        ASSERT_EQ(recoveryCapture.submitCount, 1u);
+        ASSERT_EQ(recoveryCapture.submits[0u].waitCount, 1u);
+        const VulkanTestSemaphoreSubmitInfo& recoveryWait = recoveryCapture.submits[0u].waits[0u];
+        EXPECT_EQ(recoveryWait.semaphore, transferSignal.semaphore);
+        EXPECT_EQ(recoveryWait.value, transferSignal.value);
+        EXPECT_EQ(recoveryWait.stageMask, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+        EXPECT_EQ(recoveryWait.deviceIndex, 0u);
+        ASSERT_GT(recoveryCapture.submits[0u].signalCount, 0u);
+        const VulkanTestSemaphoreSubmitInfo& recoverySignal = recoveryCapture.submits[0u].signals[0u];
+        ASSERT_NE(recoverySignal.semaphore, VK_NULL_HANDLE);
+        EXPECT_GT(recoverySignal.value, 0u);
+        EXPECT_EQ(recoverySignal.stageMask, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+        EXPECT_EQ(recoverySignal.deviceIndex, 0u);
+        ASSERT_TRUE(device.waitForIdle());
+    }
 
     const BufferHandle unrecoveredDestination = device.createBuffer(
         BufferDesc()
@@ -55847,7 +55991,6 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphRecoversAcceptedTransferFro
         .destination = unrecoveredDestination,
         .bytes = s_TransferWords,
         .byteCount = sizeof(s_TransferWords),
-        .device = device,
         .acceptedTransferToken = &unrecoveredTransferToken,
         .graphicsRecorded = &unrecoveredGraphicsRecorded,
         .graphicsAccepted = &unrecoveredGraphicsAccepted,

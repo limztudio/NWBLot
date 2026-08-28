@@ -3328,13 +3328,6 @@ public:
     [[nodiscard]] bool armRecordingIDWrapForTesting(const GpuPhysicalQueueId& queue);
     void rejectNextSubmissionForTesting(CommandQueue::Enum queue);
     void clearSubmissionRejectionsForTesting();
-    void clearSubmissionWaitTokensForTesting();
-    void armSubmissionWaitCaptureForTesting();
-    [[nodiscard]] usize lastSubmissionWaitTokenCountForTesting(const GpuPhysicalQueueId& executionQueue)const noexcept;
-    [[nodiscard]] QueueSubmissionToken lastSubmissionWaitTokenForTesting(
-        const GpuPhysicalQueueId& executionQueue,
-        usize index
-    )const noexcept;
 #endif
     [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap(){ return m_gpuDescriptorHeap; }
     // Writes descriptor-buffer entries, including TLAS handles.
@@ -3347,11 +3340,6 @@ private:
 #if !defined(NWB_FINAL)
     [[nodiscard]] bool consumeSubmissionRejectionForTesting(CommandQueue::Enum queue);
     void invokeSubmissionLedgerFinalizeHookForTesting();
-    void captureSubmissionWaitTokensForTesting(
-        const GpuPhysicalQueueId& executionQueue,
-        const QueueSubmissionToken* waitTokens,
-        usize waitTokenCount
-    );
 #endif
     // Probed once at device initialization so compressed texture selection does not rely on
     // a later optimistic format-property query.
@@ -3491,10 +3479,6 @@ private:
     Futex m_submissionLedgerFinalizeHookForTestingMutex;
     void* m_submissionLedgerFinalizeHookForTestingContext = nullptr;
     void (*m_submissionLedgerFinalizeHookForTesting)(void*) = nullptr;
-    Atomic<bool> m_submissionWaitCaptureArmedForTesting = false;
-    mutable Futex m_submissionWaitTokensForTestingMutex;
-    GpuPhysicalQueueId m_submissionWaitQueueForTesting;
-    GraphicsVector<QueueSubmissionToken> m_submissionWaitTokensForTesting;
 #endif
 
     UploadManager m_uploadManager;

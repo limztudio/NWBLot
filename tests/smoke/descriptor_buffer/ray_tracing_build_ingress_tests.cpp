@@ -836,6 +836,116 @@ TEST_F(RayTracingBuildIngressTest, RejectedSubmissionDoesNotPublishAccelerationS
     }, "");
     rejectedUpdate->close();
 }
+
+TEST_F(RayTracingBuildIngressTest, RejectedNativeSubmissionReusesExactBuildScratchSuballocation){
+    HeadlessGraphicsScope scratchScope;
+    ASSERT_TRUE(scratchScope.initialize());
+
+    GraphicsBackend::Device& scratchDevice = scratchScope.graphics().getDevice();
+    if(!scratchDevice.queryFeatureSupport(Feature::RayTracingAccelStruct))
+        GTEST_SKIP() << "Build scratch reuse: VK_KHR_acceleration_structure is unavailable.";
+
+    const BufferHandle vertex = __hidden_ray_tracing_build_ingress_tests::CreateBuildInputBuffer(
+        scratchDevice,
+        3u * 3u * sizeof(f32),
+        3u * sizeof(f32)
+    );
+    ASSERT_TRUE(vertex);
+    RayTracingGeometryTriangles triangles;
+    triangles
+        .setVertexBuffer(vertex.get())
+        .setVertexFormat(Format::RGB32_FLOAT)
+        .setVertexStride(3u * sizeof(f32))
+        .setVertexCount(3u)
+    ;
+    RayTracingGeometryDesc geometry;
+    geometry.setTriangles(triangles);
+    RayTracingAccelStructDesc createDesc(scratchScope.arena());
+    createDesc.addBottomLevelGeometry(geometry);
+    const RayTracingAccelStructHandle blas = scratchDevice.createAccelStruct(createDesc);
+    ASSERT_TRUE(blas);
+
+    const GraphicsBackend::BuildScratchPoolStatistics initialStatistics = scratchDevice.buildScratchPoolStatisticsForTesting();
+    EXPECT_EQ(initialStatistics.activeChunkCount, 0u);
+    EXPECT_EQ(initialStatistics.pooledChunkCount, 0u);
+    EXPECT_EQ(initialStatistics.pooledChunkBytes, 0u);
+    EXPECT_EQ(initialStatistics.chunkCreationCount, 0u);
+    EXPECT_EQ(initialStatistics.poolReuseCount, 0u);
+    EXPECT_EQ(initialStatistics.suballocationCount, 0u);
+
+    CommandListHandle rejectedBuild = scratchDevice.createCommandList();
+    ASSERT_TRUE(rejectedBuild);
+    rejectedBuild->open();
+    rejectedBuild->buildBottomLevelAccelStruct(blas.get(), &geometry, 1u, RayTracingAccelStructBuildFlags::None);
+    ASSERT_FALSE(rejectedBuild->commandRecordingFailed());
+    rejectedBuild->close();
+
+    const GraphicsBackend::BuildScratchPoolStatistics recordedStatistics = scratchDevice.buildScratchPoolStatisticsForTesting();
+    EXPECT_EQ(recordedStatistics.activeChunkCount, 1u);
+    EXPECT_EQ(recordedStatistics.pooledChunkCount, 0u);
+    EXPECT_EQ(recordedStatistics.pooledChunkBytes, 0u);
+    EXPECT_EQ(recordedStatistics.chunkCreationCount, 1u);
+    EXPECT_EQ(recordedStatistics.poolReuseCount, 0u);
+    EXPECT_EQ(recordedStatistics.suballocationCount, 1u);
+    ASSERT_NE(recordedStatistics.lastChunkIdentity, 0u);
+
+    scratchDevice.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    CommandList* const rejectedBuilds[]{ rejectedBuild.get() };
+    const QueueSubmissionToken rejectedToken = scratchDevice.executeCommandLists(
+        rejectedBuilds,
+        LengthOf(rejectedBuilds),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    const bool unexpectedlySubmitted = rejectedToken.valid();
+    const bool idleAfterUnexpectedSubmission = !unexpectedlySubmitted || scratchDevice.waitForIdle();
+    scratchDevice.clearSubmissionRejectionsForTesting();
+    ASSERT_FALSE(unexpectedlySubmitted);
+    ASSERT_TRUE(idleAfterUnexpectedSubmission);
+
+    const GraphicsBackend::BuildScratchPoolStatistics rejectedStatistics = scratchDevice.buildScratchPoolStatisticsForTesting();
+    EXPECT_EQ(rejectedStatistics.activeChunkCount, 0u);
+    EXPECT_EQ(rejectedStatistics.pooledChunkCount, 1u);
+    EXPECT_GT(rejectedStatistics.pooledChunkBytes, 0u);
+    EXPECT_EQ(rejectedStatistics.chunkCreationCount, 1u);
+    EXPECT_EQ(rejectedStatistics.poolReuseCount, 0u);
+    EXPECT_EQ(rejectedStatistics.suballocationCount, 1u);
+
+    CommandListHandle retryBuild = scratchDevice.createCommandList();
+    ASSERT_TRUE(retryBuild);
+    retryBuild->open();
+    retryBuild->buildBottomLevelAccelStruct(blas.get(), &geometry, 1u, RayTracingAccelStructBuildFlags::None);
+    ASSERT_FALSE(retryBuild->commandRecordingFailed());
+    retryBuild->close();
+
+    const GraphicsBackend::BuildScratchPoolStatistics retryStatistics = scratchDevice.buildScratchPoolStatisticsForTesting();
+    EXPECT_EQ(retryStatistics.activeChunkCount, 1u);
+    EXPECT_EQ(retryStatistics.pooledChunkCount, 0u);
+    EXPECT_EQ(retryStatistics.pooledChunkBytes, 0u);
+    EXPECT_EQ(retryStatistics.chunkCreationCount, 1u);
+    EXPECT_EQ(retryStatistics.poolReuseCount, 1u);
+    EXPECT_EQ(retryStatistics.suballocationCount, 2u);
+    EXPECT_EQ(retryStatistics.lastChunkIdentity, recordedStatistics.lastChunkIdentity);
+    EXPECT_EQ(retryStatistics.lastSuballocationOffset, recordedStatistics.lastSuballocationOffset);
+
+    CommandList* const retryBuilds[]{ retryBuild.get() };
+    const QueueSubmissionToken acceptedToken = scratchDevice.executeCommandLists(
+        retryBuilds,
+        LengthOf(retryBuilds),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(acceptedToken.valid());
+    ASSERT_TRUE(scratchDevice.waitForIdle());
+
+    const GraphicsBackend::BuildScratchPoolStatistics acceptedStatistics = scratchDevice.buildScratchPoolStatisticsForTesting();
+    EXPECT_EQ(acceptedStatistics.activeChunkCount, 0u);
+    EXPECT_EQ(acceptedStatistics.pooledChunkCount, 1u);
+    EXPECT_GT(acceptedStatistics.pooledChunkBytes, 0u);
+    EXPECT_EQ(acceptedStatistics.chunkCreationCount, 1u);
+    EXPECT_EQ(acceptedStatistics.poolReuseCount, 1u);
+    EXPECT_EQ(acceptedStatistics.suballocationCount, 2u);
+}
 #endif
 
 TEST_F(RayTracingBuildIngressTest, OpacityMicromapSizingDoesNotDependOnHostRecordOrder){

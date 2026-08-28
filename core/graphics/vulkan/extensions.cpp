@@ -524,34 +524,16 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         }
     }
 
-    BufferHandle scratchBuffer;
     VkDeviceAddress scratchAddress = 0u;
     if(buildSize.buildScratchSize != 0u){
         const u64 scratchAlignment = m_context.nvClusterAccelerationStructureProperties.clusterScratchByteAlignment;
-        if(scratchAlignment == 0u || buildSize.buildScratchSize > Limit<u64>::s_Max - (scratchAlignment - 1u)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("queried scratch size or alignment is invalid"));
-            return;
-        }
-
-        BufferDesc scratchDesc;
-        scratchDesc.byteSize = buildSize.buildScratchSize + scratchAlignment - 1u;
-        scratchDesc.structStride = 1u;
-        scratchDesc.debugName = "ClusterOp_Scratch";
-        scratchDesc.canHaveUAVs = true;
-        scratchBuffer = m_device.createBuffer(scratchDesc);
-        if(!scratchBuffer){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("scratch buffer allocation failed"));
-            return;
-        }
-        if(!m_device.isBufferReadyForGpuUse(
-            scratchBuffer.get(),
-            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+        if(!suballocateBuildScratchAddress(
+            buildSize.buildScratchSize,
+            scratchAlignment,
+            scratchAddress,
+            s_OperationName
         )){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("scratch buffer is not ready for device-address access"));
-            return;
-        }
-        if(!AlignUpU64Checked(scratchBuffer->getGpuVirtualAddress(), scratchAlignment, scratchAddress) || scratchAddress == 0u){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("scratch device-address alignment overflows"));
+            rejectCommandRecording(s_OperationName, NWB_TEXT("scratch-buffer suballocation failed"));
             return;
         }
     }
@@ -603,8 +585,6 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         retainResource(inOutAddressesBuffer);
     if(outAccelerationStructuresBuffer)
         retainResource(outAccelerationStructuresBuffer);
-    if(scratchBuffer)
-        m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(scratchBuffer));
 }
 
 

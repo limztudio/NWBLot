@@ -109,6 +109,20 @@ void UploadManager::clear(){
         entry.chunks.clear();
     m_activeChunks.clear();
     m_chunkPoolBytes = 0u;
+#if !defined(NWB_FINAL)
+    m_nextChunkIdentityForTesting = 0u;
+    m_chunkCreationCountForTesting = 0u;
+    m_poolReuseCountForTesting = 0u;
+    m_suballocationCountForTesting = 0u;
+    m_lastChunkIdentityForTesting = 0u;
+    m_lastSuballocationOffsetForTesting = 0u;
+#endif
+}
+
+void UploadManager::collectCompletedChunks(){
+    ScopedLock lock(m_mutex);
+
+    trimChunkPoolLocked();
 }
 
 void UploadManager::trimChunkPoolLocked(){
@@ -235,6 +249,11 @@ bool UploadManager::suballocateBuffer(
             *pCpuVA = static_cast<u8*>(buffer->m_mappedMemory) + alignedOffset;
 
         chunk.allocated = alignedOffset + size;
+#if !defined(NWB_FINAL)
+        ++m_suballocationCountForTesting;
+        m_lastChunkIdentityForTesting = chunk.testingIdentity;
+        m_lastSuballocationOffsetForTesting = alignedOffset;
+#endif
         return true;
     };
 
@@ -262,7 +281,12 @@ bool UploadManager::suballocateBuffer(
             currentChunk->allocated = 0;
             currentChunk->version = completedVersion;
 
-            return trySuballocateFromChunk(*currentChunk);
+            const bool reused = trySuballocateFromChunk(*currentChunk);
+#if !defined(NWB_FINAL)
+            if(reused)
+                ++m_poolReuseCountForTesting;
+#endif
+            return reused;
         }
     }
 
@@ -270,9 +294,13 @@ bool UploadManager::suballocateBuffer(
 
     BufferDesc bufferDesc;
     bufferDesc.byteSize = chunkSize;
-    bufferDesc.cpuAccess = CpuAccessMode::Write;
+    bufferDesc.cpuAccess = m_isScratchBuffer ? CpuAccessMode::None : CpuAccessMode::Write;
     bufferDesc.isVolatile = false;
     bufferDesc.debugName = m_isScratchBuffer ? "ScratchBuffer" : "UploadBuffer";
+    if(m_isScratchBuffer){
+        bufferDesc.structStride = 1u;
+        bufferDesc.canHaveUAVs = true;
+    }
 
     BufferHandle bufferHandle = m_device.createBuffer(bufferDesc);
     if(!bufferHandle)
@@ -288,6 +316,13 @@ bool UploadManager::suballocateBuffer(
     ));
     BufferChunkPtr& currentChunk = activeChunks->back();
     currentChunk->version = completedVersion;
+#if !defined(NWB_FINAL)
+    ++m_nextChunkIdentityForTesting;
+    if(m_nextChunkIdentityForTesting == 0u)
+        ++m_nextChunkIdentityForTesting;
+    currentChunk->testingIdentity = m_nextChunkIdentityForTesting;
+    ++m_chunkCreationCountForTesting;
+#endif
 
     return trySuballocateFromChunk(*currentChunk);
 }
@@ -346,6 +381,31 @@ void UploadManager::discardChunks(
     const VulkanDetail::OwnerIdentityContext ownerIdentity{ owner, nativeRecordingID };
     recycleMatchingActiveChunks(queue, reusableVersion, true, VulkanDetail::IsMatchingOwner, &ownerIdentity);
 }
+
+#if !defined(NWB_FINAL)
+BuildScratchPoolStatistics UploadManager::statisticsForTesting(){
+    ScopedLock lock(m_mutex);
+
+    BuildScratchPoolStatistics statistics;
+    for(const BufferChunkPtr& chunk : m_chunkPool){
+        if(chunk)
+            ++statistics.pooledChunkCount;
+    }
+    for(const ActiveQueueChunks& entry : m_activeChunks){
+        for(const BufferChunkPtr& chunk : entry.chunks){
+            if(chunk)
+                ++statistics.activeChunkCount;
+        }
+    }
+    statistics.pooledChunkBytes = m_chunkPoolBytes;
+    statistics.chunkCreationCount = m_chunkCreationCountForTesting;
+    statistics.poolReuseCount = m_poolReuseCountForTesting;
+    statistics.suballocationCount = m_suballocationCountForTesting;
+    statistics.lastChunkIdentity = m_lastChunkIdentityForTesting;
+    statistics.lastSuballocationOffset = m_lastSuballocationOffsetForTesting;
+    return statistics;
+}
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -680,6 +680,7 @@ bool Device::waitForIdle(){
         if(queue)
             queue->waitForIdle();
     }
+    m_scratchManager.collectCompletedChunks();
     m_gpuDescriptorHeap.collectRetired();
 
     return true;
@@ -699,6 +700,7 @@ void Device::runGarbageCollection(){
             queue->collectCompletedCommandBuffers();
         }
     }
+    m_scratchManager.collectCompletedChunks();
     m_gpuDescriptorHeap.collectRetired();
 }
 

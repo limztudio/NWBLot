@@ -1195,10 +1195,27 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Handles staging buffer uploads
+// Handles upload and build-scratch buffer chunks
+
+
+#if !defined(NWB_FINAL)
+struct BuildScratchPoolStatistics{
+    u64 activeChunkCount = 0u;
+    u64 pooledChunkCount = 0u;
+    u64 pooledChunkBytes = 0u;
+    u64 chunkCreationCount = 0u;
+    u64 poolReuseCount = 0u;
+    u64 suballocationCount = 0u;
+    u64 lastChunkIdentity = 0u;
+    u64 lastSuballocationOffset = 0u;
+};
+#endif
 
 
 class UploadManager final : NoCopy{
+    friend class Device;
+
+
 private:
     struct BufferChunk final : public RefCounter<GraphicsResource>{
         BufferHandle buffer;
@@ -1208,6 +1225,9 @@ private:
         u64 size;
         u64 allocated;
         u64 version;
+#if !defined(NWB_FINAL)
+        u64 testingIdentity = 0u;
+#endif
 
 
         BufferChunk(
@@ -1264,9 +1284,13 @@ public:
         u64 nativeRecordingID,
         u64 reusableVersion
     );
+#if !defined(NWB_FINAL)
+    [[nodiscard]] BuildScratchPoolStatistics statisticsForTesting();
+#endif
 
 
 private:
+    void collectCompletedChunks();
     void trimChunkPoolLocked();
     [[nodiscard]] BufferChunkList* findActiveChunksLocked(GpuPhysicalQueueId queue, bool create);
     BufferChunkList::iterator recycleActiveChunkLocked(BufferChunkList& activeChunks, BufferChunkList::iterator it, u64 version, bool resetAllocated);
@@ -1286,6 +1310,14 @@ private:
     bool m_isScratchBuffer;
     Futex m_mutex;
     u64 m_chunkPoolBytes = 0;
+#if !defined(NWB_FINAL)
+    u64 m_nextChunkIdentityForTesting = 0u;
+    u64 m_chunkCreationCountForTesting = 0u;
+    u64 m_poolReuseCountForTesting = 0u;
+    u64 m_suballocationCountForTesting = 0u;
+    u64 m_lastChunkIdentityForTesting = 0u;
+    u64 m_lastSuballocationOffsetForTesting = 0u;
+#endif
 
     BufferChunkList m_chunkPool;
     GraphicsDeque<ActiveQueueChunks> m_activeChunks;
@@ -3019,7 +3051,12 @@ private:
         u64& outStagingOffset,
         u32 alignment = s_DefaultUploadSuballocationAlignment
     );
-    [[nodiscard]] bool attachAccelStructBuildScratchBuffer(VkAccelerationStructureBuildGeometryInfoKHR& buildInfo, u64 buildScratchSize, const char* debugName, const tchar* operationName);
+    [[nodiscard]] bool suballocateBuildScratchAddress(
+        u64 buildScratchSize,
+        u64 scratchAlignment,
+        VkDeviceAddress& outScratchAddress,
+        const tchar* operationName
+    );
     [[nodiscard]] bool validateAccelStructBuildSignature(
         AccelStruct& accelStruct,
         VkAccelerationStructureTypeKHR accelStructType,
@@ -3372,6 +3409,9 @@ public:
         const GpuPhysicalQueueId& executionQueue,
         usize index
     )const noexcept;
+    [[nodiscard]] BuildScratchPoolStatistics buildScratchPoolStatisticsForTesting(){
+        return m_scratchManager.statisticsForTesting();
+    }
 #endif
     [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap(){ return m_gpuDescriptorHeap; }
     // Writes descriptor-buffer entries, including TLAS handles.

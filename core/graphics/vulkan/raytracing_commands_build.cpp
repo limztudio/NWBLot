@@ -172,19 +172,19 @@ void CommandList::setRayTracingState(const RayTracingState& state){
 }
 
 
-bool CommandList::attachAccelStructBuildScratchBuffer(
-    VkAccelerationStructureBuildGeometryInfoKHR& buildInfo,
+bool CommandList::suballocateBuildScratchAddress(
     const u64 buildScratchSize,
-    const char* debugName,
+    const u64 scratchAlignment,
+    VkDeviceAddress& outScratchAddress,
     const tchar* operationName
 ){
+    outScratchAddress = 0u;
     if(buildScratchSize == 0u)
         return true;
-
-    const u64 scratchAlignment = Max<u64>(
-        static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment),
-        1u
-    );
+    if(!m_currentCmdBuf || m_nativeRecordingID == 0u || scratchAlignment == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch recording identity or alignment is invalid"), operationName);
+        return false;
+    }
     const u64 scratchPadding = scratchAlignment - 1u;
     if(buildScratchSize > Limit<u64>::s_Max - scratchPadding){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch allocation size overflows"), operationName);
@@ -192,27 +192,33 @@ bool CommandList::attachAccelStructBuildScratchBuffer(
     }
     const u64 scratchAllocationSize = buildScratchSize + scratchPadding;
 
-    BufferDesc scratchDesc;
-    scratchDesc.byteSize = scratchAllocationSize;
-    scratchDesc.structStride = 1;
-    scratchDesc.debugName = debugName;
-    scratchDesc.canHaveUAVs = true;
-
-    BufferHandle scratchBuffer = m_device.createBuffer(scratchDesc);
-    if(!scratchBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}"), operationName);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate acceleration structure scratch buffer"));
+    Buffer* scratchBuffer = nullptr;
+    u64 scratchAllocationOffset = 0u;
+    const GpuPhysicalQueueId physicalQueue = m_currentCmdBuf->m_queue.m_physicalQueue;
+    const u64 completedVersion = m_device.queueGetCompletedInstance(physicalQueue);
+    if(!m_device.m_scratchManager.suballocateBuffer(
+        scratchAllocationSize,
+        &scratchBuffer,
+        &scratchAllocationOffset,
+        nullptr,
+        m_currentCmdBuf.get(),
+        m_nativeRecordingID,
+        physicalQueue,
+        completedVersion,
+        1u
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch-buffer suballocation failed"), operationName);
         return false;
     }
     if(!m_device.isBufferReadyForGpuUse(
-        scratchBuffer.get(),
+        scratchBuffer,
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch buffer is not ready for device-address access"), operationName);
         return false;
     }
 
-    const VkDeviceAddress scratchBaseAddress = VulkanDetail::GetBufferDeviceAddress(scratchBuffer.get());
+    const VkDeviceAddress scratchBaseAddress = VulkanDetail::GetBufferDeviceAddress(scratchBuffer, scratchAllocationOffset);
     VkDeviceAddress alignedScratchAddress = 0u;
     if(scratchBaseAddress == 0u || !AlignUpChecked(scratchBaseAddress, scratchAlignment, alignedScratchAddress)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch device address is null or cannot be aligned"), operationName);
@@ -224,8 +230,7 @@ bool CommandList::attachAccelStructBuildScratchBuffer(
         return false;
     }
 
-    buildInfo.scratchData.deviceAddress = alignedScratchAddress;
-    m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(scratchBuffer));
+    outScratchAddress = alignedScratchAddress;
     return true;
 }
 
@@ -398,7 +403,16 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     }
 
     const VkDeviceSize scratchSize = performUpdate ? sizeInfo.updateScratchSize : sizeInfo.buildScratchSize;
-    if(!attachAccelStructBuildScratchBuffer(buildInfo, scratchSize, "TLAS_BuildScratch", NWB_TEXT("allocate TLAS scratch buffer")))
+    const u64 scratchAlignment = Max<u64>(
+        static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment),
+        1u
+    );
+    if(!suballocateBuildScratchAddress(
+        scratchSize,
+        scratchAlignment,
+        buildInfo.scratchData.deviceAddress,
+        NWB_TEXT("allocate TLAS scratch buffer")
+    ))
         return false;
 
     // Order BLAS writes and prior TLAS writes before this TLAS build.
@@ -912,7 +926,16 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     }
 
     const VkDeviceSize scratchSize = performUpdate ? sizeInfo.updateScratchSize : sizeInfo.buildScratchSize;
-    if(!attachAccelStructBuildScratchBuffer(buildInfo, scratchSize, "AS_BuildScratch", NWB_TEXT("allocate BLAS scratch buffer")))
+    const u64 scratchAlignment = Max<u64>(
+        static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment),
+        1u
+    );
+    if(!suballocateBuildScratchAddress(
+        scratchSize,
+        scratchAlignment,
+        buildInfo.scratchData.deviceAddress,
+        NWB_TEXT("allocate BLAS scratch buffer")
+    ))
         return;
 
     // Reused acceleration structures need build-write ordering.

@@ -396,53 +396,18 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
         return;
     }
 
-    BufferHandle scratchBuffer;
     if(buildSize.buildScratchSize != 0u){
         const u64 scratchAlignment = Max<u64>(
             static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment),
             1u
         );
-        const u64 scratchPadding = scratchAlignment - 1u;
-        if(buildSize.buildScratchSize > Limit<u64>::s_Max - scratchPadding){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: scratch allocation size overflows"));
+        if(!suballocateBuildScratchAddress(
+            buildSize.buildScratchSize,
+            scratchAlignment,
+            buildInfo.scratchData.deviceAddress,
+            NWB_TEXT("build opacity micromap")
+        ))
             return;
-        }
-
-        const u64 scratchAllocationSize = buildSize.buildScratchSize + scratchPadding;
-        BufferDesc scratchDesc;
-        scratchDesc.byteSize = scratchAllocationSize;
-        scratchDesc.structStride = 1;
-        scratchDesc.debugName = "OMM_BuildScratch";
-        scratchDesc.canHaveUAVs = true;
-
-        scratchBuffer = m_device.createBuffer(scratchDesc);
-        if(!scratchBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate opacity micromap scratch buffer"));
-            return;
-        }
-        if(!m_device.isBufferReadyForGpuUse(
-            scratchBuffer.get(),
-            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-        )){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Opacity micromap scratch buffer is not ready for device-address access"));
-            return;
-        }
-
-        const VkDeviceAddress scratchBaseAddress = VulkanDetail::GetBufferDeviceAddress(scratchBuffer.get());
-        VkDeviceAddress alignedScratchAddress = 0u;
-        if(scratchBaseAddress == 0u || !AlignUpChecked(scratchBaseAddress, scratchAlignment, alignedScratchAddress)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: scratch device address is null or cannot be aligned"));
-            return;
-        }
-        const u64 scratchOffset = alignedScratchAddress - scratchBaseAddress;
-        if(
-            scratchOffset > scratchAllocationSize
-            || buildSize.buildScratchSize > scratchAllocationSize - scratchOffset
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: aligned scratch range is outside the buffer"));
-            return;
-        }
-        buildInfo.scratchData.deviceAddress = alignedScratchAddress;
     }
 
     if(m_enableAutomaticBarriers){
@@ -471,9 +436,6 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
 
     vkCmdBuildMicromapsEXT(m_currentCmdBuf->m_cmdBuf, 1u, &buildInfo);
     m_currentCmdBuf->appendPendingOpacityMicromapBuildCommit(*omm);
-
-    if(scratchBuffer)
-        m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(scratchBuffer));
 
     retainResource(omm);
 }

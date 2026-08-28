@@ -13,73 +13,7 @@
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if !defined(NWB_FINAL)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_VULKAN_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct BuildScratchPoolStatistics{
-    u64 activeChunkCount = 0u;
-    u64 pooledChunkCount = 0u;
-    u64 pooledChunkBytes = 0u;
-    u64 chunkCreationCount = 0u;
-    u64 poolReuseCount = 0u;
-    u64 suballocationCount = 0u;
-    u64 lastChunkIdentity = 0u;
-    u64 lastSuballocationOffset = 0u;
-};
-
-
-// Narrow diagnostic peer for deterministic native-rejection reuse coverage without a public Device test API.
-class BuildScratchPoolDiagnosticPeer final{
-public:
-    [[nodiscard]] static BuildScratchPoolStatistics statistics(Device& device){
-        UploadManager& manager = device.m_scratchManager;
-        ScopedLock lock(manager.m_mutex);
-
-        BuildScratchPoolStatistics statistics;
-        for(const UploadManager::BufferChunkPtr& chunk : manager.m_chunkPool){
-            if(chunk)
-                ++statistics.pooledChunkCount;
-        }
-        for(const UploadManager::ActiveQueueChunks& entry : manager.m_activeChunks){
-            for(const UploadManager::BufferChunkPtr& chunk : entry.chunks){
-                if(chunk)
-                    ++statistics.activeChunkCount;
-            }
-        }
-        statistics.pooledChunkBytes = manager.m_chunkPoolBytes;
-        statistics.chunkCreationCount = manager.m_chunkCreationCountForTesting;
-        statistics.poolReuseCount = manager.m_poolReuseCountForTesting;
-        statistics.suballocationCount = manager.m_suballocationCountForTesting;
-        statistics.lastChunkIdentity = manager.m_lastChunkIdentityForTesting;
-        statistics.lastSuballocationOffset = manager.m_lastSuballocationOffsetForTesting;
-        return statistics;
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_VULKAN_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
+#include <volk/volk.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -108,6 +42,119 @@ static constexpr RayTracingOpacityMicromapUsageCount s_OmmUsageCount{
     0u,
     OpacityMicromapFormat::OC1_2_State,
 };
+
+
+#if !defined(NWB_FINAL)
+
+struct NativeBufferAddressQuery{
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VkDeviceAddress address = 0u;
+};
+
+struct NativeBuildScratchCommand{
+    VkDeviceAddress scratchAddress = 0u;
+    VkAccelerationStructureKHR destination = VK_NULL_HANDLE;
+};
+
+struct NativeBuildScratchReuseCapture{
+    NativeBufferAddressQuery addressQueries[2u] = {};
+    NativeBuildScratchCommand buildCommands[2u] = {};
+    u32 addressQueryCount = 0u;
+    u32 buildCommandCount = 0u;
+};
+
+class ScopedNativeBuildScratchReuseTrace final : NoCopy{
+private:
+    static thread_local NativeBuildScratchReuseCapture* s_activeCapture;
+    static PFN_vkGetBufferDeviceAddress s_forwardGetBufferDeviceAddress;
+    static PFN_vkCmdBuildAccelerationStructuresKHR s_forwardCmdBuildAccelerationStructures;
+
+    [[nodiscard]] static VKAPI_ATTR VkDeviceAddress VKAPI_CALL InterceptGetBufferDeviceAddress(
+        const VkDevice device,
+        const VkBufferDeviceAddressInfo* const addressInfo
+    ){
+        if(!s_forwardGetBufferDeviceAddress)
+            return 0u;
+
+        const VkDeviceAddress address = s_forwardGetBufferDeviceAddress(device, addressInfo);
+        NativeBuildScratchReuseCapture* const capture = s_activeCapture;
+        if(capture && addressInfo){
+            const u32 queryIndex = capture->addressQueryCount;
+            if(queryIndex < LengthOf(capture->addressQueries)){
+                capture->addressQueries[queryIndex].buffer = addressInfo->buffer;
+                capture->addressQueries[queryIndex].address = address;
+            }
+            ++capture->addressQueryCount;
+        }
+        return address;
+    }
+    static VKAPI_ATTR void VKAPI_CALL InterceptCmdBuildAccelerationStructures(
+        const VkCommandBuffer commandBuffer,
+        const u32 infoCount,
+        const VkAccelerationStructureBuildGeometryInfoKHR* const buildInfos,
+        const VkAccelerationStructureBuildRangeInfoKHR* const* const buildRangeInfos
+    ){
+        NativeBuildScratchReuseCapture* const capture = s_activeCapture;
+        if(capture && infoCount > 0u && buildInfos){
+            const u32 commandIndex = capture->buildCommandCount;
+            if(commandIndex < LengthOf(capture->buildCommands)){
+                capture->buildCommands[commandIndex].scratchAddress = buildInfos[0u].scratchData.deviceAddress;
+                capture->buildCommands[commandIndex].destination = buildInfos[0u].dstAccelerationStructure;
+            }
+            ++capture->buildCommandCount;
+        }
+        if(s_forwardCmdBuildAccelerationStructures){
+            s_forwardCmdBuildAccelerationStructures(
+                commandBuffer,
+                infoCount,
+                buildInfos,
+                buildRangeInfos
+            );
+        }
+    }
+
+
+public:
+    explicit ScopedNativeBuildScratchReuseTrace(NativeBuildScratchReuseCapture& capture)
+        : m_originalGetBufferDeviceAddress(vkGetBufferDeviceAddress)
+        , m_originalCmdBuildAccelerationStructures(vkCmdBuildAccelerationStructuresKHR)
+    {
+        capture = {};
+        if(s_activeCapture || !m_originalGetBufferDeviceAddress || !m_originalCmdBuildAccelerationStructures)
+            return;
+
+        s_forwardGetBufferDeviceAddress = m_originalGetBufferDeviceAddress;
+        s_forwardCmdBuildAccelerationStructures = m_originalCmdBuildAccelerationStructures;
+        s_activeCapture = &capture;
+        vkGetBufferDeviceAddress = &ScopedNativeBuildScratchReuseTrace::InterceptGetBufferDeviceAddress;
+        vkCmdBuildAccelerationStructuresKHR = &ScopedNativeBuildScratchReuseTrace::InterceptCmdBuildAccelerationStructures;
+        m_armed = true;
+    }
+    ~ScopedNativeBuildScratchReuseTrace(){
+        if(!m_armed)
+            return;
+
+        vkGetBufferDeviceAddress = m_originalGetBufferDeviceAddress;
+        vkCmdBuildAccelerationStructuresKHR = m_originalCmdBuildAccelerationStructures;
+        s_activeCapture = nullptr;
+    }
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{ return m_armed; }
+
+
+private:
+    PFN_vkGetBufferDeviceAddress m_originalGetBufferDeviceAddress = nullptr;
+    PFN_vkCmdBuildAccelerationStructuresKHR m_originalCmdBuildAccelerationStructures = nullptr;
+    bool m_armed = false;
+};
+
+thread_local NativeBuildScratchReuseCapture* ScopedNativeBuildScratchReuseTrace::s_activeCapture = nullptr;
+PFN_vkGetBufferDeviceAddress ScopedNativeBuildScratchReuseTrace::s_forwardGetBufferDeviceAddress = nullptr;
+PFN_vkCmdBuildAccelerationStructuresKHR ScopedNativeBuildScratchReuseTrace::s_forwardCmdBuildAccelerationStructures = nullptr;
+
+#endif
 
 [[nodiscard]] BufferHandle CreateBuildInputBuffer(
     GraphicsBackend::Device& device,
@@ -905,7 +952,9 @@ TEST_F(RayTracingBuildIngressTest, RejectedSubmissionDoesNotPublishAccelerationS
     rejectedUpdate->close();
 }
 
-TEST_F(RayTracingBuildIngressTest, RejectedNativeSubmissionReusesExactBuildScratchSuballocation){
+// The test-owned Vulkan trace proves exact scratch-address reuse while the accepted retry and later TLAS build prove
+// that the resulting BLAS remains usable. Production exposes no scratch identity, counter, or diagnostic friend.
+TEST_F(RayTracingBuildIngressTest, RejectedNativeSubmissionReusesBuildScratchAtNativeBoundary){
     HeadlessGraphicsScope scratchScope;
     ASSERT_TRUE(scratchScope.initialize());
 
@@ -933,86 +982,82 @@ TEST_F(RayTracingBuildIngressTest, RejectedNativeSubmissionReusesExactBuildScrat
     const RayTracingAccelStructHandle blas = scratchDevice.createAccelStruct(createDesc);
     ASSERT_TRUE(blas);
 
-    const auto initialStatistics = GraphicsBackend::BuildScratchPoolDiagnosticPeer::statistics(scratchDevice);
-    EXPECT_EQ(initialStatistics.activeChunkCount, 0u);
-    EXPECT_EQ(initialStatistics.pooledChunkCount, 0u);
-    EXPECT_EQ(initialStatistics.pooledChunkBytes, 0u);
-    EXPECT_EQ(initialStatistics.chunkCreationCount, 0u);
-    EXPECT_EQ(initialStatistics.poolReuseCount, 0u);
-    EXPECT_EQ(initialStatistics.suballocationCount, 0u);
+    {
+        __hidden_ray_tracing_build_ingress_tests::NativeBuildScratchReuseCapture nativeCapture;
+        __hidden_ray_tracing_build_ingress_tests::ScopedNativeBuildScratchReuseTrace nativeTrace(nativeCapture);
+        ASSERT_TRUE(nativeTrace.valid());
 
-    CommandListHandle rejectedBuild = scratchDevice.createCommandList();
-    ASSERT_TRUE(rejectedBuild);
-    rejectedBuild->open();
-    rejectedBuild->buildBottomLevelAccelStruct(blas.get(), &geometry, 1u, RayTracingAccelStructBuildFlags::None);
-    ASSERT_FALSE(rejectedBuild->commandRecordingFailed());
-    rejectedBuild->close();
+        CommandListHandle rejectedBuild = scratchDevice.createCommandList();
+        ASSERT_TRUE(rejectedBuild);
+        rejectedBuild->open();
+        rejectedBuild->buildBottomLevelAccelStruct(blas.get(), &geometry, 1u, RayTracingAccelStructBuildFlags::None);
+        ASSERT_FALSE(rejectedBuild->commandRecordingFailed());
+        rejectedBuild->close();
+        ASSERT_EQ(nativeCapture.addressQueryCount, 1u);
+        ASSERT_EQ(nativeCapture.buildCommandCount, 1u);
+        ASSERT_NE(nativeCapture.addressQueries[0u].buffer, VK_NULL_HANDLE);
+        ASSERT_NE(nativeCapture.addressQueries[0u].address, 0u);
+        EXPECT_GE(nativeCapture.buildCommands[0u].scratchAddress, nativeCapture.addressQueries[0u].address);
+        ASSERT_NE(nativeCapture.buildCommands[0u].destination, VK_NULL_HANDLE);
 
-    const auto recordedStatistics = GraphicsBackend::BuildScratchPoolDiagnosticPeer::statistics(scratchDevice);
-    EXPECT_EQ(recordedStatistics.activeChunkCount, 1u);
-    EXPECT_EQ(recordedStatistics.pooledChunkCount, 0u);
-    EXPECT_EQ(recordedStatistics.pooledChunkBytes, 0u);
-    EXPECT_EQ(recordedStatistics.chunkCreationCount, 1u);
-    EXPECT_EQ(recordedStatistics.poolReuseCount, 0u);
-    EXPECT_EQ(recordedStatistics.suballocationCount, 1u);
-    ASSERT_NE(recordedStatistics.lastChunkIdentity, 0u);
+        scratchDevice.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+        CommandList* const rejectedBuilds[]{ rejectedBuild.get() };
+        const QueueSubmissionToken rejectedToken = scratchDevice.executeCommandLists(
+            rejectedBuilds,
+            LengthOf(rejectedBuilds),
+            CommandQueue::Graphics,
+            QueueSubmissionDesc{}
+        );
+        const bool unexpectedlySubmitted = rejectedToken.valid();
+        const bool idleAfterUnexpectedSubmission = !unexpectedlySubmitted || scratchDevice.waitForIdle();
+        scratchDevice.clearSubmissionRejectionsForTesting();
+        ASSERT_FALSE(unexpectedlySubmitted);
+        ASSERT_TRUE(idleAfterUnexpectedSubmission);
 
-    scratchDevice.rejectNextSubmissionForTesting(CommandQueue::Graphics);
-    CommandList* const rejectedBuilds[]{ rejectedBuild.get() };
-    const QueueSubmissionToken rejectedToken = scratchDevice.executeCommandLists(
-        rejectedBuilds,
-        LengthOf(rejectedBuilds),
+        CommandListHandle retryBuild = scratchDevice.createCommandList();
+        ASSERT_TRUE(retryBuild);
+        retryBuild->open();
+        retryBuild->buildBottomLevelAccelStruct(blas.get(), &geometry, 1u, RayTracingAccelStructBuildFlags::None);
+        ASSERT_FALSE(retryBuild->commandRecordingFailed());
+        retryBuild->close();
+        EXPECT_EQ(nativeCapture.addressQueryCount, 1u);
+        ASSERT_EQ(nativeCapture.buildCommandCount, 2u);
+        EXPECT_EQ(nativeCapture.buildCommands[1u].scratchAddress, nativeCapture.buildCommands[0u].scratchAddress);
+        EXPECT_EQ(nativeCapture.buildCommands[1u].destination, nativeCapture.buildCommands[0u].destination);
+
+        CommandList* const retryBuilds[]{ retryBuild.get() };
+        const QueueSubmissionToken acceptedToken = scratchDevice.executeCommandLists(
+            retryBuilds,
+            LengthOf(retryBuilds),
+            CommandQueue::Graphics,
+            QueueSubmissionDesc{}
+        );
+        ASSERT_TRUE(acceptedToken.valid());
+        ASSERT_TRUE(scratchDevice.waitForIdle());
+    }
+
+    RayTracingAccelStructDesc tlasDesc(scratchScope.arena());
+    tlasDesc.setTopLevelMaxInstances(1u);
+    const RayTracingAccelStructHandle tlas = scratchDevice.createAccelStruct(tlasDesc);
+    ASSERT_TRUE(tlas);
+    RayTracingInstanceDesc instance;
+    instance.setBLAS(blas.get()).setInstanceMask(0xffu);
+
+    CommandListHandle useBuild = scratchDevice.createCommandList();
+    ASSERT_TRUE(useBuild);
+    useBuild->open();
+    useBuild->buildTopLevelAccelStruct(tlas.get(), &instance, 1u, RayTracingAccelStructBuildFlags::None);
+    ASSERT_FALSE(useBuild->commandRecordingFailed());
+    useBuild->close();
+    CommandList* const useBuilds[]{ useBuild.get() };
+    const QueueSubmissionToken useToken = scratchDevice.executeCommandLists(
+        useBuilds,
+        LengthOf(useBuilds),
         CommandQueue::Graphics,
         QueueSubmissionDesc{}
     );
-    const bool unexpectedlySubmitted = rejectedToken.valid();
-    const bool idleAfterUnexpectedSubmission = !unexpectedlySubmitted || scratchDevice.waitForIdle();
-    scratchDevice.clearSubmissionRejectionsForTesting();
-    ASSERT_FALSE(unexpectedlySubmitted);
-    ASSERT_TRUE(idleAfterUnexpectedSubmission);
-
-    const auto rejectedStatistics = GraphicsBackend::BuildScratchPoolDiagnosticPeer::statistics(scratchDevice);
-    EXPECT_EQ(rejectedStatistics.activeChunkCount, 0u);
-    EXPECT_EQ(rejectedStatistics.pooledChunkCount, 1u);
-    EXPECT_GT(rejectedStatistics.pooledChunkBytes, 0u);
-    EXPECT_EQ(rejectedStatistics.chunkCreationCount, 1u);
-    EXPECT_EQ(rejectedStatistics.poolReuseCount, 0u);
-    EXPECT_EQ(rejectedStatistics.suballocationCount, 1u);
-
-    CommandListHandle retryBuild = scratchDevice.createCommandList();
-    ASSERT_TRUE(retryBuild);
-    retryBuild->open();
-    retryBuild->buildBottomLevelAccelStruct(blas.get(), &geometry, 1u, RayTracingAccelStructBuildFlags::None);
-    ASSERT_FALSE(retryBuild->commandRecordingFailed());
-    retryBuild->close();
-
-    const auto retryStatistics = GraphicsBackend::BuildScratchPoolDiagnosticPeer::statistics(scratchDevice);
-    EXPECT_EQ(retryStatistics.activeChunkCount, 1u);
-    EXPECT_EQ(retryStatistics.pooledChunkCount, 0u);
-    EXPECT_EQ(retryStatistics.pooledChunkBytes, 0u);
-    EXPECT_EQ(retryStatistics.chunkCreationCount, 1u);
-    EXPECT_EQ(retryStatistics.poolReuseCount, 1u);
-    EXPECT_EQ(retryStatistics.suballocationCount, 2u);
-    EXPECT_EQ(retryStatistics.lastChunkIdentity, recordedStatistics.lastChunkIdentity);
-    EXPECT_EQ(retryStatistics.lastSuballocationOffset, recordedStatistics.lastSuballocationOffset);
-
-    CommandList* const retryBuilds[]{ retryBuild.get() };
-    const QueueSubmissionToken acceptedToken = scratchDevice.executeCommandLists(
-        retryBuilds,
-        LengthOf(retryBuilds),
-        CommandQueue::Graphics,
-        QueueSubmissionDesc{}
-    );
-    ASSERT_TRUE(acceptedToken.valid());
+    ASSERT_TRUE(useToken.valid());
     ASSERT_TRUE(scratchDevice.waitForIdle());
-
-    const auto acceptedStatistics = GraphicsBackend::BuildScratchPoolDiagnosticPeer::statistics(scratchDevice);
-    EXPECT_EQ(acceptedStatistics.activeChunkCount, 0u);
-    EXPECT_EQ(acceptedStatistics.pooledChunkCount, 1u);
-    EXPECT_GT(acceptedStatistics.pooledChunkBytes, 0u);
-    EXPECT_EQ(acceptedStatistics.chunkCreationCount, 1u);
-    EXPECT_EQ(acceptedStatistics.poolReuseCount, 1u);
-    EXPECT_EQ(acceptedStatistics.suballocationCount, 2u);
 }
 #endif
 

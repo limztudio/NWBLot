@@ -28,10 +28,6 @@ using VulkanAllocatorHandle = VulkanAllocatorStorage*;
 
 struct VulkanContext;
 class Buffer;
-#if !defined(NWB_FINAL)
-class BuildScratchPoolDiagnosticPeer;
-class UploadPoolDiagnosticPeer;
-#endif
 class CommandList;
 class Heap;
 class MeshletPipeline;
@@ -1196,10 +1192,6 @@ private:
 
 class UploadManager final : NoCopy{
     friend class Device;
-#if !defined(NWB_FINAL)
-    friend class BuildScratchPoolDiagnosticPeer;
-    friend class UploadPoolDiagnosticPeer;
-#endif
 
 
 private:
@@ -1211,9 +1203,6 @@ private:
         u64 size;
         u64 allocated;
         u64 version;
-#if !defined(NWB_FINAL)
-        u64 testingIdentity = 0u;
-#endif
 
 
         BufferChunk(
@@ -1293,14 +1282,6 @@ private:
     bool m_isScratchBuffer;
     Futex m_mutex;
     u64 m_chunkPoolBytes = 0;
-#if !defined(NWB_FINAL)
-    u64 m_nextChunkIdentityForTesting = 0u;
-    u64 m_chunkCreationCountForTesting = 0u;
-    u64 m_poolReuseCountForTesting = 0u;
-    u64 m_suballocationCountForTesting = 0u;
-    u64 m_lastChunkIdentityForTesting = 0u;
-    u64 m_lastSuballocationOffsetForTesting = 0u;
-#endif
 
     BufferChunkList m_chunkPool;
     GraphicsDeque<ActiveQueueChunks> m_activeChunks;
@@ -3138,10 +3119,6 @@ private:
 
 class Device final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Buffer;
-#if !defined(NWB_FINAL)
-    friend class BuildScratchPoolDiagnosticPeer;
-    friend class UploadPoolDiagnosticPeer;
-#endif
     friend class CommandList;
     friend class Queue;
     friend class Texture;

@@ -109,14 +109,6 @@ void UploadManager::clear(){
         entry.chunks.clear();
     m_activeChunks.clear();
     m_chunkPoolBytes = 0u;
-#if !defined(NWB_FINAL)
-    m_nextChunkIdentityForTesting = 0u;
-    m_chunkCreationCountForTesting = 0u;
-    m_poolReuseCountForTesting = 0u;
-    m_suballocationCountForTesting = 0u;
-    m_lastChunkIdentityForTesting = 0u;
-    m_lastSuballocationOffsetForTesting = 0u;
-#endif
 }
 
 void UploadManager::collectCompletedChunks(){
@@ -249,11 +241,6 @@ bool UploadManager::suballocateBuffer(
             *pCpuVA = static_cast<u8*>(buffer->m_mappedMemory) + alignedOffset;
 
         chunk.allocated = alignedOffset + size;
-#if !defined(NWB_FINAL)
-        ++m_suballocationCountForTesting;
-        m_lastChunkIdentityForTesting = chunk.testingIdentity;
-        m_lastSuballocationOffsetForTesting = alignedOffset;
-#endif
         return true;
     };
 
@@ -281,12 +268,7 @@ bool UploadManager::suballocateBuffer(
             currentChunk->allocated = 0;
             currentChunk->version = completedVersion;
 
-            const bool reused = trySuballocateFromChunk(*currentChunk);
-#if !defined(NWB_FINAL)
-            if(reused)
-                ++m_poolReuseCountForTesting;
-#endif
-            return reused;
+            return trySuballocateFromChunk(*currentChunk);
         }
     }
 
@@ -316,13 +298,6 @@ bool UploadManager::suballocateBuffer(
     ));
     BufferChunkPtr& currentChunk = activeChunks->back();
     currentChunk->version = completedVersion;
-#if !defined(NWB_FINAL)
-    ++m_nextChunkIdentityForTesting;
-    if(m_nextChunkIdentityForTesting == 0u)
-        ++m_nextChunkIdentityForTesting;
-    currentChunk->testingIdentity = m_nextChunkIdentityForTesting;
-    ++m_chunkCreationCountForTesting;
-#endif
 
     return trySuballocateFromChunk(*currentChunk);
 }

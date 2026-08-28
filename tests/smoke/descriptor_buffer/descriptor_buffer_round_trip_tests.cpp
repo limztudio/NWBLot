@@ -51,74 +51,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !defined(NWB_FINAL)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_VULKAN_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct UploadPoolStatistics{
-    u64 activeChunkCount = 0u;
-    u64 pooledChunkCount = 0u;
-    u64 pooledChunkBytes = 0u;
-    u64 chunkCreationCount = 0u;
-    u64 poolReuseCount = 0u;
-    u64 suballocationCount = 0u;
-    u64 lastChunkIdentity = 0u;
-    u64 lastSuballocationOffset = 0u;
-};
-
-
-// Narrow test-owned diagnostic peer for exact upload-pool reuse coverage without a production test API.
-class UploadPoolDiagnosticPeer final{
-public:
-    [[nodiscard]] static UploadPoolStatistics statistics(Device& device){
-        UploadManager& manager = device.m_uploadManager;
-        ScopedLock lock(manager.m_mutex);
-
-        UploadPoolStatistics statistics;
-        for(const UploadManager::BufferChunkPtr& chunk : manager.m_chunkPool){
-            if(chunk)
-                ++statistics.pooledChunkCount;
-        }
-        for(const UploadManager::ActiveQueueChunks& entry : manager.m_activeChunks){
-            for(const UploadManager::BufferChunkPtr& chunk : entry.chunks){
-                if(chunk)
-                    ++statistics.activeChunkCount;
-            }
-        }
-        statistics.pooledChunkBytes = manager.m_chunkPoolBytes;
-        statistics.chunkCreationCount = manager.m_chunkCreationCountForTesting;
-        statistics.poolReuseCount = manager.m_poolReuseCountForTesting;
-        statistics.suballocationCount = manager.m_suballocationCountForTesting;
-        statistics.lastChunkIdentity = manager.m_lastChunkIdentityForTesting;
-        statistics.lastSuballocationOffset = manager.m_lastSuballocationOffsetForTesting;
-        return statistics;
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_VULKAN_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_BEGIN
 
 
@@ -425,6 +357,110 @@ thread_local NativeDeviceCapture* VulkanSubmissionTailGate::s_activeDeviceCaptur
 PFN_vkCreateQueryPool VulkanSubmissionTailGate::s_forwardCreateQueryPool = nullptr;
 thread_local VulkanSubmissionTailGate* VulkanSubmissionTailGate::s_activeGate = nullptr;
 PFN_vkQueueSubmit2 VulkanSubmissionTailGate::s_forwardQueueSubmit2 = nullptr;
+
+
+struct NativeBufferAddressQuery{
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VkDeviceAddress address = 0u;
+};
+
+struct NativeUploadCopyCommand{
+    VkBuffer source = VK_NULL_HANDLE;
+    VkDeviceSize sourceOffset = 0u;
+};
+
+struct NativeUploadReuseCapture{
+    NativeBufferAddressQuery addressQueries[2u] = {};
+    NativeUploadCopyCommand copyCommands[2u] = {};
+    u32 addressQueryCount = 0u;
+    u32 copyCommandCount = 0u;
+};
+
+class ScopedNativeUploadReuseTrace final : NoCopy{
+private:
+    static thread_local NativeUploadReuseCapture* s_activeCapture;
+    static PFN_vkGetBufferDeviceAddress s_forwardGetBufferDeviceAddress;
+    static PFN_vkCmdCopyBuffer s_forwardCmdCopyBuffer;
+
+    [[nodiscard]] static VKAPI_ATTR VkDeviceAddress VKAPI_CALL InterceptGetBufferDeviceAddress(
+        const VkDevice device,
+        const VkBufferDeviceAddressInfo* const addressInfo
+    ){
+        if(!s_forwardGetBufferDeviceAddress)
+            return 0u;
+
+        const VkDeviceAddress address = s_forwardGetBufferDeviceAddress(device, addressInfo);
+        NativeUploadReuseCapture* const capture = s_activeCapture;
+        if(capture && addressInfo){
+            const u32 queryIndex = capture->addressQueryCount;
+            if(queryIndex < LengthOf(capture->addressQueries)){
+                capture->addressQueries[queryIndex].buffer = addressInfo->buffer;
+                capture->addressQueries[queryIndex].address = address;
+            }
+            ++capture->addressQueryCount;
+        }
+        return address;
+    }
+    static VKAPI_ATTR void VKAPI_CALL InterceptCmdCopyBuffer(
+        const VkCommandBuffer commandBuffer,
+        const VkBuffer source,
+        const VkBuffer destination,
+        const u32 regionCount,
+        const VkBufferCopy* const regions
+    ){
+        NativeUploadReuseCapture* const capture = s_activeCapture;
+        if(capture && regionCount > 0u && regions){
+            const u32 commandIndex = capture->copyCommandCount;
+            if(commandIndex < LengthOf(capture->copyCommands)){
+                capture->copyCommands[commandIndex].source = source;
+                capture->copyCommands[commandIndex].sourceOffset = regions[0u].srcOffset;
+            }
+            ++capture->copyCommandCount;
+        }
+        if(s_forwardCmdCopyBuffer)
+            s_forwardCmdCopyBuffer(commandBuffer, source, destination, regionCount, regions);
+    }
+
+
+public:
+    explicit ScopedNativeUploadReuseTrace(NativeUploadReuseCapture& capture)
+        : m_originalGetBufferDeviceAddress(vkGetBufferDeviceAddress)
+        , m_originalCmdCopyBuffer(vkCmdCopyBuffer)
+    {
+        capture = {};
+        if(s_activeCapture || !m_originalGetBufferDeviceAddress || !m_originalCmdCopyBuffer)
+            return;
+
+        s_forwardGetBufferDeviceAddress = m_originalGetBufferDeviceAddress;
+        s_forwardCmdCopyBuffer = m_originalCmdCopyBuffer;
+        s_activeCapture = &capture;
+        vkGetBufferDeviceAddress = &ScopedNativeUploadReuseTrace::InterceptGetBufferDeviceAddress;
+        vkCmdCopyBuffer = &ScopedNativeUploadReuseTrace::InterceptCmdCopyBuffer;
+        m_armed = true;
+    }
+    ~ScopedNativeUploadReuseTrace(){
+        if(!m_armed)
+            return;
+
+        vkGetBufferDeviceAddress = m_originalGetBufferDeviceAddress;
+        vkCmdCopyBuffer = m_originalCmdCopyBuffer;
+        s_activeCapture = nullptr;
+    }
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{ return m_armed; }
+
+
+private:
+    PFN_vkGetBufferDeviceAddress m_originalGetBufferDeviceAddress = nullptr;
+    PFN_vkCmdCopyBuffer m_originalCmdCopyBuffer = nullptr;
+    bool m_armed = false;
+};
+
+thread_local NativeUploadReuseCapture* ScopedNativeUploadReuseTrace::s_activeCapture = nullptr;
+PFN_vkGetBufferDeviceAddress ScopedNativeUploadReuseTrace::s_forwardGetBufferDeviceAddress = nullptr;
+PFN_vkCmdCopyBuffer ScopedNativeUploadReuseTrace::s_forwardCmdCopyBuffer = nullptr;
 
 };
 
@@ -57840,44 +57876,73 @@ struct NativeRendererRejectionProbeTask{
 
 
 #if !defined(NWB_FINAL)
-// Native rejection must return the upload allocation to the pool with its offset reset. A fresh device makes the
-// exact chunk identity deterministic, and the diagnostic state stays owned by this test translation unit.
-TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesExactUploadSuballocation){
+// Native rejection must leave destination bytes untouched and return the exact upload suballocation for retry. The
+// test observes only Vulkan calls at its own boundary; production exposes no allocator identity, counter, or friend.
+TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuballocationAtNativeBoundary){
     HeadlessGraphicsScope uploadScope;
     ASSERT_TRUE(uploadScope.initialize());
 
     GraphicsBackend::Device& uploadDevice = uploadScope.graphics().getDevice();
+    static constexpr u32 s_InitialWord = 0x10203040u;
+    static constexpr u32 s_RejectedWords[] = { 0xBAD00001u, 0xBAD00002u, 0xBAD00003u, 0xBAD00004u };
+    static constexpr u32 s_RetryWords[] = { 0x13579BDFu, 0x2468ACE0u, 0xC001C0DEu, 0x600DF00Du };
     const BufferHandle destination = uploadDevice.createBuffer(
         BufferDesc()
-            .setByteSize(256u)
+            .setByteSize(sizeof(s_RetryWords))
             .setCanHaveRawViews(true)
             .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    const BufferHandle readback = uploadDevice.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(s_RetryWords))
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+            .setCpuAccess(CpuAccessMode::Read)
     );
     ASSERT_TRUE(destination);
-    constexpr u32 uploadWords[] = { 0x13579BDFu, 0x2468ACE0u, 0xC001C0DEu, 0x600DF00Du };
+    ASSERT_TRUE(readback);
 
-    const auto initialStatistics = GraphicsBackend::UploadPoolDiagnosticPeer::statistics(uploadDevice);
-    EXPECT_EQ(initialStatistics.activeChunkCount, 0u);
-    EXPECT_EQ(initialStatistics.pooledChunkCount, 0u);
-    EXPECT_EQ(initialStatistics.pooledChunkBytes, 0u);
-    EXPECT_EQ(initialStatistics.chunkCreationCount, 0u);
-    EXPECT_EQ(initialStatistics.poolReuseCount, 0u);
-    EXPECT_EQ(initialStatistics.suballocationCount, 0u);
+    CommandListHandle initialClear = uploadDevice.createCommandList();
+    ASSERT_TRUE(initialClear);
+    initialClear->open();
+    initialClear->clearBufferUInt(destination.get(), s_InitialWord);
+    ASSERT_FALSE(initialClear->commandRecordingFailed());
+    initialClear->copyBuffer(readback.get(), 0u, destination.get(), 0u, sizeof(s_RetryWords));
+    ASSERT_FALSE(initialClear->commandRecordingFailed());
+    initialClear->close();
+    CommandList* const initialClears[]{ initialClear.get() };
+    const QueueSubmissionToken initialToken = uploadDevice.executeCommandLists(
+        initialClears,
+        LengthOf(initialClears),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(initialToken.valid());
+    ASSERT_TRUE(uploadDevice.waitForIdle());
 
+    const u32* const initialReadback = static_cast<const u32*>(uploadDevice.mapBuffer(readback.get(), CpuAccessMode::Read));
+    ASSERT_NE(initialReadback, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_RetryWords); ++wordIndex)
+        EXPECT_EQ(initialReadback[wordIndex], s_InitialWord);
+    uploadDevice.unmapBuffer(readback.get());
+
+    __hidden_descriptor_buffer_round_trip_tests::NativeUploadReuseCapture rejectedNativeCapture;
     CommandListHandle rejectedUpload = uploadDevice.createCommandList();
     ASSERT_TRUE(rejectedUpload);
-    rejectedUpload->open();
-    ASSERT_TRUE(rejectedUpload->tryWriteBuffer(destination.get(), uploadWords, sizeof(uploadWords)));
-    rejectedUpload->close();
+    {
+        __hidden_descriptor_buffer_round_trip_tests::ScopedNativeUploadReuseTrace nativeTrace(rejectedNativeCapture);
+        ASSERT_TRUE(nativeTrace.valid());
 
-    const auto recordedStatistics = GraphicsBackend::UploadPoolDiagnosticPeer::statistics(uploadDevice);
-    EXPECT_EQ(recordedStatistics.activeChunkCount, 1u);
-    EXPECT_EQ(recordedStatistics.pooledChunkCount, 0u);
-    EXPECT_EQ(recordedStatistics.pooledChunkBytes, 0u);
-    EXPECT_EQ(recordedStatistics.chunkCreationCount, 1u);
-    EXPECT_EQ(recordedStatistics.poolReuseCount, 0u);
-    EXPECT_EQ(recordedStatistics.suballocationCount, 1u);
-    ASSERT_NE(recordedStatistics.lastChunkIdentity, 0u);
+        rejectedUpload->open();
+        ASSERT_TRUE(rejectedUpload->tryWriteBuffer(destination.get(), s_RejectedWords, sizeof(s_RejectedWords)));
+        rejectedUpload->close();
+    }
+    ASSERT_EQ(rejectedNativeCapture.addressQueryCount, 1u);
+    ASSERT_EQ(rejectedNativeCapture.copyCommandCount, 1u);
+    ASSERT_NE(rejectedNativeCapture.addressQueries[0u].buffer, VK_NULL_HANDLE);
+    EXPECT_EQ(rejectedNativeCapture.addressQueries[0u].buffer, rejectedNativeCapture.copyCommands[0u].source);
+    EXPECT_EQ(rejectedNativeCapture.copyCommands[0u].sourceOffset, 0u);
 
     uploadDevice.rejectNextSubmissionForTesting(CommandQueue::Graphics);
     CommandList* const rejectedUploads[]{ rejectedUpload.get() };
@@ -57893,29 +57958,43 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesExactUploadS
     ASSERT_FALSE(unexpectedlySubmitted);
     ASSERT_TRUE(idleAfterUnexpectedSubmission);
 
-    const auto rejectedStatistics = GraphicsBackend::UploadPoolDiagnosticPeer::statistics(uploadDevice);
-    EXPECT_EQ(rejectedStatistics.activeChunkCount, 0u);
-    EXPECT_EQ(rejectedStatistics.pooledChunkCount, 1u);
-    EXPECT_GT(rejectedStatistics.pooledChunkBytes, 0u);
-    EXPECT_EQ(rejectedStatistics.chunkCreationCount, 1u);
-    EXPECT_EQ(rejectedStatistics.poolReuseCount, 0u);
-    EXPECT_EQ(rejectedStatistics.suballocationCount, 1u);
-
+    __hidden_descriptor_buffer_round_trip_tests::NativeUploadReuseCapture retryNativeCapture;
     CommandListHandle retryUpload = uploadDevice.createCommandList();
     ASSERT_TRUE(retryUpload);
-    retryUpload->open();
-    ASSERT_TRUE(retryUpload->tryWriteBuffer(destination.get(), uploadWords, sizeof(uploadWords)));
-    retryUpload->close();
+    {
+        __hidden_descriptor_buffer_round_trip_tests::ScopedNativeUploadReuseTrace nativeTrace(retryNativeCapture);
+        ASSERT_TRUE(nativeTrace.valid());
 
-    const auto retryStatistics = GraphicsBackend::UploadPoolDiagnosticPeer::statistics(uploadDevice);
-    EXPECT_EQ(retryStatistics.activeChunkCount, 1u);
-    EXPECT_EQ(retryStatistics.pooledChunkCount, 0u);
-    EXPECT_EQ(retryStatistics.pooledChunkBytes, 0u);
-    EXPECT_EQ(retryStatistics.chunkCreationCount, 1u);
-    EXPECT_EQ(retryStatistics.poolReuseCount, 1u);
-    EXPECT_EQ(retryStatistics.suballocationCount, 2u);
-    EXPECT_EQ(retryStatistics.lastChunkIdentity, recordedStatistics.lastChunkIdentity);
-    EXPECT_EQ(retryStatistics.lastSuballocationOffset, recordedStatistics.lastSuballocationOffset);
+        retryUpload->open();
+        ASSERT_TRUE(retryUpload->tryWriteBuffer(destination.get(), s_RetryWords, sizeof(s_RetryWords)));
+        retryUpload->close();
+    }
+    EXPECT_EQ(retryNativeCapture.addressQueryCount, 0u);
+    ASSERT_EQ(retryNativeCapture.copyCommandCount, 1u);
+    EXPECT_EQ(retryNativeCapture.copyCommands[0u].source, rejectedNativeCapture.copyCommands[0u].source);
+    EXPECT_EQ(retryNativeCapture.copyCommands[0u].sourceOffset, rejectedNativeCapture.copyCommands[0u].sourceOffset);
+
+    CommandListHandle rejectedReadbackCopy = uploadDevice.createCommandList();
+    ASSERT_TRUE(rejectedReadbackCopy);
+    rejectedReadbackCopy->open();
+    rejectedReadbackCopy->copyBuffer(readback.get(), 0u, destination.get(), 0u, sizeof(s_RetryWords));
+    ASSERT_FALSE(rejectedReadbackCopy->commandRecordingFailed());
+    rejectedReadbackCopy->close();
+    CommandList* const rejectedReadbackCopies[]{ rejectedReadbackCopy.get() };
+    const QueueSubmissionToken rejectedReadbackToken = uploadDevice.executeCommandLists(
+        rejectedReadbackCopies,
+        LengthOf(rejectedReadbackCopies),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(rejectedReadbackToken.valid());
+    ASSERT_TRUE(uploadDevice.waitForIdle());
+
+    const u32* const rejectedReadback = static_cast<const u32*>(uploadDevice.mapBuffer(readback.get(), CpuAccessMode::Read));
+    ASSERT_NE(rejectedReadback, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_RetryWords); ++wordIndex)
+        EXPECT_EQ(rejectedReadback[wordIndex], s_InitialWord);
+    uploadDevice.unmapBuffer(readback.get());
 
     CommandList* const retryUploads[]{ retryUpload.get() };
     const QueueSubmissionToken acceptedToken = uploadDevice.executeCommandLists(
@@ -57927,13 +58006,27 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesExactUploadS
     ASSERT_TRUE(acceptedToken.valid());
     ASSERT_TRUE(uploadDevice.waitForIdle());
 
-    const auto acceptedStatistics = GraphicsBackend::UploadPoolDiagnosticPeer::statistics(uploadDevice);
-    EXPECT_EQ(acceptedStatistics.activeChunkCount, 0u);
-    EXPECT_EQ(acceptedStatistics.pooledChunkCount, 1u);
-    EXPECT_GT(acceptedStatistics.pooledChunkBytes, 0u);
-    EXPECT_EQ(acceptedStatistics.chunkCreationCount, 1u);
-    EXPECT_EQ(acceptedStatistics.poolReuseCount, 1u);
-    EXPECT_EQ(acceptedStatistics.suballocationCount, 2u);
+    CommandListHandle retryReadbackCopy = uploadDevice.createCommandList();
+    ASSERT_TRUE(retryReadbackCopy);
+    retryReadbackCopy->open();
+    retryReadbackCopy->copyBuffer(readback.get(), 0u, destination.get(), 0u, sizeof(s_RetryWords));
+    ASSERT_FALSE(retryReadbackCopy->commandRecordingFailed());
+    retryReadbackCopy->close();
+    CommandList* const retryReadbackCopies[]{ retryReadbackCopy.get() };
+    const QueueSubmissionToken retryReadbackToken = uploadDevice.executeCommandLists(
+        retryReadbackCopies,
+        LengthOf(retryReadbackCopies),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(retryReadbackToken.valid());
+    ASSERT_TRUE(uploadDevice.waitForIdle());
+
+    const u32* const retryReadback = static_cast<const u32*>(uploadDevice.mapBuffer(readback.get(), CpuAccessMode::Read));
+    ASSERT_NE(retryReadback, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_RetryWords); ++wordIndex)
+        EXPECT_EQ(retryReadback[wordIndex], s_RetryWords[wordIndex]);
+    uploadDevice.unmapBuffer(readback.get());
 }
 #endif
 

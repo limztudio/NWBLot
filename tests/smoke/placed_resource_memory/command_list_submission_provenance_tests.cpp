@@ -126,42 +126,6 @@ struct SubmissionMutationHookContext{
     return true;
 }
 
-#if !defined(NWB_FINAL)
-struct LedgerReuseHookContext{
-    CommandList* commandList = nullptr;
-    Buffer* destination = nullptr;
-    u32 value = 0u;
-    bool invoked = false;
-    bool opened = false;
-    bool staged = false;
-    bool closed = false;
-};
-
-
-static void RecordReusedLeaseUpload(void* const rawContext){
-    LedgerReuseHookContext* const context = static_cast<LedgerReuseHookContext*>(rawContext);
-    if(!context || !context->commandList || !context->destination)
-        return;
-
-    context->invoked = true;
-    context->commandList->open();
-    context->opened = context->commandList->isRecording();
-    if(!context->opened)
-        return;
-
-    context->staged = context->commandList->tryWriteBuffer(
-        context->destination,
-        &context->value,
-        sizeof(context->value)
-    );
-    context->commandList->close();
-    context->closed = context->commandList->hasCommandBuffer()
-        && !context->commandList->commandRecordingFailed()
-    ;
-}
-#endif
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -190,10 +154,6 @@ protected:
     }
 
     static void TearDownTestSuite(){
-#if !defined(NWB_FINAL)
-        if(s_validationBackedDeviceInitialized)
-            s_scope->graphics().getDevice().clearSubmissionLedgerFinalizeHookForTesting();
-#endif
         s_scope.reset();
         if(s_validationBackedDeviceInitialized && s_logger.has_value()){
             EXPECT_FALSE(s_logger->sawMessageContaining(NWB_TEXT("Vulkan debug: [severity=error")))
@@ -283,16 +243,157 @@ TEST_F(CommandListSubmissionProvenanceTest, SubmissionHookWorkerForgeryIsRejecte
 }
 
 
-#if !defined(NWB_FINAL)
-TEST_F(CommandListSubmissionProvenanceTest, InjectedNativeFailureOnOldLeaseCannotDiscardRecycledLeaseUploadChunks){
-    using namespace __hidden_command_list_submission_provenance_tests;
+TEST_F(CommandListSubmissionProvenanceTest, UploadLedgerDiscardRequiresExactNativeRecordingIdentity){
+    constexpr u64 s_WorkerDomain = 0x9a31b7c542de680full;
+    constexpr u32 s_WorkerIndex = 17u;
+    constexpr u64 s_OldRecordingID = 0x12345u;
+    constexpr u64 s_NewRecordingID = 0x6789au;
+    constexpr u64 s_OverwriteRecordingID = 0xbcdefu;
+    constexpr u32 s_OldValue = 0x1bd238a4u;
+    constexpr u32 s_NewValue = 0x67ce941fu;
+    constexpr usize s_ChunkByteCount = GraphicsBackend::s_DefaultUploadSuballocationAlignment + sizeof(u32);
+    const GpuPhysicalQueueId queue = device().getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(queue.valid());
+    ASSERT_TRUE(device().waitForIdle());
+    GraphicsBackend::Queue* const physicalQueue = device().getQueue(queue);
+    ASSERT_NE(physicalQueue, nullptr);
+    GraphicsBackend::TrackedCommandBufferPtr owner = physicalQueue->getOrCreateCommandBuffer(
+        s_WorkerDomain,
+        s_WorkerIndex
+    );
+    ASSERT_TRUE(owner);
+    const u64 completedVersion = device().queueGetCompletedInstance(queue);
+    GraphicsBackend::UploadManager uploadManager(device(), s_ChunkByteCount, 0u, false);
 
+    Buffer* oldBuffer = nullptr;
+    u64 oldOffset = 0u;
+    void* oldCpuVA = nullptr;
+    ASSERT_TRUE(uploadManager.suballocateBuffer(
+        sizeof(s_OldValue),
+        &oldBuffer,
+        &oldOffset,
+        &oldCpuVA,
+        owner.get(),
+        s_OldRecordingID,
+        queue,
+        completedVersion
+    ));
+    ASSERT_NE(oldBuffer, nullptr);
+    ASSERT_NE(oldCpuVA, nullptr);
+    EXPECT_EQ(oldOffset, 0u);
+    NWB_MEMCPY(oldCpuVA, sizeof(s_OldValue), &s_OldValue, sizeof(s_OldValue));
+
+    Buffer* newBuffer = nullptr;
+    u64 newOffset = 0u;
+    void* newCpuVA = nullptr;
+    ASSERT_TRUE(uploadManager.suballocateBuffer(
+        sizeof(s_NewValue),
+        &newBuffer,
+        &newOffset,
+        &newCpuVA,
+        owner.get(),
+        s_NewRecordingID,
+        queue,
+        completedVersion
+    ));
+    ASSERT_NE(newBuffer, nullptr);
+    ASSERT_NE(newCpuVA, nullptr);
+    EXPECT_NE(newBuffer, oldBuffer);
+    EXPECT_EQ(newOffset, 0u);
+    NWB_MEMCPY(newCpuVA, sizeof(s_NewValue), &s_NewValue, sizeof(s_NewValue));
+
+    uploadManager.discardChunks(queue, owner.get(), s_OldRecordingID, completedVersion);
+
+    Buffer* firstOverwriteBuffer = nullptr;
+    u64 firstOverwriteOffset = 0u;
+    void* firstOverwriteCpuVA = nullptr;
+    ASSERT_TRUE(uploadManager.suballocateBuffer(
+        s_ChunkByteCount,
+        &firstOverwriteBuffer,
+        &firstOverwriteOffset,
+        &firstOverwriteCpuVA,
+        owner.get(),
+        s_OverwriteRecordingID,
+        queue,
+        completedVersion
+    ));
+    ASSERT_NE(firstOverwriteCpuVA, nullptr);
+    EXPECT_EQ(firstOverwriteBuffer, oldBuffer);
+    EXPECT_EQ(firstOverwriteOffset, 0u);
+    NWB_MEMSET(firstOverwriteCpuVA, 0xa5, s_ChunkByteCount);
+
+    Buffer* secondOverwriteBuffer = nullptr;
+    u64 secondOverwriteOffset = 0u;
+    void* secondOverwriteCpuVA = nullptr;
+    ASSERT_TRUE(uploadManager.suballocateBuffer(
+        s_ChunkByteCount,
+        &secondOverwriteBuffer,
+        &secondOverwriteOffset,
+        &secondOverwriteCpuVA,
+        owner.get(),
+        s_OverwriteRecordingID,
+        queue,
+        completedVersion
+    ));
+    ASSERT_NE(secondOverwriteCpuVA, nullptr);
+    EXPECT_NE(secondOverwriteBuffer, oldBuffer);
+    EXPECT_NE(secondOverwriteBuffer, newBuffer);
+    EXPECT_EQ(secondOverwriteOffset, 0u);
+    NWB_MEMSET(secondOverwriteCpuVA, 0x5a, s_ChunkByteCount);
+
+    Buffer* continuedNewBuffer = nullptr;
+    u64 continuedNewOffset = 0u;
+    void* continuedNewCpuVA = nullptr;
+    ASSERT_TRUE(uploadManager.suballocateBuffer(
+        sizeof(s_NewValue),
+        &continuedNewBuffer,
+        &continuedNewOffset,
+        &continuedNewCpuVA,
+        owner.get(),
+        s_NewRecordingID,
+        queue,
+        completedVersion
+    ));
+    ASSERT_NE(continuedNewCpuVA, nullptr);
+    EXPECT_EQ(continuedNewBuffer, newBuffer);
+    EXPECT_EQ(continuedNewOffset, GraphicsBackend::s_DefaultUploadSuballocationAlignment);
+
+    BufferHandle readback = device().createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(s_NewValue))
+            .setInitialState(ResourceStates::CopyDest)
+            .setCpuAccess(CpuAccessMode::Read)
+    );
+    ASSERT_TRUE(readback);
+    CommandListParameters copyParameters;
+    copyParameters.setPhysicalQueue(queue);
+    CommandListHandle copyCommandList = device().createCommandList(copyParameters);
+    ASSERT_TRUE(copyCommandList);
+    copyCommandList->open();
+    copyCommandList->copyBuffer(readback.get(), 0u, newBuffer, newOffset, sizeof(s_NewValue));
+    copyCommandList->close();
+    ASSERT_FALSE(copyCommandList->commandRecordingFailed());
+    ASSERT_TRUE(copyCommandList->hasCommandBuffer());
+    CommandList* const copyCommandLists[]{ copyCommandList.get() };
+    ASSERT_TRUE(device().executeCommandLists(
+        copyCommandLists,
+        LengthOf(copyCommandLists),
+        queue,
+        QueueSubmissionDesc{}
+    ).valid());
+    ASSERT_TRUE(device().waitForIdle());
+    const u32* const readbackValue = static_cast<const u32*>(device().mapBuffer(readback.get(), CpuAccessMode::Read));
+    ASSERT_NE(readbackValue, nullptr);
+    EXPECT_EQ(*readbackValue, s_NewValue);
+    device().unmapBuffer(readback.get());
+}
+
+
+TEST_F(CommandListSubmissionProvenanceTest, InjectedNativeFailureRecyclesWorkerOwnerForFollowingUpload){
     constexpr u64 s_WorkerDomain = 0x86d731c542af901eull;
-    constexpr u32 s_ReusedWorkerIndex = 7u;
-    constexpr u32 s_OverwriteWorkerIndex = 8u;
+    constexpr u32 s_WorkerIndex = 7u;
     constexpr u32 s_OldValue = 0x1bd238a4u;
     constexpr u32 s_ReusedValue = 0x67ce941fu;
-    constexpr usize s_OverwriteByteCount = GraphicsBackend::s_DefaultUploadSuballocationAlignment + sizeof(u32);
     const GpuPhysicalQueueId queue = device().getPrimaryPhysicalQueue(CommandQueue::Graphics);
     ASSERT_TRUE(queue.valid());
     ASSERT_TRUE(device().waitForIdle());
@@ -304,31 +405,23 @@ TEST_F(CommandListSubmissionProvenanceTest, InjectedNativeFailureOnOldLeaseCanno
     ASSERT_TRUE(submissionObserver.valid());
 
     BufferHandle oldDestination = device().createBuffer(
-        BufferDesc().setByteSize(sizeof(u32)).setInitialState(ResourceStates::Common)
+        BufferDesc().setByteSize(sizeof(s_OldValue)).setInitialState(ResourceStates::Common)
     );
     BufferHandle reusedDestination = device().createBuffer(
         BufferDesc()
-            .setByteSize(sizeof(u32))
+            .setByteSize(sizeof(s_ReusedValue))
             .setInitialState(ResourceStates::Common)
             .setCpuAccess(CpuAccessMode::Read)
     );
-    BufferHandle overwriteDestination = device().createBuffer(
-        BufferDesc().setByteSize(s_OverwriteByteCount).setInitialState(ResourceStates::Common)
-    );
     ASSERT_TRUE(oldDestination);
     ASSERT_TRUE(reusedDestination);
-    ASSERT_TRUE(overwriteDestination);
 
-    CommandListParameters reusedWorkerParameters;
-    reusedWorkerParameters.setPhysicalQueue(queue).setRecordingWorker(s_WorkerDomain, s_ReusedWorkerIndex);
-    CommandListParameters overwriteWorkerParameters;
-    overwriteWorkerParameters.setPhysicalQueue(queue).setRecordingWorker(s_WorkerDomain, s_OverwriteWorkerIndex);
-    CommandListHandle oldLease = device().createCommandList(reusedWorkerParameters);
-    CommandListHandle reusedLease = device().createCommandList(reusedWorkerParameters);
-    CommandListHandle overwriteLease = device().createCommandList(overwriteWorkerParameters);
+    CommandListParameters workerParameters;
+    workerParameters.setPhysicalQueue(queue).setRecordingWorker(s_WorkerDomain, s_WorkerIndex);
+    CommandListHandle oldLease = device().createCommandList(workerParameters);
+    CommandListHandle reusedLease = device().createCommandList(workerParameters);
     ASSERT_TRUE(oldLease);
     ASSERT_TRUE(reusedLease);
-    ASSERT_TRUE(overwriteLease);
 
     oldLease->open();
     ASSERT_TRUE(oldLease->tryWriteBuffer(oldDestination.get(), &s_OldValue, sizeof(s_OldValue)));
@@ -337,16 +430,10 @@ TEST_F(CommandListSubmissionProvenanceTest, InjectedNativeFailureOnOldLeaseCanno
     const GpuCommandArenaWorkerStatistics workerStatsBefore = device().getCommandArenaWorkerStatistics(
         queue,
         s_WorkerDomain,
-        s_ReusedWorkerIndex
+        s_WorkerIndex
     );
     ASSERT_TRUE(workerStatsBefore.valid());
 
-    LedgerReuseHookContext hookContext{
-        .commandList = reusedLease.get(),
-        .destination = reusedDestination.get(),
-        .value = s_ReusedValue,
-    };
-    ASSERT_TRUE(device().armSubmissionLedgerFinalizeHookForTesting(&hookContext, RecordReusedLeaseUpload));
     ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeQueue));
     CommandList* const rejectedLists[]{ oldLease.get() };
     const QueueSubmissionToken rejectedToken = device().executeCommandLists(
@@ -355,34 +442,38 @@ TEST_F(CommandListSubmissionProvenanceTest, InjectedNativeFailureOnOldLeaseCanno
         queue,
         QueueSubmissionDesc{}
     );
-    device().clearSubmissionLedgerFinalizeHookForTesting();
-    const GpuCommandArenaWorkerStatistics workerStatsAfter = device().getCommandArenaWorkerStatistics(
+    const GpuCommandArenaWorkerStatistics workerStatsAfterRejection = device().getCommandArenaWorkerStatistics(
         queue,
         s_WorkerDomain,
-        s_ReusedWorkerIndex
+        s_WorkerIndex
     );
     ASSERT_FALSE(rejectedToken.valid());
     EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
     EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
-    ASSERT_TRUE(workerStatsAfter.valid());
-    ASSERT_TRUE(hookContext.invoked);
-    ASSERT_TRUE(hookContext.opened);
-    ASSERT_TRUE(hookContext.staged);
-    ASSERT_TRUE(hookContext.closed);
-    EXPECT_EQ(workerStatsAfter.growthEventCount, workerStatsBefore.growthEventCount);
-    EXPECT_EQ(workerStatsAfter.resetEventCount, workerStatsBefore.resetEventCount + 1u);
+    EXPECT_FALSE(submissionObserver.overflowed());
+    ASSERT_TRUE(workerStatsAfterRejection.valid());
+    EXPECT_EQ(workerStatsAfterRejection.growthEventCount, workerStatsBefore.growthEventCount);
+    EXPECT_EQ(workerStatsAfterRejection.resetEventCount, workerStatsBefore.resetEventCount);
+    EXPECT_EQ(workerStatsAfterRejection.leasedCommandBufferCount + 1u, workerStatsBefore.leasedCommandBufferCount);
+    EXPECT_EQ(workerStatsAfterRejection.reusableCommandBufferCount, workerStatsBefore.reusableCommandBufferCount + 1u);
     EXPECT_FALSE(oldLease->hasCommandBuffer());
 
-    u8 overwriteBytes[s_OverwriteByteCount];
-    NWB_MEMSET(overwriteBytes, 0xa5, sizeof(overwriteBytes));
-    overwriteLease->open();
-    ASSERT_TRUE(overwriteLease->tryWriteBuffer(
-        overwriteDestination.get(),
-        overwriteBytes,
-        sizeof(overwriteBytes)
-    ));
-    overwriteLease->close();
-    ASSERT_TRUE(overwriteLease->hasCommandBuffer());
+    reusedLease->open();
+    ASSERT_TRUE(reusedLease->isRecording());
+    ASSERT_TRUE(reusedLease->tryWriteBuffer(reusedDestination.get(), &s_ReusedValue, sizeof(s_ReusedValue)));
+    reusedLease->close();
+    ASSERT_TRUE(reusedLease->hasCommandBuffer());
+    ASSERT_FALSE(reusedLease->commandRecordingFailed());
+    const GpuCommandArenaWorkerStatistics workerStatsAfterReuse = device().getCommandArenaWorkerStatistics(
+        queue,
+        s_WorkerDomain,
+        s_WorkerIndex
+    );
+    ASSERT_TRUE(workerStatsAfterReuse.valid());
+    EXPECT_EQ(workerStatsAfterReuse.growthEventCount, workerStatsBefore.growthEventCount);
+    EXPECT_EQ(workerStatsAfterReuse.resetEventCount, workerStatsBefore.resetEventCount + 1u);
+    EXPECT_EQ(workerStatsAfterReuse.leasedCommandBufferCount, workerStatsBefore.leasedCommandBufferCount);
+    EXPECT_EQ(workerStatsAfterReuse.reusableCommandBufferCount, workerStatsBefore.reusableCommandBufferCount);
 
     CommandList* const reusedLists[]{ reusedLease.get() };
     ASSERT_TRUE(device().executeCommandLists(
@@ -399,9 +490,6 @@ TEST_F(CommandListSubmissionProvenanceTest, InjectedNativeFailureOnOldLeaseCanno
     EXPECT_EQ(*readback, s_ReusedValue);
     device().unmapBuffer(reusedDestination.get());
 }
-
-
-#endif
 
 
 TEST_F(CommandListSubmissionProvenanceTest, ClosedQueueForgeryRejectsBeforeHookAndPreservesLeaseForOwnerRetry){

@@ -259,55 +259,6 @@ bool Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !defined(NWB_FINAL)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool Device::armSubmissionLedgerFinalizeHookForTesting(void* const context, void (*invoke)(void*)){
-    if(!context || !invoke)
-        return false;
-
-    ScopedLock lock(m_submissionLedgerFinalizeHookForTestingMutex);
-    if(m_submissionLedgerFinalizeHookForTesting)
-        return false;
-
-    m_submissionLedgerFinalizeHookForTestingContext = context;
-    m_submissionLedgerFinalizeHookForTesting = invoke;
-    return true;
-}
-
-void Device::clearSubmissionLedgerFinalizeHookForTesting(){
-    ScopedLock lock(m_submissionLedgerFinalizeHookForTestingMutex);
-    m_submissionLedgerFinalizeHookForTestingContext = nullptr;
-    m_submissionLedgerFinalizeHookForTesting = nullptr;
-}
-
-void Device::invokeSubmissionLedgerFinalizeHookForTesting(){
-    void* context = nullptr;
-    void (*invoke)(void*) = nullptr;
-    {
-        ScopedLock lock(m_submissionLedgerFinalizeHookForTestingMutex);
-        context = m_submissionLedgerFinalizeHookForTestingContext;
-        invoke = m_submissionLedgerFinalizeHookForTesting;
-        m_submissionLedgerFinalizeHookForTestingContext = nullptr;
-        m_submissionLedgerFinalizeHookForTesting = nullptr;
-    }
-    if(invoke)
-        invoke(context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 CommandListHandle Device::createCommandList(const CommandListParameters& params){
     CommandListParameters resolvedParams = params;
     if(resolvedParams.recordingWorkerIndex == 0u)
@@ -396,9 +347,6 @@ u64 Device::executeCommandLists(
         0u,
         &submissionAccepted
     );
-#if !defined(NWB_FINAL)
-    invokeSubmissionLedgerFinalizeHookForTesting();
-#endif
     if(outCommandListsSubmitted)
         *outCommandListsSubmitted = submissionAccepted && hasSubmittedOwner;
 
@@ -625,10 +573,6 @@ QueueSubmissionToken Device::executeCommandLists(
         localSignalCount,
         submitDesc.forceNativeSubmission
     );
-#if !defined(NWB_FINAL)
-    invokeSubmissionLedgerFinalizeHookForTesting();
-#endif
-
     if(!expectedCommandLists.empty()){
         if(submissionAccepted){
             m_uploadManager.submitChunks(

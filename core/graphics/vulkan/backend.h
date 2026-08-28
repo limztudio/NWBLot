@@ -3314,10 +3314,6 @@ public:
 public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType);
     [[nodiscard]] Queue* getQueue(const GpuPhysicalQueueId& queue);
-#if !defined(NWB_FINAL)
-    [[nodiscard]] bool armSubmissionLedgerFinalizeHookForTesting(void* context, void (*invoke)(void*));
-    void clearSubmissionLedgerFinalizeHookForTesting();
-#endif
     [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap(){ return m_gpuDescriptorHeap; }
     // Writes descriptor-buffer entries, including TLAS handles.
     [[nodiscard]] DescriptorBufferManager& getDescriptorBufferManager(){ return m_descriptorBufferManager; }
@@ -3326,9 +3322,6 @@ public:
 private:
     [[nodiscard]] bool registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc);
     void configureLegacyQueueContext();
-#if !defined(NWB_FINAL)
-    void invokeSubmissionLedgerFinalizeHookForTesting();
-#endif
     // Probed once at device initialization so compressed texture selection does not rely on
     // a later optimistic format-property query.
     void probeCompressedTextureFormats();
@@ -3461,12 +3454,6 @@ private:
     Array<Queue*, static_cast<u32>(CommandQueue::kCount)> m_primaryQueues = {};
     // Only block-compressed entries are populated; all are resolved before the device is exposed.
     Array<FormatSupport::Mask, static_cast<usize>(Format::kCount)> m_compressedFormatSupport = {};
-
-#if !defined(NWB_FINAL)
-    Futex m_submissionLedgerFinalizeHookForTestingMutex;
-    void* m_submissionLedgerFinalizeHookForTestingContext = nullptr;
-    void (*m_submissionLedgerFinalizeHookForTesting)(void*) = nullptr;
-#endif
 
     UploadManager m_uploadManager;
     UploadManager m_scratchManager;

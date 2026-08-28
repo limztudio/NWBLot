@@ -34,7 +34,10 @@ RETIRED_IDENTIFIER = re.compile(
     r"m_submissionWaitTokensForTestingMutex|m_submissionWaitQueueForTesting|"
     r"m_submissionWaitTokensForTesting|rejectNextSubmissionForTesting|"
     r"clearSubmissionRejectionsForTesting|consumeSubmissionRejectionForTesting|"
-    r"m_submissionRejectionsForTesting|armRecordingIDWrapForTesting)\b"
+    r"m_submissionRejectionsForTesting|armRecordingIDWrapForTesting|"
+    r"armSubmissionLedgerFinalizeHookForTesting|clearSubmissionLedgerFinalizeHookForTesting|"
+    r"invokeSubmissionLedgerFinalizeHookForTesting|m_submissionLedgerFinalizeHookForTestingMutex|"
+    r"m_submissionLedgerFinalizeHookForTestingContext|m_submissionLedgerFinalizeHookForTesting)\b"
 )
 
 
@@ -196,6 +199,81 @@ def run_self_test() -> int:
         ("recording ID wrap comment", "// device.armRecordingIDWrapForTesting(queue);", ()),
         ("recording ID wrap literal", 'const char* text = "armRecordingIDWrapForTesting";', ()),
         ("recording ID wrap near name", "void armRecordingIDWrapForTestingAgain();", ()),
+        (
+            "submission ledger finalize arm",
+            "device.armSubmissionLedgerFinalizeHookForTesting(context, invoke);",
+            ((1, "armSubmissionLedgerFinalizeHookForTesting"),),
+        ),
+        (
+            "submission ledger finalize clear",
+            "device.clearSubmissionLedgerFinalizeHookForTesting();",
+            ((1, "clearSubmissionLedgerFinalizeHookForTesting"),),
+        ),
+        (
+            "submission ledger finalize invoke",
+            "invokeSubmissionLedgerFinalizeHookForTesting();",
+            ((1, "invokeSubmissionLedgerFinalizeHookForTesting"),),
+        ),
+        (
+            "submission ledger finalize mutex",
+            "Futex m_submissionLedgerFinalizeHookForTestingMutex;",
+            ((1, "m_submissionLedgerFinalizeHookForTestingMutex"),),
+        ),
+        (
+            "submission ledger finalize context",
+            "void* m_submissionLedgerFinalizeHookForTestingContext = nullptr;",
+            ((1, "m_submissionLedgerFinalizeHookForTestingContext"),),
+        ),
+        (
+            "submission ledger finalize callback",
+            "void (*m_submissionLedgerFinalizeHookForTesting)(void*) = nullptr;",
+            ((1, "m_submissionLedgerFinalizeHookForTesting"),),
+        ),
+        (
+            "multiple submission ledger finalize references",
+            "device.armSubmissionLedgerFinalizeHookForTesting(context, invoke);\n"
+            "invokeSubmissionLedgerFinalizeHookForTesting();\n"
+            "device.clearSubmissionLedgerFinalizeHookForTesting();\n"
+            "Futex m_submissionLedgerFinalizeHookForTestingMutex;\n"
+            "void* m_submissionLedgerFinalizeHookForTestingContext = nullptr;\n"
+            "void (*m_submissionLedgerFinalizeHookForTesting)(void*) = nullptr;",
+            (
+                (1, "armSubmissionLedgerFinalizeHookForTesting"),
+                (2, "invokeSubmissionLedgerFinalizeHookForTesting"),
+                (3, "clearSubmissionLedgerFinalizeHookForTesting"),
+                (4, "m_submissionLedgerFinalizeHookForTestingMutex"),
+                (5, "m_submissionLedgerFinalizeHookForTestingContext"),
+                (6, "m_submissionLedgerFinalizeHookForTesting"),
+            ),
+        ),
+        (
+            "submission ledger finalize comments",
+            "// device.armSubmissionLedgerFinalizeHookForTesting(context, invoke);\n"
+            "/* device.clearSubmissionLedgerFinalizeHookForTesting();\n"
+            "invokeSubmissionLedgerFinalizeHookForTesting();\n"
+            "Futex m_submissionLedgerFinalizeHookForTestingMutex;\n"
+            "void* m_submissionLedgerFinalizeHookForTestingContext = nullptr;\n"
+            "void (*m_submissionLedgerFinalizeHookForTesting)(void*) = nullptr; */",
+            (),
+        ),
+        (
+            "submission ledger finalize literals",
+            'const char* text = "armSubmissionLedgerFinalizeHookForTesting '
+            'clearSubmissionLedgerFinalizeHookForTesting invokeSubmissionLedgerFinalizeHookForTesting";\n'
+            'const char* raw = R"tag(m_submissionLedgerFinalizeHookForTestingMutex '
+            'm_submissionLedgerFinalizeHookForTestingContext m_submissionLedgerFinalizeHookForTesting)tag";',
+            (),
+        ),
+        (
+            "submission ledger finalize near names",
+            "void armSubmissionLedgerFinalizeHookForTestingAgain();\n"
+            "void clearSubmissionLedgerFinalizeHookForTestings();\n"
+            "void invokeSubmissionLedgerFinalizeHookForTestingState();\n"
+            "Futex m_submissionLedgerFinalizeHookForTestingMutexState;\n"
+            "void* m_submissionLedgerFinalizeHookForTestingContextValue;\n"
+            "void (*m_submissionLedgerFinalizeHookForTestingCallback)(void*);",
+            (),
+        ),
         ("legacy comment", "// device.createSubmissionSignalForTesting(signal);", ()),
         ("legacy literal", 'const char* text = "destroySubmissionTimelineForTesting";', ()),
         ("legacy near name", "void createSubmissionSignalForTestingAgain();", ()),

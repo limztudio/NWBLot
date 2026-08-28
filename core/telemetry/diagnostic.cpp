@@ -25,9 +25,6 @@ namespace __hidden_telemetry_diagnostic{
 
 
 inline Atomic<DiagnosticCaptureGuard*> g_CaptureGuard{ nullptr };
-#if !defined(NWB_FINAL)
-inline Atomic<DiagnosticCaptureTestHook> g_CaptureTestHook{ nullptr };
-#endif
 
 [[nodiscard]] static bool AddTextBytes(usize& inOutPayloadBytes, const AStringView text)noexcept{
     return FitsU32(text.size()) && AddBinaryReserveBytes(inOutPayloadBytes, text.size());
@@ -60,12 +57,6 @@ static void CaptureCallback(const DiagnosticEventRecord& record)noexcept{
     if(!guard)
         return;
 
-#if !defined(NWB_FINAL)
-    const DiagnosticCaptureTestHook testHook = g_CaptureTestHook.load(MemoryOrder::acquire);
-    if(testHook)
-        testHook(DiagnosticCaptureTestHookStage::AfterGuardLoad);
-#endif
-
     try{
         if(!guard->capture(record))
             NWB_LOGGER_WARNING(NWB_TEXT("Telemetry: diagnostic event record dropped"));
@@ -78,16 +69,6 @@ static void CaptureCallback(const DiagnosticEventRecord& record)noexcept{
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if !defined(NWB_FINAL)
-void SetDiagnosticCaptureTestHook(const DiagnosticCaptureTestHook hook)noexcept{
-    __hidden_telemetry_diagnostic::g_CaptureTestHook.store(hook, MemoryOrder::release);
-}
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -230,11 +211,6 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard(){
         return;
 
     while(::DiagnosticDetail::g_EventActive.test_and_set(MemoryOrder::acquire)){
-#if !defined(NWB_FINAL)
-        const DiagnosticCaptureTestHook testHook = __hidden_telemetry_diagnostic::g_CaptureTestHook.load(MemoryOrder::acquire);
-        if(testHook)
-            testHook(DiagnosticCaptureTestHookStage::WaitingForActiveCallback);
-#endif
         ::DiagnosticDetail::g_EventActive.wait(true, MemoryOrder::relaxed);
     }
 

@@ -34,27 +34,6 @@ static void ExistingDiagnosticCallback(const DiagnosticEventRecord&)noexcept{
     ++s_ExistingDiagnosticCallbackCount;
 }
 
-#if !defined(NWB_FINAL)
-static AtomicFlag s_DiagnosticCaptureGuardLoaded;
-static AtomicFlag s_DiagnosticCaptureRelease;
-static AtomicFlag s_DiagnosticCaptureGuardDestructionWaiting;
-
-static void DiagnosticCaptureGuardLifetimeHook(const Telemetry::DiagnosticCaptureTestHookStage::Enum stage)noexcept{
-    switch(stage){
-    case Telemetry::DiagnosticCaptureTestHookStage::AfterGuardLoad:
-        s_DiagnosticCaptureGuardLoaded.test_and_set(MemoryOrder::release);
-        s_DiagnosticCaptureGuardLoaded.notify_all();
-        while(!s_DiagnosticCaptureRelease.test(MemoryOrder::acquire))
-            s_DiagnosticCaptureRelease.wait(false, MemoryOrder::acquire);
-        return;
-    case Telemetry::DiagnosticCaptureTestHookStage::WaitingForActiveCallback:
-        s_DiagnosticCaptureGuardDestructionWaiting.test_and_set(MemoryOrder::release);
-        s_DiagnosticCaptureGuardDestructionWaiting.notify_all();
-        return;
-    }
-}
-#endif
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -628,55 +607,75 @@ TEST(Telemetry, DiagnosticCaptureGuardDoesNotReplaceExistingCallback){
     EXPECT_EQ(recorder.eventCount(), 0u);
 }
 
-#if !defined(NWB_FINAL)
-TEST(Telemetry, DiagnosticCaptureGuardDestructionWaitsForActiveCallback){
+TEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
-    auto guard = NWB::Core::MakeGlobalUnique<Telemetry::DiagnosticCaptureGuard>(testArena.arena, recorder);
-    ASSERT_NE(guard, nullptr);
-    ASSERT_TRUE(guard->installed());
-
-    s_DiagnosticCaptureGuardLoaded.clear(MemoryOrder::release);
-    s_DiagnosticCaptureRelease.clear(MemoryOrder::release);
-    s_DiagnosticCaptureGuardDestructionWaiting.clear(MemoryOrder::release);
-    Telemetry::SetDiagnosticCaptureTestHook(DiagnosticCaptureGuardLifetimeHook);
-
-    Thread captureThread([](){
-        CaptureDiagnosticEvent(DiagnosticEventRecord{
-            .event = DiagnosticEventName::s_Error.data(),
-            .category = "telemetry_guard",
-            .message = "capture during destruction",
-        });
+    AtomicFlag captureThreadStarted;
+    AtomicFlag stopCaptureThread;
+    Thread captureThread([&captureThreadStarted, &stopCaptureThread](){
+        captureThreadStarted.test_and_set(MemoryOrder::release);
+        captureThreadStarted.notify_all();
+        while(!stopCaptureThread.test(MemoryOrder::acquire)){
+            CaptureDiagnosticEvent(DiagnosticEventRecord{
+                .event = DiagnosticEventName::s_Error.data(),
+                .category = "telemetry_guard",
+                .message = "capture during destruction",
+            });
+            YieldThread();
+        }
     });
 
-    while(!s_DiagnosticCaptureGuardLoaded.test(MemoryOrder::acquire))
-        s_DiagnosticCaptureGuardLoaded.wait(false, MemoryOrder::acquire);
+    while(!captureThreadStarted.test(MemoryOrder::acquire))
+        captureThreadStarted.wait(false, MemoryOrder::acquire);
 
-    AtomicFlag destructionFinished;
-    Thread destructionThread([&guard, &destructionFinished](){
-        guard.reset();
-        destructionFinished.test_and_set(MemoryOrder::release);
-        destructionFinished.notify_all();
-    });
+    constexpr u32 s_IterationCount = 64u;
+    bool allGuardsInstalled = true;
+    for(u32 iteration = 0u; iteration < s_IterationCount; ++iteration){
+        {
+            Telemetry::DiagnosticCaptureGuard guard(recorder);
+            if(!guard.installed()){
+                allGuardsInstalled = false;
+                break;
+            }
 
-    while(!s_DiagnosticCaptureGuardDestructionWaiting.test(MemoryOrder::acquire))
-        s_DiagnosticCaptureGuardDestructionWaiting.wait(false, MemoryOrder::acquire);
+            const usize eventCountBeforeCapture = recorder.eventCount();
+            while(recorder.eventCount() == eventCountBeforeCapture)
+                YieldThread();
+        }
+    }
 
-    EXPECT_FALSE(destructionFinished.test(MemoryOrder::acquire));
-
-    s_DiagnosticCaptureRelease.test_and_set(MemoryOrder::release);
-    s_DiagnosticCaptureRelease.notify_all();
-
+    stopCaptureThread.test_and_set(MemoryOrder::release);
     captureThread.join();
-    destructionThread.join();
-    Telemetry::SetDiagnosticCaptureTestHook(nullptr);
+    EXPECT_TRUE(allGuardsInstalled);
+    EXPECT_GE(recorder.eventCount(), s_IterationCount);
 
-    EXPECT_TRUE(destructionFinished.test(MemoryOrder::acquire));
-    EXPECT_EQ(recorder.eventCount(), 1u);
+    {
+        Telemetry::DiagnosticCaptureGuard finalGuard(recorder);
+        EXPECT_TRUE(finalGuard.installed());
+    }
+
+    const usize eventCountAfterFinalDestruction = recorder.eventCount();
+    CaptureDiagnosticEvent(DiagnosticEventRecord{
+        .event = DiagnosticEventName::s_Error.data(),
+        .category = "telemetry_guard",
+        .message = "ignored after destruction",
+    });
+    EXPECT_EQ(recorder.eventCount(), eventCountAfterFinalDestruction);
+
+    const Telemetry::EventView events = recorder.view();
+    for(usize eventIndex = 0u; eventIndex < events.eventCount(); ++eventIndex){
+        const Telemetry::EventRecord* const event = events.eventAt(eventIndex);
+        ASSERT_NE(event, nullptr);
+
+        Telemetry::DiagnosticPayload parsed(testArena.arena);
+        ASSERT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+        EXPECT_EQ(parsed.event, DiagnosticEventName::s_Error);
+        EXPECT_EQ(parsed.category, "telemetry_guard");
+        EXPECT_EQ(parsed.message, "capture during destruction");
+    }
 }
-#endif
 
 TEST(Telemetry, RecorderAcceptsConcurrentRecords){
     TestArena testArena;

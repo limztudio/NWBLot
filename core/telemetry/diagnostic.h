@@ -71,23 +71,6 @@ struct DiagnosticPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !defined(NWB_FINAL)
-namespace DiagnosticCaptureTestHookStage{
-    enum Enum : u8{
-        AfterGuardLoad,
-        WaitingForActiveCallback,
-    };
-};
-
-using DiagnosticCaptureTestHook = void (*)(DiagnosticCaptureTestHookStage::Enum stage)noexcept;
-
-void SetDiagnosticCaptureTestHook(DiagnosticCaptureTestHook hook)noexcept;
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] bool BuildDiagnosticPayload(TelemetryArena& arena, const DiagnosticEventRecord& record, TelemetryBytes& outPayload);
 [[nodiscard]] bool ParseDiagnosticPayload(TelemetryArena& arena, const void* payload, usize payloadBytes, DiagnosticPayload& outPayload);
 [[nodiscard]] bool RecordDiagnostic(

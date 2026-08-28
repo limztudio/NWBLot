@@ -411,7 +411,7 @@ TEST_F(StagingTextureContractTest, MappingRejectsForeignDeviceAndOwnerRecovers){
 }
 
 
-TEST_F(StagingTextureContractTest, MappingLifecycleIsPersistentAndInvalidateFailureIsTransactional){
+TEST_F(StagingTextureContractTest, UploadAndReadbackMappingsPreservePointersAndPitchesAcrossUnmapAndRemap){
     auto& device = StagingTextureContractTest::device();
     const TextureDesc desc = TextureDesc()
         .setWidth(4u)
@@ -426,64 +426,30 @@ TEST_F(StagingTextureContractTest, MappingLifecycleIsPersistentAndInvalidateFail
     ASSERT_TRUE(upload);
     ASSERT_TRUE(readback);
 
-    usize firstPitch = 0u;
-    usize secondPitch = 0u;
-    void* const firstMap = device.mapStagingTexture(upload.get(), TextureSlice{}, CpuAccessMode::Write, &firstPitch);
-    void* const secondMap = device.mapStagingTexture(upload.get(), TextureSlice{}, CpuAccessMode::Write, &secondPitch);
-    ASSERT_NE(firstMap, nullptr);
-    ASSERT_NE(secondMap, nullptr);
-    EXPECT_EQ(firstMap, secondMap);
-    EXPECT_EQ(firstPitch, secondPitch);
-    device.unmapStagingTexture(upload.get());
-    device.unmapStagingTexture(upload.get());
+    const auto expectPersistentMappingLifecycle = [&](StagingTexture& staging, const CpuAccessMode::Enum access){
+        usize firstPitch = 0u;
+        void* const firstMap = device.mapStagingTexture(&staging, TextureSlice{}, access, &firstPitch);
+        ASSERT_NE(firstMap, nullptr);
+        EXPECT_NE(firstPitch, 0u);
 
-    usize remapPitch = 0u;
-    void* const remap = device.mapStagingTexture(upload.get(), TextureSlice{}, CpuAccessMode::Write, &remapPitch);
-    ASSERT_EQ(remap, firstMap);
-    EXPECT_EQ(remapPitch, firstPitch);
-    device.unmapStagingTexture(upload.get());
+        usize secondPitch = 0u;
+        void* const secondMap = device.mapStagingTexture(&staging, TextureSlice{}, access, &secondPitch);
+        ASSERT_NE(secondMap, nullptr);
+        EXPECT_EQ(secondMap, firstMap);
+        EXPECT_EQ(secondPitch, firstPitch);
 
-#if !defined(NWB_FINAL)
-    const auto expectDiagnosticVoidRejection = [](auto&& operation){
-#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
-        EXPECT_DEATH_IF_SUPPORTED({
-            operation();
-        }, "");
-#else
-        operation();
-#endif
+        device.unmapStagingTexture(&staging);
+        device.unmapStagingTexture(&staging);
+
+        usize remapPitch = 0u;
+        void* const remap = device.mapStagingTexture(&staging, TextureSlice{}, access, &remapPitch);
+        ASSERT_EQ(remap, firstMap);
+        EXPECT_EQ(remapPitch, firstPitch);
+        device.unmapStagingTexture(&staging);
     };
-    static constexpr usize s_UnchangedPitch = 0x5a5a5a5au;
-    EXPECT_TRUE(readback->hasMappedMemoryForTesting());
-    EXPECT_TRUE(readback->isPersistentlyMappedForTesting());
-    readback->rejectNextInvalidateForTesting();
-    EXPECT_FALSE(readback->hasMappedMemoryForTesting());
-    EXPECT_FALSE(readback->isPersistentlyMappedForTesting());
-    usize rejectedPitch = s_UnchangedPitch;
-    EXPECT_EQ(
-        device.mapStagingTexture(readback.get(), TextureSlice{}, CpuAccessMode::Read, &rejectedPitch),
-        nullptr
-    );
-    EXPECT_EQ(rejectedPitch, s_UnchangedPitch);
-    EXPECT_FALSE(readback->hasMappedMemoryForTesting());
-    EXPECT_FALSE(readback->isPersistentlyMappedForTesting());
 
-    usize retryPitch = s_UnchangedPitch;
-    void* const retryMap = device.mapStagingTexture(
-        readback.get(),
-        TextureSlice{},
-        CpuAccessMode::Read,
-        &retryPitch
-    );
-    ASSERT_NE(retryMap, nullptr);
-    EXPECT_NE(retryPitch, s_UnchangedPitch);
-    EXPECT_TRUE(readback->hasMappedMemoryForTesting());
-    EXPECT_FALSE(readback->isPersistentlyMappedForTesting());
-    device.unmapStagingTexture(readback.get());
-    EXPECT_FALSE(readback->hasMappedMemoryForTesting());
-    EXPECT_FALSE(readback->isPersistentlyMappedForTesting());
-    expectDiagnosticVoidRejection([&](){ device.unmapStagingTexture(readback.get()); });
-#endif
+    expectPersistentMappingLifecycle(*upload, CpuAccessMode::Write);
+    expectPersistentMappingLifecycle(*readback, CpuAccessMode::Read);
 }
 
 

@@ -1099,8 +1099,6 @@ public:
 
     VkResult createStagingTexture(StagingTexture& texture, const VkBufferCreateInfo& bufferInfo, CpuAccessMode::Enum cpuAccess);
     void destroyStagingTexture(StagingTexture& texture);
-    VkResult mapStagingTextureMemory(StagingTexture& texture, void** outData);
-    void unmapStagingTextureMemory(StagingTexture& texture);
     VkResult invalidateStagingTextureMemory(StagingTexture& texture, u64 offset, u64 size);
     VkResult allocateHeap(Heap& heap);
     void freeHeap(Heap& heap);
@@ -1520,11 +1518,6 @@ public:
 
 public:
     [[nodiscard]] const TextureDesc& getDescription()const{ return m_desc; }
-#if !defined(NWB_FINAL)
-    [[nodiscard]] bool hasMappedMemoryForTesting();
-    [[nodiscard]] bool isPersistentlyMappedForTesting();
-    void rejectNextInvalidateForTesting();
-#endif
 
 
 private:
@@ -1544,11 +1537,7 @@ private:
     VulkanAllocationHandle m_allocation = nullptr;
     Futex m_mappingMutex;
     void* m_mappedMemory = nullptr;
-    bool m_persistentlyMapped = false;
     bool m_requiresInvalidate = false;
-#if !defined(NWB_FINAL)
-    bool m_rejectNextInvalidateForTesting = false;
-#endif
     CpuAccessMode::Enum m_cpuAccess{};
 
     const VulkanContext& m_context;

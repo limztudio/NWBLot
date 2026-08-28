@@ -525,63 +525,24 @@ void* Device::mapStagingTexture(
     }
 
     ScopedLock lock(staging.m_mappingMutex);
-    if(staging.m_persistentlyMapped && !staging.m_mappedMemory){
+    if(!staging.m_mappedMemory){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: persistent mapping pointer is null"));
         return nullptr;
     }
 
-#if !defined(NWB_FINAL)
-    const bool rejectInvalidate = requestedAccess == CpuAccessMode::Read && staging.m_rejectNextInvalidateForTesting;
-    if(rejectInvalidate)
-        staging.m_rejectNextInvalidateForTesting = false;
-#else
-    constexpr bool rejectInvalidate = false;
-#endif
-
-    void* mappedMemory = staging.m_mappedMemory;
-    bool mappedThisCall = false;
-    if(!mappedMemory || rejectInvalidate){
-        void* newMappedMemory = nullptr;
-        const VkResult res = m_allocator.mapStagingTextureMemory(staging, &newMappedMemory);
-        if(res != VK_SUCCESS){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to map staging texture for CPU access: {}"),
-                ResultToString(res)
-            );
-            return nullptr;
-        }
-        mappedThisCall = true;
-        if(!newMappedMemory){
-            m_allocator.unmapStagingTextureMemory(staging);
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: mapped pointer is null"));
-            return nullptr;
-        }
-        if(!mappedMemory)
-            mappedMemory = newMappedMemory;
-    }
-
-    const bool needsInvalidate = requestedAccess == CpuAccessMode::Read && (staging.m_requiresInvalidate || rejectInvalidate);
+    const bool needsInvalidate = requestedAccess == CpuAccessMode::Read && staging.m_requiresInvalidate;
     if(needsInvalidate){
-        const VkResult res = rejectInvalidate
-            ? VK_ERROR_MEMORY_MAP_FAILED
-            : m_allocator.invalidateStagingTextureMemory(staging, range.byteOffset, range.byteSize)
-        ;
+        const VkResult res = m_allocator.invalidateStagingTextureMemory(staging, range.byteOffset, range.byteSize);
         if(res != VK_SUCCESS){
-            if(mappedThisCall)
-                m_allocator.unmapStagingTextureMemory(staging);
-            if(rejectInvalidate)
-                return nullptr;
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to invalidate staging texture mapping: {}"), ResultToString(res));
             return nullptr;
         }
     }
 
-    if(mappedThisCall)
-        staging.m_mappedMemory = mappedMemory;
     if(outRowPitch)
         *outRowPitch = static_cast<usize>(range.rowPitch);
 
-    return static_cast<u8*>(mappedMemory) + static_cast<usize>(range.byteOffset);
+    return static_cast<u8*>(staging.m_mappedMemory) + static_cast<usize>(range.byteOffset);
 }
 
 void Device::unmapStagingTexture(StagingTexture* textureResource){
@@ -609,11 +570,8 @@ void Device::unmapStagingTexture(StagingTexture* textureResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unmap staging texture: texture is not mapped"));
         return;
     }
-    if(staging.m_persistentlyMapped)
-        return;
 
-    m_allocator.unmapStagingTextureMemory(staging);
-    staging.m_mappedMemory = nullptr;
+    // CPU-access staging allocations remain mapped until destruction.
 }
 
 

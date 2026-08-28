@@ -420,9 +420,13 @@ VkResult VulkanAllocator::createStagingTexture(
         texture.m_mappedMemory,
         &texture.m_requiresInvalidate
     );
-    if(res == VK_SUCCESS)
-        texture.m_persistentlyMapped = texture.m_mappedMemory != nullptr;
-    return res;
+    if(res != VK_SUCCESS)
+        return res;
+    if(texture.m_mappedMemory)
+        return VK_SUCCESS;
+
+    destroyStagingTexture(texture);
+    return VK_ERROR_MEMORY_MAP_FAILED;
 }
 
 void VulkanAllocator::destroyStagingTexture(StagingTexture& texture){
@@ -431,18 +435,9 @@ void VulkanAllocator::destroyStagingTexture(StagingTexture& texture){
         texture.m_buffer,
         texture.m_allocation,
         texture.m_mappedMemory,
-        texture.m_persistentlyMapped
+        true
     );
-    texture.m_persistentlyMapped = false;
     texture.m_requiresInvalidate = false;
-}
-
-VkResult VulkanAllocator::mapStagingTextureMemory(StagingTexture& texture, void** outData){
-    return __hidden_vulkan_allocator::MapAllocation(m_allocator, texture.m_allocation, outData);
-}
-
-void VulkanAllocator::unmapStagingTextureMemory(StagingTexture& texture){
-    __hidden_vulkan_allocator::UnmapAllocation(m_allocator, texture.m_allocation);
 }
 
 VkResult VulkanAllocator::invalidateStagingTextureMemory(StagingTexture& texture, const u64 offset, const u64 size){

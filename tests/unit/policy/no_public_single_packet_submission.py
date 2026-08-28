@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from return_value_handling import blank_non_code, line_number
+from return_value_handling import blank_non_code, line_number, matching_parenthesis
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -50,10 +50,19 @@ PRIVATE_SUBMISSION_MEMBERS = {
         "rejectSubmittingPacket",
     ),
 }
+FORBIDDEN_PUBLIC_MEMBER_ARITIES = {
+    "GpuGraphSubmissionTransaction": {
+        "discardUnaccepted": frozenset((2,)),
+        "rejectTask": frozenset((3,)),
+    },
+}
 CLASS_MEMBER_TOKENS = {
     class_name: re.compile(
         r"\b(?:(public|private|protected)\s*:|("
-        + "|".join(re.escape(member) for member in members)
+        + "|".join(
+            re.escape(member)
+            for member in members + tuple(FORBIDDEN_PUBLIC_MEMBER_ARITIES.get(class_name, {}))
+        )
         + r")\b)"
     )
     for class_name, members in PRIVATE_SUBMISSION_MEMBERS.items()
@@ -97,6 +106,47 @@ def is_class_body_top_level(code: str, start: int, offset: int) -> bool:
     return brace_depth == 0 and parenthesis_depth == 0 and bracket_depth == 0
 
 
+def function_parameter_count(code: str, opening: int, closing: int) -> int:
+    parameters = code[opening + 1 : closing]
+    if not parameters.strip() or parameters.strip() == "void":
+        return 0
+
+    count = 1
+    parenthesis_depth = 0
+    bracket_depth = 0
+    brace_depth = 0
+    angle_depth = 0
+    for character in parameters:
+        if character == "(":
+            parenthesis_depth += 1
+        elif character == ")" and parenthesis_depth:
+            parenthesis_depth -= 1
+        elif character == "[":
+            bracket_depth += 1
+        elif character == "]" and bracket_depth:
+            bracket_depth -= 1
+        elif character == "{":
+            brace_depth += 1
+        elif character == "}" and brace_depth:
+            brace_depth -= 1
+        elif character == "<":
+            angle_depth += 1
+        elif character == ">" and angle_depth:
+            angle_depth -= 1
+        elif character == "," and not (parenthesis_depth or bracket_depth or brace_depth or angle_depth):
+            count += 1
+    return count
+
+
+def is_using_declaration(code: str, class_start: int, offset: int) -> bool:
+    statement_start = max(
+        code.rfind(";", class_start, offset),
+        code.rfind("{", class_start, offset),
+        code.rfind("}", class_start, offset),
+    )
+    return re.search(r"\busing\b", code[statement_start + 1 : offset]) is not None
+
+
 def find_public_single_packet_submission(source: str) -> list[tuple[int, str]]:
     code = blank_non_code(source)
     references = [
@@ -114,12 +164,34 @@ def find_public_single_packet_submission(source: str) -> list[tuple[int, str]]:
                 continue
             if match.group(1):
                 access = match.group(1)
-            elif access != "private":
+                continue
+            if access == "private":
+                continue
+
+            member = match.group(2)
+            forbidden_arities = FORBIDDEN_PUBLIC_MEMBER_ARITIES.get(class_name, {}).get(member)
+            if forbidden_arities is None:
                 references.append(
-                    (
-                        line_number(code, match.start()),
-                        f"{class_name}/{access} {match.group(2)}",
+                    (line_number(code, match.start()), f"{class_name}/{access} {member}")
+                )
+                continue
+
+            opening = match.end()
+            while opening < end and code[opening].isspace():
+                opening += 1
+            if opening >= end or code[opening] != "(":
+                if is_using_declaration(code, start, match.start()):
+                    references.append(
+                        (line_number(code, match.start()), f"{class_name}/{access} {member}/inherited")
                     )
+                continue
+            closing = matching_parenthesis(code, opening)
+            if closing is None or closing > end:
+                continue
+            parameter_count = function_parameter_count(code, opening, closing)
+            if parameter_count in forbidden_arities:
+                references.append(
+                    (line_number(code, match.start()), f"{class_name}/{access} {member}/{parameter_count}")
                 )
     return sorted(references)
 
@@ -273,6 +345,53 @@ def run_self_test() -> int:
             ),
         ),
         (
+            "public generation inferred transaction cleanup",
+            "class GpuGraphSubmissionTransaction final{\n"
+            "public:\n"
+            "    void rejectTask(GpuTaskGraph&, const GpuCompiledGraph&, GpuTaskId);\n"
+            "    bool discardUnaccepted(GpuTaskGraph&, const GpuCompiledGraph&);\n"
+            "};",
+            (
+                (3, "GpuGraphSubmissionTransaction/public rejectTask/3"),
+                (4, "GpuGraphSubmissionTransaction/public discardUnaccepted/2"),
+            ),
+        ),
+        (
+            "protected generation inferred transaction cleanup",
+            "class GpuGraphSubmissionTransaction final{\n"
+            "protected:\n"
+            "    void rejectTask(GpuTaskGraph&, const GpuCompiledGraph&, GpuTaskId);\n"
+            "    bool discardUnaccepted(GpuTaskGraph&, const GpuCompiledGraph&);\n"
+            "};",
+            (
+                (3, "GpuGraphSubmissionTransaction/protected rejectTask/3"),
+                (4, "GpuGraphSubmissionTransaction/protected discardUnaccepted/2"),
+            ),
+        ),
+        (
+            "default public generation inferred transaction cleanup",
+            "struct GpuGraphSubmissionTransaction{\n"
+            "    void rejectTask(GpuTaskGraph&, const GpuCompiledGraph&, GpuTaskId);\n"
+            "    bool discardUnaccepted(GpuTaskGraph&, const GpuCompiledGraph&);\n"
+            "};",
+            (
+                (2, "GpuGraphSubmissionTransaction/public rejectTask/3"),
+                (3, "GpuGraphSubmissionTransaction/public discardUnaccepted/2"),
+            ),
+        ),
+        (
+            "nested declarator commas retain transaction cleanup arity",
+            "class GpuGraphSubmissionTransaction final{\n"
+            "public:\n"
+            "    void rejectTask(GpuTaskGraph&, const Pair<GpuCompiledGraph, GpuSubmissionPacketId>&, void (*)(u32, u32));\n"
+            "    bool discardUnaccepted(GpuTaskGraph&, const Array<Pair<u32, u32>, 2u>&);\n"
+            "};",
+            (
+                (3, "GpuGraphSubmissionTransaction/public rejectTask/3"),
+                (4, "GpuGraphSubmissionTransaction/public discardUnaccepted/2"),
+            ),
+        ),
+        (
             "protected transaction packet rejection",
             "class GpuGraphSubmissionTransaction{\n"
             "protected:\n"
@@ -309,6 +428,8 @@ def run_self_test() -> int:
             "    bool acceptSubmittingPacket();\n"
             "    void rejectPacket();\n"
             "    void rejectSubmittingPacket();\n"
+            "    void rejectTask(GpuTaskGraph&, const GpuCompiledGraph&, GpuTaskId);\n"
+            "    bool discardUnaccepted(GpuTaskGraph&, const GpuCompiledGraph&);\n"
             "};",
             (),
         ),
@@ -354,15 +475,24 @@ def run_self_test() -> int:
             (),
         ),
         (
-            "public semantic cancellation APIs",
+            "public explicit attempt semantic cancellation APIs",
             "class GpuTaskGraph final{\n"
             "public:\n"
             "    bool discardUnaccepted();\n"
             "};\n"
             "class GpuGraphSubmissionTransaction final{\n"
             "public:\n"
+            "    void rejectTask(GpuTaskGraph&, const GpuCompiledGraph&, GpuTaskId, u64);\n"
+            "    bool discardUnaccepted(GpuTaskGraph&, const GpuCompiledGraph&, u64);\n"
+            "};",
+            (),
+        ),
+        (
+            "other public semantic cancellation arities",
+            "class GpuGraphSubmissionTransaction final{\n"
+            "public:\n"
             "    void rejectTask();\n"
-            "    bool discardUnaccepted();\n"
+            "    bool discardUnaccepted(GpuTaskGraph&);\n"
             "};",
             (),
         ),
@@ -377,12 +507,16 @@ def run_self_test() -> int:
             "    using Base::PacketRuntimeState;\n"
             "    using Base::PacketRuntime;\n"
             "    using Base::rejectPacket;\n"
+            "    using Base::rejectTask;\n"
+            "    using Base::discardUnaccepted;\n"
             "};",
             (
                 (3, "GpuTaskGraph/public discardUnacceptedPacket"),
                 (7, "GpuGraphSubmissionTransaction/public PacketRuntimeState"),
                 (8, "GpuGraphSubmissionTransaction/public PacketRuntime"),
                 (9, "GpuGraphSubmissionTransaction/public rejectPacket"),
+                (10, "GpuGraphSubmissionTransaction/public rejectTask/inherited"),
+                (11, "GpuGraphSubmissionTransaction/public discardUnaccepted/inherited"),
             ),
         ),
         (
@@ -426,11 +560,15 @@ def run_self_test() -> int:
             "        enum class PacketRuntimeState : u8;\n"
             "        struct PacketRuntime;\n"
             "        void rejectPacket();\n"
+            "        void rejectTask(GpuTaskGraph&, const GpuCompiledGraph&, GpuTaskId);\n"
+            "        bool discardUnaccepted(GpuTaskGraph&, const GpuCompiledGraph&);\n"
             "    };\n"
             "private:\n"
             "    enum class PacketRuntimeState : u8;\n"
             "    struct PacketRuntime;\n"
             "    void rejectPacket();\n"
+            "    void rejectTask(GpuTaskGraph&, const GpuCompiledGraph&, GpuTaskId);\n"
+            "    bool discardUnaccepted(GpuTaskGraph&, const GpuCompiledGraph&);\n"
             "};",
             (),
         ),
@@ -444,7 +582,8 @@ def run_self_test() -> int:
             "};\n"
             "class GpuGraphSubmissionTransaction final{\n"
             "public:\n"
-            "    bool reject(){ return helper.rejectPacket(); }\n"
+            "    bool reject(){ return helper.rejectPacket() && helper.rejectTask(graph, compiledGraph, task); }\n"
+            "    bool discard(){ return helper.discardUnaccepted(graph, compiledGraph); }\n"
             "private:\n"
             "    void rejectPacket();\n"
             "};",
@@ -453,7 +592,9 @@ def run_self_test() -> int:
         (
             "out of class definitions",
             "bool GpuTaskGraph::discardUnacceptedPacket(){ return true; }\n"
-            "void GpuGraphSubmissionTransaction::rejectPacket(){}",
+            "void GpuGraphSubmissionTransaction::rejectPacket(){}\n"
+            "void GpuGraphSubmissionTransaction::rejectTask(GpuTaskGraph&, const GpuCompiledGraph&, GpuTaskId){}\n"
+            "bool GpuGraphSubmissionTransaction::discardUnaccepted(GpuTaskGraph&, const GpuCompiledGraph&){ return true; }",
             (),
         ),
         (
@@ -475,8 +616,9 @@ def run_self_test() -> int:
             "// GpuPacketRuntimeState GpuPacketRuntime\n"
             "// class GpuTaskGraph{ public: class PacketSubmissionLease; };\n"
             "// class GpuGraphSubmissionTransaction{ public: void rejectPacket(); };\n"
-            'const char* text = "GpuTaskGraphSubmitter GpuPacketRuntime submitPacket discardUnacceptedPacket";\n'
-            'const char* raw = R"tag(GpuTaskPacketSubmissionLease GpuPacketRuntimeState rejectPacket)tag";',
+            "// void rejectTask(GpuTaskGraph&, const GpuCompiledGraph&, GpuTaskId);\n"
+            'const char* text = "GpuTaskGraphSubmitter GpuPacketRuntime submitPacket discardUnacceptedPacket discardUnaccepted(a, b)";\n'
+            'const char* raw = R"tag(GpuTaskPacketSubmissionLease GpuPacketRuntimeState rejectPacket rejectTask(a, b, c))tag";',
             (),
         ),
         (
@@ -489,8 +631,8 @@ def run_self_test() -> int:
             "class GpuTaskGraphFactory{ public: bool discardUnacceptedPacket(); };\n"
             "class GpuTaskGraph{ public: class PacketSubmissionLeases; bool discardUnacceptedPackets(); };\n"
             "class GpuGraphSubmissionTransactionFactory{ public: struct PacketRuntime; bool rejectPacket(); };\n"
-            "class GpuGraphSubmissionTransaction{ public: struct PacketRuntimes; bool rejectPackets(); };\n"
-            "class Fixture{ public: struct PacketRuntime; enum class PacketRuntimeState : u8; bool discardUnacceptedPacket(); bool rejectPacket(); };",
+            "class GpuGraphSubmissionTransaction{ public: struct PacketRuntimes; bool rejectPackets(); void rejectTasks(int, int, int); bool discardUnaccepteds(int, int); };\n"
+            "class Fixture{ public: struct PacketRuntime; enum class PacketRuntimeState : u8; bool discardUnacceptedPacket(); bool rejectPacket(); void rejectTask(int, int, int); bool discardUnaccepted(int, int); };",
             (),
         ),
     )

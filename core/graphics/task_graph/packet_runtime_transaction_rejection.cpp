@@ -19,37 +19,12 @@ NWB_CORE_BEGIN
 void GpuGraphSubmissionTransaction::rejectTask(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
-    const GpuTaskId task
-)noexcept{
-    u64 recordingAttemptGeneration = 0u;
-    {
-        ScopedLock lock(m_mutex);
-        recordingAttemptGeneration = m_recordingAttemptGeneration;
-    }
-    rejectTask(graph, compiledGraph, task, recordingAttemptGeneration);
-}
-
-void GpuGraphSubmissionTransaction::rejectTask(
-    GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
     const GpuTaskId task,
     const u64 recordingAttemptGeneration
 )noexcept{
     if(!validFor(compiledGraph))
         return;
     rejectPacket(graph, compiledGraph, compiledGraph.packetForTask(task), recordingAttemptGeneration);
-}
-
-bool GpuGraphSubmissionTransaction::discardUnaccepted(
-    GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph
-)noexcept{
-    u64 recordingAttemptGeneration = 0u;
-    {
-        ScopedLock lock(m_mutex);
-        recordingAttemptGeneration = m_recordingAttemptGeneration;
-    }
-    return discardUnaccepted(graph, compiledGraph, recordingAttemptGeneration);
 }
 
 bool GpuGraphSubmissionTransaction::discardUnaccepted(

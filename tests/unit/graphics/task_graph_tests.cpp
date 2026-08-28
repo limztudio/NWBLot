@@ -784,6 +784,46 @@ concept HasAttemptSinglePacketRejection = requires(
 };
 
 template<typename TransactionT>
+concept HasGenerationInferredTaskRejection = requires(
+    TransactionT& transaction,
+    Graphics::GpuTaskGraph& graph,
+    const Graphics::GpuCompiledGraph& compiledGraph,
+    const Graphics::GpuTaskId& task
+){
+    transaction.rejectTask(graph, compiledGraph, task);
+};
+
+template<typename TransactionT>
+concept HasAttemptTaskRejection = requires(
+    TransactionT& transaction,
+    Graphics::GpuTaskGraph& graph,
+    const Graphics::GpuCompiledGraph& compiledGraph,
+    const Graphics::GpuTaskId& task,
+    const u64 recordingAttemptGeneration
+){
+    transaction.rejectTask(graph, compiledGraph, task, recordingAttemptGeneration);
+};
+
+template<typename TransactionT>
+concept HasGenerationInferredDiscardUnaccepted = requires(
+    TransactionT& transaction,
+    Graphics::GpuTaskGraph& graph,
+    const Graphics::GpuCompiledGraph& compiledGraph
+){
+    transaction.discardUnaccepted(graph, compiledGraph);
+};
+
+template<typename TransactionT>
+concept HasAttemptDiscardUnaccepted = requires(
+    TransactionT& transaction,
+    Graphics::GpuTaskGraph& graph,
+    const Graphics::GpuCompiledGraph& compiledGraph,
+    const u64 recordingAttemptGeneration
+){
+    transaction.discardUnaccepted(graph, compiledGraph, recordingAttemptGeneration);
+};
+
+template<typename TransactionT>
 concept HasPublicPacketRuntimeState = requires{
     typename TransactionT::PacketRuntimeState;
 };
@@ -801,6 +841,10 @@ static_assert(!HasPublicTaskLifecycleState<Graphics::GpuTaskGraph>);
 static_assert(!HasSinglePacketDiscard<Graphics::GpuTaskGraph>);
 static_assert(!HasSinglePacketRejection<Graphics::GpuGraphSubmissionTransaction>);
 static_assert(!HasAttemptSinglePacketRejection<Graphics::GpuGraphSubmissionTransaction>);
+static_assert(!HasGenerationInferredTaskRejection<Graphics::GpuGraphSubmissionTransaction>);
+static_assert(HasAttemptTaskRejection<Graphics::GpuGraphSubmissionTransaction>);
+static_assert(!HasGenerationInferredDiscardUnaccepted<Graphics::GpuGraphSubmissionTransaction>);
+static_assert(HasAttemptDiscardUnaccepted<Graphics::GpuGraphSubmissionTransaction>);
 static_assert(!HasPublicPacketRuntimeState<Graphics::GpuGraphSubmissionTransaction>);
 static_assert(!HasPublicPacketRuntime<Graphics::GpuGraphSubmissionTransaction>);
 

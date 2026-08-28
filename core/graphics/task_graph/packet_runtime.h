@@ -689,17 +689,11 @@ public:
     void rejectTask(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
-        GpuTaskId task
-    )noexcept;
-    void rejectTask(
-        GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
         GpuTaskId task,
         u64 recordingAttemptGeneration
     )noexcept;
     // Returns false when a packet is actively recording/submitting or the transaction no longer owns this attempt.
     // Callers must retain the graph until a true result confirms that every unaccepted packet was resolved.
-    [[nodiscard]] bool discardUnaccepted(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)noexcept;
     [[nodiscard]] bool discardUnaccepted(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

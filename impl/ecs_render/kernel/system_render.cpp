@@ -2774,7 +2774,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingSubmissionTransaction.rejectTask(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
-                m_deferredSurfelGiCounterReadbackTask
+                m_deferredSurfelGiCounterReadbackTask,
+                m_deferredLightingRecordedGraph.recordingAttemptGeneration()
             );
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback tail was unavailable"));
         }

@@ -30,6 +30,7 @@ struct VulkanContext;
 class Buffer;
 #if !defined(NWB_FINAL)
 class BuildScratchPoolDiagnosticPeer;
+class UploadPoolDiagnosticPeer;
 #endif
 class CommandList;
 class Heap;
@@ -1205,6 +1206,7 @@ class UploadManager final : NoCopy{
     friend class Device;
 #if !defined(NWB_FINAL)
     friend class BuildScratchPoolDiagnosticPeer;
+    friend class UploadPoolDiagnosticPeer;
 #endif
 
 
@@ -3157,6 +3159,7 @@ class Device final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Buffer;
 #if !defined(NWB_FINAL)
     friend class BuildScratchPoolDiagnosticPeer;
+    friend class UploadPoolDiagnosticPeer;
 #endif
     friend class CommandList;
     friend class Queue;

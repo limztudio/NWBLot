@@ -51,6 +51,74 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if !defined(NWB_FINAL)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct UploadPoolStatistics{
+    u64 activeChunkCount = 0u;
+    u64 pooledChunkCount = 0u;
+    u64 pooledChunkBytes = 0u;
+    u64 chunkCreationCount = 0u;
+    u64 poolReuseCount = 0u;
+    u64 suballocationCount = 0u;
+    u64 lastChunkIdentity = 0u;
+    u64 lastSuballocationOffset = 0u;
+};
+
+
+// Narrow test-owned diagnostic peer for exact upload-pool reuse coverage without a production test API.
+class UploadPoolDiagnosticPeer final{
+public:
+    [[nodiscard]] static UploadPoolStatistics statistics(Device& device){
+        UploadManager& manager = device.m_uploadManager;
+        ScopedLock lock(manager.m_mutex);
+
+        UploadPoolStatistics statistics;
+        for(const UploadManager::BufferChunkPtr& chunk : manager.m_chunkPool){
+            if(chunk)
+                ++statistics.pooledChunkCount;
+        }
+        for(const UploadManager::ActiveQueueChunks& entry : manager.m_activeChunks){
+            for(const UploadManager::BufferChunkPtr& chunk : entry.chunks){
+                if(chunk)
+                    ++statistics.activeChunkCount;
+            }
+        }
+        statistics.pooledChunkBytes = manager.m_chunkPoolBytes;
+        statistics.chunkCreationCount = manager.m_chunkCreationCountForTesting;
+        statistics.poolReuseCount = manager.m_poolReuseCountForTesting;
+        statistics.suballocationCount = manager.m_suballocationCountForTesting;
+        statistics.lastChunkIdentity = manager.m_lastChunkIdentityForTesting;
+        statistics.lastSuballocationOffset = manager.m_lastSuballocationOffsetForTesting;
+        return statistics;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_BEGIN
 
 
@@ -56979,6 +57047,105 @@ struct NativeRendererRejectionProbeTask{
             ++*payload.discardedCount;
     }
 };
+
+
+#if !defined(NWB_FINAL)
+// Native rejection must return the upload allocation to the pool with its offset reset. A fresh device makes the
+// exact chunk identity deterministic, and the diagnostic state stays owned by this test translation unit.
+TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesExactUploadSuballocation){
+    HeadlessGraphicsScope uploadScope;
+    ASSERT_TRUE(uploadScope.initialize());
+
+    GraphicsBackend::Device& uploadDevice = uploadScope.graphics().getDevice();
+    const BufferHandle destination = uploadDevice.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(destination);
+    constexpr u32 uploadWords[] = { 0x13579BDFu, 0x2468ACE0u, 0xC001C0DEu, 0x600DF00Du };
+
+    const auto initialStatistics = GraphicsBackend::UploadPoolDiagnosticPeer::statistics(uploadDevice);
+    EXPECT_EQ(initialStatistics.activeChunkCount, 0u);
+    EXPECT_EQ(initialStatistics.pooledChunkCount, 0u);
+    EXPECT_EQ(initialStatistics.pooledChunkBytes, 0u);
+    EXPECT_EQ(initialStatistics.chunkCreationCount, 0u);
+    EXPECT_EQ(initialStatistics.poolReuseCount, 0u);
+    EXPECT_EQ(initialStatistics.suballocationCount, 0u);
+
+    CommandListHandle rejectedUpload = uploadDevice.createCommandList();
+    ASSERT_TRUE(rejectedUpload);
+    rejectedUpload->open();
+    ASSERT_TRUE(rejectedUpload->tryWriteBuffer(destination.get(), uploadWords, sizeof(uploadWords)));
+    rejectedUpload->close();
+
+    const auto recordedStatistics = GraphicsBackend::UploadPoolDiagnosticPeer::statistics(uploadDevice);
+    EXPECT_EQ(recordedStatistics.activeChunkCount, 1u);
+    EXPECT_EQ(recordedStatistics.pooledChunkCount, 0u);
+    EXPECT_EQ(recordedStatistics.pooledChunkBytes, 0u);
+    EXPECT_EQ(recordedStatistics.chunkCreationCount, 1u);
+    EXPECT_EQ(recordedStatistics.poolReuseCount, 0u);
+    EXPECT_EQ(recordedStatistics.suballocationCount, 1u);
+    ASSERT_NE(recordedStatistics.lastChunkIdentity, 0u);
+
+    uploadDevice.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    CommandList* const rejectedUploads[]{ rejectedUpload.get() };
+    const QueueSubmissionToken rejectedToken = uploadDevice.executeCommandLists(
+        rejectedUploads,
+        LengthOf(rejectedUploads),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    const bool unexpectedlySubmitted = rejectedToken.valid();
+    const bool idleAfterUnexpectedSubmission = !unexpectedlySubmitted || uploadDevice.waitForIdle();
+    uploadDevice.clearSubmissionRejectionsForTesting();
+    ASSERT_FALSE(unexpectedlySubmitted);
+    ASSERT_TRUE(idleAfterUnexpectedSubmission);
+
+    const auto rejectedStatistics = GraphicsBackend::UploadPoolDiagnosticPeer::statistics(uploadDevice);
+    EXPECT_EQ(rejectedStatistics.activeChunkCount, 0u);
+    EXPECT_EQ(rejectedStatistics.pooledChunkCount, 1u);
+    EXPECT_GT(rejectedStatistics.pooledChunkBytes, 0u);
+    EXPECT_EQ(rejectedStatistics.chunkCreationCount, 1u);
+    EXPECT_EQ(rejectedStatistics.poolReuseCount, 0u);
+    EXPECT_EQ(rejectedStatistics.suballocationCount, 1u);
+
+    CommandListHandle retryUpload = uploadDevice.createCommandList();
+    ASSERT_TRUE(retryUpload);
+    retryUpload->open();
+    ASSERT_TRUE(retryUpload->tryWriteBuffer(destination.get(), uploadWords, sizeof(uploadWords)));
+    retryUpload->close();
+
+    const auto retryStatistics = GraphicsBackend::UploadPoolDiagnosticPeer::statistics(uploadDevice);
+    EXPECT_EQ(retryStatistics.activeChunkCount, 1u);
+    EXPECT_EQ(retryStatistics.pooledChunkCount, 0u);
+    EXPECT_EQ(retryStatistics.pooledChunkBytes, 0u);
+    EXPECT_EQ(retryStatistics.chunkCreationCount, 1u);
+    EXPECT_EQ(retryStatistics.poolReuseCount, 1u);
+    EXPECT_EQ(retryStatistics.suballocationCount, 2u);
+    EXPECT_EQ(retryStatistics.lastChunkIdentity, recordedStatistics.lastChunkIdentity);
+    EXPECT_EQ(retryStatistics.lastSuballocationOffset, recordedStatistics.lastSuballocationOffset);
+
+    CommandList* const retryUploads[]{ retryUpload.get() };
+    const QueueSubmissionToken acceptedToken = uploadDevice.executeCommandLists(
+        retryUploads,
+        LengthOf(retryUploads),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(acceptedToken.valid());
+    ASSERT_TRUE(uploadDevice.waitForIdle());
+
+    const auto acceptedStatistics = GraphicsBackend::UploadPoolDiagnosticPeer::statistics(uploadDevice);
+    EXPECT_EQ(acceptedStatistics.activeChunkCount, 0u);
+    EXPECT_EQ(acceptedStatistics.pooledChunkCount, 1u);
+    EXPECT_GT(acceptedStatistics.pooledChunkBytes, 0u);
+    EXPECT_EQ(acceptedStatistics.chunkCreationCount, 1u);
+    EXPECT_EQ(acceptedStatistics.poolReuseCount, 1u);
+    EXPECT_EQ(acceptedStatistics.suballocationCount, 2u);
+}
+#endif
 
 
 // The renderer transaction has two distinct presentation boundaries: the deferred Present writer and the later

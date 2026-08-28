@@ -377,23 +377,18 @@ const GpuRecordedPacket* GpuRecordedGraph::find(const GpuSubmissionPacketId& pac
     ;
 }
 
-const CommandListResourceStateHandoff* GpuRecordedGraph::packetFinalStateSeed(
-    const GpuSubmissionPacketId& packet
-)const noexcept{
-    const CommandListResourceStateHandoff* const stateSeed = packetStateSeed(packet);
-    return find(packet) && stateSeed && stateSeed->validForDeviceGeneration(m_deviceGeneration)
-        ? stateSeed
-        : nullptr
-    ;
-}
-
 const CommandListResourceStateHandoff* GpuRecordedGraph::taskFinalStateSeed(
     const GpuCompiledGraph& compiledGraph,
     const GpuTaskId task
 )const noexcept{
     if(!validFor(compiledGraph) || !compiledGraph.findTask(task))
         return nullptr;
-    return packetFinalStateSeed(compiledGraph.packetForTask(task));
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    const CommandListResourceStateHandoff* const stateSeed = packetStateSeed(packet);
+    return find(packet) && stateSeed && stateSeed->validForDeviceGeneration(m_deviceGeneration)
+        ? stateSeed
+        : nullptr
+    ;
 }
 
 bool GpuRecordedGraph::prepareTimingTickets(

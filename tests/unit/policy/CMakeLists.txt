@@ -139,6 +139,20 @@ add_test(
         --self-test
 )
 add_test(
+    NAME nwb_no_packet_final_state_query
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_packet_final_state_query.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_packet_final_state_query_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_packet_final_state_query.py"
+        --self-test
+)
+add_test(
     NAME nwb_no_public_single_packet_submission
     COMMAND
         "${Python3_EXECUTABLE}"

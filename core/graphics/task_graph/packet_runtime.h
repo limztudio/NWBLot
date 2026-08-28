@@ -182,14 +182,9 @@ public:
         const GpuPhysicalQueueId& queue
     )const noexcept;
     [[nodiscard]] const GpuRecordedPacket* find(const GpuSubmissionPacketId& packet)const noexcept;
-    // Read-only export for a later graph or cross-frame state cache that needs this packet's actual native final
-    // state. Graph-internal consumers use compiler-produced state seeds instead.
-    [[nodiscard]] const CommandListResourceStateHandoff* packetFinalStateSeed(
-        const GpuSubmissionPacketId& packet
-    )const noexcept;
-    // Semantic companion to packetFinalStateSeed. It validates this recorded graph against the current compiler
-    // output before resolving the declared task's containing packet, so lifecycle consumers do not mirror packet
-    // IDs merely to retain a graph-recorded native final state.
+    // Validates this recorded graph against the current compiler output and resolves the declared task's containing
+    // packet. The result is that packet's actual native final state, not a task-local intermediate snapshot; merged
+    // tasks therefore resolve to the same state.
     [[nodiscard]] const CommandListResourceStateHandoff* taskFinalStateSeed(
         const GpuCompiledGraph& compiledGraph,
         GpuTaskId task

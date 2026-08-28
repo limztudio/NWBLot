@@ -2016,8 +2016,8 @@ TEST_F(DescriptorBufferRoundTripTest, SameClassGraphicsQueuesRouteGraphPacketsAn
         compiledGraph.allPacketRange(),
         recordedGraph
     ));
-    ASSERT_NE(recordedGraph.packetFinalStateSeed(uploadPacket), nullptr);
-    ASSERT_NE(recordedGraph.packetFinalStateSeed(copyPacket), nullptr);
+    ASSERT_NE(recordedGraph.taskFinalStateSeed(compiledGraph, uploadTask), nullptr);
+    ASSERT_NE(recordedGraph.taskFinalStateSeed(compiledGraph, copyTask), nullptr);
 
     GpuGraphSubmissionTransaction transaction(multiQueueScope.arena());
     transaction.reset(compiledGraph);
@@ -2609,8 +2609,8 @@ TEST_F(DescriptorBufferRoundTripTest, CrossFamilySameClassGraphicsQueuesRouteWit
         compiledGraph.allPacketRange(),
         recordedGraph
     ));
-    ASSERT_NE(recordedGraph.packetFinalStateSeed(uploadPacket), nullptr);
-    ASSERT_NE(recordedGraph.packetFinalStateSeed(copyPacket), nullptr);
+    ASSERT_NE(recordedGraph.taskFinalStateSeed(compiledGraph, uploadTask), nullptr);
+    ASSERT_NE(recordedGraph.taskFinalStateSeed(compiledGraph, copyTask), nullptr);
 
     GpuGraphSubmissionTransaction transaction(multiQueueScope.arena());
     transaction.reset(compiledGraph);
@@ -9327,7 +9327,7 @@ static void ExpectImportedFinalStateExportAfterTaskLocalTransition(
     ));
     EXPECT_TRUE(taskRecorded);
     EXPECT_EQ(observedEntryState, ResourceStates::ShaderResource);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, task);
     ASSERT_NE(finalState, nullptr);
     // The task-local CopyDest transition is retained by the native tracker, so this proves the graph export was
     // reasserted before the packet snapshot was captured.
@@ -9737,7 +9737,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalStateOrdersOverlappingIndepen
     EXPECT_TRUE(computeRecorded);
     EXPECT_EQ(graphicsObservedState, ResourceStates::ShaderResource);
     EXPECT_EQ(computeObservedState, ResourceStates::ShaderResource);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(computePacket);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, computeTask);
     ASSERT_NE(finalState, nullptr);
     EXPECT_FALSE(finalState->empty());
     CommandListParameters finalStateProbeParameters;
@@ -11976,7 +11976,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
     const GpuRecordedPacket* const recordedPacket = recordedGraph.find(packet);
     ASSERT_NE(recordedPacket, nullptr);
     EXPECT_EQ(recordedPacket->commandListCount, 1u);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, normalizeTask);
     ASSERT_NE(finalState, nullptr);
 
     auto stateProbe = device.createCommandList();
@@ -12441,7 +12441,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
     EXPECT_TRUE(geometryBuildInputRecorded);
     EXPECT_TRUE(buildRecorded);
     EXPECT_TRUE(finalizeRecorded);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(
+        compiledGraph,
+        geometryBuildInputTask
+    );
     ASSERT_NE(finalState, nullptr);
 
     auto stateProbe = device.createCommandList();
@@ -12684,8 +12687,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnsAccelStructPacketStateAndExternal
     EXPECT_TRUE(producerRecorded);
     EXPECT_TRUE(consumerRecorded);
 
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(
-        compiledConsumer->packet
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(
+        compiledGraph,
+        consumer
     );
     ASSERT_NE(finalState, nullptr);
     auto stateProbe = device.createCommandList();
@@ -12937,7 +12941,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedSoftwareBvhInputStatesRe
     )) << "failed packet " << failedPacket.index;
     EXPECT_TRUE(precursorRecorded);
     EXPECT_TRUE(prepareRecorded);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, precursorTask);
     ASSERT_NE(finalState, nullptr);
 
     auto stateProbe = device.createCommandList();
@@ -13188,7 +13192,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHybridSoftwareTailInputSetRecord
     )) << "failed packet " << failedPacket.index;
     EXPECT_TRUE(precursorRecorded);
     EXPECT_TRUE(hybridTailRecorded);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, precursorTask);
     ASSERT_NE(finalState, nullptr);
 
     auto stateProbe = device.createCommandList();
@@ -13364,7 +13368,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowPrepareSoftwareBvhBuildSta
         &failedPacket
     )) << "failed packet " << failedPacket.index;
     EXPECT_TRUE(recorded);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(
+        compiledGraph,
+        shadowPrepareTask
+    );
     ASSERT_NE(finalState, nullptr);
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -13826,7 +13833,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPureSoftwareBvhAndSceneTraversal
         EXPECT_EQ(clearRecord->packet, packet);
         EXPECT_EQ(clearRecord->uintClearValue, UIntColor(expectedClearValues[recordIndex]));
     }
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, shadowPrepare);
     ASSERT_NE(finalState, nullptr);
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -14088,7 +14095,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedTailFreeBlasInputStatesR
     )) << "failed packet " << failedPacket.index;
     EXPECT_TRUE(prepareRecorded);
     EXPECT_TRUE(normalizeRecorded);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, prepareTask);
     ASSERT_NE(finalState, nullptr);
 
     auto stateProbe = device.createCommandList();
@@ -22665,7 +22672,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
     EXPECT_EQ(copyCapture->sourceSlice.arraySlice, copyRegions[0u].sourceSlice.arraySlice);
     EXPECT_EQ(copyCapture->destinationSlice.mipLevel, copyRegions[0u].destinationSlice.mipLevel);
     EXPECT_EQ(copyCapture->destinationSlice.arraySlice, copyRegions[0u].destinationSlice.arraySlice);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, copyTask);
     ASSERT_NE(finalState, nullptr);
 
     const GpuTaskGraphSubmitter submitter(device);
@@ -22844,7 +22851,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRejectsUnboundTailAt
     EXPECT_EQ(failedPacket, packet);
     EXPECT_EQ(capture.recordCount(), 0u);
     EXPECT_EQ(recordedGraph.find(packet), nullptr);
-    EXPECT_EQ(recordedGraph.packetFinalStateSeed(packet), nullptr);
+    EXPECT_EQ(recordedGraph.taskFinalStateSeed(compiledGraph, task), nullptr);
     EXPECT_EQ(validSource->getReferenceCount(), validSourceReferences);
     EXPECT_EQ(validDestination->getReferenceCount(), validDestinationReferences);
     EXPECT_EQ(unboundDestination->getReferenceCount(), unboundDestinationReferences);
@@ -23142,7 +23149,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlo
         compiledGraph.allPacketRange(),
         recordedGraph
     ));
-    ASSERT_NE(recordedGraph.packetFinalStateSeed(packet), nullptr);
+    ASSERT_NE(recordedGraph.taskFinalStateSeed(compiledGraph, uploadTask), nullptr);
 
     // A successfully recorded packet reserves its graph work for this attempt. A second output artifact cannot
     // record an identical native command list before the first one reaches submission.
@@ -23597,8 +23604,8 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderReportsWorkerRoutingW
     const GpuRecordedPacket* const secondRecorded = recordedGraph.find(secondPacket);
     ASSERT_NE(firstRecorded, nullptr);
     ASSERT_NE(secondRecorded, nullptr);
-    ASSERT_NE(recordedGraph.packetFinalStateSeed(firstPacket), nullptr);
-    ASSERT_NE(recordedGraph.packetFinalStateSeed(secondPacket), nullptr);
+    ASSERT_NE(recordedGraph.taskFinalStateSeed(compiledGraph, firstUpload), nullptr);
+    ASSERT_NE(recordedGraph.taskFinalStateSeed(compiledGraph, secondUpload), nullptr);
     EXPECT_EQ(firstRecorded->recordingWorkerDomain, recordingWorkers.domainIdentity());
     EXPECT_NE(firstRecorded->recordingWorkerIndex, 0u);
     EXPECT_EQ(secondRecorded->recordingWorkerDomain, 0u);
@@ -24373,7 +24380,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadTextureTaskRecordsGraphOwnedB
         GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph
     ));
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, uploadTask);
     ASSERT_NE(finalState, nullptr);
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -24728,7 +24735,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
         EXPECT_EQ(copyCapture->destinationOffsetBytes, copyRegions[regionIndex].destinationOffsetBytes);
         EXPECT_EQ(copyCapture->dataSizeBytes, copyRegions[regionIndex].dataSizeBytes);
     }
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, copyTask);
     ASSERT_NE(finalState, nullptr);
     EXPECT_TRUE(producerRecorded);
     EXPECT_TRUE(consumerRecorded);
@@ -24952,7 +24959,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
     ));
     EXPECT_TRUE(selectorConsumerObservedConstantBuffer);
     EXPECT_TRUE(selectorConsumerObservedStaticInputShaderResource);
-    const CommandListResourceStateHandoff* const graphFinalState = recordedGraph.packetFinalStateSeed(selectorPacket);
+    const CommandListResourceStateHandoff* const graphFinalState = recordedGraph.taskFinalStateSeed(
+        compiledGraph,
+        selectorTask
+    );
     ASSERT_NE(graphFinalState, nullptr);
     auto graphStateProbe = device.createCommandList();
     ASSERT_NE(graphStateProbe.get(), nullptr);
@@ -25300,7 +25310,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesWithGraphC
         compiledGraph.allPacketRange(),
         recordedGraph
     ));
-    const CommandListResourceStateHandoff* const graphFinalState = recordedGraph.packetFinalStateSeed(restCopyPacket);
+    const CommandListResourceStateHandoff* const graphFinalState = recordedGraph.taskFinalStateSeed(
+        compiledGraph,
+        restCopyTask
+    );
     ASSERT_NE(graphFinalState, nullptr);
     auto graphStateProbe = device.createCommandList();
     ASSERT_NE(graphStateProbe.get(), nullptr);
@@ -25498,7 +25511,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningOutputStatesFinalizeInGr
     ));
     EXPECT_TRUE(producerObservedUnorderedAccess);
     EXPECT_TRUE(finalizerObservedShaderResource);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(producerPacket);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, producerTask);
     ASSERT_NE(finalState, nullptr);
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -25714,7 +25727,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedComputeEmulationGeneratedVertexH
     ));
     EXPECT_TRUE(producerObservedUnorderedAccess);
     EXPECT_TRUE(rasterObservedVertexBuffer);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(producerPacket);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, producerTask);
     ASSERT_NE(finalState, nullptr);
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -26027,7 +26040,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationPair
     EXPECT_TRUE(rasterAObservedVertexBuffer);
     EXPECT_TRUE(dispatchBObservedUnorderedAccess);
     EXPECT_TRUE(rasterBObservedVertexBuffer);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, dispatchA);
     ASSERT_NE(finalState, nullptr);
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -26312,8 +26325,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
     EXPECT_EQ(recordOrdinal, LengthOf(tasks));
     for(const bool observed : observedStates)
         EXPECT_TRUE(observed);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, tasks[0u]);
     ASSERT_NE(finalState, nullptr);
+    EXPECT_EQ(finalState, recordedGraph.taskFinalStateSeed(compiledGraph, tasks[5u]));
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
     stateProbe->open(finalState);
@@ -26621,7 +26635,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationQuad
     EXPECT_EQ(recordOrdinal, LengthOf(tasks));
     for(const bool observed : observedStates)
         EXPECT_TRUE(observed);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, tasks[0u]);
     ASSERT_NE(finalState, nullptr);
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -26929,7 +26943,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverComputeHandoffM
     EXPECT_TRUE(clearObservedCopyDest);
     EXPECT_TRUE(producerObservedUnorderedAccess);
     EXPECT_TRUE(gbufferObservedVertexBuffer);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, clearTask);
     ASSERT_NE(finalState, nullptr);
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -27314,7 +27328,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeOpaqueCsgIntervalSample
     EXPECT_TRUE(combineObservedStates);
     EXPECT_TRUE(computeEmulationObservedStates);
     EXPECT_TRUE(sampleObservedStates);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, combineTask);
     ASSERT_NE(finalState, nullptr);
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -27579,7 +27593,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitExtinctionGenerat
     ));
     EXPECT_TRUE(producerObservedStates);
     EXPECT_TRUE(rasterObservedStates);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, producerTask);
     ASSERT_NE(finalState, nullptr);
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -27840,7 +27854,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitAccumulationGener
     ));
     EXPECT_TRUE(producerObservedStates);
     EXPECT_TRUE(rasterObservedStates);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, producerTask);
     ASSERT_NE(finalState, nullptr);
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -28513,7 +28527,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationAliasFr
     EXPECT_TRUE(accumulationTimingStarted);
     EXPECT_TRUE(accumulationTimingFinished);
     EXPECT_FALSE(accumulationTiming.has_value());
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, preTask);
     ASSERT_NE(finalState, nullptr);
     auto finalStateProbe = device.createCommandList();
     ASSERT_NE(finalStateProbe.get(), nullptr);
@@ -29204,7 +29218,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     EXPECT_TRUE(accumulationTimingStarted);
     EXPECT_TRUE(accumulationTimingFinished);
     EXPECT_FALSE(accumulationTiming.has_value());
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, preTask);
     ASSERT_NE(finalState, nullptr);
     auto finalStateProbe = device.createCommandList();
     ASSERT_NE(finalStateProbe.get(), nullptr);
@@ -29917,7 +29931,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     EXPECT_TRUE(accumulationTimingStarted);
     EXPECT_TRUE(accumulationTimingFinished);
     EXPECT_FALSE(accumulationTiming.has_value());
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, preTask);
     ASSERT_NE(finalState, nullptr);
     auto finalStateProbe = device.createCommandList();
     ASSERT_NE(finalStateProbe.get(), nullptr);
@@ -30656,7 +30670,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     EXPECT_TRUE(accumulationTimingStarted);
     EXPECT_TRUE(accumulationTimingFinished);
     EXPECT_FALSE(accumulationTiming.has_value());
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, preTask);
     ASSERT_NE(finalState, nullptr);
     auto finalStateProbe = device.createCommandList();
     ASSERT_NE(finalStateProbe.get(), nullptr);
@@ -31279,7 +31293,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
     EXPECT_TRUE(occupancyTimingStarted);
     EXPECT_TRUE(occupancyTimingFinished);
     EXPECT_FALSE(occupancyTiming.has_value());
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, preTask);
     ASSERT_NE(finalState, nullptr);
     auto finalStateProbe = device.createCommandList();
     ASSERT_NE(finalStateProbe.get(), nullptr);
@@ -31926,7 +31940,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
     EXPECT_TRUE(occupancyTimingStarted);
     EXPECT_TRUE(occupancyTimingFinished);
     EXPECT_FALSE(occupancyTiming.has_value());
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, preTask);
     ASSERT_NE(finalState, nullptr);
     auto finalStateProbe = device.createCommandList();
     ASSERT_NE(finalStateProbe.get(), nullptr);
@@ -32609,7 +32623,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
     EXPECT_TRUE(occupancyTimingStarted);
     EXPECT_TRUE(occupancyTimingFinished);
     EXPECT_FALSE(occupancyTiming.has_value());
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, preTask);
     ASSERT_NE(finalState, nullptr);
     auto finalStateProbe = device.createCommandList();
     ASSERT_NE(finalStateProbe.get(), nullptr);
@@ -33169,7 +33183,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyAliasFreeC
     EXPECT_TRUE(occupancyTimingStarted);
     EXPECT_TRUE(occupancyTimingFinished);
     EXPECT_FALSE(occupancyTiming.has_value());
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, preTask);
     ASSERT_NE(finalState, nullptr);
     auto finalStateProbe = device.createCommandList();
     ASSERT_NE(finalStateProbe.get(), nullptr);
@@ -34155,7 +34169,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyCsgAliasFr
     EXPECT_TRUE(occupancyTimingStarted);
     EXPECT_TRUE(occupancyTimingFinished);
     EXPECT_FALSE(occupancyTiming.has_value());
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, preTask);
     ASSERT_NE(finalState, nullptr);
     auto finalStateProbe = device.createCommandList();
     ASSERT_NE(finalStateProbe.get(), nullptr);
@@ -34960,7 +34974,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionAliasFree
     EXPECT_TRUE(extinctionTimingStarted);
     EXPECT_TRUE(extinctionTimingFinished);
     EXPECT_FALSE(extinctionTiming.has_value());
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, preTask);
     ASSERT_NE(finalState, nullptr);
     auto finalStateProbe = device.createCommandList();
     ASSERT_NE(finalStateProbe.get(), nullptr);
@@ -35470,7 +35484,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitTypedAvboitIntegrationTai
     EXPECT_TRUE(extinctionRecorded);
     EXPECT_TRUE(integrationRecorded);
     EXPECT_TRUE(accumulationRecorded);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, preTask);
     ASSERT_NE(finalState, nullptr);
     auto finalStateProbe = device.createCommandList();
     ASSERT_NE(finalStateProbe.get(), nullptr);
@@ -36387,7 +36401,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     EXPECT_TRUE(extinctionTimingStarted);
     EXPECT_TRUE(extinctionTimingFinished);
     EXPECT_FALSE(extinctionTiming.has_value());
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, preTask);
     ASSERT_NE(finalState, nullptr);
     auto finalStateProbe = device.createCommandList();
     ASSERT_NE(finalStateProbe.get(), nullptr);
@@ -37343,7 +37357,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     EXPECT_TRUE(extinctionTimingStarted);
     EXPECT_TRUE(extinctionTimingFinished);
     EXPECT_FALSE(extinctionTiming.has_value());
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, preTask);
     ASSERT_NE(finalState, nullptr);
     auto finalStateProbe = device.createCommandList();
     ASSERT_NE(finalStateProbe.get(), nullptr);
@@ -38324,7 +38338,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     EXPECT_TRUE(extinctionTimingStarted);
     EXPECT_TRUE(extinctionTimingFinished);
     EXPECT_FALSE(extinctionTiming.has_value());
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, preTask);
     ASSERT_NE(finalState, nullptr);
     auto finalStateProbe = device.createCommandList();
     ASSERT_NE(finalStateProbe.get(), nullptr);
@@ -39195,7 +39209,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionCsgAliasF
     EXPECT_TRUE(extinctionTimingStarted);
     EXPECT_TRUE(extinctionTimingFinished);
     EXPECT_FALSE(extinctionTiming.has_value());
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, preTask);
     ASSERT_NE(finalState, nullptr);
     auto finalStateProbe = device.createCommandList();
     ASSERT_NE(finalStateProbe.get(), nullptr);
@@ -40253,7 +40267,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationCsgAlia
     EXPECT_TRUE(accumulationTimingStarted);
     EXPECT_TRUE(accumulationTimingFinished);
     EXPECT_FALSE(accumulationTiming.has_value());
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, preTask);
     ASSERT_NE(finalState, nullptr);
     auto finalStateProbe = device.createCommandList();
     ASSERT_NE(finalStateProbe.get(), nullptr);
@@ -40567,7 +40581,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitOccupancyGenerate
     ));
     EXPECT_TRUE(producerObservedStates);
     EXPECT_TRUE(rasterObservedStates);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, producerTask);
     ASSERT_NE(finalState, nullptr);
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -42283,8 +42297,9 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
     EXPECT_TRUE(accumulationTimingStarted);
     EXPECT_TRUE(accumulationTimingFinished);
     EXPECT_FALSE(accumulationTiming.has_value());
-    const CommandListResourceStateHandoff* const finalGraphicsState = recordedGraph.packetFinalStateSeed(
-        accumulationPacket
+    const CommandListResourceStateHandoff* const finalGraphicsState = recordedGraph.taskFinalStateSeed(
+        compiledGraph,
+        producerTask
     );
     ASSERT_NE(finalGraphicsState, nullptr);
     auto finalStateProbe = device.createCommandList();
@@ -43170,7 +43185,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningDeformationHandoffStaysI
     EXPECT_TRUE(deformationObservedUavs);
     EXPECT_TRUE(postDispatchObservedStates);
     EXPECT_TRUE(finalizerObservedShaderResources);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(deformationPacket);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, deformationTask);
     ASSERT_NE(finalState, nullptr);
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -44040,7 +44055,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     // capture after preflight, then relies on the already-established graph final state rather than a native
     // state bridge. The narrow direct-Vulkan prototype remains CopyBuffer-only in its separate coverage.
     const CommandListResourceStateHandoff* const clearTextureRectFinalState =
-        recordedGraph.packetFinalStateSeed(clearTextureRectPacket)
+        recordedGraph.taskFinalStateSeed(compiledGraph, clearTextureRectTask)
     ;
     ASSERT_NE(clearTextureRectFinalState, nullptr);
     const GpuPhysicalQueueInfo* const clearTextureRectQueue = compiledGraph.queueInfo(
@@ -44763,7 +44778,7 @@ TEST_F(DescriptorBufferRoundTripTest, MergedGraphBuiltInsEndInheritedAndHookOpen
     EXPECT_TRUE(boundaryObservedInactive);
     EXPECT_TRUE(clearHookState.openedRenderPass);
     EXPECT_TRUE(clearHookState.observedInactiveAfterClear);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, openerTask);
     ASSERT_NE(finalState, nullptr);
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -45089,7 +45104,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAdaptiveShadowPrimitiveChainReco
     EXPECT_EQ(statsCopyCapture->source, edgeStatsResource);
     EXPECT_EQ(statsCopyCapture->destination, statsReadbackResource);
     EXPECT_EQ(statsCopyCapture->dataSizeBytes, statsReadbackRegion.dataSizeBytes);
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(shadowPacket);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, shadow);
     ASSERT_NE(finalState, nullptr);
     const CommandListHandle stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -45271,7 +45286,7 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreWrites
     EXPECT_EQ(discardedCount, 0u);
     ASSERT_TRUE(recorded);
 
-    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.taskFinalStateSeed(compiledGraph, restoreTask);
     ASSERT_NE(finalState, nullptr);
     const CommandListHandle stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -45498,7 +45513,7 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreReject
     EXPECT_FALSE(acceptedToken.valid());
     EXPECT_EQ(discardedCount, 1u);
     EXPECT_EQ(recordedGraph.find(packet), nullptr);
-    EXPECT_EQ(recordedGraph.packetFinalStateSeed(packet), nullptr);
+    EXPECT_EQ(recordedGraph.taskFinalStateSeed(compiledGraph, restoreTask), nullptr);
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
@@ -45781,8 +45796,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityAllLitClearRecor
     EXPECT_EQ(clearCapture->clearTextureValueType, GpuClearTextureTaskValueType::Float);
     EXPECT_EQ(clearCapture->floatClearValue, Color(1.f, 1.f, 1.f, 1.f));
 
-    const CommandListResourceStateHandoff* const shadowFinalState = recordedGraph.packetFinalStateSeed(shadowPacket);
-    const CommandListResourceStateHandoff* const lightingFinalState = recordedGraph.packetFinalStateSeed(lightingPacket);
+    const CommandListResourceStateHandoff* const shadowFinalState = recordedGraph.taskFinalStateSeed(
+        compiledGraph,
+        shadowTask
+    );
+    const CommandListResourceStateHandoff* const lightingFinalState = recordedGraph.taskFinalStateSeed(
+        compiledGraph,
+        lightingTask
+    );
     ASSERT_NE(shadowFinalState, nullptr);
     ASSERT_NE(lightingFinalState, nullptr);
     const CommandListHandle stateProbe = device.createCommandList();
@@ -52592,8 +52613,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
     );
     ASSERT_NE(beginTaskFinalState, nullptr);
     ASSERT_NE(endTaskFinalState, nullptr);
-    EXPECT_EQ(beginTaskFinalState, recordedGraph.packetFinalStateSeed(beginPacket));
-    EXPECT_EQ(endTaskFinalState, recordedGraph.packetFinalStateSeed(endPacket));
+    EXPECT_NE(beginTaskFinalState, endTaskFinalState);
     EXPECT_EQ(recordedGraph.taskFinalStateSeed(compiledGraph, GpuTaskId{}), nullptr);
     GpuCompiledGraph unrelatedFinalStateGraph(DescriptorBufferRoundTripTest::arena());
     EXPECT_EQ(recordedGraph.taskFinalStateSeed(unrelatedFinalStateGraph, beginTask), nullptr);
@@ -59161,8 +59181,9 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
         packetRange,
         recordedGraph
     ));
-    const CommandListResourceStateHandoff* const shadowPrepareFinalState = recordedGraph.packetFinalStateSeed(
-        shadowPreparePacket
+    const CommandListResourceStateHandoff* const shadowPrepareFinalState = recordedGraph.taskFinalStateSeed(
+        compiledGraph,
+        shadowPrepareTask
     );
     ASSERT_NE(shadowPrepareFinalState, nullptr);
     // Opening an empty handoff would also report the selector's retained ConstantBuffer state from its descriptor.
@@ -59191,7 +59212,10 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
     EXPECT_TRUE(compositeRecorded);
     EXPECT_TRUE(presentRecorded);
 
-    const CommandListResourceStateHandoff* const presentFinalState = recordedGraph.packetFinalStateSeed(presentPacket);
+    const CommandListResourceStateHandoff* const presentFinalState = recordedGraph.taskFinalStateSeed(
+        compiledGraph,
+        presentTask
+    );
     ASSERT_NE(presentFinalState, nullptr);
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);

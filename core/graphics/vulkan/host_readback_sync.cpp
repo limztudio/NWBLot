@@ -14,26 +14,6 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !defined(NWB_FINAL)
-namespace __hidden_host_readback_sync{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static thread_local usize s_AppendedBarrierCount = 0u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace VulkanDetail{
 
 
@@ -207,20 +187,6 @@ bool MatchesAmdBreadcrumbObservation(const u32 observedMarker, const u32 reserve
     return observedMarker != 0u && reservedMarker != 0u && observedMarker == reservedMarker;
 }
 
-#if !defined(NWB_FINAL)
-void ResetHostReadbackBarrierAppendCountForTesting()noexcept{
-    __hidden_host_readback_sync::s_AppendedBarrierCount = 0u;
-}
-
-usize GetHostReadbackBarrierAppendCountForTesting()noexcept{
-    return __hidden_host_readback_sync::s_AppendedBarrierCount;
-}
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 HostReadbackBarrierTracker::HostReadbackBarrierTracker(Alloc::GlobalArena& arena)
     : m_buffers(arena)
 {}
@@ -249,9 +215,6 @@ void HostReadbackBarrierTracker::appendBarriers(
     barriers.reserve(barriers.size() + m_buffers.size());
     for(const VkBuffer buffer : m_buffers)
         barriers.push_back(BuildHostReadBufferBarrier(buffer));
-#if !defined(NWB_FINAL)
-    __hidden_host_readback_sync::s_AppendedBarrierCount += m_buffers.size();
-#endif
 }
 
 void HostReadbackBarrierTracker::clear(){

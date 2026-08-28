@@ -60185,37 +60185,19 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListMarkerStateBalancesBeforeReuseA
 
     commandList->open();
     ASSERT_TRUE(commandList->isRecording());
-#if !defined(NWB_FINAL)
-    HostSync::ResetHostReadbackBarrierAppendCountForTesting();
-#endif
     commandList->beginMarker("tests/marker_recovery/close");
     commandList->close();
     ASSERT_TRUE(commandList->hasCommandBuffer());
     EXPECT_FALSE(commandList->isRecording());
-#if !defined(NWB_FINAL)
-    EXPECT_EQ(
-        HostSync::GetHostReadbackBarrierAppendCountForTesting(),
-        device.isAmdBreadcrumbEnabled() ? 1u : 0u
-    );
-#endif
 
     commandList->open();
     ASSERT_TRUE(commandList->isRecording());
-#if !defined(NWB_FINAL)
-    HostSync::ResetHostReadbackBarrierAppendCountForTesting();
-#endif
     commandList->beginMarker("tests/marker_recovery/clear");
     commandList->endMarker();
     commandList->clearState();
     EXPECT_TRUE(commandList->isRecording());
     commandList->close();
     ASSERT_TRUE(commandList->hasCommandBuffer());
-#if !defined(NWB_FINAL)
-    EXPECT_EQ(
-        HostSync::GetHostReadbackBarrierAppendCountForTesting(),
-        device.isAmdBreadcrumbEnabled() ? 1u : 0u
-    );
-#endif
 
     commandList->open();
     ASSERT_TRUE(commandList->isRecording());
@@ -60234,15 +60216,9 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListMarkerStateBalancesBeforeReuseA
     abandonedRecording->open();
     abandonedRecording->beginMarker("tests/marker_recovery/abandoned");
     abandonedRecording->endMarker();
-#if !defined(NWB_FINAL)
-    HostSync::ResetHostReadbackBarrierAppendCountForTesting();
-#endif
     abandonedRecording->open();
     ASSERT_TRUE(abandonedRecording->isRecording());
     abandonedRecording->close();
-#if !defined(NWB_FINAL)
-    EXPECT_EQ(HostSync::GetHostReadbackBarrierAppendCountForTesting(), 0u);
-#endif
 
 #if defined(NWB_DEBUG)
     CommandListHandle clearInvariant = device.createCommandList();

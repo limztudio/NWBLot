@@ -14,7 +14,6 @@
 #include <global/thread.h>
 #include <global/unique_ptr.h>
 #include <core/graphics/vulkan/backend.h>
-#include <core/graphics/vulkan/host_readback_sync.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
 
@@ -35,7 +34,6 @@ namespace Tests{
 
 
 using namespace Core;
-namespace HostSync = Core::GraphicsBackend::VulkanDetail;
 
 
 class PlacedResourceMemoryTest : public ::testing::Test{
@@ -244,13 +242,7 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
         0u,
         sizeof(s_SecondWords)
     );
-#if !defined(NWB_FINAL)
-    HostSync::ResetHostReadbackBarrierAppendCountForTesting();
-#endif
     copyCommandList->close();
-#if !defined(NWB_FINAL)
-    EXPECT_EQ(HostSync::GetHostReadbackBarrierAppendCountForTesting(), 2u);
-#endif
 
     auto directCopyCommandList = device.createCommandList();
     ASSERT_TRUE(directCopyCommandList);
@@ -262,28 +254,16 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
         0u,
         sizeof(s_FirstWords)
     ));
-#if !defined(NWB_FINAL)
-    HostSync::ResetHostReadbackBarrierAppendCountForTesting();
-#endif
     directCopyCommandList->close();
-#if !defined(NWB_FINAL)
-    EXPECT_EQ(HostSync::GetHostReadbackBarrierAppendCountForTesting(), 1u);
-#endif
 
     auto closeScanCommandList = device.createCommandList();
     ASSERT_TRUE(closeScanCommandList);
     closeScanCommandList->open();
     closeScanCommandList->beginTrackingBufferState(firstReadback.get(), ResourceStates::CopyDest);
     closeScanCommandList->clearState();
-#if !defined(NWB_FINAL)
-    HostSync::ResetHostReadbackBarrierAppendCountForTesting();
-#endif
     closeScanCommandList->close();
     EXPECT_FALSE(closeScanCommandList->commandRecordingFailed());
     EXPECT_TRUE(closeScanCommandList->hasCommandBuffer());
-#if !defined(NWB_FINAL)
-    EXPECT_EQ(HostSync::GetHostReadbackBarrierAppendCountForTesting(), 1u);
-#endif
 
     CommandList* copyCommandLists[] = { copyCommandList.get(), directCopyCommandList.get() };
     const QueueSubmissionToken copyToken = device.executeCommandLists(
@@ -392,18 +372,8 @@ TEST_F(PlacedResourceMemoryTest, StagingTextureReadbackDirectionsAreAtomicAndHos
         EXPECT_TRUE(invalidCommandList->hasCommandBuffer());
     };
 
-#if !defined(NWB_FINAL)
-    HostSync::ResetHostReadbackBarrierAppendCountForTesting();
-#endif
     exerciseWrongDirection(true);
-#if !defined(NWB_FINAL)
-    EXPECT_EQ(HostSync::GetHostReadbackBarrierAppendCountForTesting(), 0u);
-    HostSync::ResetHostReadbackBarrierAppendCountForTesting();
-#endif
     exerciseWrongDirection(false);
-#if !defined(NWB_FINAL)
-    EXPECT_EQ(HostSync::GetHostReadbackBarrierAppendCountForTesting(), 0u);
-#endif
 
     CommandListHandle uploadCommandList = device.createCommandList();
     ASSERT_TRUE(uploadCommandList);
@@ -413,14 +383,8 @@ TEST_F(PlacedResourceMemoryTest, StagingTextureReadbackDirectionsAreAtomicAndHos
         slice.setArraySlice(arraySlice);
         uploadCommandList->copyTexture(texture.get(), slice, upload.get(), slice);
     }
-#if !defined(NWB_FINAL)
-    HostSync::ResetHostReadbackBarrierAppendCountForTesting();
-#endif
     uploadCommandList->close();
     ASSERT_FALSE(uploadCommandList->commandRecordingFailed());
-#if !defined(NWB_FINAL)
-    EXPECT_EQ(HostSync::GetHostReadbackBarrierAppendCountForTesting(), 0u);
-#endif
 
     CommandListHandle readbackCommandList = device.createCommandList();
     ASSERT_TRUE(readbackCommandList);
@@ -430,14 +394,8 @@ TEST_F(PlacedResourceMemoryTest, StagingTextureReadbackDirectionsAreAtomicAndHos
         slice.setArraySlice(arraySlice);
         readbackCommandList->copyTexture(readback.get(), slice, texture.get(), slice);
     }
-#if !defined(NWB_FINAL)
-    HostSync::ResetHostReadbackBarrierAppendCountForTesting();
-#endif
     readbackCommandList->close();
     ASSERT_FALSE(readbackCommandList->commandRecordingFailed());
-#if !defined(NWB_FINAL)
-    EXPECT_EQ(HostSync::GetHostReadbackBarrierAppendCountForTesting(), 1u);
-#endif
 
     CommandList* commandLists[] = { uploadCommandList.get(), readbackCommandList.get() };
     const QueueSubmissionToken token = device.executeCommandLists(

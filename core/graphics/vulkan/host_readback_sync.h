@@ -66,12 +66,6 @@ void CollectUniquePhysicalQueueFamilyIndices(
 )noexcept;
 [[nodiscard]] bool MatchesAmdBreadcrumbObservation(u32 observedMarker, u32 reservedMarker)noexcept;
 
-#if !defined(NWB_FINAL)
-void ResetHostReadbackBarrierAppendCountForTesting()noexcept;
-[[nodiscard]] usize GetHostReadbackBarrierAppendCountForTesting()noexcept;
-#endif
-
-
 class HostReadbackBarrierTracker final : NoCopy{
 public:
     explicit HostReadbackBarrierTracker(Alloc::GlobalArena& arena);

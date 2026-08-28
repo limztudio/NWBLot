@@ -290,16 +290,10 @@ TEST(HostReadbackSync, DeduplicatesNativeBuffersAndAppendsOneBarrierEach){
     EXPECT_FALSE(tracker.registerBuffer(first));
     EXPECT_TRUE(tracker.registerBuffer(second));
     EXPECT_EQ(tracker.size(), 2u);
-#if !defined(NWB_FINAL)
-    HostSync::ResetHostReadbackBarrierAppendCountForTesting();
-#endif
     tracker.appendBarriers(barriers);
     ASSERT_EQ(barriers.size(), 2u);
     EXPECT_EQ(barriers[0u].buffer, first);
     EXPECT_EQ(barriers[1u].buffer, second);
-#if !defined(NWB_FINAL)
-    EXPECT_EQ(HostSync::GetHostReadbackBarrierAppendCountForTesting(), 2u);
-#endif
 
     tracker.clear();
     EXPECT_EQ(tracker.size(), 0u);

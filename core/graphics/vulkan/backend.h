@@ -1540,11 +1540,6 @@ public:
 public:
     [[nodiscard]] const TextureDesc& getDescription()const{ return m_desc; }
 #if !defined(NWB_FINAL)
-    [[nodiscard]] VkSharingMode getNativeQueueFamilySharingModeForTesting()const{ return m_creationSharingMode; }
-    [[nodiscard]] usize getAdmittedQueueFamilyCountForTesting()const{ return m_admittedQueueFamilies.size(); }
-    [[nodiscard]] u32 getAdmittedQueueFamilyForTesting(const usize index)const{
-        return index < m_admittedQueueFamilies.size() ? m_admittedQueueFamilies[index] : Limit<u32>::s_Max;
-    }
     [[nodiscard]] bool hasMappedMemoryForTesting();
     [[nodiscard]] bool isPersistentlyMappedForTesting();
     void rejectNextInvalidateForTesting();

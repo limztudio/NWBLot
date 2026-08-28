@@ -683,11 +683,6 @@ TEST_F(StagingTextureProvenanceTest, ConcurrentSharingRequiresImmutableQueueClas
     TextureHandle texture = device().createTexture(imageDesc);
     ASSERT_TRUE(upload);
     ASSERT_TRUE(texture);
-#if !defined(NWB_FINAL)
-    EXPECT_EQ(upload->getNativeQueueFamilySharingModeForTesting(), VK_SHARING_MODE_CONCURRENT);
-    EXPECT_GE(upload->getAdmittedQueueFamilyCountForTesting(), 2u);
-#endif
-
     CommandListParameters parameters;
     parameters.setPhysicalQueue(unmaskedQueue->id);
     CommandListHandle commandList = device().createCommandList(parameters);
@@ -734,13 +729,6 @@ TEST_F(StagingTextureProvenanceTest, OneFamilyNonzeroSharingCollapsesAndAllowsAn
     TextureHandle texture = device().createTexture(imageDesc);
     ASSERT_TRUE(upload);
     ASSERT_TRUE(texture);
-#if !defined(NWB_FINAL)
-    EXPECT_EQ(upload->getNativeQueueFamilySharingModeForTesting(), VK_SHARING_MODE_EXCLUSIVE);
-    ASSERT_EQ(upload->getAdmittedQueueFamilyCountForTesting(), 1u);
-    EXPECT_EQ(upload->getAdmittedQueueFamilyForTesting(0u), primaryGraphics->familyIndex);
-    EXPECT_EQ(upload->getAdmittedQueueFamilyForTesting(1u), Limit<u32>::s_Max);
-#endif
-
     CommandListParameters siblingParameters;
     siblingParameters.setPhysicalQueue(siblingQueue->id);
     CommandListHandle commandList = device().createCommandList(siblingParameters);

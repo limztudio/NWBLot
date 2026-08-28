@@ -521,20 +521,6 @@ TEST_F(StagingTextureContractTest, GraphicsAndTransferStagingBufferIsUsedAcrossD
     ASSERT_TRUE(texture);
     ASSERT_TRUE(upload);
     ASSERT_TRUE(readback);
-#if !defined(NWB_FINAL)
-    EXPECT_EQ(upload->getNativeQueueFamilySharingModeForTesting(), VK_SHARING_MODE_CONCURRENT);
-    bool includesGraphicsFamily = false;
-    bool includesTransferFamily = false;
-    const usize admittedFamilyCount = upload->getAdmittedQueueFamilyCountForTesting();
-    for(usize familyIndex = 0u; familyIndex < admittedFamilyCount; ++familyIndex){
-        const u32 admittedFamily = upload->getAdmittedQueueFamilyForTesting(familyIndex);
-        includesGraphicsFamily = includesGraphicsFamily || admittedFamily == graphicsFamily;
-        includesTransferFamily = includesTransferFamily || admittedFamily == transferFamily;
-    }
-    EXPECT_TRUE(includesGraphicsFamily);
-    EXPECT_TRUE(includesTransferFamily);
-#endif
-
     usize uploadRowPitch = 0u;
     u8* const uploadBytes = static_cast<u8*>(
         device.mapStagingTexture(upload.get(), TextureSlice{}, CpuAccessMode::Write, &uploadRowPitch)

@@ -1680,6 +1680,14 @@ TEST(VulkanDevice, SelectsAnExactComputeCapableQueueForGpuFaultInjection){
     );
 }
 
+TEST(VulkanDevice, DeviceGenerationAllocationFailsClosedAtExhaustion){
+    Graphics::GraphicsBackend::VulkanDetail::DeviceGenerationAllocator allocator;
+    for(u32 expectedGeneration = 1u; expectedGeneration <= static_cast<u32>(Limit<u16>::s_Max); ++expectedGeneration)
+        ASSERT_EQ(allocator.allocate(), static_cast<u16>(expectedGeneration));
+    EXPECT_EQ(allocator.allocate(), 0u);
+    EXPECT_EQ(allocator.allocate(), 0u);
+}
+
 TEST(VulkanDevice, MatchesExactCommandListSubmissionQueueIdentity){
     using Graphics::GraphicsBackend::VulkanDetail::SubmissionCommandListMatchesExecutionQueue;
 

@@ -7,6 +7,8 @@
 
 #include "backend.h"
 
+#include <global/atomic.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,6 +28,28 @@ namespace VulkanDetail{
 inline constexpr AStringView s_PipelineCacheVirtualPath = "vulkan/pipeline_cache.bin";
 // Pipeline-cache validation rejects data from different GPUs or drivers.
 inline constexpr AStringView s_PipelineCacheVolumeName = "runtime_pipeline_cache";
+
+
+class DeviceGenerationAllocator final : NoCopy{
+public:
+    [[nodiscard]] u16 allocate()noexcept{
+        u32 generation = m_nextGeneration.load(MemoryOrder::relaxed);
+        while(generation != 0u && generation <= static_cast<u32>(Limit<u16>::s_Max)){
+            if(m_nextGeneration.compare_exchange_weak(
+                generation,
+                generation + 1u,
+                MemoryOrder::relaxed,
+                MemoryOrder::relaxed
+            ))
+                return static_cast<u16>(generation);
+        }
+        return 0u;
+    }
+
+
+private:
+    Atomic<u32> m_nextGeneration{ 1u };
+};
 
 [[nodiscard]] inline constexpr GpuQueueCapability::Mask DeviceMinimumQueueCapabilities(
     const CommandQueue::Enum queue

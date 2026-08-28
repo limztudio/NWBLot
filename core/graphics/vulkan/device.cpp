@@ -7,7 +7,6 @@
 #include "device_detail.h"
 
 #include <core/common/log.h>
-#include <global/atomic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,12 +26,11 @@ namespace __hidden_vulkan_device{
 
 // Queue timeline values are only meaningful within one logical-device lifetime. Physical queue indices are assigned
 // by the Device registry (not CommandQueue ordinals) and the generation makes a recreated Device reject old tokens.
-static Atomic<u32> s_NextDeviceGeneration{ 1u };
+static VulkanDetail::DeviceGenerationAllocator s_DeviceGenerationAllocator;
 
 [[nodiscard]] static u16 AllocateDeviceGeneration()noexcept{
-    u16 generation = static_cast<u16>(s_NextDeviceGeneration.fetch_add(1u, MemoryOrder::relaxed));
-    while(generation == 0u)
-        generation = static_cast<u16>(s_NextDeviceGeneration.fetch_add(1u, MemoryOrder::relaxed));
+    const u16 generation = s_DeviceGenerationAllocator.allocate();
+    NWB_FATAL_ASSERT_MSG(generation != 0u, NWB_TEXT("Vulkan: Device-generation identity space is exhausted."));
     return generation;
 }
 

@@ -146,45 +146,6 @@ class GpuRecordedGraph;
 class GpuTaskGraphSubmitter;
 
 
-// Native submission has the same exclusive ownership rule as native recording: cancellation cannot discard graph
-// payload while Device::executeCommandLists() owns the packet, and only the owning transaction can resolve it.
-class GpuTaskPacketSubmissionLease final : NoCopy{
-    friend class GpuTaskGraph;
-    friend class GpuGraphSubmissionTransaction;
-
-public:
-    GpuTaskPacketSubmissionLease() = default;
-    GpuTaskPacketSubmissionLease(GpuTaskPacketSubmissionLease&&) = delete;
-    GpuTaskPacketSubmissionLease& operator=(GpuTaskPacketSubmissionLease&&) = delete;
-
-
-public:
-    [[nodiscard]] bool valid()const noexcept{
-        return m_packet.valid()
-            && m_planGeneration != 0u
-            && m_recordingAttemptGeneration != 0u
-            && m_claimGeneration != 0u
-        ;
-    }
-
-
-private:
-    void reset()noexcept{
-        m_packet = {};
-        m_planGeneration = 0u;
-        m_recordingAttemptGeneration = 0u;
-        m_claimGeneration = 0u;
-    }
-
-
-private:
-    GpuSubmissionPacketId m_packet;
-    u64 m_planGeneration = 0u;
-    u64 m_recordingAttemptGeneration = 0u;
-    u64 m_claimGeneration = 0u;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -205,6 +166,44 @@ private:
         PacketRecordingLease() = default;
         PacketRecordingLease(PacketRecordingLease&&) = delete;
         PacketRecordingLease& operator=(PacketRecordingLease&&) = delete;
+
+
+    public:
+        [[nodiscard]] bool valid()const noexcept{
+            return m_packet.valid()
+                && m_planGeneration != 0u
+                && m_recordingAttemptGeneration != 0u
+                && m_claimGeneration != 0u
+            ;
+        }
+
+
+    private:
+        void reset()noexcept{
+            m_packet = {};
+            m_planGeneration = 0u;
+            m_recordingAttemptGeneration = 0u;
+            m_claimGeneration = 0u;
+        }
+
+
+    private:
+        GpuSubmissionPacketId m_packet;
+        u64 m_planGeneration = 0u;
+        u64 m_recordingAttemptGeneration = 0u;
+        u64 m_claimGeneration = 0u;
+    };
+
+    // Native submission has the same exclusive ownership rule as native recording: cancellation cannot discard
+    // graph payload while Device::executeCommandLists() owns the packet, and only the owning transaction resolves it.
+    class PacketSubmissionLease final : NoCopy{
+        friend class GpuTaskGraph;
+        friend class GpuGraphSubmissionTransaction;
+
+    public:
+        PacketSubmissionLease() = default;
+        PacketSubmissionLease(PacketSubmissionLease&&) = delete;
+        PacketSubmissionLease& operator=(PacketSubmissionLease&&) = delete;
 
 
     public:
@@ -587,22 +586,19 @@ private:
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
         u64 recordingAttemptGeneration,
-        GpuTaskPacketSubmissionLease& outLease
+        PacketSubmissionLease& outLease
     )const noexcept;
     [[nodiscard]] bool completePacketSubmission(
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
         const QueueSubmissionToken& token,
-        GpuTaskPacketSubmissionLease& lease
+        PacketSubmissionLease& lease
     )const noexcept;
     void abortPacketSubmission(
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
-        GpuTaskPacketSubmissionLease& lease
+        PacketSubmissionLease& lease
     )const noexcept;
-
-
-public:
     // Atomically discards one non-recording packet. A packet with an in-flight Recording claim is left intact so
     // transaction cancellation cannot race native command recording or reopen the graph for a retry.
     [[nodiscard]] bool discardUnacceptedPacket(
@@ -610,6 +606,9 @@ public:
         GpuSubmissionPacketId packet,
         u64 recordingAttemptGeneration
     )const noexcept;
+
+
+public:
     // Lowers a compiler-owned packet-boundary barrier through the existing CommandList state tracker.  Task thunks
     // retain responsibility only for barriers internal to their own command sequence.
     [[nodiscard]] bool applyCompiledBarrier(

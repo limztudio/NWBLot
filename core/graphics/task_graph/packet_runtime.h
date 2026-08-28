@@ -6,6 +6,7 @@
 
 
 #include "compiled_graph.h"
+#include "task_graph.h"
 
 #include <core/alloc/scratch.h>
 #include <core/alloc/thread.h>
@@ -24,9 +25,7 @@ NWB_CORE_BEGIN
 
 class GpuTimingRecorder;
 class GpuTimingSubmissionTicket;
-class GpuTaskGraph;
 class GpuTaskGraphSubmitter;
-class GpuTaskPacketSubmissionLease;
 class GpuCommandIrCapture;
 
 
@@ -686,21 +685,8 @@ public:
     void reset(const GpuCompiledGraph& compiledGraph);
 
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
-    // Convenience only after the transaction has been bound by an explicit attempt. An unbound cleanup must not
-    // infer the graph's current attempt, because a stale transaction could otherwise discard a later retry.
-    void rejectPacket(
-        GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuSubmissionPacketId& packet
-    )noexcept;
-    void rejectPacket(
-        GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuSubmissionPacketId& packet,
-        u64 recordingAttemptGeneration
-    )noexcept;
-    // Semantic companion to rejectPacket(). It resolves the current packet only inside the transaction, so
-    // renderer recovery code can revoke unaccepted graph work without mirroring compiler packet identities.
+    // Semantic task rejection resolves the current packet only inside the transaction, so renderer recovery code
+    // can revoke unaccepted graph work without mirroring compiler packet identities.
     void rejectTask(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -798,23 +784,29 @@ private:
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
         u64 recordingAttemptGeneration,
-        GpuTaskPacketSubmissionLease& outLease
+        GpuTaskGraph::PacketSubmissionLease& outLease
     )noexcept;
     [[nodiscard]] bool acceptSubmittingPacket(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
         const QueueSubmissionToken& token,
-        GpuTaskPacketSubmissionLease& lease,
+        GpuTaskGraph::PacketSubmissionLease& lease,
         const NativeSubmissionInfo& nativeSubmissionInfo,
         const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr,
         usize taskAcceptedCallbackCount = 0u
+    )noexcept;
+    void rejectPacket(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuSubmissionPacketId& packet,
+        u64 recordingAttemptGeneration
     )noexcept;
     void rejectSubmittingPacket(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
-        GpuTaskPacketSubmissionLease& lease
+        GpuTaskGraph::PacketSubmissionLease& lease
     )noexcept;
     [[nodiscard]] bool bindRecordingAttempt(
         const GpuTaskGraph& graph,

@@ -317,7 +317,7 @@ bool GpuTaskGraph::beginPacketSubmission(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packet,
     const u64 recordingAttemptGeneration,
-    GpuTaskPacketSubmissionLease& outLease
+    PacketSubmissionLease& outLease
 )const noexcept{
     if(
         !compiledGraph.validFor(*this)
@@ -373,7 +373,7 @@ bool GpuTaskGraph::completePacketSubmission(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packet,
     const QueueSubmissionToken& token,
-    GpuTaskPacketSubmissionLease& lease
+    PacketSubmissionLease& lease
 )const noexcept{
     if(
         !compiledGraph.validFor(*this)
@@ -454,7 +454,7 @@ bool GpuTaskGraph::completePacketSubmission(
 void GpuTaskGraph::abortPacketSubmission(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packet,
-    GpuTaskPacketSubmissionLease& lease
+    PacketSubmissionLease& lease
 )const noexcept{
     if(
         !compiledGraph.validFor(*this)

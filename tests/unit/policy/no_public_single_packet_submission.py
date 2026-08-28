@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep native single-packet submission private to the graph runtime."""
+"""Keep native single-packet submission and rejection private to the graph runtime."""
 
 from __future__ import annotations
 
@@ -25,15 +25,41 @@ SOURCE_DIRECTORIES = (
     "utilities",
 )
 SOURCE_SUFFIXES = frozenset((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ixx"))
-SUBMITTER_CLASS_OPEN = re.compile(r"\b(class|struct)\s+GpuTaskGraphSubmitter\b[^;{]*\{")
-SUBMITTER_MEMBER_TOKEN = re.compile(
-    r"\b(?:(public|private|protected)\s*:|(submitPacket)\b)"
+RETIRED_SUBMISSION_LEASE = re.compile(r"\bGpuTaskPacketSubmissionLease\b")
+TARGET_CLASS_OPEN = re.compile(
+    r"\b(class|struct)\s+"
+    r"(GpuTaskGraphSubmitter|GpuTaskGraph|GpuGraphSubmissionTransaction)\b"
+    r"(?!\s*::)[^;{]*\{"
 )
+PRIVATE_SUBMISSION_MEMBERS = {
+    "GpuTaskGraphSubmitter": ("submitPacket",),
+    "GpuTaskGraph": (
+        "PacketSubmissionLease",
+        "beginPacketSubmission",
+        "completePacketSubmission",
+        "abortPacketSubmission",
+        "discardUnacceptedPacket",
+    ),
+    "GpuGraphSubmissionTransaction": (
+        "beginPacketSubmission",
+        "acceptSubmittingPacket",
+        "rejectPacket",
+        "rejectSubmittingPacket",
+    ),
+}
+CLASS_MEMBER_TOKENS = {
+    class_name: re.compile(
+        r"\b(?:(public|private|protected)\s*:|("
+        + "|".join(re.escape(member) for member in members)
+        + r")\b)"
+    )
+    for class_name, members in PRIVATE_SUBMISSION_MEMBERS.items()
+}
 
 
-def submitter_body_ranges(code: str) -> list[tuple[int, int, str]]:
-    ranges: list[tuple[int, int, str]] = []
-    for match in SUBMITTER_CLASS_OPEN.finditer(code):
+def target_class_body_ranges(code: str) -> list[tuple[str, int, int, str]]:
+    ranges: list[tuple[str, int, int, str]] = []
+    for match in TARGET_CLASS_OPEN.finditer(code):
         open_offset = match.end() - 1
         default_access = "public" if match.group(1) == "struct" else "private"
         depth = 0
@@ -43,7 +69,7 @@ def submitter_body_ranges(code: str) -> list[tuple[int, int, str]]:
             elif code[offset] == "}":
                 depth -= 1
                 if depth == 0:
-                    ranges.append((open_offset + 1, offset, default_access))
+                    ranges.append((match.group(2), open_offset + 1, offset, default_access))
                     break
     return ranges
 
@@ -70,10 +96,13 @@ def is_class_body_top_level(code: str, start: int, offset: int) -> bool:
 
 def find_public_single_packet_submission(source: str) -> list[tuple[int, str]]:
     code = blank_non_code(source)
-    references: list[tuple[int, str]] = []
-    for start, end, default_access in submitter_body_ranges(code):
+    references = [
+        (line_number(code, match.start()), match.group())
+        for match in RETIRED_SUBMISSION_LEASE.finditer(code)
+    ]
+    for class_name, start, end, default_access in target_class_body_ranges(code):
         access = default_access
-        for match in SUBMITTER_MEMBER_TOKEN.finditer(code, start, end):
+        for match in CLASS_MEMBER_TOKENS[class_name].finditer(code, start, end):
             if not is_class_body_top_level(code, start, match.start()):
                 continue
             if match.group(1):
@@ -82,7 +111,7 @@ def find_public_single_packet_submission(source: str) -> list[tuple[int, str]]:
                 references.append(
                     (
                         line_number(code, match.start()),
-                        f"GpuTaskGraphSubmitter/{access} submitPacket",
+                        f"{class_name}/{access} {match.group(2)}",
                     )
                 )
     return sorted(references)
@@ -99,6 +128,11 @@ def source_files(source_root: Path) -> list[Path]:
 
 def run_self_test() -> int:
     cases = (
+        (
+            "retired submission lease",
+            "GpuTaskPacketSubmissionLease lease;",
+            ((1, "GpuTaskPacketSubmissionLease"),),
+        ),
         (
             "public packet submitter",
             "class GpuTaskGraphSubmitter final{\n"
@@ -141,6 +175,116 @@ def run_self_test() -> int:
             ((3, "GpuTaskGraphSubmitter/public submitPacket"),),
         ),
         (
+            "public task graph submission lifecycle",
+            "class GpuTaskGraph final{\n"
+            "public:\n"
+            "    class PacketSubmissionLease;\n"
+            "    bool beginPacketSubmission();\n"
+            "    bool completePacketSubmission();\n"
+            "    void abortPacketSubmission();\n"
+            "    bool discardUnacceptedPacket();\n"
+            "};",
+            (
+                (3, "GpuTaskGraph/public PacketSubmissionLease"),
+                (4, "GpuTaskGraph/public beginPacketSubmission"),
+                (5, "GpuTaskGraph/public completePacketSubmission"),
+                (6, "GpuTaskGraph/public abortPacketSubmission"),
+                (7, "GpuTaskGraph/public discardUnacceptedPacket"),
+            ),
+        ),
+        (
+            "protected task graph submission lifecycle",
+            "class GpuTaskGraph{\n"
+            "protected:\n"
+            "    class PacketSubmissionLease;\n"
+            "    bool discardUnacceptedPacket();\n"
+            "};",
+            (
+                (3, "GpuTaskGraph/protected PacketSubmissionLease"),
+                (4, "GpuTaskGraph/protected discardUnacceptedPacket"),
+            ),
+        ),
+        (
+            "default public task graph struct",
+            "struct GpuTaskGraph final{\n"
+            "    class PacketSubmissionLease;\n"
+            "    bool beginPacketSubmission();\n"
+            "};",
+            (
+                (2, "GpuTaskGraph/public PacketSubmissionLease"),
+                (3, "GpuTaskGraph/public beginPacketSubmission"),
+            ),
+        ),
+        (
+            "private task graph submission lifecycle",
+            "class GpuTaskGraph final{\n"
+            "private:\n"
+            "    class PacketSubmissionLease;\n"
+            "    bool beginPacketSubmission();\n"
+            "    bool completePacketSubmission();\n"
+            "    void abortPacketSubmission();\n"
+            "    bool discardUnacceptedPacket();\n"
+            "};",
+            (),
+        ),
+        (
+            "default private task graph submission lifecycle",
+            "class GpuTaskGraph final{\n"
+            "    class PacketSubmissionLease;\n"
+            "    bool discardUnacceptedPacket();\n"
+            "};",
+            (),
+        ),
+        (
+            "public transaction packet lifecycle",
+            "class GpuGraphSubmissionTransaction final{\n"
+            "public:\n"
+            "    bool beginPacketSubmission();\n"
+            "    bool acceptSubmittingPacket();\n"
+            "    void rejectPacket();\n"
+            "    void rejectSubmittingPacket();\n"
+            "};",
+            (
+                (3, "GpuGraphSubmissionTransaction/public beginPacketSubmission"),
+                (4, "GpuGraphSubmissionTransaction/public acceptSubmittingPacket"),
+                (5, "GpuGraphSubmissionTransaction/public rejectPacket"),
+                (6, "GpuGraphSubmissionTransaction/public rejectSubmittingPacket"),
+            ),
+        ),
+        (
+            "protected transaction packet rejection",
+            "class GpuGraphSubmissionTransaction{\n"
+            "protected:\n"
+            "    void rejectPacket();\n"
+            "};",
+            ((3, "GpuGraphSubmissionTransaction/protected rejectPacket"),),
+        ),
+        (
+            "default public transaction struct",
+            "struct GpuGraphSubmissionTransaction{\n"
+            "    void rejectPacket();\n"
+            "};",
+            ((2, "GpuGraphSubmissionTransaction/public rejectPacket"),),
+        ),
+        (
+            "private transaction packet lifecycle",
+            "class GpuGraphSubmissionTransaction final{\n"
+            "private:\n"
+            "    bool beginPacketSubmission();\n"
+            "    bool acceptSubmittingPacket();\n"
+            "    void rejectPacket();\n"
+            "    void rejectSubmittingPacket();\n"
+            "};",
+            (),
+        ),
+        (
+            "default private transaction packet rejection",
+            "class GpuGraphSubmissionTransaction final{\n"
+            "    void rejectPacket();\n"
+            "};",
+            (),
+        ),
+        (
             "private packet submitter",
             "class GpuTaskGraphSubmitter final{\n"
             "private:\n"
@@ -173,6 +317,34 @@ def run_self_test() -> int:
             (),
         ),
         (
+            "public semantic cancellation APIs",
+            "class GpuTaskGraph final{\n"
+            "public:\n"
+            "    bool discardUnaccepted();\n"
+            "};\n"
+            "class GpuGraphSubmissionTransaction final{\n"
+            "public:\n"
+            "    void rejectTask();\n"
+            "    bool discardUnaccepted();\n"
+            "};",
+            (),
+        ),
+        (
+            "public inherited packet lifecycle",
+            "class GpuTaskGraph final{\n"
+            "public:\n"
+            "    using Base::discardUnacceptedPacket;\n"
+            "};\n"
+            "class GpuGraphSubmissionTransaction final{\n"
+            "public:\n"
+            "    using Base::rejectPacket;\n"
+            "};",
+            (
+                (3, "GpuTaskGraph/public discardUnacceptedPacket"),
+                (7, "GpuGraphSubmissionTransaction/public rejectPacket"),
+            ),
+        ),
+        (
             "private native primitive",
             "class GpuTaskGraphSubmitter final{\n"
             "private:\n"
@@ -194,6 +366,52 @@ def run_self_test() -> int:
             (),
         ),
         (
+            "nested task graph and transaction fixtures",
+            "class GpuTaskGraph final{\n"
+            "public:\n"
+            "    struct Fixture{\n"
+            "    public:\n"
+            "        class PacketSubmissionLease;\n"
+            "        bool discardUnacceptedPacket();\n"
+            "    };\n"
+            "private:\n"
+            "    class PacketSubmissionLease;\n"
+            "    bool discardUnacceptedPacket();\n"
+            "};\n"
+            "class GpuGraphSubmissionTransaction final{\n"
+            "public:\n"
+            "    struct Fixture{\n"
+            "    public:\n"
+            "        void rejectPacket();\n"
+            "    };\n"
+            "private:\n"
+            "    void rejectPacket();\n"
+            "};",
+            (),
+        ),
+        (
+            "inline implementation details",
+            "class GpuTaskGraph final{\n"
+            "public:\n"
+            "    bool discard(){ return helper.discardUnacceptedPacket(); }\n"
+            "private:\n"
+            "    bool discardUnacceptedPacket();\n"
+            "};\n"
+            "class GpuGraphSubmissionTransaction final{\n"
+            "public:\n"
+            "    bool reject(){ return helper.rejectPacket(); }\n"
+            "private:\n"
+            "    void rejectPacket();\n"
+            "};",
+            (),
+        ),
+        (
+            "out of class definitions",
+            "bool GpuTaskGraph::discardUnacceptedPacket(){ return true; }\n"
+            "void GpuGraphSubmissionTransaction::rejectPacket(){}",
+            (),
+        ),
+        (
             "inline implementation detail",
             "class GpuTaskGraphSubmitter final{\n"
             "public:\n"
@@ -208,13 +426,23 @@ def run_self_test() -> int:
         (
             "comment and literal",
             "// class GpuTaskGraphSubmitter{ public: bool submitPacket(); };\n"
-            'const char* text = "GpuTaskGraphSubmitter submitPacket";',
+            "// GpuTaskPacketSubmissionLease\n"
+            "// class GpuTaskGraph{ public: class PacketSubmissionLease; };\n"
+            "// class GpuGraphSubmissionTransaction{ public: void rejectPacket(); };\n"
+            'const char* text = "GpuTaskGraphSubmitter submitPacket discardUnacceptedPacket";\n'
+            'const char* raw = R"tag(GpuTaskPacketSubmissionLease rejectPacket)tag";',
             (),
         ),
         (
             "near names",
+            "GpuTaskPacketSubmissionLeaseFactory lease;\n"
             "class GpuTaskGraphSubmitterFactory{ public: bool submitPacket(); };\n"
-            "class GpuTaskGraphSubmitter{ public: bool submitPackets(); };",
+            "class GpuTaskGraphSubmitter{ public: bool submitPackets(); };\n"
+            "class GpuTaskGraphFactory{ public: bool discardUnacceptedPacket(); };\n"
+            "class GpuTaskGraph{ public: class PacketSubmissionLeases; bool discardUnacceptedPackets(); };\n"
+            "class GpuGraphSubmissionTransactionFactory{ public: bool rejectPacket(); };\n"
+            "class GpuGraphSubmissionTransaction{ public: bool rejectPackets(); };\n"
+            "class Fixture{ public: bool discardUnacceptedPacket(); bool rejectPacket(); };",
             (),
         ),
     )
@@ -242,7 +470,7 @@ def main() -> int:
 
     if violations:
         print(
-            "Native packet selection and submission must stay private to the graph runtime.",
+            "Native packet selection, submission, and rejection lifecycle must stay private to the graph runtime.",
             file=sys.stderr,
         )
         print("\n".join(violations), file=sys.stderr)

@@ -311,7 +311,7 @@ bool GpuGraphSubmissionTransaction::beginPacketSubmission(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packetID,
     const u64 recordingAttemptGeneration,
-    GpuTaskPacketSubmissionLease& outLease
+    GpuTaskGraph::PacketSubmissionLease& outLease
 )noexcept{
     if(
         !validFor(compiledGraph)
@@ -362,7 +362,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packetID,
     const QueueSubmissionToken& token,
-    GpuTaskPacketSubmissionLease& lease,
+    GpuTaskGraph::PacketSubmissionLease& lease,
     const NativeSubmissionInfo& nativeSubmissionInfo,
     const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
     const usize taskAcceptedCallbackCount

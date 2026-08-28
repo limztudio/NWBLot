@@ -247,18 +247,19 @@ struct Result{
     );
 }
 
-[[nodiscard]] static bool DiscardRecordedPacket(
-    const GpuTaskGraph& graph,
+[[nodiscard]] static bool DiscardRecordedAttempt(
+    GpuGraphSubmissionTransaction& transaction,
+    GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
-    const GpuSubmissionPacketId packet,
     GpuRecordedGraph& recordedGraph
 ){
-    if(!compiledGraph.validPacket(packet) || !recordedGraph.validFor(graph, compiledGraph))
+    if(!recordedGraph.validFor(graph, compiledGraph))
         return false;
-    if(!graph.discardUnacceptedPacket(compiledGraph, packet, recordedGraph.recordingAttemptGeneration()))
+    transaction.reset(compiledGraph);
+    if(!transaction.discardUnaccepted(graph, compiledGraph, recordedGraph.recordingAttemptGeneration()))
         return false;
 
-    // Discard resolves the graph's exact recording attempt; reset then releases the unsubmitted native artifact.
+    // Transaction cleanup resolves the exact recording attempt; reset then releases its unsubmitted native artifact.
     recordedGraph.reset(compiledGraph);
     return true;
 }
@@ -620,17 +621,18 @@ struct Result{
     const GpuNativePacketRecorder recorder(device);
     GpuRecordedGraph nativeRecordedGraph(arena);
     GpuRecordedGraph captureRecordedGraph(arena);
+    GpuGraphSubmissionTransaction discardTransaction(arena);
     Alloc::GlobalArena captureArena(Name("tests/ab/command_ir/capture_arena"));
     GpuCommandIrCapture capture(captureArena);
     const auto warmup = [&]{
         if(!RecordPacket(recorder, graph, compiledGraph, packet, nativeRecordedGraph, nullptr))
             return false;
-        if(!DiscardRecordedPacket(graph, compiledGraph, packet, nativeRecordedGraph))
+        if(!DiscardRecordedAttempt(discardTransaction, graph, compiledGraph, nativeRecordedGraph))
             return false;
         capture.reset();
         if(!RecordPacket(recorder, graph, compiledGraph, packet, captureRecordedGraph, &capture))
             return false;
-        if(!DiscardRecordedPacket(graph, compiledGraph, packet, captureRecordedGraph))
+        if(!DiscardRecordedAttempt(discardTransaction, graph, compiledGraph, captureRecordedGraph))
             return false;
         if(capture.recordCount() != arguments.recordCount)
             return false;
@@ -677,7 +679,7 @@ struct Result{
         const bool appended = outResult.nativeRecord.append(
             DurationInNS<f64>(TimerNow(), nativeBegin) / static_cast<f64>(arguments.recordCount)
         );
-        if(!DiscardRecordedPacket(graph, compiledGraph, packet, nativeRecordedGraph))
+        if(!DiscardRecordedAttempt(discardTransaction, graph, compiledGraph, nativeRecordedGraph))
             return false;
         return appended;
     };
@@ -691,7 +693,7 @@ struct Result{
         const bool appended = outResult.captureRecord.append(
             DurationInNS<f64>(TimerNow(), captureBegin) / static_cast<f64>(arguments.recordCount)
         );
-        if(!DiscardRecordedPacket(graph, compiledGraph, packet, captureRecordedGraph))
+        if(!DiscardRecordedAttempt(discardTransaction, graph, compiledGraph, captureRecordedGraph))
             return false;
         if(capture.recordCount() != arguments.recordCount)
             return false;

@@ -742,9 +742,49 @@ concept HasDeclarationTaskDiscard = requires(
     graph.discardTask(task);
 };
 
+template<typename GraphT>
+concept HasPublicPacketSubmissionLease = requires{
+    typename GraphT::PacketSubmissionLease;
+};
+
+template<typename GraphT>
+concept HasSinglePacketDiscard = requires(
+    const GraphT& graph,
+    const Graphics::GpuCompiledGraph& compiledGraph,
+    const Graphics::GpuSubmissionPacketId& packet,
+    const u64 recordingAttemptGeneration
+){
+    graph.discardUnacceptedPacket(compiledGraph, packet, recordingAttemptGeneration);
+};
+
+template<typename TransactionT>
+concept HasSinglePacketRejection = requires(
+    TransactionT& transaction,
+    Graphics::GpuTaskGraph& graph,
+    const Graphics::GpuCompiledGraph& compiledGraph,
+    const Graphics::GpuSubmissionPacketId& packet
+){
+    transaction.rejectPacket(graph, compiledGraph, packet);
+};
+
+template<typename TransactionT>
+concept HasAttemptSinglePacketRejection = requires(
+    TransactionT& transaction,
+    Graphics::GpuTaskGraph& graph,
+    const Graphics::GpuCompiledGraph& compiledGraph,
+    const Graphics::GpuSubmissionPacketId& packet,
+    const u64 recordingAttemptGeneration
+){
+    transaction.rejectPacket(graph, compiledGraph, packet, recordingAttemptGeneration);
+};
+
 static_assert(!HasDeclarationTaskAcceptance<Graphics::GpuTaskGraph>);
 static_assert(!HasAttemptTaskAcceptance<Graphics::GpuTaskGraph>);
 static_assert(!HasDeclarationTaskDiscard<Graphics::GpuTaskGraph>);
+static_assert(!HasPublicPacketSubmissionLease<Graphics::GpuTaskGraph>);
+static_assert(!HasSinglePacketDiscard<Graphics::GpuTaskGraph>);
+static_assert(!HasSinglePacketRejection<Graphics::GpuGraphSubmissionTransaction>);
+static_assert(!HasAttemptSinglePacketRejection<Graphics::GpuGraphSubmissionTransaction>);
 
 
 inline constexpr Graphics::GpuTaskId s_CommandIrTask{ 4u, 17u };

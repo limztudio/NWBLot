@@ -373,7 +373,7 @@ bool GpuTaskGraphSubmitter::submitPacketWithinSubmissionOperation(
     // A bad dependency or external completion is a pre-submit input error. Preserve the completed native packet
     // so the caller can retry it with corrected tokens; the graph-owned reservation starts only once submission is
     // unavoidable and keeps cancellation from racing Device::executeCommandLists().
-    GpuTaskPacketSubmissionLease submissionLease;
+    GpuTaskGraph::PacketSubmissionLease submissionLease;
     if(!transaction.beginPacketSubmission(
         graph,
         compiledGraph,

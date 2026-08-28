@@ -31,8 +31,10 @@ can receive an unconditional final sign-off.
 
 - The legacy `FrameExecutionPlan` family is absent; the deferred renderer builds a shared task graph and consumes
   compiler-derived packet ranges.
-- Task IDs, resource uses, inferred hazards, deterministic queue selection, packet generation, graph state seeds,
-  and barrier/ownership planning are implemented and covered by focused tests.
+- Task IDs, resource uses, explicit-cycle rejection, deterministic ordered RAW/WAR/WAW inference, queue selection,
+  packet generation, graph state seeds, and barrier/ownership planning are implemented and covered by focused tests.
+  Resource-version cycle expression and its resource-derived/mixed diagnostic cases are deferred by
+  [`W-CYCLE-001`](#w-cycle-001--resource-derived-and-mixed-cycle-expression).
 - Accepted/rejected packet lifecycle is transactional. Native recording is still the default runtime path; command IR
   capture, validation, replay, and the direct-Vulkan `CopyBuffer` lowerer are opt-in tooling.
 - Vulkan-only descriptor-buffer bindless rendering remains fail-closed. The retained `RenderLane` RHI compatibility
@@ -728,6 +730,30 @@ runtime IR templates or general direct-Vulkan IR replay.
   the paired images, manifests, logs, comparison reports, and tolerances under `.cozter/out/ab-results/`, then
   replace this waiver with an audit row that reports the reviewed legacy-to-graph comparison. A current-renderer
   re-capture alone cannot remove this waiver.
+
+### W-CYCLE-001 — resource-derived and mixed-cycle expression
+
+- **Deferred requirement:** the resource-derived-cycle and mixed explicit/resource-cycle cases in §78.3, together
+  with §27's corresponding same-frame feedback example, require producer/consumer intent that is independent of a
+  preselected task order. Only those resource-version cases are deferred; explicit dependency-cycle rejection,
+  cross-frame imported-completion handling, and the defensive final topological validation remain in accepted scope.
+- **Reason:** `GpuTaskResourceUse` identifies a resource range and its state/access contract, but does not identify a
+  produced or consumed resource version. The analyzer first rejects cycles in explicit edges, computes their stable
+  topological order, and then orients every inferred RAW/WAR/WAW edge forward through that order. The final
+  explicit-plus-inferred graph is therefore acyclic by construction. In particular, §27's two-task example selects
+  one deterministic serial order instead of expressing that each read consumes the other task's output. A synthetic
+  resource-cycle test would require a private edge-injection seam and would not exercise the public contract.
+- **Affected behavior and safe fallback:** same-frame ordering must be stated with explicit dependencies, and feedback
+  must use imported prior-frame state/completions. Explicit cycles are rejected before queue assignment and report a
+  closed task path plus typed cycle edges; the analyzer also retains its final post-hazard cycle check as a defensive
+  invariant. Overlapping RAW/WAR/WAW uses remain correctly serialized in explicit stable order, but this behavior must
+  not be presented as resource-derived or mixed-cycle rejection coverage.
+- **Removal condition:** add a version-addressable resource API that lets declarations name produced and consumed
+  versions for exact ranges; validate version provenance, compatible ranges, and producer uniqueness; derive version
+  producer-to-consumer edges independently of declaration or scheduling order; then run cycle detection on the union
+  of explicit and version-derived edges. Add the two deferred §78.3 tests with task, edge-type, resource/version, and
+  closed-path diagnostics. Imported prior-frame versions/completions must remain external roots rather than same-frame
+  edges.
 
 ## Open criteria preventing strict final acceptance
 

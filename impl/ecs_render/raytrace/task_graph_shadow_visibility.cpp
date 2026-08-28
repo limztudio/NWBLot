@@ -139,23 +139,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         && materialContextSlots.valid()
         && softwareTraceGeometryResourceCount != 0u
     ;
-    bool graphOwnedSoftTransparentFoldEnabled = true;
-#if !defined(NWB_FINAL)
-    graphOwnedSoftTransparentFoldEnabled = m_graphOwnedSoftTransparentShadowFoldEnabledForTesting;
-    if(
-        preparedSoftTransparentFoldCandidate
-        && m_graphOwnedSoftTransparentShadowFoldBenchmarkForTesting
-        && !m_reportedGraphOwnedSoftTransparentShadowFoldBenchmarkForTesting
-    ){
-        NWB_LOGGER_ESSENTIAL_INFO(
-            graphOwnedSoftTransparentFoldEnabled
-                ? NWB_TEXT("RendererSystem: graph-owned soft-transparent shadow-fold benchmark path active")
-                : NWB_TEXT("RendererSystem: retained monolithic soft-transparent shadow-fold benchmark path active")
-        );
-        m_reportedGraphOwnedSoftTransparentShadowFoldBenchmarkForTesting = true;
-    }
-#endif
-    const bool splitSoftTransparentFold = preparedSoftTransparentFoldCandidate && graphOwnedSoftTransparentFoldEnabled;
+    const bool splitSoftTransparentFold = preparedSoftTransparentFoldCandidate;
     // The adaptive fallback remains in the monolithic callback, but its raw buffer primitives and acceptance-time
     // diagnostic lifecycle are deterministic from this frozen route.  A frame with no clear/copy work still owns
     // its tick through the semantic task's accepted hook without gaining empty graph nodes.

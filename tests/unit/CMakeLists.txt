@@ -33,22 +33,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "${CMAKE_SOURCE_DIR}/tests/ab/async_shadow_m4/launch.py"
             "--self-test"
     )
-    # Keep the graph-owned soft-transparent fold's paired timing/verdict parser and its launcher contract under
-    # ordinary CTest. The visual/timestamp comparison remains an opt-in target-hardware workflow.
-    add_test(
-        NAME nwb_soft_transparent_shadow_fold_harness_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/soft_transparent_shadow_fold/run.py"
-            "--self-test"
-    )
-    add_test(
-        NAME nwb_soft_transparent_shadow_fold_launcher_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/soft_transparent_shadow_fold/launch.py"
-            "--self-test"
-    )
     # Keep the natural hybrid-versus-opaque report schema, route diagnostics, and shared-binary launcher contract
     # under ordinary CTest. The window/timestamp capture remains an opt-in target-hardware workflow.
     add_test(

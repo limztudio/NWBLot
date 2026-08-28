@@ -8,7 +8,6 @@ Only complete, independently runnable workflows live here. Invoke them through t
 - `python launcher.py frame-lagged-async-lighting` validates the opt-in lighting history lifecycle.
 - `python launcher.py hybrid-shadow-boundary` measures the healthy hybrid transparent-shadow tail against a natural opaque hardware-shadow scene baseline.
 - `python launcher.py renderer-baseline <profile>` captures or compares an immutable current-renderer scene baseline.
-- `python launcher.py soft-transparent-shadow-fold` measures the graph-owned transparent-shadow fold against its retained monolithic callback.
 - `python launcher.py transfer-queue` profiles repeated large setup uploads on a real dedicated Transfer family.
 
 The directory-level `launch.py` is a router, not a workflow. Do not add an A/B script that needs manual source edits, hard-coded build paths, or a platform shell. Keep raw captures, logs, timing tables, diff images, and result summaries under `.cozter/out/ab-results/`.

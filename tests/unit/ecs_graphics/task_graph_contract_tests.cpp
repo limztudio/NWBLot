@@ -3527,6 +3527,63 @@ TEST(EcsGraphics, FrontierSafeEffectChainsRetainTheirSemanticPackets){
 }
 
 
+// A fully prepared soft-transparent frame selects the split graph route from production state alone. The retained
+// monolithic callback remains a natural compatibility fallback, not a behavior-selectable benchmark arm.
+TEST(EcsGraphics, SoftTransparentFoldHasNoProductionTestControl){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemHeaderSource;
+    AString systemSource;
+    AString shadowVisibilitySource;
+    AString smokeCmakeSource;
+    AString stressTestProjectSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", systemHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", systemSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "raytrace" / "task_graph_shadow_visibility.cpp",
+        shadowVisibilitySource
+    ));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "CMakeLists.txt", smokeCmakeSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "stress_test_project.cpp", stressTestProjectSource));
+    const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
+    const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView shadowVisibility(shadowVisibilitySource.data(), shadowVisibilitySource.size());
+    const AStringView smokeCmake(smokeCmakeSource.data(), smokeCmakeSource.size());
+    const AStringView stressTestProject(stressTestProjectSource.data(), stressTestProjectSource.size());
+
+    EXPECT_TRUE(ContainsText(
+        shadowVisibility,
+        "const bool splitSoftTransparentFold = preparedSoftTransparentFoldCandidate;"
+    ));
+    EXPECT_TRUE(ContainsText(shadowVisibility, "if(splitSoftTransparentFold){"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, "Core::GpuTaskId shadowVisibilityDependency = prefixTask;"));
+    EXPECT_FALSE(ContainsText(shadowVisibility, "graphOwnedSoftTransparentFoldEnabled"));
+    EXPECT_FALSE(ContainsText(shadowVisibility, "SoftTransparentShadowFoldEnabledForTesting"));
+    EXPECT_FALSE(ContainsText(shadowVisibility, "soft-transparent shadow-fold benchmark path active"));
+    EXPECT_FALSE(ContainsText(systemHeader, "setGraphOwnedSoftTransparentShadowFoldEnabledForTesting"));
+    EXPECT_FALSE(ContainsText(systemHeader, "m_graphOwnedSoftTransparentShadowFoldEnabledForTesting"));
+    EXPECT_FALSE(ContainsText(systemHeader, "m_graphOwnedSoftTransparentShadowFoldBenchmarkForTesting"));
+    EXPECT_FALSE(ContainsText(systemHeader, "m_reportedGraphOwnedSoftTransparentShadowFoldBenchmarkForTesting"));
+    EXPECT_FALSE(ContainsText(system, "setGraphOwnedSoftTransparentShadowFoldEnabledForTesting"));
+    EXPECT_FALSE(ContainsText(smokeCmake, "nwb_soft_transparent_shadow_fold_graph_benchmark"));
+    EXPECT_FALSE(ContainsText(smokeCmake, "nwb_soft_transparent_shadow_fold_monolithic_benchmark"));
+    EXPECT_FALSE(ContainsText(smokeCmake, "NWB_SOFT_TRANSPARENT_SHADOW_FOLD_BENCHMARK"));
+    EXPECT_FALSE(ContainsText(smokeCmake, "NWB_SOFT_TRANSPARENT_SHADOW_FOLD_MONOLITHIC_BENCHMARK"));
+    EXPECT_FALSE(ContainsText(stressTestProject, "NWB_SOFT_TRANSPARENT_SHADOW_FOLD_BENCHMARK"));
+    EXPECT_FALSE(ContainsText(stressTestProject, "NWB_SOFT_TRANSPARENT_SHADOW_FOLD_MONOLITHIC_BENCHMARK"));
+    EXPECT_FALSE(ContainsText(
+        stressTestProject,
+        "StressTestSmokeProject: enabled graph-owned soft-transparent shadow-fold benchmark"
+    ));
+    EXPECT_FALSE(ContainsText(
+        stressTestProject,
+        "StressTestSmokeProject: enabled retained monolithic soft-transparent shadow-fold benchmark"
+    ));
+    EXPECT_FALSE(ContainsText(stressTestProject, "NWB Soft Transparent Shadow Fold Benchmark"));
+}
+
+
 // A retained generated-vertex output needs an explicit graph phase for every producer/raster handoff. Keep the
 // narrow fifth regular draw visible rather than allowing it to fall through to a callback-local compatibility path.
 TEST(EcsGraphics, SharedComputeEmulationRetainsFiveRegularDraws){
@@ -5463,7 +5520,8 @@ TEST(EcsGraphics, HybridHardwareFallbackRequiresCompleteGraphOwnedBlobs){
     EXPECT_TRUE(ContainsText(createCharacter, "const f32 z = transparentMaterialClass ? s_TransparentRowZ : s_OpaqueRowZ;"));
 
     const usize hybridBenchmarkStartupOffset = stressTestProject.find(
-        "#elif defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)"
+        "#if defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)",
+        createCharacterEndOffset
     );
     const usize hybridBenchmarkStartupEndOffset = stressTestProject.find(
         "const u32 transparentCharacterCount",

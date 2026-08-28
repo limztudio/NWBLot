@@ -375,24 +375,6 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
     return handoff.validFor(compiledGraph) ? handoff : GpuTaskGraphExternalResourceHandoff{};
 }
 
-const QueueSubmissionToken* GpuGraphSubmissionTransaction::latestAcceptedToken(
-    const GpuPhysicalQueueId& queue
-)const noexcept{
-    // This borrowed inspection pointer is intended for a caller that serializes reset/query access. Submission and
-    // cancellation paths use value copies instead, so they never retain transaction-owned vector storage.
-    if(!queue.valid() || queue.deviceGeneration != m_deviceGeneration)
-        return nullptr;
-    for(const LatestAcceptedQueueToken& latest : m_latestAcceptedQueueTokens){
-        if(
-            latest.queue == queue
-            && latest.token.valid()
-            && latest.token.matchesPhysicalQueue(queue.index, queue.deviceGeneration)
-        )
-            return &latest.token;
-    }
-    return nullptr;
-}
-
 bool GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(
     const GpuPhysicalQueueId& destinationQueue,
     Vector<QueueSubmissionToken, Alloc::ScratchArena>& outTokens
@@ -417,17 +399,6 @@ bool GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(
     }
     return true;
 }
-
-const GpuPacketRuntime* GpuGraphSubmissionTransaction::packetRuntime(
-    const GpuSubmissionPacketId& packet
-)const noexcept{
-    // See latestAcceptedToken(): test/diagnostic inspection must serialize reset/query access around this borrowed
-    // pointer. Runtime submission paths query packet tokens by value under m_mutex.
-    if(!m_valid || !packet.valid() || packet.generation != m_planGeneration || packet.index >= m_packets.size())
-        return nullptr;
-    return &m_packets[packet.index];
-}
-
 
 GpuTaskGraphRuntimeStatistics CollectGpuTaskGraphRuntimeStatistics(
     const GpuCompiledGraph& compiledGraph,

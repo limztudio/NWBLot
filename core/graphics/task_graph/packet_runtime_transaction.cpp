@@ -59,15 +59,8 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(
         if(!transaction.m_submissionMutex.try_lock())
             return;
     }
-    else if(!transaction.m_submissionMutex.try_lock()){
-#if !defined(NWB_FINAL)
-        transaction.m_submissionWaiterCount.fetch_add(1u, MemoryOrder::release);
-#endif
+    else if(!transaction.m_submissionMutex.try_lock())
         transaction.m_submissionMutex.lock();
-#if !defined(NWB_FINAL)
-        transaction.m_submissionWaiterCount.fetch_sub(1u, MemoryOrder::release);
-#endif
-    }
     m_transaction = &transaction;
     m_previousOperation = s_activeOperation;
     s_activeOperation = this;
@@ -188,7 +181,6 @@ GpuTaskGraphPacketSubmissionStatistics GpuGraphSubmissionTransaction::packetSubm
         !queueInfo
         || queueInfo->queueClass >= CommandQueue::kCount
         || runtime.state != GpuPacketRuntimeState::Accepted
-        || !runtime.hasNativeSubmission
         || !runtime.token.valid()
         || runtime.token.queue != queueInfo->queueClass
         || !runtime.token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration)
@@ -245,19 +237,13 @@ GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::phy
             continue;
 
         const GpuPacketRuntime& runtime = m_packets[packetIndex];
-        if(
-            (runtime.hasNativeSubmission && runtime.state != GpuPacketRuntimeState::Accepted)
-            || (runtime.nativeSubmissionRejected && runtime.state != GpuPacketRuntimeState::Rejected)
-        )
+        if(runtime.nativeSubmissionRejected && runtime.state != GpuPacketRuntimeState::Rejected)
             return {};
 
         switch(runtime.state){
         case GpuPacketRuntimeState::Accepted:
             ++statistics.acceptedPacketCount;
             statistics.acceptedTaskCount += packet.taskCount;
-            if(!runtime.hasNativeSubmission)
-                break;
-
             ++statistics.nativeSubmissionCount;
             statistics.nativeCommandListCount += runtime.nativeCommandListCount;
             statistics.plannedWaitTokenCount += runtime.plannedWaitTokenCount;
@@ -320,40 +306,6 @@ bool GpuGraphSubmissionTransaction::matchesRecordedAttempt(
     ;
 }
 
-bool GpuGraphSubmissionTransaction::markPacketRecorded(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuSubmissionPacketId& packet,
-    const u64 recordingAttemptGeneration
-)noexcept{
-    if(
-        !compiledGraph.validPacket(packet)
-        || !graph.packetReadyForSubmission(
-            compiledGraph,
-            packet,
-            recordingAttemptGeneration
-        )
-        || !bindRecordingAttempt(graph, compiledGraph, recordingAttemptGeneration)
-    )
-        return false;
-
-    ScopedLock lock(m_mutex);
-    if(
-        !validForLocked(compiledGraph)
-        || !packet.valid()
-        || packet.generation != m_planGeneration
-        || packet.index >= m_packets.size()
-        || m_recordingAttemptGeneration != recordingAttemptGeneration
-    )
-        return false;
-    GpuPacketRuntime& runtime = m_packets[packet.index];
-    if(runtime.state != GpuPacketRuntimeState::Declared)
-        return false;
-    runtime.state = GpuPacketRuntimeState::Recorded;
-    return true;
-}
-
-
 bool GpuGraphSubmissionTransaction::beginPacketSubmission(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
@@ -374,7 +326,6 @@ bool GpuGraphSubmissionTransaction::beginPacketSubmission(
     )
         return false;
 
-    GpuPacketRuntimeState::Enum previousState = GpuPacketRuntimeState::Declared;
     {
         ScopedLock lock(m_mutex);
         if(
@@ -384,12 +335,8 @@ bool GpuGraphSubmissionTransaction::beginPacketSubmission(
         )
             return false;
         GpuPacketRuntime& runtime = m_packets[packetID.index];
-        if(
-            runtime.state != GpuPacketRuntimeState::Declared
-            && runtime.state != GpuPacketRuntimeState::Recorded
-        )
+        if(runtime.state != GpuPacketRuntimeState::Declared)
             return false;
-        previousState = runtime.state;
         runtime.state = GpuPacketRuntimeState::Submitting;
     }
 
@@ -403,50 +350,12 @@ bool GpuGraphSubmissionTransaction::beginPacketSubmission(
         if(validForLocked(compiledGraph) && packetID.index < m_packets.size()){
             GpuPacketRuntime& runtime = m_packets[packetID.index];
             if(runtime.state == GpuPacketRuntimeState::Submitting)
-                runtime.state = previousState;
+                runtime.state = GpuPacketRuntimeState::Declared;
         }
         return false;
     }
     return true;
 }
-
-bool GpuGraphSubmissionTransaction::acceptPacket(
-    GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuSubmissionPacketId& packetID,
-    const QueueSubmissionToken& token
-)noexcept{
-    SubmissionOperation submissionOperation(*this);
-    if(!submissionOperation.valid())
-        return false;
-
-    u64 recordingAttemptGeneration = 0u;
-    {
-        ScopedLock lock(m_mutex);
-        recordingAttemptGeneration = m_recordingAttemptGeneration;
-    }
-    if(
-        !validFor(compiledGraph)
-        || !compiledGraph.validPacket(packetID)
-        || !token.valid()
-        || recordingAttemptGeneration == 0u
-    )
-        return false;
-    const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
-    const GpuPhysicalQueueInfo* const queueInfo = compiledGraph.queueInfo(packet.queue);
-    if(
-        !queueInfo
-        || queueInfo->queueClass >= CommandQueue::kCount
-        || token.queue != queueInfo->queueClass
-        || !token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration)
-    )
-        return false;
-    GpuTaskPacketSubmissionLease lease;
-    if(!beginPacketSubmission(graph, compiledGraph, packetID, recordingAttemptGeneration, lease))
-        return false;
-    return acceptSubmittingPacket(graph, compiledGraph, packetID, token, lease);
-}
-
 
 bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     GpuTaskGraph& graph,
@@ -454,7 +363,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     const GpuSubmissionPacketId packetID,
     const QueueSubmissionToken& token,
     GpuTaskPacketSubmissionLease& lease,
-    const NativeSubmissionInfo* const nativeSubmissionInfo,
+    const NativeSubmissionInfo& nativeSubmissionInfo,
     const GpuTaskGraphPacketAcceptedCallback* const acceptedCallback,
     const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
     const usize taskAcceptedCallbackCount
@@ -505,7 +414,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     }
 
     ScopedLock lock(m_mutex);
-    // reset(), public acceptance, and cancellation cannot cross a graph-owned submission lease. Once the graph
+    // reset() and cancellation cannot cross a graph-owned submission lease. Once the graph
     // publishes accepted callbacks, this transaction resolution is therefore an invariant rather than a second
     // failure point.
     NWB_ASSERT(validForLocked(compiledGraph));
@@ -514,15 +423,12 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     NWB_ASSERT(runtime.state == GpuPacketRuntimeState::Submitting);
     runtime.state = GpuPacketRuntimeState::Accepted;
     runtime.token = token;
-    if(nativeSubmissionInfo){
-        runtime.nativeCommandListCount = nativeSubmissionInfo->commandListCount;
-        runtime.plannedWaitTokenCount = nativeSubmissionInfo->plannedWaitTokenCount;
-        runtime.sameQueueWaitElisionCount = nativeSubmissionInfo->sameQueueWaitElisionCount;
-        runtime.timelineWaitCount = nativeSubmissionInfo->timelineWaitCount;
-        runtime.mergedTimelineWaitCount = nativeSubmissionInfo->mergedTimelineWaitCount;
-        runtime.submissionSeconds = nativeSubmissionInfo->submissionSeconds;
-        runtime.hasNativeSubmission = true;
-    }
+    runtime.nativeCommandListCount = nativeSubmissionInfo.commandListCount;
+    runtime.plannedWaitTokenCount = nativeSubmissionInfo.plannedWaitTokenCount;
+    runtime.sameQueueWaitElisionCount = nativeSubmissionInfo.sameQueueWaitElisionCount;
+    runtime.timelineWaitCount = nativeSubmissionInfo.timelineWaitCount;
+    runtime.mergedTimelineWaitCount = nativeSubmissionInfo.mergedTimelineWaitCount;
+    runtime.submissionSeconds = nativeSubmissionInfo.submissionSeconds;
 
     ++m_acceptedSubmissionCount;
     if(m_acceptedSubmissionCount == 0u)
@@ -531,26 +437,24 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
 
     ++m_submissionStatistics.acceptedPacketCount;
     m_submissionStatistics.acceptedTaskCount += packet.taskCount;
-    if(nativeSubmissionInfo){
-        ++m_submissionStatistics.nativeSubmissionCount;
-        m_submissionStatistics.nativeCommandListCount += nativeSubmissionInfo->commandListCount;
-        m_submissionStatistics.plannedWaitTokenCount += nativeSubmissionInfo->plannedWaitTokenCount;
-        m_submissionStatistics.sameQueueWaitElisionCount += nativeSubmissionInfo->sameQueueWaitElisionCount;
-        m_submissionStatistics.timelineWaitCount += nativeSubmissionInfo->timelineWaitCount;
-        m_submissionStatistics.mergedTimelineWaitCount += nativeSubmissionInfo->mergedTimelineWaitCount;
-        m_submissionStatistics.submissionSeconds += nativeSubmissionInfo->submissionSeconds;
-        if(packet.joinsAcceptedQueueFrontier)
-            ++m_submissionStatistics.acceptedFrontierSubmissionCount;
-        if(packet.isRecoverySubmission)
-            ++m_submissionStatistics.recoverySubmissionCount;
+    ++m_submissionStatistics.nativeSubmissionCount;
+    m_submissionStatistics.nativeCommandListCount += nativeSubmissionInfo.commandListCount;
+    m_submissionStatistics.plannedWaitTokenCount += nativeSubmissionInfo.plannedWaitTokenCount;
+    m_submissionStatistics.sameQueueWaitElisionCount += nativeSubmissionInfo.sameQueueWaitElisionCount;
+    m_submissionStatistics.timelineWaitCount += nativeSubmissionInfo.timelineWaitCount;
+    m_submissionStatistics.mergedTimelineWaitCount += nativeSubmissionInfo.mergedTimelineWaitCount;
+    m_submissionStatistics.submissionSeconds += nativeSubmissionInfo.submissionSeconds;
+    if(packet.joinsAcceptedQueueFrontier)
+        ++m_submissionStatistics.acceptedFrontierSubmissionCount;
+    if(packet.isRecoverySubmission)
+        ++m_submissionStatistics.recoverySubmissionCount;
 
-        const usize queueClassIndex = static_cast<usize>(queueInfo->queueClass);
-        NWB_ASSERT(queueClassIndex < GpuTaskGraphSubmissionStatistics::s_QueueClassCount);
-        if(queueClassIndex < GpuTaskGraphSubmissionStatistics::s_QueueClassCount){
-            ++m_submissionStatistics.nativeSubmissionCountByQueueClass[queueClassIndex];
-            m_submissionStatistics.nativeCommandListCountByQueueClass[queueClassIndex] += nativeSubmissionInfo->commandListCount;
-            m_submissionStatistics.timelineWaitCountByQueueClass[queueClassIndex] += nativeSubmissionInfo->timelineWaitCount;
-        }
+    const usize queueClassIndex = static_cast<usize>(queueInfo->queueClass);
+    NWB_ASSERT(queueClassIndex < GpuTaskGraphSubmissionStatistics::s_QueueClassCount);
+    if(queueClassIndex < GpuTaskGraphSubmissionStatistics::s_QueueClassCount){
+        ++m_submissionStatistics.nativeSubmissionCountByQueueClass[queueClassIndex];
+        m_submissionStatistics.nativeCommandListCountByQueueClass[queueClassIndex] += nativeSubmissionInfo.commandListCount;
+        m_submissionStatistics.timelineWaitCountByQueueClass[queueClassIndex] += nativeSubmissionInfo.timelineWaitCount;
     }
 
     bool foundLatestQueue = false;

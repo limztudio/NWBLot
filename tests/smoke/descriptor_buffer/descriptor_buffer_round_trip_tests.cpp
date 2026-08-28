@@ -4482,9 +4482,7 @@ struct NativePacketSubmissionSerializationTask{
         context->compatibilityAcceptedToken = token;
         ++context->compatibilityAcceptedCount;
         context->packetTokenHiddenDuringCallback = !context->transaction->packetToken(packet).valid();
-        context->acceptedFrontierHiddenDuringCallback = context->transaction->latestAcceptedToken(
-            context->compiledGraph->packet(packet).queue
-        ) == nullptr;
+        context->acceptedFrontierHiddenDuringCallback = !context->transaction->hasAcceptedPackets();
         context->reentrantSubmissionResult = context->submitter->submitPacket(
             *context->graph,
             *context->compiledGraph,
@@ -26261,8 +26259,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
         scratchArena
     ));
     EXPECT_FALSE(transaction.hasAcceptedPackets());
-    ASSERT_NE(transaction.packetRuntime(packet), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(packet)->state, GpuPacketRuntimeState::Declared);
+    EXPECT_FALSE(transaction.packetToken(packet).valid());
     const GpuTaskGraphSubmissionStatistics retryableStatistics = transaction.submissionStatistics();
     ASSERT_TRUE(retryableStatistics.valid());
     EXPECT_EQ(retryableStatistics.acceptedPacketCount, 0u);
@@ -48350,8 +48347,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     EXPECT_EQ(callbackFalseAcceptance.lastToken.value, callbackFalsePacketToken.value);
     EXPECT_EQ(callbackFalseTypedToken.value, callbackFalsePacketToken.value);
     EXPECT_EQ(callbackFalseTaskToken.value, callbackFalsePacketToken.value);
-    ASSERT_NE(callbackFalseTransaction.packetRuntime(callbackFalsePacket), nullptr);
-    EXPECT_EQ(callbackFalseTransaction.packetRuntime(callbackFalsePacket)->state, GpuPacketRuntimeState::Accepted);
     // The helper's false-result closeout calls rejectTask(), which must leave an already native-accepted packet
     // untouched rather than discarding its payload or rewriting its terminal state.
     EXPECT_EQ(callbackFalseDiscardedCount, 0u);
@@ -48385,11 +48380,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     EXPECT_FALSE(preflightRejectedRecorded);
     EXPECT_EQ(preflightRejectedDiscardedCount, 1u);
     EXPECT_FALSE(preflightRejectedTransaction.packetToken(preflightRejectedTailPacket).valid());
-    ASSERT_NE(preflightRejectedTransaction.packetRuntime(preflightRejectedTailPacket), nullptr);
-    EXPECT_EQ(
-        preflightRejectedTransaction.packetRuntime(preflightRejectedTailPacket)->state,
-        GpuPacketRuntimeState::Rejected
-    );
 
     const GpuTaskGraphTaskAcceptedCallback invalidAcceptedCallback{
         .task = invalidAcceptedCallbackTailTask,
@@ -48419,11 +48409,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     ;
     EXPECT_EQ(invalidAcceptedCallbackStatistics.acceptedPacketCount, 0u);
     EXPECT_EQ(invalidAcceptedCallbackStatistics.nativeSubmissionCount, 0u);
-    ASSERT_NE(invalidAcceptedCallbackTransaction.packetRuntime(invalidCallbackPacket), nullptr);
-    EXPECT_EQ(
-        invalidAcceptedCallbackTransaction.packetRuntime(invalidCallbackPacket)->state,
-        GpuPacketRuntimeState::Rejected
-    );
 
     NativeTaskAcceptanceObserver mismatchedAcceptance;
     const GpuTaskGraphTaskAcceptedCallback mismatchedAcceptedCallback{
@@ -48457,11 +48442,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     ;
     EXPECT_EQ(mismatchedAcceptedCallbackStatistics.acceptedPacketCount, 0u);
     EXPECT_EQ(mismatchedAcceptedCallbackStatistics.nativeSubmissionCount, 0u);
-    ASSERT_NE(mismatchedAcceptedCallbackTransaction.packetRuntime(mismatchedCallbackPacket), nullptr);
-    EXPECT_EQ(
-        mismatchedAcceptedCallbackTransaction.packetRuntime(mismatchedCallbackPacket)->state,
-        GpuPacketRuntimeState::Rejected
-    );
 
     const auto rejectLateTailAfterRecord = [](
         void* const context,
@@ -48488,8 +48468,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         scratchArena
     ));
     EXPECT_TRUE(rejectedTailRecorded);
-    ASSERT_NE(transaction.packetRuntime(rejectedTailPacket), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(rejectedTailPacket)->state, GpuPacketRuntimeState::Rejected);
+    EXPECT_FALSE(transaction.packetToken(rejectedTailPacket).valid());
     EXPECT_TRUE(device.waitForIdle());
 }
 
@@ -49196,8 +49175,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
         scratchArena,
         &resolvedCompanionTicket
     ));
-    ASSERT_NE(transaction.packetRuntime(envelopeOnlyPacket), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(envelopeOnlyPacket)->state, GpuPacketRuntimeState::Declared);
+    EXPECT_FALSE(transaction.packetToken(envelopeOnlyPacket).valid());
     const GpuTaskGraphSubmissionStatistics retryableStatistics = transaction.submissionStatistics();
     ASSERT_TRUE(retryableStatistics.valid());
     EXPECT_EQ(retryableStatistics.acceptedPacketCount, 1u);
@@ -50281,8 +50259,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingRejectsAndReusesC
         transaction,
         scratchArena
     ));
-    ASSERT_NE(transaction.packetRuntime(packet), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(packet)->state, GpuPacketRuntimeState::Rejected);
+    EXPECT_FALSE(transaction.packetToken(packet).valid());
     const GpuTaskGraphSubmissionStatistics submissionStatistics = transaction.submissionStatistics();
     ASSERT_TRUE(submissionStatistics.valid());
     EXPECT_EQ(submissionStatistics.acceptedPacketCount, 0u);
@@ -50427,8 +50404,8 @@ TEST_F(DescriptorBufferRoundTripTest, DirectCommandListCanRetryAfterRejectedSubm
 
 
 // A structurally exact token can still name a producer value that was never submitted. Reject that dependency
-// before graph submission reservation so its recorded packet and lifecycle hooks remain available for a real token.
-TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsRecordedAndRetryable){
+// before graph submission reservation so the packet and lifecycle hooks remain available for a real token.
+TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsRetryable){
     auto& device = DescriptorBufferRoundTripTest::device();
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     ASSERT_TRUE(graphicsQueue.valid());
@@ -50547,14 +50524,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsReco
         recordedGraph
     ));
     ASSERT_TRUE(recorded);
-    ASSERT_TRUE(transaction.markPacketRecorded(
-        graph,
-        compiledGraph,
-        packet,
-        recordedGraph.recordingAttemptGeneration()
-    ));
-    ASSERT_NE(transaction.packetRuntime(packet), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(packet)->state, GpuPacketRuntimeState::Recorded);
 
     const GpuTaskGraphExternalCompletionToken futureBinding{
         .completion = completion,
@@ -50573,9 +50542,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsReco
         transaction,
         scratchArena
     ));
-    ASSERT_NE(transaction.packetRuntime(packet), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(packet)->state, GpuPacketRuntimeState::Recorded);
-    EXPECT_FALSE(transaction.packetRuntime(packet)->nativeSubmissionRejected);
     EXPECT_FALSE(transaction.packetToken(packet).valid());
     EXPECT_FALSE(acceptedToken.valid());
     EXPECT_EQ(discardedCount, 0u);
@@ -50622,126 +50588,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsReco
     EXPECT_EQ(capturedWait.physicalQueueIndex, producerToken.physicalQueueIndex);
     EXPECT_EQ(capturedWait.deviceGeneration, producerToken.deviceGeneration);
     ASSERT_TRUE(device.waitForIdle());
-}
-
-
-// Diagnostic acceptance may publish packets out of native timeline order. The transaction frontier must retain the
-// greatest accepted value for the exact physical queue instead of allowing a later callback to move it backwards.
-TEST_F(DescriptorBufferRoundTripTest, NativePacketDiagnosticAcceptanceKeepsMonotonicExactQueueFrontier){
-    auto& device = DescriptorBufferRoundTripTest::device();
-    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
-    ASSERT_TRUE(graphicsQueue.valid());
-
-    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
-    const GpuQueueRequest graphicsRequest{
-        GpuQueueCapability::Graphics,
-        GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    GpuTaskSchedulingHint packetScheduling;
-    packetScheduling.cost = GpuTaskCostHint::Tiny;
-    packetScheduling.forceSubmissionBoundary = true;
-    packetScheduling.allowPacketMerge = false;
-
-    bool shouldRecord = true;
-    bool firstRecorded = false;
-    bool secondRecorded = false;
-    const GpuTaskId firstTask = graph.addTask<NativePacketCaptureRetryTask>(
-        GpuTaskDesc{}
-            .setIdentity(Name("tests/descriptor_buffer/diagnostic_frontier_first"))
-            .setMarkerLabel("Diagnostic Frontier First")
-            .setQueue(graphicsRequest)
-            .setScheduling(packetScheduling),
-        NativePacketCaptureRetryTask::Payload{
-            .shouldRecord = &shouldRecord,
-            .attempted = &firstRecorded,
-        }
-    );
-    const GpuTaskId secondTask = graph.addTask<NativePacketCaptureRetryTask>(
-        GpuTaskDesc{}
-            .setIdentity(Name("tests/descriptor_buffer/diagnostic_frontier_second"))
-            .setMarkerLabel("Diagnostic Frontier Second")
-            .setQueue(graphicsRequest)
-            .setScheduling(packetScheduling),
-        NativePacketCaptureRetryTask::Payload{
-            .shouldRecord = &shouldRecord,
-            .attempted = &secondRecorded,
-        }
-    );
-    ASSERT_TRUE(firstTask.valid());
-    ASSERT_TRUE(secondTask.valid());
-
-    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
-    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
-    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
-    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
-    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/diagnostic_frontier_scratch"));
-    const GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
-    const GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(firstTask);
-    const GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(secondTask);
-    ASSERT_TRUE(firstPacket.valid());
-    ASSERT_TRUE(secondPacket.valid());
-    ASSERT_NE(firstPacket, secondPacket);
-
-    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
-    const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(
-        graph,
-        compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = firstPacket },
-        recordedGraph
-    ));
-    ASSERT_TRUE(recorder.recordPacket(
-        graph,
-        compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = secondPacket },
-        recordedGraph
-    ));
-    ASSERT_TRUE(firstRecorded);
-    ASSERT_TRUE(secondRecorded);
-
-    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
-    transaction.reset(compiledGraph);
-    ASSERT_TRUE(transaction.markPacketRecorded(
-        graph,
-        compiledGraph,
-        firstPacket,
-        recordedGraph.recordingAttemptGeneration()
-    ));
-    ASSERT_TRUE(transaction.markPacketRecorded(
-        graph,
-        compiledGraph,
-        secondPacket,
-        recordedGraph.recordingAttemptGeneration()
-    ));
-
-    const QueueSubmissionToken lowerToken{
-        .queue = CommandQueue::Graphics,
-        .value = 41u,
-        .physicalQueueIndex = graphicsQueue.index,
-        .deviceGeneration = graphicsQueue.deviceGeneration,
-    };
-    const QueueSubmissionToken higherToken{
-        .queue = CommandQueue::Graphics,
-        .value = 42u,
-        .physicalQueueIndex = graphicsQueue.index,
-        .deviceGeneration = graphicsQueue.deviceGeneration,
-    };
-    ASSERT_GT(higherToken.value, lowerToken.value);
-    ASSERT_TRUE(transaction.acceptPacket(graph, compiledGraph, firstPacket, higherToken));
-    ASSERT_TRUE(transaction.acceptPacket(graph, compiledGraph, secondPacket, lowerToken));
-
-    EXPECT_EQ(transaction.packetToken(firstPacket).value, higherToken.value);
-    EXPECT_EQ(transaction.packetToken(secondPacket).value, lowerToken.value);
-    const QueueSubmissionToken* const latestToken = transaction.latestAcceptedToken(graphicsQueue);
-    ASSERT_NE(latestToken, nullptr);
-    EXPECT_EQ(latestToken->queue, higherToken.queue);
-    EXPECT_EQ(latestToken->value, higherToken.value);
-    EXPECT_EQ(latestToken->physicalQueueIndex, higherToken.physicalQueueIndex);
-    EXPECT_EQ(latestToken->deviceGeneration, higherToken.deviceGeneration);
 }
 
 
@@ -52131,8 +51977,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
         scratchArena,
         &finalTimingTicket
     ));
-    ASSERT_NE(transaction.packetRuntime(finalPacket), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(finalPacket)->state, GpuPacketRuntimeState::Rejected);
+    EXPECT_FALSE(transaction.packetToken(finalPacket).valid());
     const GpuTaskGraphSubmissionStatistics rejectedSubmissionStatistics = transaction.submissionStatistics();
     ASSERT_TRUE(rejectedSubmissionStatistics.valid());
     EXPECT_EQ(rejectedSubmissionStatistics.acceptedPacketCount, 1u);
@@ -52187,10 +52032,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
         compiledGraph,
         recordedGraph.recordingAttemptGeneration()
     ));
-    ASSERT_NE(transaction.packetRuntime(prefixPacket), nullptr);
-    ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(prefixPacket)->state, GpuPacketRuntimeState::Accepted);
-    EXPECT_EQ(transaction.packetRuntime(recoveryPacket)->state, GpuPacketRuntimeState::Accepted);
+    EXPECT_TRUE(transaction.packetToken(prefixPacket).valid());
+    EXPECT_TRUE(transaction.packetToken(recoveryPacket).valid());
     EXPECT_FALSE(recoveryDiscarded);
     ASSERT_TRUE(device.waitForIdle());
     timing.collect(device, 121u);
@@ -52371,12 +52214,9 @@ TEST_F(DescriptorBufferRoundTripTest, TaskRangeHelperPreservesRecoveryOwnership)
     EXPECT_EQ(failedPacket, rejectedPacket);
     EXPECT_TRUE(rejectedRecorded);
     EXPECT_FALSE(recoveryRecorded);
-    ASSERT_NE(transaction.packetRuntime(prefixPacket), nullptr);
-    ASSERT_NE(transaction.packetRuntime(rejectedPacket), nullptr);
-    ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(prefixPacket)->state, GpuPacketRuntimeState::Accepted);
-    EXPECT_EQ(transaction.packetRuntime(rejectedPacket)->state, GpuPacketRuntimeState::Rejected);
-    EXPECT_EQ(transaction.packetRuntime(recoveryPacket)->state, GpuPacketRuntimeState::Declared);
+    EXPECT_TRUE(transaction.packetToken(prefixPacket).valid());
+    EXPECT_FALSE(transaction.packetToken(rejectedPacket).valid());
+    EXPECT_FALSE(transaction.packetToken(recoveryPacket).valid());
 
     ASSERT_TRUE(submitter.recordAndSubmitAcceptedFrontierTask(
         graph,
@@ -52547,12 +52387,6 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorSubmitsOrdinaryPrefix){
     ASSERT_TRUE(transaction.packetToken(firstPacket).valid());
     ASSERT_TRUE(transaction.packetToken(secondPacket).valid());
     EXPECT_FALSE(transaction.packetToken(frontierPacket).valid());
-    ASSERT_NE(transaction.packetRuntime(firstPacket), nullptr);
-    ASSERT_NE(transaction.packetRuntime(secondPacket), nullptr);
-    ASSERT_NE(transaction.packetRuntime(frontierPacket), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(firstPacket)->state, GpuPacketRuntimeState::Accepted);
-    EXPECT_EQ(transaction.packetRuntime(secondPacket)->state, GpuPacketRuntimeState::Accepted);
-    EXPECT_EQ(transaction.packetRuntime(frontierPacket)->state, GpuPacketRuntimeState::Declared);
     ASSERT_TRUE(submitter.recordAndSubmitAcceptedFrontierTask(
         graph,
         compiledGraph,
@@ -52564,8 +52398,6 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorSubmitsOrdinaryPrefix){
     ));
     EXPECT_TRUE(frontierRecorded);
     ASSERT_TRUE(transaction.packetToken(frontierPacket).valid());
-    ASSERT_NE(transaction.packetRuntime(frontierPacket), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(frontierPacket)->state, GpuPacketRuntimeState::Accepted);
     const GpuTaskGraphSubmissionStatistics submissionStatistics = transaction.submissionStatistics();
     ASSERT_TRUE(submissionStatistics.valid());
     EXPECT_EQ(submissionStatistics.acceptedFrontierSubmissionCount, 1u);
@@ -52733,10 +52565,6 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsAtSemanticTerminal
     ASSERT_TRUE(transaction.packetToken(terminalPacket).valid());
     EXPECT_FALSE(transaction.packetToken(lateTailPacket).valid());
     EXPECT_FALSE(transaction.packetToken(frontierPacket).valid());
-    ASSERT_NE(transaction.packetRuntime(lateTailPacket), nullptr);
-    ASSERT_NE(transaction.packetRuntime(frontierPacket), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(lateTailPacket)->state, GpuPacketRuntimeState::Declared);
-    EXPECT_EQ(transaction.packetRuntime(frontierPacket)->state, GpuPacketRuntimeState::Declared);
 
     ASSERT_TRUE(submitter.recordAndSubmitTask(
         graph,
@@ -52841,8 +52669,6 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsBeforeRejectedReco
     EXPECT_TRUE(callbackInvoked);
     EXPECT_EQ(failedPacket, packet);
     EXPECT_FALSE(transaction.packetToken(packet).valid());
-    ASSERT_NE(transaction.packetRuntime(packet), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(packet)->state, GpuPacketRuntimeState::Declared);
     const GpuTaskGraphSubmissionStatistics beforeDiscard = transaction.submissionStatistics();
     EXPECT_EQ(beforeDiscard.nativeSubmissionCount, 0u);
     EXPECT_TRUE(transaction.discardUnaccepted(
@@ -52850,7 +52676,9 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsBeforeRejectedReco
         compiledGraph,
         recordedGraph.recordingAttemptGeneration()
     ));
-    EXPECT_EQ(transaction.packetRuntime(packet)->state, GpuPacketRuntimeState::Rejected);
+    const GpuTaskGraphSubmissionStatistics afterDiscard = transaction.submissionStatistics();
+    EXPECT_EQ(afterDiscard.rejectedPacketCount, beforeDiscard.rejectedPacketCount + 1u);
+    EXPECT_EQ(afterDiscard.rejectedSubmissionCount, beforeDiscard.rejectedSubmissionCount);
     EXPECT_TRUE(device.waitForIdle());
 }
 
@@ -52991,12 +52819,8 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorPreservesRecoveryOwners
     EXPECT_TRUE(rejectedRecorded);
     EXPECT_FALSE(recoveryRecorded);
     ASSERT_TRUE(transaction.packetToken(prefixPacket).valid());
-    ASSERT_NE(transaction.packetRuntime(prefixPacket), nullptr);
-    ASSERT_NE(transaction.packetRuntime(rejectedPacket), nullptr);
-    ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(prefixPacket)->state, GpuPacketRuntimeState::Accepted);
-    EXPECT_EQ(transaction.packetRuntime(rejectedPacket)->state, GpuPacketRuntimeState::Rejected);
-    EXPECT_EQ(transaction.packetRuntime(recoveryPacket)->state, GpuPacketRuntimeState::Declared);
+    EXPECT_FALSE(transaction.packetToken(rejectedPacket).valid());
+    EXPECT_FALSE(transaction.packetToken(recoveryPacket).valid());
     const GpuTaskGraphSubmissionStatistics rejectedSubmissionStatistics = transaction.submissionStatistics();
     ASSERT_TRUE(rejectedSubmissionStatistics.valid());
     EXPECT_EQ(rejectedSubmissionStatistics.acceptedFrontierSubmissionCount, 0u);
@@ -53308,12 +53132,9 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierTaskRangeHelperPreservesRecov
     EXPECT_EQ(failedPacket, rejectedPacket);
     EXPECT_TRUE(rejectedRecorded);
     EXPECT_FALSE(recoveryRecorded);
-    ASSERT_NE(transaction.packetRuntime(prefixPacket), nullptr);
-    ASSERT_NE(transaction.packetRuntime(rejectedPacket), nullptr);
-    ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(prefixPacket)->state, GpuPacketRuntimeState::Accepted);
-    EXPECT_EQ(transaction.packetRuntime(rejectedPacket)->state, GpuPacketRuntimeState::Rejected);
-    EXPECT_EQ(transaction.packetRuntime(recoveryPacket)->state, GpuPacketRuntimeState::Declared);
+    EXPECT_TRUE(transaction.packetToken(prefixPacket).valid());
+    EXPECT_FALSE(transaction.packetToken(rejectedPacket).valid());
+    EXPECT_FALSE(transaction.packetToken(recoveryPacket).valid());
 
     ASSERT_TRUE(submitter.recordAndSubmitAcceptedFrontierTask(
         graph,
@@ -53814,10 +53635,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
         transaction,
         scratchArena
     ));
-    ASSERT_NE(transaction.packetRuntime(rejectedSuffixPacket), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(rejectedSuffixPacket)->state, GpuPacketRuntimeState::Rejected);
-    ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(recoveryPacket)->state, GpuPacketRuntimeState::Declared);
+    EXPECT_FALSE(transaction.packetToken(rejectedSuffixPacket).valid());
+    EXPECT_FALSE(transaction.packetToken(recoveryPacket).valid());
     const GpuTaskGraphPhysicalQueueSubmissionStatistics rejectedGraphicsQueueStatistics =
         transaction.physicalQueueSubmissionStatistics(
             compiledGraph,
@@ -53920,10 +53739,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
         compiledGraph,
         recordedGraph.recordingAttemptGeneration()
     ));
-    ASSERT_NE(transaction.packetRuntime(transferPacket), nullptr);
-    ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(transferPacket)->state, GpuPacketRuntimeState::Accepted);
-    EXPECT_EQ(transaction.packetRuntime(recoveryPacket)->state, GpuPacketRuntimeState::Accepted);
+    EXPECT_TRUE(transaction.packetToken(transferPacket).valid());
+    EXPECT_TRUE(transaction.packetToken(recoveryPacket).valid());
 }
 
 
@@ -54180,7 +53997,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketCompatibilityCallbacksGateAcce
     EXPECT_TRUE(serializationContext.acceptedFrontierHiddenDuringCallback);
     EXPECT_FALSE(transaction.hasAcceptedPackets());
     EXPECT_FALSE(transaction.packetToken(transferPacket).valid());
-    EXPECT_EQ(transaction.latestAcceptedToken(transferQueue), nullptr);
     ASSERT_EQ(acceptanceOrder.invocationCount, 3u);
     EXPECT_EQ(acceptanceOrder.markers[0u], 1u);
     EXPECT_EQ(acceptanceOrder.markers[1u], 2u);
@@ -54188,15 +54004,14 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketCompatibilityCallbacksGateAcce
 
     device.clearSubmissionWaitTokensForTesting();
     device.armSubmissionWaitCaptureForTesting();
-    AtomicFlag recoveryStarted;
-    AtomicFlag recoveryFinished;
+    AtomicFlag recoveryReadyToSubmit;
     bool recoverySubmissionResult = false;
     Thread recoverySubmissionThread([&](){
         Alloc::ScratchArena recoveryScratch(
             Name("tests/descriptor_buffer/submission_serialization_recovery_thread_scratch")
         );
-        recoveryStarted.test_and_set(MemoryOrder::release);
-        recoveryStarted.notify_all();
+        recoveryReadyToSubmit.test_and_set(MemoryOrder::release);
+        recoveryReadyToSubmit.notify_all();
         recoverySubmissionResult = submitter.recordAndSubmitAcceptedFrontierTask(
             graph,
             compiledGraph,
@@ -54206,27 +54021,18 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketCompatibilityCallbacksGateAcce
             transaction,
             recoveryScratch
         );
-        recoveryFinished.test_and_set(MemoryOrder::release);
-        recoveryFinished.notify_all();
     });
 
-    while(!recoveryStarted.test(MemoryOrder::acquire))
-        recoveryStarted.wait(false, MemoryOrder::acquire);
-    while(
-        transaction.submissionWaiterCountForTesting() == 0u
-        && !recoveryFinished.test(MemoryOrder::acquire)
-    )
-        YieldThread();
-    const bool recoveryBlockedForPublication = transaction.submissionWaiterCountForTesting() != 0u
-        && !recoveryFinished.test(MemoryOrder::acquire)
-    ;
+    // The public transaction contract deliberately exposes no internal waiter state. Synchronize at the call
+    // boundary, then prove after both threads join that recovery consumed the newly accepted exact-queue frontier.
+    while(!recoveryReadyToSubmit.test(MemoryOrder::acquire))
+        recoveryReadyToSubmit.wait(false, MemoryOrder::acquire);
 
     serializationContext.releaseCompatibility.test_and_set(MemoryOrder::release);
     serializationContext.releaseCompatibility.notify_all();
     rangeSubmissionThread.join();
     recoverySubmissionThread.join();
 
-    EXPECT_TRUE(recoveryBlockedForPublication);
     EXPECT_FALSE(rangeSubmissionResult);
     EXPECT_EQ(failedSubmissionPacket, transferPacket);
     EXPECT_TRUE(recoverySubmissionResult);
@@ -54240,7 +54046,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketCompatibilityCallbacksGateAcce
     EXPECT_EQ(acceptanceOrder.markers[2u], 3u);
     EXPECT_EQ(acceptanceOrder.markers[3u], 4u);
     EXPECT_EQ(acceptanceOrder.markers[4u], 5u);
-    EXPECT_EQ(transaction.submissionWaiterCountForTesting(), 0u);
     const QueueSubmissionToken transferToken = transaction.packetToken(transferPacket);
     const QueueSubmissionToken suffixToken = transaction.packetToken(suffixPacket);
     const QueueSubmissionToken recoveryToken = transaction.packetToken(recoveryPacket);
@@ -54291,8 +54096,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketCompatibilityCallbacksGateAcce
         compiledGraph,
         recordedGraph.recordingAttemptGeneration()
     ));
-    ASSERT_NE(transaction.packetRuntime(suffixPacket), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(suffixPacket)->state, GpuPacketRuntimeState::Rejected);
+    EXPECT_FALSE(transaction.packetToken(suffixPacket).valid());
     ASSERT_TRUE(device.waitForIdle());
 }
 
@@ -58649,16 +58453,10 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
             }
 
             if(failurePoint != FailurePoint::Clean){
-                const GpuPacketRuntime* const rejectedRuntime = transaction.packetRuntime(rejectionPacket);
-                ASSERT_NE(rejectedRuntime, nullptr);
-                EXPECT_EQ(rejectedRuntime->state, GpuPacketRuntimeState::Rejected);
-                EXPECT_TRUE(rejectedRuntime->nativeSubmissionRejected);
+                EXPECT_FALSE(transaction.packetToken(rejectionPacket).valid());
             }
             if(failurePoint == FailurePoint::Recovery){
-                const GpuPacketRuntime* const recoveryRuntime = transaction.packetRuntime(recoveryPacket);
-                ASSERT_NE(recoveryRuntime, nullptr);
-                EXPECT_EQ(recoveryRuntime->state, GpuPacketRuntimeState::Rejected);
-                EXPECT_TRUE(recoveryRuntime->nativeSubmissionRejected);
+                EXPECT_FALSE(transaction.packetToken(recoveryPacket).valid());
             }
 
             QueueSubmissionToken acceptedTokenSnapshots[8u];
@@ -58676,36 +58474,29 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
 
             for(usize packetIndex = 0u; packetIndex < compiledGraph.packetCount(); ++packetIndex){
                 const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
-                const GpuPacketRuntime* const runtime = transaction.packetRuntime(packet);
-                ASSERT_NE(runtime, nullptr);
-                EXPECT_TRUE(
-                    runtime->state == GpuPacketRuntimeState::Accepted
-                    || runtime->state == GpuPacketRuntimeState::Rejected
-                );
+                const QueueSubmissionToken currentToken = transaction.packetToken(packet);
                 if(acceptedPacketSnapshots[packetIndex]){
-                    const QueueSubmissionToken currentToken = transaction.packetToken(packet);
                     EXPECT_TRUE(currentToken.valid());
                     EXPECT_EQ(currentToken.queue, acceptedTokenSnapshots[packetIndex].queue);
                     EXPECT_EQ(currentToken.value, acceptedTokenSnapshots[packetIndex].value);
                     EXPECT_EQ(currentToken.physicalQueueIndex, acceptedTokenSnapshots[packetIndex].physicalQueueIndex);
                     EXPECT_EQ(currentToken.deviceGeneration, acceptedTokenSnapshots[packetIndex].deviceGeneration);
                 }
+                else{
+                    EXPECT_FALSE(currentToken.valid());
+                }
             }
             for(usize probeIndex = 0u; probeIndex < ProbeCount; ++probeIndex){
                 const GpuSubmissionPacketId packet = compiledGraph.packetForTask(probeTasks[probeIndex]);
-                const bool accepted = transaction.packetRuntime(packet)->state == GpuPacketRuntimeState::Accepted;
+                const bool accepted = transaction.packetToken(packet).valid();
                 EXPECT_EQ(probeStates[probeIndex].acceptedCount, accepted ? 1u : 0u);
                 EXPECT_EQ(probeStates[probeIndex].discardedCount, accepted ? 0u : 1u);
                 EXPECT_EQ(probeStates[probeIndex].acceptedToken.valid(), accepted);
             }
 
-            const bool firstPacketAccepted = transaction.packetRuntime(compiledGraph.packetForTask(firstTask))->state
-                == GpuPacketRuntimeState::Accepted
-            ;
+            const bool firstPacketAccepted = transaction.packetToken(compiledGraph.packetForTask(firstTask)).valid();
             EXPECT_EQ(uploadAcceptedToken.valid(), firstPacketAccepted);
-            const bool recoveryPacketAccepted = transaction.packetRuntime(recoveryPacket)->state
-                == GpuPacketRuntimeState::Accepted
-            ;
+            const bool recoveryPacketAccepted = transaction.packetToken(recoveryPacket).valid();
             EXPECT_EQ(recoveryAccepted, recoveryPacketAccepted);
             EXPECT_EQ(recoveryDiscarded, !recoveryPacketAccepted);
             EXPECT_FALSE(frameTransaction.needsRetirement());
@@ -58973,9 +58764,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphRejectsDedicatedFirstComputeA
     ));
     EXPECT_EQ(failedPacket, computePacket);
     EXPECT_TRUE(rejectionArm.armed);
-    ASSERT_NE(transaction.packetRuntime(computePacket), nullptr);
-    EXPECT_EQ(transaction.packetRuntime(computePacket)->state, GpuPacketRuntimeState::Rejected);
-    EXPECT_TRUE(transaction.packetRuntime(computePacket)->nativeSubmissionRejected);
+    EXPECT_FALSE(transaction.packetToken(computePacket).valid());
     ASSERT_TRUE(firstState.acceptedToken.valid());
     const QueueSubmissionToken firstTokenSnapshot = firstState.acceptedToken;
     if(timingActive)

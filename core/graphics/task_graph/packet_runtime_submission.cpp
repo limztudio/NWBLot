@@ -449,7 +449,7 @@ bool GpuTaskGraphSubmitter::submitPacketWithinSubmissionOperation(
         packetID,
         token,
         submissionLease,
-        &nativeSubmissionInfo,
+        nativeSubmissionInfo,
         acceptedCallback,
         taskAcceptedCallbacks,
         taskAcceptedCallbackCount

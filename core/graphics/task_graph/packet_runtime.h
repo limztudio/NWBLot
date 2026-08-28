@@ -26,9 +26,6 @@ class GpuTimingRecorder;
 class GpuTimingSubmissionTicket;
 class GpuTaskGraph;
 class GpuTaskGraphSubmitter;
-#if !defined(NWB_FINAL)
-class GpuGraphSubmissionTransactionDiagnosticPeer;
-#endif
 class GpuTaskPacketSubmissionLease;
 class GpuCommandIrCapture;
 struct GpuExternalPacketStateSource;
@@ -393,7 +390,6 @@ private:
 namespace GpuPacketRuntimeState{
     enum Enum : u8{
         Declared,
-        Recorded,
         Submitting,
         Rejecting,
         Accepted,
@@ -404,16 +400,13 @@ namespace GpuPacketRuntimeState{
 struct GpuPacketRuntime{
     GpuPacketRuntimeState::Enum state = GpuPacketRuntimeState::Declared;
     QueueSubmissionToken token;
-    // Native counters are committed only after the graph lifecycle accepts the submission. Direct diagnostic packet
-    // acceptance remains visible through `state`/`token`, while these fields intentionally stay empty because no
-    // Device::executeCommandLists() call occurred.
+    // Native counters are committed only after the graph lifecycle and its Device submission both accept.
     usize nativeCommandListCount = 0u;
     usize plannedWaitTokenCount = 0u;
     usize sameQueueWaitElisionCount = 0u;
     usize timelineWaitCount = 0u;
     usize mergedTimelineWaitCount = 0u;
     f64 submissionSeconds = 0.0;
-    bool hasNativeSubmission = false;
     // A post-reservation submit-path failure is terminally rejected, but ordinary discard/rejection never sets this
     // flag. It can occur before the backend execute call, such as while validating a timing ticket.
     bool nativeSubmissionRejected = false;
@@ -719,9 +712,6 @@ struct GpuGraphSubmissionAcceptanceSnapshot{
 
 class GpuGraphSubmissionTransaction final : NoCopy{
     friend class GpuTaskGraphSubmitter;
-#if !defined(NWB_FINAL)
-    friend class GpuGraphSubmissionTransactionDiagnosticPeer;
-#endif
 
 
 private:
@@ -806,20 +796,6 @@ public:
     void reset(const GpuCompiledGraph& compiledGraph);
 
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
-    // Test/diagnostic seam for manually completed recording. The explicit graph and attempt prevent an arbitrary
-    // generation from binding this transaction to stale graph work.
-    [[nodiscard]] bool markPacketRecorded(
-        const GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuSubmissionPacketId& packet,
-        u64 recordingAttemptGeneration
-    )noexcept;
-    [[nodiscard]] bool acceptPacket(
-        GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuSubmissionPacketId& packet,
-        const QueueSubmissionToken& token
-    )noexcept;
     // Convenience only after the transaction has been bound by an explicit attempt. An unbound cleanup must not
     // infer the graph's current attempt, because a stale transaction could otherwise discard a later retry.
     void rejectPacket(
@@ -856,11 +832,6 @@ public:
     )noexcept;
 
     [[nodiscard]] bool hasAcceptedPackets()const noexcept;
-#if !defined(NWB_FINAL)
-    [[nodiscard]] u32 submissionWaiterCountForTesting()const noexcept{
-        return m_submissionWaiterCount.load(MemoryOrder::acquire);
-    }
-#endif
     [[nodiscard]] GpuTaskGraphSubmissionStatistics submissionStatistics()const noexcept;
     // Copies one accepted native packet's exact wait decomposition and compiler role while holding the transaction
     // mutex. The result owns every field, but resolving its packet and queue borrows immutable compiled-plan storage;
@@ -915,7 +886,6 @@ public:
         const GpuRecordedGraph& recordedGraph,
         GpuGraphResourceId resource
     )const noexcept;
-    [[nodiscard]] const QueueSubmissionToken* latestAcceptedToken(const GpuPhysicalQueueId& queue)const noexcept;
     // Appends one latest accepted token for every physical queue other than `destinationQueue`. A recovery packet
     // submitted on that destination does not need to wait on its own queue because queue order already supplies the
     // dependency; every other physical producer remains an explicit timeline wait.
@@ -923,7 +893,6 @@ public:
         const GpuPhysicalQueueId& destinationQueue,
         Vector<QueueSubmissionToken, Alloc::ScratchArena>& outTokens
     )const;
-    [[nodiscard]] const GpuPacketRuntime* packetRuntime(const GpuSubmissionPacketId& packet)const noexcept;
 
 
 private:
@@ -947,7 +916,7 @@ private:
         GpuSubmissionPacketId packet,
         const QueueSubmissionToken& token,
         GpuTaskPacketSubmissionLease& lease,
-        const NativeSubmissionInfo* nativeSubmissionInfo = nullptr,
+        const NativeSubmissionInfo& nativeSubmissionInfo,
         const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr,
         const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr,
         usize taskAcceptedCallbackCount = 0u
@@ -987,9 +956,6 @@ private:
     u64 m_acceptanceRevision = 0u;
     GpuTaskGraphSubmissionStatistics m_submissionStatistics;
     bool m_valid = false;
-#if !defined(NWB_FINAL)
-    mutable Atomic<u32> m_submissionWaiterCount{ 0u };
-#endif
     mutable Futex m_submissionMutex;
     mutable Futex m_mutex;
 };

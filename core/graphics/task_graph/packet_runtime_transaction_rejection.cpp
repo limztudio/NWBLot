@@ -42,7 +42,6 @@ void GpuGraphSubmissionTransaction::rejectPacket(
         || !bindRecordingAttempt(graph, compiledGraph, recordingAttemptGeneration)
     )
         return;
-    GpuPacketRuntimeState::Enum previousState = GpuPacketRuntimeState::Declared;
     {
         ScopedLock lock(m_mutex);
         if(
@@ -52,19 +51,8 @@ void GpuGraphSubmissionTransaction::rejectPacket(
         )
             return;
         GpuPacketRuntime& runtime = m_packets[packetID.index];
-        if(
-            runtime.state == GpuPacketRuntimeState::Accepted
-            || runtime.state == GpuPacketRuntimeState::Rejected
-            || runtime.state == GpuPacketRuntimeState::Submitting
-            || runtime.state == GpuPacketRuntimeState::Rejecting
-        )
+        if(runtime.state != GpuPacketRuntimeState::Declared)
             return;
-        if(
-            runtime.state != GpuPacketRuntimeState::Declared
-            && runtime.state != GpuPacketRuntimeState::Recorded
-        )
-            return;
-        previousState = runtime.state;
         runtime.state = GpuPacketRuntimeState::Rejecting;
     }
 
@@ -79,7 +67,7 @@ void GpuGraphSubmissionTransaction::rejectPacket(
         if(validForLocked(compiledGraph) && packetID.index < m_packets.size()){
             GpuPacketRuntime& runtime = m_packets[packetID.index];
             if(runtime.state == GpuPacketRuntimeState::Rejecting)
-                runtime.state = previousState;
+                runtime.state = GpuPacketRuntimeState::Declared;
         }
         return;
     }

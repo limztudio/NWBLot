@@ -274,16 +274,6 @@ void ShaderTable::rejectNextNewBufferMapForTesting(){
     ScopedLock lock(m_mutex);
     m_rejectNextNewBufferMapForTesting = true;
 }
-
-void ShaderTable::captureDispatchBuffersForTesting(Array<BufferHandle, 4u>& outBuffers)const{
-    DispatchSnapshot snapshot;
-    captureDispatchSnapshot(snapshot);
-
-    outBuffers[0u] = Move(snapshot.rayGeneration.buffer);
-    outBuffers[1u] = Move(snapshot.miss.buffer);
-    outBuffers[2u] = Move(snapshot.hit.buffer);
-    outBuffers[3u] = Move(snapshot.callable.buffer);
-}
 #endif
 
 bool ShaderTable::findGroupIndex(

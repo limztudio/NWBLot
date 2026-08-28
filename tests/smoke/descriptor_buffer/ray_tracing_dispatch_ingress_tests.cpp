@@ -13,6 +13,8 @@
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
 
+#include <volk/volk.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,6 +32,119 @@ namespace Tests{
 
 
 using namespace Core;
+
+
+namespace __hidden_ray_tracing_dispatch_ingress_tests{
+
+
+struct NativeTraceRaysCommand{
+    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+    VkStridedDeviceAddressRegionKHR rayGeneration = {};
+    VkStridedDeviceAddressRegionKHR miss = {};
+    VkStridedDeviceAddressRegionKHR hit = {};
+    VkStridedDeviceAddressRegionKHR callable = {};
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 depth = 0u;
+    bool regionsComplete = false;
+};
+
+struct NativeTraceRaysCapture{
+    NativeTraceRaysCommand commands[2u] = {};
+    u32 commandCount = 0u;
+    bool overflowed = false;
+};
+
+class ScopedNativeTraceRaysObserver final : NoCopy{
+private:
+    static thread_local NativeTraceRaysCapture* s_activeCapture;
+    static PFN_vkCmdTraceRaysKHR s_forwardCmdTraceRays;
+
+    static VKAPI_ATTR void VKAPI_CALL InterceptCmdTraceRays(
+        const VkCommandBuffer commandBuffer,
+        const VkStridedDeviceAddressRegionKHR* const rayGeneration,
+        const VkStridedDeviceAddressRegionKHR* const miss,
+        const VkStridedDeviceAddressRegionKHR* const hit,
+        const VkStridedDeviceAddressRegionKHR* const callable,
+        const u32 width,
+        const u32 height,
+        const u32 depth
+    ){
+        NativeTraceRaysCapture* const capture = s_activeCapture;
+        if(capture){
+            const u32 commandIndex = capture->commandCount;
+            if(commandIndex < LengthOf(capture->commands)){
+                NativeTraceRaysCommand& command = capture->commands[commandIndex];
+                command.commandBuffer = commandBuffer;
+                command.width = width;
+                command.height = height;
+                command.depth = depth;
+                command.regionsComplete = rayGeneration && miss && hit && callable;
+                if(rayGeneration)
+                    command.rayGeneration = *rayGeneration;
+                if(miss)
+                    command.miss = *miss;
+                if(hit)
+                    command.hit = *hit;
+                if(callable)
+                    command.callable = *callable;
+            }else{
+                capture->overflowed = true;
+            }
+            ++capture->commandCount;
+        }
+
+        if(s_forwardCmdTraceRays){
+            s_forwardCmdTraceRays(
+                commandBuffer,
+                rayGeneration,
+                miss,
+                hit,
+                callable,
+                width,
+                height,
+                depth
+            );
+        }
+    }
+
+
+public:
+    explicit ScopedNativeTraceRaysObserver(NativeTraceRaysCapture& capture)
+        : m_originalCmdTraceRays(vkCmdTraceRaysKHR)
+    {
+        capture = {};
+        if(s_activeCapture || !m_originalCmdTraceRays)
+            return;
+
+        s_forwardCmdTraceRays = m_originalCmdTraceRays;
+        s_activeCapture = &capture;
+        vkCmdTraceRaysKHR = &ScopedNativeTraceRaysObserver::InterceptCmdTraceRays;
+        m_armed = true;
+    }
+    ~ScopedNativeTraceRaysObserver(){
+        if(!m_armed)
+            return;
+
+        vkCmdTraceRaysKHR = m_originalCmdTraceRays;
+        s_activeCapture = nullptr;
+    }
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{ return m_armed; }
+
+
+private:
+    PFN_vkCmdTraceRaysKHR m_originalCmdTraceRays = nullptr;
+    bool m_armed = false;
+};
+
+thread_local NativeTraceRaysCapture* ScopedNativeTraceRaysObserver::s_activeCapture = nullptr;
+PFN_vkCmdTraceRaysKHR ScopedNativeTraceRaysObserver::s_forwardCmdTraceRays = nullptr;
+
+
+};
 
 // Minimal source for every module: `#version 460`, `#extension GL_EXT_ray_tracing : require`, then `void main(){}`.
 // Generated and validated against Vulkan 1.2 by glslangValidator and spirv-val from Vulkan SDK 1.4.341.1.
@@ -342,35 +457,29 @@ TEST_F(RayTracingDispatchIngressTest, ValidAllRegionTableRecordsTraceCommand){
     EXPECT_FALSE(commandList->commandRecordingFailed());
 }
 
-#if !defined(NWB_FINAL)
-TEST_F(RayTracingDispatchIngressTest, ExactFourRegionBuffersStayRetainedAfterTableMutation){
+TEST_F(RayTracingDispatchIngressTest, NativeFourRegionAddressesChangeAfterMutationAndOriginalDispatchSubmits){
     const RayTracingShaderTableHandle table = CreatePopulatedDispatchTable(device(), arena());
     ASSERT_TRUE(table);
 
-    Array<BufferHandle, 4u> oldBuffers = {};
-    table->captureDispatchBuffersForTesting(oldBuffers);
-    Array<u32, 4u> baselineReferences = {};
-    for(usize index = 0u; index < oldBuffers.size(); ++index){
-        ASSERT_TRUE(oldBuffers[index]);
-        const BufferDesc& description = oldBuffers[index]->getDescription();
-        EXPECT_TRUE(description.isShaderBindingTable);
-        EXPECT_EQ(description.cpuAccess, CpuAccessMode::Write);
-        EXPECT_EQ(description.queueSharing, ResourceQueueSharing::GraphicsAndAsyncCompute);
-        EXPECT_EQ(oldBuffers[index]->getDeviceGeneration(), device().getDeviceGeneration());
-        baselineReferences[index] = oldBuffers[index]->getReferenceCount();
-        ASSERT_GE(baselineReferences[index], 2u);
-    }
+    __hidden_ray_tracing_dispatch_ingress_tests::NativeTraceRaysCapture nativeCapture;
+    CommandListHandle originalCommandList;
+    CommandListHandle replacementCommandList;
+    const PFN_vkCmdTraceRaysKHR originalCmdTraceRays = vkCmdTraceRaysKHR;
+    ASSERT_TRUE(originalCmdTraceRays);
 
     {
-        CommandListHandle commandList = device().createCommandList();
-        ASSERT_TRUE(commandList);
-        commandList->open();
-        commandList->setRayTracingState(RayTracingState().setShaderTable(table.get()));
-        ASSERT_FALSE(commandList->commandRecordingFailed());
-        commandList->dispatchRays(RayTracingDispatchRaysArguments().setDimensions(1u, 1u, 1u));
-        ASSERT_FALSE(commandList->commandRecordingFailed());
-        for(usize index = 0u; index < oldBuffers.size(); ++index)
-            EXPECT_EQ(oldBuffers[index]->getReferenceCount(), baselineReferences[index] + 1u);
+        __hidden_ray_tracing_dispatch_ingress_tests::ScopedNativeTraceRaysObserver observer(nativeCapture);
+        ASSERT_TRUE(observer.valid());
+
+        originalCommandList = device().createCommandList();
+        ASSERT_TRUE(originalCommandList);
+        originalCommandList->open();
+        originalCommandList->setRayTracingState(RayTracingState().setShaderTable(table.get()));
+        ASSERT_FALSE(originalCommandList->commandRecordingFailed());
+        originalCommandList->dispatchRays(RayTracingDispatchRaysArguments().setDimensions(1u, 1u, 1u));
+        ASSERT_FALSE(originalCommandList->commandRecordingFailed());
+        originalCommandList->close();
+        ASSERT_FALSE(originalCommandList->commandRecordingFailed());
 
         ASSERT_TRUE(table->setRayGenerationShader("dispatch_ray_generation"));
         table->clearMissShaders();
@@ -380,24 +489,85 @@ TEST_F(RayTracingDispatchIngressTest, ExactFourRegionBuffersStayRetainedAfterTab
         ASSERT_EQ(table->addHitGroup("dispatch_hit"), 0u);
         ASSERT_EQ(table->addCallableShader("dispatch_callable"), 0u);
 
-        Array<BufferHandle, 4u> replacementBuffers = {};
-        table->captureDispatchBuffersForTesting(replacementBuffers);
-        for(usize index = 0u; index < oldBuffers.size(); ++index){
-            ASSERT_TRUE(replacementBuffers[index]);
-            EXPECT_NE(replacementBuffers[index].get(), oldBuffers[index].get());
-            EXPECT_EQ(oldBuffers[index]->getReferenceCount(), baselineReferences[index]);
-        }
+        replacementCommandList = device().createCommandList();
+        ASSERT_TRUE(replacementCommandList);
+        replacementCommandList->open();
+        replacementCommandList->setRayTracingState(RayTracingState().setShaderTable(table.get()));
+        ASSERT_FALSE(replacementCommandList->commandRecordingFailed());
+        replacementCommandList->dispatchRays(RayTracingDispatchRaysArguments().setDimensions(1u, 1u, 1u));
+        ASSERT_FALSE(replacementCommandList->commandRecordingFailed());
+        replacementCommandList->close();
+        ASSERT_FALSE(replacementCommandList->commandRecordingFailed());
+    }
+    ASSERT_EQ(vkCmdTraceRaysKHR, originalCmdTraceRays);
 
-        commandList->close();
-        ASSERT_FALSE(commandList->commandRecordingFailed());
-        for(usize index = 0u; index < oldBuffers.size(); ++index)
-            EXPECT_EQ(oldBuffers[index]->getReferenceCount(), baselineReferences[index]);
+    ASSERT_EQ(nativeCapture.commandCount, 2u);
+    ASSERT_FALSE(nativeCapture.overflowed);
+    const auto& original = nativeCapture.commands[0u];
+    const auto& replacement = nativeCapture.commands[1u];
+    ASSERT_TRUE(original.regionsComplete);
+    ASSERT_TRUE(replacement.regionsComplete);
+    ASSERT_NE(original.commandBuffer, VK_NULL_HANDLE);
+    ASSERT_NE(replacement.commandBuffer, VK_NULL_HANDLE);
+    ASSERT_NE(original.commandBuffer, replacement.commandBuffer);
+    EXPECT_EQ(original.width, 1u);
+    EXPECT_EQ(original.height, 1u);
+    EXPECT_EQ(original.depth, 1u);
+    EXPECT_EQ(replacement.width, 1u);
+    EXPECT_EQ(replacement.height, 1u);
+    EXPECT_EQ(replacement.depth, 1u);
+
+    const VkStridedDeviceAddressRegionKHR* const originalRegions[]{
+        &original.rayGeneration,
+        &original.miss,
+        &original.hit,
+        &original.callable,
+    };
+    const VkStridedDeviceAddressRegionKHR* const replacementRegions[]{
+        &replacement.rayGeneration,
+        &replacement.miss,
+        &replacement.hit,
+        &replacement.callable,
+    };
+    for(usize regionIndex = 0u; regionIndex < LengthOf(originalRegions); ++regionIndex){
+        const VkStridedDeviceAddressRegionKHR& originalRegion = *originalRegions[regionIndex];
+        const VkStridedDeviceAddressRegionKHR& replacementRegion = *replacementRegions[regionIndex];
+        ASSERT_NE(originalRegion.deviceAddress, 0u);
+        ASSERT_NE(originalRegion.stride, 0u);
+        ASSERT_NE(originalRegion.size, 0u);
+        ASSERT_EQ(originalRegion.size, originalRegion.stride);
+        ASSERT_NE(replacementRegion.deviceAddress, 0u);
+        ASSERT_NE(replacementRegion.stride, 0u);
+        ASSERT_NE(replacementRegion.size, 0u);
+        ASSERT_EQ(replacementRegion.size, replacementRegion.stride);
+        EXPECT_EQ(replacementRegion.stride, originalRegion.stride);
+        EXPECT_EQ(replacementRegion.size, originalRegion.size);
+        ASSERT_NE(replacementRegion.deviceAddress, originalRegion.deviceAddress);
     }
 
-    for(usize index = 0u; index < oldBuffers.size(); ++index)
-        EXPECT_EQ(oldBuffers[index]->getReferenceCount(), baselineReferences[index] - 1u);
+    for(usize originalIndex = 0u; originalIndex < LengthOf(originalRegions); ++originalIndex){
+        const VkStridedDeviceAddressRegionKHR& originalRegion = *originalRegions[originalIndex];
+        for(usize replacementIndex = 0u; replacementIndex < LengthOf(replacementRegions); ++replacementIndex){
+            const VkStridedDeviceAddressRegionKHR& replacementRegion = *replacementRegions[replacementIndex];
+            const bool originalBeforeReplacement = originalRegion.deviceAddress < replacementRegion.deviceAddress
+                && originalRegion.size <= replacementRegion.deviceAddress - originalRegion.deviceAddress;
+            const bool replacementBeforeOriginal = replacementRegion.deviceAddress < originalRegion.deviceAddress
+                && replacementRegion.size <= originalRegion.deviceAddress - replacementRegion.deviceAddress;
+            EXPECT_TRUE(originalBeforeReplacement || replacementBeforeOriginal)
+                << "Original region " << originalIndex << " overlaps replacement region " << replacementIndex;
+        }
+    }
+
+    CommandList* const commandLists[]{ originalCommandList.get() };
+    const QueueSubmissionToken token = device().executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(token.valid());
+    ASSERT_TRUE(device().waitForIdle());
 }
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

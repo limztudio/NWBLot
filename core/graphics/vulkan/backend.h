@@ -2320,7 +2320,6 @@ public:
 #if !defined(NWB_FINAL)
     void rejectNextBufferAllocationForTesting();
     void rejectNextNewBufferMapForTesting();
-    void captureDispatchBuffersForTesting(Array<BufferHandle, 4u>& outBuffers)const;
 #endif
 
 

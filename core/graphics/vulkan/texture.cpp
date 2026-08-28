@@ -596,32 +596,6 @@ void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, cons
     m_retainedSubresourceStates[index] = known ? 1u : 0u;
 }
 
-#if !defined(NWB_FINAL)
-void VulkanDetail::MarkRetainedTextureSubresourceStateKnownForTesting(
-    Texture& texture,
-    const ArraySlice arraySlice,
-    const MipLevel mipLevel
-){
-    if(
-        !texture.m_creationDesc.keepInitialState
-        || arraySlice >= texture.m_creationDesc.arraySize
-        || mipLevel >= texture.m_creationDesc.mipLevels
-    )
-        return;
-
-    const usize subresourceCount = static_cast<usize>(texture.m_creationDesc.mipLevels)
-        * static_cast<usize>(texture.m_creationDesc.arraySize)
-    ;
-    const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(texture.m_creationDesc.mipLevels)
-        + static_cast<usize>(mipLevel)
-    ;
-    ScopedLock lock(texture.m_retainedSubresourceStatesMutex);
-    if(texture.m_retainedSubresourceStates.size() != subresourceCount)
-        texture.m_retainedSubresourceStates.assign(subresourceCount, 0u);
-    texture.m_retainedSubresourceStates[index] = 1u;
-}
-#endif
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

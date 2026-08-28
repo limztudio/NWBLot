@@ -55959,7 +55959,7 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphReadyFrontierUploadsUseWork
 }
 
 
-TEST_F(DescriptorBufferRoundTripTest, RetainedTextureUploadPublishesOnlyAcceptedMipState){
+TEST_F(DescriptorBufferRoundTripTest, RetainedTextureTypedImportsTrackAcceptedMipStateCompleteness){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
     const TextureHandle texture = graphics.createTexture(
@@ -55972,6 +55972,17 @@ TEST_F(DescriptorBufferRoundTripTest, RetainedTextureUploadPublishesOnlyAccepted
             .setKeepInitialState(true)
     );
     ASSERT_NE(texture.get(), nullptr);
+
+    GpuTaskGraph freshImportGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId freshImport = freshImportGraph.importTexture(
+        texture,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/fresh_retained_unspecified_import"))
+            .setMarkerLabel("Fresh Retained Unspecified Import")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(freshImport.valid());
+    EXPECT_EQ(freshImportGraph.resourceAt(freshImport.index).initialState, ResourceStates::ShaderResource);
 
     u8 uploadBytes[4u * 4u * 4u] = {};
     const CommandListHandle upload = device.createCommandList();
@@ -56007,6 +56018,60 @@ TEST_F(DescriptorBufferRoundTripTest, RetainedTextureUploadPublishesOnlyAccepted
     EXPECT_EQ(postSubmitStateProbe->getTextureSubresourceState(texture.get(), 0u, 0u), ResourceStates::ShaderResource);
     EXPECT_EQ(postSubmitStateProbe->getTextureSubresourceState(texture.get(), 0u, 1u), ResourceStates::Unknown);
     postSubmitStateProbe->close();
+
+    GpuTaskGraph partialImportGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId partialImport = partialImportGraph.importTexture(
+        texture,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/partial_retained_unspecified_import"))
+            .setMarkerLabel("Partial Retained Unspecified Import")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(partialImport.valid());
+    EXPECT_EQ(partialImportGraph.resourceAt(partialImport.index).initialState, ResourceStates::Unknown);
+
+    const CommandListHandle secondUpload = device.createCommandList();
+    ASSERT_NE(secondUpload.get(), nullptr);
+    secondUpload->open();
+    ASSERT_TRUE(secondUpload->tryWriteTexture(texture.get(), 0u, 1u, uploadBytes, 2u * 4u));
+    secondUpload->setTextureState(texture.get(), TextureSubresourceSet(1u, 1u, 0u, 1u), ResourceStates::ShaderResource);
+    secondUpload->close();
+
+    const CommandListHandle secondPreSubmitStateProbe = device.createCommandList();
+    ASSERT_NE(secondPreSubmitStateProbe.get(), nullptr);
+    secondPreSubmitStateProbe->open();
+    EXPECT_EQ(secondPreSubmitStateProbe->getTextureSubresourceState(texture.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(secondPreSubmitStateProbe->getTextureSubresourceState(texture.get(), 0u, 1u), ResourceStates::Unknown);
+    secondPreSubmitStateProbe->close();
+
+    CommandList* const secondCommandLists[] = { secondUpload.get() };
+    const QueueSubmissionToken secondUploadToken = device.executeCommandLists(
+        secondCommandLists,
+        LengthOf(secondCommandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(secondUploadToken.valid());
+    EXPECT_EQ(secondUploadToken.queue, CommandQueue::Graphics);
+    EXPECT_GT(secondUploadToken.value, uploadToken.value);
+
+    const CommandListHandle completeStateProbe = device.createCommandList();
+    ASSERT_NE(completeStateProbe.get(), nullptr);
+    completeStateProbe->open();
+    EXPECT_EQ(completeStateProbe->getTextureSubresourceState(texture.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(completeStateProbe->getTextureSubresourceState(texture.get(), 0u, 1u), ResourceStates::ShaderResource);
+    completeStateProbe->close();
+
+    GpuTaskGraph completeImportGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId completeImport = completeImportGraph.importTexture(
+        texture,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/complete_retained_unspecified_import"))
+            .setMarkerLabel("Complete Retained Unspecified Import")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(completeImport.valid());
+    EXPECT_EQ(completeImportGraph.resourceAt(completeImport.index).initialState, ResourceStates::ShaderResource);
 
     ASSERT_TRUE(device.waitForIdle());
 }

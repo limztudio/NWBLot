@@ -5669,36 +5669,27 @@ TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPubli
     ;
     EXPECT_TRUE(graph.addClearTextureTask(clearTaskDesc, clearDesc).valid());
     EXPECT_EQ(graph.taskCount(), 2u);
+}
 
-#if !defined(NWB_FINAL)
-    // Model Queue::submit accepting the explicit-Unknown mip-0 upload. Mip 1 remains Undefined, so a new typed
-    // import without an explicit state cannot claim the descriptor's ShaderResource layout for the whole image.
-    Graphics::GraphicsBackend::VulkanDetail::MarkRetainedTextureSubresourceStateKnownForTesting(*texture, 0u, 0u);
-    Graphics::GpuTaskGraph partialImportGraph(testArena.arena);
-    const Graphics::GpuGraphResourceId partialImport = partialImportGraph.importTexture(
-        texture,
-        Graphics::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/partial_retained_unspecified_import"))
-            .setMarkerLabel("Partial Retained Unspecified Import")
-            .setType(Graphics::GpuGraphResourceType::Texture)
-    );
-    ASSERT_TRUE(partialImport.valid());
-    EXPECT_EQ(partialImportGraph.resourceAt(partialImport.index).initialState, Graphics::ResourceStates::Unknown);
 
-    // Once all subresources have accepted their restoration, unspecified typed imports preserve the descriptor
-    // fallback just as native imported textures do.
-    Graphics::GraphicsBackend::VulkanDetail::MarkRetainedTextureSubresourceStateKnownForTesting(*texture, 0u, 1u);
-    Graphics::GpuTaskGraph completeImportGraph(testArena.arena);
-    const Graphics::GpuGraphResourceId completeImport = completeImportGraph.importTexture(
-        texture,
-        Graphics::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/complete_retained_unspecified_import"))
-            .setMarkerLabel("Complete Retained Unspecified Import")
-            .setType(Graphics::GpuGraphResourceType::Texture)
-    );
-    ASSERT_TRUE(completeImport.valid());
-    EXPECT_EQ(completeImportGraph.resourceAt(completeImport.index).initialState, Graphics::ResourceStates::ShaderResource);
-#endif
+TEST(GpuTaskGraph, RetainedTextureStateCompletenessHasNoProductionTestMutationHook){
+    TestArena testArena;
+    const TestPath repoRoot = TestPath(testArena.arena, __FILE__)
+        .parent_path()
+        .parent_path()
+        .parent_path()
+        .parent_path()
+        .lexically_normal()
+    ;
+    TestAString backendHeaderSource;
+    TestAString textureSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", backendHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "texture.cpp", textureSource));
+
+    const AStringView backendHeader(backendHeaderSource.data(), backendHeaderSource.size());
+    const AStringView textureImplementation(textureSource.data(), textureSource.size());
+    EXPECT_EQ(backendHeader.find("MarkRetainedTextureSubresourceStateKnownForTesting"), AStringView::npos);
+    EXPECT_EQ(textureImplementation.find("MarkRetainedTextureSubresourceStateKnownForTesting"), AStringView::npos);
 }
 
 TEST(GpuTaskGraph, AllowsExplicitUnknownRetainedTextureFirstWriteDestinations){

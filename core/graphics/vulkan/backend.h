@@ -50,14 +50,6 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !defined(NWB_FINAL)
-void MarkRetainedTextureSubresourceStateKnownForTesting(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel);
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace PipelineStencilFaceMode{
     enum Enum : u8{
         DepthOnly = 0u,
@@ -1467,9 +1459,6 @@ class Texture final : public RefCounter<GraphicsResource>, NoCopy{
     friend class VulkanAllocator;
     friend class Queue;
     friend class TrackedCommandBuffer;
-#if !defined(NWB_FINAL)
-    friend void VulkanDetail::MarkRetainedTextureSubresourceStateKnownForTesting(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel);
-#endif
 
 
 public:

@@ -735,17 +735,16 @@ concept HasAttemptTaskAcceptance = requires(
 };
 
 template<typename GraphT>
-concept HasAttemptTaskDiscard = requires(
+concept HasDeclarationTaskDiscard = requires(
     const GraphT& graph,
-    const Graphics::GpuTaskId& task,
-    const u64 recordingAttemptGeneration
+    const Graphics::GpuTaskId& task
 ){
-    graph.discardTask(task, recordingAttemptGeneration);
+    graph.discardTask(task);
 };
 
 static_assert(!HasDeclarationTaskAcceptance<Graphics::GpuTaskGraph>);
 static_assert(!HasAttemptTaskAcceptance<Graphics::GpuTaskGraph>);
-static_assert(!HasAttemptTaskDiscard<Graphics::GpuTaskGraph>);
+static_assert(!HasDeclarationTaskDiscard<Graphics::GpuTaskGraph>);
 
 
 inline constexpr Graphics::GpuTaskId s_CommandIrTask{ 4u, 17u };
@@ -1791,18 +1790,6 @@ TEST(GpuTaskGraph, RegistersOnlyExactTypedPayloadLifecycleSignatures){
     EXPECT_EQ(recordCount, 0u);
     EXPECT_EQ(acceptedCount, 0u);
     EXPECT_EQ(discardedCount, 0u);
-
-    Graphics::GpuTaskGraph discardGraph(testArena.arena);
-    const Graphics::GpuTaskId discardTask = discardGraph.addTask<MalformedLifecycleTask>(
-        desc,
-        MalformedLifecycleTask::Payload{
-            .discardedCount = &discardedCount,
-        }
-    );
-    ASSERT_TRUE(discardTask.valid());
-    discardGraph.discardTask(discardTask);
-    discardGraph.reset();
-    EXPECT_EQ(discardedCount, 0u);
 }
 
 TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
@@ -1985,8 +1972,7 @@ TEST(GpuTaskGraph, DiscardsTypedPayloadLifecycleOnlyOnceWhenGraphIsAbandoned){
         );
         ASSERT_TRUE(task.valid());
 
-        graph.discardTask(task);
-        graph.discardTask(task);
+        graph.reset();
         graph.reset();
 
         EXPECT_EQ(acceptedCount, 0u);

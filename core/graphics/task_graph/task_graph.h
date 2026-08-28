@@ -624,8 +624,6 @@ public:
         const GpuTaskId& task,
         CommandList& commandList
     )const;
-    // Declaration-only teardown helper. Compiled work must resolve through its compiler-owned packet transaction.
-    void discardTask(const GpuTaskId& task)const noexcept;
     [[nodiscard]] bool appendFrameGraphTelemetry(
         Telemetry::FrameGraphBuilder& builder,
         const GpuTaskGraphAnalysis& analysis,

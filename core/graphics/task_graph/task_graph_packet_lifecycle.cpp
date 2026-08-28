@@ -614,53 +614,6 @@ bool GpuTaskGraph::discardUnacceptedPacket(
 }
 
 
-void GpuTaskGraph::discardTask(const GpuTaskId& taskID)const noexcept{
-    void* payload = nullptr;
-    GpuTaskDiscardedThunk discardPayload = nullptr;
-    u64 recordingAttemptGeneration = 0u;
-    {
-        ScopedLock lock(m_lifecycleMutex);
-        if(
-            m_teardownInProgress
-            || m_activeRecordingPlanGeneration != 0u
-            || !validTask(taskID)
-        )
-            return;
-
-        const GpuTaskNode& task = m_tasks[taskID.index];
-        if(
-            task.lifecycleState != GpuTaskLifecycleState::Declared
-            || task.lifecycleAttemptGeneration != m_activeRecordingAttemptGeneration
-        )
-            return;
-        recordingAttemptGeneration = m_activeRecordingAttemptGeneration;
-        task.lifecycleState = GpuTaskLifecycleState::Discarding;
-        payload = task.payload;
-        discardPayload = task.discardPayload;
-    }
-    if(payload && discardPayload)
-        discardPayload(payload);
-
-    {
-        ScopedLock lock(m_lifecycleMutex);
-        if(
-            validTask(taskID)
-            && m_activeRecordingPlanGeneration == 0u
-            && recordingAttemptGeneration == m_activeRecordingAttemptGeneration
-        ){
-            const GpuTaskNode& task = m_tasks[taskID.index];
-            if(
-                task.lifecycleState == GpuTaskLifecycleState::Discarding
-                && task.lifecycleAttemptGeneration == recordingAttemptGeneration
-            ){
-                task.lifecycleState = GpuTaskLifecycleState::Discarded;
-                task.recordingClaimGeneration = 0u;
-            }
-        }
-    }
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

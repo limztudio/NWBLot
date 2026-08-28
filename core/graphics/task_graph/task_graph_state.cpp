@@ -124,14 +124,11 @@ bool GpuTaskGraph::beginRecordingAttempt(
             || task.lifecycleState == GpuTaskLifecycleState::Accepted
         )
             return false;
-        // A declaration-only discard is terminal. Once a plan began recording, every task must also receive its
-        // discarded callback before a different plan or retry can re-arm the graph.
+        // Once a plan began recording, every task must receive its discarded callback before a different plan or
+        // retry can re-arm the graph.
         if(
-            (m_activeRecordingPlanGeneration == 0u && task.lifecycleState == GpuTaskLifecycleState::Discarded)
-            || (
-                (!planChanged || m_activeRecordingPlanGeneration != 0u)
-                && task.lifecycleState != GpuTaskLifecycleState::Discarded
-            )
+            (!planChanged || m_activeRecordingPlanGeneration != 0u)
+            && task.lifecycleState != GpuTaskLifecycleState::Discarded
         )
             return false;
     }

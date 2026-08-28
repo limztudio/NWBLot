@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep retired manual packet-transaction seams out of production C++ sources."""
+"""Keep retired manual task-graph lifecycle and packet-transaction seams out of production C++ sources."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ PRODUCTION_DIRECTORIES = (
 )
 SOURCE_SUFFIXES = frozenset((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ixx"))
 RETIRED_IDENTIFIER = re.compile(
-    r"\b(?:GpuGraphSubmissionTransactionDiagnosticPeer|markPacketRecorded|acceptPacket|packetRuntime|"
+    r"\b(?:GpuGraphSubmissionTransactionDiagnosticPeer|discardTask|markPacketRecorded|acceptPacket|packetRuntime|"
     r"latestAcceptedToken|submissionWaiterCountForTesting|m_submissionWaiterCount|hasNativeSubmission)\b"
 )
 PACKET_RUNTIME_NAMESPACE = re.compile(r"\bnamespace\s+GpuPacketRuntimeState\s*\{(?P<body>.*?)\};", re.DOTALL)
@@ -57,6 +57,8 @@ def production_source_files(source_root: Path) -> list[Path]:
 def run_self_test() -> int:
     cases = (
         ("diagnostic peer", "friend class GpuGraphSubmissionTransactionDiagnosticPeer;", ((1, "GpuGraphSubmissionTransactionDiagnosticPeer"),)),
+        ("task discard seam", "graph.discardTask(task);", ((1, "discardTask"),)),
+        ("task discard definition", "void GpuTaskGraph::discardTask(const GpuTaskId&){}", ((1, "discardTask"),)),
         ("record seam", "transaction.markPacketRecorded(graph, compiled, packet, attempt);", ((1, "markPacketRecorded"),)),
         ("accept seam", "transaction.acceptPacket(graph, compiled, packet, token);", ((1, "acceptPacket"),)),
         ("borrowed runtime", "transaction.packetRuntime(packet);", ((1, "packetRuntime"),)),
@@ -68,9 +70,14 @@ def run_self_test() -> int:
             "namespace GpuPacketRuntimeState{ enum Enum : u8{ Declared, Recorded, Accepted }; };",
             ((1, "GpuPacketRuntimeState::Recorded"),),
         ),
-        ("comment", "// transaction.acceptPacket(graph, compiled, packet, token);", ()),
-        ("literal", 'const char* text = "markPacketRecorded packetRuntime";', ()),
-        ("near names", "void acceptPacketBatch(); usize packetRuntimeIndex = 0u;", ()),
+        ("comment", "// graph.discardTask(task); transaction.acceptPacket(graph, compiled, packet, token);", ()),
+        ("literal", 'const char* text = "discardTask markPacketRecorded packetRuntime";', ()),
+        (
+            "near names",
+            "void acceptPacketBatch(); usize packetRuntimeIndex = 0u; "
+            "void discardTasks(); void discardTaskRange(); usize discardTaskId = 0u;",
+            (),
+        ),
     )
     failed = False
     for name, source, expected in cases:
@@ -90,10 +97,10 @@ def main() -> int:
     for path in production_source_files(source_root):
         source = path.read_text(encoding="utf-8", errors="replace")
         for line, identifier in find_manual_transaction_references(source):
-            violations.append(f"{path.relative_to(source_root)}:{line}: retired manual transaction seam '{identifier}'")
+            violations.append(f"{path.relative_to(source_root)}:{line}: retired manual task-graph seam '{identifier}'")
 
     if violations:
-        print("Accepted graph packets must come from the native submitter, without production test seams.", file=sys.stderr)
+        print("Task lifecycle must resolve through graph abandonment or native packet transactions, without production test seams.", file=sys.stderr)
         print("\n".join(violations), file=sys.stderr)
         return 1
     return 0

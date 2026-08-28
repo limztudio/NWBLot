@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Texture close/submission revocation, queue-boundary defense, and framebuffer-ledger coverage.
+// Texture close/submission readiness, queue-boundary defense, and framebuffer-ledger coverage.
 
 
 #include <gtest/gtest.h>
@@ -40,6 +40,21 @@ struct SubmissionHookObserver{
     u32 invocationCount = 0u;
 };
 
+struct TextureOwnerReleaseHookContext{
+    TextureHandle* owner = nullptr;
+    Texture* retainedTexture = nullptr;
+    QueueSubmissionNativeSignal signal;
+    u32 invocationCount = 0u;
+};
+
+struct TextureDescriptionDriftHookContext{
+    Texture* texture = nullptr;
+    QueueSubmissionNativeSignal signal;
+    TextureDesc savedDescription;
+    u32 invocationCount = 0u;
+    bool descriptionMutated = false;
+};
+
 
 [[nodiscard]] static bool RejectObservedSubmissionHook(
     void* const rawContext,
@@ -55,38 +70,50 @@ struct SubmissionHookObserver{
 }
 
 
-#if !defined(NWB_FINAL)
-struct TextureRevocationHookContext{
-    GraphicsBackend::Device* device = nullptr;
-    Texture* texture = nullptr;
-    Object nativeImage;
-    QueueSubmissionNativeSignal signal;
-    u32 invocationCount = 0u;
-};
-
-
-[[nodiscard]] static bool RevokeTextureDuringSubmissionHook(
+[[nodiscard]] static bool ReleaseTextureOwnerDuringSubmissionHook(
     void* const rawContext,
     const GpuPhysicalQueueId& executionQueue,
     QueueSubmissionNativeSignal& outSignal
 ){
-    TextureRevocationHookContext* const context = static_cast<TextureRevocationHookContext*>(rawContext);
+    TextureOwnerReleaseHookContext* const context = static_cast<TextureOwnerReleaseHookContext*>(rawContext);
     if(
         !context
-        || !context->device
-        || !context->texture
+        || !context->owner
+        || !*context->owner
+        || context->owner->get() != context->retainedTexture
         || !executionQueue.valid()
         || !context->signal.valid()
     )
         return false;
 
     ++context->invocationCount;
-    if(!context->device->revokeUnmanagedNativeTextureForTesting(context->texture, context->nativeImage))
-        return false;
+    context->owner->reset();
     outSignal = context->signal;
     return true;
 }
-#endif
+
+[[nodiscard]] static bool DriftTextureDescriptionDuringSubmissionHook(
+    void* const rawContext,
+    const GpuPhysicalQueueId& executionQueue,
+    QueueSubmissionNativeSignal& outSignal
+){
+    TextureDescriptionDriftHookContext* const context = static_cast<TextureDescriptionDriftHookContext*>(rawContext);
+    if(
+        !context
+        || !context->texture
+        || !executionQueue.valid()
+        || !context->signal.valid()
+    )
+        return false;
+
+    context->savedDescription = context->texture->getDescription();
+    TextureDesc& publishedDescription = const_cast<TextureDesc&>(context->texture->getDescription());
+    publishedDescription.isVirtual = true;
+    context->descriptionMutated = true;
+    ++context->invocationCount;
+    outSignal = context->signal;
+    return true;
+}
 
 
 };
@@ -130,7 +157,7 @@ protected:
         ;
     }
 
-    [[nodiscard]] static TextureDesc unmanagedStateTextureDesc(){
+    [[nodiscard]] static TextureDesc retainedStateTextureDesc(){
         return baseTextureDesc().setKeepInitialState(true);
     }
 
@@ -291,14 +318,8 @@ TEST_F(TextureGpuReadinessSubmissionTest, ClosedFramebufferAttachmentReadinessRe
 }
 
 
-#if !defined(NWB_FINAL)
-TEST_F(TextureGpuReadinessSubmissionTest, RevocationBeforeCloseRollsBackProvisionalPermanentState){
-    const Object nativeImage(static_cast<u64>(0x51a00001u));
-    TextureHandle texture = device().createHandleForNativeTexture(
-        GraphicsBackend::ObjectTypes::VK_Image,
-        nativeImage,
-        unmanagedStateTextureDesc()
-    );
+TEST_F(TextureGpuReadinessSubmissionTest, DescriptionDriftBeforeCloseRollsBackProvisionalPermanentState){
+    TextureHandle texture = device().createTexture(retainedStateTextureDesc());
     ASSERT_TRUE(texture);
     CommandListHandle commandList = device().createCommandList();
     ASSERT_TRUE(commandList);
@@ -307,76 +328,56 @@ TEST_F(TextureGpuReadinessSubmissionTest, RevocationBeforeCloseRollsBackProvisio
     commandList->setPermanentTextureState(texture.get(), ResourceStates::Common);
     ASSERT_FALSE(commandList->commandRecordingFailed());
     ASSERT_EQ(commandList->getPermanentTextureState(texture.get()), ResourceStates::Common);
-    ASSERT_TRUE(device().revokeUnmanagedNativeTextureForTesting(texture.get(), nativeImage));
+
+    TextureDesc& publishedDescription = const_cast<TextureDesc&>(texture->getDescription());
+    publishedDescription.isVirtual = true;
 
     commandList->close();
+    publishedDescription = texture->getCreationDescription();
     EXPECT_TRUE(commandList->commandRecordingFailed());
     EXPECT_FALSE(commandList->hasCommandBuffer());
     EXPECT_EQ(commandList->getPermanentTextureState(texture.get()), ResourceStates::Unknown);
-    device().releaseRevokedNativeTextureIdentityForTesting(texture.get(), nativeImage);
 }
 
 
-TEST_F(TextureGpuReadinessSubmissionTest, ClosedRevokedTextureRejectsBeforeHookAndFreshWrapperDoesNotRetagOldList){
-    const Object nativeImage(static_cast<u64>(0x51a00002u));
-    const TextureDesc desc = unmanagedStateTextureDesc();
-    TextureHandle oldWrapper = device().createHandleForNativeTexture(
-        GraphicsBackend::ObjectTypes::VK_Image,
-        nativeImage,
-        desc
-    );
-    ASSERT_TRUE(oldWrapper);
+TEST_F(TextureGpuReadinessSubmissionTest, SubmissionRetainsTextureWhenCallerReleasesOwnerInPreSubmitHook){
+    TextureHandle owner = device().createTexture(baseTextureDesc());
+    ASSERT_TRUE(owner);
     CommandListHandle commandList = device().createCommandList();
     ASSERT_TRUE(commandList);
     commandList->open();
-    commandList->setPermanentTextureState(oldWrapper.get(), ResourceStates::Common);
+    commandList->beginTrackingTextureState(owner.get(), s_AllSubresources, ResourceStates::Common);
     commandList->close();
     ASSERT_FALSE(commandList->commandRecordingFailed());
     ASSERT_TRUE(commandList->hasCommandBuffer());
-    const u64 recordingLease = commandList->recordingLeaseSerial();
+    Texture* const retainedTexture = owner.get();
+    ASSERT_GT(retainedTexture->getReferenceCount(), 1u);
 
-    ASSERT_TRUE(device().revokeUnmanagedNativeTextureForTesting(oldWrapper.get(), nativeImage));
-    __hidden_texture_gpu_readiness_submission::SubmissionHookObserver hookObserver;
+    VulkanTestBinarySemaphore signal(device());
+    ASSERT_TRUE(signal.valid());
+    __hidden_texture_gpu_readiness_submission::TextureOwnerReleaseHookContext hookContext{
+        .owner = &owner,
+        .retainedTexture = retainedTexture,
+        .signal = signal.nativeSignal(),
+    };
     const QueueSubmissionDesc hookedSubmission{
         .preSubmitHook = QueueSubmissionPreSubmitHook{
-            .context = &hookObserver,
-            .invoke = __hidden_texture_gpu_readiness_submission::RejectObservedSubmissionHook,
+            .context = &hookContext,
+            .invoke = __hidden_texture_gpu_readiness_submission::ReleaseTextureOwnerDuringSubmissionHook,
         },
     };
-    EXPECT_FALSE(submit(*commandList, hookedSubmission).valid());
-    EXPECT_EQ(hookObserver.invocationCount, 0u);
-    EXPECT_TRUE(commandList->hasCommandBuffer());
-    EXPECT_EQ(commandList->recordingLeaseSerial(), recordingLease);
-
-    device().releaseRevokedNativeTextureIdentityForTesting(oldWrapper.get(), nativeImage);
-    TextureHandle replacement = device().createHandleForNativeTexture(
-        GraphicsBackend::ObjectTypes::VK_Image,
-        nativeImage,
-        desc
-    );
-    ASSERT_TRUE(replacement);
-    ASSERT_TRUE(device().isTextureReadyForGpuUse(replacement.get()));
-    EXPECT_FALSE(device().isTextureReadyForGpuUse(oldWrapper.get()));
-    EXPECT_FALSE(submit(*commandList, hookedSubmission).valid());
-    EXPECT_EQ(hookObserver.invocationCount, 0u);
-    EXPECT_TRUE(commandList->hasCommandBuffer());
-
-    commandList->open();
-    commandList->beginTrackingTextureState(replacement.get(), s_AllSubresources, ResourceStates::Common);
-    commandList->close();
-    ASSERT_FALSE(commandList->commandRecordingFailed());
-    ASSERT_TRUE(submit(*commandList).valid());
-    EXPECT_TRUE(device().waitForIdle());
+    const QueueSubmissionToken token = submit(*commandList, hookedSubmission);
+    ASSERT_TRUE(token.valid());
+    EXPECT_EQ(hookContext.invocationCount, 1u);
+    EXPECT_FALSE(owner);
+    EXPECT_FALSE(commandList->hasCommandBuffer());
+    EXPECT_TRUE(device().isTextureReadyForGpuUse(retainedTexture));
+    ASSERT_TRUE(device().waitForIdle());
 }
 
 
-TEST_F(TextureGpuReadinessSubmissionTest, HookRevocationIsRejectedByQueueWithoutDetachingClosedLease){
-    const Object nativeImage(static_cast<u64>(0x51a00003u));
-    TextureHandle texture = device().createHandleForNativeTexture(
-        GraphicsBackend::ObjectTypes::VK_Image,
-        nativeImage,
-        baseTextureDesc()
-    );
+TEST_F(TextureGpuReadinessSubmissionTest, SubmissionRevalidatesRetainedTextureDescriptionAfterPreSubmitHook){
+    TextureHandle texture = device().createTexture(baseTextureDesc());
     ASSERT_TRUE(texture);
     CommandListHandle commandList = device().createCommandList();
     ASSERT_TRUE(commandList);
@@ -389,37 +390,36 @@ TEST_F(TextureGpuReadinessSubmissionTest, HookRevocationIsRejectedByQueueWithout
 
     VulkanTestBinarySemaphore signal(device());
     ASSERT_TRUE(signal.valid());
-    __hidden_texture_gpu_readiness_submission::TextureRevocationHookContext hookContext{
-        .device = &device(),
+    __hidden_texture_gpu_readiness_submission::TextureDescriptionDriftHookContext hookContext{
         .texture = texture.get(),
-        .nativeImage = nativeImage,
         .signal = signal.nativeSignal(),
+        .savedDescription = {},
+        .invocationCount = 0u,
+        .descriptionMutated = false,
     };
     const QueueSubmissionDesc hookedSubmission{
         .preSubmitHook = QueueSubmissionPreSubmitHook{
             .context = &hookContext,
-            .invoke = __hidden_texture_gpu_readiness_submission::RevokeTextureDuringSubmissionHook,
+            .invoke = __hidden_texture_gpu_readiness_submission::DriftTextureDescriptionDuringSubmissionHook,
         },
     };
     const QueueSubmissionToken rejectedToken = submit(*commandList, hookedSubmission);
-    if(rejectedToken.valid()){
-        const bool idle = device().waitForIdle();
-        if(idle){
-            ASSERT_FALSE(device().isTextureReadyForGpuUse(texture.get()));
-            device().releaseRevokedNativeTextureIdentityForTesting(texture.get(), nativeImage);
-        }
-        ASSERT_TRUE(idle);
-        FAIL() << "Texture revocation hook unexpectedly reached the native queue";
+    if(hookContext.descriptionMutated){
+        TextureDesc& publishedDescription = const_cast<TextureDesc&>(texture->getDescription());
+        publishedDescription = hookContext.savedDescription;
     }
+    if(rejectedToken.valid())
+        ASSERT_TRUE(device().waitForIdle());
+    ASSERT_TRUE(hookContext.descriptionMutated);
     ASSERT_FALSE(rejectedToken.valid());
     EXPECT_EQ(hookContext.invocationCount, 1u);
     EXPECT_TRUE(commandList->hasCommandBuffer());
     EXPECT_EQ(commandList->recordingLeaseSerial(), recordingLease);
 
-    ASSERT_FALSE(device().isTextureReadyForGpuUse(texture.get()));
-    device().releaseRevokedNativeTextureIdentityForTesting(texture.get(), nativeImage);
+    const QueueSubmissionToken retryToken = submit(*commandList);
+    ASSERT_TRUE(retryToken.valid());
+    ASSERT_TRUE(device().waitForIdle());
 }
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

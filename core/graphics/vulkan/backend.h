@@ -3157,10 +3157,6 @@ public:
     )const noexcept;
     // The caller owns native binding and lifetime. Only one live Texture wrapper may name a VkImage per Device.
     [[nodiscard]] TextureHandle createHandleForNativeTexture(ObjectType objectType, Object texture, const TextureDesc& desc);
-#if !defined(NWB_FINAL)
-    [[nodiscard]] bool revokeUnmanagedNativeTextureForTesting(Texture* texture, Object expectedNativeImage)noexcept;
-    void releaseRevokedNativeTextureIdentityForTesting(Texture* texture, Object expectedNativeImage)noexcept;
-#endif
     [[nodiscard]] StagingTextureHandle createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess);
     void* mapStagingTexture(StagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch);
     void unmapStagingTexture(StagingTexture* tex);

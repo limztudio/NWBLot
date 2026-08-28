@@ -659,22 +659,16 @@ TEST_F(GpuResourceReadinessTest, HandoffProducerRejectsUnboundTextureBeforePubli
     EXPECT_FALSE(producer->hasCommandBuffer());
     EXPECT_FALSE(invalidSeed.valid());
 
-#if !defined(NWB_FINAL)
-    const Object nativeImage(static_cast<u64>(0x63b00001u));
-    const TextureDesc unmanagedDesc = TextureDesc()
+    const TextureDesc readyTextureDesc = TextureDesc()
         .setWidth(16u)
         .setHeight(16u)
         .setFormat(Format::RGBA8_UNORM)
         .setInitialState(ResourceStates::Common)
     ;
-    TextureHandle readyTexture = device.createHandleForNativeTexture(
-        GraphicsBackend::ObjectTypes::VK_Image,
-        nativeImage,
-        unmanagedDesc
-    );
+    TextureHandle readyTexture = device.createTexture(readyTextureDesc);
     ASSERT_TRUE(readyTexture);
 
-    CommandListResourceStateHandoff revokedSeed(GpuResourceReadinessTest::arena());
+    CommandListResourceStateHandoff invalidatedSeed(GpuResourceReadinessTest::arena());
     CommandListHandle readyProducer = device.createCommandList();
     ASSERT_TRUE(readyProducer);
     readyProducer->open();
@@ -684,32 +678,29 @@ TEST_F(GpuResourceReadinessTest, HandoffProducerRejectsUnboundTextureBeforePubli
         ResourceStates::Common
     );
     readyProducer->beginTrackingBufferState(readyBuffer.get(), ResourceStates::Common);
-    readyProducer->close(&revokedSeed);
+    readyProducer->close(&invalidatedSeed);
     ASSERT_FALSE(readyProducer->commandRecordingFailed());
-    ASSERT_TRUE(revokedSeed.valid());
-    ASSERT_TRUE(device.revokeUnmanagedNativeTextureForTesting(readyTexture.get(), nativeImage));
+    ASSERT_TRUE(invalidatedSeed.valid());
 
     CommandListHandle consumer = device.createCommandList();
     ASSERT_TRUE(consumer);
-    consumer->open(&revokedSeed);
+
+    TextureDesc& publishedDescription = const_cast<TextureDesc&>(readyTexture->getDescription());
+    publishedDescription.isVirtual = true;
+
+    consumer->open(&invalidatedSeed);
+    publishedDescription = readyTexture->getCreationDescription();
     EXPECT_TRUE(consumer->commandRecordingFailed());
     EXPECT_FALSE(consumer->hasCommandBuffer());
     EXPECT_FALSE(consumer->hasExplicitBufferState(readyBuffer.get()));
     consumer->close();
 
-    device.releaseRevokedNativeTextureIdentityForTesting(readyTexture.get(), nativeImage);
-    TextureHandle replacement = device.createHandleForNativeTexture(
-        GraphicsBackend::ObjectTypes::VK_Image,
-        nativeImage,
-        unmanagedDesc
-    );
-    ASSERT_TRUE(replacement);
     CommandListResourceStateHandoff restoredSeed(GpuResourceReadinessTest::arena());
     CommandListHandle restoredProducer = device.createCommandList();
     ASSERT_TRUE(restoredProducer);
     restoredProducer->open();
     restoredProducer->beginTrackingTextureState(
-        replacement.get(),
+        readyTexture.get(),
         TextureSubresourceSet(0u, 1u, 0u, 1u),
         ResourceStates::Common
     );
@@ -721,7 +712,6 @@ TEST_F(GpuResourceReadinessTest, HandoffProducerRejectsUnboundTextureBeforePubli
     EXPECT_FALSE(consumer->commandRecordingFailed());
     EXPECT_TRUE(consumer->hasExplicitBufferState(readyBuffer.get()));
     consumer->close();
-#endif
 }
 
 

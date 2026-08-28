@@ -254,52 +254,6 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !defined(NWB_FINAL)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool Device::revokeUnmanagedNativeTextureForTesting(
-    Texture* textureResource,
-    const Object expectedNativeImageHandle
-)noexcept{
-    if(!textureResource)
-        return false;
-
-    Texture& texture = *textureResource;
-    if(&texture.m_context != &m_context || &texture.m_allocator != &m_allocator)
-        return false;
-
-    auto* expectedNativeImage = static_cast<VkImage_T*>(expectedNativeImageHandle);
-    return texture.revokeUnmanagedNativeImage(expectedNativeImage);
-}
-
-void Device::releaseRevokedNativeTextureIdentityForTesting(
-    Texture* textureResource,
-    const Object expectedNativeImageHandle
-)noexcept{
-    if(!textureResource)
-        return;
-
-    Texture& texture = *textureResource;
-    if(&texture.m_context != &m_context || &texture.m_allocator != &m_allocator)
-        return;
-
-    auto* expectedNativeImage = static_cast<VkImage_T*>(expectedNativeImageHandle);
-    texture.releaseRevokedNativeImageIdentity(expectedNativeImage);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 SamplerHandle Device::createSampler(const SamplerDesc& d){
     SamplerDesc normalizedDesc = d;
     const f32 maxSupportedAnisotropy = Max(m_context.physicalDeviceProperties.limits.maxSamplerAnisotropy, 1.f);

@@ -958,27 +958,6 @@ struct GpuTaskGraphRuntimeStatistics{
 
 
 class GpuTaskGraphSubmitter final : NoCopy{
-private:
-    // The caller owns one valid SubmissionOperation for the full native-accept, task-callback, and
-    // transaction-publication sequence. Range submission supplies its synchronous semantic obligations here; the
-    // public single-packet API deliberately supplies none.
-    [[nodiscard]] bool submitPacketWithinSubmissionOperation(
-        GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuRecordedGraph& recordedGraph,
-        const GpuSubmissionPacketId& packet,
-        const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
-        usize externalCompletionTokenCount,
-        GpuGraphSubmissionTransaction& transaction,
-        Alloc::ScratchArena& scratchArena,
-        GpuTimingSubmissionTicket* const* timingTickets,
-        usize timingTicketCount,
-        const QueueSubmissionPreSubmitHook* preSubmitHook,
-        const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks,
-        usize taskAcceptedCallbackCount
-    )const;
-
-
 public:
     explicit GpuTaskGraphSubmitter(Device& device)
         : m_device(device)
@@ -1140,6 +1119,29 @@ public:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         const GpuTaskGraphTaskAcceptedCallback* acceptedCallback = nullptr
     )const;
+
+
+private:
+    // The caller owns one valid SubmissionOperation for the full native-accept, task-callback, and
+    // transaction-publication sequence. Range submission supplies its synchronous semantic obligations here; the
+    // public single-packet API deliberately supplies none.
+    [[nodiscard]] bool submitPacketWithinSubmissionOperation(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuRecordedGraph& recordedGraph,
+        const GpuSubmissionPacketId& packet,
+        const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
+        usize externalCompletionTokenCount,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuTimingSubmissionTicket* const* timingTickets,
+        usize timingTicketCount,
+        const QueueSubmissionPreSubmitHook* preSubmitHook,
+        const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks,
+        usize taskAcceptedCallbackCount
+    )const;
+
+
 private:
     Device& m_device;
 };

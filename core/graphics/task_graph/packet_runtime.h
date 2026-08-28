@@ -28,8 +28,6 @@ class GpuTaskGraph;
 class GpuTaskGraphSubmitter;
 class GpuTaskPacketSubmissionLease;
 class GpuCommandIrCapture;
-struct GpuExternalPacketStateSource;
-struct GpuTaskPacketStateBinding;
 
 
 struct GpuRecordedPacket{
@@ -146,7 +144,6 @@ private:
         CommandListResourceStateHandoff stateMergeScratch;
         CommandListResourceStateHandoff externalBaseStateSeed;
         CommandListResourceStateHandoff externalMergedStateSeed;
-        GraphicsVector<u8> dependencyReachability;
 
 
         explicit PacketRecordingScratch(GraphicsArena& arena)
@@ -155,7 +152,6 @@ private:
             , stateMergeScratch(arena)
             , externalBaseStateSeed(arena)
             , externalMergedStateSeed(arena)
-            , dependencyReachability(arena)
         {}
     };
 
@@ -211,10 +207,6 @@ private:
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketId& packet,
-        const GpuExternalPacketStateSource* externalStateSources,
-        usize externalStateSourceCount,
-        const GpuTaskPacketStateBinding* taskStateBindings,
-        usize taskStateBindingCount,
         const CommandListResourceStateHandoff*& outInitialStates
     );
     [[nodiscard]] CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet)noexcept;
@@ -242,31 +234,10 @@ private:
 };
 
 
-// An external producer's native final state. Packet recording filters every source through the consuming task's
-// declared imported resources, including declared texture ranges, so renderer subsystems never hand-build state
-// subsets or fan-ins for graph-owned packet boundaries.
-struct GpuExternalPacketStateSource{
-    const CommandListResourceStateHandoff* states = nullptr;
-};
-
-// A recording-time state source anchored to semantic graph work rather than compiler-generated packet IDs. The
-// optional recorded producer supplies its containing packet's actual native final state after that packet records;
-// external sources may supplement it. The recorder filters every source through the consumer packet's declared
-// resource uses so the contract remains stable across packetization changes.
-struct GpuTaskPacketStateBinding{
-    GpuTaskId task;
-    GpuTaskId recordedProducerTask = {};
-    const GpuExternalPacketStateSource* externalStateSources = nullptr;
-    usize externalStateSourceCount = 0u;
-};
-
-
 // Native graph packets always receive compiler-produced internal state seeds, declaration-selected external state
 // seeds, and compiler-planned packet-boundary barriers. Task thunks retain only intra-task synchronization.
 struct GpuNativePacketRecordDesc{
     GpuSubmissionPacketId packet;
-    const GpuExternalPacketStateSource* externalStateSources = nullptr;
-    usize externalStateSourceCount = 0u;
     // Internal ready-frontier lease selector. Direct callers leave both fields at zero; the recorder derives a
     // process-unique ThreadPool domain and nonzero local index without exposing backend-native pool handles.
     u64 recordingWorkerDomain = 0u;
@@ -291,24 +262,17 @@ public:
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecordDesc& desc,
         GpuRecordedGraph& outRecordedGraph,
-        GpuCommandIrCapture* commandIrCapture = nullptr,
-        const GpuTaskPacketStateBinding* taskStateBindings = nullptr,
-        usize taskStateBindingCount = 0u
+        GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
-    // Records one compiler-derived non-empty contiguous range. `recordOverrides` is optional and sparse: packets
-    // without an override receive the ordinary graph-owned state seed. Earlier producer packets needed by the range
-    // must already be recorded, which keeps deliberate late tails separate from the ordinary graph prefix.
+    // Records one compiler-derived non-empty contiguous range. Earlier producer packets needed by the range must
+    // already be recorded, which keeps deliberate late tails separate from the ordinary graph prefix.
     [[nodiscard]] bool recordPacketRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketRange& range,
-        const GpuNativePacketRecordDesc* recordOverrides,
-        usize recordOverrideCount,
         GpuRecordedGraph& outRecordedGraph,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
-        GpuCommandIrCapture* commandIrCapture = nullptr,
-        const GpuTaskPacketStateBinding* taskStateBindings = nullptr,
-        usize taskStateBindingCount = 0u
+        GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
     // Semantic companion to the packet-range recorder. Task endpoints resolve only after compilation, keeping
     // renderer record spans independent from packet splitting and merging while preserving intentional late tails.
@@ -317,13 +281,9 @@ public:
         const GpuCompiledGraph& compiledGraph,
         GpuTaskId firstTask,
         GpuTaskId lastTask,
-        const GpuNativePacketRecordDesc* recordOverrides,
-        usize recordOverrideCount,
         GpuRecordedGraph& outRecordedGraph,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
-        GpuCommandIrCapture* commandIrCapture = nullptr,
-        const GpuTaskPacketStateBinding* taskStateBindings = nullptr,
-        usize taskStateBindingCount = 0u
+        GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
     // Records compiler-ready frontiers with `workerPool`. Only packets whose tasks all set
     // GpuTaskSchedulingHint::allowParallelRecording may share a worker frontier; every other packet remains serial.
@@ -333,14 +293,10 @@ public:
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketRange& range,
-        const GpuNativePacketRecordDesc* recordOverrides,
-        usize recordOverrideCount,
         GpuRecordedGraph& outRecordedGraph,
         Alloc::ThreadPool& workerPool,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
-        GpuCommandIrCapture* commandIrCapture = nullptr,
-        const GpuTaskPacketStateBinding* taskStateBindings = nullptr,
-        usize taskStateBindingCount = 0u
+        GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
     // Semantic companion to ready-frontier recording. Worker eligibility and packet ordering remain compiler-owned.
     [[nodiscard]] bool recordTaskRangeInReadyFrontiers(
@@ -348,15 +304,13 @@ public:
         const GpuCompiledGraph& compiledGraph,
         GpuTaskId firstTask,
         GpuTaskId lastTask,
-        const GpuNativePacketRecordDesc* recordOverrides,
-        usize recordOverrideCount,
         GpuRecordedGraph& outRecordedGraph,
         Alloc::ThreadPool& workerPool,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
-        GpuCommandIrCapture* commandIrCapture = nullptr,
-        const GpuTaskPacketStateBinding* taskStateBindings = nullptr,
-        usize taskStateBindingCount = 0u
+        GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
+
+
 private:
     [[nodiscard]] bool preflightPacketResources(
         const GpuTaskGraph& graph,
@@ -376,10 +330,11 @@ private:
         const GpuNativePacketRecordDesc& desc,
         GpuRecordedGraph& outRecordedGraph,
         GpuRecordedGraph::PacketRecordingScratch& scratch,
-        GpuCommandIrCapture* commandIrCapture,
-        const GpuTaskPacketStateBinding* taskStateBindings,
-        usize taskStateBindingCount
+        GpuCommandIrCapture* commandIrCapture
     )const;
+
+
+private:
     Device& m_device;
     // Optional because all-None graphs retain the existing recorder path. A timing-aware recorder must outlive every
     // GpuRecordedGraph ticket created through this instance.
@@ -530,10 +485,6 @@ struct GpuTaskGraphTaskRecordedCallback{
 // completion, and callback bindings keep execution independent from compiler packet splitting and merging.
 struct GpuTaskGraphNormalExecutionDesc{
     GpuTaskId terminalTask;
-    const GpuNativePacketRecordDesc* recordOverrides = nullptr;
-    usize recordOverrideCount = 0u;
-    const GpuTaskPacketStateBinding* taskStateBindings = nullptr;
-    usize taskStateBindingCount = 0u;
     // Invoked in compiler task order after the complete ordinary prefix records and before its first native submit.
     // A false result leaves every packet unaccepted so the caller can discard or recover transactionally.
     const GpuTaskGraphTaskRecordedCallback* taskRecordedCallbacks = nullptr;
@@ -1100,19 +1051,16 @@ public:
         Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
-    // Records and submits one semantic late task after its graph dependencies have accepted. Optional
-    // task-anchored state bindings are resolved only while recording, a recorded callback may validate the
-    // packet's immutable final-state seed before submission, and an accepted callback may publish semantic state
-    // synchronously from the native submission token. Any rejection leaves task lifecycle owned by the transaction
-    // rather than a renderer-local packet/retry path.
+    // Records and submits one semantic late task after its graph dependencies have accepted. A recorded callback may
+    // validate the packet's immutable final-state seed before submission, and an accepted callback may publish
+    // semantic state synchronously from the native submission token. Any rejection leaves task lifecycle owned by
+    // the transaction rather than a renderer-local packet/retry path.
     [[nodiscard]] bool recordAndSubmitTask(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecorder& recorder,
         GpuRecordedGraph& recordedGraph,
         GpuTaskId task,
-        const GpuTaskPacketStateBinding* taskStateBindings,
-        usize taskStateBindingCount,
         const GpuTaskGraphTaskRecordedCallback* recordedCallback,
         GpuGraphSubmissionTransaction& transaction,
         Alloc::ScratchArena& scratchArena,

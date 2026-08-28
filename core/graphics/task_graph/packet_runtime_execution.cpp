@@ -22,52 +22,6 @@ namespace __hidden_gpu_packet_runtime_execution{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidateTaskPacketStateBindings(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuTaskPacketStateBinding* const taskStateBindings,
-    const usize taskStateBindingCount
-){
-    if(taskStateBindingCount != 0u && !taskStateBindings)
-        return false;
-
-    for(usize bindingIndex = 0u; bindingIndex < taskStateBindingCount; ++bindingIndex){
-        const GpuTaskPacketStateBinding& binding = taskStateBindings[bindingIndex];
-        const bool hasRecordedProducer = binding.recordedProducerTask.valid();
-        if(
-            !graph.validTask(binding.task)
-            || !compiledGraph.findTask(binding.task)
-            || (!hasRecordedProducer && binding.externalStateSourceCount == 0u)
-            || (binding.externalStateSourceCount != 0u && !binding.externalStateSources)
-        )
-            return false;
-        if(hasRecordedProducer){
-            if(
-                !graph.validTask(binding.recordedProducerTask)
-                || !compiledGraph.findTask(binding.recordedProducerTask)
-            )
-                return false;
-            const GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(binding.task);
-            const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(binding.recordedProducerTask);
-            if(!compiledGraph.validPacket(consumerPacket) || !compiledGraph.validPacket(producerPacket))
-                return false;
-            if(producerPacket == consumerPacket){
-                if(!compiledGraph.taskPrecedesInSamePacket(binding.recordedProducerTask, binding.task))
-                    return false;
-            }
-            else if(producerPacket.index >= consumerPacket.index)
-                return false;
-        }
-        for(usize sourceIndex = 0u; sourceIndex < binding.externalStateSourceCount; ++sourceIndex){
-            const CommandListResourceStateHandoff* const states =
-                binding.externalStateSources[sourceIndex].states
-            ;
-            if(!states || !states->validForDeviceGeneration(compiledGraph.deviceGeneration()))
-                return false;
-        }
-    }
-    return true;
-}
 // A frontier packet is meaningful only as an explicit recovery/finalization tail. The compiler prevents it from
 // merging with ordinary work, but does not force declaration order, so normal graph execution rejects one inside
 // either its semantic endpoint prefix or its automatically derived ordinary prefix before recording begins.
@@ -132,29 +86,6 @@ namespace __hidden_gpu_packet_runtime_execution{
     );
     outRange = compiledGraph.packetRange(firstPacket, lastPacket);
     return compiledGraph.validPacketRange(outRange);
-}
-
-[[nodiscard]] bool ValidateNormalGraphTaskStateBindings(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuSubmissionPacketRange& range,
-    const GpuTaskPacketStateBinding* const taskStateBindings,
-    const usize taskStateBindingCount
-){
-    if(!ValidateTaskPacketStateBindings(graph, compiledGraph, taskStateBindings, taskStateBindingCount))
-        return false;
-
-    const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
-    for(usize bindingIndex = 0u; bindingIndex < taskStateBindingCount; ++bindingIndex){
-        const GpuSubmissionPacketId packet = compiledGraph.packetForTask(taskStateBindings[bindingIndex].task);
-        if(
-            !packet.valid()
-            || packet.index < range.first.index
-            || static_cast<usize>(packet.index) >= rangeEnd
-        )
-            return false;
-    }
-    return true;
 }
 
 [[nodiscard]] bool ValidateNormalGraphTaskRecordedCallbacks(
@@ -228,18 +159,10 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
         return false;
     }
     if(
-        (desc.recordOverrideCount != 0u && !desc.recordOverrides)
-        || (desc.externalCompletionTokenCount != 0u && !desc.externalCompletionTokens)
+        (desc.externalCompletionTokenCount != 0u && !desc.externalCompletionTokens)
         || (desc.taskTimingTicketCount != 0u && !desc.taskTimingTickets)
         || (desc.taskAcceptedCallbackCount != 0u && !desc.taskAcceptedCallbacks)
         || (desc.taskSubmissionHookCount != 0u && !desc.taskSubmissionHooks)
-        || !__hidden_gpu_packet_runtime_execution::ValidateNormalGraphTaskStateBindings(
-            graph,
-            compiledGraph,
-            normalRange,
-            desc.taskStateBindings,
-            desc.taskStateBindingCount
-        )
         || !__hidden_gpu_packet_runtime_execution::ValidateNormalGraphTaskRecordedCallbacks(
             graph,
             compiledGraph,
@@ -255,26 +178,18 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
             graph,
             compiledGraph,
             normalRange,
-            desc.recordOverrides,
-            desc.recordOverrideCount,
             recordedGraph,
             *desc.readyFrontierWorkerPool,
             &failedPacket,
-            desc.commandIrCapture,
-            desc.taskStateBindings,
-            desc.taskStateBindingCount
+            desc.commandIrCapture
         )
         : recorder.recordPacketRangeInCompileOrder(
             graph,
             compiledGraph,
             normalRange,
-            desc.recordOverrides,
-            desc.recordOverrideCount,
             recordedGraph,
             &failedPacket,
-            desc.commandIrCapture,
-            desc.taskStateBindings,
-            desc.taskStateBindingCount
+            desc.commandIrCapture
         )
     ;
     if(!recorded){
@@ -368,8 +283,6 @@ bool GpuTaskGraphSubmitter::recordAndSubmitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         range,
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )){
@@ -457,8 +370,6 @@ bool GpuTaskGraphSubmitter::recordAndSubmitPacketRangeInReadyFrontiers(
         graph,
         compiledGraph,
         range,
-        nullptr,
-        0u,
         recordedGraph,
         workerPool,
         &failedPacket
@@ -568,8 +479,6 @@ bool GpuTaskGraphSubmitter::recordAndSubmitAcceptedFrontierTask(
         recordedGraph,
         task,
         nullptr,
-        0u,
-        nullptr,
         transaction,
         scratchArena,
         outFailedPacket
@@ -583,8 +492,6 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTask(
     const GpuNativePacketRecorder& recorder,
     GpuRecordedGraph& recordedGraph,
     const GpuTaskId task,
-    const GpuTaskPacketStateBinding* const taskStateBindings,
-    const usize taskStateBindingCount,
     const GpuTaskGraphTaskRecordedCallback* const recordedCallback,
     GpuGraphSubmissionTransaction& transaction,
     Alloc::ScratchArena& scratchArena,
@@ -621,7 +528,6 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTask(
         || !transaction.validFor(compiledGraph)
         || !graph.validTask(task)
         || !compiledGraph.findTask(task)
-        || (taskStateBindingCount != 0u && !taskStateBindings)
         || (recordedCallback && (!recordedCallback->invoke || recordedCallback->task != task))
         || (acceptedCallback && (!acceptedCallback->invoke || acceptedCallback->task != task))
     ){
@@ -635,13 +541,9 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTask(
         compiledGraph,
         task,
         task,
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket,
-        nullptr,
-        taskStateBindings,
-        taskStateBindingCount
+        nullptr
     )){
         if(outFailedPacket)
             *outFailedPacket = failedPacket;

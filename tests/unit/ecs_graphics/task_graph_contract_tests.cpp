@@ -2593,8 +2593,6 @@ TEST(EcsGraphics, LaggedHistoryReturnCachesPublishOnlyOnTaskAcceptance){
     EXPECT_TRUE(ContainsText(
         system.substr(submitOffset, tokenOffset - submitOffset),
         "m_deferredLaggedLightingHistoryTask,\n"
-        "                nullptr,\n"
-        "                0u,\n"
         "                &historyCopyRecordedCallback,"
     ));
 

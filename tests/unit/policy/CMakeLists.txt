@@ -111,6 +111,20 @@ add_test(
         --self-test
 )
 add_test(
+    NAME nwb_no_recording_time_packet_state_overrides
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_recording_time_packet_state_overrides.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_recording_time_packet_state_overrides_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_recording_time_packet_state_overrides.py"
+        --self-test
+)
+add_test(
     NAME nwb_no_vulkan_submission_test_sync
     COMMAND
         "${Python3_EXECUTABLE}"

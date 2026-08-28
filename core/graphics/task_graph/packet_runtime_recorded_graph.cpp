@@ -104,7 +104,6 @@ void GpuRecordedGraph::reset(const GpuCompiledGraph& compiledGraph){
     m_serialRecordingScratch.stateMergeScratch.reset();
     m_serialRecordingScratch.externalBaseStateSeed.reset();
     m_serialRecordingScratch.externalMergedStateSeed.reset();
-    m_serialRecordingScratch.dependencyReachability.clear();
     m_recordingElapsedSeconds = 0.0;
     m_readyFrontierElapsedSeconds = 0.0;
     m_readyFrontierWorkerBusySeconds = 0.0;

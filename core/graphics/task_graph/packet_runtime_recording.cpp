@@ -248,52 +248,6 @@ inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
     return (static_cast<u8>(available) & static_cast<u8>(required)) == static_cast<u8>(required);
 }
 #endif
-[[nodiscard]] bool ValidateTaskPacketStateBindings(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuTaskPacketStateBinding* const taskStateBindings,
-    const usize taskStateBindingCount
-){
-    if(taskStateBindingCount != 0u && !taskStateBindings)
-        return false;
-
-    for(usize bindingIndex = 0u; bindingIndex < taskStateBindingCount; ++bindingIndex){
-        const GpuTaskPacketStateBinding& binding = taskStateBindings[bindingIndex];
-        const bool hasRecordedProducer = binding.recordedProducerTask.valid();
-        if(
-            !graph.validTask(binding.task)
-            || !compiledGraph.findTask(binding.task)
-            || (!hasRecordedProducer && binding.externalStateSourceCount == 0u)
-            || (binding.externalStateSourceCount != 0u && !binding.externalStateSources)
-        )
-            return false;
-        if(hasRecordedProducer){
-            if(
-                !graph.validTask(binding.recordedProducerTask)
-                || !compiledGraph.findTask(binding.recordedProducerTask)
-            )
-                return false;
-            const GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(binding.task);
-            const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(binding.recordedProducerTask);
-            if(!compiledGraph.validPacket(consumerPacket) || !compiledGraph.validPacket(producerPacket))
-                return false;
-            if(producerPacket == consumerPacket){
-                if(!compiledGraph.taskPrecedesInSamePacket(binding.recordedProducerTask, binding.task))
-                    return false;
-            }
-            else if(producerPacket.index >= consumerPacket.index)
-                return false;
-        }
-        for(usize sourceIndex = 0u; sourceIndex < binding.externalStateSourceCount; ++sourceIndex){
-            const CommandListResourceStateHandoff* const states =
-                binding.externalStateSources[sourceIndex].states
-            ;
-            if(!states || !states->validForDeviceGeneration(compiledGraph.deviceGeneration()))
-                return false;
-        }
-    }
-    return true;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -310,21 +264,13 @@ bool GpuNativePacketRecorder::recordPacket(
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecordDesc& desc,
     GpuRecordedGraph& outRecordedGraph,
-    GpuCommandIrCapture* const commandIrCapture,
-    const GpuTaskPacketStateBinding* const taskStateBindings,
-    const usize taskStateBindingCount
+    GpuCommandIrCapture* const commandIrCapture
 )const{
     if(
         !compiledGraph.validFor(graph)
         || !graph.validForDeviceGeneration(compiledGraph.deviceGeneration())
         || m_device.getDeviceGeneration() != compiledGraph.deviceGeneration()
         || !compiledGraph.validPacket(desc.packet)
-        || !__hidden_gpu_packet_runtime_recording::ValidateTaskPacketStateBindings(
-            graph,
-            compiledGraph,
-            taskStateBindings,
-            taskStateBindingCount
-        )
     )
         return false;
     const Timer recordingOperationBegin = TimerNow();
@@ -341,9 +287,7 @@ bool GpuNativePacketRecorder::recordPacket(
         desc,
         outRecordedGraph,
         outRecordedGraph.m_serialRecordingScratch,
-        commandIrCapture,
-        taskStateBindings,
-        taskStateBindingCount
+        commandIrCapture
     ))
         return false;
     outRecordedGraph.m_recordingElapsedSeconds += DurationInSeconds<f64>(TimerNow(), recordingOperationBegin);
@@ -357,9 +301,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     const GpuNativePacketRecordDesc& desc,
     GpuRecordedGraph& outRecordedGraph,
     GpuRecordedGraph::PacketRecordingScratch& scratch,
-    GpuCommandIrCapture* const commandIrCapture,
-    const GpuTaskPacketStateBinding* const taskStateBindings,
-    const usize taskStateBindingCount
+    GpuCommandIrCapture* const commandIrCapture
 )const{
     if(
         !compiledGraph.validFor(graph)
@@ -367,12 +309,6 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         || m_device.getDeviceGeneration() != compiledGraph.deviceGeneration()
         || !compiledGraph.validPacket(desc.packet)
         || !outRecordedGraph.validFor(graph, compiledGraph)
-        || !__hidden_gpu_packet_runtime_recording::ValidateTaskPacketStateBindings(
-            graph,
-            compiledGraph,
-            taskStateBindings,
-            taskStateBindingCount
-        )
     )
         return false;
     // A capture is one immutable compiled-plan artifact. Reject a stale non-empty capture before opening a packet
@@ -437,10 +373,6 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         graph,
         compiledGraph,
         desc.packet,
-        desc.externalStateSources,
-        desc.externalStateSourceCount,
-        taskStateBindings,
-        taskStateBindingCount,
         initialStates
     )){
         abortPacketRecording();

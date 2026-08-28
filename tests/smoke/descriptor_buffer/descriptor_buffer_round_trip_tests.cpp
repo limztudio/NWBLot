@@ -2014,8 +2014,6 @@ TEST_F(DescriptorBufferRoundTripTest, SameClassGraphicsQueuesRouteGraphPacketsAn
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     ASSERT_NE(recordedGraph.packetFinalStateSeed(uploadPacket), nullptr);
@@ -2380,8 +2378,6 @@ TEST_F(DescriptorBufferRoundTripTest, ForcedTimingQueueOverrideRoutesNativeGraph
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
 
@@ -2611,8 +2607,6 @@ TEST_F(DescriptorBufferRoundTripTest, CrossFamilySameClassGraphicsQueuesRouteWit
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     ASSERT_NE(recordedGraph.packetFinalStateSeed(uploadPacket), nullptr);
@@ -11534,8 +11528,6 @@ TEST_F(DescriptorBufferRoundTripTest, TaskSubmissionHookResolvesSemanticAnchorTo
         compiledGraph,
         task,
         task,
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -11922,8 +11914,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
         graph,
         compiledGraph,
         packetRange,
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     );
@@ -12395,8 +12385,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -12625,8 +12613,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnsAccelStructPacketStateAndExternal
         driftGraph,
         driftCompiledGraph,
         driftCompiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         driftRecordedGraph,
         &driftFailedPacket
     ));
@@ -12642,8 +12628,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnsAccelStructPacketStateAndExternal
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -12898,8 +12882,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedSoftwareBvhInputStatesRe
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -13151,8 +13133,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHybridSoftwareTailInputSetRecord
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -13330,8 +13310,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowPrepareSoftwareBvhBuildSta
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -13775,8 +13753,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPureSoftwareBvhAndSceneTraversal
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket,
         &commandIrCapture
@@ -14057,8 +14033,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedTailFreeBlasInputStatesR
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -14268,8 +14242,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCoverageStateReco
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket,
         &commandIrCapture
@@ -14811,8 +14783,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -15014,8 +14984,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPostGbufferTraceGeometryStatesRe
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -15288,8 +15256,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceEntryStatesR
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -16054,8 +16020,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -16293,8 +16257,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueSoftTemporalMergeEntryStat
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -16881,8 +16843,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftwareCausticsEntryStatesRecor
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -17298,8 +17258,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -17501,8 +17459,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedNonTemporalCausticAccumulatorCle
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -17699,8 +17655,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedWarmCausticAccumulatorDecayRecor
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -17839,6 +17793,37 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFive
     const TextureSubresourceSet accumulatorSubresources(0u, 1u, 0u, layerCount);
     const TextureSubresourceSet geometrySubresources(0u, 1u, 0u, 1u);
     const TextureSubresourceSet pingPongSubresources(0u, 1u, 0u, 1u);
+    // Persistent caustic scratch comes from the previous accepted frame in the renderer. Declare that immutable
+    // state source with each first semantic consumer so the graph snapshots and filters it before compilation.
+    CommandListResourceStateHandoff causticScratchState(DescriptorBufferRoundTripTest::arena());
+    auto causticScratchProducer = device.createCommandList();
+    ASSERT_NE(causticScratchProducer.get(), nullptr);
+    causticScratchProducer->open();
+    causticScratchProducer->setTextureState(
+        accumulator.get(),
+        accumulatorSubresources,
+        ResourceStates::ShaderResource
+    );
+    causticScratchProducer->setTextureState(
+        geometry.get(),
+        geometrySubresources,
+        ResourceStates::ShaderResource
+    );
+    causticScratchProducer->setTextureState(
+        history.get(),
+        pingPongSubresources,
+        ResourceStates::ShaderResource
+    );
+    causticScratchProducer->setTextureState(
+        resolveHalf.get(),
+        pingPongSubresources,
+        ResourceStates::ShaderResource
+    );
+    causticScratchProducer->close(&causticScratchState);
+    ASSERT_TRUE(causticScratchState.valid());
+    const GpuTaskExternalStateSource causticScratchStateSources[] = {
+        GpuTaskExternalStateSource{ .states = &causticScratchState },
+    };
     const GpuTaskResourceUse photonUses[] = {
         GpuTaskResourceUse{
             .resource = accumulatorResource,
@@ -17856,6 +17841,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFive
         .setMarkerLabel("Caustic Photons")
         .setQueue(graphicsQueue)
         .setScheduling(photonScheduling)
+        .setExternalStateSources(causticScratchStateSources, LengthOf(causticScratchStateSources))
         .setResourceUses(photonUses, LengthOf(photonUses))
     ;
     bool photonRecorded = false;
@@ -17886,6 +17872,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFive
         .setQueue(graphicsQueue)
         .setScheduling(geometryScheduling)
         .setDependencies(&photonTask, 1u)
+        .setExternalStateSources(causticScratchStateSources, LengthOf(causticScratchStateSources))
         .setResourceUses(geometryUses, LengthOf(geometryUses))
     ;
     bool geometryRecorded = false;
@@ -17938,6 +17925,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFive
         .setQueue(graphicsQueue)
         .setScheduling(prepareScheduling)
         .setDependencies(&geometryTask, 1u)
+        .setExternalStateSources(causticScratchStateSources, LengthOf(causticScratchStateSources))
         .setResourceUses(prepareUses, LengthOf(prepareUses))
     ;
     bool prepareAccumulatorReady = false;
@@ -18404,46 +18392,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFive
     }
     EXPECT_TRUE(hasFifthUpsampleHandoff);
 
-    // Persistent caustic scratch comes from the previous accepted frame in the renderer. Seed the native packet
-    // exactly as that state-handoff contract does, rather than pretending a newly-created ShaderResource image was
-    // already tracked by this command list.
-    CommandListResourceStateHandoff causticScratchState(DescriptorBufferRoundTripTest::arena());
-    auto causticScratchProducer = device.createCommandList();
-    ASSERT_NE(causticScratchProducer.get(), nullptr);
-    causticScratchProducer->open();
-    causticScratchProducer->setTextureState(
-        accumulator.get(),
-        accumulatorSubresources,
-        ResourceStates::ShaderResource
-    );
-    causticScratchProducer->setTextureState(
-        geometry.get(),
-        geometrySubresources,
-        ResourceStates::ShaderResource
-    );
-    causticScratchProducer->setTextureState(
-        history.get(),
-        pingPongSubresources,
-        ResourceStates::ShaderResource
-    );
-    causticScratchProducer->setTextureState(
-        resolveHalf.get(),
-        pingPongSubresources,
-        ResourceStates::ShaderResource
-    );
-    causticScratchProducer->close(&causticScratchState);
-    ASSERT_TRUE(causticScratchState.valid());
-    const GpuExternalPacketStateSource causticScratchStateSources[] = {
-        GpuExternalPacketStateSource{ .states = &causticScratchState },
-    };
-    const GpuNativePacketRecordDesc recordOverrides[] = {
-        GpuNativePacketRecordDesc{
-            .packet = photonPacket,
-            .externalStateSources = causticScratchStateSources,
-            .externalStateSourceCount = LengthOf(causticScratchStateSources),
-        },
-    };
-
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
     GpuSubmissionPacketId failedPacket;
@@ -18451,8 +18399,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFive
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        recordOverrides,
-        LengthOf(recordOverrides),
         recordedGraph,
         &failedPacket
     );
@@ -18779,8 +18725,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         rejectedRecordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -18803,8 +18747,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket,
         &commandIrCapture
@@ -19700,8 +19642,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket,
         &commandIrCapture
@@ -19942,8 +19882,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCsgClipBufferEntryStatesRecordWi
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -20129,8 +20067,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialFrameEntryStatesRecordWi
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -20268,8 +20204,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialGeometryEntryStatesReuse
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -20417,8 +20351,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialSampledTextureEntryState
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -21125,8 +21057,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     );
@@ -21376,8 +21306,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitExtinctionMaterialGeometry
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -21622,8 +21550,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationMaterialGeomet
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -22139,8 +22065,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverSpanCombineAndS
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     );
@@ -22505,8 +22429,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -22676,8 +22598,6 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         nullptr,
         &commandIrCapture
@@ -22867,8 +22787,6 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRejectsUnboundTailAt
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket,
         &capture
@@ -23171,8 +23089,6 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlo
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     ASSERT_NE(recordedGraph.packetFinalStateSeed(packet), nullptr);
@@ -23432,8 +23348,6 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitPhaseUploadsKeepImmutableSnapshotsIs
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
 
@@ -23620,8 +23534,6 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderReportsWorkerRoutingW
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         recordingWorkers
     ));
@@ -23857,8 +23769,6 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRecordsExplicitGpuDep
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         recordingWorkers
     ));
@@ -24120,8 +24030,6 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedComm
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         recordingWorkers
     ));
@@ -24744,8 +24652,6 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         nullptr,
         &commandIrCapture
@@ -24984,8 +24890,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_TRUE(selectorConsumerObservedConstantBuffer);
@@ -25336,8 +25240,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesWithGraphC
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     const CommandListResourceStateHandoff* const graphFinalState = recordedGraph.packetFinalStateSeed(restCopyPacket);
@@ -25534,8 +25436,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningOutputStatesFinalizeInGr
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_TRUE(producerObservedUnorderedAccess);
@@ -25752,8 +25652,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedComputeEmulationGeneratedVertexH
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_TRUE(producerObservedUnorderedAccess);
@@ -26064,8 +25962,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationPair
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, 4u);
@@ -26353,8 +26249,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, LengthOf(tasks));
@@ -26664,8 +26558,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationQuad
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, LengthOf(tasks));
@@ -26974,8 +26866,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverComputeHandoffM
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_TRUE(clearObservedCopyDest);
@@ -27361,8 +27251,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeOpaqueCsgIntervalSample
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_TRUE(combineObservedStates);
@@ -27629,8 +27517,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitExtinctionGenerat
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_TRUE(producerObservedStates);
@@ -27892,8 +27778,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitAccumulationGener
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_TRUE(producerObservedStates);
@@ -28560,8 +28444,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationAliasFr
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, 5u);
@@ -29253,8 +29135,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, 7u);
@@ -29968,8 +29848,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, 9u);
@@ -30709,8 +30587,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, 11u);
@@ -31333,8 +31209,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, 8u);
@@ -31982,8 +31856,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, 10u);
@@ -32667,8 +32539,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, 12u);
@@ -33230,8 +33100,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyAliasFreeC
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, 5u);
@@ -34215,8 +34083,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyCsgAliasFr
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, LengthOf(packetOrder));
@@ -35023,8 +34889,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionAliasFree
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, LengthOf(tasks));
@@ -35541,8 +35405,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitTypedAvboitIntegrationTai
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, LengthOf(tasks));
@@ -36451,8 +36313,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, LengthOf(tasks));
@@ -37407,8 +37267,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, LengthOf(tasks));
@@ -38388,8 +38246,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, LengthOf(tasks));
@@ -39268,8 +39124,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionCsgAliasF
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, LengthOf(tasks));
@@ -40327,8 +40181,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationCsgAlia
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, LengthOf(tasks));
@@ -40653,8 +40505,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitOccupancyGenerate
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_TRUE(producerObservedStates);
@@ -41219,8 +41069,6 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitExtinctionComputeEmulationShare
         graph,
         compiledGraph,
         packetRange,
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, 4u);
@@ -41533,8 +41381,6 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitSemanticRangeAcceptsAuxiliaryCo
         compiledGraph,
         tasks[0u],
         tasks[5u],
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, LengthOf(tasks));
@@ -42367,8 +42213,6 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
         graph,
         compiledGraph,
         packetRange,
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, 6u);
@@ -42876,8 +42720,6 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitOccupancyComputeEmulationShares
         graph,
         compiledGraph,
         packetRange,
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_EQ(recordOrdinal, 4u);
@@ -43265,8 +43107,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningDeformationHandoffStaysI
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_TRUE(deformationObservedUavs);
@@ -43522,8 +43362,6 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersC
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         capturedGraph,
         nullptr,
         &capture
@@ -44073,8 +43911,6 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         nullptr,
         &commandIrCapture
@@ -44420,8 +44256,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphFullMultisampleTextureClearSubmitsAnd
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket,
         &capture
@@ -44864,8 +44698,6 @@ TEST_F(DescriptorBufferRoundTripTest, MergedGraphBuiltInsEndInheritedAndHookOpen
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
@@ -45175,8 +45007,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAdaptiveShadowPrimitiveChainReco
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         nullptr,
         &commandIrCapture
@@ -45874,8 +45704,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityAllLitClearRecor
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
         recordedGraph,
         nullptr,
         &commandIrCapture
@@ -46438,19 +46266,14 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
-    // The writer override proves that incremental range recording may seed only selected packets; the reader receives
-    // the compiler-derived default descriptor. Each one-packet ready call deliberately takes the serial fallback.
-    const GpuNativePacketRecordDesc recordOverrides[] = {
-        GpuNativePacketRecordDesc{ .packet = writerPacket },
-    };
+    // Each one-packet ready call deliberately takes the serial fallback while preserving incremental graph-owned
+    // recording and compiler state propagation.
     const GpuNativePacketRecorder recorder(device);
     Alloc::ThreadPool recordingWorkers(1u, CpuAffinity::Any);
     ASSERT_TRUE(recorder.recordPacketRangeInReadyFrontiers(
         graph,
         compiledGraph,
         GpuSubmissionPacketRange{ .first = writerPacket, .packetCount = 1u },
-        recordOverrides,
-        1u,
         recordedGraph,
         recordingWorkers
     ));
@@ -46458,8 +46281,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
         graph,
         compiledGraph,
         GpuSubmissionPacketRange{ .first = readerPacket, .packetCount = 1u },
-        nullptr,
-        0u,
         recordedGraph,
         recordingWorkers
     ));
@@ -46529,31 +46350,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
         recordedGraph,
         transaction
     ).valid());
-
-    GpuRecordedGraph rejectedOverrideGraph(DescriptorBufferRoundTripTest::arena());
-    const GpuNativePacketRecordDesc outsideRangeOverride[] = {
-        GpuNativePacketRecordDesc{ .packet = readerPacket },
-    };
-    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        compiledGraph.packetRange(writerPacket, writerPacket),
-        outsideRangeOverride,
-        LengthOf(outsideRangeOverride),
-        rejectedOverrideGraph
-    ));
-    const GpuNativePacketRecordDesc duplicateOverrides[] = {
-        GpuNativePacketRecordDesc{ .packet = writerPacket },
-        GpuNativePacketRecordDesc{ .packet = writerPacket },
-    };
-    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        compiledGraph.allPacketRange(),
-        duplicateOverrides,
-        LengthOf(duplicateOverrides),
-        rejectedOverrideGraph
-    ));
 
     const GpuTaskGraphSubmitter submitter(device);
     NativeTaskAcceptanceObserver writerAcceptance;
@@ -46735,478 +46531,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
 }
 
 
-TEST_F(DescriptorBufferRoundTripTest, NativePacketResolvesTaskAnchoredRuntimeStateBinding){
-    auto& device = DescriptorBufferRoundTripTest::device();
-    const BufferHandle buffer = device.createBuffer(
-        BufferDesc()
-            .setByteSize(256u)
-            .setCanHaveRawViews(true)
-            .setInitialState(ResourceStates::Common)
-    );
-    ASSERT_NE(buffer.get(), nullptr);
-
-    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
-    const GpuGraphResourceId resource = graph.importBuffer(
-        buffer,
-        GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/descriptor_buffer/task_anchored_runtime_state"))
-            .setMarkerLabel("Task-Anchored Runtime State")
-            .setType(GpuGraphResourceType::Buffer)
-            // The graph owns its known initial state. The late task-anchored source must still be accepted and
-            // applied before this task's first use when the renderer provides one.
-            .setInitialState(ResourceStates::ShaderResource)
-    );
-    ASSERT_TRUE(resource.valid());
-
-    const GpuTaskResourceUse uses[] = {
-        GpuTaskResourceUse{
-            .resource = resource,
-            .range = {},
-            .requiredState = ResourceStates::ShaderResource,
-            .access = GpuTaskResourceAccess::Read,
-        },
-    };
-    GpuTaskSchedulingHint scheduling;
-    scheduling.forceSubmissionBoundary = true;
-    scheduling.allowPacketMerge = false;
-    GpuTaskDesc taskDesc;
-    taskDesc
-        .setIdentity(Name("tests/descriptor_buffer/task_anchored_runtime_state_task"))
-        .setMarkerLabel("Task-Anchored Runtime State Task")
-        .setQueue(GpuQueueRequest{
-            GpuQueueCapability::Graphics,
-            GpuQueuePreference::Graphics,
-            false,
-            false,
-        })
-        .setScheduling(scheduling)
-        .setResourceUses(uses, LengthOf(uses))
-    ;
-    bool taskRecorded = false;
-    const GpuTaskId task = graph.addTask<NativePacketPrefixTask>(
-        taskDesc,
-        NativePacketPrefixTask::Payload{
-            .buffer = buffer.get(),
-            .expectedState = ResourceStates::ShaderResource,
-            .recorded = &taskRecorded,
-        }
-    );
-    ASSERT_TRUE(task.valid());
-
-    const GpuPhysicalQueueInfo queue{
-        .id = BackendQueueId(device, CommandQueue::Graphics),
-        .queueClass = CommandQueue::Graphics,
-        .capabilities = static_cast<GpuQueueCapability::Mask>(
-            static_cast<u8>(GpuQueueCapability::Graphics)
-            | static_cast<u8>(GpuQueueCapability::Compute)
-            | static_cast<u8>(GpuQueueCapability::Transfer)
-        ),
-        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
-        .queueIndex = 0u,
-        .dedicated = false,
-    };
-    const GpuTaskGraphQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
-    };
-    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
-    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
-    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
-    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/task_anchored_runtime_state_scratch"));
-    const GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
-    ASSERT_EQ(compiledGraph.packetCount(), 1u);
-    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
-    ASSERT_TRUE(packet.valid());
-
-    // This source is intentionally created after compilation, matching the prefix-to-effects handoff shape in the
-    // renderer. A graph task ID, not the compiler packet ID, names its consumer at recording time.
-    CommandListResourceStateHandoff sourceState(DescriptorBufferRoundTripTest::arena());
-    CommandListHandle sourceProducer = device.createCommandList();
-    ASSERT_NE(sourceProducer.get(), nullptr);
-    sourceProducer->open();
-    sourceProducer->setBufferState(buffer.get(), ResourceStates::ShaderResource);
-    sourceProducer->close(&sourceState);
-    ASSERT_TRUE(sourceState.valid());
-    const GpuExternalPacketStateSource sources[] = {
-        GpuExternalPacketStateSource{ .states = &sourceState },
-    };
-    const GpuTaskPacketStateBinding bindings[] = {
-        GpuTaskPacketStateBinding{
-            .task = task,
-            .externalStateSources = sources,
-            .externalStateSourceCount = LengthOf(sources),
-        },
-    };
-
-    const GpuNativePacketRecorder recorder(device);
-    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
-    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
-        recordedGraph,
-        nullptr,
-        nullptr,
-        bindings,
-        LengthOf(bindings)
-    ));
-    EXPECT_TRUE(taskRecorded);
-    EXPECT_NE(recordedGraph.find(packet), nullptr);
-    EXPECT_NE(recordedGraph.packetFinalStateSeed(packet), nullptr);
-
-    GpuTaskPacketStateBinding invalidBinding = bindings[0];
-    invalidBinding.task = {};
-    GpuRecordedGraph invalidBindingGraph(DescriptorBufferRoundTripTest::arena());
-    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
-        invalidBindingGraph,
-        nullptr,
-        nullptr,
-        &invalidBinding,
-        1u
-    ));
-}
-
-
-TEST_F(DescriptorBufferRoundTripTest, NativePacketResolvesRecordedProducerStateAcrossTransitiveDependency){
-    auto& device = DescriptorBufferRoundTripTest::device();
-    const auto createBuffer = [&device]{
-        return device.createBuffer(
-            BufferDesc()
-                .setByteSize(256u)
-                .setCanHaveRawViews(true)
-                .setInitialState(ResourceStates::Common)
-        );
-    };
-    const BufferHandle recordedStateBuffer = createBuffer();
-    const BufferHandle externalStateBuffer = createBuffer();
-    ASSERT_NE(recordedStateBuffer.get(), nullptr);
-    ASSERT_NE(externalStateBuffer.get(), nullptr);
-
-    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
-    const GpuGraphResourceId recordedStateResource = graph.importBuffer(
-        recordedStateBuffer,
-        GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/descriptor_buffer/recorded_producer_transitive_state"))
-            .setMarkerLabel("Recorded Producer Transitive State")
-            .setType(GpuGraphResourceType::Buffer)
-            .setInitialState(ResourceStates::Unknown)
-    );
-    const GpuGraphResourceId externalStateResource = graph.importBuffer(
-        externalStateBuffer,
-        GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/descriptor_buffer/recorded_producer_external_state"))
-            .setMarkerLabel("Recorded Producer External State")
-            .setType(GpuGraphResourceType::Buffer)
-            .setInitialState(ResourceStates::Unknown)
-    );
-    ASSERT_TRUE(recordedStateResource.valid());
-    ASSERT_TRUE(externalStateResource.valid());
-
-    GpuTaskSchedulingHint scheduling;
-    scheduling.forceSubmissionBoundary = true;
-    scheduling.allowPacketMerge = false;
-    const GpuQueueRequest graphicsRequest{
-        GpuQueueCapability::Graphics,
-        GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-
-    bool producerRecorded = false;
-    GpuTaskDesc producerDesc;
-    producerDesc
-        .setIdentity(Name("tests/descriptor_buffer/recorded_producer_transitive_producer"))
-        .setMarkerLabel("Recorded Producer")
-        .setQueue(graphicsRequest)
-        .setScheduling(scheduling)
-    ;
-    const GpuTaskId producerTask = graph.addTask<NativePacketRecordedStateProducerTask>(
-        producerDesc,
-        NativePacketRecordedStateProducerTask::Payload{
-            .producedBuffer = recordedStateBuffer.get(),
-            .producedState = ResourceStates::ShaderResource,
-            .recorded = &producerRecorded,
-        }
-    );
-    ASSERT_TRUE(producerTask.valid());
-
-    const bool shouldRecord = true;
-    bool bridgeRecorded = false;
-    GpuTaskDesc bridgeDesc;
-    bridgeDesc
-        .setIdentity(Name("tests/descriptor_buffer/recorded_producer_transitive_bridge"))
-        .setMarkerLabel("Recorded Producer Bridge")
-        .setQueue(graphicsRequest)
-        .setScheduling(scheduling)
-        .setDependencies(&producerTask, 1u)
-    ;
-    const GpuTaskId bridgeTask = graph.addTask<NativePacketCaptureRetryTask>(
-        bridgeDesc,
-        NativePacketCaptureRetryTask::Payload{
-            .shouldRecord = &shouldRecord,
-            .attempted = &bridgeRecorded,
-        }
-    );
-    ASSERT_TRUE(bridgeTask.valid());
-
-    const GpuTaskResourceUse consumerUses[] = {
-        GpuTaskResourceUse{
-            .resource = recordedStateResource,
-            .range = {},
-            .requiredState = ResourceStates::ShaderResource,
-            .access = GpuTaskResourceAccess::Read,
-        },
-        GpuTaskResourceUse{
-            .resource = externalStateResource,
-            .range = {},
-            .requiredState = ResourceStates::ShaderResource,
-            .access = GpuTaskResourceAccess::Read,
-        },
-    };
-    bool consumerRecorded = false;
-    GpuTaskDesc consumerDesc;
-    consumerDesc
-        .setIdentity(Name("tests/descriptor_buffer/recorded_producer_transitive_consumer"))
-        .setMarkerLabel("Recorded Producer Consumer")
-        .setQueue(graphicsRequest)
-        .setScheduling(scheduling)
-        .setDependencies(&bridgeTask, 1u)
-        .setResourceUses(consumerUses, LengthOf(consumerUses))
-    ;
-    const GpuTaskId consumerTask = graph.addTask<NativePacketPrefixTask>(
-        consumerDesc,
-        NativePacketPrefixTask::Payload{
-            .buffer = recordedStateBuffer.get(),
-            .expectedState = ResourceStates::ShaderResource,
-            .additionalBuffer = externalStateBuffer.get(),
-            .expectedAdditionalBufferState = ResourceStates::ShaderResource,
-            .recorded = &consumerRecorded,
-        }
-    );
-    ASSERT_TRUE(consumerTask.valid());
-
-    const GpuPhysicalQueueInfo queue{
-        .id = BackendQueueId(device, CommandQueue::Graphics),
-        .queueClass = CommandQueue::Graphics,
-        .capabilities = static_cast<GpuQueueCapability::Mask>(
-            static_cast<u8>(GpuQueueCapability::Graphics)
-            | static_cast<u8>(GpuQueueCapability::Compute)
-            | static_cast<u8>(GpuQueueCapability::Transfer)
-        ),
-        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
-        .queueIndex = 0u,
-        .dedicated = false,
-    };
-    const GpuTaskGraphQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
-    };
-    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
-    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
-    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
-    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/recorded_producer_transitive_scratch"));
-    const GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
-    const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producerTask);
-    const GpuSubmissionPacketId bridgePacket = compiledGraph.packetForTask(bridgeTask);
-    const GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumerTask);
-    ASSERT_TRUE(producerPacket.valid());
-    ASSERT_TRUE(bridgePacket.valid());
-    ASSERT_TRUE(consumerPacket.valid());
-    ASSERT_EQ(compiledGraph.packet(bridgePacket).dependencyCount, 1u);
-    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 1u);
-    ASSERT_NE(compiledGraph.packetDependencies(bridgePacket), nullptr);
-    ASSERT_NE(compiledGraph.packetDependencies(consumerPacket), nullptr);
-    EXPECT_EQ(compiledGraph.packetDependencies(bridgePacket)[0u].producer, producerPacket);
-    EXPECT_EQ(compiledGraph.packetDependencies(consumerPacket)[0u].producer, bridgePacket);
-
-    CommandListResourceStateHandoff externalState(DescriptorBufferRoundTripTest::arena());
-    const CommandListHandle externalStateProducer = device.createCommandList();
-    ASSERT_NE(externalStateProducer.get(), nullptr);
-    externalStateProducer->open();
-    externalStateProducer->setBufferState(externalStateBuffer.get(), ResourceStates::ShaderResource);
-    externalStateProducer->close(&externalState);
-    ASSERT_TRUE(externalState.valid());
-    const GpuExternalPacketStateSource externalSources[] = {
-        GpuExternalPacketStateSource{ .states = &externalState },
-    };
-    const GpuTaskPacketStateBinding bindings[] = {
-        GpuTaskPacketStateBinding{
-            .task = consumerTask,
-            .recordedProducerTask = producerTask,
-            .externalStateSources = externalSources,
-            .externalStateSourceCount = LengthOf(externalSources),
-        },
-    };
-
-    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
-    const GpuNativePacketRecorder recorder(device);
-    GpuSubmissionPacketId failedPacket;
-    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        compiledGraph.packetRange(producerPacket, bridgePacket),
-        nullptr,
-        0u,
-        recordedGraph,
-        &failedPacket
-    )) << "failed packet " << failedPacket.index;
-    EXPECT_TRUE(producerRecorded);
-    EXPECT_TRUE(bridgeRecorded);
-    EXPECT_FALSE(consumerRecorded);
-    EXPECT_NE(recordedGraph.taskFinalStateSeed(compiledGraph, producerTask), nullptr);
-
-    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        compiledGraph.packetRange(consumerPacket, consumerPacket),
-        nullptr,
-        0u,
-        recordedGraph,
-        &failedPacket,
-        nullptr,
-        bindings,
-        LengthOf(bindings)
-    )) << "failed packet " << failedPacket.index;
-    EXPECT_TRUE(consumerRecorded);
-    EXPECT_NE(recordedGraph.find(consumerPacket), nullptr);
-}
-
-
-TEST_F(DescriptorBufferRoundTripTest, NativePacketRejectsRecordedProducerWithoutDependencyPath){
-    auto& device = DescriptorBufferRoundTripTest::device();
-    const BufferHandle buffer = device.createBuffer(
-        BufferDesc()
-            .setByteSize(256u)
-            .setCanHaveRawViews(true)
-            .setInitialState(ResourceStates::Common)
-    );
-    ASSERT_NE(buffer.get(), nullptr);
-
-    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
-    const GpuGraphResourceId resource = graph.importBuffer(
-        buffer,
-        GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/descriptor_buffer/unrelated_recorded_producer_state"))
-            .setMarkerLabel("Unrelated Recorded Producer State")
-            .setType(GpuGraphResourceType::Buffer)
-            .setInitialState(ResourceStates::Unknown)
-    );
-    ASSERT_TRUE(resource.valid());
-
-    GpuTaskSchedulingHint scheduling;
-    scheduling.forceSubmissionBoundary = true;
-    scheduling.allowPacketMerge = false;
-    const GpuQueueRequest graphicsRequest{
-        GpuQueueCapability::Graphics,
-        GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    bool producerRecorded = false;
-    const GpuTaskId producerTask = graph.addTask<NativePacketRecordedStateProducerTask>(
-        GpuTaskDesc{}
-            .setIdentity(Name("tests/descriptor_buffer/unrelated_recorded_producer"))
-            .setMarkerLabel("Unrelated Recorded Producer")
-            .setQueue(graphicsRequest)
-            .setScheduling(scheduling),
-        NativePacketRecordedStateProducerTask::Payload{
-            .producedBuffer = buffer.get(),
-            .producedState = ResourceStates::ShaderResource,
-            .recorded = &producerRecorded,
-        }
-    );
-    ASSERT_TRUE(producerTask.valid());
-
-    const GpuTaskResourceUse consumerUse{
-        .resource = resource,
-        .range = {},
-        .requiredState = ResourceStates::ShaderResource,
-        .access = GpuTaskResourceAccess::Read,
-    };
-    bool consumerRecorded = false;
-    const GpuTaskId consumerTask = graph.addTask<NativePacketPrefixTask>(
-        GpuTaskDesc{}
-            .setIdentity(Name("tests/descriptor_buffer/unrelated_recorded_consumer"))
-            .setMarkerLabel("Unrelated Recorded Consumer")
-            .setQueue(graphicsRequest)
-            .setScheduling(scheduling)
-            .setResourceUses(&consumerUse, 1u),
-        NativePacketPrefixTask::Payload{
-            .buffer = buffer.get(),
-            .expectedState = ResourceStates::ShaderResource,
-            .recorded = &consumerRecorded,
-        }
-    );
-    ASSERT_TRUE(consumerTask.valid());
-
-    const GpuPhysicalQueueInfo queue{
-        .id = BackendQueueId(device, CommandQueue::Graphics),
-        .queueClass = CommandQueue::Graphics,
-        .capabilities = static_cast<GpuQueueCapability::Mask>(
-            static_cast<u8>(GpuQueueCapability::Graphics)
-            | static_cast<u8>(GpuQueueCapability::Compute)
-            | static_cast<u8>(GpuQueueCapability::Transfer)
-        ),
-        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
-        .queueIndex = 0u,
-        .dedicated = false,
-    };
-    const GpuTaskGraphQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
-    };
-    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
-    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
-    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
-    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/unrelated_recorded_producer_scratch"));
-    const GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
-    const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producerTask);
-    const GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumerTask);
-    ASSERT_TRUE(producerPacket.valid());
-    ASSERT_TRUE(consumerPacket.valid());
-    ASSERT_LT(producerPacket.index, consumerPacket.index);
-    EXPECT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 0u);
-
-    const GpuTaskPacketStateBinding binding{
-        .task = consumerTask,
-        .recordedProducerTask = producerTask,
-    };
-    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
-    const GpuNativePacketRecorder recorder(device);
-    GpuSubmissionPacketId failedPacket;
-    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
-        recordedGraph,
-        &failedPacket,
-        nullptr,
-        &binding,
-        1u
-    ));
-    EXPECT_EQ(failedPacket, consumerPacket);
-    EXPECT_TRUE(producerRecorded);
-    EXPECT_FALSE(consumerRecorded);
-    EXPECT_NE(recordedGraph.find(producerPacket), nullptr);
-    EXPECT_EQ(recordedGraph.find(consumerPacket), nullptr);
-}
-
-
-TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorReadyFrontierRaisesRecordedStateConsumerAfterProducer){
+TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorReadyFrontierFollowsCompilerStateSeeds){
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto createBuffer = [&device]{
         return device.createBuffer(
@@ -47272,11 +46597,19 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorReadyFrontierRaisesReco
     );
     ASSERT_TRUE(frontierTask.valid());
 
-    const GpuTaskResourceUse producerUse{
-        .resource = frontierResource,
-        .range = {},
-        .requiredState = ResourceStates::ShaderResource,
-        .access = GpuTaskResourceAccess::Read,
+    const GpuTaskResourceUse producerUses[] = {
+        GpuTaskResourceUse{
+            .resource = frontierResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = recordedStateResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Write,
+        },
     };
     bool producerRecorded = false;
     const GpuTaskId producerTask = graph.addTask<NativePacketRecordedStateProducerTask>(
@@ -47286,7 +46619,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorReadyFrontierRaisesReco
             .setQueue(graphicsRequest)
             .setScheduling(scheduling)
             .setDependencies(&frontierTask, 1u)
-            .setResourceUses(&producerUse, 1u),
+            .setResourceUses(producerUses, LengthOf(producerUses)),
         NativePacketRecordedStateProducerTask::Payload{
             .prerequisiteBuffer = frontierBuffer.get(),
             .expectedPrerequisiteState = ResourceStates::ShaderResource,
@@ -47351,18 +46684,18 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorReadyFrontierRaisesReco
     ASSERT_TRUE(consumerPacket.valid());
     EXPECT_EQ(compiledGraph.packet(frontierPacket).recordingFrontier, 0u);
     EXPECT_EQ(compiledGraph.packet(producerPacket).recordingFrontier, 1u);
-    EXPECT_EQ(compiledGraph.packet(consumerPacket).recordingFrontier, 0u);
+    EXPECT_EQ(compiledGraph.packet(consumerPacket).recordingFrontier, 2u);
     const GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producerTask);
     const GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumerTask);
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledConsumer, nullptr);
     ASSERT_EQ(compiledProducer->prologueStateSeedCount, 1u);
-    EXPECT_EQ(compiledConsumer->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
+    const GpuPacketStateSeed* const consumerStateSeeds = compiledGraph.taskPrologueStateSeeds(consumerTask);
+    ASSERT_NE(consumerStateSeeds, nullptr);
+    EXPECT_EQ(consumerStateSeeds[0u].resource, recordedStateResource);
+    EXPECT_EQ(consumerStateSeeds[0u].sourcePacket, producerPacket);
 
-    const GpuTaskPacketStateBinding binding{
-        .task = consumerTask,
-        .recordedProducerTask = producerTask,
-    };
     Alloc::ThreadPool recordingWorkers(1u, CpuAffinity::Any);
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -47371,8 +46704,6 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorReadyFrontierRaisesReco
     const GpuTaskGraphSubmitter submitter(device);
     GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.terminalTask = consumerTask;
-    normalExecution.taskStateBindings = &binding;
-    normalExecution.taskStateBindingCount = 1u;
     normalExecution.readyFrontierWorkerPool = &recordingWorkers;
     GpuSubmissionPacketId failedPacket;
     ASSERT_TRUE(submitter.recordAndSubmitNormalGraph(
@@ -47398,183 +46729,6 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorReadyFrontierRaisesReco
     ASSERT_NE(consumerRecording, nullptr);
     EXPECT_LE(producerRecording->recordingEndNanoseconds, consumerRecording->recordingBeginNanoseconds);
     EXPECT_TRUE(device.waitForIdle());
-}
-
-
-TEST_F(DescriptorBufferRoundTripTest, NativePacketValidatesSamePacketRecordedStateProducerOrder){
-    auto& device = DescriptorBufferRoundTripTest::device();
-    const BufferHandle buffer = device.createBuffer(
-        BufferDesc()
-            .setByteSize(256u)
-            .setCanHaveRawViews(true)
-            .setInitialState(ResourceStates::Common)
-    );
-    ASSERT_NE(buffer.get(), nullptr);
-
-    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
-    const GpuGraphResourceId resource = graph.importBuffer(
-        buffer,
-        GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/descriptor_buffer/same_packet_recorded_state"))
-            .setMarkerLabel("Same-Packet Recorded State")
-            .setType(GpuGraphResourceType::Buffer)
-            .setInitialState(ResourceStates::Common)
-    );
-    ASSERT_TRUE(resource.valid());
-
-    const GpuQueueRequest graphicsRequest{
-        GpuQueueCapability::Graphics,
-        GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    GpuTaskSchedulingHint producerScheduling;
-    producerScheduling.allowPacketMerge = true;
-    bool producerRecorded = false;
-    const GpuTaskId producerTask = graph.addTask<NativePacketRecordedStateProducerTask>(
-        GpuTaskDesc{}
-            .setIdentity(Name("tests/descriptor_buffer/same_packet_recorded_producer"))
-            .setMarkerLabel("Same-Packet Recorded Producer")
-            .setQueue(graphicsRequest)
-            .setScheduling(producerScheduling),
-        NativePacketRecordedStateProducerTask::Payload{
-            .producedBuffer = buffer.get(),
-            .producedState = ResourceStates::CopyDest,
-            .recorded = &producerRecorded,
-        }
-    );
-    ASSERT_TRUE(producerTask.valid());
-
-    GpuTaskSchedulingHint consumerScheduling;
-    consumerScheduling.allowPacketMerge = true;
-    consumerScheduling.mergeWithPrevious = true;
-    const GpuTaskResourceUse consumerUse{
-        .resource = resource,
-        .range = {},
-        .requiredState = ResourceStates::ShaderResource,
-        .access = GpuTaskResourceAccess::Read,
-    };
-    bool consumerRecorded = false;
-    const GpuTaskId consumerTask = graph.addTask<NativePacketPrefixTask>(
-        GpuTaskDesc{}
-            .setIdentity(Name("tests/descriptor_buffer/same_packet_recorded_consumer"))
-            .setMarkerLabel("Same-Packet Recorded Consumer")
-            .setQueue(graphicsRequest)
-            .setScheduling(consumerScheduling)
-            .setDependencies(&producerTask, 1u)
-            .setResourceUses(&consumerUse, 1u),
-        NativePacketPrefixTask::Payload{
-            .buffer = buffer.get(),
-            .expectedState = ResourceStates::ShaderResource,
-            .recorded = &consumerRecorded,
-        }
-    );
-    ASSERT_TRUE(consumerTask.valid());
-
-    const GpuPhysicalQueueInfo queue{
-        .id = BackendQueueId(device, CommandQueue::Graphics),
-        .queueClass = CommandQueue::Graphics,
-        .capabilities = static_cast<GpuQueueCapability::Mask>(
-            static_cast<u8>(GpuQueueCapability::Graphics)
-            | static_cast<u8>(GpuQueueCapability::Compute)
-            | static_cast<u8>(GpuQueueCapability::Transfer)
-        ),
-        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
-        .queueIndex = 0u,
-        .dedicated = false,
-    };
-    const GpuTaskGraphQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
-    };
-    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
-    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
-    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
-    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/same_packet_recorded_state_scratch"));
-    const GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
-    ASSERT_EQ(compiledGraph.packetCount(), 1u);
-    ASSERT_TRUE(compiledGraph.tasksSharePacket(producerTask, consumerTask));
-    ASSERT_TRUE(compiledGraph.taskPrecedesInSamePacket(producerTask, consumerTask));
-
-    const GpuNativePacketRecorder recorder(device);
-    const GpuTaskPacketStateBinding reversedBinding{
-        .task = producerTask,
-        .recordedProducerTask = consumerTask,
-    };
-    GpuRecordedGraph reversedGraph(DescriptorBufferRoundTripTest::arena());
-    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
-        reversedGraph,
-        nullptr,
-        nullptr,
-        &reversedBinding,
-        1u
-    ));
-    EXPECT_EQ(reversedGraph.recordingAttemptGeneration(), 0u);
-
-    const GpuTaskPacketStateBinding selfBinding{
-        .task = consumerTask,
-        .recordedProducerTask = consumerTask,
-    };
-    GpuRecordedGraph selfGraph(DescriptorBufferRoundTripTest::arena());
-    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
-        selfGraph,
-        nullptr,
-        nullptr,
-        &selfBinding,
-        1u
-    ));
-    EXPECT_EQ(selfGraph.recordingAttemptGeneration(), 0u);
-
-    GpuTaskPacketStateBinding staleBinding{
-        .task = consumerTask,
-        .recordedProducerTask = producerTask,
-    };
-    ++staleBinding.recordedProducerTask.generation;
-    GpuRecordedGraph staleGraph(DescriptorBufferRoundTripTest::arena());
-    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
-        staleGraph,
-        nullptr,
-        nullptr,
-        &staleBinding,
-        1u
-    ));
-    EXPECT_EQ(staleGraph.recordingAttemptGeneration(), 0u);
-
-    const GpuTaskPacketStateBinding binding{
-        .task = consumerTask,
-        .recordedProducerTask = producerTask,
-    };
-    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
-    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
-        recordedGraph,
-        nullptr,
-        nullptr,
-        &binding,
-        1u
-    ));
-    EXPECT_TRUE(producerRecorded);
-    EXPECT_TRUE(consumerRecorded);
 }
 
 
@@ -47866,8 +47020,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
         graph,
         compiledGraph,
         packetRange,
-        nullptr,
-        0u,
         recordedGraph,
         &failedPacket
     );
@@ -48382,8 +47534,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         recorder,
         recordedGraph,
         historyTask,
-        nullptr,
-        0u,
         &historyRecordedCallback,
         transaction,
         scratchArena,
@@ -48419,8 +47569,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         callbackFalseRecordedGraph,
         callbackFalseTask,
         nullptr,
-        0u,
-        nullptr,
         callbackFalseTransaction,
         scratchArena,
         &callbackFalseFailedPacket,
@@ -48447,8 +47595,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
 
     // Validation fails before the recorder can prepare its recorded graph. The helper must still establish the
     // current graph attempt for transactional cleanup, rather than leaving the declared tail armed.
-    const GpuTaskPacketStateBinding invalidPreflightStateBindings[] = {
-        GpuTaskPacketStateBinding{ .task = preflightRejectedTailTask },
+    const GpuTaskGraphTaskRecordedCallback invalidPreflightRecordedCallback{
+        .task = preflightRejectedTailTask,
     };
     GpuRecordedGraph preflightRejectedRecordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction preflightRejectedTransaction(DescriptorBufferRoundTripTest::arena());
@@ -48460,9 +47608,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         recorder,
         preflightRejectedRecordedGraph,
         preflightRejectedTailTask,
-        invalidPreflightStateBindings,
-        LengthOf(invalidPreflightStateBindings),
-        nullptr,
+        &invalidPreflightRecordedCallback,
         preflightRejectedTransaction,
         scratchArena
     ));
@@ -48482,8 +47628,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         recorder,
         invalidAcceptedCallbackRecordedGraph,
         invalidAcceptedCallbackTailTask,
-        nullptr,
-        0u,
         nullptr,
         invalidAcceptedCallbackTransaction,
         scratchArena,
@@ -48514,8 +47658,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         recorder,
         mismatchedAcceptedCallbackRecordedGraph,
         mismatchedAcceptedCallbackTailTask,
-        nullptr,
-        0u,
         nullptr,
         mismatchedAcceptedCallbackTransaction,
         scratchArena,
@@ -48550,8 +47692,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         recorder,
         recordedGraph,
         rejectedTailTask,
-        nullptr,
-        0u,
         &rejectedTailRecordedCallback,
         transaction,
         scratchArena
@@ -49136,8 +48276,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
         compiledGraph,
         outsidePrefixTask,
         outsideSuffixTask,
-        nullptr,
-        0u,
         recordedGraph,
         &failedRecordingPacket
     ));
@@ -49159,8 +48297,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
             compiledGraph,
             outsidePrefixTask,
             envelopeOnlyTask,
-            nullptr,
-            0u,
             recordedGraph,
             &failedRecordingPacket
         ));
@@ -49183,8 +48319,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
             compiledGraph,
             packetOnlyTask,
             packetOnlyTask,
-            nullptr,
-            0u,
             recordedGraph,
             &failedRecordingPacket
         ));
@@ -49219,8 +48353,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
         compiledGraph,
         packetOnlyTask,
         outsideSuffixTask,
-        nullptr,
-        0u,
         recordedGraph,
         &failedRecordingPacket
     ));
@@ -50322,8 +49454,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingRejectsAndReusesC
         compiledGraph,
         tasks[0u],
         tasks[LengthOf(tasks) - 1u],
-        nullptr,
-        0u,
         recordedGraph
     ));
     for(const bool taskRecorded : tasksRecorded)
@@ -51120,8 +50250,6 @@ TEST_F(DescriptorBufferRoundTripTest, AcceptedGraphBarrierOutlivesGraphResourceH
             graph,
             compiledGraph,
             compiledGraph.allPacketRange(),
-            nullptr,
-            0u,
             recordedGraph
         ));
         EXPECT_TRUE(recorded);
@@ -52681,8 +51809,6 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsAtSemanticTerminal
         recordedGraph,
         lateTailTask,
         nullptr,
-        0u,
-        nullptr,
         transaction,
         scratchArena
     ));
@@ -53372,8 +52498,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
         compiledGraph,
         beginTask,
         endTask,
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_TRUE(beginRecorded);
@@ -54009,8 +53133,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativeTaskAcceptedCallbacksGateAcceptedFro
         compiledGraph,
         transferTask,
         suffixTask,
-        nullptr,
-        0u,
         recordedGraph
     ));
     EXPECT_TRUE(suffixRecorded);
@@ -58576,8 +57698,6 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
                     recordedGraph,
                     historyTask,
                     nullptr,
-                    0u,
-                    nullptr,
                     transaction,
                     scratchArena
                 );
@@ -59956,8 +59076,6 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
         graph,
         compiledGraph,
         packetRange,
-        nullptr,
-        0u,
         recordedGraph
     ));
     const CommandListResourceStateHandoff* const shadowPrepareFinalState = recordedGraph.packetFinalStateSeed(

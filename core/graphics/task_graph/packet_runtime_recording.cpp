@@ -262,52 +262,18 @@ inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
 bool GpuNativePacketRecorder::recordPacket(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
-    const GpuNativePacketRecordDesc& desc,
-    GpuRecordedGraph& outRecordedGraph,
-    GpuCommandIrCapture* const commandIrCapture
-)const{
-    if(
-        !compiledGraph.validFor(graph)
-        || !graph.validForDeviceGeneration(compiledGraph.deviceGeneration())
-        || m_device.getDeviceGeneration() != compiledGraph.deviceGeneration()
-        || !compiledGraph.validPacket(desc.packet)
-    )
-        return false;
-    const Timer recordingOperationBegin = TimerNow();
-    if(!prepareRecordingAttempt(
-        graph,
-        compiledGraph,
-        GpuSubmissionPacketRange{ .first = desc.packet, .packetCount = 1u },
-        outRecordedGraph
-    ))
-        return false;
-    if(!recordPacketWithScratch(
-        graph,
-        compiledGraph,
-        desc,
-        outRecordedGraph,
-        outRecordedGraph.m_serialRecordingScratch,
-        commandIrCapture
-    ))
-        return false;
-    outRecordedGraph.m_recordingElapsedSeconds += DurationInSeconds<f64>(TimerNow(), recordingOperationBegin);
-    return true;
-}
-
-
-bool GpuNativePacketRecorder::recordPacketWithScratch(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuNativePacketRecordDesc& desc,
+    const GpuSubmissionPacketId packetID,
     GpuRecordedGraph& outRecordedGraph,
     GpuRecordedGraph::PacketRecordingScratch& scratch,
-    GpuCommandIrCapture* const commandIrCapture
+    GpuCommandIrCapture* const commandIrCapture,
+    const u64 recordingWorkerDomain,
+    const u32 recordingWorkerIndex
 )const{
     if(
         !compiledGraph.validFor(graph)
         || !graph.validForDeviceGeneration(compiledGraph.deviceGeneration())
         || m_device.getDeviceGeneration() != compiledGraph.deviceGeneration()
-        || !compiledGraph.validPacket(desc.packet)
+        || !compiledGraph.validPacket(packetID)
         || !outRecordedGraph.validFor(graph, compiledGraph)
     )
         return false;
@@ -330,13 +296,13 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
             != outRecordedGraph.recordingAttemptGeneration()
     )
         return false;
-    if(outRecordedGraph.find(desc.packet))
+    if(outRecordedGraph.find(packetID))
         return false;
 
-    const GpuSubmissionPacket& packet = compiledGraph.packet(desc.packet);
-    const GpuTaskId* const tasks = compiledGraph.packetTasks(desc.packet);
+    const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
+    const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
     const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packet.queue);
-    GpuTimingSubmissionTicket* const packetTimingTicket = outRecordedGraph.packetTimingTicket(desc.packet);
+    GpuTimingSubmissionTicket* const packetTimingTicket = outRecordedGraph.packetTimingTicket(packetID);
     if(
         !tasks
         || packet.taskCount == 0u
@@ -356,12 +322,12 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     const CommandListResourceStateHandoff* initialStates = nullptr;
     GpuTaskPacketRecordingLease recordingLease;
     const auto abortPacketRecording = [&]{
-        outRecordedGraph.discardPacketTimingTicket(desc.packet);
-        graph.abortPacketRecording(compiledGraph, desc.packet, recordingLease);
+        outRecordedGraph.discardPacketTimingTicket(packetID);
+        graph.abortPacketRecording(compiledGraph, packetID, recordingLease);
     };
     if(!graph.beginPacketRecording(
         compiledGraph,
-        desc.packet,
+        packetID,
         outRecordedGraph.recordingAttemptGeneration(),
         recordingLease
     ))
@@ -372,21 +338,21 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         scratch,
         graph,
         compiledGraph,
-        desc.packet,
+        packetID,
         initialStates
     )){
         abortPacketRecording();
         return false;
     }
 
-    CommandListResourceStateHandoff* const packetStateSeed = outRecordedGraph.packetStateSeed(desc.packet);
+    CommandListResourceStateHandoff* const packetStateSeed = outRecordedGraph.packetStateSeed(packetID);
     if(!packetStateSeed){
         abortPacketRecording();
         return false;
     }
     packetStateSeed->reset();
 
-    if(!preflightPacketResources(graph, compiledGraph, desc.packet, initialStates)){
+    if(!preflightPacketResources(graph, compiledGraph, packetID, initialStates)){
         packetStateSeed->reset();
         abortPacketRecording();
         return false;
@@ -404,7 +370,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
 
     CommandListParameters parameters;
     parameters.setPhysicalQueue(packet.queue);
-    parameters.setRecordingWorker(desc.recordingWorkerDomain, desc.recordingWorkerIndex);
+    parameters.setRecordingWorker(recordingWorkerDomain, recordingWorkerIndex);
     const Timer commandListAcquisitionBegin = TimerNow();
     CommandListHandle commandList = m_device.createCommandList(parameters);
     if(!commandList){
@@ -428,7 +394,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         packetTiming.emplace(
             *m_timingRecorder,
             __hidden_gpu_packet_runtime_recording::TimingScopeDefinition(
-                __hidden_gpu_packet_runtime_recording::PacketTimingScopeName(graph, compiledGraph, desc.packet),
+                __hidden_gpu_packet_runtime_recording::PacketTimingScopeName(graph, compiledGraph, packetID),
                 __hidden_gpu_packet_runtime_recording::s_PacketMarkerLabel
             ),
             m_device,
@@ -452,7 +418,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
         if(
             !compiledTask
-            || compiledTask->packet != desc.packet
+            || compiledTask->packet != packetID
             || compiledTask->timingPolicy != taskView.timing.policy
         ){
             recorded = false;
@@ -462,7 +428,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
             .taskGraph = graph,
             .graph = compiledGraph,
             .task = task,
-            .packet = desc.packet,
+            .packet = packetID,
             .queue = packet.queue,
             .recordingAttemptGeneration = outRecordedGraph.recordingAttemptGeneration(),
             .commandIrCapture = commandIrCapture,
@@ -577,8 +543,8 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: semantic record thunk for task identity '{}' marker '{}' returned false for packet {}:{} on assigned physical queue class {} index {} device generation {}")
                     , StringConvert(taskView.identity.c_str())
                     , StringConvert(taskView.markerLabel)
-                    , desc.packet.index
-                    , desc.packet.generation
+                    , packetID.index
+                    , packetID.generation
                     , static_cast<u32>(queue->queueClass)
                     , queue->id.index
                     , queue->id.deviceGeneration
@@ -679,7 +645,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     }
     if(!graph.completePacketRecording(
         compiledGraph,
-        desc.packet,
+        packetID,
         recordingLease
     )){
         packetStateSeed->reset();
@@ -689,8 +655,8 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         return false;
     }
     const Timer recordingEnd = TimerNow();
-    GpuRecordedPacket& recordedPacket = outRecordedGraph.m_packets[desc.packet.index];
-    recordedPacket.packet = desc.packet;
+    GpuRecordedPacket& recordedPacket = outRecordedGraph.m_packets[packetID.index];
+    recordedPacket.packet = packetID;
     recordedPacket.commandLists[0u] = commandList.get();
     recordedPacket.ownedCommandLists[0u] = Move(commandList);
     recordedPacket.taskCount = packet.taskCount;
@@ -701,8 +667,8 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     recordedPacket.recordingBeginNanoseconds = DurationInNS<u64>(recordingBegin);
     recordedPacket.recordingEndNanoseconds = DurationInNS<u64>(recordingEnd);
     recordedPacket.recordingSeconds = DurationInSeconds<f64>(recordingEnd, recordingBegin);
-    recordedPacket.recordingWorkerDomain = desc.recordingWorkerDomain;
-    recordedPacket.recordingWorkerIndex = desc.recordingWorkerIndex;
+    recordedPacket.recordingWorkerDomain = recordingWorkerDomain;
+    recordedPacket.recordingWorkerIndex = recordingWorkerIndex;
     // Publish the slot only after its owned native list is retained. Frontier workers are joined before callers can
     // submit, but this order also keeps the slot self-consistent for diagnostic reads.
     recordedPacket.commandListCount = 1u;

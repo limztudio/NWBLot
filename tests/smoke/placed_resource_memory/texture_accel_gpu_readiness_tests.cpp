@@ -253,11 +253,12 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsUnboundTextureBeforeThunk
     GpuRecordedGraph recordedGraph(GpuResourceReadinessTest::arena());
     GpuCommandIrCapture capture(GpuResourceReadinessTest::arena());
     const GpuNativePacketRecorder recorder(device);
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph,
+        nullptr,
         &capture
     ));
     EXPECT_FALSE(prefixRecorded);
@@ -349,11 +350,12 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsInvalidGraphInitialTextur
     GpuRecordedGraph recordedGraph(GpuResourceReadinessTest::arena());
     GpuCommandIrCapture capture(GpuResourceReadinessTest::arena());
     const GpuNativePacketRecorder recorder(device);
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph,
+        nullptr,
         &capture
     ));
     EXPECT_FALSE(recorded);
@@ -476,10 +478,10 @@ TEST_F(GpuResourceReadinessTest, OrderedUploadCopyDestConflictRejectsMergedPacke
 
     GpuRecordedGraph recordedGraph(GpuResourceReadinessTest::arena());
     const GpuNativePacketRecorder recorder(device);
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_FALSE(prefixRecorded);
@@ -549,10 +551,10 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsBufferSpanBeyondImportedD
 
     GpuRecordedGraph recordedGraph(GpuResourceReadinessTest::arena());
     const GpuNativePacketRecorder recorder(device);
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_FALSE(recorded);
@@ -612,10 +614,10 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightAcceptsBackendlessHazardDomainWi
 
     GpuRecordedGraph recordedGraph(GpuResourceReadinessTest::arena());
     const GpuNativePacketRecorder recorder(device);
-    EXPECT_TRUE(recorder.recordPacket(
+    EXPECT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_TRUE(recorded);

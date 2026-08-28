@@ -201,11 +201,12 @@ static void CountDiscardedClear(void* const rawResult){
     GpuRecordedGraph recordedGraph(arena);
     GpuCommandIrCapture commandIrCapture(arena);
     const GpuNativePacketRecorder recorder(device);
-    result.recordPacketAccepted = recorder.recordPacket(
+    result.recordPacketAccepted = recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph,
+        nullptr,
         &commandIrCapture
     );
     result.acceptedTokenCleared = !acceptedToken.valid();

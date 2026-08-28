@@ -234,17 +234,6 @@ private:
 };
 
 
-// Native graph packets always receive compiler-produced internal state seeds, declaration-selected external state
-// seeds, and compiler-planned packet-boundary barriers. Task thunks retain only intra-task synchronization.
-struct GpuNativePacketRecordDesc{
-    GpuSubmissionPacketId packet;
-    // Internal ready-frontier lease selector. Direct callers leave both fields at zero; the recorder derives a
-    // process-unique ThreadPool domain and nonzero local index without exposing backend-native pool handles.
-    u64 recordingWorkerDomain = 0u;
-    u32 recordingWorkerIndex = 0u;
-};
-
-
 class GpuNativePacketRecorder final : NoCopy{
 public:
     explicit GpuNativePacketRecorder(Device& device)
@@ -257,13 +246,6 @@ public:
 
 
 public:
-    [[nodiscard]] bool recordPacket(
-        const GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuNativePacketRecordDesc& desc,
-        GpuRecordedGraph& outRecordedGraph,
-        GpuCommandIrCapture* commandIrCapture = nullptr
-    )const;
     // Records one compiler-derived non-empty contiguous range. Earlier producer packets needed by the range must
     // already be recorded, which keeps deliberate late tails separate from the ordinary graph prefix.
     [[nodiscard]] bool recordPacketRangeInCompileOrder(
@@ -298,40 +280,31 @@ public:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
-    // Semantic companion to ready-frontier recording. Worker eligibility and packet ordering remain compiler-owned.
-    [[nodiscard]] bool recordTaskRangeInReadyFrontiers(
-        const GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        GpuTaskId firstTask,
-        GpuTaskId lastTask,
-        GpuRecordedGraph& outRecordedGraph,
-        Alloc::ThreadPool& workerPool,
-        GpuSubmissionPacketId* outFailedPacket = nullptr,
-        GpuCommandIrCapture* commandIrCapture = nullptr
-    )const;
 
 
 private:
-    [[nodiscard]] bool preflightPacketResources(
+    [[nodiscard]] bool recordPacket(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
-        const CommandListResourceStateHandoff* initialStates
-    )const noexcept;
+        GpuRecordedGraph& outRecordedGraph,
+        GpuRecordedGraph::PacketRecordingScratch& scratch,
+        GpuCommandIrCapture* commandIrCapture,
+        u64 recordingWorkerDomain = 0u,
+        u32 recordingWorkerIndex = 0u
+    )const;
     [[nodiscard]] bool prepareRecordingAttempt(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketRange& range,
         GpuRecordedGraph& outRecordedGraph
     )const;
-    [[nodiscard]] bool recordPacketWithScratch(
+    [[nodiscard]] bool preflightPacketResources(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
-        const GpuNativePacketRecordDesc& desc,
-        GpuRecordedGraph& outRecordedGraph,
-        GpuRecordedGraph::PacketRecordingScratch& scratch,
-        GpuCommandIrCapture* commandIrCapture
-    )const;
+        GpuSubmissionPacketId packet,
+        const CommandListResourceStateHandoff* initialStates
+    )const noexcept;
 
 
 private:

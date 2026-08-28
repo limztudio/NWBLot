@@ -237,11 +237,12 @@ struct Result{
     GpuCommandIrCapture* const capture
 ){
     recordedGraph.reset(compiledGraph);
-    return recorder.recordPacket(
+    return recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph,
+        nullptr,
         capture
     );
 }

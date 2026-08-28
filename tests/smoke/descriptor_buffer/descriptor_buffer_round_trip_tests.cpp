@@ -4806,10 +4806,10 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecorderRejectsCommandsOutside
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_TRUE(attempted);
@@ -4914,10 +4914,10 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecorderRejectsComputeSetupAnd
 
         GpuRecordedGraph recordedGraph(transferScope.arena());
         const GpuNativePacketRecorder recorder(device);
-        EXPECT_FALSE(recorder.recordPacket(
+        EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
             graph,
             compiledGraph,
-            GpuNativePacketRecordDesc{ .packet = packet },
+            GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
             recordedGraph
         ));
         EXPECT_TRUE(attempted);
@@ -8419,10 +8419,10 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecorderRejectsTaskRecordingLe
 
         GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
         const GpuNativePacketRecorder recorder(device);
-        EXPECT_FALSE(recorder.recordPacket(
+        EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
             graph,
             compiledGraph,
-            GpuNativePacketRecordDesc{ .packet = packet },
+            GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
             recordedGraph
         ));
         EXPECT_TRUE(attempted);
@@ -8831,10 +8831,10 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
 
     {
         const GpuNativePacketRecorder recorder(firstDevice);
-        ASSERT_TRUE(recorder.recordPacket(
+        ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
             retiredGraph,
             retiredCompiledGraph,
-            GpuNativePacketRecordDesc{ .packet = firstPacket },
+            GpuSubmissionPacketRange{ .first = firstPacket, .packetCount = 1u },
             nativeRecordedGraph
         ));
     }
@@ -8868,10 +8868,10 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
     // Its native list is released below, leaving only the empty CPU recording-attempt artifact across recreation.
     {
         const GpuNativePacketRecorder recorder(firstDevice);
-        ASSERT_TRUE(recorder.recordPacket(
+        ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
             retiredGraph,
             retiredCompiledGraph,
-            GpuNativePacketRecordDesc{ .packet = thirdPacket },
+            GpuSubmissionPacketRange{ .first = thirdPacket, .packetCount = 1u },
             staleRecordedGraph
         ));
     }
@@ -8941,10 +8941,10 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
 
     {
         const GpuNativePacketRecorder recorder(secondDevice);
-        EXPECT_FALSE(recorder.recordPacket(
+        EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
             retiredGraph,
             retiredCompiledGraph,
-            GpuNativePacketRecordDesc{ .packet = secondPacket },
+            GpuSubmissionPacketRange{ .first = secondPacket, .packetCount = 1u },
             staleRecordedGraph
         ));
     }
@@ -9029,10 +9029,10 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
 
     {
         const GpuNativePacketRecorder recorder(secondDevice);
-        ASSERT_TRUE(recorder.recordPacket(
+        ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
             replacementGraph,
             replacementCompiledGraph,
-            GpuNativePacketRecordDesc{ .packet = replacementPacket },
+            GpuSubmissionPacketRange{ .first = replacementPacket, .packetCount = 1u },
             replacementRecordedGraph
         ));
     }
@@ -9313,10 +9313,10 @@ static void ExpectImportedFinalStateExportAfterTaskLocalTransition(
     GpuGraphSubmissionTransaction transaction(arena);
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_TRUE(taskRecorded);
@@ -9481,10 +9481,10 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffReleasesToDedicatedCom
     const GpuNativePacketRecorder recorder(device);
     const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
     ASSERT_TRUE(packet.valid());
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_TRUE(taskRecorded);
@@ -9711,16 +9711,16 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalStateOrdersOverlappingIndepen
     GpuGraphSubmissionTransaction transaction(asyncScope.arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = graphicsPacket },
+        GpuSubmissionPacketRange{ .first = graphicsPacket, .packetCount = 1u },
         recordedGraph
     ));
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = computePacket },
+        GpuSubmissionPacketRange{ .first = computePacket, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_TRUE(graphicsRecorded);
@@ -9919,16 +9919,16 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffMergesMultipleTerminal
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = mip0Packet },
+        GpuSubmissionPacketRange{ .first = mip0Packet, .packetCount = 1u },
         recordedGraph
     ));
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = mip1Packet },
+        GpuSubmissionPacketRange{ .first = mip1Packet, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_TRUE(mip0Recorded);
@@ -10111,16 +10111,16 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsIntoLaterGraph)
     GpuGraphSubmissionTransaction sourceTransaction(DescriptorBufferRoundTripTest::arena());
     sourceTransaction.reset(sourceCompiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         sourceGraph,
         sourceCompiledGraph,
-        GpuNativePacketRecordDesc{ .packet = sourceMip0Packet },
+        GpuSubmissionPacketRange{ .first = sourceMip0Packet, .packetCount = 1u },
         sourceRecordedGraph
     ));
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         sourceGraph,
         sourceCompiledGraph,
-        GpuNativePacketRecordDesc{ .packet = sourceMip1Packet },
+        GpuSubmissionPacketRange{ .first = sourceMip1Packet, .packetCount = 1u },
         sourceRecordedGraph
     ));
     EXPECT_TRUE(sourceMip0Recorded);
@@ -10288,16 +10288,16 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsIntoLaterGraph)
     GpuRecordedGraph destinationRecordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction destinationTransaction(DescriptorBufferRoundTripTest::arena());
     destinationTransaction.reset(destinationCompiledGraph);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         destinationGraph,
         destinationCompiledGraph,
-        GpuNativePacketRecordDesc{ .packet = destinationMip0Packet },
+        GpuSubmissionPacketRange{ .first = destinationMip0Packet, .packetCount = 1u },
         destinationRecordedGraph
     ));
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         destinationGraph,
         destinationCompiledGraph,
-        GpuNativePacketRecordDesc{ .packet = destinationMip1Packet },
+        GpuSubmissionPacketRange{ .first = destinationMip1Packet, .packetCount = 1u },
         destinationRecordedGraph
     ));
     EXPECT_TRUE(destinationMip0Recorded);
@@ -10510,16 +10510,16 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsCrossQueueTextu
     GpuGraphSubmissionTransaction transaction(asyncScope.arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = graphicsPacket },
+        GpuSubmissionPacketRange{ .first = graphicsPacket, .packetCount = 1u },
         recordedGraph
     ));
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = computePacket },
+        GpuSubmissionPacketRange{ .first = computePacket, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_TRUE(graphicsRecorded);
@@ -10703,16 +10703,16 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsCrossQueueTextu
     GpuRecordedGraph destinationRecordedGraph(asyncScope.arena());
     GpuGraphSubmissionTransaction destinationTransaction(asyncScope.arena());
     destinationTransaction.reset(destinationCompiledGraph);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         destinationGraph,
         destinationCompiledGraph,
-        GpuNativePacketRecordDesc{ .packet = mip0Packet },
+        GpuSubmissionPacketRange{ .first = mip0Packet, .packetCount = 1u },
         destinationRecordedGraph
     ));
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         destinationGraph,
         destinationCompiledGraph,
-        GpuNativePacketRecordDesc{ .packet = mip1Packet },
+        GpuSubmissionPacketRange{ .first = mip1Packet, .packetCount = 1u },
         destinationRecordedGraph
     ));
     EXPECT_EQ(mip0State, ResourceStates::ShaderResource);
@@ -10829,10 +10829,10 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerMatchesFirstPacketQueu
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_TRUE(taskRecorded);
@@ -10948,10 +10948,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedExternalCompletionSuppliesNative
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_TRUE(taskRecorded);
@@ -11161,10 +11161,10 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
     GpuGraphSubmissionTransaction transaction(asyncScope.arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_TRUE(taskRecorded);
@@ -23068,11 +23068,12 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlo
     rejectedTransaction.reset(compiledGraph);
     GpuCommandIrCapture rejectedCapture(DescriptorBufferRoundTripTest::arena());
     acceptedToken = staleToken;
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         rejectedRecordedGraph,
+        nullptr,
         &rejectedCapture
     ));
     EXPECT_TRUE(rejectedTransaction.discardUnaccepted(
@@ -23096,10 +23097,10 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlo
     // A successfully recorded packet reserves its graph work for this attempt. A second output artifact cannot
     // record an identical native command list before the first one reaches submission.
     GpuRecordedGraph duplicateRecordedGraph(DescriptorBufferRoundTripTest::arena());
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         duplicateRecordedGraph
     ));
 
@@ -23327,11 +23328,12 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitPhaseUploadsKeepImmutableSnapshotsIs
     occupancyAcceptedToken = staleToken;
     extinctionAcceptedToken = staleToken;
     accumulationAcceptedToken = staleToken;
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = occupancyPacket },
+        GpuSubmissionPacketRange{ .first = occupancyPacket, .packetCount = 1u },
         rejectedRecordedGraph,
+        nullptr,
         &rejectedCapture
     ));
     EXPECT_TRUE(rejectedTransaction.discardUnaccepted(
@@ -24311,10 +24313,10 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadTextureTaskRecordsGraphOwnedB
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph
     ));
     const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
@@ -45198,10 +45200,10 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreWrites
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
-    const bool recorded = recorder.recordPacket(
+    const bool recorded = recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph
     );
     EXPECT_TRUE(recordAttempted);
@@ -45424,10 +45426,10 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreReject
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_TRUE(recordAttempted);
@@ -45905,10 +45907,10 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTextureHooksDiscardOnPacketRec
     ASSERT_TRUE(s_logger.has_value());
     const u32 messageCountBeforeRecordFailure = s_logger->messageCount();
     const u32 errorCountBeforeRecordFailure = s_logger->errorCount();
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_EQ(s_logger->messageCount(), messageCountBeforeRecordFailure + 1u);
@@ -46048,11 +46050,12 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrCaptureRollsBackARejectedPacketBe
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuCommandIrCapture commandIrCapture(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph,
+        nullptr,
         &commandIrCapture
     ));
     EXPECT_TRUE(retryTaskAttempted);
@@ -46061,11 +46064,12 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrCaptureRollsBackARejectedPacketBe
 
     shouldRecord = true;
     retryTaskAttempted = false;
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph,
+        nullptr,
         &commandIrCapture
     ));
     EXPECT_TRUE(retryTaskAttempted);
@@ -46110,11 +46114,12 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrCaptureRollsBackARejectedPacketBe
     const GpuSubmissionPacketId foreignPacket = foreignCompiledGraph.packetForTask(foreignTask);
     ASSERT_TRUE(foreignPacket.valid());
     GpuRecordedGraph foreignRecordedGraph(DescriptorBufferRoundTripTest::arena());
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         foreignGraph,
         foreignCompiledGraph,
-        GpuNativePacketRecordDesc{ .packet = foreignPacket },
+        GpuSubmissionPacketRange{ .first = foreignPacket, .packetCount = 1u },
         foreignRecordedGraph,
+        nullptr,
         &commandIrCapture
     ));
     EXPECT_FALSE(foreignTaskAttempted);
@@ -49743,10 +49748,10 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsRetr
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph
     ));
     ASSERT_TRUE(recorded);
@@ -51158,16 +51163,16 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = prefixPacket },
+        GpuSubmissionPacketRange{ .first = prefixPacket, .packetCount = 1u },
         recordedGraph
     ));
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = finalPacket },
+        GpuSubmissionPacketRange{ .first = finalPacket, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_TRUE(prefixRecorded);
@@ -52816,16 +52821,16 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     GpuGraphSubmissionTransaction transaction(transferScope.arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = transferPacket },
+        GpuSubmissionPacketRange{ .first = transferPacket, .packetCount = 1u },
         recordedGraph
     ));
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = rejectedSuffixPacket },
+        GpuSubmissionPacketRange{ .first = rejectedSuffixPacket, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_TRUE(rejectedSuffixRecorded);
@@ -53495,10 +53500,10 @@ TEST_F(DescriptorBufferRoundTripTest, PacketPreflightRejectsCorruptedForcedMemor
         targetBarrier = corruptedBarrier;
         producerAttempted = false;
         consumerAttempted = false;
-        EXPECT_FALSE(recorder.recordPacket(
+        EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
             graph,
             compiledGraph,
-            GpuNativePacketRecordDesc{ .packet = packet },
+            GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
             recordedGraph
         ));
         EXPECT_FALSE(producerAttempted);
@@ -53548,10 +53553,10 @@ TEST_F(DescriptorBufferRoundTripTest, PacketPreflightRejectsCorruptedForcedMemor
 
     producerAttempted = false;
     consumerAttempted = false;
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = packet },
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_TRUE(producerAttempted);
@@ -53837,27 +53842,27 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferStateValidatesMatchingUavAn
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = transitionMismatchPacket },
+        GpuSubmissionPacketRange{ .first = transitionMismatchPacket, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_FALSE(transitionMismatchAttempted);
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = exportMismatchPacket },
+        GpuSubmissionPacketRange{ .first = exportMismatchPacket, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_FALSE(exportPrefixRecorded);
     EXPECT_FALSE(exportMismatchRecorded);
     EXPECT_EQ(exportPrefixDiscardedCount, 1u);
     EXPECT_EQ(exportMismatchDiscardedCount, 1u);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = matchingPacket },
+        GpuSubmissionPacketRange{ .first = matchingPacket, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_TRUE(matchingRecorded);
@@ -54023,16 +54028,16 @@ TEST_F(DescriptorBufferRoundTripTest, DeclarationStateSourceApplicabilityFollows
 
     GpuRecordedGraph recordedGraph(asyncScope.arena());
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = compiledGraph.packetForTask(graphicsTask) },
+        GpuSubmissionPacketRange{ .first = compiledGraph.packetForTask(graphicsTask), .packetCount = 1u },
         recordedGraph
     ));
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = compiledGraph.packetForTask(computeTask) },
+        GpuSubmissionPacketRange{ .first = compiledGraph.packetForTask(computeTask), .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_TRUE(graphicsAttempted);
@@ -54189,10 +54194,10 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferOwnershipReleaseFailsClosed
     ASSERT_TRUE(producerPacket.valid());
     GpuRecordedGraph recordedGraph(asyncScope.arena());
     const GpuNativePacketRecorder recorder(device);
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = producerPacket },
+        GpuSubmissionPacketRange{ .first = producerPacket, .packetCount = 1u },
         recordedGraph
     ));
     EXPECT_FALSE(producerRecorded);

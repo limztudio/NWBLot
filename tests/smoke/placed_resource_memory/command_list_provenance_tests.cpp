@@ -546,10 +546,10 @@ TEST_F(CommandListProvenanceTest, NativePacketRecorderDiscardsForgeRestoreThunkA
     const GpuNativePacketRecorder recorder(device());
 
     GpuRecordedGraph rejectedGraph(arena());
-    EXPECT_FALSE(recorder.recordPacket(
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
         resources.m_graph,
         resources.m_compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = resources.m_packet },
+        GpuSubmissionPacketRange{ .first = resources.m_packet, .packetCount = 1u },
         rejectedGraph
     ));
     EXPECT_TRUE(attempted);
@@ -558,10 +558,10 @@ TEST_F(CommandListProvenanceTest, NativePacketRecorderDiscardsForgeRestoreThunkA
 
     attack = false;
     attempted = false;
-    EXPECT_TRUE(recorder.recordPacket(
+    EXPECT_TRUE(recorder.recordPacketRangeInCompileOrder(
         resources.m_graph,
         resources.m_compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = resources.m_packet },
+        GpuSubmissionPacketRange{ .first = resources.m_packet, .packetCount = 1u },
         rejectedGraph
     ));
     EXPECT_TRUE(attempted);

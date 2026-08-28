@@ -3326,8 +3326,6 @@ public:
     [[nodiscard]] bool armSubmissionLedgerFinalizeHookForTesting(void* context, void (*invoke)(void*));
     void clearSubmissionLedgerFinalizeHookForTesting();
     [[nodiscard]] bool armRecordingIDWrapForTesting(const GpuPhysicalQueueId& queue);
-    void rejectNextSubmissionForTesting(CommandQueue::Enum queue);
-    void clearSubmissionRejectionsForTesting();
 #endif
     [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap(){ return m_gpuDescriptorHeap; }
     // Writes descriptor-buffer entries, including TLAS handles.
@@ -3338,7 +3336,6 @@ private:
     [[nodiscard]] bool registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc);
     void configureLegacyQueueContext();
 #if !defined(NWB_FINAL)
-    [[nodiscard]] bool consumeSubmissionRejectionForTesting(CommandQueue::Enum queue);
     void invokeSubmissionLedgerFinalizeHookForTesting();
 #endif
     // Probed once at device initialization so compressed texture selection does not rely on
@@ -3475,7 +3472,6 @@ private:
     Array<FormatSupport::Mask, static_cast<usize>(Format::kCount)> m_compressedFormatSupport = {};
 
 #if !defined(NWB_FINAL)
-    Array<Atomic<u32>, static_cast<u32>(CommandQueue::kCount)> m_submissionRejectionsForTesting = {};
     Futex m_submissionLedgerFinalizeHookForTestingMutex;
     void* m_submissionLedgerFinalizeHookForTestingContext = nullptr;
     void (*m_submissionLedgerFinalizeHookForTesting)(void*) = nullptr;

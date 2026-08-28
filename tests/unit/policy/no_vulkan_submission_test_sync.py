@@ -32,7 +32,9 @@ RETIRED_IDENTIFIER = re.compile(
     r"lastSubmissionWaitTokenCountForTesting|lastSubmissionWaitTokenForTesting|"
     r"captureSubmissionWaitTokensForTesting|m_submissionWaitCaptureArmedForTesting|"
     r"m_submissionWaitTokensForTestingMutex|m_submissionWaitQueueForTesting|"
-    r"m_submissionWaitTokensForTesting)\b"
+    r"m_submissionWaitTokensForTesting|rejectNextSubmissionForTesting|"
+    r"clearSubmissionRejectionsForTesting|consumeSubmissionRejectionForTesting|"
+    r"m_submissionRejectionsForTesting)\b"
 )
 
 
@@ -130,11 +132,60 @@ def run_self_test() -> int:
             (),
         ),
         (
-            "remaining submission rejection hooks",
-            "device.rejectNextSubmissionForTesting(CommandQueue::Graphics);\n"
-            "device.clearSubmissionRejectionsForTesting();\n"
-            "device.consumeSubmissionRejectionForTesting(CommandQueue::Graphics);\n"
+            "submission rejection arm",
+            "device.rejectNextSubmissionForTesting(CommandQueue::Graphics);",
+            ((1, "rejectNextSubmissionForTesting"),),
+        ),
+        (
+            "submission rejection clear",
+            "device.clearSubmissionRejectionsForTesting();",
+            ((1, "clearSubmissionRejectionsForTesting"),),
+        ),
+        (
+            "submission rejection consume",
+            "device.consumeSubmissionRejectionForTesting(CommandQueue::Graphics);",
+            ((1, "consumeSubmissionRejectionForTesting"),),
+        ),
+        (
+            "submission rejection state",
             "Atomic<u32> m_submissionRejectionsForTesting;",
+            ((1, "m_submissionRejectionsForTesting"),),
+        ),
+        (
+            "multiple submission rejection references",
+            "device.rejectNextSubmissionForTesting(CommandQueue::Graphics);\n"
+            "device.consumeSubmissionRejectionForTesting(CommandQueue::Graphics);\n"
+            "device.rejectNextSubmissionForTesting(CommandQueue::Compute);\n"
+            "device.clearSubmissionRejectionsForTesting();\n"
+            "Atomic<u32> m_submissionRejectionsForTesting;",
+            (
+                (1, "rejectNextSubmissionForTesting"),
+                (2, "consumeSubmissionRejectionForTesting"),
+                (3, "rejectNextSubmissionForTesting"),
+                (4, "clearSubmissionRejectionsForTesting"),
+                (5, "m_submissionRejectionsForTesting"),
+            ),
+        ),
+        (
+            "submission rejection comments",
+            "// device.rejectNextSubmissionForTesting(CommandQueue::Graphics);\n"
+            "/* device.clearSubmissionRejectionsForTesting();\n"
+            "device.consumeSubmissionRejectionForTesting(CommandQueue::Graphics);\n"
+            "Atomic<u32> m_submissionRejectionsForTesting; */",
+            (),
+        ),
+        (
+            "submission rejection literals",
+            'const char* text = "rejectNextSubmissionForTesting clearSubmissionRejectionsForTesting";\n'
+            'const char* raw = R"tag(consumeSubmissionRejectionForTesting m_submissionRejectionsForTesting)tag";',
+            (),
+        ),
+        (
+            "submission rejection near names",
+            "void rejectNextSubmissionForTestingAgain();\n"
+            "void clearSubmissionRejectionsForTestings();\n"
+            "void consumeSubmissionRejectionForTestingState();\n"
+            "Atomic<u32> m_submissionRejectionsForTestingCount;",
             (),
         ),
         ("legacy comment", "// device.createSubmissionSignalForTesting(signal);", ()),

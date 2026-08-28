@@ -123,6 +123,7 @@ private:
     inline static Atomic<VulkanTestQueueSubmit2Observer*> s_activeObserver{ nullptr };
     inline static PFN_vkQueueSubmit2 s_forwardQueueSubmit2 = nullptr;
     inline static Futex s_installMutex;
+    inline static Atomic<u32> s_activeInterceptionCount = 0u;
 
     [[nodiscard]] static VKAPI_ATTR VkResult VKAPI_CALL interceptQueueSubmit2(
         const VkQueue queue,
@@ -130,14 +131,23 @@ private:
         const VkSubmitInfo2* const submits,
         const VkFence fence
     ){
-        PFN_vkQueueSubmit2 const forward = s_forwardQueueSubmit2;
+        PFN_vkQueueSubmit2 forward = nullptr;
+        VulkanTestQueueSubmit2Observer* observer = nullptr;
+        {
+            ScopedLock lock(s_installMutex);
+            forward = s_forwardQueueSubmit2;
+            observer = s_activeObserver.load(MemoryOrder::acquire);
+            if(observer)
+                s_activeInterceptionCount.fetch_add(1u, MemoryOrder::acq_rel);
+        }
         if(!forward)
             return VK_ERROR_INITIALIZATION_FAILED;
-
-        VulkanTestQueueSubmit2Observer* const observer = s_activeObserver.load(MemoryOrder::acquire);
         if(!observer)
             return forward(queue, submitCount, submits, fence);
-        return observer->captureAndForward(forward, queue, submitCount, submits, fence);
+
+        const VkResult result = observer->captureAndForward(forward, queue, submitCount, submits, fence);
+        s_activeInterceptionCount.fetch_sub(1u, MemoryOrder::release);
+        return result;
     }
 
     [[nodiscard]] VkResult captureAndForward(
@@ -150,6 +160,8 @@ private:
         const u32 captureIndex = m_reservedCaptureCount.fetch_add(1u, MemoryOrder::acq_rel);
         if(captureIndex >= LengthOf(m_captures)){
             m_overflowed.store(true, MemoryOrder::release);
+            if(consumeSubmissionFailure(queue))
+                return VK_ERROR_OUT_OF_HOST_MEMORY;
             return forward(queue, submitCount, submits, fence);
         }
 
@@ -231,13 +243,31 @@ private:
         if(capture.overflowed)
             m_overflowed.store(true, MemoryOrder::release);
 
-        capture.result = forward(queue, submitCount, submits, fence);
+        if(consumeSubmissionFailure(queue))
+            capture.result = VK_ERROR_OUT_OF_HOST_MEMORY;
+        else
+            capture.result = forward(queue, submitCount, submits, fence);
         m_captureComplete[captureIndex].store(true, MemoryOrder::release);
         return capture.result;
     }
 
+    [[nodiscard]] bool consumeSubmissionFailure(const VkQueue queue)noexcept{
+        ScopedLock lock(m_submissionFailureMutex);
+        if(m_pendingSubmissionFailureCount == 0u || queue != m_submissionFailureQueue)
+            return false;
+
+        --m_pendingSubmissionFailureCount;
+        if(m_injectedSubmissionFailureCount != s_MaxU32)
+            ++m_injectedSubmissionFailureCount;
+        if(m_pendingSubmissionFailureCount == 0u)
+            m_submissionFailureQueue = VK_NULL_HANDLE;
+        return true;
+    }
+
 
 public:
+    // Volk's dispatch slot is plain storage. Construct and destroy this observer only while new submissions and
+    // other vkQueueSubmit2 wrappers are quiescent; already registered interceptor calls are drained at teardown.
     VulkanTestQueueSubmit2Observer(){
         ScopedLock lock(s_installMutex);
         if(s_activeObserver.load(MemoryOrder::acquire))
@@ -257,14 +287,40 @@ public:
         if(!m_armed)
             return;
 
-        vkQueueSubmit2 = m_originalQueueSubmit2;
         s_activeObserver.store(nullptr, MemoryOrder::release);
+        while(s_activeInterceptionCount.load(MemoryOrder::acquire) != 0u)
+            YieldThread();
+        NWB_ASSERT(vkQueueSubmit2 == &VulkanTestQueueSubmit2Observer::interceptQueueSubmit2);
+        vkQueueSubmit2 = m_originalQueueSubmit2;
     }
 
 
 public:
     [[nodiscard]] bool valid()const noexcept{ return m_armed; }
     [[nodiscard]] bool overflowed()const noexcept{ return m_overflowed.load(MemoryOrder::acquire); }
+    [[nodiscard]] bool armSubmissionFailures(VkQueue queue, u32 count = 1u){
+        if(!m_armed || queue == VK_NULL_HANDLE || count == 0u)
+            return false;
+
+        ScopedLock lock(m_submissionFailureMutex);
+        if(
+            (m_pendingSubmissionFailureCount != 0u && queue != m_submissionFailureQueue)
+            || count > s_MaxU32 - m_pendingSubmissionFailureCount
+        )
+            return false;
+
+        m_submissionFailureQueue = queue;
+        m_pendingSubmissionFailureCount += count;
+        return true;
+    }
+    [[nodiscard]] u32 injectedSubmissionFailureCount()const noexcept{
+        ScopedLock lock(m_submissionFailureMutex);
+        return m_injectedSubmissionFailureCount;
+    }
+    [[nodiscard]] u32 pendingSubmissionFailureCount()const noexcept{
+        ScopedLock lock(m_submissionFailureMutex);
+        return m_pendingSubmissionFailureCount;
+    }
     [[nodiscard]] usize capturedSubmissionCount()const noexcept{
         const u32 reservedCount = m_reservedCaptureCount.load(MemoryOrder::acquire);
         const u32 boundedCount = reservedCount < LengthOf(m_captures)
@@ -335,6 +391,10 @@ private:
     Array<Atomic<bool>, 16u> m_captureComplete = {};
     Atomic<u32> m_reservedCaptureCount = 0u;
     Atomic<bool> m_overflowed = false;
+    mutable Futex m_submissionFailureMutex;
+    VkQueue m_submissionFailureQueue = VK_NULL_HANDLE;
+    u32 m_injectedSubmissionFailureCount = 0u;
+    u32 m_pendingSubmissionFailureCount = 0u;
     bool m_armed = false;
 };
 

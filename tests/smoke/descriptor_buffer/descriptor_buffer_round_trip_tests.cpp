@@ -411,6 +411,7 @@ private:
 thread_local VulkanSubmissionTailGate* VulkanSubmissionTailGate::s_activeGate = nullptr;
 PFN_vkQueueSubmit2 VulkanSubmissionTailGate::s_forwardQueueSubmit2 = nullptr;
 
+#endif
 
 struct NativeBufferAddressQuery{
     VkBuffer buffer = VK_NULL_HANDLE;
@@ -514,8 +515,6 @@ private:
 thread_local NativeUploadReuseCapture* ScopedNativeUploadReuseTrace::s_activeCapture = nullptr;
 PFN_vkGetBufferDeviceAddress ScopedNativeUploadReuseTrace::s_forwardGetBufferDeviceAddress = nullptr;
 PFN_vkCmdCopyBuffer ScopedNativeUploadReuseTrace::s_forwardCmdCopyBuffer = nullptr;
-
-#endif
 
 };
 
@@ -855,7 +854,6 @@ struct StandaloneGraphTextureUploadContext{
     bool* discarded = nullptr;
 };
 
-#if !defined(NWB_FINAL)
 [[nodiscard]] static GpuTaskId DeclareStandaloneGraphTextureUpload(
     void* const rawContext,
     GpuTaskGraph& graph
@@ -949,9 +947,7 @@ struct StandaloneGraphTextureUploadContext{
         }
     );
 }
-#endif
 
-#if !defined(NWB_FINAL)
 // The public standalone boundary normally owns no renderer tail.  This probe makes a Transfer packet accept before
 // a dependent Graphics packet is rejected, then observes the standalone helper's recovery frontier submission.
 struct StandaloneGraphAcceptedFrontierRecoveryCompletionTask{
@@ -1070,7 +1066,6 @@ struct StandaloneGraphAcceptedFrontierRecoveryContext{
     );
     return suffixTask;
 }
-#endif
 
 
 // Public standalone declarations may opt into the same compiler-derived worker frontiers as renderer-owned graph
@@ -8373,18 +8368,26 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentStateRecordingAttemptsCommitOnlyO
     commandList->close();
     ASSERT_TRUE(submit().valid());
 
-#if !defined(NWB_FINAL)
     commandList->open();
     commandList->setPermanentBufferState(rejected.get(), ResourceStates::UnorderedAccess);
     ASSERT_EQ(commandList->getPermanentBufferState(rejected.get()), ResourceStates::UnorderedAccess);
     commandList->close();
     ASSERT_TRUE(commandList->hasCommandBuffer());
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    const GpuPhysicalQueueId rejectedQueue = commandList->getDescription().physicalQueue;
+    ASSERT_TRUE(rejectedQueue.valid());
+    const VkQueue nativeRejectedQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, rejectedQueue).pointer
+    );
+    ASSERT_NE(nativeRejectedQueue, VK_NULL_HANDLE);
+    VulkanTestQueueSubmit2Observer submissionObserver;
+    ASSERT_TRUE(submissionObserver.valid());
+    ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeRejectedQueue));
     EXPECT_FALSE(submit().valid());
+    EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+    EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
     EXPECT_FALSE(commandList->hasCommandBuffer());
     EXPECT_EQ(commandList->getPermanentBufferState(rejected.get()), ResourceStates::Unknown);
     EXPECT_EQ(commandList->getPermanentBufferState(baseline.get()), ResourceStates::UnorderedAccess);
-#endif
 
     commandList->open();
     commandList->setPermanentBufferState(provisional.get(), ResourceStates::Unknown);
@@ -49013,8 +49016,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQuer
 }
 
 
-#if !defined(NWB_FINAL)
-
 // The graph-owned reset task must publish query-pool availability only from packet acceptance. A rejected reset is
 // followed by a dynamic-rendering timing scope, which cannot reset the pool itself; the next accepted preamble must
 // still establish a fresh usable reset rather than leaving either stale availability or a permanently stuck pool.
@@ -49030,9 +49031,21 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleRollsBackRejectedGrap
     FrameTimingPreambleProbePass rejectedProbe(graphics, s_FrameTimingRejectedGraphResetScope);
     ASSERT_TRUE(rejectedProbe.initialize());
     graphics.addRenderPassToBack(rejectedProbe);
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
-    ASSERT_TRUE(graphics.prepareFramePreamble());
-    graphics.render();
+    {
+        const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+        ASSERT_TRUE(graphicsQueue.valid());
+        const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+            device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+        );
+        ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+        VulkanTestQueueSubmit2Observer submissionObserver;
+        ASSERT_TRUE(submissionObserver.valid());
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
+        ASSERT_TRUE(graphics.prepareFramePreamble());
+        graphics.render();
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+    }
     graphics.removeRenderPass(rejectedProbe);
     ASSERT_TRUE(rejectedProbe.recorded());
     ASSERT_TRUE(device.waitForIdle());
@@ -49059,6 +49072,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleRollsBackRejectedGrap
     timing.resetQueries();
 }
 
+
+#if !defined(NWB_FINAL)
 
 // An available result from seed A must not let capacity-one query B publish or return to the free list before B's
 // exact accepted submission completes. A test-owned native submission tail gate makes that real ordering observable.
@@ -49753,10 +49768,9 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
 }
 
 
-#if !defined(NWB_FINAL)
-
-// A backend rejection happens after the automatic ticket and three independent manual tickets are prepared. One
-// failed native attempt must discard all four transactions, and the next frame reset must make every slot reusable.
+// An injected native-submit failure happens after the automatic ticket and three independent manual tickets are
+// prepared. One failed native attempt must discard all four transactions, and the next frame reset must make every
+// slot reusable.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingRejectsAndReusesCompanionQueriesTogether){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& timing = s_scope->graphics().gpuTiming();
@@ -49897,20 +49911,32 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingRejectsAndReusesC
             .timingTicket = companionTimingTickets[taskIndex],
         };
     }
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
-    EXPECT_FALSE(submitter.submitTaskRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        recordedGraph,
-        tasks[0u],
-        tasks[LengthOf(tasks) - 1u],
-        nullptr,
-        0u,
-        timingTickets,
-        LengthOf(timingTickets),
-        transaction,
-        scratchArena
-    ));
+    {
+        const GpuPhysicalQueueId rejectedQueue = compiledGraph.packet(packet).queue;
+        ASSERT_TRUE(rejectedQueue.valid());
+        const VkQueue nativeRejectedQueue = static_cast<VkQueue>(
+            device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, rejectedQueue).pointer
+        );
+        ASSERT_NE(nativeRejectedQueue, VK_NULL_HANDLE);
+        VulkanTestQueueSubmit2Observer submissionObserver;
+        ASSERT_TRUE(submissionObserver.valid());
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeRejectedQueue));
+        EXPECT_FALSE(submitter.submitTaskRangeInCompileOrder(
+            graph,
+            compiledGraph,
+            recordedGraph,
+            tasks[0u],
+            tasks[LengthOf(tasks) - 1u],
+            nullptr,
+            0u,
+            timingTickets,
+            LengthOf(timingTickets),
+            transaction,
+            scratchArena
+        ));
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+    }
     EXPECT_FALSE(transaction.packetToken(packet).valid());
     const GpuTaskGraphSubmissionStatistics submissionStatistics = transaction.submissionStatistics();
     ASSERT_TRUE(submissionStatistics.valid());
@@ -49996,10 +50022,22 @@ TEST_F(DescriptorBufferRoundTripTest, ImguiTextureUploadBatchCommitsOnlyAfterAcc
 
     uploads.add(createTexture, &createInitialUploadAccepted);
     uploads.add(updateTexture, &updateInitialUploadAccepted);
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
     CommandList* rejectedCommandLists[] = { rejected.get() };
     bool submitted = true;
-    device.executeCommandLists(rejectedCommandLists, 1u, CommandQueue::Graphics, &submitted);
+    {
+        const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+        ASSERT_TRUE(graphicsQueue.valid());
+        const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+            device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+        );
+        ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+        VulkanTestQueueSubmit2Observer submissionObserver;
+        ASSERT_TRUE(submissionObserver.valid());
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
+        device.executeCommandLists(rejectedCommandLists, 1u, CommandQueue::Graphics, &submitted);
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+    }
     EXPECT_FALSE(submitted);
     uploads.complete(submitted);
     EXPECT_EQ(createTexture.Status, ImTextureStatus_WantCreate);
@@ -50040,8 +50078,20 @@ TEST_F(DescriptorBufferRoundTripTest, DirectCommandListCanRetryAfterRejectedSubm
 
     CommandList* commandLists[] = { commandList.get() };
     bool submitted = true;
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
-    device.executeCommandLists(commandLists, 1u, CommandQueue::Graphics, &submitted);
+    {
+        const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+        ASSERT_TRUE(graphicsQueue.valid());
+        const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+            device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+        );
+        ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+        VulkanTestQueueSubmit2Observer submissionObserver;
+        ASSERT_TRUE(submissionObserver.valid());
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
+        device.executeCommandLists(commandLists, 1u, CommandQueue::Graphics, &submitted);
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+    }
     EXPECT_FALSE(submitted);
     EXPECT_FALSE(commandList->hasCommandBuffer());
 
@@ -50053,9 +50103,6 @@ TEST_F(DescriptorBufferRoundTripTest, DirectCommandListCanRetryAfterRejectedSubm
     ASSERT_TRUE(submitted);
     ASSERT_TRUE(device.waitForIdle());
 }
-
-
-#endif
 
 
 // A structurally exact token can still name a producer value that was never submitted. Reject that dependency
@@ -50270,12 +50317,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsRetr
 }
 
 
-#if !defined(NWB_FINAL)
-
-
-// Frame acquisition is a queue-global binary wait. A pre-driver rejection must leave global synchronization owned
+// Frame acquisition is a queue-global binary wait. An injected native-submit failure must leave global synchronization
 // by the queue so an accepted compatibility submission can consume it instead of reusing a still-signaled semaphore.
-TEST_F(DescriptorBufferRoundTripTest, QueueGlobalSynchronizationSurvivesPreDriverRejection){
+TEST_F(DescriptorBufferRoundTripTest, QueueGlobalSynchronizationSurvivesInjectedNativeSubmitFailure){
     auto& device = DescriptorBufferRoundTripTest::device();
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     ASSERT_TRUE(graphicsQueue.valid());
@@ -50297,8 +50341,16 @@ TEST_F(DescriptorBufferRoundTripTest, QueueGlobalSynchronizationSurvivesPreDrive
     ASSERT_TRUE(device.waitForIdle());
 
     device.queueWaitForCommandList(CommandQueue::Graphics, producerToken.queue, producerToken.value);
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+    );
+    ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+    VulkanTestQueueSubmit2Observer submissionObserver;
+    ASSERT_TRUE(submissionObserver.valid());
+    ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
     EXPECT_FALSE(device.executeCommandLists(nullptr, 0u, graphicsQueue, QueueSubmissionDesc{}).valid());
+    EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+    EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
 
     const QueueSubmissionToken retryToken = device.executeCommandLists(
         nullptr,
@@ -50327,8 +50379,16 @@ TEST_F(DescriptorBufferRoundTripTest, ForcedEmptySubmissionAdvancesExactQueueAnd
     EXPECT_TRUE(firstToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
     ASSERT_TRUE(device.waitForIdle());
 
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+    );
+    ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+    VulkanTestQueueSubmit2Observer submissionObserver;
+    ASSERT_TRUE(submissionObserver.valid());
+    ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
     EXPECT_FALSE(device.executeCommandLists(nullptr, 0u, graphicsQueue, forcedSubmitDesc).valid());
+    EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+    EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
 
     const QueueSubmissionToken retryToken = device.executeCommandLists(nullptr, 0u, graphicsQueue, forcedSubmitDesc);
     ASSERT_TRUE(retryToken.valid());
@@ -50375,9 +50435,6 @@ TEST_F(DescriptorBufferRoundTripTest, GarbageCollectionRetiresCompletedCommandBu
     EXPECT_EQ(retainedBuffer->getReferenceCount(), 1u)
         << "periodic device GC did not retire the completed command-buffer resource reference";
 }
-
-#endif
-
 
 // Framebuffer construction owns every attachment category even when the adapter cannot execute variable-rate
 // shading. Keeping this ownership check feature-independent makes a caller-side shading-rate handle safe to drop.
@@ -50805,14 +50862,13 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedHandoffResourcesOutliveCallerAfter
 }
 
 
-#if !defined(NWB_FINAL)
-
 // Timestamp reset/begin/end commands all embed the raw VkQueryPool in native work. Each independently recorded path
 // must own the TimerQuery, deduplicate repeated uses, release abandoned/rejected work immediately, and retire accepted
 // work only after its queue completion is collected.
 TEST_F(DescriptorBufferRoundTripTest, TimerQueryCommandsRetainQueryThroughAbandonmentRejectionAndCompletion){
     auto& device = DescriptorBufferRoundTripTest::device();
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
     const GpuPhysicalQueueInfo* const queueInfo = device.getPhysicalQueueInfo(graphicsQueue);
     ASSERT_TRUE(queueInfo);
     if(queueInfo->timestampValidBits == 0u)
@@ -50863,14 +50919,25 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryCommandsRetainQueryThroughAbando
     rejected->close();
     EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + 1u);
 
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
     CommandList* const rejectedCommandLists[] = { rejected.get() };
-    const QueueSubmissionToken rejectedToken = device.executeCommandLists(
-        rejectedCommandLists,
-        LengthOf(rejectedCommandLists),
-        graphicsQueue,
-        QueueSubmissionDesc{}
-    );
+    QueueSubmissionToken rejectedToken;
+    {
+        const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+            device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+        );
+        ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+        VulkanTestQueueSubmit2Observer submissionObserver;
+        ASSERT_TRUE(submissionObserver.valid());
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
+        rejectedToken = device.executeCommandLists(
+            rejectedCommandLists,
+            LengthOf(rejectedCommandLists),
+            graphicsQueue,
+            QueueSubmissionDesc{}
+        );
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+    }
     EXPECT_FALSE(rejectedToken.valid());
     EXPECT_FALSE(rejected->hasCommandBuffer());
     EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord);
@@ -50908,7 +50975,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryCommandsRetainQueryThroughAbando
 }
 
 
-// Never-submitted and pre-driver-rejected command buffers must not turn safety retention into a leak. Both paths
+// Never-submitted and native-submit-failed command buffers must not turn safety retention into a leak. Both paths
 // release state-only pipeline and barrier-only buffer references as soon as the native buffer is abandoned.
 TEST_F(DescriptorBufferRoundTripTest, AbandonedAndRejectedCommandBuffersReleaseRetainedResourcesPromptly){
     auto& device = DescriptorBufferRoundTripTest::device();
@@ -50960,22 +51027,32 @@ TEST_F(DescriptorBufferRoundTripTest, AbandonedAndRejectedCommandBuffersReleaseR
     EXPECT_EQ(retainedPipeline->getReferenceCount(), pipelineReferencesBeforeRecord + 1u);
     EXPECT_EQ(retainedBuffer->getReferenceCount(), bufferReferencesBeforeRecord + 1u);
 
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
     CommandList* const commandLists[] = { rejected.get() };
-    const QueueSubmissionToken rejectedToken = device.executeCommandLists(
-        commandLists,
-        LengthOf(commandLists),
-        CommandQueue::Graphics,
-        QueueSubmissionDesc{}
-    );
+    QueueSubmissionToken rejectedToken;
+    {
+        const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+        ASSERT_TRUE(graphicsQueue.valid());
+        const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+            device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+        );
+        ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+        VulkanTestQueueSubmit2Observer submissionObserver;
+        ASSERT_TRUE(submissionObserver.valid());
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
+        rejectedToken = device.executeCommandLists(
+            commandLists,
+            LengthOf(commandLists),
+            CommandQueue::Graphics,
+            QueueSubmissionDesc{}
+        );
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+    }
     EXPECT_FALSE(rejectedToken.valid());
     EXPECT_FALSE(rejected->hasCommandBuffer());
     EXPECT_EQ(retainedPipeline->getReferenceCount(), pipelineReferencesBeforeRecord);
     EXPECT_EQ(retainedBuffer->getReferenceCount(), bufferReferencesBeforeRecord);
 }
-
-#endif
-
 
 #if !defined(NWB_FINAL)
 
@@ -51273,6 +51350,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
     if(!device.supportsComparableGpuTimestamps(graphicsQueue))
         GTEST_SKIP() << "GPU timing recovery transaction: comparable 64-bit device timestamps are unavailable.";
     auto& timing = graphics.gpuTiming();
@@ -51326,15 +51404,25 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
     ASSERT_TRUE(prefixToken.valid());
     ASSERT_TRUE(rejectedTransaction.confirmBeginSubmission(prefixToken));
 
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
     CommandList* rejectedFinalCommandLists[] = { rejectedFinal.get() };
-    EXPECT_FALSE(finalTicket.submit(
-        device,
-        rejectedFinalCommandLists,
-        1u,
-        CommandQueue::Graphics,
-        QueueSubmissionDesc{}
-    ).valid());
+    {
+        const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+            device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+        );
+        ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+        VulkanTestQueueSubmit2Observer submissionObserver;
+        ASSERT_TRUE(submissionObserver.valid());
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
+        EXPECT_FALSE(finalTicket.submit(
+            device,
+            rejectedFinalCommandLists,
+            1u,
+            CommandQueue::Graphics,
+            QueueSubmissionDesc{}
+        ).valid());
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+    }
 
     ASSERT_TRUE(rejectedTransaction.prepareForRecovery());
     recovery->open();
@@ -51436,6 +51524,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();
 }
+
+#endif
 
 
 // A recovery packet is declared with the normal frame graph but recorded only after a later packet rejects. It must
@@ -51651,24 +51741,36 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     ASSERT_TRUE(prefixToken.valid());
     ASSERT_TRUE(frameTransaction.confirmBeginSubmission(prefixToken));
 
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
     const GpuTaskGraphTaskTimingTicket finalTimingBinding{
         .task = finalTask,
         .timingTicket = &finalTimingTicket,
     };
-    EXPECT_FALSE(submitter.submitTaskRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        recordedGraph,
-        finalTask,
-        finalTask,
-        nullptr,
-        0u,
-        &finalTimingBinding,
-        1u,
-        transaction,
-        scratchArena
-    ));
+    {
+        const GpuPhysicalQueueId rejectedQueue = compiledGraph.packet(finalPacket).queue;
+        ASSERT_TRUE(rejectedQueue.valid());
+        const VkQueue nativeRejectedQueue = static_cast<VkQueue>(
+            device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, rejectedQueue).pointer
+        );
+        ASSERT_NE(nativeRejectedQueue, VK_NULL_HANDLE);
+        VulkanTestQueueSubmit2Observer submissionObserver;
+        ASSERT_TRUE(submissionObserver.valid());
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeRejectedQueue));
+        EXPECT_FALSE(submitter.submitTaskRangeInCompileOrder(
+            graph,
+            compiledGraph,
+            recordedGraph,
+            finalTask,
+            finalTask,
+            nullptr,
+            0u,
+            &finalTimingBinding,
+            1u,
+            transaction,
+            scratchArena
+        ));
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+    }
     EXPECT_FALSE(transaction.packetToken(finalPacket).valid());
     const GpuTaskGraphSubmissionStatistics rejectedSubmissionStatistics = transaction.submissionStatistics();
     ASSERT_TRUE(rejectedSubmissionStatistics.valid());
@@ -51891,18 +51993,30 @@ TEST_F(DescriptorBufferRoundTripTest, TaskRangeHelperPreservesRecoveryOwnership)
 
     // A rejected normal task remains recorded/rejected for caller-owned recovery; the helper does not touch the
     // late frontier task or cleanup state.
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
-    EXPECT_FALSE(submitter.recordAndSubmitTaskRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        recorder,
-        recordedGraph,
-        rejectedTask,
-        rejectedTask,
-        transaction,
-        scratchArena,
-        &failedPacket
-    ));
+    {
+        const GpuPhysicalQueueId rejectedQueue = compiledGraph.packet(rejectedPacket).queue;
+        ASSERT_TRUE(rejectedQueue.valid());
+        const VkQueue nativeRejectedQueue = static_cast<VkQueue>(
+            device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, rejectedQueue).pointer
+        );
+        ASSERT_NE(nativeRejectedQueue, VK_NULL_HANDLE);
+        VulkanTestQueueSubmit2Observer submissionObserver;
+        ASSERT_TRUE(submissionObserver.valid());
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeRejectedQueue));
+        EXPECT_FALSE(submitter.recordAndSubmitTaskRangeInCompileOrder(
+            graph,
+            compiledGraph,
+            recorder,
+            recordedGraph,
+            rejectedTask,
+            rejectedTask,
+            transaction,
+            scratchArena,
+            &failedPacket
+        ));
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+    }
     EXPECT_EQ(failedPacket, rejectedPacket);
     EXPECT_TRUE(rejectedRecorded);
     EXPECT_FALSE(recoveryRecorded);
@@ -52466,23 +52580,32 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorPreservesRecoveryOwners
     const GpuTaskGraphSubmitter submitter(device);
     GpuSubmissionPacketId failedPacket;
 
+    const GpuPhysicalQueueId rejectedQueue = compiledGraph.packet(rejectedPacket).queue;
+    ASSERT_TRUE(rejectedQueue.valid());
+    const VkQueue nativeRejectedQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, rejectedQueue).pointer
+    );
+    ASSERT_NE(nativeRejectedQueue, VK_NULL_HANDLE);
+    VulkanTestQueueSubmit2Observer submissionObserver;
+    ASSERT_TRUE(submissionObserver.valid());
     struct FailureArm{
-        Device& device;
+        VulkanTestQueueSubmit2Observer* observer = nullptr;
+        VkQueue queue = VK_NULL_HANDLE;
         bool armed = false;
     };
     FailureArm failureArm{
-        .device = device,
+        .observer = &submissionObserver,
+        .queue = nativeRejectedQueue,
     };
     const GpuTaskGraphTaskAcceptedCallback acceptedCallback{
         .task = prefixTask,
         .context = &failureArm,
         .invoke = [](void* const rawContext, const QueueSubmissionToken& token){
             FailureArm* const context = static_cast<FailureArm*>(rawContext);
-            if(!context || !token.valid())
+            if(!context || !context->observer || context->queue == VK_NULL_HANDLE || !token.valid())
                 return false;
-            context->device.rejectNextSubmissionForTesting(token.queue);
-            context->armed = true;
-            return true;
+            context->armed = context->observer->armSubmissionFailures(context->queue);
+            return context->armed;
         },
     };
     GpuTaskGraphNormalExecutionDesc normalExecution;
@@ -52503,6 +52626,8 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorPreservesRecoveryOwners
     ));
     EXPECT_EQ(failedPacket, rejectedPacket);
     EXPECT_TRUE(failureArm.armed);
+    EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+    EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
     EXPECT_TRUE(prefixRecorded);
     EXPECT_TRUE(rejectedRecorded);
     EXPECT_FALSE(recoveryRecorded);
@@ -52804,19 +52929,31 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierTaskRangeHelperPreservesRecov
 
     // Submission failure remains visible to the caller. The helper neither discards the rejected normal packet nor
     // records the recovery tail, which leaves the accepted frontier available to the explicit recovery helper.
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
-    EXPECT_FALSE(submitter.recordAndSubmitTaskRangeInReadyFrontiers(
-        graph,
-        compiledGraph,
-        recorder,
-        recordedGraph,
-        recordingWorkers,
-        rejectedTask,
-        rejectedTask,
-        transaction,
-        scratchArena,
-        &failedPacket
-    ));
+    {
+        const GpuPhysicalQueueId rejectedQueue = compiledGraph.packet(rejectedPacket).queue;
+        ASSERT_TRUE(rejectedQueue.valid());
+        const VkQueue nativeRejectedQueue = static_cast<VkQueue>(
+            device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, rejectedQueue).pointer
+        );
+        ASSERT_NE(nativeRejectedQueue, VK_NULL_HANDLE);
+        VulkanTestQueueSubmit2Observer submissionObserver;
+        ASSERT_TRUE(submissionObserver.valid());
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeRejectedQueue));
+        EXPECT_FALSE(submitter.recordAndSubmitTaskRangeInReadyFrontiers(
+            graph,
+            compiledGraph,
+            recorder,
+            recordedGraph,
+            recordingWorkers,
+            rejectedTask,
+            rejectedTask,
+            transaction,
+            scratchArena,
+            &failedPacket
+        ));
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+    }
     EXPECT_EQ(failedPacket, rejectedPacket);
     EXPECT_TRUE(rejectedRecorded);
     EXPECT_FALSE(recoveryRecorded);
@@ -53317,7 +53454,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_TRUE(transferToken.matchesPhysicalQueue(transferQueue.index, transferQueue.deviceGeneration));
     EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 1u);
 
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
     EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -53347,7 +53484,14 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_EQ(rejectedGraphicsQueueStatistics.nativeCommandListCount, 0u);
     EXPECT_EQ(rejectedGraphicsQueueStatistics.acceptedFrontierSubmissionCount, 0u);
     EXPECT_EQ(rejectedGraphicsQueueStatistics.recoverySubmissionCount, 0u);
-    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 1u);
+    EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+    EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
+    VulkanTestQueueSubmit2Capture rejectedSuffixCapture;
+    ASSERT_TRUE(submissionObserver.capturedSubmission(1u, rejectedSuffixCapture));
+    EXPECT_EQ(rejectedSuffixCapture.queue, nativeGraphicsQueue);
+    EXPECT_EQ(rejectedSuffixCapture.result, VK_ERROR_OUT_OF_HOST_MEMORY);
+    EXPECT_FALSE(rejectedSuffixCapture.overflowed);
 
     ASSERT_TRUE(submitter.recordAndSubmitAcceptedFrontierTask(
         graph,
@@ -53364,13 +53508,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_EQ(recoveryToken.queue, CommandQueue::Graphics);
     EXPECT_TRUE(recoveryToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
     EXPECT_FALSE(submissionObserver.overflowed());
-    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
+    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 3u);
     EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 2u);
     EXPECT_EQ(submissionObserver.successfulWaitCount(), 1u);
     VulkanTestQueueSubmit2Capture transferCapture;
     VulkanTestQueueSubmit2Capture recoveryCapture;
     ASSERT_TRUE(submissionObserver.capturedSubmission(0u, transferCapture));
-    ASSERT_TRUE(submissionObserver.capturedSubmission(1u, recoveryCapture));
+    ASSERT_TRUE(submissionObserver.capturedSubmission(2u, recoveryCapture));
     __hidden_descriptor_buffer_round_trip_tests::ExpectNativeTimelineDependency(
         transferCapture,
         nativeTransferQueue,
@@ -53437,6 +53581,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_TRUE(transaction.packetToken(recoveryPacket).valid());
 }
 
+
+#if !defined(NWB_FINAL)
 
 // The native Transfer packet has accepted and both typed hooks have reached graph Accepted before the first semantic
 // task callback blocks. The transaction token/frontier must remain hidden until every task callback finishes;
@@ -55553,9 +55699,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
 
 
 TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAcceptsTerminalCompletion){
-#if defined(NWB_FINAL)
-    GTEST_SKIP() << "standalone graph rejection coverage requires test submission overrides";
-#else
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
     const GpuPhysicalQueueId graphicsQueue = BackendQueueId(device, CommandQueue::Graphics);
@@ -55588,13 +55731,23 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAc
         .discarded = &rejectedDiscarded,
     };
     QueueSubmissionToken rejectedToken;
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
-    EXPECT_FALSE(graphics.submitStandaloneTaskGraph(
-        &rejectedContext,
-        &DeclareStandaloneGraphTextureUpload,
-        rejectedToken,
-        graphicsQueue
-    ));
+    {
+        const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+            device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+        );
+        ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+        VulkanTestQueueSubmit2Observer submissionObserver;
+        ASSERT_TRUE(submissionObserver.valid());
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
+        EXPECT_FALSE(graphics.submitStandaloneTaskGraph(
+            &rejectedContext,
+            &DeclareStandaloneGraphTextureUpload,
+            rejectedToken,
+            graphicsQueue
+        ));
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+    }
     EXPECT_FALSE(rejectedToken.valid());
     EXPECT_TRUE(rejectedRecorded);
     EXPECT_FALSE(rejectedAccepted);
@@ -55625,7 +55778,6 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAc
     EXPECT_TRUE(accepted);
     EXPECT_FALSE(acceptedDiscarded);
     EXPECT_TRUE(device.waitForIdle());
-#endif
 }
 
 
@@ -55860,9 +56012,6 @@ TEST_F(DescriptorBufferRoundTripTest, RetainedTextureTypedImportsTrackAcceptedMi
 // Graphics-side frontier when a later Graphics packet rejects. A second rejection proves the fail-closed recreation
 // latch engages when that recovery packet itself cannot be accepted.
 TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphRecoversAcceptedTransferFrontierOrRequestsRecreation){
-#if defined(NWB_FINAL)
-    GTEST_SKIP() << "standalone graph recovery coverage requires test submission overrides";
-#else
     HeadlessGraphicsScope transferScope;
     ASSERT_TRUE(transferScope.setTransferQueueEnabled(true));
     if(!transferScope.initialize())
@@ -55923,7 +56072,7 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphRecoversAcceptedTransferFro
     {
         VulkanTestQueueSubmit2Observer submissionObserver;
         ASSERT_TRUE(submissionObserver.valid());
-        device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
         EXPECT_FALSE(graphics.submitStandaloneTaskGraph(
             &recoveredContext,
             &DeclareStandaloneGraphAcceptedFrontierRecovery,
@@ -55939,13 +56088,20 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphRecoversAcceptedTransferFro
         EXPECT_TRUE(acceptedTransferToken.matchesPhysicalQueue(transferQueue.index, transferQueue.deviceGeneration));
         EXPECT_FALSE(graphics.isDeviceRecreationRequested());
         EXPECT_FALSE(submissionObserver.overflowed());
-        ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+        ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 3u);
         EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 2u);
         EXPECT_EQ(submissionObserver.successfulWaitCount(), 1u);
         VulkanTestQueueSubmit2Capture transferCapture;
+        VulkanTestQueueSubmit2Capture failedGraphicsCapture;
         VulkanTestQueueSubmit2Capture recoveryCapture;
         ASSERT_TRUE(submissionObserver.capturedSubmission(0u, transferCapture));
-        ASSERT_TRUE(submissionObserver.capturedSubmission(1u, recoveryCapture));
+        ASSERT_TRUE(submissionObserver.capturedSubmission(1u, failedGraphicsCapture));
+        ASSERT_TRUE(submissionObserver.capturedSubmission(2u, recoveryCapture));
+        EXPECT_EQ(failedGraphicsCapture.queue, nativeGraphicsQueue);
+        EXPECT_EQ(failedGraphicsCapture.result, VK_ERROR_OUT_OF_HOST_MEMORY);
+        EXPECT_FALSE(failedGraphicsCapture.overflowed);
         ASSERT_EQ(transferCapture.result, VK_SUCCESS);
         ASSERT_FALSE(transferCapture.overflowed);
         ASSERT_EQ(transferCapture.queue, nativeTransferQueue);
@@ -55997,14 +56153,22 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphRecoversAcceptedTransferFro
         .graphicsDiscarded = &unrecoveredGraphicsDiscarded,
     };
     QueueSubmissionToken unrecoveredTerminalToken;
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
-    EXPECT_FALSE(graphics.submitStandaloneTaskGraph(
-        &unrecoveredContext,
-        &DeclareStandaloneGraphAcceptedFrontierRecovery,
-        unrecoveredTerminalToken,
-        graphicsQueue
-    ));
+    {
+        VulkanTestQueueSubmit2Observer submissionObserver;
+        ASSERT_TRUE(submissionObserver.valid());
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue, 2u));
+        EXPECT_FALSE(graphics.submitStandaloneTaskGraph(
+            &unrecoveredContext,
+            &DeclareStandaloneGraphAcceptedFrontierRecovery,
+            unrecoveredTerminalToken,
+            graphicsQueue
+        ));
+        EXPECT_FALSE(submissionObserver.overflowed());
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 2u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+        EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 3u);
+        EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 1u);
+    }
     EXPECT_FALSE(unrecoveredTerminalToken.valid());
     EXPECT_TRUE(unrecoveredGraphicsRecorded);
     EXPECT_FALSE(unrecoveredGraphicsAccepted);
@@ -56012,7 +56176,6 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphRecoversAcceptedTransferFro
     EXPECT_TRUE(unrecoveredTransferToken.valid());
     EXPECT_TRUE(graphics.isDeviceRecreationRequested());
     ASSERT_TRUE(device.waitForIdle());
-#endif
 }
 
 
@@ -57496,8 +57659,6 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueRecoversCausticSurfel
 }
 
 
-#if !defined(NWB_FINAL)
-
 // Renderer-shaped rejection probes retain task lifecycle independently from command-list recording. Timing endpoints
 // use the same split frame transaction as RendererSystem, so a rejected ordinary packet can be retired by the late
 // accepted-frontier recovery packet without publishing a partial duration.
@@ -57570,7 +57731,6 @@ struct NativeRendererRejectionProbeTask{
 };
 
 
-#if !defined(NWB_FINAL)
 // Native rejection must leave destination bytes untouched and return the exact upload suballocation for retry. The
 // test observes only Vulkan calls at its own boundary; production exposes no allocator identity, counter, or friend.
 TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuballocationAtNativeBoundary){
@@ -57639,9 +57799,18 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuball
     EXPECT_EQ(rejectedNativeCapture.addressQueries[0u].buffer, rejectedNativeCapture.copyCommands[0u].source);
     EXPECT_EQ(rejectedNativeCapture.copyCommands[0u].sourceOffset, 0u);
 
-    uploadDevice.rejectNextSubmissionForTesting(CommandQueue::Graphics);
     CommandList* const rejectedUploads[]{ rejectedUpload.get() };
-    const QueueSubmissionToken rejectedToken = uploadDevice.executeCommandLists(
+    QueueSubmissionToken rejectedToken;
+    VulkanTestQueueSubmit2Observer submissionObserver;
+    ASSERT_TRUE(submissionObserver.valid());
+    const GpuPhysicalQueueId graphicsQueue = uploadDevice.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+    const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+        uploadDevice.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+    );
+    ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+    ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
+    rejectedToken = uploadDevice.executeCommandLists(
         rejectedUploads,
         LengthOf(rejectedUploads),
         CommandQueue::Graphics,
@@ -57649,7 +57818,8 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuball
     );
     const bool unexpectedlySubmitted = rejectedToken.valid();
     const bool idleAfterUnexpectedSubmission = !unexpectedlySubmitted || uploadDevice.waitForIdle();
-    uploadDevice.clearSubmissionRejectionsForTesting();
+    EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+    EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
     ASSERT_FALSE(unexpectedlySubmitted);
     ASSERT_TRUE(idleAfterUnexpectedSubmission);
 
@@ -57723,7 +57893,6 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuball
         EXPECT_EQ(retryReadback[wordIndex], s_RetryWords[wordIndex]);
     uploadDevice.unmapBuffer(readback.get());
 }
-#endif
 
 
 // The renderer transaction has two distinct presentation boundaries: the deferred Present writer and the later
@@ -57735,6 +57904,10 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
     auto& timing = graphics.gpuTiming();
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     ASSERT_TRUE(graphicsQueue.valid());
+    const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+    );
+    ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
 
     enum class FailurePoint : u8{
         FirstPacket,
@@ -57766,8 +57939,8 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
         bool timingAccepted = false;
     };
     struct RejectionArm{
-        Device* device = nullptr;
-        CommandQueue::Enum targetQueue = CommandQueue::Graphics;
+        VulkanTestQueueSubmit2Observer* observer = nullptr;
+        VkQueue queue = VK_NULL_HANDLE;
         bool armed = false;
     };
 
@@ -57787,7 +57960,6 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
     u64 timingFrameIndex = 700u;
     for(const FailurePoint failurePoint : failurePoints){
         SCOPED_TRACE(static_cast<u32>(failurePoint));
-        device.clearSubmissionRejectionsForTesting();
         timing.resetQueries();
         if(timingActive){
             ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTransactionScope.identity, device, 1u));
@@ -58116,26 +58288,21 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
             if(failurePoint != FailurePoint::Clean)
                 ASSERT_TRUE(rejectionPacket.valid());
 
+            VulkanTestQueueSubmit2Observer submissionObserver;
+            ASSERT_TRUE(submissionObserver.valid());
             RejectionArm rejectionArm{
-                .device = &device,
-                .targetQueue = CommandQueue::Graphics,
-                .armed = false,
+                .observer = &submissionObserver,
+                .queue = nativeGraphicsQueue,
             };
-            if(rejectionArmTask.valid()){
-                const GpuPhysicalQueueInfo* const targetQueue = compiledGraph.queueInfoForTask(rejectionTask);
-                ASSERT_NE(targetQueue, nullptr);
-                rejectionArm.targetQueue = targetQueue->queueClass;
-            }
             const GpuTaskGraphTaskAcceptedCallback acceptedCallback{
                 .task = rejectionArmTask,
                 .context = &rejectionArm,
                 .invoke = [](void* const rawContext, const QueueSubmissionToken& token){
                     RejectionArm* const context = static_cast<RejectionArm*>(rawContext);
-                    if(!context || !context->device || !token.valid())
+                    if(!context || !context->observer || context->queue == VK_NULL_HANDLE || !token.valid())
                         return false;
-                    context->device->rejectNextSubmissionForTesting(context->targetQueue);
-                    context->armed = true;
-                    return true;
+                    context->armed = context->observer->armSubmissionFailures(context->queue);
+                    return context->armed;
                 },
             };
             const GpuTaskGraphTaskTimingTicket taskTimingTickets[] = {
@@ -58160,7 +58327,8 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
             if(failurePoint == FailurePoint::FirstPacket){
                 const GpuPhysicalQueueInfo* const targetQueue = compiledGraph.queueInfoForTask(firstTask);
                 ASSERT_NE(targetQueue, nullptr);
-                device.rejectNextSubmissionForTesting(targetQueue->queueClass);
+                EXPECT_EQ(targetQueue->id, graphicsQueue);
+                ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
             }
 
             GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
@@ -58199,7 +58367,8 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
                 if(failurePoint == FailurePoint::Recovery){
                     const GpuPhysicalQueueInfo* const targetQueue = compiledGraph.queueInfoForTask(recoveryTask);
                     ASSERT_NE(targetQueue, nullptr);
-                    device.rejectNextSubmissionForTesting(targetQueue->queueClass);
+                    EXPECT_EQ(targetQueue->id, graphicsQueue);
+                    ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
                 }
                 const bool recoverySubmitted = submitter.recordAndSubmitAcceptedFrontierTask(
                     graph,
@@ -58216,7 +58385,8 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
                 if(failurePoint == FailurePoint::History){
                     const GpuPhysicalQueueInfo* const targetQueue = compiledGraph.queueInfoForTask(historyTask);
                     ASSERT_NE(targetQueue, nullptr);
-                    device.rejectNextSubmissionForTesting(targetQueue->queueClass);
+                    EXPECT_EQ(targetQueue->id, graphicsQueue);
+                    ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
                 }
                 const bool historySubmitted = submitter.recordAndSubmitTask(
                     graph,
@@ -58287,6 +58457,9 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
                 : (failurePoint == FailurePoint::Recovery ? 2u : 1u)
             ;
             EXPECT_EQ(statistics.rejectedSubmissionCount, expectedRejectedSubmissions);
+            EXPECT_FALSE(submissionObserver.overflowed());
+            EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), expectedRejectedSubmissions);
+            EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
             const bool recoveryShouldAccept = failurePoint >= FailurePoint::FirstComputeFallback
                 && failurePoint <= FailurePoint::PresentationEndpoint
             ;
@@ -58299,7 +58472,6 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
         if(timingActive)
             timing.collect(device, timingFrameIndex + 1u);
         timing.resetQueries();
-        device.clearSubmissionRejectionsForTesting();
         timingFrameIndex += 2u;
     }
 
@@ -58340,8 +58512,8 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphRejectsDedicatedFirstComputeA
         bool timingAccepted = false;
     };
     struct RejectionArm{
-        Device* device = nullptr;
-        CommandQueue::Enum targetQueue = CommandQueue::Compute;
+        VulkanTestQueueSubmit2Observer* observer = nullptr;
+        VkQueue queue = VK_NULL_HANDLE;
         bool armed = false;
     };
 
@@ -58488,22 +58660,27 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphRejectsDedicatedFirstComputeA
     ASSERT_NE(computeQueue, nullptr);
     EXPECT_EQ(computeQueue->queueClass, CommandQueue::Compute);
     EXPECT_TRUE(computeQueue->dedicated);
+    ASSERT_TRUE(computeQueue->id.valid());
+    const VkQueue nativeComputeQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, computeQueue->id).pointer
+    );
+    ASSERT_NE(nativeComputeQueue, VK_NULL_HANDLE);
 
+    VulkanTestQueueSubmit2Observer submissionObserver;
+    ASSERT_TRUE(submissionObserver.valid());
     RejectionArm rejectionArm{
-        .device = &device,
-        .targetQueue = computeQueue->queueClass,
-        .armed = false,
+        .observer = &submissionObserver,
+        .queue = nativeComputeQueue,
     };
     const GpuTaskGraphTaskAcceptedCallback acceptedCallback{
         .task = firstTask,
         .context = &rejectionArm,
         .invoke = [](void* const rawContext, const QueueSubmissionToken& token){
             RejectionArm* const context = static_cast<RejectionArm*>(rawContext);
-            if(!context || !context->device || !token.valid())
+            if(!context || !context->observer || context->queue == VK_NULL_HANDLE || !token.valid())
                 return false;
-            context->device->rejectNextSubmissionForTesting(context->targetQueue);
-            context->armed = true;
-            return true;
+            context->armed = context->observer->armSubmissionFailures(context->queue);
+            return context->armed;
         },
     };
     const GpuTaskGraphTaskTimingTicket timingTickets[] = {
@@ -58541,6 +58718,8 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphRejectsDedicatedFirstComputeA
     ));
     EXPECT_EQ(failedPacket, computePacket);
     EXPECT_TRUE(rejectionArm.armed);
+    EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+    EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
     EXPECT_FALSE(transaction.packetToken(computePacket).valid());
     ASSERT_TRUE(firstState.acceptedToken.valid());
     const QueueSubmissionToken firstTokenSnapshot = firstState.acceptedToken;
@@ -58589,7 +58768,6 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphRejectsDedicatedFirstComputeA
     ASSERT_TRUE(device.waitForIdle());
     if(timingActive)
         timing.collect(device, 811u);
-    device.clearSubmissionRejectionsForTesting();
     asyncScope.setGpuTimingEnabled(false);
     timing.resetQueries();
 }
@@ -58597,10 +58775,10 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphRejectsDedicatedFirstComputeA
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Exercise the four-submission shadow topology's rejection boundaries with the same pre-Vulkan injection seam used
-// by RendererSystem. Prefix and shadow rejections leave no ownership handoff; effects/final rejections repair the
-// accepted Compute release through a Graphics acquire/release; a rejected recovery deliberately stops before reuse,
-// matching the renderer's device-recreation/suspension policy.
+// Exercise the four-submission shadow topology's rejection boundaries with a test-owned vkQueueSubmit2 observer.
+// Prefix and shadow failures leave no ownership handoff; effects/final failures repair the accepted Compute release
+// through a Graphics acquire/release; a failed recovery deliberately stops before reuse, matching the renderer's
+// device-recreation/suspension policy. Injected failures return before the observer forwards to the real driver.
 TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreservesOrSuspendsExclusiveOwnership){
     HeadlessGraphicsScope asyncScope;
     ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
@@ -58610,6 +58788,18 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
     auto& device = asyncScope.graphics().getDevice();
     if(!HasDedicatedComputeQueue(device))
         GTEST_SKIP() << "Dedicated Compute queue: adapter has no dedicated compute-only queue family.";
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueId computeQueue = device.getPrimaryPhysicalQueue(CommandQueue::Compute);
+    ASSERT_TRUE(graphicsQueue.valid());
+    ASSERT_TRUE(computeQueue.valid());
+    const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+    );
+    const VkQueue nativeComputeQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, computeQueue).pointer
+    );
+    ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+    ASSERT_NE(nativeComputeQueue, VK_NULL_HANDLE);
 
     enum class FailurePoint : u8{
         Prefix,
@@ -58722,7 +58912,8 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
     };
     for(const FailurePoint failurePoint : failurePoints){
         SCOPED_TRACE(static_cast<u32>(failurePoint));
-        device.clearSubmissionRejectionsForTesting();
+        VulkanTestQueueSubmit2Observer submissionObserver;
+        ASSERT_TRUE(submissionObserver.valid());
 
         auto output = makeExclusiveBuffer();
         auto sharedInput = makeSharedBuffer();
@@ -58744,7 +58935,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         prefix->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
         prefix->close();
         if(failurePoint == FailurePoint::Prefix)
-            device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+            ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
         CommandList* prefixCommandLists[] = { prefix.get() };
         const QueueSubmissionToken prefixToken = device.executeCommandLists(
             prefixCommandLists,
@@ -58755,6 +58946,9 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         if(failurePoint == FailurePoint::Prefix){
             EXPECT_FALSE(prefixToken.valid());
             executeNextValidCycle(output.get(), sharedInput.get(), nullptr, {});
+            EXPECT_FALSE(submissionObserver.overflowed());
+            EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+            EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
             continue;
         }
         ASSERT_TRUE(prefixToken.valid());
@@ -58766,7 +58960,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         shadow->close(&computeToGraphics);
         ASSERT_TRUE(computeToGraphics.valid());
         if(failurePoint == FailurePoint::Shadow)
-            device.rejectNextSubmissionForTesting(CommandQueue::Compute);
+            ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeComputeQueue));
         const QueueSubmissionDesc shadowSubmitDesc = QueueSubmissionDesc().setWaitTokens(&prefixToken, 1u);
         CommandList* shadowCommandLists[] = { shadow.get() };
         const QueueSubmissionToken shadowToken = device.executeCommandLists(
@@ -58778,6 +58972,9 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         if(failurePoint == FailurePoint::Shadow){
             EXPECT_FALSE(shadowToken.valid());
             executeNextValidCycle(output.get(), sharedInput.get(), nullptr, prefixToken);
+            EXPECT_FALSE(submissionObserver.overflowed());
+            EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+            EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
             continue;
         }
         ASSERT_TRUE(shadowToken.valid());
@@ -58786,9 +58983,10 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         effects->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
         effects->close();
         if(failurePoint == FailurePoint::Effects || failurePoint == FailurePoint::Recovery)
-            device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
-        if(failurePoint == FailurePoint::Recovery)
-            device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+            ASSERT_TRUE(submissionObserver.armSubmissionFailures(
+                nativeGraphicsQueue,
+                failurePoint == FailurePoint::Recovery ? 2u : 1u
+            ));
         CommandList* effectsCommandLists[] = { effects.get() };
         const QueueSubmissionToken effectsToken = device.executeCommandLists(
             effectsCommandLists,
@@ -58798,6 +58996,11 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         );
         if(failurePoint == FailurePoint::Effects || failurePoint == FailurePoint::Recovery){
             EXPECT_FALSE(effectsToken.valid());
+            EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+            EXPECT_EQ(
+                submissionObserver.pendingSubmissionFailureCount(),
+                failurePoint == FailurePoint::Recovery ? 1u : 0u
+            );
         }
         else
             ASSERT_TRUE(effectsToken.valid());
@@ -58811,7 +59014,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
             final->close(&graphicsToCompute);
             ASSERT_TRUE(graphicsToCompute.valid());
             if(failurePoint == FailurePoint::Final)
-                device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+                ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
             const QueueSubmissionToken finalWaitTokens[] = { shadowToken, effectsToken };
             const QueueSubmissionDesc finalSubmitDesc = QueueSubmissionDesc().setWaitTokens(finalWaitTokens, 2u);
             CommandList* finalCommandLists[] = { final.get() };
@@ -58822,8 +59025,11 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
                 finalSubmitDesc
             );
             finalRejected = failurePoint == FailurePoint::Final;
-            if(finalRejected)
+            if(finalRejected){
                 EXPECT_FALSE(finalToken.valid());
+                EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+                EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+            }
             else
                 ASSERT_TRUE(finalToken.valid());
 
@@ -58853,16 +59059,19 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         );
         if(failurePoint == FailurePoint::Recovery){
             EXPECT_FALSE(recoveryToken.valid());
+            EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 2u);
+            EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+            EXPECT_FALSE(submissionObserver.overflowed());
             EXPECT_TRUE(device.waitForIdle());
             continue;
         }
         ASSERT_TRUE(recoveryToken.valid());
         executeNextValidCycle(output.get(), sharedInput.get(), &graphicsToCompute, recoveryToken);
+        EXPECT_FALSE(submissionObserver.overflowed());
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
     }
 }
-
-#endif
-
 
 // A normalized prelude transitions shared inputs once before independently recorded primary command lists begin.
 // Each branch can therefore import the same ShaderResource state without emitting another stale RenderTarget ->
@@ -60795,12 +61004,9 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapStorageBufferDispatche
 
 
 // A heap binding belongs to its recording command buffer, not to a CPU frame. A free therefore stays pinned while
-// that command buffer is unsubmitted, becomes reclaimable when a rejected submission abandons it, and follows the
-// accepted queue token through completion on the normal path.
+// that command buffer is unsubmitted, becomes reclaimable when an injected native-submit failure abandons it, and
+// follows the accepted queue token through completion on the normal path.
 TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBufferSubmissionAndAbandonment){
-#if defined(NWB_FINAL)
-    GTEST_SKIP() << "descriptor-heap rejection coverage requires test submission overrides";
-#else
     auto& device = DescriptorBufferRoundTripTest::device();
 
     auto& heap = device.getDescriptorHeap();
@@ -60910,11 +61116,24 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     EXPECT_EQ(storageBuffer->getReferenceCount(), 2u)
         << "CPU garbage collection released an unsubmitted descriptor heap use";
 
-    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
     CommandList* unsubmittedCommandLists[] = { unsubmittedCommandList.get() };
     bool unsubmittedAccepted = true;
-    device.executeCommandLists(unsubmittedCommandLists, 1u, CommandQueue::Graphics, &unsubmittedAccepted);
-    EXPECT_FALSE(unsubmittedAccepted);
+    {
+        const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+        ASSERT_TRUE(graphicsQueue.valid());
+        const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+            device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+        );
+        ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+        VulkanTestQueueSubmit2Observer submissionObserver;
+        ASSERT_TRUE(submissionObserver.valid());
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
+
+        device.executeCommandLists(unsubmittedCommandLists, 1u, CommandQueue::Graphics, &unsubmittedAccepted);
+        EXPECT_FALSE(unsubmittedAccepted);
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+    }
 
     const GpuDescriptorHeapLifecycleStatistics rejectedStatistics = heap.lifecycleStatistics();
     EXPECT_EQ(rejectedStatistics.resourceLiveSlotCount, 0u);
@@ -60931,14 +61150,14 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     EXPECT_EQ(abandonedStatistics.unsubmittedHeapUseCount, 0u);
     EXPECT_EQ(abandonedStatistics.abandonedHeapUseCount, 0u);
     EXPECT_EQ(storageBuffer->getReferenceCount(), 1u)
-        << "a rejected submission did not release the abandoned descriptor heap use";
+        << "an injected native-submit failure did not release the abandoned descriptor heap use";
 
     const GpuDescriptorHandle recycledFirst = heap.allocate(GpuDescriptorClass::StorageBuffer);
     const GpuDescriptorHandle recycledSecond = heap.allocate(GpuDescriptorClass::StorageBuffer);
     ASSERT_TRUE(recycledFirst.valid());
     ASSERT_TRUE(recycledSecond.valid());
     EXPECT_TRUE(recycledFirst.slot() == unsubmittedHandle.slot() || recycledSecond.slot() == unsubmittedHandle.slot())
-        << "a rejected submission did not return the abandoned descriptor slot";
+        << "an injected native-submit failure did not return the abandoned descriptor slot";
     const GpuDescriptorHeapLifecycleStatistics recycledStatistics = heap.lifecycleStatistics();
     EXPECT_EQ(recycledStatistics.resourceLiveSlotCount, 2u);
     EXPECT_EQ(recycledStatistics.pendingRetiredSlotCount, 0u);
@@ -61014,7 +61233,6 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     EXPECT_EQ(storageBuffer->getReferenceCount(), 1u)
         << "a completed queue submission did not release its descriptor heap use";
 
-#endif
 }
 
 

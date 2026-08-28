@@ -12,6 +12,7 @@
 #include <core/graphics/vulkan/raytracing_internal.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
+#include <tests/common/vulkan_test_sync.h>
 
 #include <volk/volk.h>
 
@@ -43,8 +44,6 @@ static constexpr RayTracingOpacityMicromapUsageCount s_OmmUsageCount{
     OpacityMicromapFormat::OC1_2_State,
 };
 
-
-#if !defined(NWB_FINAL)
 
 struct NativeBufferAddressQuery{
     VkBuffer buffer = VK_NULL_HANDLE;
@@ -153,8 +152,6 @@ private:
 thread_local NativeBuildScratchReuseCapture* ScopedNativeBuildScratchReuseTrace::s_activeCapture = nullptr;
 PFN_vkGetBufferDeviceAddress ScopedNativeBuildScratchReuseTrace::s_forwardGetBufferDeviceAddress = nullptr;
 PFN_vkCmdBuildAccelerationStructuresKHR ScopedNativeBuildScratchReuseTrace::s_forwardCmdBuildAccelerationStructures = nullptr;
-
-#endif
 
 [[nodiscard]] BufferHandle CreateBuildInputBuffer(
     GraphicsBackend::Device& device,
@@ -882,10 +879,18 @@ TEST_F(RayTracingBuildIngressTest, AcceptedAccelerationStructureBuildSignatureRe
     update->close();
 }
 
-#if !defined(NWB_FINAL)
-TEST_F(RayTracingBuildIngressTest, RejectedSubmissionDoesNotPublishAccelerationStructureBuildState){
+TEST_F(RayTracingBuildIngressTest, InjectedNativeSubmissionFailureDoesNotPublishAccelerationStructureBuildState){
     if(!device().queryFeatureSupport(Feature::RayTracingAccelStruct))
         GTEST_SKIP() << "AS ingress: VK_KHR_acceleration_structure is unavailable.";
+
+    const GpuPhysicalQueueId graphicsQueue = device().getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+    const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+        device().getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+    );
+    ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+    VulkanTestQueueSubmit2Observer submissionObserver;
+    ASSERT_TRUE(submissionObserver.valid());
 
     const BufferHandle vertex = __hidden_ray_tracing_build_ingress_tests::CreateBuildInputBuffer(
         device(),
@@ -929,7 +934,7 @@ TEST_F(RayTracingBuildIngressTest, RejectedSubmissionDoesNotPublishAccelerationS
     ASSERT_FALSE(initialBuild->commandRecordingFailed());
     initialBuild->close();
 
-    device().rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
     CommandList* const initialBuilds[]{ initialBuild.get() };
     const QueueSubmissionToken rejectedToken = device().executeCommandLists(
         initialBuilds,
@@ -939,28 +944,44 @@ TEST_F(RayTracingBuildIngressTest, RejectedSubmissionDoesNotPublishAccelerationS
     );
     const bool unexpectedlySubmitted = rejectedToken.valid();
     const bool idleAfterUnexpectedSubmission = !unexpectedlySubmitted || device().waitForIdle();
-    device().clearSubmissionRejectionsForTesting();
     ASSERT_FALSE(unexpectedlySubmitted);
     ASSERT_TRUE(idleAfterUnexpectedSubmission);
+    EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+    EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
 
     CommandListHandle rejectedUpdate = device().createCommandList();
     ASSERT_TRUE(rejectedUpdate);
     rejectedUpdate->open();
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
     EXPECT_DEATH_IF_SUPPORTED({
         rejectedUpdate->buildBottomLevelAccelStruct(blas.get(), &geometry, 1u, updateFlags);
     }, "");
+#else
+    rejectedUpdate->buildBottomLevelAccelStruct(blas.get(), &geometry, 1u, updateFlags);
+    EXPECT_TRUE(initialLogger.sawErrorContaining(NWB_TEXT("requires a previously accepted build")));
+    EXPECT_FALSE(rejectedUpdate->commandRecordingFailed());
+#endif
     rejectedUpdate->close();
 }
 
 // The test-owned Vulkan trace proves exact scratch-address reuse while the accepted retry and later TLAS build prove
 // that the resulting BLAS remains usable. Production exposes no scratch identity, counter, or diagnostic friend.
-TEST_F(RayTracingBuildIngressTest, RejectedNativeSubmissionReusesBuildScratchAtNativeBoundary){
+TEST_F(RayTracingBuildIngressTest, InjectedNativeSubmissionFailureReusesBuildScratchAtNativeBoundary){
     HeadlessGraphicsScope scratchScope;
     ASSERT_TRUE(scratchScope.initialize());
 
     GraphicsBackend::Device& scratchDevice = scratchScope.graphics().getDevice();
     if(!scratchDevice.queryFeatureSupport(Feature::RayTracingAccelStruct))
         GTEST_SKIP() << "Build scratch reuse: VK_KHR_acceleration_structure is unavailable.";
+
+    const GpuPhysicalQueueId graphicsQueue = scratchDevice.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+    const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+        scratchDevice.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+    );
+    ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+    VulkanTestQueueSubmit2Observer submissionObserver;
+    ASSERT_TRUE(submissionObserver.valid());
 
     const BufferHandle vertex = __hidden_ray_tracing_build_ingress_tests::CreateBuildInputBuffer(
         scratchDevice,
@@ -1000,7 +1021,7 @@ TEST_F(RayTracingBuildIngressTest, RejectedNativeSubmissionReusesBuildScratchAtN
         EXPECT_GE(nativeCapture.buildCommands[0u].scratchAddress, nativeCapture.addressQueries[0u].address);
         ASSERT_NE(nativeCapture.buildCommands[0u].destination, VK_NULL_HANDLE);
 
-        scratchDevice.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
         CommandList* const rejectedBuilds[]{ rejectedBuild.get() };
         const QueueSubmissionToken rejectedToken = scratchDevice.executeCommandLists(
             rejectedBuilds,
@@ -1010,9 +1031,10 @@ TEST_F(RayTracingBuildIngressTest, RejectedNativeSubmissionReusesBuildScratchAtN
         );
         const bool unexpectedlySubmitted = rejectedToken.valid();
         const bool idleAfterUnexpectedSubmission = !unexpectedlySubmitted || scratchDevice.waitForIdle();
-        scratchDevice.clearSubmissionRejectionsForTesting();
         ASSERT_FALSE(unexpectedlySubmitted);
         ASSERT_TRUE(idleAfterUnexpectedSubmission);
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
 
         CommandListHandle retryBuild = scratchDevice.createCommandList();
         ASSERT_TRUE(retryBuild);
@@ -1059,7 +1081,6 @@ TEST_F(RayTracingBuildIngressTest, RejectedNativeSubmissionReusesBuildScratchAtN
     ASSERT_TRUE(useToken.valid());
     ASSERT_TRUE(scratchDevice.waitForIdle());
 }
-#endif
 
 TEST_F(RayTracingBuildIngressTest, OpacityMicromapSizingDoesNotDependOnHostRecordOrder){
     if(
@@ -1220,13 +1241,21 @@ TEST_F(RayTracingBuildIngressTest, OpacityMicromapDeviceAddressAlignmentRejectsB
     commandList->close();
 }
 
-#if !defined(NWB_FINAL)
-TEST_F(RayTracingBuildIngressTest, RejectedSubmissionDoesNotPublishOpacityMicromapConstructionState){
+TEST_F(RayTracingBuildIngressTest, InjectedNativeSubmissionFailureDoesNotPublishOpacityMicromapConstructionState){
     if(
         !device().queryFeatureSupport(Feature::RayTracingOpacityMicromap)
         || !device().queryFeatureSupport(Feature::RayTracingAccelStruct)
     )
         GTEST_SKIP() << "OMM ingress: VK_EXT_opacity_micromap is unavailable.";
+
+    const GpuPhysicalQueueId graphicsQueue = device().getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+    const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
+        device().getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+    );
+    ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
+    VulkanTestQueueSubmit2Observer submissionObserver;
+    ASSERT_TRUE(submissionObserver.valid());
 
     const RayTracingOpacityMicromapHandle opacityMicromap =
         __hidden_ray_tracing_build_ingress_tests::CreateOpacityMicromap(device(), arena());
@@ -1257,7 +1286,7 @@ TEST_F(RayTracingBuildIngressTest, RejectedSubmissionDoesNotPublishOpacityMicrom
     ));
     rejectedBuild->close();
 
-    device().rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
     CommandList* const rejectedBuilds[]{ rejectedBuild.get() };
     const QueueSubmissionToken rejectedToken = device().executeCommandLists(
         rejectedBuilds,
@@ -1267,9 +1296,10 @@ TEST_F(RayTracingBuildIngressTest, RejectedSubmissionDoesNotPublishOpacityMicrom
     );
     const bool unexpectedlySubmitted = rejectedToken.valid();
     const bool idleAfterUnexpectedSubmission = !unexpectedlySubmitted || device().waitForIdle();
-    device().clearSubmissionRejectionsForTesting();
     ASSERT_FALSE(unexpectedlySubmitted);
     ASSERT_TRUE(idleAfterUnexpectedSubmission);
+    EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+    EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
 
     CommandListHandle rejectedUse = device().createCommandList();
     ASSERT_TRUE(rejectedUse);
@@ -1287,7 +1317,6 @@ TEST_F(RayTracingBuildIngressTest, RejectedSubmissionDoesNotPublishOpacityMicrom
 #endif
     rejectedUse->close();
 }
-#endif
 
 TEST_F(RayTracingBuildIngressTest, OpacityMicromapIndexRangeRejectsBeforeBuildRetention){
     if(!device().queryFeatureSupport(Feature::RayTracingOpacityMicromap))

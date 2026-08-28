@@ -1174,20 +1174,6 @@ u64 Queue::submit(
     submitInfo.signalSemaphoreInfoCount = static_cast<uint32_t>(signalInfos.size());
     submitInfo.pSignalSemaphoreInfos = signalInfos.data();
 
-#if !defined(NWB_FINAL)
-    if(m_device.consumeSubmissionRejectionForTesting(m_queueID)){
-        // Reject before the driver sees this submission. Global synchronization remains owned by the queue for a
-        // retry, while detached command buffers and their tentative timeline value are rolled back.
-        m_lastSubmittedID = submissionID - 1;
-        if(descriptorBufferLifecycleLock.owns_lock())
-            descriptorBufferLifecycleLock.unlock();
-        finalizeDetachedRecordingAttempts(false);
-        for(auto& tracked : trackedBuffers)
-            recycleCommandBuffer(Move(tracked));
-        return m_lastSubmittedID;
-    }
-#endif
-
     const VkResult res = vkQueueSubmit2(m_queue, 1, &submitInfo, VK_NULL_HANDLE);
 
     if(res != VK_SUCCESS){
@@ -1200,6 +1186,9 @@ u64 Queue::submit(
             clearPendingSemaphores();
             m_device.captureGpuCrash("queue submit");
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Device was lost during queue submission."));
+        }
+        else if(res == VK_ERROR_OUT_OF_HOST_MEMORY || res == VK_ERROR_OUT_OF_DEVICE_MEMORY){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Queue submission was rejected: {}"), ResultToString(res));
         }
         else{
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command buffers to queue: {}"), ResultToString(res));

@@ -284,7 +284,7 @@ TEST_F(CommandListSubmissionProvenanceTest, SubmissionHookWorkerForgeryIsRejecte
 
 
 #if !defined(NWB_FINAL)
-TEST_F(CommandListSubmissionProvenanceTest, RejectedOldLeaseCannotDiscardRecycledLeaseUploadChunks){
+TEST_F(CommandListSubmissionProvenanceTest, InjectedNativeFailureOnOldLeaseCannotDiscardRecycledLeaseUploadChunks){
     using namespace __hidden_command_list_submission_provenance_tests;
 
     constexpr u64 s_WorkerDomain = 0x86d731c542af901eull;
@@ -296,6 +296,12 @@ TEST_F(CommandListSubmissionProvenanceTest, RejectedOldLeaseCannotDiscardRecycle
     const GpuPhysicalQueueId queue = device().getPrimaryPhysicalQueue(CommandQueue::Graphics);
     ASSERT_TRUE(queue.valid());
     ASSERT_TRUE(device().waitForIdle());
+    const VkQueue nativeQueue = static_cast<VkQueue>(
+        device().getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, queue).pointer
+    );
+    ASSERT_NE(nativeQueue, VK_NULL_HANDLE);
+    VulkanTestQueueSubmit2Observer submissionObserver;
+    ASSERT_TRUE(submissionObserver.valid());
 
     BufferHandle oldDestination = device().createBuffer(
         BufferDesc().setByteSize(sizeof(u32)).setInitialState(ResourceStates::Common)
@@ -341,7 +347,7 @@ TEST_F(CommandListSubmissionProvenanceTest, RejectedOldLeaseCannotDiscardRecycle
         .value = s_ReusedValue,
     };
     ASSERT_TRUE(device().armSubmissionLedgerFinalizeHookForTesting(&hookContext, RecordReusedLeaseUpload));
-    device().rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeQueue));
     CommandList* const rejectedLists[]{ oldLease.get() };
     const QueueSubmissionToken rejectedToken = device().executeCommandLists(
         rejectedLists,
@@ -350,13 +356,14 @@ TEST_F(CommandListSubmissionProvenanceTest, RejectedOldLeaseCannotDiscardRecycle
         QueueSubmissionDesc{}
     );
     device().clearSubmissionLedgerFinalizeHookForTesting();
-    device().clearSubmissionRejectionsForTesting();
     const GpuCommandArenaWorkerStatistics workerStatsAfter = device().getCommandArenaWorkerStatistics(
         queue,
         s_WorkerDomain,
         s_ReusedWorkerIndex
     );
     ASSERT_FALSE(rejectedToken.valid());
+    EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+    EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
     ASSERT_TRUE(workerStatsAfter.valid());
     ASSERT_TRUE(hookContext.invoked);
     ASSERT_TRUE(hookContext.opened);

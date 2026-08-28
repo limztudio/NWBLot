@@ -755,6 +755,9 @@ public:
         const GpuRecordedGraph& recordedGraph,
         GpuGraphResourceId resource
     )const noexcept;
+
+
+private:
     // Appends one latest accepted token for every physical queue other than `destinationQueue`. A recovery packet
     // submitted on that destination does not need to wait on its own queue because queue order already supplies the
     // dependency; every other physical producer remains an explicit timeline wait.
@@ -763,8 +766,6 @@ public:
         Vector<QueueSubmissionToken, Alloc::ScratchArena>& outTokens
     )const;
 
-
-private:
     [[nodiscard]] bool validForLocked(const GpuCompiledGraph& compiledGraph)const noexcept;
     [[nodiscard]] bool waitForSubmissionPublicationAndHasAcceptedPackets()const noexcept;
 

@@ -48,6 +48,7 @@ PRIVATE_SUBMISSION_MEMBERS = {
         "acceptSubmittingPacket",
         "rejectPacket",
         "rejectSubmittingPacket",
+        "appendAcceptedQueueFrontierWaitTokens",
     ),
 }
 FORBIDDEN_PUBLIC_MEMBER_ARITIES = {
@@ -334,6 +335,7 @@ def run_self_test() -> int:
             "    bool acceptSubmittingPacket();\n"
             "    void rejectPacket();\n"
             "    void rejectSubmittingPacket();\n"
+            "    bool appendAcceptedQueueFrontierWaitTokens();\n"
             "};",
             (
                 (3, "GpuGraphSubmissionTransaction/public PacketRuntimeState"),
@@ -342,6 +344,7 @@ def run_self_test() -> int:
                 (6, "GpuGraphSubmissionTransaction/public acceptSubmittingPacket"),
                 (7, "GpuGraphSubmissionTransaction/public rejectPacket"),
                 (8, "GpuGraphSubmissionTransaction/public rejectSubmittingPacket"),
+                (9, "GpuGraphSubmissionTransaction/public appendAcceptedQueueFrontierWaitTokens"),
             ),
         ),
         (
@@ -398,11 +401,13 @@ def run_self_test() -> int:
             "    enum class PacketRuntimeState : u8;\n"
             "    struct PacketRuntime;\n"
             "    void rejectPacket();\n"
+            "    bool appendAcceptedQueueFrontierWaitTokens();\n"
             "};",
             (
                 (3, "GpuGraphSubmissionTransaction/protected PacketRuntimeState"),
                 (4, "GpuGraphSubmissionTransaction/protected PacketRuntime"),
                 (5, "GpuGraphSubmissionTransaction/protected rejectPacket"),
+                (6, "GpuGraphSubmissionTransaction/protected appendAcceptedQueueFrontierWaitTokens"),
             ),
         ),
         (
@@ -411,11 +416,13 @@ def run_self_test() -> int:
             "    enum class PacketRuntimeState : u8;\n"
             "    struct PacketRuntime;\n"
             "    void rejectPacket();\n"
+            "    bool appendAcceptedQueueFrontierWaitTokens();\n"
             "};",
             (
                 (2, "GpuGraphSubmissionTransaction/public PacketRuntimeState"),
                 (3, "GpuGraphSubmissionTransaction/public PacketRuntime"),
                 (4, "GpuGraphSubmissionTransaction/public rejectPacket"),
+                (5, "GpuGraphSubmissionTransaction/public appendAcceptedQueueFrontierWaitTokens"),
             ),
         ),
         (
@@ -430,6 +437,7 @@ def run_self_test() -> int:
             "    void rejectSubmittingPacket();\n"
             "    void rejectTask(GpuTaskGraph&, const GpuCompiledGraph&, GpuTaskId);\n"
             "    bool discardUnaccepted(GpuTaskGraph&, const GpuCompiledGraph&);\n"
+            "    bool appendAcceptedQueueFrontierWaitTokens();\n"
             "};",
             (),
         ),
@@ -439,6 +447,7 @@ def run_self_test() -> int:
             "    enum class PacketRuntimeState : u8;\n"
             "    struct PacketRuntime;\n"
             "    void rejectPacket();\n"
+            "    bool appendAcceptedQueueFrontierWaitTokens();\n"
             "};",
             (),
         ),
@@ -509,6 +518,7 @@ def run_self_test() -> int:
             "    using Base::rejectPacket;\n"
             "    using Base::rejectTask;\n"
             "    using Base::discardUnaccepted;\n"
+            "    using Base::appendAcceptedQueueFrontierWaitTokens;\n"
             "};",
             (
                 (3, "GpuTaskGraph/public discardUnacceptedPacket"),
@@ -517,6 +527,7 @@ def run_self_test() -> int:
                 (9, "GpuGraphSubmissionTransaction/public rejectPacket"),
                 (10, "GpuGraphSubmissionTransaction/public rejectTask/inherited"),
                 (11, "GpuGraphSubmissionTransaction/public discardUnaccepted/inherited"),
+                (12, "GpuGraphSubmissionTransaction/public appendAcceptedQueueFrontierWaitTokens"),
             ),
         ),
         (
@@ -562,6 +573,7 @@ def run_self_test() -> int:
             "        void rejectPacket();\n"
             "        void rejectTask(GpuTaskGraph&, const GpuCompiledGraph&, GpuTaskId);\n"
             "        bool discardUnaccepted(GpuTaskGraph&, const GpuCompiledGraph&);\n"
+            "        bool appendAcceptedQueueFrontierWaitTokens();\n"
             "    };\n"
             "private:\n"
             "    enum class PacketRuntimeState : u8;\n"
@@ -569,6 +581,7 @@ def run_self_test() -> int:
             "    void rejectPacket();\n"
             "    void rejectTask(GpuTaskGraph&, const GpuCompiledGraph&, GpuTaskId);\n"
             "    bool discardUnaccepted(GpuTaskGraph&, const GpuCompiledGraph&);\n"
+            "    bool appendAcceptedQueueFrontierWaitTokens();\n"
             "};",
             (),
         ),
@@ -584,8 +597,10 @@ def run_self_test() -> int:
             "public:\n"
             "    bool reject(){ return helper.rejectPacket() && helper.rejectTask(graph, compiledGraph, task); }\n"
             "    bool discard(){ return helper.discardUnaccepted(graph, compiledGraph); }\n"
+            "    bool appendFrontier(){ return helper.appendAcceptedQueueFrontierWaitTokens(queue, tokens); }\n"
             "private:\n"
             "    void rejectPacket();\n"
+            "    bool appendAcceptedQueueFrontierWaitTokens();\n"
             "};",
             (),
         ),
@@ -594,7 +609,8 @@ def run_self_test() -> int:
             "bool GpuTaskGraph::discardUnacceptedPacket(){ return true; }\n"
             "void GpuGraphSubmissionTransaction::rejectPacket(){}\n"
             "void GpuGraphSubmissionTransaction::rejectTask(GpuTaskGraph&, const GpuCompiledGraph&, GpuTaskId){}\n"
-            "bool GpuGraphSubmissionTransaction::discardUnaccepted(GpuTaskGraph&, const GpuCompiledGraph&){ return true; }",
+            "bool GpuGraphSubmissionTransaction::discardUnaccepted(GpuTaskGraph&, const GpuCompiledGraph&){ return true; }\n"
+            "bool GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(){ return true; }",
             (),
         ),
         (
@@ -617,8 +633,9 @@ def run_self_test() -> int:
             "// class GpuTaskGraph{ public: class PacketSubmissionLease; };\n"
             "// class GpuGraphSubmissionTransaction{ public: void rejectPacket(); };\n"
             "// void rejectTask(GpuTaskGraph&, const GpuCompiledGraph&, GpuTaskId);\n"
-            'const char* text = "GpuTaskGraphSubmitter GpuPacketRuntime submitPacket discardUnacceptedPacket discardUnaccepted(a, b)";\n'
-            'const char* raw = R"tag(GpuTaskPacketSubmissionLease GpuPacketRuntimeState rejectPacket rejectTask(a, b, c))tag";',
+            "// bool appendAcceptedQueueFrontierWaitTokens();\n"
+            'const char* text = "GpuTaskGraphSubmitter GpuPacketRuntime submitPacket discardUnacceptedPacket discardUnaccepted(a, b) appendAcceptedQueueFrontierWaitTokens";\n'
+            'const char* raw = R"tag(GpuTaskPacketSubmissionLease GpuPacketRuntimeState rejectPacket rejectTask(a, b, c) appendAcceptedQueueFrontierWaitTokens)tag";',
             (),
         ),
         (
@@ -630,9 +647,9 @@ def run_self_test() -> int:
             "class GpuTaskGraphSubmitter{ public: bool submitPackets(); };\n"
             "class GpuTaskGraphFactory{ public: bool discardUnacceptedPacket(); };\n"
             "class GpuTaskGraph{ public: class PacketSubmissionLeases; bool discardUnacceptedPackets(); };\n"
-            "class GpuGraphSubmissionTransactionFactory{ public: struct PacketRuntime; bool rejectPacket(); };\n"
-            "class GpuGraphSubmissionTransaction{ public: struct PacketRuntimes; bool rejectPackets(); void rejectTasks(int, int, int); bool discardUnaccepteds(int, int); };\n"
-            "class Fixture{ public: struct PacketRuntime; enum class PacketRuntimeState : u8; bool discardUnacceptedPacket(); bool rejectPacket(); void rejectTask(int, int, int); bool discardUnaccepted(int, int); };",
+            "class GpuGraphSubmissionTransactionFactory{ public: struct PacketRuntime; bool rejectPacket(); bool appendAcceptedQueueFrontierWaitTokens(); };\n"
+            "class GpuGraphSubmissionTransaction{ public: struct PacketRuntimes; bool rejectPackets(); void rejectTasks(int, int, int); bool discardUnaccepteds(int, int); bool appendAcceptedQueueFrontierWaitTokenSets(); };\n"
+            "class Fixture{ public: struct PacketRuntime; enum class PacketRuntimeState : u8; bool discardUnacceptedPacket(); bool rejectPacket(); void rejectTask(int, int, int); bool discardUnaccepted(int, int); bool appendAcceptedQueueFrontierWaitTokens(); };",
             (),
         ),
     )

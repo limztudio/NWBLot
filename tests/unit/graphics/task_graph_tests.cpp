@@ -824,6 +824,15 @@ concept HasAttemptDiscardUnaccepted = requires(
 };
 
 template<typename TransactionT>
+concept HasAcceptedQueueFrontierWaitTokens = requires(
+    const TransactionT& transaction,
+    const Graphics::GpuPhysicalQueueId& destinationQueue,
+    Vector<Graphics::QueueSubmissionToken, Graphics::Alloc::ScratchArena>& outTokens
+){
+    transaction.appendAcceptedQueueFrontierWaitTokens(destinationQueue, outTokens);
+};
+
+template<typename TransactionT>
 concept HasPublicPacketRuntimeState = requires{
     typename TransactionT::PacketRuntimeState;
 };
@@ -845,6 +854,7 @@ static_assert(!HasGenerationInferredTaskRejection<Graphics::GpuGraphSubmissionTr
 static_assert(HasAttemptTaskRejection<Graphics::GpuGraphSubmissionTransaction>);
 static_assert(!HasGenerationInferredDiscardUnaccepted<Graphics::GpuGraphSubmissionTransaction>);
 static_assert(HasAttemptDiscardUnaccepted<Graphics::GpuGraphSubmissionTransaction>);
+static_assert(!HasAcceptedQueueFrontierWaitTokens<Graphics::GpuGraphSubmissionTransaction>);
 static_assert(!HasPublicPacketRuntimeState<Graphics::GpuGraphSubmissionTransaction>);
 static_assert(!HasPublicPacketRuntime<Graphics::GpuGraphSubmissionTransaction>);
 

@@ -53267,14 +53267,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_EQ(rejectedGraphicsQueueStatistics.acceptedFrontierSubmissionCount, 0u);
     EXPECT_EQ(rejectedGraphicsQueueStatistics.recoverySubmissionCount, 0u);
 
-    Vector<QueueSubmissionToken, Alloc::ScratchArena> recoveryWaitTokens(scratchArena);
-    ASSERT_TRUE(transaction.appendAcceptedQueueFrontierWaitTokens(graphicsQueue, recoveryWaitTokens));
-    ASSERT_EQ(recoveryWaitTokens.size(), 1u);
-    EXPECT_EQ(recoveryWaitTokens[0u].queue, CommandQueue::Transfer);
-    EXPECT_EQ(recoveryWaitTokens[0u].value, transferToken.value);
-    EXPECT_EQ(recoveryWaitTokens[0u].physicalQueueIndex, transferQueue.index);
-    EXPECT_EQ(recoveryWaitTokens[0u].deviceGeneration, transferQueue.deviceGeneration);
-
     // The preceding rejected suffix also carried the Transfer dependency. Clear that capture so this assertion
     // observes only the late recovery helper's submitter call, after it has assembled its accepted-frontier waits.
     device.clearSubmissionWaitTokensForTesting();

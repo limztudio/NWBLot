@@ -4396,6 +4396,65 @@ struct NativePacketCaptureRetryTask{
 };
 
 
+// Two public recorder calls contend for one merged packet while its prefix thunk is blocked. This exercises the
+// runtime claim, cancellation, abort, retry, and exactly-once discard contract without exposing packet lifecycle
+// controls to tests.
+struct ConcurrentPacketRecordingProbeTask{
+    struct State{
+        Atomic<u32> prefixRecordCount{ 0u };
+        Atomic<u32> suffixRecordCount{ 0u };
+        Atomic<u32> prefixDiscardCount{ 0u };
+        Atomic<u32> suffixDiscardCount{ 0u };
+        AtomicFlag prefixRecordEntered;
+        AtomicFlag ownerRecordingProgress;
+        AtomicFlag releasePrefixRecord;
+        bool prefixShouldRecord = false;
+    };
+
+    struct Payload{
+        State* state = nullptr;
+        bool isPrefix = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.state || !commandList.isRecording())
+            return false;
+
+        State& state = *payload.state;
+        if(!payload.isPrefix){
+            state.suffixRecordCount.fetch_add(1u, MemoryOrder::relaxed);
+            return true;
+        }
+
+        const u32 priorPrefixRecordCount = state.prefixRecordCount.fetch_add(1u, MemoryOrder::relaxed);
+        if(priorPrefixRecordCount != 0u)
+            return state.prefixShouldRecord;
+
+        state.prefixRecordEntered.test_and_set(MemoryOrder::release);
+        state.prefixRecordEntered.notify_all();
+        state.ownerRecordingProgress.test_and_set(MemoryOrder::release);
+        state.ownerRecordingProgress.notify_all();
+        while(!state.releasePrefixRecord.test(MemoryOrder::acquire))
+            state.releasePrefixRecord.wait(false, MemoryOrder::acquire);
+        return state.prefixShouldRecord;
+    }
+
+    static void discarded(Payload& payload){
+        if(!payload.state)
+            return;
+        if(payload.isPrefix)
+            payload.state->prefixDiscardCount.fetch_add(1u, MemoryOrder::relaxed);
+        else
+            payload.state->suffixDiscardCount.fetch_add(1u, MemoryOrder::relaxed);
+    }
+};
+
+
 // Records one legacy/manual scope inside the graph-owned packet scope so submission must resolve two independent
 // tickets with the same native token.
 struct NativePacketCompanionTimingCaptureRetryTask{
@@ -8807,6 +8866,24 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
     );
     ASSERT_TRUE(thirdTask.valid());
 
+    bool disposableShouldRecord = false;
+    bool disposableAttempted = false;
+    GpuTaskDesc disposableDesc;
+    disposableDesc
+        .setIdentity(Name("tests/descriptor_buffer/recreate_graph_packet_disposable"))
+        .setMarkerLabel("Recreate Graph Packet Disposable")
+        .setQueue(graphicsQueueRequest)
+        .setScheduling(scheduling)
+    ;
+    const GpuTaskId disposableTask = retiredGraph.addTask<NativePacketCaptureRetryTask>(
+        disposableDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &disposableShouldRecord,
+            .attempted = &disposableAttempted,
+        }
+    );
+    ASSERT_TRUE(disposableTask.valid());
+
     const GpuPhysicalQueueTopology retiredTopology = firstDevice.getPhysicalQueueTopology();
     ASSERT_NE(retiredTopology.queues, nullptr);
     ASSERT_GT(retiredTopology.queueCount, 0u);
@@ -8818,16 +8895,19 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
         retiredCompiledGraph,
         scratchArena
     ));
-    ASSERT_EQ(retiredCompiledGraph.packetCount(), 3u);
+    ASSERT_EQ(retiredCompiledGraph.packetCount(), 4u);
     const GpuSubmissionPacketId firstPacket = retiredCompiledGraph.packetForTask(firstTask);
     const GpuSubmissionPacketId secondPacket = retiredCompiledGraph.packetForTask(secondTask);
     const GpuSubmissionPacketId thirdPacket = retiredCompiledGraph.packetForTask(thirdTask);
+    const GpuSubmissionPacketId disposablePacket = retiredCompiledGraph.packetForTask(disposableTask);
     ASSERT_TRUE(firstPacket.valid());
     ASSERT_TRUE(secondPacket.valid());
     ASSERT_TRUE(thirdPacket.valid());
+    ASSERT_TRUE(disposablePacket.valid());
     EXPECT_NE(firstPacket, secondPacket);
     EXPECT_NE(secondPacket, thirdPacket);
     EXPECT_NE(firstPacket, thirdPacket);
+    EXPECT_NE(thirdPacket, disposablePacket);
 
     {
         const GpuNativePacketRecorder recorder(firstDevice);
@@ -8853,19 +8933,8 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
     ASSERT_TRUE(retiredArenaStatistics.valid());
     EXPECT_EQ(retiredArenaStatistics.queue, retiredQueue);
 
-    staleRecordedGraph.resetForRecording(retiredGraph, retiredCompiledGraph);
-    ASSERT_TRUE(staleRecordedGraph.validFor(retiredGraph, retiredCompiledGraph));
-    ASSERT_EQ(
-        staleRecordedGraph.recordingAttemptGeneration(),
-        nativeRecordedGraph.recordingAttemptGeneration()
-    );
-    const u64 retiredRecordingAttemptGeneration = staleRecordedGraph.recordingAttemptGeneration();
-    EXPECT_EQ(staleRecordedGraph.find(firstPacket), nullptr);
-    EXPECT_EQ(staleRecordedGraph.find(secondPacket), nullptr);
-    EXPECT_EQ(staleRecordedGraph.find(thirdPacket), nullptr);
-
     // Put the submitter probe's packet into the graph lifecycle's recorded state while the first device is alive.
-    // Its native list is released below, leaving only the empty CPU recording-attempt artifact across recreation.
+    // Its native list is released below before a disposable failure recreates the empty CPU attempt artifact.
     {
         const GpuNativePacketRecorder recorder(firstDevice);
         ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
@@ -8876,7 +8945,16 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
         ));
     }
     EXPECT_TRUE(thirdAttempted);
+    ASSERT_TRUE(staleRecordedGraph.validFor(retiredGraph, retiredCompiledGraph));
+    ASSERT_EQ(
+        staleRecordedGraph.recordingAttemptGeneration(),
+        nativeRecordedGraph.recordingAttemptGeneration()
+    );
+    const u64 retiredRecordingAttemptGeneration = staleRecordedGraph.recordingAttemptGeneration();
+    EXPECT_EQ(staleRecordedGraph.find(firstPacket), nullptr);
+    EXPECT_EQ(staleRecordedGraph.find(secondPacket), nullptr);
     ASSERT_NE(staleRecordedGraph.find(thirdPacket), nullptr);
+    EXPECT_EQ(staleRecordedGraph.find(disposablePacket), nullptr);
 
     retiredTransaction.reset(retiredCompiledGraph);
     {
@@ -8906,12 +8984,25 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
     // A native CommandList cannot cross its owning Device lifetime. The CPU-only graph plan, empty recording
     // attempt, submission transaction, queue identity, and token intentionally remain alive for stale-state probes.
     nativeRecordedGraph.reset(retiredCompiledGraph);
-    staleRecordedGraph.resetForRecording(retiredGraph, retiredCompiledGraph);
+    staleRecordedGraph.reset(retiredCompiledGraph);
+    {
+        const GpuNativePacketRecorder recorder(firstDevice);
+        EXPECT_FALSE(recorder.recordTaskRangeInCompileOrder(
+            retiredGraph,
+            retiredCompiledGraph,
+            disposableTask,
+            disposableTask,
+            staleRecordedGraph
+        ));
+    }
+    EXPECT_TRUE(disposableAttempted);
+    disposableAttempted = false;
     thirdAttempted = false;
     EXPECT_EQ(nativeRecordedGraph.find(firstPacket), nullptr);
     ASSERT_TRUE(staleRecordedGraph.validFor(retiredGraph, retiredCompiledGraph));
     EXPECT_EQ(staleRecordedGraph.recordingAttemptGeneration(), retiredRecordingAttemptGeneration);
     EXPECT_EQ(staleRecordedGraph.find(thirdPacket), nullptr);
+    EXPECT_EQ(staleRecordedGraph.find(disposablePacket), nullptr);
     ASSERT_TRUE(retiredTransaction.validFor(retiredCompiledGraph));
 
     recoveryScope.graphics().destroy();
@@ -46034,6 +46125,204 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTextureHooksDiscardOnPacketRec
     EXPECT_EQ(failedRecordingStatistics.readyFrontierWorkerBusySeconds, 0.0);
     EXPECT_EQ(failedRecordingStatistics.readyFrontierWorkerCapacitySeconds, 0.0);
     EXPECT_EQ(failedRecordingStatistics.readyFrontierWorkerUtilization(), 0.0);
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, ConcurrentRecordersClaimOneMergedPacketAndAbortForRetry){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    ConcurrentPacketRecordingProbeTask::State state;
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint prefixScheduling;
+    prefixScheduling.allowPacketMerge = true;
+    GpuTaskDesc prefixDesc;
+    prefixDesc
+        .setIdentity(Name("tests/descriptor_buffer/concurrent_packet_recording_prefix"))
+        .setMarkerLabel("Concurrent Packet Recording Prefix")
+        .setQueue(graphicsQueue)
+        .setScheduling(prefixScheduling)
+    ;
+    const GpuTaskId prefixTask = graph.addTask<ConcurrentPacketRecordingProbeTask>(
+        prefixDesc,
+        ConcurrentPacketRecordingProbeTask::Payload{
+            .state = &state,
+            .isPrefix = true,
+        }
+    );
+    ASSERT_TRUE(prefixTask.valid());
+
+    GpuTaskSchedulingHint suffixScheduling = prefixScheduling;
+    suffixScheduling.mergeWithPrevious = true;
+    GpuTaskDesc suffixDesc;
+    suffixDesc
+        .setIdentity(Name("tests/descriptor_buffer/concurrent_packet_recording_suffix"))
+        .setMarkerLabel("Concurrent Packet Recording Suffix")
+        .setQueue(graphicsQueue)
+        .setScheduling(suffixScheduling)
+        .setDependencies(&prefixTask, 1u)
+    ;
+    const GpuTaskId suffixTask = graph.addTask<ConcurrentPacketRecordingProbeTask>(
+        suffixDesc,
+        ConcurrentPacketRecordingProbeTask::Payload{
+            .state = &state,
+            .isPrefix = false,
+        }
+    );
+    ASSERT_TRUE(suffixTask.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/concurrent_packet_recording_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(prefixTask);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(suffixTask), packet);
+    EXPECT_EQ(compiledGraph.packet(packet).taskCount, 2u);
+
+    GpuRecordedGraph ownerRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuRecordedGraph contenderRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder ownerRecorder(device);
+    const GpuNativePacketRecorder contenderRecorder(device);
+    GpuSubmissionPacketId ownerFailedPacket;
+    bool ownerRecordingResult = true;
+    Thread ownerRecordingThread([&](){
+        ownerRecordingResult = ownerRecorder.recordTaskRangeInCompileOrder(
+            graph,
+            compiledGraph,
+            prefixTask,
+            suffixTask,
+            ownerRecordedGraph,
+            &ownerFailedPacket
+        );
+        state.ownerRecordingProgress.test_and_set(MemoryOrder::release);
+        state.ownerRecordingProgress.notify_all();
+    });
+
+    while(!state.ownerRecordingProgress.test(MemoryOrder::acquire))
+        state.ownerRecordingProgress.wait(false, MemoryOrder::acquire);
+    const bool ownerRecordThunkEntered = state.prefixRecordEntered.test(MemoryOrder::acquire);
+    if(!ownerRecordThunkEntered)
+        ownerRecordingThread.join();
+    ASSERT_TRUE(ownerRecordThunkEntered);
+
+    GpuSubmissionPacketId contenderFailedPacket;
+    EXPECT_FALSE(contenderRecorder.recordTaskRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        prefixTask,
+        suffixTask,
+        contenderRecordedGraph,
+        &contenderFailedPacket
+    ));
+    EXPECT_FALSE(contenderFailedPacket.valid());
+    EXPECT_EQ(contenderRecordedGraph.find(packet), nullptr);
+    EXPECT_EQ(state.prefixRecordCount.load(MemoryOrder::relaxed), 1u);
+    EXPECT_EQ(state.suffixRecordCount.load(MemoryOrder::relaxed), 0u);
+
+    GpuGraphSubmissionTransaction activeTransaction(DescriptorBufferRoundTripTest::arena());
+    activeTransaction.reset(compiledGraph);
+    activeTransaction.rejectTask(
+        graph,
+        compiledGraph,
+        suffixTask,
+        ownerRecordedGraph.recordingAttemptGeneration()
+    );
+    EXPECT_EQ(state.prefixDiscardCount.load(MemoryOrder::relaxed), 0u);
+    EXPECT_EQ(state.suffixDiscardCount.load(MemoryOrder::relaxed), 0u);
+    const GpuTaskGraphSubmissionStatistics activeStatistics = activeTransaction.submissionStatistics();
+    EXPECT_TRUE(activeStatistics.valid());
+    EXPECT_EQ(activeStatistics.rejectedPacketCount, 0u);
+    EXPECT_EQ(activeStatistics.rejectedTaskCount, 0u);
+
+    state.releasePrefixRecord.test_and_set(MemoryOrder::release);
+    state.releasePrefixRecord.notify_all();
+    ownerRecordingThread.join();
+
+    EXPECT_FALSE(ownerRecordingResult);
+    EXPECT_EQ(ownerFailedPacket, packet);
+    EXPECT_EQ(ownerRecordedGraph.find(packet), nullptr);
+    EXPECT_EQ(state.prefixRecordCount.load(MemoryOrder::relaxed), 1u);
+    EXPECT_EQ(state.suffixRecordCount.load(MemoryOrder::relaxed), 0u);
+    EXPECT_EQ(state.prefixDiscardCount.load(MemoryOrder::relaxed), 1u);
+    EXPECT_EQ(state.suffixDiscardCount.load(MemoryOrder::relaxed), 1u);
+    EXPECT_TRUE(activeTransaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        ownerRecordedGraph.recordingAttemptGeneration()
+    ));
+    EXPECT_TRUE(activeTransaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        ownerRecordedGraph.recordingAttemptGeneration()
+    ));
+    const GpuTaskGraphSubmissionStatistics abortedStatistics = activeTransaction.submissionStatistics();
+    ASSERT_TRUE(abortedStatistics.valid());
+    EXPECT_EQ(abortedStatistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(abortedStatistics.rejectedTaskCount, 2u);
+    EXPECT_EQ(abortedStatistics.rejectedSubmissionCount, 0u);
+    EXPECT_EQ(state.prefixDiscardCount.load(MemoryOrder::relaxed), 1u);
+    EXPECT_EQ(state.suffixDiscardCount.load(MemoryOrder::relaxed), 1u);
+
+    state.prefixShouldRecord = true;
+    GpuRecordedGraph retryRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder retryRecorder(device);
+    ASSERT_TRUE(retryRecorder.recordTaskRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        prefixTask,
+        suffixTask,
+        retryRecordedGraph
+    ));
+    ASSERT_NE(retryRecordedGraph.find(packet), nullptr);
+    EXPECT_EQ(state.prefixRecordCount.load(MemoryOrder::relaxed), 2u);
+    EXPECT_EQ(state.suffixRecordCount.load(MemoryOrder::relaxed), 1u);
+    EXPECT_EQ(state.prefixDiscardCount.load(MemoryOrder::relaxed), 1u);
+    EXPECT_EQ(state.suffixDiscardCount.load(MemoryOrder::relaxed), 1u);
+
+    GpuGraphSubmissionTransaction retryTransaction(DescriptorBufferRoundTripTest::arena());
+    retryTransaction.reset(compiledGraph);
+    retryTransaction.rejectTask(
+        graph,
+        compiledGraph,
+        suffixTask,
+        retryRecordedGraph.recordingAttemptGeneration()
+    );
+    EXPECT_EQ(state.prefixDiscardCount.load(MemoryOrder::relaxed), 2u);
+    EXPECT_EQ(state.suffixDiscardCount.load(MemoryOrder::relaxed), 2u);
+    const GpuTaskGraphSubmissionStatistics retryStatistics = retryTransaction.submissionStatistics();
+    ASSERT_TRUE(retryStatistics.valid());
+    EXPECT_EQ(retryStatistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(retryStatistics.rejectedTaskCount, 2u);
+    EXPECT_EQ(retryStatistics.rejectedSubmissionCount, 0u);
+
+    retryTransaction.rejectTask(
+        graph,
+        compiledGraph,
+        prefixTask,
+        retryRecordedGraph.recordingAttemptGeneration()
+    );
+    EXPECT_TRUE(retryTransaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        retryRecordedGraph.recordingAttemptGeneration()
+    ));
+    EXPECT_EQ(state.prefixDiscardCount.load(MemoryOrder::relaxed), 2u);
+    EXPECT_EQ(state.suffixDiscardCount.load(MemoryOrder::relaxed), 2u);
+    graph.reset();
+    EXPECT_EQ(state.prefixDiscardCount.load(MemoryOrder::relaxed), 2u);
+    EXPECT_EQ(state.suffixDiscardCount.load(MemoryOrder::relaxed), 2u);
 }
 
 

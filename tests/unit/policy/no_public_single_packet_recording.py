@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep native single-packet recording private to the graph runtime."""
+"""Keep native single-packet recording and lifecycle capabilities private."""
 
 from __future__ import annotations
 
@@ -26,15 +26,40 @@ SOURCE_DIRECTORIES = (
 )
 SOURCE_SUFFIXES = frozenset((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ixx"))
 RETIRED_RECORD_DESCRIPTOR = re.compile(r"\bGpuNativePacketRecordDesc\b")
-RECORDER_CLASS_OPEN = re.compile(r"\b(class|struct)\s+GpuNativePacketRecorder\b[^;{]*\{")
-RECORDER_MEMBER_TOKEN = re.compile(
-    r"\b(?:(public|private|protected)\s*:|(recordPacket)\b)"
+RETIRED_RECORDING_LEASE = re.compile(r"\bGpuTaskPacketRecordingLease\b")
+TARGET_CLASS_OPEN = re.compile(
+    r"\b(class|struct)\s+"
+    r"(GpuNativePacketRecorder|GpuTaskGraph|GpuRecordedGraph)\b"
+    r"(?!\s*::)[^;{]*\{"
 )
+PRIVATE_RECORDING_MEMBERS = {
+    "GpuNativePacketRecorder": ("prepareRecordingAttempt", "recordPacket"),
+    "GpuTaskGraph": (
+        "PacketRecordingLease",
+        "recordingAttemptGeneration",
+        "beginRecordingAttempt",
+        "matchesRecordingAttempt",
+        "recordTask",
+        "beginPacketRecording",
+        "completePacketRecording",
+        "abortPacketRecording",
+        "packetReadyForSubmission",
+    ),
+    "GpuRecordedGraph": ("resetForRecording",),
+}
+CLASS_MEMBER_TOKENS = {
+    class_name: re.compile(
+        r"\b(?:(public|private|protected)\s*:|("
+        + "|".join(re.escape(member) for member in members)
+        + r")\b)"
+    )
+    for class_name, members in PRIVATE_RECORDING_MEMBERS.items()
+}
 
 
-def recorder_body_ranges(code: str) -> list[tuple[int, int, str]]:
-    ranges: list[tuple[int, int, str]] = []
-    for match in RECORDER_CLASS_OPEN.finditer(code):
+def target_class_body_ranges(code: str) -> list[tuple[str, int, int, str]]:
+    ranges: list[tuple[str, int, int, str]] = []
+    for match in TARGET_CLASS_OPEN.finditer(code):
         open_offset = match.end() - 1
         default_access = "public" if match.group(1) == "struct" else "private"
         depth = 0
@@ -44,7 +69,7 @@ def recorder_body_ranges(code: str) -> list[tuple[int, int, str]]:
             elif code[offset] == "}":
                 depth -= 1
                 if depth == 0:
-                    ranges.append((open_offset + 1, offset, default_access))
+                    ranges.append((match.group(2), open_offset + 1, offset, default_access))
                     break
     return ranges
 
@@ -75,9 +100,13 @@ def find_public_single_packet_recording(source: str) -> list[tuple[int, str]]:
         (line_number(code, match.start()), match.group())
         for match in RETIRED_RECORD_DESCRIPTOR.finditer(code)
     ]
-    for start, end, default_access in recorder_body_ranges(code):
+    references.extend(
+        (line_number(code, match.start()), match.group())
+        for match in RETIRED_RECORDING_LEASE.finditer(code)
+    )
+    for class_name, start, end, default_access in target_class_body_ranges(code):
         access = default_access
-        for match in RECORDER_MEMBER_TOKEN.finditer(code, start, end):
+        for match in CLASS_MEMBER_TOKENS[class_name].finditer(code, start, end):
             if not is_class_body_top_level(code, start, match.start()):
                 continue
             if match.group(1):
@@ -86,7 +115,7 @@ def find_public_single_packet_recording(source: str) -> list[tuple[int, str]]:
                 references.append(
                     (
                         line_number(code, match.start()),
-                        f"GpuNativePacketRecorder/{access} recordPacket",
+                        f"{class_name}/{access} {match.group(2)}",
                     )
                 )
     return sorted(references)
@@ -109,6 +138,11 @@ def run_self_test() -> int:
             ((1, "GpuNativePacketRecordDesc"),),
         ),
         (
+            "retired recording lease",
+            "GpuTaskPacketRecordingLease lease;",
+            ((1, "GpuTaskPacketRecordingLease"),),
+        ),
+        (
             "public packet recorder",
             "class GpuNativePacketRecorder final{\n"
             "public:\n"
@@ -120,9 +154,13 @@ def run_self_test() -> int:
             "protected packet recorder",
             "class GpuNativePacketRecorder{\n"
             "protected:\n"
+            "    bool prepareRecordingAttempt();\n"
             "    bool recordPacket(int packet);\n"
             "};",
-            ((3, "GpuNativePacketRecorder/protected recordPacket"),),
+            (
+                (3, "GpuNativePacketRecorder/protected prepareRecordingAttempt"),
+                (4, "GpuNativePacketRecorder/protected recordPacket"),
+            ),
         ),
         (
             "reopened public section",
@@ -138,6 +176,7 @@ def run_self_test() -> int:
             "private packet recorder",
             "class GpuNativePacketRecorder final{\n"
             "private:\n"
+            "    bool prepareRecordingAttempt();\n"
             "    bool recordPacket(int packet);\n"
             "};",
             (),
@@ -145,6 +184,7 @@ def run_self_test() -> int:
         (
             "default private packet recorder",
             "class GpuNativePacketRecorder final{\n"
+            "    bool prepareRecordingAttempt();\n"
             "    bool recordPacket(int packet);\n"
             "};",
             (),
@@ -174,6 +214,170 @@ def run_self_test() -> int:
             (),
         ),
         (
+            "public task graph recording internals",
+            "class GpuTaskGraph final{\n"
+            "public:\n"
+            "    class PacketRecordingLease;\n"
+            "    bool recordTask();\n"
+            "};",
+            (
+                (3, "GpuTaskGraph/public PacketRecordingLease"),
+                (4, "GpuTaskGraph/public recordTask"),
+            ),
+        ),
+        (
+            "public task graph recording lifecycle",
+            "class GpuTaskGraph final : NoCopy{\n"
+            "public:\n"
+            "    u64 recordingAttemptGeneration()const;\n"
+            "    bool beginRecordingAttempt();\n"
+            "    bool matchesRecordingAttempt();\n"
+            "    bool beginPacketRecording();\n"
+            "    bool completePacketRecording();\n"
+            "    void abortPacketRecording();\n"
+            "    bool packetReadyForSubmission();\n"
+            "};",
+            (
+                (3, "GpuTaskGraph/public recordingAttemptGeneration"),
+                (4, "GpuTaskGraph/public beginRecordingAttempt"),
+                (5, "GpuTaskGraph/public matchesRecordingAttempt"),
+                (6, "GpuTaskGraph/public beginPacketRecording"),
+                (7, "GpuTaskGraph/public completePacketRecording"),
+                (8, "GpuTaskGraph/public abortPacketRecording"),
+                (9, "GpuTaskGraph/public packetReadyForSubmission"),
+            ),
+        ),
+        (
+            "protected task graph recording lifecycle",
+            "class GpuTaskGraph{\n"
+            "protected:\n"
+            "    class PacketRecordingLease;\n"
+            "    bool beginPacketRecording();\n"
+            "};",
+            (
+                (3, "GpuTaskGraph/protected PacketRecordingLease"),
+                (4, "GpuTaskGraph/protected beginPacketRecording"),
+            ),
+        ),
+        (
+            "default public task graph struct",
+            "struct GpuTaskGraph final : Base{\n"
+            "    class PacketRecordingLease;\n"
+            "    bool recordTask();\n"
+            "    bool packetReadyForSubmission();\n"
+            "};",
+            (
+                (2, "GpuTaskGraph/public PacketRecordingLease"),
+                (3, "GpuTaskGraph/public recordTask"),
+                (4, "GpuTaskGraph/public packetReadyForSubmission"),
+            ),
+        ),
+        (
+            "reopened public task graph section",
+            "class GpuTaskGraph final{\n"
+            "private:\n"
+            "    bool beginRecordingAttempt();\n"
+            "public:\n"
+            "    bool matchesRecordingAttempt();\n"
+            "};",
+            ((5, "GpuTaskGraph/public matchesRecordingAttempt"),),
+        ),
+        (
+            "public inherited task graph lifecycle",
+            "class GpuTaskGraph final{\n"
+            "public:\n"
+            "    using Base::beginPacketRecording;\n"
+            "};",
+            ((3, "GpuTaskGraph/public beginPacketRecording"),),
+        ),
+        (
+            "private task graph recording lifecycle",
+            "class GpuTaskGraph final{\n"
+            "private:\n"
+            "    class PacketRecordingLease;\n"
+            "    u64 recordingAttemptGeneration()const;\n"
+            "    bool beginRecordingAttempt();\n"
+            "    bool matchesRecordingAttempt();\n"
+            "    bool recordTask();\n"
+            "    bool beginPacketRecording();\n"
+            "    bool completePacketRecording();\n"
+            "    void abortPacketRecording();\n"
+            "    bool packetReadyForSubmission();\n"
+            "};",
+            (),
+        ),
+        (
+            "default private task graph lifecycle",
+            "class GpuTaskGraph final{\n"
+            "    bool beginPacketRecording();\n"
+            "};",
+            (),
+        ),
+        (
+            "public recorded graph reset for recording",
+            "class GpuRecordedGraph final{\n"
+            "public:\n"
+            "    void resetForRecording();\n"
+            "};",
+            ((3, "GpuRecordedGraph/public resetForRecording"),),
+        ),
+        (
+            "protected recorded graph reset for recording",
+            "class GpuRecordedGraph{\n"
+            "protected:\n"
+            "    void resetForRecording();\n"
+            "};",
+            ((3, "GpuRecordedGraph/protected resetForRecording"),),
+        ),
+        (
+            "default public recorded graph struct",
+            "struct GpuRecordedGraph final{\n"
+            "    void resetForRecording();\n"
+            "};",
+            ((2, "GpuRecordedGraph/public resetForRecording"),),
+        ),
+        (
+            "private recorded graph reset for recording",
+            "class GpuRecordedGraph final{\n"
+            "private:\n"
+            "    void resetForRecording();\n"
+            "};",
+            (),
+        ),
+        (
+            "out of class definitions",
+            "bool GpuTaskGraph::beginRecordingAttempt(){ return true; }\n"
+            "bool GpuTaskGraph::packetReadyForSubmission(){ return true; }\n"
+            "void GpuRecordedGraph::resetForRecording(){}",
+            (),
+        ),
+        (
+            "legitimate attempt queries",
+            "class GpuRecordedGraph final{\n"
+            "public:\n"
+            "    u64 recordingAttemptGeneration()const;\n"
+            "};\n"
+            "class GpuCommandIrCapture final{\n"
+            "public:\n"
+            "    u64 beginRecordingAttempt();\n"
+            "    u64 recordingAttemptGeneration()const;\n"
+            "};\n"
+            "class StateTracker final{\n"
+            "public:\n"
+            "    bool beginRecordingAttempt();\n"
+            "};",
+            (),
+        ),
+        (
+            "unrelated same named methods",
+            "class RecordingFixture final{\n"
+            "public:\n"
+            "    bool beginPacketRecording();\n"
+            "    void resetForRecording();\n"
+            "};",
+            (),
+        ),
+        (
             "nested fixture method",
             "class GpuNativePacketRecorder final{\n"
             "public:\n"
@@ -183,6 +387,36 @@ def run_self_test() -> int:
             "    };\n"
             "private:\n"
             "    bool recordPacket(int packet);\n"
+            "};",
+            (),
+        ),
+        (
+            "nested task graph fixture method",
+            "class GpuTaskGraph final{\n"
+            "public:\n"
+            "    struct Fixture{\n"
+            "    public:\n"
+            "        class PacketRecordingLease;\n"
+            "        bool recordTask();\n"
+            "        bool beginPacketRecording();\n"
+            "    };\n"
+            "    bool recordTaskRange();\n"
+            "private:\n"
+            "    class PacketRecordingLease;\n"
+            "    bool recordTask();\n"
+            "    bool beginPacketRecording();\n"
+            "};",
+            (),
+        ),
+        (
+            "inline task graph implementation detail",
+            "class GpuTaskGraph final{\n"
+            "public:\n"
+            "    bool recordTaskRange(){\n"
+            "        return helper.beginPacketRecording();\n"
+            "    }\n"
+            "private:\n"
+            "    bool beginPacketRecording();\n"
             "};",
             (),
         ),
@@ -201,14 +435,19 @@ def run_self_test() -> int:
         (
             "comment and literal",
             "// GpuNativePacketRecordDesc\n"
-            "// class GpuNativePacketRecorder{ public: bool recordPacket(); };\n"
-            'const char* text = "GpuNativePacketRecordDesc recordPacket";',
+            "// GpuTaskPacketRecordingLease\n"
+            "// class GpuTaskGraph{ public: bool beginPacketRecording(); };\n"
+            'const char* text = "GpuNativePacketRecordDesc resetForRecording";\n'
+            'const char* raw = R"tag(GpuTaskPacketRecordingLease beginRecordingAttempt)tag";',
             (),
         ),
         (
             "near names",
             "GpuNativePacketRecordDescription desc;\n"
-            "class GpuNativePacketRecorderFactory{ public: bool recordPacket(); };",
+            "GpuTaskPacketRecordingLeaseFactory lease;\n"
+            "class GpuNativePacketRecorderFactory{ public: bool recordPacket(); };\n"
+            "class GpuTaskGraphFactory{ public: bool beginPacketRecordingRange(); };\n"
+            "class GpuRecordedGraphFactory{ public: bool resetForRecordings(); };",
             (),
         ),
     )
@@ -236,7 +475,7 @@ def main() -> int:
 
     if violations:
         print(
-            "Native packet selection and recording-worker routing must stay private to the graph runtime.",
+            "Native packet selection, recording lifecycle, and recording-worker routing must stay private to the graph runtime.",
             file=sys.stderr,
         )
         print("\n".join(violations), file=sys.stderr)

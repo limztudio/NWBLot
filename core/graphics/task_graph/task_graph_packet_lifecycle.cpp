@@ -19,7 +19,7 @@ bool GpuTaskGraph::recordTask(
     const GpuTaskId& taskID,
     CommandList& commandList,
     const GpuTaskRecordContext& context,
-    const GpuTaskPacketRecordingLease& lease,
+    const PacketRecordingLease& lease,
     bool& outRecordThunkInvoked
 )const{
     outRecordThunkInvoked = false;
@@ -97,7 +97,7 @@ bool GpuTaskGraph::beginPacketRecording(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packet,
     const u64 recordingAttemptGeneration,
-    GpuTaskPacketRecordingLease& outLease
+    PacketRecordingLease& outLease
 )const noexcept{
     if(
         !compiledGraph.validFor(*this)
@@ -149,7 +149,7 @@ bool GpuTaskGraph::beginPacketRecording(
 bool GpuTaskGraph::completePacketRecording(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packet,
-    GpuTaskPacketRecordingLease& lease
+    PacketRecordingLease& lease
 )const noexcept{
     if(
         !compiledGraph.validFor(*this)
@@ -199,7 +199,7 @@ bool GpuTaskGraph::completePacketRecording(
 void GpuTaskGraph::abortPacketRecording(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packet,
-    GpuTaskPacketRecordingLease& lease
+    PacketRecordingLease& lease
 )const noexcept{
     if(
         !compiledGraph.validFor(*this)

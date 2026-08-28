@@ -142,44 +142,8 @@ namespace GpuTaskLifecycleState{
 class GpuTaskGraph;
 class GpuNativePacketRecorder;
 class GpuGraphSubmissionTransaction;
-
-// A packet claim is an opaque capability. Only the caller that acquired it can invoke record thunks, complete
-// native recording, or abandon that exact packet attempt.
-class GpuTaskPacketRecordingLease final : NoCopy{
-    friend class GpuTaskGraph;
-
-public:
-    GpuTaskPacketRecordingLease() = default;
-    GpuTaskPacketRecordingLease(GpuTaskPacketRecordingLease&&) = delete;
-    GpuTaskPacketRecordingLease& operator=(GpuTaskPacketRecordingLease&&) = delete;
-
-
-public:
-    [[nodiscard]] bool valid()const noexcept{
-        return m_packet.valid()
-            && m_planGeneration != 0u
-            && m_recordingAttemptGeneration != 0u
-            && m_claimGeneration != 0u
-        ;
-    }
-    [[nodiscard]] u64 claimGeneration()const noexcept{ return m_claimGeneration; }
-
-
-private:
-    void reset()noexcept{
-        m_packet = {};
-        m_planGeneration = 0u;
-        m_recordingAttemptGeneration = 0u;
-        m_claimGeneration = 0u;
-    }
-
-
-private:
-    GpuSubmissionPacketId m_packet;
-    u64 m_planGeneration = 0u;
-    u64 m_recordingAttemptGeneration = 0u;
-    u64 m_claimGeneration = 0u;
-};
+class GpuRecordedGraph;
+class GpuTaskGraphSubmitter;
 
 
 // Native submission has the same exclusive ownership rule as native recording: cancellation cannot discard graph
@@ -228,6 +192,46 @@ class GpuTaskGraph final : NoCopy{
     friend class GpuTaskGraphCompiler;
     friend class GpuNativePacketRecorder;
     friend class GpuGraphSubmissionTransaction;
+    friend class GpuRecordedGraph;
+    friend class GpuTaskGraphSubmitter;
+
+private:
+    // A packet claim is an opaque runtime capability. Only the recorder that acquired it can invoke task thunks,
+    // complete native recording, or abandon that exact packet attempt.
+    class PacketRecordingLease final : NoCopy{
+        friend class GpuTaskGraph;
+
+    public:
+        PacketRecordingLease() = default;
+        PacketRecordingLease(PacketRecordingLease&&) = delete;
+        PacketRecordingLease& operator=(PacketRecordingLease&&) = delete;
+
+
+    public:
+        [[nodiscard]] bool valid()const noexcept{
+            return m_packet.valid()
+                && m_planGeneration != 0u
+                && m_recordingAttemptGeneration != 0u
+                && m_claimGeneration != 0u
+            ;
+        }
+
+
+    private:
+        void reset()noexcept{
+            m_packet = {};
+            m_planGeneration = 0u;
+            m_recordingAttemptGeneration = 0u;
+            m_claimGeneration = 0u;
+        }
+
+
+    private:
+        GpuSubmissionPacketId m_packet;
+        u64 m_planGeneration = 0u;
+        u64 m_recordingAttemptGeneration = 0u;
+        u64 m_claimGeneration = 0u;
+    };
 
 private:
     [[nodiscard]] static u64 allocateGeneration()noexcept;
@@ -482,6 +486,9 @@ public:
     // Every successful compile-relevant declaration or owned-storage mutation advances this revision, including
     // changes that leave task/resource handle generations and counts unchanged.
     [[nodiscard]] u64 declarationRevision()const noexcept{ return m_declarationRevision; }
+
+
+private:
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
     // Starts or validates one native-recording attempt for the compiler-owned packet. A retry can begin only after
     // every task from the previous attempt was discarded; accepted-frontier recovery remains in that same attempt.
@@ -493,6 +500,9 @@ public:
         const GpuCompiledGraph& compiledGraph,
         u64 recordingAttemptGeneration
     )const noexcept;
+
+
+public:
     [[nodiscard]] bool validForDeviceGeneration(u16 deviceGeneration)const noexcept;
     [[nodiscard]] bool validTask(const GpuTaskId& id)const noexcept;
     [[nodiscard]] bool validResource(const GpuGraphResourceId& id)const noexcept;
@@ -537,12 +547,11 @@ private:
         const GpuTaskId& task,
         CommandList& commandList,
         const GpuTaskRecordContext& context,
-        const GpuTaskPacketRecordingLease& lease,
+        const PacketRecordingLease& lease,
         bool& outRecordThunkInvoked
     )const;
 
 
-public:
     // Claims all packet tasks before native command recording begins. One recording attempt can therefore have
     // exactly one native artifact per packet even when callers use separate recorded-graph outputs concurrently.
     // The returned opaque lease authenticates the one recorder that may invoke task thunks, complete, or abort it.
@@ -550,13 +559,13 @@ public:
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
         u64 recordingAttemptGeneration,
-        GpuTaskPacketRecordingLease& outLease
+        PacketRecordingLease& outLease
     )const noexcept;
     // A claimed native packet becomes submission-eligible only after every one of its task record thunks completed.
     [[nodiscard]] bool completePacketRecording(
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
-        GpuTaskPacketRecordingLease& lease
+        PacketRecordingLease& lease
     )const noexcept;
     // Abandons an active packet claim after its owning recorder has stopped invoking task thunks. Ordinary
     // transaction cleanup deliberately cannot discard a Recording packet, because that would allow a retry to
@@ -564,7 +573,7 @@ public:
     void abortPacketRecording(
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
-        GpuTaskPacketRecordingLease& lease
+        PacketRecordingLease& lease
     )const noexcept;
     [[nodiscard]] bool packetReadyForSubmission(
         const GpuCompiledGraph& compiledGraph,

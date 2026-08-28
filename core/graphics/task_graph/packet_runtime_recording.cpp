@@ -320,7 +320,7 @@ bool GpuNativePacketRecorder::recordPacket(
     )
         return false;
     const CommandListResourceStateHandoff* initialStates = nullptr;
-    GpuTaskPacketRecordingLease recordingLease;
+    GpuTaskGraph::PacketRecordingLease recordingLease;
     const auto abortPacketRecording = [&]{
         outRecordedGraph.discardPacketTimingTicket(packetID);
         graph.abortPacketRecording(compiledGraph, packetID, recordingLease);

@@ -165,8 +165,13 @@ public:
     // Reset and scratch-backed handoff queries are externally serialized. reset() refuses while native submission
     // or cancellation is resolving so it cannot invalidate transaction storage used by a live packet operation.
     void reset(const GpuCompiledGraph& compiledGraph);
+
+
+private:
     void resetForRecording(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph);
 
+
+public:
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
     [[nodiscard]] bool validFor(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)const noexcept;
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept{ return m_recordingAttemptGeneration; }

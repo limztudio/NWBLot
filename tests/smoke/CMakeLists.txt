@@ -225,9 +225,17 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "${_nwb_transparent_multi_runtime_root}"
             "NWB Transparent Multi Smoke"
             "--expect-transparent-multi"
+            "--expect-log-message" "TransparentMultiSmokeProject: renderer baseline capture ready after 6 rendered frames"
             "--expect-log-message" "RendererSystem: dispatched software shadow traversal"
+            "--reject-log-message" "RendererSystem: frozen software material-context cache identity is no longer accepted"
+            "--reject-log-message" "RendererSystem: frozen software scene-BVH cache identity is no longer accepted"
+            "--reject-log-message" "RendererSystem: frozen software scene traversal no longer matches preflight storage"
+            "--reject-log-message" "RendererSystem: software shadow scene has no frozen preflight traversal"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
+        )
+        set_tests_properties(nwb_transparent_multi_sw_capture_smoke PROPERTIES
+            ENVIRONMENT "NWB_TRANSPARENT_MULTI_SPIN_ANGLE=0.6;NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME=6"
         )
 
         nwb_add_window_capture_smoke(

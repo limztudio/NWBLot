@@ -1818,6 +1818,12 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     ;
     if(!staticScene || !canReuseSceneBvh)
         rayTracingState().m_sceneSwBvhStaticSceneHashValid = false;
+    if(
+        !commandList
+        && canReuseSceneBvh
+        && !capturePreparedSceneBvhCacheReuse(sceneStaticHash, instanceCount)
+    )
+        return false;
 
     if(commandList && !HasPreparedSceneBvhBuffers(rayTracingState(), instanceCount)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software scene BVH changed after preflight; skipping recording-time replacement"));
@@ -1944,6 +1950,17 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             materialTypedUploadBytes
         )
     ;
+    if(
+        !commandList
+        && canReuseSwMaterialContext
+        && !capturePreparedShadowMaterialContextCacheReuse(
+            swMaterialContextHash,
+            instanceMaterials.size(),
+            shadowInstanceData.size(),
+            materialTypedUploadBytes
+        )
+    )
+        return false;
     if(!canReuseSwMaterialContext){
         if(!commandList){
             if(
@@ -2034,10 +2051,12 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                 preparedMeshes.size(),
                 instanceCount
             )){
-                // The paired immutable uploads remain valid even when their traversal-table snapshot cannot be
-                // retained. Recording may re-gather CPU scene data to validate those declared bytes, but it cannot
-                // upload a replacement outside the graph-owned batch.
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software scene traversal; retaining live validation fallback"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software scene traversal"));
+                if(hybridSoftwareMaterialContextCaptureRequired)
+                    return true;
+                clearPreparedSceneBvh();
+                clearPreparedShadowMaterialContext();
+                return false;
             }
         }
         else

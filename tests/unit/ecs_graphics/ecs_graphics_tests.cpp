@@ -79,6 +79,29 @@ TEST(EcsGraphics, RayTracingStateInvalidationClearsSurfelAgeFreePipelineFailureL
     EXPECT_FALSE(state.m_surfelAgeFreePipelineFailed);
 }
 
+TEST(EcsGraphics, RayTraceMaterialSnapshotOwnsClassificationAndDispatchMetadata){
+    NWB::Tests::TestArena<> testArena;
+    NWB::Impl::MaterialSurfaceInfo materialInfo(testArena.arena);
+    materialInfo.shadowTransmittanceModelId = 17u;
+    materialInfo.transparent = true;
+    materialInfo.refractive = true;
+
+    const NWB::Impl::NwbRtInstanceMaterialGpu frozen =
+        NWB::Impl::RayTracingDetail::ResolveInstanceShadowMaterial(materialInfo, 64u, 3u)
+    ;
+    materialInfo.shadowTransmittanceModelId = 29u;
+    materialInfo.transparent = false;
+    materialInfo.refractive = false;
+
+    EXPECT_EQ(frozen.shadowTransmittanceModelId, 17u);
+    EXPECT_EQ(
+        frozen.flags,
+        NWB::Impl::RtInstanceMaterialFlag::Transparent | NWB::Impl::RtInstanceMaterialFlag::Refractive
+    );
+    EXPECT_EQ(frozen.materialConstantByteOffset, 64u);
+    EXPECT_EQ(frozen.meshInstanceIndex, 3u);
+}
+
 TEST(EcsGraphics, AvboitPushConstantsCarryHdrPolicyWithoutChangingCoverageData){
     NWB::Impl::AvboitFrameTargets targets;
     targets.fullWidth = 1920u;

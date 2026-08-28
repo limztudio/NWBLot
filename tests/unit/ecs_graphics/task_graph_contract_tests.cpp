@@ -4732,6 +4732,192 @@ TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
 }
 
 
+// Accepted static scene-BVH and software-material cache hits have no upload bytes, but they still freeze the exact
+// storage identities and traversal table during preflight. Pure software consumes that snapshot or rejects the
+// packet; hybrid consumes it or restores HW. Neither route regathers ECS/material data after graph declaration.
+TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRegather){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString rayTracingHeaderSource;
+    AString rayTracingSource;
+    AString swBvhSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
+
+    const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
+    const AStringView rayTracing(rayTracingSource.data(), rayTracingSource.size());
+    const AStringView swBvh(swBvhSource.data(), swBvhSource.size());
+
+    EXPECT_TRUE(ContainsText(rayTracingHeader, "capturePreparedSceneBvhCacheReuse"));
+    EXPECT_TRUE(ContainsText(rayTracingHeader, "capturePreparedShadowMaterialContextCacheReuse"));
+    EXPECT_TRUE(ContainsText(rayTracingHeader, "bool m_preparedSceneBvhUploadRequired = false;"));
+    EXPECT_TRUE(ContainsText(rayTracingHeader, "bool m_preparedShadowMaterialContextUploadRequired = false;"));
+    EXPECT_TRUE(ContainsText(swBvh, "&& !capturePreparedSceneBvhCacheReuse(sceneStaticHash, instanceCount)"));
+    EXPECT_TRUE(ContainsText(swBvh, "&& !capturePreparedShadowMaterialContextCacheReuse("));
+
+    const usize cacheCaptureOffset = rayTracing.find("bool RendererRayTracingSystem::capturePreparedSceneBvhCacheReuse(");
+    const usize cacheCaptureEndOffset = rayTracing.find("bool RendererRayTracingSystem::matchesPreparedSceneBvh(", cacheCaptureOffset);
+    ASSERT_NE(cacheCaptureOffset, AStringView::npos);
+    ASSERT_NE(cacheCaptureEndOffset, AStringView::npos);
+    const AStringView cacheCapture = rayTracing.substr(cacheCaptureOffset, cacheCaptureEndOffset - cacheCaptureOffset);
+    EXPECT_TRUE(ContainsText(cacheCapture, "state.m_sceneSwBvhStaticSceneHashValid"));
+    EXPECT_TRUE(ContainsText(cacheCapture, "m_preparedSceneBvhReady = true;"));
+    EXPECT_TRUE(ContainsText(cacheCapture, "m_preparedSceneBvhUploadRequired = false;"));
+    EXPECT_FALSE(ContainsText(cacheCapture, "m_preparedSceneBvhNodeBytes.resize"));
+    EXPECT_FALSE(ContainsText(cacheCapture, "m_preparedSceneBvhInstanceBytes.resize"));
+
+    const usize materialCacheCaptureOffset = rayTracing.find(
+        "bool RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse("
+    );
+    const usize materialCacheCaptureEndOffset = rayTracing.find(
+        "bool RendererRayTracingSystem::matchesPreparedShadowMaterialContext(",
+        materialCacheCaptureOffset
+    );
+    ASSERT_NE(materialCacheCaptureOffset, AStringView::npos);
+    ASSERT_NE(materialCacheCaptureEndOffset, AStringView::npos);
+    const AStringView materialCacheCapture = rayTracing.substr(
+        materialCacheCaptureOffset,
+        materialCacheCaptureEndOffset - materialCacheCaptureOffset
+    );
+    EXPECT_TRUE(ContainsText(materialCacheCapture, "state.m_swShadowMaterialContextHashValid"));
+    EXPECT_TRUE(ContainsText(materialCacheCapture, "m_preparedShadowMaterialContextReady = true;"));
+    EXPECT_TRUE(ContainsText(materialCacheCapture, "m_preparedShadowMaterialContextUploadRequired = false;"));
+    EXPECT_FALSE(ContainsText(materialCacheCapture, "m_preparedShadowInstanceMaterialBytes.resize"));
+    EXPECT_FALSE(ContainsText(materialCacheCapture, "m_preparedShadowInstanceBytes.resize"));
+    EXPECT_FALSE(ContainsText(materialCacheCapture, "m_preparedShadowMaterialTypedBytes.resize"));
+
+    const usize retainOffset = rayTracing.find("bool RendererRayTracingSystem::retainPreparedSceneBvhUploads(");
+    const usize retainEndOffset = rayTracing.find("void RendererRayTracingSystem::confirmPreparedSceneBvhUploads()", retainOffset);
+    ASSERT_NE(retainOffset, AStringView::npos);
+    ASSERT_NE(retainEndOffset, AStringView::npos);
+    const AStringView retain = rayTracing.substr(retainOffset, retainEndOffset - retainOffset);
+    EXPECT_TRUE(ContainsText(retain, "outNodeBlob = {};"));
+    EXPECT_TRUE(ContainsText(retain, "outInstanceBlob = {};"));
+    EXPECT_TRUE(ContainsText(retain, "if(!m_preparedSceneBvhUploadRequired)"));
+    EXPECT_TRUE(ContainsText(retain, "state.m_sceneSwBvhStaticSceneHash != m_preparedSceneBvhStaticSceneHash"));
+    EXPECT_TRUE(ContainsText(rayTracing, "if(!m_preparedSceneBvhReady || !m_preparedSceneBvhUploadRequired)"));
+
+    const usize materialRetainOffset = rayTracing.find(
+        "bool RendererRayTracingSystem::retainPreparedShadowMaterialContextUploads("
+    );
+    const usize materialRetainEndOffset = rayTracing.find(
+        "bool RendererRayTracingSystem::retainPreparedHybridHardwareMaterialContextFallbackUploads(",
+        materialRetainOffset
+    );
+    ASSERT_NE(materialRetainOffset, AStringView::npos);
+    ASSERT_NE(materialRetainEndOffset, AStringView::npos);
+    const AStringView materialRetain = rayTracing.substr(
+        materialRetainOffset,
+        materialRetainEndOffset - materialRetainOffset
+    );
+    const usize materialCacheRetainOffset = materialRetain.find(
+        "if(!m_preparedShadowMaterialContextUploadRequired)"
+    );
+    const usize materialUploadCopyOffset = materialRetain.find("outInstanceMaterialBlob = graph.copyUploadData(");
+    ASSERT_NE(materialCacheRetainOffset, AStringView::npos);
+    ASSERT_NE(materialUploadCopyOffset, AStringView::npos);
+    ASSERT_LT(materialCacheRetainOffset, materialUploadCopyOffset);
+    const AStringView materialCacheRetain = materialRetain.substr(
+        materialCacheRetainOffset,
+        materialUploadCopyOffset - materialCacheRetainOffset
+    );
+    EXPECT_TRUE(ContainsText(materialCacheRetain, "state.m_swShadowMaterialContextHash != m_preparedShadowMaterialContextHash"));
+    EXPECT_TRUE(ContainsText(materialCacheRetain, "return true;"));
+
+    const usize materialConfirmOffset = rayTracing.find(
+        "void RendererRayTracingSystem::confirmPreparedShadowMaterialContextUploads()"
+    );
+    const usize materialConfirmEndOffset = rayTracing.find(
+        "void RendererRayTracingSystem::clearPreparedSceneBvh()",
+        materialConfirmOffset
+    );
+    ASSERT_NE(materialConfirmOffset, AStringView::npos);
+    ASSERT_NE(materialConfirmEndOffset, AStringView::npos);
+    const AStringView materialConfirm = rayTracing.substr(
+        materialConfirmOffset,
+        materialConfirmEndOffset - materialConfirmOffset
+    );
+    EXPECT_TRUE(ContainsText(
+        materialConfirm,
+        "if(m_preparedShadowMaterialContextReady && m_preparedShadowMaterialContextUploadRequired)"
+    ));
+    EXPECT_EQ(CountText(materialConfirm, "clearPreparedShadowMaterialContext();"), 1u);
+
+    const usize materialHashOffset = swBvh.find("[[nodiscard]] u64 ComputeShadowMaterialContextHash(");
+    const usize materialHashEndOffset = swBvh.find("// Cross-frame cache pins raw keys", materialHashOffset);
+    ASSERT_NE(materialHashOffset, AStringView::npos);
+    ASSERT_NE(materialHashEndOffset, AStringView::npos);
+    const AStringView materialHash = swBvh.substr(materialHashOffset, materialHashEndOffset - materialHashOffset);
+    const usize instanceMaterialsHashOffset = materialHash.find("reinterpret_cast<const u8*>(instanceMaterials.data())");
+    const usize instanceDataHashOffset = materialHash.find("reinterpret_cast<const u8*>(instanceData.data())");
+    const usize typedBytesHashOffset = materialHash.find("materialTypedBytes.data()");
+    ASSERT_NE(instanceMaterialsHashOffset, AStringView::npos);
+    ASSERT_NE(instanceDataHashOffset, AStringView::npos);
+    ASSERT_NE(typedBytesHashOffset, AStringView::npos);
+    EXPECT_LT(instanceMaterialsHashOffset, instanceDataHashOffset);
+    EXPECT_LT(instanceDataHashOffset, typedBytesHashOffset);
+
+    const usize traversalOffset = rayTracing.find("bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal()");
+    const usize traversalEndOffset = rayTracing.find("#if !defined(NWB_FINAL)", traversalOffset);
+    ASSERT_NE(traversalOffset, AStringView::npos);
+    ASSERT_NE(traversalEndOffset, AStringView::npos);
+    const AStringView traversal = rayTracing.substr(traversalOffset, traversalEndOffset - traversalOffset);
+    EXPECT_TRUE(ContainsText(traversal, "const bool sceneSnapshotValid ="));
+    EXPECT_TRUE(ContainsText(traversal, "const bool materialSnapshotValid ="));
+    const usize rejectionOffset = traversal.find("const auto rejectPreparedTraversal = [&]()");
+    const usize rejectionEndOffset = traversal.find("    };", rejectionOffset);
+    ASSERT_NE(rejectionOffset, AStringView::npos);
+    ASSERT_NE(rejectionEndOffset, AStringView::npos);
+    const AStringView rejection = traversal.substr(rejectionOffset, rejectionEndOffset - rejectionOffset);
+    EXPECT_TRUE(ContainsText(
+        rejection,
+        "if(!m_preparedSceneBvhUploadRequired)\n"
+        "            state.m_sceneSwBvhStaticSceneHashValid = false;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        rejection,
+        "if(!m_preparedShadowMaterialContextUploadRequired)\n"
+        "            state.m_swShadowMaterialContextHashValid = false;"
+    ));
+    const AStringView traversalValidation = traversal.substr(rejectionEndOffset + 6u);
+    EXPECT_EQ(CountText(traversalValidation, "return false;"), 0u);
+    EXPECT_EQ(CountText(traversalValidation, "return rejectPreparedTraversal();"), 5u);
+    EXPECT_TRUE(ContainsText(traversal, "const bool tablesMatch ="));
+    EXPECT_FALSE(ContainsText(traversal, "restoreMutableTables"));
+    EXPECT_EQ(CountText(traversal, ".clear();"), 0u);
+    EXPECT_EQ(CountText(traversal, ".push_back("), 0u);
+    EXPECT_FALSE(ContainsText(traversal, "seenThisFrame"));
+
+    const usize pureRecordOffset = rayTracing.find(
+        "bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources("
+    );
+    const usize pureRecordEndOffset = rayTracing.find(
+        "bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(",
+        pureRecordOffset
+    );
+    ASSERT_NE(pureRecordOffset, AStringView::npos);
+    ASSERT_NE(pureRecordEndOffset, AStringView::npos);
+    const AStringView pureRecord = rayTracing.substr(pureRecordOffset, pureRecordEndOffset - pureRecordOffset);
+    EXPECT_TRUE(ContainsText(pureRecord, "if(!m_preparedSceneSwBvhReady)"));
+    EXPECT_TRUE(ContainsText(pureRecord, "if(!recordPreparedSceneSwBvhTraversal())"));
+    EXPECT_FALSE(ContainsText(pureRecord, "buildSceneSwBvh("));
+
+    const usize hybridTailOffset = rayTracing.find("bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(");
+    const usize hybridTailEndOffset = rayTracing.find("// A graph-owned hybrid plan may exist", hybridTailOffset);
+    ASSERT_NE(hybridTailOffset, AStringView::npos);
+    ASSERT_NE(hybridTailEndOffset, AStringView::npos);
+    const AStringView hybridTail = rayTracing.substr(hybridTailOffset, hybridTailEndOffset - hybridTailOffset);
+    EXPECT_TRUE(ContainsText(hybridTail, "const bool hybridSceneTraversalFrozen ="));
+    EXPECT_TRUE(ContainsText(hybridTail, "&& m_preparedSceneSwBvhReady"));
+    EXPECT_TRUE(ContainsText(hybridTail, "&& recordPreparedSceneSwBvhTraversal()"));
+    EXPECT_TRUE(ContainsText(hybridTail, "recordPreparedHybridHardwareMaterialContextFallback("));
+    EXPECT_FALSE(ContainsText(hybridTail, "buildSceneSwBvh("));
+    EXPECT_FALSE(ContainsText(hybridTail, "Core::Alloc::ScratchArena"));
+}
+
+
 // A healthy hybrid tail requires both a fresh software triple and a complete frozen hardware restore triple. A tail
 // miss restores only declared blobs; invalid snapshots reject the merged packet for a fresh preflight.
 TEST(EcsGraphics, HybridHardwareFallbackRequiresCompleteGraphOwnedBlobs){

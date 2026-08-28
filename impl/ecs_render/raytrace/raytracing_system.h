@@ -314,8 +314,8 @@ public:
         const DeferredFrameTargets& targets,
         Core::GpuUploadBlobId& outBlob
     )const;
-    // The material table, instance stream, and typed bytes share indices and offsets, so retain them only as one
-    // preflight-frozen graph upload batch.
+    // The material table, instance stream, and typed bytes share indices and offsets. A fresh context retains one
+    // all-or-nothing upload batch; accepted software-cache reuse retains the same storage/hash identity without bytes.
     [[nodiscard]] bool retainPreparedShadowMaterialContextUploads(
         Core::GpuTaskGraph& graph,
         Core::GpuUploadBlobId& outInstanceMaterialBlob,
@@ -876,6 +876,12 @@ private:
         const void* materialTypedData,
         usize materialTypedByteCount
     );
+    [[nodiscard]] bool capturePreparedShadowMaterialContextCacheReuse(
+        u64 hash,
+        usize instanceMaterialCount,
+        usize instanceCount,
+        usize materialTypedByteCount
+    );
     [[nodiscard]] bool matchesPreparedShadowMaterialContext(
         PreparedShadowMaterialContextRoute route,
         bool staticScene,
@@ -910,6 +916,7 @@ private:
         usize instanceCount,
         usize instanceByteCount
     );
+    [[nodiscard]] bool capturePreparedSceneBvhCacheReuse(u64 staticSceneHash, u32 instanceCount);
     [[nodiscard]] bool matchesPreparedSceneBvh(
         bool staticScene,
         u64 staticSceneHash,
@@ -926,9 +933,9 @@ private:
         usize meshCount,
         u32 instanceCount
     );
-    // Pure software keeps the descriptor tables populated by preflight and only verifies them while recording;
-    // healthy hybrid restores that immutable table after its hardware preparation has repurposed the live state.
-    [[nodiscard]] bool recordPreparedSceneSwBvhTraversal(bool restoreMutableTables = true);
+    // Preflight leaves the exact software descriptor tables populated for pure and hybrid recording. The frozen
+    // traversal validates those tables and their retained resource identities without republishing mutable state.
+    [[nodiscard]] bool recordPreparedSceneSwBvhTraversal();
     void clearPreparedSceneSwBvhTraversal()noexcept;
     [[nodiscard]] bool capturePreparedSceneTlasBuild(
         bool staticScene,
@@ -1272,8 +1279,8 @@ private:
     // Persist across graph declaration/recording so the immutable blob and compatibility writer never regather
     // mutable renderer state after preflight. The bytes are tightly packed NwbCausticEmissionTargetGpu records.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedCausticEmissionTargetBytes;
-    // The complete shadow material context remains retained until the accepting Shadow Preparation packet commits its
-    // static cache. Each vector is one ABI-coupled part of the same payload; never graph-upload one independently.
+    // A fresh shadow material context retains all three ABI-coupled byte streams until Shadow Preparation accepts.
+    // Accepted software-cache reuse retains only the same immutable storage identity, counts, and hash.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedShadowInstanceMaterialBytes;
     Vector<u8, Core::Alloc::GlobalArena> m_preparedShadowInstanceBytes;
     Vector<u8, Core::Alloc::GlobalArena> m_preparedShadowMaterialTypedBytes;
@@ -1293,6 +1300,7 @@ private:
     PreparedShadowMaterialContextRoute m_preparedShadowMaterialContextRoute = PreparedShadowMaterialContextRoute::None;
     bool m_preparedShadowMaterialContextStatic = false;
     bool m_preparedShadowMaterialContextReady = false;
+    bool m_preparedShadowMaterialContextUploadRequired = false;
     // The transient HW fallback is separate from the final SW graph upload. It retains only the material-context
     // payload because the preceding Shadow Preparation work has already recorded the frozen HW TLAS/BLAS plan.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedHybridHardwareFallbackBytes;
@@ -1315,9 +1323,9 @@ private:
     bool m_preparedHybridHardwareFallbackStatic = false;
     bool m_preparedHybridHardwareFallbackReady = false;
     bool m_preparedHybridHardwareFallbackRecorded = false;
-    // The CPU-built software scene BVH must retain node and leaf-instance bytes together: each node's leaf range
-    // indexes this exact instance stream. Hybrid frames graph-own this independent pair and their final
-    // software-compatible material context, while the hardware TLAS plan retains its own retry boundary.
+    // A fresh CPU-built software scene BVH retains node and leaf-instance bytes together because each node's leaf
+    // range indexes that exact instance stream. An accepted static-cache reuse retains only the same immutable
+    // storage identity and hash; it remains traversal-ready without manufacturing another graph upload.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedSceneBvhNodeBytes;
     Vector<u8, Core::Alloc::GlobalArena> m_preparedSceneBvhInstanceBytes;
     Core::BufferHandle m_preparedSceneBvhNodeBuffer;
@@ -1331,8 +1339,9 @@ private:
     u64 m_preparedSceneBvhStaticSceneHash = 0u;
     bool m_preparedSceneBvhStatic = false;
     bool m_preparedSceneBvhReady = false;
-    // The graph uploads frozen scene/material bytes, and this companion plan freezes the matching traversal table so
-    // healthy hybrid recording need not rebuild CPU scene data. ECS mutation versions reject stale frozen plans.
+    bool m_preparedSceneBvhUploadRequired = false;
+    // Fresh graph uploads and accepted static-cache reuse both freeze the matching traversal table so healthy hybrid
+    // recording never rebuilds CPU scene data. ECS mutation versions reject stale frozen plans.
     PreparedSceneSwBvhMeshVector m_preparedSceneSwBvhMeshes;
     u32 m_preparedSceneSwBvhInstanceCount = 0u;
     u64 m_preparedSceneSwBvhRendererMutationVersion = 0u;

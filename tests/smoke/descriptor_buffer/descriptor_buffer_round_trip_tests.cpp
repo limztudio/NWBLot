@@ -8170,10 +8170,10 @@ TEST_F(DescriptorBufferRoundTripTest, HostTimerResetRejectsForeignDeviceQueryOwn
 }
 
 
-// The graph runtime lives longer than one native device in the renderer.  Before the owner tears a device down it
-// must release packet-owned command lists and completion tokens; after recreation, compiler output and recording
-// state must bind only to the new physical-queue generation.  Exercise that complete lifetime with a real Vulkan
-// device rather than inferring it from two unrelated scopes.
+// The graph runtime can outlive one native device in the renderer. Keep a retired CPU-only plan, recording attempt,
+// transaction, queue identity, and completion token across real device recreation while releasing its native command
+// list first. The replacement recorder, submitter, token validator, and arena registry must all reject that state
+// before a newly compiled plan can acquire replacement-generation native storage.
 TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossActualDeviceLifetime){
     HeadlessGraphicsScope recoveryScope;
     if(!recoveryScope.initialize())
@@ -8182,20 +8182,24 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
     auto& firstDevice = recoveryScope.graphics().getDevice();
     const u16 firstDeviceGeneration = firstDevice.getDeviceGeneration();
 
-    GpuTaskGraph graph(recoveryScope.arena());
-    GpuTaskGraphAnalysis analysis(recoveryScope.arena());
-    GpuTaskGraphQueueAssignments assignments(recoveryScope.arena());
-    GpuCompiledGraph compiledGraph(recoveryScope.arena());
-    GpuRecordedGraph recordedGraph(recoveryScope.arena());
-    GpuGraphSubmissionTransaction transaction(recoveryScope.arena());
+    GpuTaskGraph retiredGraph(recoveryScope.arena());
+    GpuTaskGraphAnalysis retiredAnalysis(recoveryScope.arena());
+    GpuTaskGraphQueueAssignments retiredAssignments(recoveryScope.arena());
+    GpuCompiledGraph retiredCompiledGraph(recoveryScope.arena());
+    GpuRecordedGraph nativeRecordedGraph(recoveryScope.arena());
+    GpuRecordedGraph staleRecordedGraph(recoveryScope.arena());
+    GpuGraphSubmissionTransaction retiredTransaction(recoveryScope.arena());
     Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/recreate_graph_packet_scratch"));
     const GpuTaskGraphCompiler compiler;
 
-    GpuQueueRequest graphicsQueue;
-    graphicsQueue.requiredCapabilities = GpuQueueCapability::Graphics;
-    graphicsQueue.preferredQueue = GpuQueuePreference::Graphics;
-    graphicsQueue.allowFallback = false;
-    graphicsQueue.compilerMayOverridePreference = false;
+    GpuQueueRequest graphicsQueueRequest;
+    graphicsQueueRequest.requiredCapabilities = GpuQueueCapability::Graphics;
+    graphicsQueueRequest.preferredQueue = GpuQueuePreference::Graphics;
+    graphicsQueueRequest.allowFallback = false;
+    graphicsQueueRequest.compilerMayOverridePreference = false;
+    GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
 
     bool firstShouldRecord = true;
     bool firstAttempted = false;
@@ -8203,9 +8207,10 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
     firstDesc
         .setIdentity(Name("tests/descriptor_buffer/recreate_graph_packet_first"))
         .setMarkerLabel("Recreate Graph Packet First")
-        .setQueue(graphicsQueue)
+        .setQueue(graphicsQueueRequest)
+        .setScheduling(scheduling)
     ;
-    const GpuTaskId firstTask = graph.addTask<NativePacketCaptureRetryTask>(
+    const GpuTaskId firstTask = retiredGraph.addTask<NativePacketCaptureRetryTask>(
         firstDesc,
         NativePacketCaptureRetryTask::Payload{
             .shouldRecord = &firstShouldRecord,
@@ -8214,87 +8219,16 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
     );
     ASSERT_TRUE(firstTask.valid());
 
-    const GpuPhysicalQueueTopology firstTopology = firstDevice.getPhysicalQueueTopology();
-    ASSERT_NE(firstTopology.queues, nullptr);
-    ASSERT_GT(firstTopology.queueCount, 0u);
-    ASSERT_TRUE(compiler.compile(
-        graph,
-        analysis,
-        firstTopology,
-        assignments,
-        compiledGraph,
-        scratchArena
-    ));
-    const GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(firstTask);
-    ASSERT_TRUE(firstPacket.valid());
-
-    {
-        const GpuNativePacketRecorder recorder(firstDevice);
-        ASSERT_TRUE(recorder.recordPacket(
-            graph,
-            compiledGraph,
-            GpuNativePacketRecordDesc{ .packet = firstPacket },
-            recordedGraph
-        ));
-    }
-    EXPECT_TRUE(firstAttempted);
-    ASSERT_NE(recordedGraph.find(firstPacket), nullptr);
-
-    transaction.reset(compiledGraph);
-    {
-        const GpuTaskGraphSubmitter submitter(firstDevice);
-        ASSERT_TRUE(submitter.submitPacket(
-            graph,
-            compiledGraph,
-            recordedGraph,
-            firstPacket,
-            nullptr,
-            0u,
-            transaction,
-            scratchArena
-        ));
-    }
-    const QueueSubmissionToken retiredToken = transaction.packetToken(firstPacket);
-    ASSERT_TRUE(retiredToken.valid());
-    ASSERT_TRUE(retiredToken.matchesPhysicalQueue(
-        compiledGraph.packet(firstPacket).queue.index,
-        firstDeviceGeneration
-    ));
-    ASSERT_TRUE(firstDevice.waitForIdle());
-
-    // This is the production invalidation order used before Graphics::destroy(): dropping the invalid compiled
-    // graph makes reset() release every packet-owned CommandList while the old device and its command pools still
-    // exist. The state containers themselves intentionally survive so they can be rebound below.
-    graph.reset();
-    analysis.reset();
-    assignments.reset();
-    compiledGraph.reset();
-    recordedGraph.reset(compiledGraph);
-    transaction.reset(compiledGraph);
-    EXPECT_EQ(recordedGraph.find(firstPacket), nullptr);
-    EXPECT_FALSE(recordedGraph.validFor(compiledGraph));
-    EXPECT_FALSE(transaction.validFor(compiledGraph));
-
-    recoveryScope.graphics().destroy();
-    ASSERT_TRUE(recoveryScope.graphics().createHeadlessDevice());
-    auto& secondDevice = recoveryScope.graphics().getDevice();
-    const u16 secondDeviceGeneration = secondDevice.getDeviceGeneration();
-    EXPECT_NE(secondDeviceGeneration, firstDeviceGeneration);
-    EXPECT_FALSE(secondDevice.matchesPhysicalQueueIdentity(
-        retiredToken.queue,
-        retiredToken.physicalQueueIndex,
-        retiredToken.deviceGeneration
-    ));
-
     bool secondShouldRecord = true;
     bool secondAttempted = false;
     GpuTaskDesc secondDesc;
     secondDesc
         .setIdentity(Name("tests/descriptor_buffer/recreate_graph_packet_second"))
         .setMarkerLabel("Recreate Graph Packet Second")
-        .setQueue(graphicsQueue)
+        .setQueue(graphicsQueueRequest)
+        .setScheduling(scheduling)
     ;
-    const GpuTaskId secondTask = graph.addTask<NativePacketCaptureRetryTask>(
+    const GpuTaskId secondTask = retiredGraph.addTask<NativePacketCaptureRetryTask>(
         secondDesc,
         NativePacketCaptureRetryTask::Payload{
             .shouldRecord = &secondShouldRecord,
@@ -8302,55 +8236,304 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
         }
     );
     ASSERT_TRUE(secondTask.valid());
-    EXPECT_NE(secondTask, firstTask);
 
-    const GpuPhysicalQueueTopology secondTopology = secondDevice.getPhysicalQueueTopology();
-    ASSERT_NE(secondTopology.queues, nullptr);
-    ASSERT_GT(secondTopology.queueCount, 0u);
+    bool thirdShouldRecord = true;
+    bool thirdAttempted = false;
+    GpuTaskDesc thirdDesc;
+    thirdDesc
+        .setIdentity(Name("tests/descriptor_buffer/recreate_graph_packet_third"))
+        .setMarkerLabel("Recreate Graph Packet Third")
+        .setQueue(graphicsQueueRequest)
+        .setScheduling(scheduling)
+    ;
+    const GpuTaskId thirdTask = retiredGraph.addTask<NativePacketCaptureRetryTask>(
+        thirdDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &thirdShouldRecord,
+            .attempted = &thirdAttempted,
+        }
+    );
+    ASSERT_TRUE(thirdTask.valid());
+
+    const GpuPhysicalQueueTopology retiredTopology = firstDevice.getPhysicalQueueTopology();
+    ASSERT_NE(retiredTopology.queues, nullptr);
+    ASSERT_GT(retiredTopology.queueCount, 0u);
     ASSERT_TRUE(compiler.compile(
-        graph,
-        analysis,
-        secondTopology,
-        assignments,
-        compiledGraph,
+        retiredGraph,
+        retiredAnalysis,
+        retiredTopology,
+        retiredAssignments,
+        retiredCompiledGraph,
         scratchArena
     ));
-    const GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(secondTask);
+    ASSERT_EQ(retiredCompiledGraph.packetCount(), 3u);
+    const GpuSubmissionPacketId firstPacket = retiredCompiledGraph.packetForTask(firstTask);
+    const GpuSubmissionPacketId secondPacket = retiredCompiledGraph.packetForTask(secondTask);
+    const GpuSubmissionPacketId thirdPacket = retiredCompiledGraph.packetForTask(thirdTask);
+    ASSERT_TRUE(firstPacket.valid());
     ASSERT_TRUE(secondPacket.valid());
-    EXPECT_FALSE(compiledGraph.validPacket(firstPacket));
-    EXPECT_FALSE(recordedGraph.validFor(compiledGraph));
-    EXPECT_FALSE(transaction.validFor(compiledGraph));
+    ASSERT_TRUE(thirdPacket.valid());
+    EXPECT_NE(firstPacket, secondPacket);
+    EXPECT_NE(secondPacket, thirdPacket);
+    EXPECT_NE(firstPacket, thirdPacket);
+
+    {
+        const GpuNativePacketRecorder recorder(firstDevice);
+        ASSERT_TRUE(recorder.recordPacket(
+            retiredGraph,
+            retiredCompiledGraph,
+            GpuNativePacketRecordDesc{ .packet = firstPacket },
+            nativeRecordedGraph
+        ));
+    }
+    EXPECT_TRUE(firstAttempted);
+    EXPECT_FALSE(secondAttempted);
+    EXPECT_FALSE(thirdAttempted);
+    ASSERT_TRUE(nativeRecordedGraph.validFor(retiredGraph, retiredCompiledGraph));
+    const GpuRecordedPacket* const retiredRecordedPacket = nativeRecordedGraph.find(firstPacket);
+    ASSERT_NE(retiredRecordedPacket, nullptr);
+    ASSERT_EQ(retiredRecordedPacket->commandListCount, 1u);
+    ASSERT_NE(retiredRecordedPacket->commandLists[0u], nullptr);
+    const GpuPhysicalQueueId retiredQueue = retiredRecordedPacket->commandLists[0u]->getDescription().physicalQueue;
+    ASSERT_TRUE(retiredQueue.valid());
+    EXPECT_EQ(retiredQueue, retiredCompiledGraph.packet(firstPacket).queue);
+    const GpuCommandArenaStatistics retiredArenaStatistics = firstDevice.getCommandArenaStatistics(retiredQueue);
+    ASSERT_TRUE(retiredArenaStatistics.valid());
+    EXPECT_EQ(retiredArenaStatistics.queue, retiredQueue);
+
+    staleRecordedGraph.resetForRecording(retiredGraph, retiredCompiledGraph);
+    ASSERT_TRUE(staleRecordedGraph.validFor(retiredGraph, retiredCompiledGraph));
+    ASSERT_EQ(
+        staleRecordedGraph.recordingAttemptGeneration(),
+        nativeRecordedGraph.recordingAttemptGeneration()
+    );
+    const u64 retiredRecordingAttemptGeneration = staleRecordedGraph.recordingAttemptGeneration();
+    EXPECT_EQ(staleRecordedGraph.find(firstPacket), nullptr);
+    EXPECT_EQ(staleRecordedGraph.find(secondPacket), nullptr);
+    EXPECT_EQ(staleRecordedGraph.find(thirdPacket), nullptr);
+
+    // Put the submitter probe's packet into the graph lifecycle's recorded state while the first device is alive.
+    // Its native list is released below, leaving only the empty CPU recording-attempt artifact across recreation.
+    {
+        const GpuNativePacketRecorder recorder(firstDevice);
+        ASSERT_TRUE(recorder.recordPacket(
+            retiredGraph,
+            retiredCompiledGraph,
+            GpuNativePacketRecordDesc{ .packet = thirdPacket },
+            staleRecordedGraph
+        ));
+    }
+    EXPECT_TRUE(thirdAttempted);
+    ASSERT_NE(staleRecordedGraph.find(thirdPacket), nullptr);
+
+    retiredTransaction.reset(retiredCompiledGraph);
+    {
+        const GpuTaskGraphSubmitter submitter(firstDevice);
+        ASSERT_TRUE(submitter.submitPacket(
+            retiredGraph,
+            retiredCompiledGraph,
+            nativeRecordedGraph,
+            firstPacket,
+            nullptr,
+            0u,
+            retiredTransaction,
+            scratchArena
+        ));
+    }
+    const QueueSubmissionToken retiredToken = retiredTransaction.packetToken(firstPacket);
+    ASSERT_TRUE(retiredToken.valid());
+    ASSERT_TRUE(retiredToken.matchesPhysicalQueue(
+        retiredQueue.index,
+        firstDeviceGeneration
+    ));
+    ASSERT_TRUE(firstDevice.validateSubmissionWaitToken(retiredToken));
+    ASSERT_TRUE(firstDevice.waitForIdle());
+
+    // A native CommandList cannot cross its owning Device lifetime. The CPU-only graph plan, empty recording
+    // attempt, submission transaction, queue identity, and token intentionally remain alive for stale-state probes.
+    nativeRecordedGraph.reset(retiredCompiledGraph);
+    staleRecordedGraph.resetForRecording(retiredGraph, retiredCompiledGraph);
+    thirdAttempted = false;
+    EXPECT_EQ(nativeRecordedGraph.find(firstPacket), nullptr);
+    ASSERT_TRUE(staleRecordedGraph.validFor(retiredGraph, retiredCompiledGraph));
+    EXPECT_EQ(staleRecordedGraph.recordingAttemptGeneration(), retiredRecordingAttemptGeneration);
+    EXPECT_EQ(staleRecordedGraph.find(thirdPacket), nullptr);
+    ASSERT_TRUE(retiredTransaction.validFor(retiredCompiledGraph));
+
+    recoveryScope.graphics().destroy();
+    ASSERT_TRUE(recoveryScope.graphics().createHeadlessDevice());
+    auto& secondDevice = recoveryScope.graphics().getDevice();
+    const u16 secondDeviceGeneration = secondDevice.getDeviceGeneration();
+    EXPECT_NE(secondDeviceGeneration, firstDeviceGeneration);
+    EXPECT_TRUE(retiredGraph.validForDeviceGeneration(secondDeviceGeneration));
+    EXPECT_TRUE(retiredCompiledGraph.validFor(retiredGraph));
+    EXPECT_EQ(retiredCompiledGraph.deviceGeneration(), firstDeviceGeneration);
+    EXPECT_TRUE(staleRecordedGraph.validFor(retiredGraph, retiredCompiledGraph));
+    EXPECT_TRUE(retiredTransaction.validFor(retiredCompiledGraph));
+    EXPECT_FALSE(secondDevice.matchesPhysicalQueueIdentity(
+        retiredToken.queue,
+        retiredToken.physicalQueueIndex,
+        retiredToken.deviceGeneration
+    ));
+    EXPECT_FALSE(secondDevice.validateSubmissionWaitToken(retiredToken));
+    EXPECT_FALSE(secondDevice.getCommandArenaStatistics(retiredQueue).valid());
+
+    const GpuPhysicalQueueId replacementQueue = secondDevice.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(replacementQueue.valid());
+    EXPECT_NE(replacementQueue, retiredQueue);
+    EXPECT_EQ(replacementQueue.deviceGeneration, secondDeviceGeneration);
+    const GpuCommandArenaStatistics beforeStaleStatistics =
+        secondDevice.getCommandArenaStatistics(replacementQueue)
+    ;
+    ASSERT_TRUE(beforeStaleStatistics.valid());
+
+    {
+        const GpuNativePacketRecorder recorder(secondDevice);
+        EXPECT_FALSE(recorder.recordPacket(
+            retiredGraph,
+            retiredCompiledGraph,
+            GpuNativePacketRecordDesc{ .packet = secondPacket },
+            staleRecordedGraph
+        ));
+    }
+    EXPECT_FALSE(secondAttempted);
+    EXPECT_EQ(staleRecordedGraph.find(secondPacket), nullptr);
+
+    {
+        const GpuTaskGraphSubmitter submitter(secondDevice);
+        EXPECT_FALSE(submitter.submitPacket(
+            retiredGraph,
+            retiredCompiledGraph,
+            staleRecordedGraph,
+            thirdPacket,
+            nullptr,
+            0u,
+            retiredTransaction,
+            scratchArena
+        ));
+    }
+    EXPECT_FALSE(thirdAttempted);
+    EXPECT_EQ(retiredTransaction.packetToken(firstPacket).value, retiredToken.value);
+    EXPECT_EQ(retiredTransaction.packetToken(firstPacket).deviceGeneration, retiredToken.deviceGeneration);
+    EXPECT_FALSE(retiredTransaction.packetToken(secondPacket).valid());
+    EXPECT_FALSE(retiredTransaction.packetToken(thirdPacket).valid());
+
+    const GpuCommandArenaStatistics afterStaleStatistics =
+        secondDevice.getCommandArenaStatistics(replacementQueue)
+    ;
+    ASSERT_TRUE(afterStaleStatistics.valid());
+    EXPECT_EQ(afterStaleStatistics.workerArenaCount, beforeStaleStatistics.workerArenaCount);
+    EXPECT_EQ(afterStaleStatistics.commandPoolEpochCount, beforeStaleStatistics.commandPoolEpochCount);
+    EXPECT_EQ(afterStaleStatistics.growthEventCount, beforeStaleStatistics.growthEventCount);
+    EXPECT_EQ(afterStaleStatistics.resetEventCount, beforeStaleStatistics.resetEventCount);
+    EXPECT_EQ(afterStaleStatistics.currentCommandBufferCount, beforeStaleStatistics.currentCommandBufferCount);
+
+    ASSERT_TRUE(retiredTransaction.discardUnaccepted(
+        retiredGraph,
+        retiredCompiledGraph,
+        staleRecordedGraph.recordingAttemptGeneration()
+    ));
+
+    GpuTaskGraph replacementGraph(recoveryScope.arena());
+    GpuTaskGraphAnalysis replacementAnalysis(recoveryScope.arena());
+    GpuTaskGraphQueueAssignments replacementAssignments(recoveryScope.arena());
+    GpuCompiledGraph replacementCompiledGraph(recoveryScope.arena());
+    GpuRecordedGraph replacementRecordedGraph(recoveryScope.arena());
+    GpuGraphSubmissionTransaction replacementTransaction(recoveryScope.arena());
+    bool replacementShouldRecord = true;
+    bool replacementAttempted = false;
+    GpuTaskDesc replacementDesc;
+    replacementDesc
+        .setIdentity(Name("tests/descriptor_buffer/recreate_graph_packet_replacement"))
+        .setMarkerLabel("Recreate Graph Packet Replacement")
+        .setQueue(graphicsQueueRequest)
+        .setScheduling(scheduling)
+    ;
+    const GpuTaskId replacementTask = replacementGraph.addTask<NativePacketCaptureRetryTask>(
+        replacementDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &replacementShouldRecord,
+            .attempted = &replacementAttempted,
+        }
+    );
+    ASSERT_TRUE(replacementTask.valid());
+
+    const GpuPhysicalQueueTopology replacementTopology = secondDevice.getPhysicalQueueTopology();
+    ASSERT_NE(replacementTopology.queues, nullptr);
+    ASSERT_GT(replacementTopology.queueCount, 0u);
+    ASSERT_TRUE(compiler.compile(
+        replacementGraph,
+        replacementAnalysis,
+        replacementTopology,
+        replacementAssignments,
+        replacementCompiledGraph,
+        scratchArena
+    ));
+    ASSERT_EQ(replacementCompiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId replacementPacket = replacementCompiledGraph.packetForTask(replacementTask);
+    ASSERT_TRUE(replacementPacket.valid());
+    EXPECT_EQ(replacementCompiledGraph.deviceGeneration(), secondDeviceGeneration);
+    EXPECT_EQ(replacementCompiledGraph.packet(replacementPacket).queue, replacementQueue);
 
     {
         const GpuNativePacketRecorder recorder(secondDevice);
         ASSERT_TRUE(recorder.recordPacket(
-            graph,
-            compiledGraph,
-            GpuNativePacketRecordDesc{ .packet = secondPacket },
-            recordedGraph
+            replacementGraph,
+            replacementCompiledGraph,
+            GpuNativePacketRecordDesc{ .packet = replacementPacket },
+            replacementRecordedGraph
         ));
     }
-    EXPECT_TRUE(secondAttempted);
-    ASSERT_NE(recordedGraph.find(secondPacket), nullptr);
+    EXPECT_TRUE(replacementAttempted);
+    const GpuRecordedPacket* const replacementRecordedPacket = replacementRecordedGraph.find(replacementPacket);
+    ASSERT_NE(replacementRecordedPacket, nullptr);
+    ASSERT_EQ(replacementRecordedPacket->commandListCount, 1u);
+    ASSERT_NE(replacementRecordedPacket->commandLists[0u], nullptr);
+    const GpuPhysicalQueueId recordedReplacementQueue =
+        replacementRecordedPacket->commandLists[0u]->getDescription().physicalQueue
+    ;
+    EXPECT_EQ(recordedReplacementQueue, replacementQueue);
+    EXPECT_EQ(recordedReplacementQueue, replacementCompiledGraph.packet(replacementPacket).queue);
+    EXPECT_EQ(recordedReplacementQueue.deviceGeneration, secondDeviceGeneration);
+    EXPECT_NE(recordedReplacementQueue, retiredQueue);
 
-    transaction.reset(compiledGraph);
+    const GpuCommandArenaStatistics replacementRecordingStatistics =
+        secondDevice.getCommandArenaStatistics(replacementQueue)
+    ;
+    ASSERT_TRUE(replacementRecordingStatistics.valid());
+    EXPECT_GT(
+        replacementRecordingStatistics.growthEventCount + replacementRecordingStatistics.resetEventCount,
+        afterStaleStatistics.growthEventCount + afterStaleStatistics.resetEventCount
+    );
+    EXPECT_GT(
+        replacementRecordingStatistics.leasedCommandBufferCount,
+        afterStaleStatistics.leasedCommandBufferCount
+    );
+
+    replacementTransaction.reset(replacementCompiledGraph);
     {
         const GpuTaskGraphSubmitter submitter(secondDevice);
         ASSERT_TRUE(submitter.submitPacket(
-            graph,
-            compiledGraph,
-            recordedGraph,
-            secondPacket,
+            replacementGraph,
+            replacementCompiledGraph,
+            replacementRecordedGraph,
+            replacementPacket,
             nullptr,
             0u,
-            transaction,
+            replacementTransaction,
             scratchArena
         ));
     }
-    const QueueSubmissionToken replacementToken = transaction.packetToken(secondPacket);
+    const QueueSubmissionToken replacementToken = replacementTransaction.packetToken(replacementPacket);
+    ASSERT_TRUE(replacementToken.valid());
     ASSERT_TRUE(replacementToken.matchesPhysicalQueue(
-        compiledGraph.packet(secondPacket).queue.index,
+        replacementQueue.index,
         secondDeviceGeneration
+    ));
+    EXPECT_TRUE(secondDevice.validateSubmissionWaitToken(replacementToken));
+    EXPECT_FALSE(replacementToken.matchesPhysicalQueue(
+        retiredToken.physicalQueueIndex,
+        retiredToken.deviceGeneration
     ));
     EXPECT_NE(replacementToken.deviceGeneration, retiredToken.deviceGeneration);
     ASSERT_TRUE(secondDevice.waitForIdle());

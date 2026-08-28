@@ -152,10 +152,7 @@ concept DeviceApi = requires(
     { device.executeCommandLists(commandLists, usize{}, GpuPhysicalQueueId{}, outSubmitted) }->SameAs<u64>;
     { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics, submissionDesc) }->SameAs<QueueSubmissionToken>;
     { device.executeCommandLists(commandLists, usize{}, GpuPhysicalQueueId{}, submissionDesc) }->SameAs<QueueSubmissionToken>;
-    { device.executeCommandLists(commandLists, usize{}, RenderLane::AsyncCompute, submissionDesc) }->SameAs<QueueSubmissionToken>;
     device.queueWaitForCommandList(CommandQueue::Graphics, CommandQueue::Graphics, u64{});
-    { device.resolveRenderLane(RenderLane::AsyncCompute) }->SameAs<CommandQueue::Enum>;
-    { device.isRenderLaneDedicated(RenderLane::AsyncCompute) }->SameAs<bool>;
     { device.getDeviceGeneration() }->SameAs<u16>;
     { device.getPhysicalQueueIndex(CommandQueue::Graphics) }->SameAs<u16>;
     { device.getPrimaryPhysicalQueue(CommandQueue::Graphics) }->SameAs<GpuPhysicalQueueId>;
@@ -290,8 +287,6 @@ concept CommandListApi = requires(
     commandList.releaseBufferOwnership(buffer, GpuPhysicalQueueId{});
     commandList.releaseTextureOwnership(texture, subresources, CommandQueue::Transfer);
     commandList.releaseBufferOwnership(buffer, CommandQueue::Transfer);
-    commandList.releaseTextureOwnership(texture, subresources, RenderLane::AsyncCompute);
-    commandList.releaseBufferOwnership(buffer, RenderLane::AsyncCompute);
     commandList.setPermanentTextureState(texture, ResourceStates::ShaderResource);
     commandList.setPermanentBufferState(buffer, ResourceStates::ShaderResource);
     commandList.commitBarriers();

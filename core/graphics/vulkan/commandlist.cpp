@@ -296,8 +296,6 @@ bool CommandList::descriptionMatchesCreation()const noexcept{
     return
         m_desc.queueType == m_creationDesc.queueType
         && m_desc.physicalQueue == m_creationDesc.physicalQueue
-        && m_desc.renderLane == m_creationDesc.renderLane
-        && m_desc.resolveRenderLane == m_creationDesc.resolveRenderLane
         && m_desc.recordingWorkerDomain == m_creationDesc.recordingWorkerDomain
         && m_desc.recordingWorkerIndex == m_creationDesc.recordingWorkerIndex
     ;

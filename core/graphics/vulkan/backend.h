@@ -2771,12 +2771,9 @@ public:
         ResourceStates::Mask stateBits,
         bool forceMemoryDependency = false
     );
-    // Exports an exclusive resource to an ordered physical consumer queue. RenderLane overloads preserve the
-    // deprecated lane-facing contract while graph lowering uses the resolved CommandQueue transport directly.
+    // Exports an exclusive resource to an ordered physical consumer queue.
     void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, CommandQueue::Enum destinationQueue);
     void releaseBufferOwnership(Buffer* buffer, CommandQueue::Enum destinationQueue);
-    void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, RenderLane::Enum destinationLane);
-    void releaseBufferOwnership(Buffer* buffer, RenderLane::Enum destinationLane);
     void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, GpuPhysicalQueueId destinationQueue);
     void releaseBufferOwnership(Buffer* buffer, GpuPhysicalQueueId destinationQueue);
 
@@ -3273,7 +3270,7 @@ public:
         const GpuPhysicalQueueId& executionQueue,
         bool* outCommandListsSubmitted = nullptr
     );
-    // Cross-lane dependencies are immutable submission-local token edges.
+    // Cross-queue dependencies are immutable submission-local token edges.
     [[nodiscard]] QueueSubmissionToken executeCommandLists(
         CommandList* const* pCommandLists,
         usize numCommandLists,
@@ -3286,15 +3283,7 @@ public:
         const GpuPhysicalQueueId& executionQueue,
         const QueueSubmissionDesc& submitDesc
     );
-    [[nodiscard]] QueueSubmissionToken executeCommandLists(
-        CommandList* const* pCommandLists,
-        usize numCommandLists,
-        RenderLane::Enum executionLane,
-        const QueueSubmissionDesc& submitDesc
-    );
     void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance);
-    [[nodiscard]] CommandQueue::Enum resolveRenderLane(RenderLane::Enum lane)const;
-    [[nodiscard]] bool isRenderLaneDedicated(RenderLane::Enum lane)const;
     // The registry owns every active native VkQueue. Broad CommandQueue calls resolve through the designated
     // primary record only for legacy callers; graph recording/submission selects a concrete ID directly.
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_deviceGeneration; }

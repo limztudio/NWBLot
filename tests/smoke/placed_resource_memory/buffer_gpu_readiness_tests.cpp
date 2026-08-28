@@ -566,7 +566,6 @@ TEST_F(BufferGpuReadinessTest, NullUnknownScopeConflictAndRetentionContractsAreE
     commandList->setPermanentBufferState(nullptr, ResourceStates::CopyDest);
     commandList->releaseBufferOwnership(nullptr, GpuPhysicalQueueId{});
     commandList->releaseBufferOwnership(nullptr, static_cast<CommandQueue::Enum>(UINT8_MAX));
-    commandList->releaseBufferOwnership(nullptr, static_cast<RenderLane::Enum>(UINT8_MAX));
     EXPECT_FALSE(commandList->commandRecordingFailed());
     EXPECT_FALSE(commandList->hasCommandBuffer());
 

@@ -52,8 +52,6 @@ namespace __hidden_command_list_provenance_tests{
     return
         left.queueType == right.queueType
         && left.physicalQueue == right.physicalQueue
-        && left.renderLane == right.renderLane
-        && left.resolveRenderLane == right.resolveRenderLane
         && left.recordingWorkerDomain == right.recordingWorkerDomain
         && left.recordingWorkerIndex == right.recordingWorkerIndex
     ;

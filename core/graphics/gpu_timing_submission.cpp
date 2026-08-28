@@ -58,27 +58,7 @@ QueueSubmissionToken GpuTimingSubmissionTicket::submit(
     Device& device,
     CommandList* const* commandLists,
     const usize commandListCount,
-    const RenderLane::Enum executionLane,
-    const QueueSubmissionDesc& submitDesc
-){
-    if(!prepareSubmission(commandLists, commandListCount))
-        return {};
-
-    const QueueSubmissionToken token = device.executeCommandLists(
-        commandLists,
-        commandListCount,
-        executionLane,
-        submitDesc
-    );
-    resolveSubmission(token);
-    return token;
-}
-
-QueueSubmissionToken GpuTimingSubmissionTicket::submit(
-    Device& device,
-    CommandList* const* commandLists,
-    const usize commandListCount,
-    const GpuPhysicalQueueId& executionQueue,
+    const CommandQueue::Enum executionQueue,
     const QueueSubmissionDesc& submitDesc
 ){
     if(!prepareSubmission(commandLists, commandListCount))
@@ -98,7 +78,7 @@ QueueSubmissionToken GpuTimingSubmissionTicket::submit(
     Device& device,
     CommandList* const* commandLists,
     const usize commandListCount,
-    const CommandQueue::Enum executionQueue,
+    const GpuPhysicalQueueId& executionQueue,
     const QueueSubmissionDesc& submitDesc
 ){
     if(!prepareSubmission(commandLists, commandListCount))

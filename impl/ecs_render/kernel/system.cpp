@@ -111,7 +111,7 @@ void RendererSystem::reportLaggedLightingTransition(const LaggedLightingReport r
         break;
     case LaggedLightingReport::NoDedicatedAsyncCompute:
         NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated AsyncCompute lane, target generation {})"),
+            NWB_TEXT("RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue, target generation {})"),
             targetGeneration
         );
         break;

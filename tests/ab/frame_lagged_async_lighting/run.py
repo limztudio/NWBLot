@@ -35,7 +35,7 @@ from window_capture_smoke import (  # noqa: E402
 )
 
 
-NO_DEDICATED_ASYNC_COMPUTE = "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated AsyncCompute lane"
+NO_DEDICATED_ASYNC_COMPUTE = "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue"
 BOOTSTRAP_ACCEPTED = "RendererSystem: frame-lagged async lighting bootstrap accepted"
 ACTIVE_HISTORY_ACCEPTED = "RendererSystem: frame-lagged async lighting active history accepted"
 CURRENT_FRAME_ACCEPTED = "RendererSystem: frame-lagged async lighting current-frame path accepted"
@@ -126,7 +126,7 @@ def require_final_run_verdict(log_text: str, app_exit_code: int | None, app_exit
     if NO_DEDICATED_ASYNC_COMPUTE in log_text:
         raise DedicatedComputeUnavailable(
             "frame-lagged async-lighting smoke skipped: the requested feature accepted the Graphics queue route "
-            "because this adapter has no dedicated AsyncCompute lane"
+            "because this adapter has no dedicated Compute queue"
         )
     require_lifecycle_stage(log_text, len(LAGGED_LIGHTING_LIFECYCLE))
 

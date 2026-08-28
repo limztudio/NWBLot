@@ -678,6 +678,12 @@ TEST_F(DescriptorBufferRoundTripTest, FramePublishesMainThreadCpuTimingScopes){
     return device.getPrimaryPhysicalQueue(queue);
 }
 
+[[nodiscard]] static bool HasDedicatedComputeQueue(GraphicsBackend::Device& device){
+    const GpuPhysicalQueueId computeQueue = BackendQueueId(device, CommandQueue::Compute);
+    const GpuPhysicalQueueInfo* const queueInfo = device.getPhysicalQueueInfo(computeQueue);
+    return queueInfo && queueInfo->queueClass == CommandQueue::Compute && queueInfo->dedicated;
+}
+
 
 // A graph declaration can name a known imported state only after native work has materialized that state. Fresh
 // Vulkan images begin UNDEFINED, so tests that intentionally model an external first reader use this small producer
@@ -9354,7 +9360,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffReleasesToDedicatedCom
         GTEST_SKIP() << "External-final handoff: no usable dedicated-compute headless Vulkan device on this host.";
 
     auto& device = asyncScope.graphics().getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+    if(!HasDedicatedComputeQueue(device))
         GTEST_SKIP() << "External-final handoff: adapter has no dedicated compute-only queue family.";
 
     const GpuPhysicalQueueId graphicsQueue = BackendQueueId(device, CommandQueue::Graphics);
@@ -9472,7 +9478,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffReleasesToDedicatedCom
     EXPECT_TRUE(handoff.token.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
 
     CommandListParameters computeParameters;
-    computeParameters.setRenderLane(RenderLane::AsyncCompute);
+    computeParameters.setQueueType(CommandQueue::Compute);
     const CommandListHandle computeConsumer = device.createCommandList(computeParameters);
     ASSERT_NE(computeConsumer.get(), nullptr);
     computeConsumer->open(handoff.stateSource);
@@ -9503,7 +9509,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalStateOrdersOverlappingIndepen
         GTEST_SKIP() << "External-final read ordering: no usable dedicated-compute headless Vulkan device on this host.";
 
     auto& device = asyncScope.graphics().getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+    if(!HasDedicatedComputeQueue(device))
         GTEST_SKIP() << "External-final read ordering: adapter has no dedicated compute-only queue family.";
 
     const GpuPhysicalQueueId graphicsQueue = BackendQueueId(device, CommandQueue::Graphics);
@@ -10349,7 +10355,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsCrossQueueTextu
         GTEST_SKIP() << "Multi-producer external-final handoff: no usable dedicated-compute headless Vulkan device on this host.";
 
     auto& device = asyncScope.graphics().getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+    if(!HasDedicatedComputeQueue(device))
         GTEST_SKIP() << "Multi-producer external-final handoff: adapter has no dedicated compute-only queue family.";
 
     const GpuPhysicalQueueId graphicsQueue = BackendQueueId(device, CommandQueue::Graphics);
@@ -10972,7 +10978,7 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
         GTEST_SKIP() << "Initial-owner handoff: no usable dedicated-compute headless Vulkan device on this host.";
 
     auto& device = asyncScope.graphics().getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+    if(!HasDedicatedComputeQueue(device))
         GTEST_SKIP() << "Initial-owner handoff: adapter has no dedicated compute-only queue family.";
 
     const GpuPhysicalQueueId graphicsQueue = BackendQueueId(device, CommandQueue::Graphics);
@@ -10991,7 +10997,7 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
     ASSERT_NE(buffer.get(), nullptr);
 
     CommandListParameters computeParams;
-    computeParams.setRenderLane(RenderLane::AsyncCompute);
+    computeParams.setQueueType(CommandQueue::Compute);
     const CommandListHandle computePrimer = device.createCommandList(computeParams);
     ASSERT_NE(computePrimer.get(), nullptr);
     computePrimer->open();
@@ -40568,7 +40574,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitExtinctionComputeEmulationShare
 
     auto& graphics = asyncScope.graphics();
     auto& device = graphics.getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+    if(!HasDedicatedComputeQueue(device))
         GTEST_SKIP() << "Async AVBOIT Extinction: adapter has no dedicated compute-only queue family.";
 
     auto& timing = graphics.gpuTiming();
@@ -41161,7 +41167,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitSemanticRangeAcceptsAuxiliaryCo
 
     auto& graphics = asyncScope.graphics();
     auto& device = graphics.getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+    if(!HasDedicatedComputeQueue(device))
         GTEST_SKIP() << "Async AVBOIT semantic range: adapter has no dedicated compute-only queue family.";
 
     auto& timing = graphics.gpuTiming();
@@ -41462,7 +41468,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
 
     auto& graphics = asyncScope.graphics();
     auto& device = graphics.getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+    if(!HasDedicatedComputeQueue(device))
         GTEST_SKIP() << "Async AVBOIT Accumulation: adapter has no dedicated compute-only queue family.";
 
     auto& timing = graphics.gpuTiming();
@@ -42328,7 +42334,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitOccupancyComputeEmulationShares
 
     auto& graphics = asyncScope.graphics();
     auto& device = graphics.getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+    if(!HasDedicatedComputeQueue(device))
         GTEST_SKIP() << "Async AVBOIT Occupancy: adapter has no dedicated compute-only queue family.";
 
     auto& timing = graphics.gpuTiming();
@@ -49988,50 +49994,50 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketMalformedBatchesR
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& timing = s_scope->graphics().gpuTiming();
 
-    auto queueCommandList = device.createCommandList();
-    auto laneCommandList = device.createCommandList();
-    ASSERT_NE(queueCommandList.get(), nullptr);
-    ASSERT_NE(laneCommandList.get(), nullptr);
-    queueCommandList->open();
-    queueCommandList->close();
-    laneCommandList->open();
-    laneCommandList->close();
-    ASSERT_TRUE(queueCommandList->hasCommandBuffer());
-    ASSERT_TRUE(laneCommandList->hasCommandBuffer());
+    auto implicitCommandList = device.createCommandList();
+    auto explicitQueueCommandList = device.createCommandList();
+    ASSERT_NE(implicitCommandList.get(), nullptr);
+    ASSERT_NE(explicitQueueCommandList.get(), nullptr);
+    implicitCommandList->open();
+    implicitCommandList->close();
+    explicitQueueCommandList->open();
+    explicitQueueCommandList->close();
+    ASSERT_TRUE(implicitCommandList->hasCommandBuffer());
+    ASSERT_TRUE(explicitQueueCommandList->hasCommandBuffer());
 
-    CommandList* queueCommandLists[] = { queueCommandList.get() };
-    GpuTimingSubmissionTicket rejectedQueueTicket(timing);
-    EXPECT_FALSE(rejectedQueueTicket.submit(device, nullptr, 0u));
-    EXPECT_FALSE(rejectedQueueTicket.submit(device, queueCommandLists, 1u));
-    EXPECT_TRUE(queueCommandList->hasCommandBuffer());
+    CommandList* implicitCommandLists[] = { implicitCommandList.get() };
+    GpuTimingSubmissionTicket rejectedImplicitTicket(timing);
+    EXPECT_FALSE(rejectedImplicitTicket.submit(device, nullptr, 0u));
+    EXPECT_FALSE(rejectedImplicitTicket.submit(device, implicitCommandLists, 1u));
+    EXPECT_TRUE(implicitCommandList->hasCommandBuffer());
 
-    CommandList* incompleteLaneCommandLists[] = { nullptr };
-    CommandList* laneCommandLists[] = { laneCommandList.get() };
-    GpuTimingSubmissionTicket rejectedLaneTicket(timing);
-    EXPECT_FALSE(rejectedLaneTicket.submit(
+    CommandList* incompleteExplicitCommandLists[] = { nullptr };
+    CommandList* explicitCommandLists[] = { explicitQueueCommandList.get() };
+    GpuTimingSubmissionTicket rejectedExplicitTicket(timing);
+    EXPECT_FALSE(rejectedExplicitTicket.submit(
         device,
-        incompleteLaneCommandLists,
+        incompleteExplicitCommandLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         QueueSubmissionDesc{}
     ).valid());
-    EXPECT_FALSE(rejectedLaneTicket.submit(
+    EXPECT_FALSE(rejectedExplicitTicket.submit(
         device,
-        laneCommandLists,
+        explicitCommandLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         QueueSubmissionDesc{}
     ).valid());
-    EXPECT_TRUE(laneCommandList->hasCommandBuffer());
+    EXPECT_TRUE(explicitQueueCommandList->hasCommandBuffer());
 
-    GpuTimingSubmissionTicket acceptedQueueTicket(timing);
-    ASSERT_TRUE(acceptedQueueTicket.submit(device, queueCommandLists, 1u));
-    GpuTimingSubmissionTicket acceptedLaneTicket(timing);
-    ASSERT_TRUE(acceptedLaneTicket.submit(
+    GpuTimingSubmissionTicket acceptedImplicitTicket(timing);
+    ASSERT_TRUE(acceptedImplicitTicket.submit(device, implicitCommandLists, 1u));
+    GpuTimingSubmissionTicket acceptedExplicitTicket(timing);
+    ASSERT_TRUE(acceptedExplicitTicket.submit(
         device,
-        laneCommandLists,
+        explicitCommandLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         QueueSubmissionDesc{}
     ).valid());
     ASSERT_TRUE(device.waitForIdle());
@@ -51788,7 +51794,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
         device,
         prefixCommandLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(prefixToken.valid());
@@ -51800,7 +51806,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
         device,
         rejectedFinalCommandLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         QueueSubmissionDesc{}
     ).valid());
 
@@ -51820,7 +51826,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
         recoveryToken = device.executeCommandLists(
             recoveryCommandLists,
             1u,
-            RenderLane::Graphics,
+            CommandQueue::Graphics,
             QueueSubmissionDesc{}
         );
     }
@@ -51882,7 +51888,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
         device,
         acceptedPrefixCommandLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(acceptedPrefixToken.valid());
@@ -51892,7 +51898,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
         device,
         acceptedFinalCommandLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(acceptedFinalToken.valid());
@@ -54875,7 +54881,7 @@ TEST_F(DescriptorBufferRoundTripTest, DeclarationStateSourceApplicabilityFollows
         GTEST_SKIP() << "State-source applicability: no usable dedicated-compute headless Vulkan device on this host.";
 
     auto& device = asyncScope.graphics().getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+    if(!HasDedicatedComputeQueue(device))
         GTEST_SKIP() << "State-source applicability: adapter has no dedicated compute-only queue family.";
 
     const BufferHandle graphicsBuffer = device.createBuffer(
@@ -55035,7 +55041,7 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferOwnershipReleaseFailsClosed
         GTEST_SKIP() << "Permanent ownership release: no usable dedicated-compute headless Vulkan device on this host.";
 
     auto& device = asyncScope.graphics().getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+    if(!HasDedicatedComputeQueue(device))
         GTEST_SKIP() << "Permanent ownership release: adapter has no dedicated compute-only queue family.";
 
     const GpuPhysicalQueueId graphicsQueue = BackendQueueId(device, CommandQueue::Graphics);
@@ -55409,38 +55415,6 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffSeparatesCurrentInp
     EXPECT_EQ(nextCompute->getBufferState(sharedInput.get()), ResourceStates::ShaderResource);
     EXPECT_EQ(nextCompute->getBufferState(computeScratch.get()), ResourceStates::UnorderedAccess);
     nextCompute->close();
-}
-
-
-// The logical AsyncCompute lane is always usable by packet code: when explicitly disabled, it resolves to Graphics,
-// preserves ordered execution, and returns a Graphics timeline token rather than inventing a second queue.
-TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRoutesToGraphicsWhenNotEnabled){
-    HeadlessGraphicsScope graphicsRouteScope;
-    ASSERT_TRUE(graphicsRouteScope.setAsyncComputeLaneEnabled(false));
-    ASSERT_TRUE(graphicsRouteScope.initialize());
-
-    auto& device = graphicsRouteScope.graphics().getDevice();
-    EXPECT_EQ(device.resolveRenderLane(RenderLane::AsyncCompute), CommandQueue::Graphics);
-    EXPECT_FALSE(device.isRenderLaneDedicated(RenderLane::AsyncCompute));
-
-    CommandListParameters asyncParams;
-    asyncParams.setRenderLane(RenderLane::AsyncCompute);
-    auto commandList = device.createCommandList(asyncParams);
-    ASSERT_NE(commandList.get(), nullptr);
-
-    commandList->open();
-    commandList->close();
-
-    CommandList* commandLists[] = { commandList.get() };
-    const QueueSubmissionToken token = device.executeCommandLists(
-        commandLists,
-        1u,
-        RenderLane::AsyncCompute,
-        QueueSubmissionDesc{}
-    );
-    EXPECT_TRUE(token.valid());
-    EXPECT_EQ(token.queue, CommandQueue::Graphics);
-    EXPECT_TRUE(device.waitForIdle());
 }
 
 
@@ -56713,15 +56687,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedBufferUploadsRejectUnsafeLegacyD
 // exclusive storage moves Compute -> Graphics -> Compute with paired release/acquire barriers and submission-local
 // timeline tokens. No rendering job has moved yet; this specifically validates the resource-lifecycle round trip
 // that a reused shadow-visibility frame slot will need.
-TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneTransfersExclusiveBufferOwnershipRoundTrip){
+TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueTransfersExclusiveBufferOwnershipRoundTrip){
     HeadlessGraphicsScope asyncScope;
     ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
     if(!asyncScope.initialize())
-        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+        GTEST_SKIP() << "Dedicated Compute queue: no usable dedicated-compute headless Vulkan device on this host.";
 
     auto& device = asyncScope.graphics().getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
-        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+    if(!HasDedicatedComputeQueue(device))
+        GTEST_SKIP() << "Dedicated Compute queue: adapter has no dedicated compute-only queue family.";
 
     auto buffer = device.createBuffer(
         BufferDesc()
@@ -56742,7 +56716,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneTransfersExclusiveBufferOw
     ASSERT_NE(sharedInput.get(), nullptr);
 
     CommandListParameters computeParams;
-    computeParams.setRenderLane(RenderLane::AsyncCompute);
+    computeParams.setQueueType(CommandQueue::Compute);
 
     CommandListResourceStateHandoff computeToGraphics(asyncScope.arena());
     auto computeProducer = device.createCommandList(computeParams);
@@ -56750,7 +56724,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneTransfersExclusiveBufferOw
     computeProducer->open();
     computeProducer->setBufferState(buffer.get(), ResourceStates::UnorderedAccess);
     computeProducer->setBufferState(sharedInput.get(), ResourceStates::UnorderedAccess);
-    computeProducer->releaseBufferOwnership(buffer.get(), RenderLane::Graphics);
+    computeProducer->releaseBufferOwnership(buffer.get(), CommandQueue::Graphics);
     computeProducer->close(&computeToGraphics);
     ASSERT_TRUE(computeToGraphics.valid());
 
@@ -56758,7 +56732,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneTransfersExclusiveBufferOw
     const QueueSubmissionToken computeToken = device.executeCommandLists(
         computeProducerLists,
         1u,
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(computeToken.valid());
@@ -56772,7 +56746,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneTransfersExclusiveBufferOw
     EXPECT_EQ(graphicsConsumer->getBufferState(sharedInput.get()), ResourceStates::UnorderedAccess);
     graphicsConsumer->setBufferState(buffer.get(), ResourceStates::ShaderResource);
     graphicsConsumer->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
-    graphicsConsumer->releaseBufferOwnership(buffer.get(), RenderLane::AsyncCompute);
+    graphicsConsumer->releaseBufferOwnership(buffer.get(), CommandQueue::Compute);
     graphicsConsumer->close(&graphicsToCompute);
     ASSERT_TRUE(graphicsToCompute.valid());
 
@@ -56784,7 +56758,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneTransfersExclusiveBufferOw
     const QueueSubmissionToken graphicsToken = device.executeCommandLists(
         graphicsConsumerLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         graphicsSubmissionDesc
     );
     ASSERT_TRUE(graphicsToken.valid());
@@ -56803,7 +56777,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneTransfersExclusiveBufferOw
     const QueueSubmissionToken reuseToken = device.executeCommandLists(
         computeReuseLists,
         1u,
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         computeSubmissionDesc
     );
     EXPECT_TRUE(reuseToken.valid());
@@ -56814,16 +56788,16 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneTransfersExclusiveBufferOw
 
 // AVBOIT alternates raster and compute phases. Its shared work resources use concurrent queue sharing, while timeline
 // waits order the exact Graphics pre -> Compute warp -> Graphics extinction -> Compute integration -> Graphics
-// accumulation chain. Exercise the state subsets/fan-ins and every lane crossing on a real dedicated family.
-TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneChainsConcurrentAvboitWorkStates){
+// accumulation chain. Exercise the state subsets/fan-ins and every queue crossing on a real dedicated family.
+TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueChainsConcurrentAvboitWorkStates){
     HeadlessGraphicsScope asyncScope;
     ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
     if(!asyncScope.initialize())
-        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+        GTEST_SKIP() << "Dedicated Compute queue: no usable dedicated-compute headless Vulkan device on this host.";
 
     auto& device = asyncScope.graphics().getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
-        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+    if(!HasDedicatedComputeQueue(device))
+        GTEST_SKIP() << "Dedicated Compute queue: adapter has no dedicated compute-only queue family.";
 
     const auto makeSharedWorkBuffer = [&device](){
         return device.createBuffer(
@@ -56859,7 +56833,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneChainsConcurrentAvboitWork
     ASSERT_NE(transmittance.get(), nullptr);
 
     CommandListParameters computeParams;
-    computeParams.setRenderLane(RenderLane::AsyncCompute);
+    computeParams.setQueueType(CommandQueue::Compute);
     auto graphicsPre = device.createCommandList();
     auto computeWarp = device.createCommandList(computeParams);
     auto graphicsExtinction = device.createCommandList();
@@ -56945,7 +56919,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneChainsConcurrentAvboitWork
     const QueueSubmissionToken graphicsPreToken = device.executeCommandLists(
         graphicsPreLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(graphicsPreToken.valid());
@@ -56955,7 +56929,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneChainsConcurrentAvboitWork
     const QueueSubmissionToken warpToken = device.executeCommandLists(
         computeWarpLists,
         1u,
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         warpSubmitDesc
     );
     ASSERT_TRUE(warpToken.valid());
@@ -56965,7 +56939,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneChainsConcurrentAvboitWork
     const QueueSubmissionToken extinctionToken = device.executeCommandLists(
         graphicsExtinctionLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         extinctionSubmitDesc
     );
     ASSERT_TRUE(extinctionToken.valid());
@@ -56975,7 +56949,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneChainsConcurrentAvboitWork
     const QueueSubmissionToken integrationToken = device.executeCommandLists(
         computeIntegrationLists,
         1u,
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         integrationSubmitDesc
     );
     ASSERT_TRUE(integrationToken.valid());
@@ -56985,7 +56959,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneChainsConcurrentAvboitWork
     const QueueSubmissionToken accumulationToken = device.executeCommandLists(
         graphicsAccumulateLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         accumulationSubmitDesc
     );
     EXPECT_TRUE(accumulationToken.valid());
@@ -56997,15 +56971,15 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneChainsConcurrentAvboitWork
 // stash run on AsyncCompute. The output is intentionally concurrent, so timeline dependencies are sufficient and no
 // exclusive ownership release is required. Exercise both the bootstrap (lighting supplies the stash source) and the
 // active lagged path (the current Graphics producer supplies it directly).
-TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneLetsGraphicsCausticsFeedLightingAndLaggedStashThroughConcurrentIrradiance){
+TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueLetsGraphicsCausticsFeedLightingAndLaggedStashThroughConcurrentIrradiance){
     HeadlessGraphicsScope asyncScope;
     ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
     if(!asyncScope.initialize())
-        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+        GTEST_SKIP() << "Dedicated Compute queue: no usable dedicated-compute headless Vulkan device on this host.";
 
     auto& device = asyncScope.graphics().getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
-        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+    if(!HasDedicatedComputeQueue(device))
+        GTEST_SKIP() << "Dedicated Compute queue: adapter has no dedicated compute-only queue family.";
 
     auto causticIrradiance = device.createTexture(
         TextureDesc()
@@ -57030,7 +57004,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneLetsGraphicsCausticsFeedLi
     ASSERT_NE(causticHistory.get(), nullptr);
 
     CommandListParameters computeParams;
-    computeParams.setRenderLane(RenderLane::AsyncCompute);
+    computeParams.setQueueType(CommandQueue::Compute);
     auto graphicsCaustics = device.createCommandList();
     auto asyncLighting = device.createCommandList(computeParams);
     auto bootstrapFinal = device.createCommandList();
@@ -57127,7 +57101,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneLetsGraphicsCausticsFeedLi
     const QueueSubmissionToken graphicsToken = device.executeCommandLists(
         graphicsLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(graphicsToken.valid());
@@ -57137,7 +57111,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneLetsGraphicsCausticsFeedLi
     const QueueSubmissionToken lightingToken = device.executeCommandLists(
         lightingLists,
         1u,
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         lightingSubmitDesc
     );
     EXPECT_TRUE(lightingToken.valid());
@@ -57147,7 +57121,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneLetsGraphicsCausticsFeedLi
     const QueueSubmissionToken bootstrapFinalToken = device.executeCommandLists(
         bootstrapFinalLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         bootstrapFinalSubmitDesc
     );
     ASSERT_TRUE(bootstrapFinalToken.valid());
@@ -57157,7 +57131,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneLetsGraphicsCausticsFeedLi
     const QueueSubmissionToken bootstrapStashToken = device.executeCommandLists(
         bootstrapStashLists,
         1u,
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         bootstrapStashSubmitDesc
     );
     ASSERT_TRUE(bootstrapStashToken.valid());
@@ -57169,7 +57143,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneLetsGraphicsCausticsFeedLi
     const QueueSubmissionToken activeCausticsToken = device.executeCommandLists(
         activeCausticsLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         activeCausticsSubmitDesc
     );
     ASSERT_TRUE(activeCausticsToken.valid());
@@ -57179,7 +57153,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneLetsGraphicsCausticsFeedLi
     const QueueSubmissionToken activeStashToken = device.executeCommandLists(
         activeStashLists,
         1u,
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         activeStashSubmitDesc
     );
     EXPECT_TRUE(activeStashToken.valid());
@@ -57187,19 +57161,19 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneLetsGraphicsCausticsFeedLi
 }
 
 
-// Deferred lighting and the logical composite now join the dedicated Compute lane after AVBOIT. The exclusive
+// Deferred lighting and the logical composite now join the dedicated Compute queue after AVBOIT. The exclusive
 // shadow, caustic, and surfel outputs therefore remain Compute-local through their only consumer; Graphics imports only the linear
 // composite image for presentation. This exercises the narrow handoffs and verifies that no Graphics acquire/release
 // is needed before the next Compute reuse of shadow/caustic/surfel outputs.
-TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCompositeOnComputeUntilPresent){
+TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueKeepsDeferredLightingAndCompositeOnComputeUntilPresent){
     HeadlessGraphicsScope asyncScope;
     ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
     if(!asyncScope.initialize())
-        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+        GTEST_SKIP() << "Dedicated Compute queue: no usable dedicated-compute headless Vulkan device on this host.";
 
     auto& device = asyncScope.graphics().getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
-        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+    if(!HasDedicatedComputeQueue(device))
+        GTEST_SKIP() << "Dedicated Compute queue: adapter has no dedicated compute-only queue family.";
 
     auto gbuffer = CreateConcurrentTestTexture(device);
     auto opaqueColor = CreateConcurrentTestTexture(device, true);
@@ -57228,7 +57202,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCo
     ASSERT_NE(slotsBuffer.get(), nullptr);
 
     CommandListParameters computeParams;
-    computeParams.setRenderLane(RenderLane::AsyncCompute);
+    computeParams.setQueueType(CommandQueue::Compute);
     auto prefix = device.createCommandList();
     auto rayEffects = device.createCommandList(computeParams);
     auto avboit = device.createCommandList();
@@ -57408,7 +57382,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCo
     const QueueSubmissionToken prefixToken = device.executeCommandLists(
         prefixLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(prefixToken.valid());
@@ -57425,7 +57399,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCo
     const QueueSubmissionToken rayEffectsToken = device.executeCommandLists(
         rayEffectsLists,
         1u,
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         rayEffectsSubmitDesc
     );
     ASSERT_TRUE(rayEffectsToken.valid());
@@ -57435,7 +57409,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCo
     const QueueSubmissionToken avboitToken = device.executeCommandLists(
         avboitLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         avboitSubmitDesc
     );
     ASSERT_TRUE(avboitToken.valid());
@@ -57445,7 +57419,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCo
     const QueueSubmissionToken lightingToken = device.executeCommandLists(
         lightingLists,
         1u,
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         lightingSubmitDesc
     );
     ASSERT_TRUE(lightingToken.valid());
@@ -57454,7 +57428,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCo
     const QueueSubmissionToken compositeToken = device.executeCommandLists(
         compositeLists,
         1u,
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(compositeToken.valid());
@@ -57464,7 +57438,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCo
     const QueueSubmissionToken presentToken = device.executeCommandLists(
         presentLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         presentSubmitDesc
     );
     ASSERT_TRUE(presentToken.valid());
@@ -57475,7 +57449,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCo
     const QueueSubmissionToken reuseToken = device.executeCommandLists(
         reuseLists,
         1u,
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         QueueSubmissionDesc{}
     );
     EXPECT_TRUE(reuseToken.valid());
@@ -57487,15 +57461,15 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCo
 // accepted snapshot into concurrent, keep-initial-state history images. The next frame's Graphics lighting samples
 // only those history images while AsyncCompute writes a new live triple; final still joins the current producer before
 // the next snapshot. This verifies the precise queue and state topology without relying on a renderer pipeline.
-TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLightingHistory){
+TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueUsesAcceptedLaggedLightingHistory){
     HeadlessGraphicsScope asyncScope;
     ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
     if(!asyncScope.initialize())
-        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+        GTEST_SKIP() << "Dedicated Compute queue: no usable dedicated-compute headless Vulkan device on this host.";
 
     auto& device = asyncScope.graphics().getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
-        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+    if(!HasDedicatedComputeQueue(device))
+        GTEST_SKIP() << "Dedicated Compute queue: adapter has no dedicated compute-only queue family.";
 
     auto gbuffer = CreateConcurrentTestTexture(device);
     auto opaqueColor = CreateConcurrentTestTexture(device, true);
@@ -57517,7 +57491,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
     ASSERT_NE(surfelHistory.get(), nullptr);
 
     CommandListParameters asyncParams;
-    asyncParams.setRenderLane(RenderLane::AsyncCompute);
+    asyncParams.setQueueType(CommandQueue::Compute);
     auto seedPrefix = device.createCommandList();
     auto seedProducer = device.createCommandList(asyncParams);
     auto seedFinal = device.createCommandList();
@@ -57738,7 +57712,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
     const QueueSubmissionToken seedPrefixToken = device.executeCommandLists(
         seedPrefixLists,
         LengthOf(seedPrefixLists),
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(seedPrefixToken.valid());
@@ -57748,7 +57722,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
     const QueueSubmissionToken seedProducerToken = device.executeCommandLists(
         seedProducerLists,
         LengthOf(seedProducerLists),
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         seedProducerSubmitDesc
     );
     ASSERT_TRUE(seedProducerToken.valid());
@@ -57758,7 +57732,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
     const QueueSubmissionToken seedFinalToken = device.executeCommandLists(
         seedFinalLists,
         LengthOf(seedFinalLists),
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         seedFinalSubmitDesc
     );
     ASSERT_TRUE(seedFinalToken.valid());
@@ -57768,7 +57742,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
     const QueueSubmissionToken seedStashToken = device.executeCommandLists(
         seedStashLists,
         LengthOf(seedStashLists),
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         seedStashSubmitDesc
     );
     ASSERT_TRUE(seedStashToken.valid());
@@ -57777,7 +57751,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
     const QueueSubmissionToken nextPrefixToken = device.executeCommandLists(
         nextPrefixLists,
         LengthOf(nextPrefixLists),
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(nextPrefixToken.valid());
@@ -57787,7 +57761,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
     const QueueSubmissionToken nextProducerToken = device.executeCommandLists(
         nextProducerLists,
         LengthOf(nextProducerLists),
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         nextProducerSubmitDesc
     );
     ASSERT_TRUE(nextProducerToken.valid());
@@ -57797,7 +57771,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
     const QueueSubmissionToken laggedLightingToken = device.executeCommandLists(
         laggedLightingLists,
         LengthOf(laggedLightingLists),
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         laggedLightingSubmitDesc
     );
     ASSERT_TRUE(laggedLightingToken.valid());
@@ -57806,7 +57780,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
     const QueueSubmissionToken laggedCompositeToken = device.executeCommandLists(
         laggedCompositeLists,
         LengthOf(laggedCompositeLists),
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(laggedCompositeToken.valid());
@@ -57820,7 +57794,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
     const QueueSubmissionToken laggedFinalToken = device.executeCommandLists(
         laggedFinalLists,
         LengthOf(laggedFinalLists),
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         laggedFinalSubmitDesc
     );
     ASSERT_TRUE(laggedFinalToken.valid());
@@ -57830,7 +57804,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
     const QueueSubmissionToken nextStashToken = device.executeCommandLists(
         nextStashLists,
         LengthOf(nextStashLists),
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         nextStashSubmitDesc
     );
     EXPECT_TRUE(nextStashToken.valid());
@@ -57842,15 +57816,15 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
 // shadowVisibility. If Graphics effects/final cannot consume them, the recovery packet must acquire and return all
 // three outputs together; the next Compute packet
 // then imports their shared return handoff alongside its ordinary concurrent prefix input.
-TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversCausticSurfelAndShadowTextureOwnershipTogether){
+TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueRecoversCausticSurfelAndShadowTextureOwnershipTogether){
     HeadlessGraphicsScope asyncScope;
     ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
     if(!asyncScope.initialize())
-        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+        GTEST_SKIP() << "Dedicated Compute queue: no usable dedicated-compute headless Vulkan device on this host.";
 
     auto& device = asyncScope.graphics().getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
-        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+    if(!HasDedicatedComputeQueue(device))
+        GTEST_SKIP() << "Dedicated Compute queue: adapter has no dedicated compute-only queue family.";
 
     const auto makeExclusiveOutput = [&device](){
         return device.createTexture(
@@ -57878,7 +57852,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversCausticSurfelAndSh
     ASSERT_NE(sharedInput.get(), nullptr);
 
     CommandListParameters computeParams;
-    computeParams.setRenderLane(RenderLane::AsyncCompute);
+    computeParams.setQueueType(CommandQueue::Compute);
 
     CommandListResourceStateHandoff prefixState(asyncScope.arena());
     CommandListResourceStateHandoff computeState(asyncScope.arena());
@@ -57908,9 +57882,9 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversCausticSurfelAndSh
     compute->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
     compute->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
     compute->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
-    compute->releaseTextureOwnership(shadowVisibility.get(), s_AllSubresources, RenderLane::Graphics);
-    compute->releaseTextureOwnership(causticIrradiance.get(), s_AllSubresources, RenderLane::Graphics);
-    compute->releaseTextureOwnership(surfelIrradiance.get(), s_AllSubresources, RenderLane::Graphics);
+    compute->releaseTextureOwnership(shadowVisibility.get(), s_AllSubresources, CommandQueue::Graphics);
+    compute->releaseTextureOwnership(causticIrradiance.get(), s_AllSubresources, CommandQueue::Graphics);
+    compute->releaseTextureOwnership(surfelIrradiance.get(), s_AllSubresources, CommandQueue::Graphics);
     compute->close(&computeState);
     ASSERT_TRUE(computeState.valid());
     ASSERT_TRUE(shadowGraphicsState.buildTextureSubset(computeState, shadowVisibility.get()));
@@ -57924,7 +57898,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversCausticSurfelAndSh
     const QueueSubmissionToken prefixToken = device.executeCommandLists(
         prefixLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(prefixToken.valid());
@@ -57934,7 +57908,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversCausticSurfelAndSh
     const QueueSubmissionToken computeToken = device.executeCommandLists(
         computeLists,
         1u,
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         computeSubmitDesc
     );
     ASSERT_TRUE(computeToken.valid());
@@ -57946,9 +57920,9 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversCausticSurfelAndSh
     recovery->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
     recovery->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
     recovery->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
-    recovery->releaseTextureOwnership(shadowVisibility.get(), s_AllSubresources, RenderLane::AsyncCompute);
-    recovery->releaseTextureOwnership(causticIrradiance.get(), s_AllSubresources, RenderLane::AsyncCompute);
-    recovery->releaseTextureOwnership(surfelIrradiance.get(), s_AllSubresources, RenderLane::AsyncCompute);
+    recovery->releaseTextureOwnership(shadowVisibility.get(), s_AllSubresources, CommandQueue::Compute);
+    recovery->releaseTextureOwnership(causticIrradiance.get(), s_AllSubresources, CommandQueue::Compute);
+    recovery->releaseTextureOwnership(surfelIrradiance.get(), s_AllSubresources, CommandQueue::Compute);
     recovery->close(&recoveryState);
     ASSERT_TRUE(recoveryState.valid());
 
@@ -57957,7 +57931,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversCausticSurfelAndSh
     const QueueSubmissionToken recoveryToken = device.executeCommandLists(
         recoveryLists,
         1u,
-        RenderLane::Graphics,
+        CommandQueue::Graphics,
         recoverySubmitDesc
     );
     ASSERT_TRUE(recoveryToken.valid());
@@ -57979,7 +57953,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversCausticSurfelAndSh
     const QueueSubmissionToken reuseToken = device.executeCommandLists(
         reuseLists,
         1u,
-        RenderLane::AsyncCompute,
+        CommandQueue::Compute,
         reuseSubmitDesc
     );
     EXPECT_TRUE(reuseToken.valid());
@@ -58774,7 +58748,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphRejectsDedicatedFirstComputeA
 
     auto& graphics = asyncScope.graphics();
     auto& device = graphics.getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+    if(!HasDedicatedComputeQueue(device))
         GTEST_SKIP() << "Renderer rejection matrix: adapter has no dedicated compute-only queue family.";
 
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
@@ -59065,11 +59039,11 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
     HeadlessGraphicsScope asyncScope;
     ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
     if(!asyncScope.initialize())
-        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+        GTEST_SKIP() << "Dedicated Compute queue: no usable dedicated-compute headless Vulkan device on this host.";
 
     auto& device = asyncScope.graphics().getDevice();
-    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
-        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+    if(!HasDedicatedComputeQueue(device))
+        GTEST_SKIP() << "Dedicated Compute queue: adapter has no dedicated compute-only queue family.";
 
     enum class FailurePoint : u8{
         Prefix,
@@ -59100,7 +59074,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
     };
 
     CommandListParameters computeParams;
-    computeParams.setRenderLane(RenderLane::AsyncCompute);
+    computeParams.setQueueType(CommandQueue::Compute);
 
     // Executes the next valid Compute -> Graphics -> Compute cycle. `initialState` is present only after the
     // ownership-recovery acquire/release; `initialWait` makes that handoff's accepted token explicit.
@@ -59124,7 +59098,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
             EXPECT_EQ(compute->getBufferState(output), ResourceStates::ShaderResource);
         compute->setBufferState(sharedInput, ResourceStates::ShaderResource);
         compute->setBufferState(output, ResourceStates::UnorderedAccess);
-        compute->releaseBufferOwnership(output, RenderLane::Graphics);
+        compute->releaseBufferOwnership(output, CommandQueue::Graphics);
         compute->close(&computeToGraphics);
         ASSERT_TRUE(computeToGraphics.valid());
 
@@ -59135,7 +59109,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         const QueueSubmissionToken computeToken = device.executeCommandLists(
             computeCommandLists,
             1u,
-            RenderLane::AsyncCompute,
+            CommandQueue::Compute,
             computeSubmitDesc
         );
         ASSERT_TRUE(computeToken.valid());
@@ -59143,7 +59117,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         graphics->open(&computeToGraphics);
         EXPECT_EQ(graphics->getBufferState(output), ResourceStates::UnorderedAccess);
         graphics->setBufferState(output, ResourceStates::ShaderResource);
-        graphics->releaseBufferOwnership(output, RenderLane::AsyncCompute);
+        graphics->releaseBufferOwnership(output, CommandQueue::Compute);
         graphics->close(&graphicsToCompute);
         ASSERT_TRUE(graphicsToCompute.valid());
 
@@ -59152,7 +59126,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         const QueueSubmissionToken graphicsToken = device.executeCommandLists(
             graphicsCommandLists,
             1u,
-            RenderLane::Graphics,
+            CommandQueue::Graphics,
             graphicsSubmitDesc
         );
         ASSERT_TRUE(graphicsToken.valid());
@@ -59166,7 +59140,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         const QueueSubmissionToken reuseToken = device.executeCommandLists(
             reuseCommandLists,
             1u,
-            RenderLane::AsyncCompute,
+            CommandQueue::Compute,
             reuseSubmitDesc
         );
         ASSERT_TRUE(reuseToken.valid());
@@ -59209,7 +59183,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         const QueueSubmissionToken prefixToken = device.executeCommandLists(
             prefixCommandLists,
             1u,
-            RenderLane::Graphics,
+            CommandQueue::Graphics,
             QueueSubmissionDesc{}
         );
         if(failurePoint == FailurePoint::Prefix){
@@ -59222,7 +59196,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         shadow->open();
         shadow->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
         shadow->setBufferState(output.get(), ResourceStates::UnorderedAccess);
-        shadow->releaseBufferOwnership(output.get(), RenderLane::Graphics);
+        shadow->releaseBufferOwnership(output.get(), CommandQueue::Graphics);
         shadow->close(&computeToGraphics);
         ASSERT_TRUE(computeToGraphics.valid());
         if(failurePoint == FailurePoint::Shadow)
@@ -59232,7 +59206,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         const QueueSubmissionToken shadowToken = device.executeCommandLists(
             shadowCommandLists,
             1u,
-            RenderLane::AsyncCompute,
+            CommandQueue::Compute,
             shadowSubmitDesc
         );
         if(failurePoint == FailurePoint::Shadow){
@@ -59253,7 +59227,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         const QueueSubmissionToken effectsToken = device.executeCommandLists(
             effectsCommandLists,
             1u,
-            RenderLane::Graphics,
+            CommandQueue::Graphics,
             QueueSubmissionDesc{}
         );
         if(failurePoint == FailurePoint::Effects || failurePoint == FailurePoint::Recovery){
@@ -59267,7 +59241,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
             final->open(&computeToGraphics);
             EXPECT_EQ(final->getBufferState(output.get()), ResourceStates::UnorderedAccess);
             final->setBufferState(output.get(), ResourceStates::ShaderResource);
-            final->releaseBufferOwnership(output.get(), RenderLane::AsyncCompute);
+            final->releaseBufferOwnership(output.get(), CommandQueue::Compute);
             final->close(&graphicsToCompute);
             ASSERT_TRUE(graphicsToCompute.valid());
             if(failurePoint == FailurePoint::Final)
@@ -59278,7 +59252,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
             const QueueSubmissionToken finalToken = device.executeCommandLists(
                 finalCommandLists,
                 1u,
-                RenderLane::Graphics,
+                CommandQueue::Graphics,
                 finalSubmitDesc
             );
             finalRejected = failurePoint == FailurePoint::Final;
@@ -59300,7 +59274,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         recovery->open(&computeToGraphics);
         EXPECT_EQ(recovery->getBufferState(output.get()), ResourceStates::UnorderedAccess);
         recovery->setBufferState(output.get(), ResourceStates::ShaderResource);
-        recovery->releaseBufferOwnership(output.get(), RenderLane::AsyncCompute);
+        recovery->releaseBufferOwnership(output.get(), CommandQueue::Compute);
         recovery->close(&graphicsToCompute);
         ASSERT_TRUE(graphicsToCompute.valid());
         const QueueSubmissionDesc recoverySubmitDesc = QueueSubmissionDesc().setWaitTokens(&shadowToken, 1u);
@@ -59308,7 +59282,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         const QueueSubmissionToken recoveryToken = device.executeCommandLists(
             recoveryCommandLists,
             1u,
-            RenderLane::Graphics,
+            CommandQueue::Graphics,
             recoverySubmitDesc
         );
         if(failurePoint == FailurePoint::Recovery){

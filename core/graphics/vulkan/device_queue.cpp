@@ -149,8 +149,8 @@ void Device::configureLegacyQueueContext(){
         : s_InvalidQueueFamilyIndex
     ;
     m_context.auxiliaryTransferQueueFamilyIndex = resolveAuxiliaryFamily(transferQueue, CommandQueue::Transfer);
-    // RenderLane remains a compatibility faÃ§ade: it may target Compute only when the primary Compute transport is
-    // a separate family. Graph packets bypass this policy and submit through their exact physical queue ID.
+    // Cross-family async Compute remains an explicit resource-sharing capability even though submission routes use
+    // queue classes or exact physical queue IDs directly.
     m_context.asyncComputeLaneEnabled = graphicsQueue
         && computeQueue
         && computeQueue->m_queueFamilyIndex != graphicsQueue->m_queueFamilyIndex
@@ -466,11 +466,6 @@ CommandListHandle Device::createCommandList(const CommandListParameters& params)
     CommandListParameters resolvedParams = params;
     if(resolvedParams.recordingWorkerIndex == 0u)
         resolvedParams.recordingWorkerDomain = 0u;
-    if(resolvedParams.resolveRenderLane){
-        resolvedParams.queueType = resolveRenderLane(resolvedParams.renderLane);
-        resolvedParams.resolveRenderLane = false;
-    }
-
     Queue* queue = nullptr;
     if(resolvedParams.physicalQueue.valid()){
         queue = getQueue(resolvedParams.physicalQueue);
@@ -855,35 +850,6 @@ QueueSubmissionToken Device::executeCommandLists(
         .physicalQueueIndex = executionQueue.index,
         .deviceGeneration = executionQueue.deviceGeneration,
     };
-}
-
-QueueSubmissionToken Device::executeCommandLists(
-    CommandList* const* pCommandLists,
-    const usize numCommandLists,
-    const RenderLane::Enum executionLane,
-    const QueueSubmissionDesc& submitDesc
-){
-    return executeCommandLists(pCommandLists, numCommandLists, resolveRenderLane(executionLane), submitDesc);
-}
-
-CommandQueue::Enum Device::resolveRenderLane(const RenderLane::Enum lane)const{
-    switch(lane){
-    case RenderLane::Graphics:
-        return CommandQueue::Graphics;
-    case RenderLane::AsyncCompute:
-        return isRenderLaneDedicated(lane) ? CommandQueue::Compute : CommandQueue::Graphics;
-    default:
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: invalid render lane"));
-        return CommandQueue::Graphics;
-    }
-}
-
-bool Device::isRenderLaneDedicated(const RenderLane::Enum lane)const{
-    return
-        lane == RenderLane::AsyncCompute
-        && m_context.asyncComputeLaneEnabled
-        && m_primaryQueues[static_cast<u32>(CommandQueue::Compute)] != nullptr
-    ;
 }
 
 u32 Device::getQueueFamilyIndex(const CommandQueue::Enum queueType)const{

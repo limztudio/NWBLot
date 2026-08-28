@@ -618,17 +618,8 @@ public:
         usize commandListCount,
         CommandQueue::Enum executionQueue = CommandQueue::Graphics
     );
-    // The cross-lane form confirms the ticket only when Vulkan accepts this exact submission and returns the
-    // completion token consumed by a dependent lane. A rejected submission discards its query reservations.
-    [[nodiscard]] QueueSubmissionToken submit(
-        Device& device,
-        CommandList* const* commandLists,
-        usize commandListCount,
-        RenderLane::Enum executionLane,
-        const QueueSubmissionDesc& submitDesc
-    );
-    // Graph-owned packets already resolve a physical CommandQueue during compilation.  Keep timing ownership tied to
-    // that exact submission instead of translating back through renderer-facing lane intent.
+    // Confirms the ticket only when Vulkan accepts this exact submission and returns the completion token consumed by
+    // a dependent queue. A rejected submission discards its query reservations.
     [[nodiscard]] QueueSubmissionToken submit(
         Device& device,
         CommandList* const* commandLists,

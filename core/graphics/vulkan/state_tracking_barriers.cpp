@@ -870,14 +870,6 @@ void CommandList::setAccelStructState(
 void CommandList::releaseTextureOwnership(
     Texture* textureResource,
     TextureSubresourceSet subresources,
-    const RenderLane::Enum destinationLane
-){
-    releaseTextureOwnership(textureResource, subresources, m_device.resolveRenderLane(destinationLane));
-}
-
-void CommandList::releaseTextureOwnership(
-    Texture* textureResource,
-    TextureSubresourceSet subresources,
     const CommandQueue::Enum destinationQueue
 ){
     releaseTextureOwnership(textureResource, subresources, m_device.getPrimaryPhysicalQueue(destinationQueue));
@@ -966,12 +958,6 @@ void CommandList::releaseTextureOwnership(
         }
     }
     retainResource(&texture);
-}
-
-void CommandList::releaseBufferOwnership(Buffer* bufferResource, const RenderLane::Enum destinationLane){
-    if(!bufferResource)
-        return;
-    releaseBufferOwnership(bufferResource, m_device.resolveRenderLane(destinationLane));
 }
 
 void CommandList::releaseBufferOwnership(Buffer* bufferResource, const CommandQueue::Enum destinationQueue){

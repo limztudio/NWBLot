@@ -1784,19 +1784,36 @@ def validate_texture_smoke_result(result):
         raise SmokeFailure(f"texture smoke did not show the expected sampled texture and receiver-side GI ({observed})")
 
 
-def validate_expected_log_messages(log_directory, log_baseline, log_pattern, required_needles, rejected_needles):
-    if not required_needles and not rejected_needles:
+def validate_expected_log_messages(
+    log_directory,
+    log_baseline,
+    log_pattern,
+    required_needles,
+    rejected_needles,
+    skip_needles=(),
+    skip_blocking_needles=(),
+):
+    if not required_needles and not rejected_needles and not skip_needles and not skip_blocking_needles:
         return
     if not log_directory:
         raise SmokeFailure("cannot validate expected log messages without captured runtime logs")
 
     log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
-    for needle in required_needles:
-        if needle not in log_text:
-            raise SmokeFailure(f"missing log message '{needle}'\n{log_text[-4000:]}")
+    for needle in skip_needles:
+        if needle in log_text:
+            for blocking_needle in skip_blocking_needles:
+                if blocking_needle in log_text:
+                    raise SmokeFailure(
+                        f"capability skip also contained blocking log message '{blocking_needle}'\n{log_text[-4000:]}"
+                    )
+            return needle
     for needle in rejected_needles:
         if needle in log_text:
             raise SmokeFailure(f"rejected log message '{needle}' was found\n{log_text[-4000:]}")
+    for needle in required_needles:
+        if needle not in log_text:
+            raise SmokeFailure(f"missing log message '{needle}'\n{log_text[-4000:]}")
+    return None
 
 
 def capture_checked_window(args, backend, handle):
@@ -1827,6 +1844,7 @@ def launch_and_capture(args, backend):
     handle = None
     testbed_exit_code = None
     testbed_exit_tail = ""
+    skip_reason = None
     try:
         logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(args, executable, env)
         testbed_process = launch_testbed(args, executable, env, log_port)
@@ -1843,12 +1861,22 @@ def launch_and_capture(args, backend):
 
         ensure_process_running(testbed_process, "before checked capture")
         result = capture_checked_window(args, backend, handle)
-        validate_expected_log_messages(log_directory, log_baseline, log_pattern, args.expect_log_message, args.reject_log_message)
+        skip_reason = validate_expected_log_messages(
+            log_directory,
+            log_baseline,
+            log_pattern,
+            args.expect_log_message,
+            args.reject_log_message,
+            args.skip_log_message,
+            args.skip_blocking_log_message,
+        )
     finally:
         testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, "testbed", handle)
         terminate_process(logserver_process, "logserver")
 
     require_normal_testbed_exit(testbed_exit_code, testbed_exit_tail)
+    if skip_reason:
+        raise SmokeSkip(skip_reason)
     return result
 
 
@@ -1866,6 +1894,18 @@ def parse_args(argv):
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an available localhost port.")
     parser.add_argument("--expect-log-message", action="append", default=[], help="Required substring in the logserver output.")
     parser.add_argument("--reject-log-message", action="append", default=[], help="Forbidden substring in the logserver output.")
+    parser.add_argument(
+        "--skip-log-message",
+        action="append",
+        default=[],
+        help="Log substring that classifies the launched smoke as unsupported instead of failed.",
+    )
+    parser.add_argument(
+        "--skip-blocking-log-message",
+        action="append",
+        default=[],
+        help="Log substring that remains a failure even when an explicit capability-skip marker is present.",
+    )
     parser.add_argument(
         "--expect-transparent-multi",
         action="store_true",

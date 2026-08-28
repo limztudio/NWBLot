@@ -245,9 +245,6 @@ public:
     // this inspection with deferred native recording/reset just as they do other recorded-graph diagnostics.
     [[nodiscard]] Core::GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const noexcept;
 #if !defined(NWB_FINAL)
-    // Test-only proxy; keep the ray-tracing subsystem itself private to ordinary renderer callers.
-    void forceHybridSceneTraversalFallbackForTesting()noexcept;
-    void forceHybridSceneTraversalFallbackEveryFrameForTesting()noexcept;
     // Target-scene A/B seam. Production always uses the graph-owned fold; benchmark arms explicitly select the
     // graph split or the retained monolithic compatibility callback before the first frame is declared.
     void setGraphOwnedSoftTransparentShadowFoldEnabledForTesting(bool enabled)noexcept;

@@ -536,13 +536,6 @@ public:
             NWB_TEXT("TransparentMultiSmokeProject failed to create all scene entities")
         );
 
-#if defined(NWB_TRANSPARENT_MULTI_FORCE_HYBRID_TRAVERSAL_FALLBACK) && !defined(NWB_FINAL)
-        auto* const rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>();
-        NWB_FATAL_ASSERT_MSG(rendererSystem, NWB_TEXT("TransparentMultiSmokeProject renderer system disappeared"));
-        rendererSystem->forceHybridSceneTraversalFallbackForTesting();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: armed hybrid software traversal fallback proof"));
-#endif
-
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: shared transparent material with three mutable instance overrides created"));
         return true;
     }

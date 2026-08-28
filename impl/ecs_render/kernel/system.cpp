@@ -97,21 +97,29 @@ Core::GpuTaskGraphRuntimeStatistics RendererSystem::deferredTaskGraphRuntimeStat
 }
 
 
-#if !defined(NWB_FINAL)
-void RendererSystem::forceHybridSceneTraversalFallbackForTesting()noexcept{
-    m_raytracingSystem.forceHybridSceneTraversalFallbackForTesting();
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void RendererSystem::forceHybridSceneTraversalFallbackEveryFrameForTesting()noexcept{
-    m_raytracingSystem.forceHybridSceneTraversalFallbackEveryFrameForTesting();
-}
+
+#if !defined(NWB_FINAL)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void RendererSystem::setGraphOwnedSoftTransparentShadowFoldEnabledForTesting(const bool enabled)noexcept{
     m_graphOwnedSoftTransparentShadowFoldEnabledForTesting = enabled;
     m_graphOwnedSoftTransparentShadowFoldBenchmarkForTesting = true;
     m_reportedGraphOwnedSoftTransparentShadowFoldBenchmarkForTesting = false;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 void RendererSystem::reportLaggedLightingTransition(const LaggedLightingReport report, const u64 targetGeneration){

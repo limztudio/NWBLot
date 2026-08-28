@@ -17,6 +17,7 @@ from window_capture_smoke import (  # noqa: E402
     read_process_tail,
     require_normal_testbed_exit,
     terminate_process,
+    validate_expected_log_messages,
 )
 
 
@@ -101,6 +102,80 @@ class TextureSmokeAnalysisTests(unittest.TestCase):
 
         self.assertEqual(analysis.receiver_pixel_count, 15 * 14)
         self.assertEqual(analysis.receiver_red_pixels, 8 * 8)
+
+
+class RuntimeLogValidationTests(unittest.TestCase):
+    def test_capability_marker_is_classified_before_required_log_validation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_directory = Path(temp_dir)
+            marker = "benchmark skipped because required hardware is unavailable"
+            (log_directory / "test.log").write_text(marker, encoding="utf-8")
+
+            self.assertEqual(
+                validate_expected_log_messages(
+                    log_directory,
+                    {},
+                    "*.log",
+                    ["required route marker"],
+                    [],
+                    [marker],
+                ),
+                marker,
+            )
+
+    def test_missing_required_marker_is_not_a_capability_skip(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_directory = Path(temp_dir)
+            (log_directory / "test.log").write_text("ordinary startup", encoding="utf-8")
+
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "missing log message"):
+                validate_expected_log_messages(
+                    log_directory,
+                    {},
+                    "*.log",
+                    ["required route marker"],
+                    [],
+                    ["benchmark skipped"],
+                )
+
+    def test_capability_marker_preempts_supported_route_rejection(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_directory = Path(temp_dir)
+            marker = "benchmark skipped because required hardware is unavailable"
+            (log_directory / "test.log").write_text(
+                f"{marker}\nsoftware traversal route",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                validate_expected_log_messages(
+                    log_directory,
+                    {},
+                    "*.log",
+                    ["required hardware route"],
+                    ["software traversal route"],
+                    [marker],
+                    ["[ERROR]"],
+                ),
+                marker,
+            )
+
+    def test_rejected_error_takes_precedence_over_capability_skip(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_directory = Path(temp_dir)
+            marker = "benchmark skipped because required hardware is unavailable"
+            (log_directory / "test.log").write_text(f"{marker}\n[ERROR] device failure", encoding="utf-8")
+
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "blocking log message"):
+                validate_expected_log_messages(
+                    log_directory,
+                    {},
+                    "*.log",
+                    ["required route marker"],
+                    ["[ERROR]"],
+                    [marker],
+                    ["[ERROR]"],
+                )
 
 
 class WindowsCaptureOrderingTests(unittest.TestCase):

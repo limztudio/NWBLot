@@ -49,6 +49,22 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "${CMAKE_SOURCE_DIR}/tests/ab/soft_transparent_shadow_fold/launch.py"
             "--self-test"
     )
+    # Keep the natural hybrid-versus-opaque report schema, route diagnostics, and shared-binary launcher contract
+    # under ordinary CTest. The window/timestamp capture remains an opt-in target-hardware workflow.
+    add_test(
+        NAME nwb_hybrid_shadow_boundary_harness_unit
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tests/ab/hybrid_shadow_boundary/run.py"
+            "--self-test"
+    )
+    add_test(
+        NAME nwb_hybrid_shadow_boundary_launcher_unit
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tests/ab/hybrid_shadow_boundary/launch.py"
+            "--self-test"
+    )
     # Parser/state-machine coverage for the opt-in target-hardware lagged-lighting smoke. The actual run remains
     # manual because it requires a dedicated Vulkan compute family plus an interactive native window.
     add_test(

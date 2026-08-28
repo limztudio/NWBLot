@@ -606,7 +606,7 @@ private:
     )const noexcept;
 
 
-public:
+private:
     // Lowers a compiler-owned packet-boundary barrier through the existing CommandList state tracker.  Task thunks
     // retain responsibility only for barriers internal to their own command sequence.
     [[nodiscard]] bool applyCompiledBarrier(
@@ -621,6 +621,9 @@ public:
         const GpuTaskId& task,
         CommandList& commandList
     )const;
+
+
+public:
     [[nodiscard]] bool appendFrameGraphTelemetry(
         Telemetry::FrameGraphBuilder& builder,
         const GpuTaskGraphAnalysis& analysis,

@@ -42,6 +42,8 @@ PRIVATE_RECORDING_MEMBERS = {
         "beginRecordingAttempt",
         "matchesRecordingAttempt",
         "recordTask",
+        "applyCompiledBarrier",
+        "seedTaskRetainedResourceStates",
         "beginPacketRecording",
         "completePacketRecording",
         "abortPacketRecording",
@@ -231,11 +233,15 @@ def run_self_test() -> int:
             "    enum class TaskLifecycleState : u8;\n"
             "    class PacketRecordingLease;\n"
             "    bool recordTask();\n"
+            "    bool applyCompiledBarrier();\n"
+            "    bool seedTaskRetainedResourceStates();\n"
             "};",
             (
                 (3, "GpuTaskGraph/public TaskLifecycleState"),
                 (4, "GpuTaskGraph/public PacketRecordingLease"),
                 (5, "GpuTaskGraph/public recordTask"),
+                (6, "GpuTaskGraph/public applyCompiledBarrier"),
+                (7, "GpuTaskGraph/public seedTaskRetainedResourceStates"),
             ),
         ),
         (
@@ -267,11 +273,15 @@ def run_self_test() -> int:
             "    enum class TaskLifecycleState : u8;\n"
             "    class PacketRecordingLease;\n"
             "    bool beginPacketRecording();\n"
+            "    bool applyCompiledBarrier();\n"
+            "    bool seedTaskRetainedResourceStates();\n"
             "};",
             (
                 (3, "GpuTaskGraph/protected TaskLifecycleState"),
                 (4, "GpuTaskGraph/protected PacketRecordingLease"),
                 (5, "GpuTaskGraph/protected beginPacketRecording"),
+                (6, "GpuTaskGraph/protected applyCompiledBarrier"),
+                (7, "GpuTaskGraph/protected seedTaskRetainedResourceStates"),
             ),
         ),
         (
@@ -281,12 +291,16 @@ def run_self_test() -> int:
             "    class PacketRecordingLease;\n"
             "    bool recordTask();\n"
             "    bool packetReadyForSubmission();\n"
+            "    bool applyCompiledBarrier();\n"
+            "    bool seedTaskRetainedResourceStates();\n"
             "};",
             (
                 (2, "GpuTaskGraph/public TaskLifecycleState"),
                 (3, "GpuTaskGraph/public PacketRecordingLease"),
                 (4, "GpuTaskGraph/public recordTask"),
                 (5, "GpuTaskGraph/public packetReadyForSubmission"),
+                (6, "GpuTaskGraph/public applyCompiledBarrier"),
+                (7, "GpuTaskGraph/public seedTaskRetainedResourceStates"),
             ),
         ),
         (
@@ -305,10 +319,14 @@ def run_self_test() -> int:
             "public:\n"
             "    using Base::beginPacketRecording;\n"
             "    using Base::TaskLifecycleState;\n"
+            "    using Base::applyCompiledBarrier;\n"
+            "    using Base::seedTaskRetainedResourceStates;\n"
             "};",
             (
                 (3, "GpuTaskGraph/public beginPacketRecording"),
                 (4, "GpuTaskGraph/public TaskLifecycleState"),
+                (5, "GpuTaskGraph/public applyCompiledBarrier"),
+                (6, "GpuTaskGraph/public seedTaskRetainedResourceStates"),
             ),
         ),
         (
@@ -321,6 +339,8 @@ def run_self_test() -> int:
             "    bool beginRecordingAttempt();\n"
             "    bool matchesRecordingAttempt();\n"
             "    bool recordTask();\n"
+            "    bool applyCompiledBarrier();\n"
+            "    bool seedTaskRetainedResourceStates();\n"
             "    bool beginPacketRecording();\n"
             "    bool completePacketRecording();\n"
             "    void abortPacketRecording();\n"
@@ -333,6 +353,8 @@ def run_self_test() -> int:
             "class GpuTaskGraph final{\n"
             "    enum class TaskLifecycleState : u8;\n"
             "    bool beginPacketRecording();\n"
+            "    bool applyCompiledBarrier();\n"
+            "    bool seedTaskRetainedResourceStates();\n"
             "};",
             (),
         ),
@@ -371,6 +393,8 @@ def run_self_test() -> int:
             "out of class definitions",
             "bool GpuTaskGraph::beginRecordingAttempt(){ return true; }\n"
             "bool GpuTaskGraph::packetReadyForSubmission(){ return true; }\n"
+            "bool GpuTaskGraph::applyCompiledBarrier(){ return true; }\n"
+            "bool GpuTaskGraph::seedTaskRetainedResourceStates(){ return true; }\n"
             "void GpuRecordedGraph::resetForRecording(){}",
             (),
         ),
@@ -397,6 +421,8 @@ def run_self_test() -> int:
             "public:\n"
             "    bool beginPacketRecording();\n"
             "    void resetForRecording();\n"
+            "    bool applyCompiledBarrier();\n"
+            "    bool seedTaskRetainedResourceStates();\n"
             "};",
             (),
         ),
@@ -423,6 +449,8 @@ def run_self_test() -> int:
             "        class PacketRecordingLease;\n"
             "        bool recordTask();\n"
             "        bool beginPacketRecording();\n"
+            "        bool applyCompiledBarrier();\n"
+            "        bool seedTaskRetainedResourceStates();\n"
             "    };\n"
             "    bool recordTaskRange();\n"
             "private:\n"
@@ -430,6 +458,8 @@ def run_self_test() -> int:
             "    class PacketRecordingLease;\n"
             "    bool recordTask();\n"
             "    bool beginPacketRecording();\n"
+            "    bool applyCompiledBarrier();\n"
+            "    bool seedTaskRetainedResourceStates();\n"
             "};",
             (),
         ),
@@ -440,8 +470,12 @@ def run_self_test() -> int:
             "    bool recordTaskRange(){\n"
             "        return helper.beginPacketRecording();\n"
             "    }\n"
+            "    bool lowerBarriers(){ return helper.applyCompiledBarrier(); }\n"
+            "    bool seedRetainedStates(){ return helper.seedTaskRetainedResourceStates(); }\n"
             "private:\n"
             "    bool beginPacketRecording();\n"
+            "    bool applyCompiledBarrier();\n"
+            "    bool seedTaskRetainedResourceStates();\n"
             "};",
             (),
         ),
@@ -463,8 +497,9 @@ def run_self_test() -> int:
             "// GpuTaskPacketRecordingLease\n"
             "// GpuTaskLifecycleState\n"
             "// class GpuTaskGraph{ public: bool beginPacketRecording(); };\n"
-            'const char* text = "GpuNativePacketRecordDesc GpuTaskLifecycleState resetForRecording";\n'
-            'const char* raw = R"tag(GpuTaskPacketRecordingLease TaskLifecycleState beginRecordingAttempt)tag";',
+            "// bool applyCompiledBarrier(); bool seedTaskRetainedResourceStates();\n"
+            'const char* text = "GpuNativePacketRecordDesc GpuTaskLifecycleState resetForRecording applyCompiledBarrier";\n'
+            'const char* raw = R"tag(GpuTaskPacketRecordingLease TaskLifecycleState beginRecordingAttempt seedTaskRetainedResourceStates)tag";',
             (),
         ),
         (
@@ -473,8 +508,9 @@ def run_self_test() -> int:
             "GpuTaskPacketRecordingLeaseFactory lease;\n"
             "GpuTaskLifecycleStates state;\n"
             "class GpuNativePacketRecorderFactory{ public: bool recordPacket(); };\n"
-            "class GpuTaskGraphFactory{ public: enum class TaskLifecycleState : u8; bool beginPacketRecordingRange(); };\n"
-            "class Fixture{ public: enum class TaskLifecycleState : u8; };\n"
+            "class GpuTaskGraphFactory{ public: enum class TaskLifecycleState : u8; bool beginPacketRecordingRange(); bool applyCompiledBarriers(); };\n"
+            "class GpuTaskGraph{ public: bool seedTaskRetainedResourceStateSets(); };\n"
+            "class Fixture{ public: enum class TaskLifecycleState : u8; bool applyCompiledBarrier(); bool seedTaskRetainedResourceStates(); };\n"
             "class GpuRecordedGraphFactory{ public: bool resetForRecordings(); };",
             (),
         ),

@@ -762,6 +762,25 @@ concept HasSinglePacketDiscard = requires(
     graph.discardUnacceptedPacket(compiledGraph, packet, recordingAttemptGeneration);
 };
 
+template<typename GraphT>
+concept HasCompiledBarrierApplication = requires(
+    const GraphT& graph,
+    const Graphics::GpuCompiledGraph& compiledGraph,
+    const Graphics::GpuCompiledBarrier& barrier,
+    Graphics::CommandList& commandList
+){
+    graph.applyCompiledBarrier(compiledGraph, barrier, commandList);
+};
+
+template<typename GraphT>
+concept HasTaskRetainedResourceStateSeeding = requires(
+    const GraphT& graph,
+    const Graphics::GpuTaskId& task,
+    Graphics::CommandList& commandList
+){
+    graph.seedTaskRetainedResourceStates(task, commandList);
+};
+
 template<typename TransactionT>
 concept HasSinglePacketRejection = requires(
     TransactionT& transaction,
@@ -848,6 +867,8 @@ static_assert(!HasDeclarationTaskDiscard<Graphics::GpuTaskGraph>);
 static_assert(!HasPublicPacketSubmissionLease<Graphics::GpuTaskGraph>);
 static_assert(!HasPublicTaskLifecycleState<Graphics::GpuTaskGraph>);
 static_assert(!HasSinglePacketDiscard<Graphics::GpuTaskGraph>);
+static_assert(!HasCompiledBarrierApplication<Graphics::GpuTaskGraph>);
+static_assert(!HasTaskRetainedResourceStateSeeding<Graphics::GpuTaskGraph>);
 static_assert(!HasSinglePacketRejection<Graphics::GpuGraphSubmissionTransaction>);
 static_assert(!HasAttemptSinglePacketRejection<Graphics::GpuGraphSubmissionTransaction>);
 static_assert(!HasGenerationInferredTaskRejection<Graphics::GpuGraphSubmissionTransaction>);

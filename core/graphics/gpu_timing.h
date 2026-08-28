@@ -493,12 +493,6 @@ public:
     void recordFrameReset(CommandList& commandList);
     void confirmFrameReset();
     void discardFrameReset();
-#if !defined(NWB_FINAL)
-    // Holds one exact accepted token at the recorder boundary after the native queue may already be complete. This
-    // makes query publication/reuse tests deterministic without changing Device timeline state.
-    [[nodiscard]] bool holdSubmissionCompletionForTesting(const QueueSubmissionToken& token);
-    void releaseSubmissionCompletionForTesting(const QueueSubmissionToken& token);
-#endif
 
 
 private:
@@ -579,9 +573,6 @@ private:
     u64 m_feedbackCollectionRequestCount = 0u;
     u32 m_epoch = 1u;
     GpuTimingRecorderStatistics m_statistics;
-#if !defined(NWB_FINAL)
-    QueueSubmissionToken m_heldSubmissionCompletion;
-#endif
     bool m_accumulatorsActive = false;
     bool m_enabled = false;
 };

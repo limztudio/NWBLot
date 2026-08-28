@@ -169,6 +169,268 @@ inline constexpr GpuTimingScopeDefinition s_UnsplitAvboitIntegrationLifecycleSco
 );
 
 
+#if !defined(NWB_FINAL)
+
+namespace __hidden_descriptor_buffer_round_trip_tests{
+
+struct NativeDeviceCapture{
+    VkDevice device = VK_NULL_HANDLE;
+    const VkAllocationCallbacks* allocationCallbacks = nullptr;
+
+
+    [[nodiscard]] bool valid()const noexcept{ return device != VK_NULL_HANDLE; }
+};
+
+
+// The production queue submits one VkSubmitInfo2 whose final signal is its tracking timeline. Split that submit into
+// an executable command batch and a signal-only tail blocked by a test-owned timeline. This leaves the real command
+// buffer and timestamps complete while the production token remains naturally incomplete.
+class VulkanSubmissionTailGate final : NoCopy{
+public:
+    class ScopedSubmitInterception final : NoCopy{
+    public:
+        explicit ScopedSubmitInterception(VulkanSubmissionTailGate& gate)
+            : m_original(vkQueueSubmit2)
+        {
+            if(!gate.valid() || s_activeGate || !m_original)
+                return;
+
+            s_forwardQueueSubmit2 = m_original;
+            s_activeGate = &gate;
+            vkQueueSubmit2 = &VulkanSubmissionTailGate::InterceptQueueSubmit2;
+            m_armed = true;
+        }
+        ~ScopedSubmitInterception(){
+            if(!m_armed)
+                return;
+
+            vkQueueSubmit2 = m_original;
+            s_activeGate = nullptr;
+        }
+
+
+    public:
+        [[nodiscard]] bool valid()const noexcept{ return m_armed; }
+
+
+    private:
+        PFN_vkQueueSubmit2 m_original = nullptr;
+        bool m_armed = false;
+    };
+
+
+private:
+    static thread_local NativeDeviceCapture* s_activeDeviceCapture;
+    static PFN_vkCreateQueryPool s_forwardCreateQueryPool;
+    static thread_local VulkanSubmissionTailGate* s_activeGate;
+    static PFN_vkQueueSubmit2 s_forwardQueueSubmit2;
+
+    [[nodiscard]] static NativeDeviceCapture CaptureNativeDevice(GraphicsBackend::Device& device){
+        NativeDeviceCapture capture;
+        if(s_activeDeviceCapture || !vkCreateQueryPool)
+            return capture;
+
+        s_forwardCreateQueryPool = vkCreateQueryPool;
+        s_activeDeviceCapture = &capture;
+        vkCreateQueryPool = &VulkanSubmissionTailGate::CaptureCreateQueryPool;
+        auto probe = device.createTimerQuery();
+        vkCreateQueryPool = s_forwardCreateQueryPool;
+        s_activeDeviceCapture = nullptr;
+        if(!probe)
+            capture = {};
+        return capture;
+    }
+    [[nodiscard]] static VKAPI_ATTR VkResult VKAPI_CALL CaptureCreateQueryPool(
+        const VkDevice device,
+        const VkQueryPoolCreateInfo* const createInfo,
+        const VkAllocationCallbacks* const allocationCallbacks,
+        VkQueryPool* const queryPool
+    ){
+        NativeDeviceCapture* const capture = s_activeDeviceCapture;
+        if(capture){
+            capture->device = device;
+            capture->allocationCallbacks = allocationCallbacks;
+        }
+        if(!s_forwardCreateQueryPool)
+            return VK_ERROR_INITIALIZATION_FAILED;
+        return s_forwardCreateQueryPool(device, createInfo, allocationCallbacks, queryPool);
+    }
+    [[nodiscard]] static VKAPI_ATTR VkResult VKAPI_CALL InterceptQueueSubmit2(
+        const VkQueue queue,
+        const u32 submitCount,
+        const VkSubmitInfo2* const submits,
+        const VkFence fence
+    ){
+        if(!s_forwardQueueSubmit2)
+            return VK_ERROR_INITIALIZATION_FAILED;
+
+        VulkanSubmissionTailGate* const gate = s_activeGate;
+        if(!gate || queue != gate->m_nativeQueue)
+            return s_forwardQueueSubmit2(queue, submitCount, submits, fence);
+        return gate->splitQueueSubmit(submitCount, submits, fence);
+    }
+
+
+public:
+    VulkanSubmissionTailGate(GraphicsBackend::Device& device, const GpuPhysicalQueueId& queue)
+        : m_queue(device.getQueue(queue))
+        , m_nativeQueue(static_cast<VkQueue>(
+            device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, queue).pointer
+        ))
+    {
+        const NativeDeviceCapture capture = CaptureNativeDevice(device);
+        m_nativeDevice = capture.device;
+        m_allocationCallbacks = capture.allocationCallbacks;
+        if(!m_queue || m_nativeQueue == VK_NULL_HANDLE || !capture.valid())
+            return;
+
+        if(!createTimeline(m_readySemaphore))
+            return;
+        if(!createTimeline(m_releaseSemaphore)){
+            vkDestroySemaphore(m_nativeDevice, m_readySemaphore, m_allocationCallbacks);
+            m_readySemaphore = VK_NULL_HANDLE;
+        }
+    }
+    ~VulkanSubmissionTailGate(){
+        if(m_splitSubmissionAccepted && !m_queueDrained){
+            if(release()){
+                m_queue->waitForIdle();
+                m_queueDrained = true;
+            }
+        }
+        if(m_splitSubmissionAccepted && !m_queueDrained)
+            return;
+
+        if(m_releaseSemaphore != VK_NULL_HANDLE)
+            vkDestroySemaphore(m_nativeDevice, m_releaseSemaphore, m_allocationCallbacks);
+        if(m_readySemaphore != VK_NULL_HANDLE)
+            vkDestroySemaphore(m_nativeDevice, m_readySemaphore, m_allocationCallbacks);
+    }
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{
+        return
+            m_nativeDevice != VK_NULL_HANDLE
+            && m_queue
+            && m_nativeQueue != VK_NULL_HANDLE
+            && m_readySemaphore != VK_NULL_HANDLE
+            && m_releaseSemaphore != VK_NULL_HANDLE
+        ;
+    }
+    [[nodiscard]] bool splitSubmissionAccepted()const noexcept{ return m_splitSubmissionAccepted; }
+    [[nodiscard]] bool waitUntilReady()const{
+        if(!m_splitSubmissionAccepted || !vkWaitSemaphores)
+            return false;
+
+        auto waitInfo = HostSync::MakeVkStruct<VkSemaphoreWaitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO);
+        const u64 readyValue = 1u;
+        waitInfo.semaphoreCount = 1u;
+        waitInfo.pSemaphores = &m_readySemaphore;
+        waitInfo.pValues = &readyValue;
+        return vkWaitSemaphores(m_nativeDevice, &waitInfo, 30'000'000'000u) == VK_SUCCESS;
+    }
+    [[nodiscard]] bool release(){
+        if(!m_splitSubmissionAccepted || !vkSignalSemaphore)
+            return false;
+        if(m_releaseSignaled)
+            return true;
+
+        auto signalInfo = HostSync::MakeVkStruct<VkSemaphoreSignalInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO);
+        signalInfo.semaphore = m_releaseSemaphore;
+        signalInfo.value = 1u;
+        if(vkSignalSemaphore(m_nativeDevice, &signalInfo) != VK_SUCCESS)
+            return false;
+        m_releaseSignaled = true;
+        return true;
+    }
+    [[nodiscard]] bool releaseAndWait(){
+        if(!release())
+            return false;
+        m_queue->waitForIdle();
+        m_queueDrained = true;
+        return true;
+    }
+
+
+private:
+    [[nodiscard]] bool createTimeline(VkSemaphore& semaphore)const{
+        if(!vkCreateSemaphore)
+            return false;
+
+        auto typeInfo = HostSync::MakeVkStruct<VkSemaphoreTypeCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO);
+        typeInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+        typeInfo.initialValue = 0u;
+        auto createInfo = HostSync::MakeVkStruct<VkSemaphoreCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO);
+        createInfo.pNext = &typeInfo;
+        return vkCreateSemaphore(m_nativeDevice, &createInfo, m_allocationCallbacks, &semaphore) == VK_SUCCESS;
+    }
+    [[nodiscard]] VkResult splitQueueSubmit(
+        const u32 submitCount,
+        const VkSubmitInfo2* const submits,
+        const VkFence fence
+    ){
+        if(
+            m_splitSubmissionObserved
+            || submitCount != 1u
+            || !submits
+            || submits[0u].pNext
+            || submits[0u].commandBufferInfoCount == 0u
+            || !submits[0u].pCommandBufferInfos
+            || submits[0u].signalSemaphoreInfoCount == 0u
+            || !submits[0u].pSignalSemaphoreInfos
+        )
+            return s_forwardQueueSubmit2(m_nativeQueue, submitCount, submits, fence);
+
+        m_splitSubmissionObserved = true;
+        const VkSubmitInfo2& source = submits[0u];
+        auto readySignal = HostSync::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
+        readySignal.semaphore = m_readySemaphore;
+        readySignal.value = 1u;
+        readySignal.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+        auto releaseWait = HostSync::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
+        releaseWait.semaphore = m_releaseSemaphore;
+        releaseWait.value = 1u;
+        releaseWait.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+
+        VkSubmitInfo2 batches[2u] = { source, HostSync::MakeVkStruct<VkSubmitInfo2>(VK_STRUCTURE_TYPE_SUBMIT_INFO_2) };
+        batches[0u].signalSemaphoreInfoCount = 1u;
+        batches[0u].pSignalSemaphoreInfos = &readySignal;
+        batches[1u].flags = source.flags;
+        batches[1u].waitSemaphoreInfoCount = 1u;
+        batches[1u].pWaitSemaphoreInfos = &releaseWait;
+        batches[1u].signalSemaphoreInfoCount = source.signalSemaphoreInfoCount;
+        batches[1u].pSignalSemaphoreInfos = source.pSignalSemaphoreInfos;
+
+        const VkResult result = s_forwardQueueSubmit2(m_nativeQueue, LengthOf(batches), batches, fence);
+        m_splitSubmissionAccepted = result == VK_SUCCESS;
+        return result;
+    }
+
+
+private:
+    GraphicsBackend::Queue* m_queue = nullptr;
+    VkQueue m_nativeQueue = VK_NULL_HANDLE;
+    VkDevice m_nativeDevice = VK_NULL_HANDLE;
+    const VkAllocationCallbacks* m_allocationCallbacks = nullptr;
+    VkSemaphore m_readySemaphore = VK_NULL_HANDLE;
+    VkSemaphore m_releaseSemaphore = VK_NULL_HANDLE;
+    bool m_splitSubmissionObserved = false;
+    bool m_splitSubmissionAccepted = false;
+    bool m_releaseSignaled = false;
+    bool m_queueDrained = false;
+};
+
+thread_local NativeDeviceCapture* VulkanSubmissionTailGate::s_activeDeviceCapture = nullptr;
+PFN_vkCreateQueryPool VulkanSubmissionTailGate::s_forwardCreateQueryPool = nullptr;
+thread_local VulkanSubmissionTailGate* VulkanSubmissionTailGate::s_activeGate = nullptr;
+PFN_vkQueueSubmit2 VulkanSubmissionTailGate::s_forwardQueueSubmit2 = nullptr;
+
+};
+
+#endif
+
+
 struct GpuTimingSampleCapture{
     GpuTimingSample samples[2u] = {};
     u32 sampleCount = 0u;
@@ -1413,8 +1675,8 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryRejectsDifferentExactPhysicalQue
 
 #if !defined(NWB_FINAL)
 
-// Completion ownership follows the exact auxiliary queue token, not its broad Graphics class. Holding that token
-// after the device is idle must block publication; releasing a same-value primary-queue lookalike must not unblock it.
+// Completion ownership follows the exact auxiliary queue token, not its broad Graphics class. Finish the auxiliary
+// command buffer while gating its tracking signal, then prove a completed primary-queue lookalike cannot publish it.
 TEST_F(DescriptorBufferRoundTripTest, GpuTimingCompletionTracksExactAuxiliaryPhysicalQueue){
     HeadlessGraphicsScope multiQueueScope;
     ASSERT_TRUE(multiQueueScope.setSameClassMultiQueueEnabled(true));
@@ -1439,6 +1701,12 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingCompletionTracksExactAuxiliaryPhy
     }
     if(!secondaryInfo)
         GTEST_SKIP() << "GPU timing auxiliary completion: adapter exposes no auxiliary timestamp-capable Graphics queue.";
+
+    __hidden_descriptor_buffer_round_trip_tests::VulkanSubmissionTailGate submissionGate(
+        nativeDevice,
+        secondaryInfo->id
+    );
+    ASSERT_TRUE(submissionGate.valid());
 
     auto& timing = graphics.gpuTiming();
     multiQueueScope.setGpuTimingEnabled(true);
@@ -1471,28 +1739,46 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingCompletionTracksExactAuxiliaryPhy
         commandList->close();
     }
     CommandList* commandLists[] = { commandList.get() };
-    const QueueSubmissionToken token = ticket.submit(
-        nativeDevice,
-        commandLists,
-        LengthOf(commandLists),
-        secondaryInfo->id,
-        QueueSubmissionDesc{}
-    );
+    QueueSubmissionToken token;
+    {
+        __hidden_descriptor_buffer_round_trip_tests::VulkanSubmissionTailGate::ScopedSubmitInterception interception(
+            submissionGate
+        );
+        ASSERT_TRUE(interception.valid());
+        token = ticket.submit(
+            nativeDevice,
+            commandLists,
+            LengthOf(commandLists),
+            secondaryInfo->id,
+            QueueSubmissionDesc{}
+        );
+    }
     ASSERT_TRUE(token.valid());
     ASSERT_TRUE(token.matchesPhysicalQueue(secondaryInfo->id.index, secondaryInfo->id.deviceGeneration));
-    ASSERT_TRUE(timing.holdSubmissionCompletionForTesting(token));
-    ASSERT_TRUE(nativeDevice.waitForIdle());
+    ASSERT_TRUE(submissionGate.splitSubmissionAccepted());
+    ASSERT_TRUE(submissionGate.waitUntilReady());
+    EXPECT_LT(nativeDevice.queueGetCompletedInstance(secondaryInfo->id), token.value);
 
     timing.collect(nativeDevice, 241u);
     EXPECT_EQ(completedSamples.sampleCount, 0u);
-    QueueSubmissionToken primaryLookalike = token;
-    primaryLookalike.physicalQueueIndex = primaryQueue.index;
-    primaryLookalike.deviceGeneration = primaryQueue.deviceGeneration;
-    timing.releaseSubmissionCompletionForTesting(primaryLookalike);
+
+    QueueSubmissionDesc forcedPrimarySubmission;
+    forcedPrimarySubmission.forceNativeSubmission = true;
+    QueueSubmissionToken primaryToken;
+    do{
+        primaryToken = nativeDevice.executeCommandLists(nullptr, 0u, primaryQueue, forcedPrimarySubmission);
+        ASSERT_TRUE(primaryToken.valid());
+    }while(primaryToken.value < token.value);
+    GraphicsBackend::Queue* const primaryNativeQueue = nativeDevice.getQueue(primaryQueue);
+    ASSERT_NE(primaryNativeQueue, nullptr);
+    primaryNativeQueue->waitForIdle();
+    EXPECT_GE(nativeDevice.queueGetCompletedInstance(primaryQueue), token.value);
+    EXPECT_LT(nativeDevice.queueGetCompletedInstance(secondaryInfo->id), token.value);
     timing.collect(nativeDevice, 241u);
     EXPECT_EQ(completedSamples.sampleCount, 0u);
 
-    timing.releaseSubmissionCompletionForTesting(token);
+    ASSERT_TRUE(submissionGate.releaseAndWait());
+    EXPECT_GE(nativeDevice.queueGetCompletedInstance(secondaryInfo->id), token.value);
     timing.collect(nativeDevice, 241u);
     ASSERT_EQ(completedSamples.sampleCount, 1u);
     EXPECT_EQ(completedSamples.samples[0u].scopeName, s_AuxiliaryCompletionScope.identity);
@@ -49137,7 +49423,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleRollsBackRejectedGrap
 
 
 // An available result from seed A must not let capacity-one query B publish or return to the free list before B's
-// exact accepted submission completes. The recorder-local hold makes that ordering deterministic after device idle.
+// exact accepted submission completes. A test-owned native submission tail gate makes that real ordering observable.
 TEST_F(DescriptorBufferRoundTripTest, GpuTimingAcceptedSubmissionCompletionGatesPublicationAndReuse){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& timing = s_scope->graphics().gpuTiming();
@@ -49176,6 +49462,10 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingAcceptedSubmissionCompletionGates
     timing.collect(device, 231u);
     EXPECT_EQ(completedSamples.sampleCount, 0u);
 
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    __hidden_descriptor_buffer_round_trip_tests::VulkanSubmissionTailGate submissionGate(device, graphicsQueue);
+    ASSERT_TRUE(submissionGate.valid());
+
     timing.beginFrame(231u);
     const GpuTimingSampleAttribution acceptedAttribution = timing.allocateSampleAttribution();
     ASSERT_TRUE(acceptedAttribution.valid());
@@ -49198,16 +49488,24 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingAcceptedSubmissionCompletionGates
         acceptedCommandList->close();
     }
     CommandList* acceptedCommandLists[] = { acceptedCommandList.get() };
-    const QueueSubmissionToken acceptedToken = acceptedTicket.submit(
-        device,
-        acceptedCommandLists,
-        LengthOf(acceptedCommandLists),
-        CommandQueue::Graphics,
-        QueueSubmissionDesc{}
-    );
+    QueueSubmissionToken acceptedToken;
+    {
+        __hidden_descriptor_buffer_round_trip_tests::VulkanSubmissionTailGate::ScopedSubmitInterception interception(
+            submissionGate
+        );
+        ASSERT_TRUE(interception.valid());
+        acceptedToken = acceptedTicket.submit(
+            device,
+            acceptedCommandLists,
+            LengthOf(acceptedCommandLists),
+            CommandQueue::Graphics,
+            QueueSubmissionDesc{}
+        );
+    }
     ASSERT_TRUE(acceptedToken.valid());
-    ASSERT_TRUE(timing.holdSubmissionCompletionForTesting(acceptedToken));
-    ASSERT_TRUE(device.waitForIdle());
+    ASSERT_TRUE(submissionGate.splitSubmissionAccepted());
+    ASSERT_TRUE(submissionGate.waitUntilReady());
+    EXPECT_LT(device.queueGetCompletedInstance(graphicsQueue), acceptedToken.value);
     timing.collect(device, 232u);
     EXPECT_EQ(completedSamples.sampleCount, 0u);
 
@@ -49229,7 +49527,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingAcceptedSubmissionCompletionGates
         1u
     );
 
-    timing.releaseSubmissionCompletionForTesting(acceptedToken);
+    ASSERT_TRUE(submissionGate.releaseAndWait());
+    EXPECT_GE(device.queueGetCompletedInstance(graphicsQueue), acceptedToken.value);
     timing.collect(device, 232u);
     ASSERT_EQ(completedSamples.sampleCount, 1u);
     EXPECT_EQ(completedSamples.samples[0u].scopeName, s_AcceptedCompletionScope.identity);
@@ -51441,7 +51740,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionPropagatesBackend
 TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPrefixAfterRejectedFinal){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
-    if(!device.supportsComparableGpuTimestamps(device.getPrimaryPhysicalQueue(CommandQueue::Graphics)))
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    if(!device.supportsComparableGpuTimestamps(graphicsQueue))
         GTEST_SKIP() << "GPU timing recovery transaction: comparable 64-bit device timestamps are unavailable.";
     auto& timing = graphics.gpuTiming();
     auto& timingSink = s_scope->gpuTimingSink();
@@ -51509,19 +51809,26 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
     ASSERT_TRUE(rejectedTransaction.recordEnd(*recovery));
     recovery->close();
     CommandList* recoveryCommandLists[] = { recovery.get() };
-    const QueueSubmissionToken recoveryToken = device.executeCommandLists(
-        recoveryCommandLists,
-        1u,
-        RenderLane::Graphics,
-        QueueSubmissionDesc{}
-    );
+    __hidden_descriptor_buffer_round_trip_tests::VulkanSubmissionTailGate submissionGate(device, graphicsQueue);
+    ASSERT_TRUE(submissionGate.valid());
+    QueueSubmissionToken recoveryToken;
+    {
+        __hidden_descriptor_buffer_round_trip_tests::VulkanSubmissionTailGate::ScopedSubmitInterception interception(
+            submissionGate
+        );
+        ASSERT_TRUE(interception.valid());
+        recoveryToken = device.executeCommandLists(
+            recoveryCommandLists,
+            1u,
+            RenderLane::Graphics,
+            QueueSubmissionDesc{}
+        );
+    }
     ASSERT_TRUE(recoveryToken.valid());
-#if !defined(NWB_FINAL)
-    ASSERT_TRUE(timing.holdSubmissionCompletionForTesting(recoveryToken));
-#endif
+    ASSERT_TRUE(submissionGate.splitSubmissionAccepted());
     ASSERT_TRUE(rejectedTransaction.confirmEndSubmission(recoveryToken, false));
-    ASSERT_TRUE(device.waitForIdle());
-#if !defined(NWB_FINAL)
+    ASSERT_TRUE(submissionGate.waitUntilReady());
+    EXPECT_LT(device.queueGetCompletedInstance(graphicsQueue), recoveryToken.value);
     timing.collect(device, 91u);
     EXPECT_EQ(completedSamples.sampleCount, 0u);
     EXPECT_FALSE(timingSink.stats(s_FrameTransactionScope.identity).valid());
@@ -51539,8 +51846,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
         blockedCommandList->close();
     }
 
-    timing.releaseSubmissionCompletionForTesting(recoveryToken);
-#endif
+    ASSERT_TRUE(submissionGate.releaseAndWait());
+    EXPECT_GE(device.queueGetCompletedInstance(graphicsQueue), recoveryToken.value);
     timing.collect(device, 91u);
     ASSERT_EQ(completedSamples.sampleCount, 1u);
     EXPECT_EQ(completedSamples.samples[0u].scopeName, s_FrameTransactionScope.identity);

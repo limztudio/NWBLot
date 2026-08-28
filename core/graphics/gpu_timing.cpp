@@ -625,9 +625,6 @@ void GpuTimingRecorder::resetQueries(){
         m_overlapRecords.clear();
         m_pendingPacketEnvelopeMetrics.clear();
         m_packetEnvelopeMetricOutputRoles.clear();
-#if !defined(NWB_FINAL)
-        m_heldSubmissionCompletion = {};
-#endif
         advanceEpoch();
         m_accumulatorsActive = false;
         m_currentFrameIndex = 0u;
@@ -679,16 +676,6 @@ void GpuTimingRecorder::collectLocked(
 }
 
 bool GpuTimingRecorder::submissionCompleted(Device& device, const QueueSubmissionToken& token){
-#if !defined(NWB_FINAL)
-    if(
-        m_heldSubmissionCompletion.queue == token.queue
-        && m_heldSubmissionCompletion.value == token.value
-        && m_heldSubmissionCompletion.physicalQueueIndex == token.physicalQueueIndex
-        && m_heldSubmissionCompletion.deviceGeneration == token.deviceGeneration
-    )
-        return false;
-#endif
-
     const GpuPhysicalQueueId physicalQueue{ token.physicalQueueIndex, token.deviceGeneration };
     if(m_queueCompletions.size() <= static_cast<usize>(physicalQueue.index))
         m_queueCompletions.resize(static_cast<usize>(physicalQueue.index) + 1u);
@@ -1097,39 +1084,6 @@ void GpuTimingRecorder::discardFrameReset(){
     ScopedLock lock(m_mutex);
     discardFrameResetLocked();
 }
-
-#if !defined(NWB_FINAL)
-
-bool GpuTimingRecorder::holdSubmissionCompletionForTesting(const QueueSubmissionToken& token){
-    if(!token.valid() || !token.hasPhysicalQueueIdentity())
-        return false;
-
-    ScopedLock lock(m_mutex);
-    if(m_heldSubmissionCompletion.valid()){
-        return
-            m_heldSubmissionCompletion.queue == token.queue
-            && m_heldSubmissionCompletion.value == token.value
-            && m_heldSubmissionCompletion.physicalQueueIndex == token.physicalQueueIndex
-            && m_heldSubmissionCompletion.deviceGeneration == token.deviceGeneration
-        ;
-    }
-
-    m_heldSubmissionCompletion = token;
-    return true;
-}
-
-void GpuTimingRecorder::releaseSubmissionCompletionForTesting(const QueueSubmissionToken& token){
-    ScopedLock lock(m_mutex);
-    if(
-        m_heldSubmissionCompletion.queue == token.queue
-        && m_heldSubmissionCompletion.value == token.value
-        && m_heldSubmissionCompletion.physicalQueueIndex == token.physicalQueueIndex
-        && m_heldSubmissionCompletion.deviceGeneration == token.deviceGeneration
-    )
-        m_heldSubmissionCompletion = {};
-}
-
-#endif
 
 void GpuTimingRecorder::discardFrameResetLocked(){
     for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)

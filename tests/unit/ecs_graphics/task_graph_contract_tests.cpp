@@ -481,9 +481,16 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
     EXPECT_TRUE(ContainsText(timingHeader, "u64 skippedScopeCountByReason[GpuTimingScopeSkipReason::kCount]{};"));
     EXPECT_TRUE(ContainsText(timingHeader, "GpuTimingRecorderStatistics statistics(const Device& device)const;"));
     EXPECT_FALSE(ContainsText(timingHeader, "const GpuTimingRecorderStatistics& statistics("));
+    EXPECT_FALSE(ContainsText(timingHeader, "holdSubmissionCompletionForTesting"));
+    EXPECT_FALSE(ContainsText(timingHeader, "releaseSubmissionCompletionForTesting"));
+    EXPECT_FALSE(ContainsText(timingHeader, "m_heldSubmissionCompletion"));
     EXPECT_TRUE(ContainsText(timing, "GpuTimingRecorderStatistics result = m_statistics;"));
     EXPECT_TRUE(ContainsText(timing, "result.deviceGeneration = device.getDeviceGeneration();"));
     EXPECT_TRUE(ContainsText(timing, "m_statistics = {};"));
+    EXPECT_TRUE(ContainsText(timing, "device.queueGetCompletedInstance(physicalQueue)"));
+    EXPECT_FALSE(ContainsText(timing, "holdSubmissionCompletionForTesting"));
+    EXPECT_FALSE(ContainsText(timing, "releaseSubmissionCompletionForTesting"));
+    EXPECT_FALSE(ContainsText(timing, "m_heldSubmissionCompletion"));
     EXPECT_TRUE(ContainsText(timing, "++m_publishedSampleCount;"));
     EXPECT_TRUE(ContainsText(timing, "++m_unpublishedSampleCount;"));
     EXPECT_TRUE(ContainsText(timing, "++m_statistics.scopeAttemptCount;"));

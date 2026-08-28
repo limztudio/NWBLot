@@ -217,12 +217,6 @@ private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("StressTestSmokeProject"));
 
-        // Force ray-tracing emulation so the SOFTWARE shadow path runs even on RT-capable hardware -- the A/B sibling of
-        // the hardware path. Default OFF: the demo runs the hardware (hybrid) path.
-#if defined(NWB_STRESS_TEST_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
-        NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
-#endif
-
         AddSmokeSkinnedRenderSystems(*world, context);
         return world;
     }

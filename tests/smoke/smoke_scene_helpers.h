@@ -129,18 +129,6 @@ struct SmokeRenderSystems{
     return { meshSystem, rendererSystem };
 }
 
-inline void DisableSmokeRayTracingForTesting(ProjectRuntimeContext& context){
-#if !defined(NWB_FINAL)
-    context.graphics.setFeatureSupportDisabledForTesting(Core::Feature::RayTracingAccelStruct, true);
-    context.graphics.setFeatureSupportDisabledForTesting(Core::Feature::RayTracingPipeline, true);
-    context.graphics.setFeatureSupportDisabledForTesting(Core::Feature::RayQuery, true);
-#else
-    // Production final builds deliberately exclude the hook; their smoke executable keeps the
-    // platform's native feature selection.
-    static_cast<void>(context);
-#endif
-}
-
 inline Impl::RendererSystem& AddSmokeRenderSystems(
     Core::ECS::World& world,
     ProjectRuntimeContext& context

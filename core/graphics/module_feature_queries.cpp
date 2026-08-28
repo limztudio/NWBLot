@@ -45,11 +45,6 @@ constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& com
 
 
 bool Graphics::queryFeatureSupport(const Feature::Enum feature, void* featureInfo, const usize featureInfoSize)const{
-#if !defined(NWB_FINAL)
-    if((m_disabledFeatureSupportMask & BitMask<u64>(static_cast<u32>(feature))) != 0u)
-        return false;
-#endif
-
     auto& device = getDevice();
     return device.queryFeatureSupport(feature, featureInfo, featureInfoSize);
 }
@@ -62,34 +57,6 @@ u32 Graphics::queryWaveLaneCount()const noexcept{
     // bound across all desktop GPUs and keeps groupshared reductions correct without wave intrinsics.
     return __hidden_graphics_feature_queries::s_DefaultWaveLaneCount;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if !defined(NWB_FINAL)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void Graphics::setFeatureSupportDisabledForTesting(const Feature::Enum feature, const bool disabled){
-    const u64 featureBit = BitMask<u64>(static_cast<u32>(feature));
-    if(disabled)
-        m_disabledFeatureSupportMask |= featureBit;
-    else
-        m_disabledFeatureSupportMask &= ~featureBit;
-}
-
-void Graphics::clearFeatureSupportDisabledForTesting(){
-    m_disabledFeatureSupportMask = 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

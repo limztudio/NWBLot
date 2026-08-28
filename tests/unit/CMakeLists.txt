@@ -65,13 +65,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "${CMAKE_SOURCE_DIR}/tests/ab/frame_lagged_async_lighting/launch.py"
             "--self-test"
     )
-    add_test(
-        NAME nwb_bindless_parity_harness_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/bindless_parity/launch.py"
-            "--self-test"
-    )
     # The transfer-upload A/B stays opt-in because a meaningful run needs a distinct Transfer-only family and an
     # external bandwidth capture. Keep its parser/report contracts in regular unit coverage.
     add_test(

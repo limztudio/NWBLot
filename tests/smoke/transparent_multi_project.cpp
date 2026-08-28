@@ -341,11 +341,19 @@ private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("TransparentMultiSmokeProject"));
 
-        // Force ray-tracing emulation so the software shadow path runs even on RT-capable hardware; for caustic-focused
-        // builds this also A/Bs the SW caustic producer against the hardware ray-traced producer.
-#if defined(NWB_TRANSPARENT_MULTI_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
-        NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
-#endif
+        const bool rayQueryHardwareAvailable =
+            context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct)
+            && context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery)
+        ;
+        if(rayQueryHardwareAvailable){
+            NWB_LOGGER_ESSENTIAL_INFO(
+                NWB_TEXT("TransparentMultiSmokeProject: natural hybrid shadow route selected on RayQuery-capable hardware")
+            );
+        }else{
+            NWB_LOGGER_ESSENTIAL_INFO(
+                NWB_TEXT("TransparentMultiSmokeProject: natural software-only shadow route selected because RayQuery-capable hardware is unavailable")
+            );
+        }
 
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
         auto& rendererSystem = AddSmokeRenderSystems(*world, context);

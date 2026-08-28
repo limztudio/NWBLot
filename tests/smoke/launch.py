@@ -43,52 +43,49 @@ SMOKE_SCENES = {
     "transparent-multi": SmokeScene(
         runtime="smoke_runtime",
         backends={
-            "hw": SmokeExecutable("nwb_transparent_multi_smoke", "transparent_multi_smoke"),
-            "sw": SmokeExecutable("nwb_transparent_multi_sw_smoke", "transparent_multi_sw_smoke"),
+            "native": SmokeExecutable("nwb_transparent_multi_smoke", "transparent_multi_smoke"),
         },
     ),
     "transparent-csg": SmokeScene(
         runtime="smoke_runtime",
         backends={
-            "hw": SmokeExecutable("nwb_transparent_csg_smoke", "transparent_csg_smoke"),
+            "native": SmokeExecutable("nwb_transparent_csg_smoke", "transparent_csg_smoke"),
         },
     ),
     "texture": SmokeScene(
         runtime="texture_smoke_runtime",
         backends={
-            "hw": SmokeExecutable("nwb_texture_smoke", "texture_smoke"),
+            "native": SmokeExecutable("nwb_texture_smoke", "texture_smoke"),
         },
     ),
     "caustic-sphere": SmokeScene(
         runtime="smoke_runtime",
         backends={
-            "hw": SmokeExecutable("nwb_caustic_sphere_smoke", "caustic_sphere_smoke"),
-            "sw": SmokeExecutable("nwb_caustic_sphere_sw_smoke", "caustic_sphere_sw_smoke"),
+            "native": SmokeExecutable("nwb_caustic_sphere_smoke", "caustic_sphere_smoke"),
         },
     ),
     "csg-visible": SmokeScene(
         runtime="csg_visible_smoke_runtime",
         backends={
-            "hw": SmokeExecutable("nwb_csg_visible_smoke", "csg_visible_smoke"),
-            "compute": SmokeExecutable("nwb_csg_visible_compute_emulation_smoke", "csg_visible_compute_emulation_smoke"),
+            "native": SmokeExecutable("nwb_csg_visible_smoke", "csg_visible_smoke"),
         },
     ),
     "csg-skinned-visible": SmokeScene(
         runtime="csg_skinned_visible_smoke_runtime",
         backends={
-            "hw": SmokeExecutable("nwb_csg_skinned_visible_smoke", "csg_skinned_visible_smoke"),
+            "native": SmokeExecutable("nwb_csg_skinned_visible_smoke", "csg_skinned_visible_smoke"),
         },
     ),
     "csg-skinned-sphere-visible": SmokeScene(
         runtime="csg_skinned_visible_smoke_runtime",
         backends={
-            "hw": SmokeExecutable("nwb_csg_skinned_sphere_visible_smoke", "csg_skinned_sphere_visible_smoke"),
+            "native": SmokeExecutable("nwb_csg_skinned_sphere_visible_smoke", "csg_skinned_sphere_visible_smoke"),
         },
     ),
     "csg-skinned-transparent-sphere-visible": SmokeScene(
         runtime="csg_skinned_visible_smoke_runtime",
         backends={
-            "hw": SmokeExecutable(
+            "native": SmokeExecutable(
                 "nwb_csg_skinned_transparent_sphere_visible_smoke",
                 "csg_skinned_transparent_sphere_visible_smoke",
             ),
@@ -97,42 +94,37 @@ SMOKE_SCENES = {
     "skinning-culling-benchmark": SmokeScene(
         runtime="skinning_culling_benchmark_runtime",
         backends={
-            "hw": SmokeExecutable("nwb_skinning_culling_benchmark", "skinning_culling_benchmark"),
+            "native": SmokeExecutable("nwb_skinning_culling_benchmark", "skinning_culling_benchmark"),
         },
     ),
     "skinned-caustic": SmokeScene(
         runtime="skinning_culling_benchmark_runtime",
         backends={
-            "hw": SmokeExecutable("nwb_skinned_caustic_smoke", "skinned_caustic_smoke"),
-            "sw": SmokeExecutable("nwb_skinned_caustic_sw_smoke", "skinned_caustic_sw_smoke"),
+            "native": SmokeExecutable("nwb_skinned_caustic_smoke", "skinned_caustic_smoke"),
         },
     ),
     "stress-test": SmokeScene(
         runtime="skinning_culling_benchmark_runtime",
         backends={
-            "hw": SmokeExecutable("nwb_stress_test_smoke", "stress_test_smoke"),
-            "sw": SmokeExecutable("nwb_stress_test_sw_smoke", "stress_test_sw_smoke"),
+            "native": SmokeExecutable("nwb_stress_test_smoke", "stress_test_smoke"),
         },
     ),
     "flicker-test": SmokeScene(
         runtime="skinning_culling_benchmark_runtime",
         backends={
-            "hw": SmokeExecutable("nwb_flicker_test_smoke", "flicker_test_smoke"),
-            "sw": SmokeExecutable("nwb_flicker_test_sw_smoke", "flicker_test_sw_smoke"),
+            "native": SmokeExecutable("nwb_flicker_test_smoke", "flicker_test_smoke"),
         },
     ),
     "soft-shadow-test": SmokeScene(
         runtime="skinning_culling_benchmark_runtime",
         backends={
-            "hw": SmokeExecutable("nwb_soft_shadow_test_smoke", "soft_shadow_test_smoke"),
-            "sw": SmokeExecutable("nwb_soft_shadow_test_sw_smoke", "soft_shadow_test_sw_smoke"),
+            "native": SmokeExecutable("nwb_soft_shadow_test_smoke", "soft_shadow_test_smoke"),
         },
     ),
     "gi-test": SmokeScene(
         runtime="skinning_culling_benchmark_runtime",
         backends={
-            "hw": SmokeExecutable("nwb_gi_test_smoke", "gi_test_smoke"),
-            "sw": SmokeExecutable("nwb_gi_test_sw_smoke", "gi_test_sw_smoke"),
+            "native": SmokeExecutable("nwb_gi_test_smoke", "gi_test_smoke"),
         },
     ),
 }
@@ -209,7 +201,7 @@ def profiles_command(_args) -> int:
 def add_smoke_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("scene_name", nargs="?", help="Smoke scene name.")
     parser.add_argument("--scene", choices=sorted(SMOKE_SCENES), default="transparent-multi")
-    parser.add_argument("--backend", default="hw", help="Backend variant for the scene, such as hw/sw/compute.")
+    parser.add_argument("--backend", default="native", help="Backend variant for the scene; currently native.")
     parser.add_argument("--spin-angle", help="Pin NWB_TRANSPARENT_MULTI_SPIN_ANGLE, in radians.")
     parser.add_argument("--spin-speed", help="Set NWB_TRANSPARENT_MULTI_SPIN_SPEED.")
 

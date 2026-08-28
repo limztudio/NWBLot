@@ -66,9 +66,9 @@ using SoftShadowMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 //     ~0.001 is a near-HARD reference (tight penumbra), ~0.05 is very soft. Shown live in the title bar (deg).
 //   - NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS (world units, default 0.15): the POINT + SPOT emissive sphere radius. Larger =
 //     softer; the penumbra ALSO widens as the light nears the caster (asin(radius/dist)) -- physical distance softening.
-//   - The _sw_smoke build (NWB_SOFT_SHADOW_TEST_FORCE_RT_EMULATION) forces the SOFTWARE path, which runs the FULL soft
-//     pipeline (half-res jittered trace -> a-trous denoise -> bilateral upsample). The HW build applies the same cone
-//     jitter but at full res without the denoise (per-frame shimmer expected until the temporal stage).
+//   - A device without RayQuery-capable hardware naturally selects the SOFTWARE path, which runs the full soft pipeline
+//     (half-res jittered trace -> a-trous denoise -> bilateral upsample). The hardware path applies the same cone jitter
+//     at full resolution without the denoise (per-frame shimmer expected until the temporal stage).
 //   - Arrow keys (Left/Right) scrub the character yaw so the sweeping soft edge can be checked for crawl (it should NOT
 //     crawl -- a soft edge has nothing to alias); NWB_SOFT_SHADOW_TEST_SPIN_ANGLE pins a fixed yaw for a deterministic A/B.
 // Reuses the benchmark's cooked body model + ground material (no new assets).
@@ -166,13 +166,6 @@ private:
 
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("SoftShadowTestSmokeProject"));
-
-        // Force ray-tracing emulation so the SOFTWARE shadow path runs even on RT-capable hardware -- the software path is
-        // the one that runs the FULL soft pipeline (half-res jittered trace -> a-trous denoise -> bilateral upsample), so
-        // the _sw_smoke build is the intended way to see the denoised soft shadow. Default OFF: the HW (hybrid) path.
-#if defined(NWB_SOFT_SHADOW_TEST_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
-        NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
-#endif
 
         AddSmokeSkinnedRenderSystems(*world, context);
 

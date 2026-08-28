@@ -113,7 +113,6 @@ class LauncherPlatformTests(unittest.TestCase):
                 root / "tests" / "smoke" / "launcher.py",
                 root / "tests" / "ab" / "launch.py",
                 root / "tests" / "ab" / "async_shadow_m4" / "launch.py",
-                root / "tests" / "ab" / "bindless_parity" / "launch.py",
                 root / "tests" / "ab" / "command_ir" / "launch.py",
                 root / "tests" / "ab" / "frame_lagged_async_lighting" / "launch.py",
                 root / "tests" / "ab" / "frame_lagged_async_lighting" / "run.py",
@@ -132,7 +131,6 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertEqual(
             {
                 "async-shadow-m4": Path("tests/ab/async_shadow_m4/launch.py"),
-                "bindless-parity": Path("tests/ab/bindless_parity/launch.py"),
                 "command-ir": Path("tests/ab/command_ir/launch.py"),
                 "frame-lagged-async-lighting": Path("tests/ab/frame_lagged_async_lighting/launch.py"),
                 "hybrid-shadow-boundary": Path("tests/ab/hybrid_shadow_boundary/launch.py"),
@@ -146,7 +144,6 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertEqual(
             {
                 "async-shadow-m4": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
-                "bindless-parity": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
                 "command-ir": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
                 "frame-lagged-async-lighting": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
                 "hybrid-shadow-boundary": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
@@ -181,7 +178,6 @@ class LauncherPlatformTests(unittest.TestCase):
                 root / "tests" / "launch.py",
                 root / "tests" / "ab" / "launch.py",
                 root / "tests" / "ab" / "async_shadow_m4" / "launch.py",
-                root / "tests" / "ab" / "bindless_parity" / "launch.py",
                 root / "tests" / "ab" / "command_ir" / "launch.py",
                 root / "tests" / "ab" / "frame_lagged_async_lighting" / "launch.py",
                 root / "tests" / "ab" / "hybrid_shadow_boundary" / "launch.py",
@@ -206,7 +202,6 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertEqual(
             {
                 "async-shadow-m4": Path("tests/ab/async_shadow_m4/launch.py"),
-                "bindless-parity": Path("tests/ab/bindless_parity/launch.py"),
                 "command-ir": Path("tests/ab/command_ir/launch.py"),
                 "frame-lagged-async-lighting": Path("tests/ab/frame_lagged_async_lighting/launch.py"),
                 "hybrid-shadow-boundary": Path("tests/ab/hybrid_shadow_boundary/launch.py"),

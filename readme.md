@@ -47,10 +47,10 @@
   - Testbed directory launcher: `python launcher.py testbed --config dbg`
   - Generic executable target: `python launcher.py run nwb_resource_cooker -- --help`
   - Launch with profiling/logserver: `python launcher.py run testbed --with-profile`
-  - Smoke profile through root dispatch: `python launcher.py smoke transparent-multi --backend hw`
-  - Smoke profile with profiling/logserver: `python launcher.py smoke transparent-multi --backend hw --with-profile`
-  - Smoke-domain launcher script: `python tests/smoke/launch.py --scene transparent-multi --backend hw`
-  - A/B workflows through root dispatch: `python launcher.py async-shadow-m4`, `python launcher.py bindless-parity soft-shadows`, and `python launcher.py frame-lagged-async-lighting`
+  - Smoke profile through root dispatch: `python launcher.py smoke transparent-multi --backend native`
+  - Smoke profile with profiling/logserver: `python launcher.py smoke transparent-multi --backend native --with-profile`
+  - Smoke-domain launcher script: `python tests/smoke/launch.py --scene transparent-multi --backend native`
+  - A/B workflows through root dispatch include `python launcher.py async-shadow-m4` and `python launcher.py frame-lagged-async-lighting`
   - Root commands stay flat, but dispatch through every router in the directory hierarchy: `launcher.py` →
     `CoolStuff/launch.py`, `tests/launch.py`, or `utilities/launch.py` → any intermediate group launcher such as
     `tests/ab/launch.py` → the workflow's terminal `launch.py`. Every directory that groups child launchers must

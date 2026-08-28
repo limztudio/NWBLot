@@ -209,10 +209,6 @@ public:
     // Resolves the GPU wave/subgroup size, or returns a conservative fallback (64) when the device cannot report it.
     // Use the returned value to size groupshared reductions and wave-intrinsic shader specializations.
     [[nodiscard]] u32 queryWaveLaneCount()const noexcept;
-#if !defined(NWB_FINAL)
-    void setFeatureSupportDisabledForTesting(Feature::Enum feature, bool disabled);
-    void clearFeatureSupportDisabledForTesting();
-#endif
 
     void addRenderPassToFront(IRenderPass& pass);
     void addRenderPassToBack(IRenderPass& pass);
@@ -362,9 +358,6 @@ private:
     i32 m_numberOfAccumulatedFrames = 0;
 
     u32 m_frameIndex = 0;
-#if !defined(NWB_FINAL)
-    u64 m_disabledFeatureSupportMask = 0u;
-#endif
 
     Vector<FramebufferHandle, Alloc::GlobalArena> m_swapChainFramebuffers;
     AcquiredPresentationFrame m_acquiredPresentationFrame;

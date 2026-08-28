@@ -213,6 +213,9 @@ class RendererRayTracingSystem final : public RendererSystemSubsystemBase<Render
 public:
     explicit RendererRayTracingSystem(RendererSystem& renderer);
     ~RendererRayTracingSystem();
+
+
+public:
     // Retire an accepted readback before graph declaration so native packet recording stays CPU-side-effect-free.
     void retireCompletedAdaptiveShadowStatisticsReadback();
     // A graph-owned adaptive plan cannot publish its CPU mirror while recording. The Shadow Visibility task commits
@@ -222,7 +225,6 @@ public:
         bool adaptiveRouteRecorded,
         const Core::QueueSubmissionToken& submissionToken
     );
-
 
 public:
     void logCapabilityOnce();

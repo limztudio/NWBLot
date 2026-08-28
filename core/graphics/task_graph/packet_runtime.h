@@ -314,31 +314,6 @@ private:
 };
 
 
-namespace GpuPacketRuntimeState{
-    enum Enum : u8{
-        Declared,
-        Submitting,
-        Rejecting,
-        Accepted,
-        Rejected,
-    };
-};
-
-struct GpuPacketRuntime{
-    GpuPacketRuntimeState::Enum state = GpuPacketRuntimeState::Declared;
-    QueueSubmissionToken token;
-    // Native counters are committed only after the graph lifecycle and its Device submission both accept.
-    usize nativeCommandListCount = 0u;
-    usize plannedWaitTokenCount = 0u;
-    usize sameQueueWaitElisionCount = 0u;
-    usize timelineWaitCount = 0u;
-    usize mergedTimelineWaitCount = 0u;
-    f64 submissionSeconds = 0.0;
-    // A post-reservation submit-path failure is terminally rejected, but ordinary discard/rejection never sets this
-    // flag. It can occur before the backend execute call, such as while validating a timing ticket.
-    bool nativeSubmissionRejected = false;
-};
-
 struct GpuTaskGraphExternalCompletionToken{
     GpuExternalCompletionId completion;
     // The token must retain the exact physical queue and device-generation identity returned by native submission.
@@ -604,6 +579,30 @@ class GpuGraphSubmissionTransaction final : NoCopy{
 
 
 private:
+    enum class PacketRuntimeState : u8{
+        Declared,
+        Submitting,
+        Rejecting,
+        Accepted,
+        Rejected,
+    };
+
+    struct PacketRuntime{
+        PacketRuntimeState state = PacketRuntimeState::Declared;
+        QueueSubmissionToken token;
+        // Native counters are committed only after the graph lifecycle and its Device submission both accept.
+        usize nativeCommandListCount = 0u;
+        usize plannedWaitTokenCount = 0u;
+        usize sameQueueWaitElisionCount = 0u;
+        usize timelineWaitCount = 0u;
+        usize mergedTimelineWaitCount = 0u;
+        f64 submissionSeconds = 0.0;
+        // A post-reservation submit-path failure is terminally rejected, but ordinary discard/rejection never sets
+        // this flag. It can occur before the backend execute call, such as while validating a timing ticket.
+        bool nativeSubmissionRejected = false;
+    };
+
+private:
     class SubmissionOperation final : NoCopy{
     private:
         static thread_local const SubmissionOperation* s_activeOperation;
@@ -826,7 +825,7 @@ private:
 
 private:
     GraphicsArena& m_arena;
-    GraphicsVector<GpuPacketRuntime> m_packets;
+    GraphicsVector<PacketRuntime> m_packets;
     GraphicsVector<LatestAcceptedQueueToken> m_latestAcceptedQueueTokens;
     mutable GraphicsVector<ExternalResourceHandoffScratch> m_externalResourceHandoffScratch;
     u64 m_generation = 0u;

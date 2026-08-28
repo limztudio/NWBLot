@@ -24,10 +24,10 @@ void GpuTaskGraph::reset(){
         }
         for(const GpuTaskNode& task : m_tasks){
             if(
-                task.lifecycleState == GpuTaskLifecycleState::Recording
-                || task.lifecycleState == GpuTaskLifecycleState::Submitting
-                || task.lifecycleState == GpuTaskLifecycleState::Accepting
-                || task.lifecycleState == GpuTaskLifecycleState::Discarding
+                task.lifecycleState == TaskLifecycleState::Recording
+                || task.lifecycleState == TaskLifecycleState::Submitting
+                || task.lifecycleState == TaskLifecycleState::Accepting
+                || task.lifecycleState == TaskLifecycleState::Discarding
             ){
                 NWB_ASSERT_MSG(false, "GpuTaskGraph::reset requires in-flight task work to resolve first");
                 return;
@@ -97,15 +97,15 @@ bool GpuTaskGraph::beginRecordingAttempt(
         if(task.lifecycleAttemptGeneration != m_activeRecordingAttemptGeneration)
             return false;
         if(
-            task.lifecycleState == GpuTaskLifecycleState::Recording
-            || task.lifecycleState == GpuTaskLifecycleState::Recorded
-            || task.lifecycleState == GpuTaskLifecycleState::Discarding
-            || task.lifecycleState == GpuTaskLifecycleState::Submitting
-            || task.lifecycleState == GpuTaskLifecycleState::Accepting
-            || task.lifecycleState == GpuTaskLifecycleState::Accepted
+            task.lifecycleState == TaskLifecycleState::Recording
+            || task.lifecycleState == TaskLifecycleState::Recorded
+            || task.lifecycleState == TaskLifecycleState::Discarding
+            || task.lifecycleState == TaskLifecycleState::Submitting
+            || task.lifecycleState == TaskLifecycleState::Accepting
+            || task.lifecycleState == TaskLifecycleState::Accepted
         )
             return false;
-        if(task.lifecycleState == GpuTaskLifecycleState::Discarded)
+        if(task.lifecycleState == TaskLifecycleState::Discarded)
             selectedTaskWasDiscarded = true;
     }
 
@@ -116,19 +116,19 @@ bool GpuTaskGraph::beginRecordingAttempt(
     for(const GpuTaskNode& task : m_tasks){
         if(
             task.lifecycleAttemptGeneration != m_activeRecordingAttemptGeneration
-            || task.lifecycleState == GpuTaskLifecycleState::Recording
-            || task.lifecycleState == GpuTaskLifecycleState::Recorded
-            || task.lifecycleState == GpuTaskLifecycleState::Discarding
-            || task.lifecycleState == GpuTaskLifecycleState::Submitting
-            || task.lifecycleState == GpuTaskLifecycleState::Accepting
-            || task.lifecycleState == GpuTaskLifecycleState::Accepted
+            || task.lifecycleState == TaskLifecycleState::Recording
+            || task.lifecycleState == TaskLifecycleState::Recorded
+            || task.lifecycleState == TaskLifecycleState::Discarding
+            || task.lifecycleState == TaskLifecycleState::Submitting
+            || task.lifecycleState == TaskLifecycleState::Accepting
+            || task.lifecycleState == TaskLifecycleState::Accepted
         )
             return false;
         // Once a plan began recording, every task must receive its discarded callback before a different plan or
         // retry can re-arm the graph.
         if(
             (!planChanged || m_activeRecordingPlanGeneration != 0u)
-            && task.lifecycleState != GpuTaskLifecycleState::Discarded
+            && task.lifecycleState != TaskLifecycleState::Discarded
         )
             return false;
     }
@@ -136,7 +136,7 @@ bool GpuTaskGraph::beginRecordingAttempt(
     m_activeRecordingPlanGeneration = compiledGraph.planGeneration();
     m_activeRecordingAttemptGeneration = allocateGeneration();
     for(const GpuTaskNode& task : m_tasks){
-        task.lifecycleState = GpuTaskLifecycleState::Declared;
+        task.lifecycleState = TaskLifecycleState::Declared;
         task.lifecycleAttemptGeneration = m_activeRecordingAttemptGeneration;
         task.recordingClaimGeneration = 0u;
         task.submissionClaimGeneration = 0u;

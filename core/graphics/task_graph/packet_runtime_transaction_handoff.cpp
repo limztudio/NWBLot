@@ -36,8 +36,8 @@ bool GpuGraphSubmissionTransaction::copyAcceptedPacketTokens(
         return false;
 
     for(usize packetIndex = 0u; packetIndex < tokenCount; ++packetIndex){
-        const GpuPacketRuntime& runtime = m_packets[packetIndex];
-        outTokens[packetIndex] = runtime.state == GpuPacketRuntimeState::Accepted
+        const PacketRuntime& runtime = m_packets[packetIndex];
+        outTokens[packetIndex] = runtime.state == PacketRuntimeState::Accepted
             ? runtime.token
             : QueueSubmissionToken{}
         ;
@@ -58,8 +58,8 @@ QueueSubmissionToken GpuGraphSubmissionTransaction::packetToken(const GpuSubmiss
         || packet.index >= m_packets.size()
     )
         return {};
-    const GpuPacketRuntime& runtime = m_packets[packet.index];
-    return runtime.state == GpuPacketRuntimeState::Accepted ? runtime.token : QueueSubmissionToken{};
+    const PacketRuntime& runtime = m_packets[packet.index];
+    return runtime.state == PacketRuntimeState::Accepted ? runtime.token : QueueSubmissionToken{};
 }
 
 

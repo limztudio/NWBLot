@@ -748,6 +748,11 @@ concept HasPublicPacketSubmissionLease = requires{
 };
 
 template<typename GraphT>
+concept HasPublicTaskLifecycleState = requires{
+    typename GraphT::TaskLifecycleState;
+};
+
+template<typename GraphT>
 concept HasSinglePacketDiscard = requires(
     const GraphT& graph,
     const Graphics::GpuCompiledGraph& compiledGraph,
@@ -778,13 +783,26 @@ concept HasAttemptSinglePacketRejection = requires(
     transaction.rejectPacket(graph, compiledGraph, packet, recordingAttemptGeneration);
 };
 
+template<typename TransactionT>
+concept HasPublicPacketRuntimeState = requires{
+    typename TransactionT::PacketRuntimeState;
+};
+
+template<typename TransactionT>
+concept HasPublicPacketRuntime = requires{
+    typename TransactionT::PacketRuntime;
+};
+
 static_assert(!HasDeclarationTaskAcceptance<Graphics::GpuTaskGraph>);
 static_assert(!HasAttemptTaskAcceptance<Graphics::GpuTaskGraph>);
 static_assert(!HasDeclarationTaskDiscard<Graphics::GpuTaskGraph>);
 static_assert(!HasPublicPacketSubmissionLease<Graphics::GpuTaskGraph>);
+static_assert(!HasPublicTaskLifecycleState<Graphics::GpuTaskGraph>);
 static_assert(!HasSinglePacketDiscard<Graphics::GpuTaskGraph>);
 static_assert(!HasSinglePacketRejection<Graphics::GpuGraphSubmissionTransaction>);
 static_assert(!HasAttemptSinglePacketRejection<Graphics::GpuGraphSubmissionTransaction>);
+static_assert(!HasPublicPacketRuntimeState<Graphics::GpuGraphSubmissionTransaction>);
+static_assert(!HasPublicPacketRuntime<Graphics::GpuGraphSubmissionTransaction>);
 
 
 inline constexpr Graphics::GpuTaskId s_CommandIrTask{ 4u, 17u };

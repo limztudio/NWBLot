@@ -73,12 +73,12 @@ bool GpuGraphSubmissionTransaction::discardUnaccepted(
                 || packetIndex >= m_packets.size()
             )
                 return false;
-            const GpuPacketRuntimeState::Enum state = m_packets[packetIndex].state;
-            if(state == GpuPacketRuntimeState::Accepted || state == GpuPacketRuntimeState::Rejected)
+            const PacketRuntimeState state = m_packets[packetIndex].state;
+            if(state == PacketRuntimeState::Accepted || state == PacketRuntimeState::Rejected)
                 continue;
             if(
-                state == GpuPacketRuntimeState::Submitting
-                || state == GpuPacketRuntimeState::Rejecting
+                state == PacketRuntimeState::Submitting
+                || state == PacketRuntimeState::Rejecting
             )
                 return false;
         }
@@ -92,7 +92,7 @@ bool GpuGraphSubmissionTransaction::discardUnaccepted(
         if(
             !validForLocked(compiledGraph)
             || packetIndex >= m_packets.size()
-            || m_packets[packetIndex].state != GpuPacketRuntimeState::Rejected
+            || m_packets[packetIndex].state != PacketRuntimeState::Rejected
         )
             return false;
     }
@@ -121,10 +121,10 @@ void GpuGraphSubmissionTransaction::rejectPacket(
             || packetID.index >= m_packets.size()
         )
             return;
-        GpuPacketRuntime& runtime = m_packets[packetID.index];
-        if(runtime.state != GpuPacketRuntimeState::Declared)
+        PacketRuntime& runtime = m_packets[packetID.index];
+        if(runtime.state != PacketRuntimeState::Declared)
             return;
-        runtime.state = GpuPacketRuntimeState::Rejecting;
+        runtime.state = PacketRuntimeState::Rejecting;
     }
 
     const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
@@ -136,18 +136,18 @@ void GpuGraphSubmissionTransaction::rejectPacket(
     {
         ScopedLock lock(m_mutex);
         if(validForLocked(compiledGraph) && packetID.index < m_packets.size()){
-            GpuPacketRuntime& runtime = m_packets[packetID.index];
-            if(runtime.state == GpuPacketRuntimeState::Rejecting)
-                runtime.state = GpuPacketRuntimeState::Declared;
+            PacketRuntime& runtime = m_packets[packetID.index];
+            if(runtime.state == PacketRuntimeState::Rejecting)
+                runtime.state = PacketRuntimeState::Declared;
         }
         return;
     }
     {
         ScopedLock lock(m_mutex);
         if(validForLocked(compiledGraph) && packetID.index < m_packets.size()){
-            GpuPacketRuntime& runtime = m_packets[packetID.index];
-            if(runtime.state == GpuPacketRuntimeState::Rejecting){
-                runtime.state = GpuPacketRuntimeState::Rejected;
+            PacketRuntime& runtime = m_packets[packetID.index];
+            if(runtime.state == PacketRuntimeState::Rejecting){
+                runtime.state = PacketRuntimeState::Rejected;
                 ++m_submissionStatistics.rejectedPacketCount;
                 m_submissionStatistics.rejectedTaskCount += packet.taskCount;
             }
@@ -179,8 +179,8 @@ void GpuGraphSubmissionTransaction::rejectSubmittingPacket(
             || packetID.index >= m_packets.size()
         )
             return;
-        GpuPacketRuntime& runtime = m_packets[packetID.index];
-        if(runtime.state != GpuPacketRuntimeState::Submitting)
+        PacketRuntime& runtime = m_packets[packetID.index];
+        if(runtime.state != PacketRuntimeState::Submitting)
             return;
     }
 
@@ -195,9 +195,9 @@ void GpuGraphSubmissionTransaction::rejectSubmittingPacket(
 
     ScopedLock lock(m_mutex);
     if(validForLocked(compiledGraph) && packetID.index < m_packets.size()){
-        GpuPacketRuntime& runtime = m_packets[packetID.index];
-        if(runtime.state == GpuPacketRuntimeState::Submitting){
-            runtime.state = GpuPacketRuntimeState::Rejected;
+        PacketRuntime& runtime = m_packets[packetID.index];
+        if(runtime.state == PacketRuntimeState::Submitting){
+            runtime.state = PacketRuntimeState::Rejected;
             runtime.nativeSubmissionRejected = true;
             ++m_submissionStatistics.rejectedPacketCount;
             m_submissionStatistics.rejectedTaskCount += packet.taskCount;

@@ -27,6 +27,7 @@ SOURCE_DIRECTORIES = (
 SOURCE_SUFFIXES = frozenset((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ixx"))
 RETIRED_RECORD_DESCRIPTOR = re.compile(r"\bGpuNativePacketRecordDesc\b")
 RETIRED_RECORDING_LEASE = re.compile(r"\bGpuTaskPacketRecordingLease\b")
+RETIRED_TASK_LIFECYCLE_STATE = re.compile(r"\bGpuTaskLifecycleState\b")
 TARGET_CLASS_OPEN = re.compile(
     r"\b(class|struct)\s+"
     r"(GpuNativePacketRecorder|GpuTaskGraph|GpuRecordedGraph)\b"
@@ -35,6 +36,7 @@ TARGET_CLASS_OPEN = re.compile(
 PRIVATE_RECORDING_MEMBERS = {
     "GpuNativePacketRecorder": ("prepareRecordingAttempt", "recordPacket"),
     "GpuTaskGraph": (
+        "TaskLifecycleState",
         "PacketRecordingLease",
         "recordingAttemptGeneration",
         "beginRecordingAttempt",
@@ -104,6 +106,10 @@ def find_public_single_packet_recording(source: str) -> list[tuple[int, str]]:
         (line_number(code, match.start()), match.group())
         for match in RETIRED_RECORDING_LEASE.finditer(code)
     )
+    references.extend(
+        (line_number(code, match.start()), match.group())
+        for match in RETIRED_TASK_LIFECYCLE_STATE.finditer(code)
+    )
     for class_name, start, end, default_access in target_class_body_ranges(code):
         access = default_access
         for match in CLASS_MEMBER_TOKENS[class_name].finditer(code, start, end):
@@ -141,6 +147,11 @@ def run_self_test() -> int:
             "retired recording lease",
             "GpuTaskPacketRecordingLease lease;",
             ((1, "GpuTaskPacketRecordingLease"),),
+        ),
+        (
+            "retired task lifecycle state",
+            "GpuTaskLifecycleState state;",
+            ((1, "GpuTaskLifecycleState"),),
         ),
         (
             "public packet recorder",
@@ -217,12 +228,14 @@ def run_self_test() -> int:
             "public task graph recording internals",
             "class GpuTaskGraph final{\n"
             "public:\n"
+            "    enum class TaskLifecycleState : u8;\n"
             "    class PacketRecordingLease;\n"
             "    bool recordTask();\n"
             "};",
             (
-                (3, "GpuTaskGraph/public PacketRecordingLease"),
-                (4, "GpuTaskGraph/public recordTask"),
+                (3, "GpuTaskGraph/public TaskLifecycleState"),
+                (4, "GpuTaskGraph/public PacketRecordingLease"),
+                (5, "GpuTaskGraph/public recordTask"),
             ),
         ),
         (
@@ -251,25 +264,29 @@ def run_self_test() -> int:
             "protected task graph recording lifecycle",
             "class GpuTaskGraph{\n"
             "protected:\n"
+            "    enum class TaskLifecycleState : u8;\n"
             "    class PacketRecordingLease;\n"
             "    bool beginPacketRecording();\n"
             "};",
             (
-                (3, "GpuTaskGraph/protected PacketRecordingLease"),
-                (4, "GpuTaskGraph/protected beginPacketRecording"),
+                (3, "GpuTaskGraph/protected TaskLifecycleState"),
+                (4, "GpuTaskGraph/protected PacketRecordingLease"),
+                (5, "GpuTaskGraph/protected beginPacketRecording"),
             ),
         ),
         (
             "default public task graph struct",
             "struct GpuTaskGraph final : Base{\n"
+            "    enum class TaskLifecycleState : u8;\n"
             "    class PacketRecordingLease;\n"
             "    bool recordTask();\n"
             "    bool packetReadyForSubmission();\n"
             "};",
             (
-                (2, "GpuTaskGraph/public PacketRecordingLease"),
-                (3, "GpuTaskGraph/public recordTask"),
-                (4, "GpuTaskGraph/public packetReadyForSubmission"),
+                (2, "GpuTaskGraph/public TaskLifecycleState"),
+                (3, "GpuTaskGraph/public PacketRecordingLease"),
+                (4, "GpuTaskGraph/public recordTask"),
+                (5, "GpuTaskGraph/public packetReadyForSubmission"),
             ),
         ),
         (
@@ -287,13 +304,18 @@ def run_self_test() -> int:
             "class GpuTaskGraph final{\n"
             "public:\n"
             "    using Base::beginPacketRecording;\n"
+            "    using Base::TaskLifecycleState;\n"
             "};",
-            ((3, "GpuTaskGraph/public beginPacketRecording"),),
+            (
+                (3, "GpuTaskGraph/public beginPacketRecording"),
+                (4, "GpuTaskGraph/public TaskLifecycleState"),
+            ),
         ),
         (
             "private task graph recording lifecycle",
             "class GpuTaskGraph final{\n"
             "private:\n"
+            "    enum class TaskLifecycleState : u8;\n"
             "    class PacketRecordingLease;\n"
             "    u64 recordingAttemptGeneration()const;\n"
             "    bool beginRecordingAttempt();\n"
@@ -309,6 +331,7 @@ def run_self_test() -> int:
         (
             "default private task graph lifecycle",
             "class GpuTaskGraph final{\n"
+            "    enum class TaskLifecycleState : u8;\n"
             "    bool beginPacketRecording();\n"
             "};",
             (),
@@ -396,12 +419,14 @@ def run_self_test() -> int:
             "public:\n"
             "    struct Fixture{\n"
             "    public:\n"
+            "        enum class TaskLifecycleState : u8;\n"
             "        class PacketRecordingLease;\n"
             "        bool recordTask();\n"
             "        bool beginPacketRecording();\n"
             "    };\n"
             "    bool recordTaskRange();\n"
             "private:\n"
+            "    enum class TaskLifecycleState : u8;\n"
             "    class PacketRecordingLease;\n"
             "    bool recordTask();\n"
             "    bool beginPacketRecording();\n"
@@ -436,17 +461,20 @@ def run_self_test() -> int:
             "comment and literal",
             "// GpuNativePacketRecordDesc\n"
             "// GpuTaskPacketRecordingLease\n"
+            "// GpuTaskLifecycleState\n"
             "// class GpuTaskGraph{ public: bool beginPacketRecording(); };\n"
-            'const char* text = "GpuNativePacketRecordDesc resetForRecording";\n'
-            'const char* raw = R"tag(GpuTaskPacketRecordingLease beginRecordingAttempt)tag";',
+            'const char* text = "GpuNativePacketRecordDesc GpuTaskLifecycleState resetForRecording";\n'
+            'const char* raw = R"tag(GpuTaskPacketRecordingLease TaskLifecycleState beginRecordingAttempt)tag";',
             (),
         ),
         (
             "near names",
             "GpuNativePacketRecordDescription desc;\n"
             "GpuTaskPacketRecordingLeaseFactory lease;\n"
+            "GpuTaskLifecycleStates state;\n"
             "class GpuNativePacketRecorderFactory{ public: bool recordPacket(); };\n"
-            "class GpuTaskGraphFactory{ public: bool beginPacketRecordingRange(); };\n"
+            "class GpuTaskGraphFactory{ public: enum class TaskLifecycleState : u8; bool beginPacketRecordingRange(); };\n"
+            "class Fixture{ public: enum class TaskLifecycleState : u8; };\n"
             "class GpuRecordedGraphFactory{ public: bool resetForRecordings(); };",
             (),
         ),

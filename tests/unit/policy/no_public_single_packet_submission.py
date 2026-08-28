@@ -26,6 +26,7 @@ SOURCE_DIRECTORIES = (
 )
 SOURCE_SUFFIXES = frozenset((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ixx"))
 RETIRED_SUBMISSION_LEASE = re.compile(r"\bGpuTaskPacketSubmissionLease\b")
+RETIRED_PACKET_RUNTIME_TYPES = re.compile(r"\b(?:GpuPacketRuntimeState|GpuPacketRuntime)\b")
 TARGET_CLASS_OPEN = re.compile(
     r"\b(class|struct)\s+"
     r"(GpuTaskGraphSubmitter|GpuTaskGraph|GpuGraphSubmissionTransaction)\b"
@@ -41,6 +42,8 @@ PRIVATE_SUBMISSION_MEMBERS = {
         "discardUnacceptedPacket",
     ),
     "GpuGraphSubmissionTransaction": (
+        "PacketRuntimeState",
+        "PacketRuntime",
         "beginPacketSubmission",
         "acceptSubmittingPacket",
         "rejectPacket",
@@ -100,6 +103,10 @@ def find_public_single_packet_submission(source: str) -> list[tuple[int, str]]:
         (line_number(code, match.start()), match.group())
         for match in RETIRED_SUBMISSION_LEASE.finditer(code)
     ]
+    references.extend(
+        (line_number(code, match.start()), match.group())
+        for match in RETIRED_PACKET_RUNTIME_TYPES.finditer(code)
+    )
     for class_name, start, end, default_access in target_class_body_ranges(code):
         access = default_access
         for match in CLASS_MEMBER_TOKENS[class_name].finditer(code, start, end):
@@ -132,6 +139,16 @@ def run_self_test() -> int:
             "retired submission lease",
             "GpuTaskPacketSubmissionLease lease;",
             ((1, "GpuTaskPacketSubmissionLease"),),
+        ),
+        (
+            "retired packet runtime state",
+            "GpuPacketRuntimeState state;",
+            ((1, "GpuPacketRuntimeState"),),
+        ),
+        (
+            "retired packet runtime",
+            "GpuPacketRuntime runtime;",
+            ((1, "GpuPacketRuntime"),),
         ),
         (
             "public packet submitter",
@@ -239,37 +256,55 @@ def run_self_test() -> int:
             "public transaction packet lifecycle",
             "class GpuGraphSubmissionTransaction final{\n"
             "public:\n"
+            "    enum class PacketRuntimeState : u8;\n"
+            "    struct PacketRuntime;\n"
             "    bool beginPacketSubmission();\n"
             "    bool acceptSubmittingPacket();\n"
             "    void rejectPacket();\n"
             "    void rejectSubmittingPacket();\n"
             "};",
             (
-                (3, "GpuGraphSubmissionTransaction/public beginPacketSubmission"),
-                (4, "GpuGraphSubmissionTransaction/public acceptSubmittingPacket"),
-                (5, "GpuGraphSubmissionTransaction/public rejectPacket"),
-                (6, "GpuGraphSubmissionTransaction/public rejectSubmittingPacket"),
+                (3, "GpuGraphSubmissionTransaction/public PacketRuntimeState"),
+                (4, "GpuGraphSubmissionTransaction/public PacketRuntime"),
+                (5, "GpuGraphSubmissionTransaction/public beginPacketSubmission"),
+                (6, "GpuGraphSubmissionTransaction/public acceptSubmittingPacket"),
+                (7, "GpuGraphSubmissionTransaction/public rejectPacket"),
+                (8, "GpuGraphSubmissionTransaction/public rejectSubmittingPacket"),
             ),
         ),
         (
             "protected transaction packet rejection",
             "class GpuGraphSubmissionTransaction{\n"
             "protected:\n"
+            "    enum class PacketRuntimeState : u8;\n"
+            "    struct PacketRuntime;\n"
             "    void rejectPacket();\n"
             "};",
-            ((3, "GpuGraphSubmissionTransaction/protected rejectPacket"),),
+            (
+                (3, "GpuGraphSubmissionTransaction/protected PacketRuntimeState"),
+                (4, "GpuGraphSubmissionTransaction/protected PacketRuntime"),
+                (5, "GpuGraphSubmissionTransaction/protected rejectPacket"),
+            ),
         ),
         (
             "default public transaction struct",
             "struct GpuGraphSubmissionTransaction{\n"
+            "    enum class PacketRuntimeState : u8;\n"
+            "    struct PacketRuntime;\n"
             "    void rejectPacket();\n"
             "};",
-            ((2, "GpuGraphSubmissionTransaction/public rejectPacket"),),
+            (
+                (2, "GpuGraphSubmissionTransaction/public PacketRuntimeState"),
+                (3, "GpuGraphSubmissionTransaction/public PacketRuntime"),
+                (4, "GpuGraphSubmissionTransaction/public rejectPacket"),
+            ),
         ),
         (
             "private transaction packet lifecycle",
             "class GpuGraphSubmissionTransaction final{\n"
             "private:\n"
+            "    enum class PacketRuntimeState : u8;\n"
+            "    struct PacketRuntime;\n"
             "    bool beginPacketSubmission();\n"
             "    bool acceptSubmittingPacket();\n"
             "    void rejectPacket();\n"
@@ -280,6 +315,8 @@ def run_self_test() -> int:
         (
             "default private transaction packet rejection",
             "class GpuGraphSubmissionTransaction final{\n"
+            "    enum class PacketRuntimeState : u8;\n"
+            "    struct PacketRuntime;\n"
             "    void rejectPacket();\n"
             "};",
             (),
@@ -337,11 +374,15 @@ def run_self_test() -> int:
             "};\n"
             "class GpuGraphSubmissionTransaction final{\n"
             "public:\n"
+            "    using Base::PacketRuntimeState;\n"
+            "    using Base::PacketRuntime;\n"
             "    using Base::rejectPacket;\n"
             "};",
             (
                 (3, "GpuTaskGraph/public discardUnacceptedPacket"),
-                (7, "GpuGraphSubmissionTransaction/public rejectPacket"),
+                (7, "GpuGraphSubmissionTransaction/public PacketRuntimeState"),
+                (8, "GpuGraphSubmissionTransaction/public PacketRuntime"),
+                (9, "GpuGraphSubmissionTransaction/public rejectPacket"),
             ),
         ),
         (
@@ -382,9 +423,13 @@ def run_self_test() -> int:
             "public:\n"
             "    struct Fixture{\n"
             "    public:\n"
+            "        enum class PacketRuntimeState : u8;\n"
+            "        struct PacketRuntime;\n"
             "        void rejectPacket();\n"
             "    };\n"
             "private:\n"
+            "    enum class PacketRuntimeState : u8;\n"
+            "    struct PacketRuntime;\n"
             "    void rejectPacket();\n"
             "};",
             (),
@@ -427,22 +472,25 @@ def run_self_test() -> int:
             "comment and literal",
             "// class GpuTaskGraphSubmitter{ public: bool submitPacket(); };\n"
             "// GpuTaskPacketSubmissionLease\n"
+            "// GpuPacketRuntimeState GpuPacketRuntime\n"
             "// class GpuTaskGraph{ public: class PacketSubmissionLease; };\n"
             "// class GpuGraphSubmissionTransaction{ public: void rejectPacket(); };\n"
-            'const char* text = "GpuTaskGraphSubmitter submitPacket discardUnacceptedPacket";\n'
-            'const char* raw = R"tag(GpuTaskPacketSubmissionLease rejectPacket)tag";',
+            'const char* text = "GpuTaskGraphSubmitter GpuPacketRuntime submitPacket discardUnacceptedPacket";\n'
+            'const char* raw = R"tag(GpuTaskPacketSubmissionLease GpuPacketRuntimeState rejectPacket)tag";',
             (),
         ),
         (
             "near names",
             "GpuTaskPacketSubmissionLeaseFactory lease;\n"
+            "GpuPacketRuntimeStates state;\n"
+            "GpuPacketRuntimes runtime;\n"
             "class GpuTaskGraphSubmitterFactory{ public: bool submitPacket(); };\n"
             "class GpuTaskGraphSubmitter{ public: bool submitPackets(); };\n"
             "class GpuTaskGraphFactory{ public: bool discardUnacceptedPacket(); };\n"
             "class GpuTaskGraph{ public: class PacketSubmissionLeases; bool discardUnacceptedPackets(); };\n"
-            "class GpuGraphSubmissionTransactionFactory{ public: bool rejectPacket(); };\n"
-            "class GpuGraphSubmissionTransaction{ public: bool rejectPackets(); };\n"
-            "class Fixture{ public: bool discardUnacceptedPacket(); bool rejectPacket(); };",
+            "class GpuGraphSubmissionTransactionFactory{ public: struct PacketRuntime; bool rejectPacket(); };\n"
+            "class GpuGraphSubmissionTransaction{ public: struct PacketRuntimes; bool rejectPackets(); };\n"
+            "class Fixture{ public: struct PacketRuntime; enum class PacketRuntimeState : u8; bool discardUnacceptedPacket(); bool rejectPacket(); };",
             (),
         ),
     )

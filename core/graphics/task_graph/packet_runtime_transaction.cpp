@@ -104,10 +104,10 @@ void GpuGraphSubmissionTransaction::reset(const GpuCompiledGraph& compiledGraph)
         return;
 
     ScopedLock lock(m_mutex);
-    for(const GpuPacketRuntime& runtime : m_packets){
+    for(const PacketRuntime& runtime : m_packets){
         if(
-            runtime.state == GpuPacketRuntimeState::Submitting
-            || runtime.state == GpuPacketRuntimeState::Rejecting
+            runtime.state == PacketRuntimeState::Submitting
+            || runtime.state == PacketRuntimeState::Rejecting
         ){
             NWB_ASSERT_MSG(false, "GpuGraphSubmissionTransaction::reset requires every native submission/cancellation to resolve first");
             return;
@@ -176,11 +176,11 @@ GpuTaskGraphPacketSubmissionStatistics GpuGraphSubmissionTransaction::packetSubm
 
     const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
     const GpuPhysicalQueueInfo* const queueInfo = compiledGraph.queueInfo(packet.queue);
-    const GpuPacketRuntime& runtime = m_packets[packetID.index];
+    const PacketRuntime& runtime = m_packets[packetID.index];
     if(
         !queueInfo
         || queueInfo->queueClass >= CommandQueue::kCount
-        || runtime.state != GpuPacketRuntimeState::Accepted
+        || runtime.state != PacketRuntimeState::Accepted
         || !runtime.token.valid()
         || runtime.token.queue != queueInfo->queueClass
         || !runtime.token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration)
@@ -236,12 +236,12 @@ GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::phy
         if(packet.queue != queue)
             continue;
 
-        const GpuPacketRuntime& runtime = m_packets[packetIndex];
-        if(runtime.nativeSubmissionRejected && runtime.state != GpuPacketRuntimeState::Rejected)
+        const PacketRuntime& runtime = m_packets[packetIndex];
+        if(runtime.nativeSubmissionRejected && runtime.state != PacketRuntimeState::Rejected)
             return {};
 
         switch(runtime.state){
-        case GpuPacketRuntimeState::Accepted:
+        case PacketRuntimeState::Accepted:
             ++statistics.acceptedPacketCount;
             statistics.acceptedTaskCount += packet.taskCount;
             ++statistics.nativeSubmissionCount;
@@ -256,7 +256,7 @@ GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::phy
             if(packet.isRecoverySubmission)
                 ++statistics.recoverySubmissionCount;
             break;
-        case GpuPacketRuntimeState::Rejected:
+        case PacketRuntimeState::Rejected:
             ++statistics.rejectedPacketCount;
             statistics.rejectedTaskCount += packet.taskCount;
             if(runtime.nativeSubmissionRejected)
@@ -334,10 +334,10 @@ bool GpuGraphSubmissionTransaction::beginPacketSubmission(
             || packetID.index >= m_packets.size()
         )
             return false;
-        GpuPacketRuntime& runtime = m_packets[packetID.index];
-        if(runtime.state != GpuPacketRuntimeState::Declared)
+        PacketRuntime& runtime = m_packets[packetID.index];
+        if(runtime.state != PacketRuntimeState::Declared)
             return false;
-        runtime.state = GpuPacketRuntimeState::Submitting;
+        runtime.state = PacketRuntimeState::Submitting;
     }
 
     if(!graph.beginPacketSubmission(
@@ -348,9 +348,9 @@ bool GpuGraphSubmissionTransaction::beginPacketSubmission(
     )){
         ScopedLock lock(m_mutex);
         if(validForLocked(compiledGraph) && packetID.index < m_packets.size()){
-            GpuPacketRuntime& runtime = m_packets[packetID.index];
-            if(runtime.state == GpuPacketRuntimeState::Submitting)
-                runtime.state = GpuPacketRuntimeState::Declared;
+            PacketRuntime& runtime = m_packets[packetID.index];
+            if(runtime.state == PacketRuntimeState::Submitting)
+                runtime.state = PacketRuntimeState::Declared;
         }
         return false;
     }
@@ -416,9 +416,9 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     // failure point.
     NWB_ASSERT(validForLocked(compiledGraph));
     NWB_ASSERT(packetID.index < m_packets.size());
-    GpuPacketRuntime& runtime = m_packets[packetID.index];
-    NWB_ASSERT(runtime.state == GpuPacketRuntimeState::Submitting);
-    runtime.state = GpuPacketRuntimeState::Accepted;
+    PacketRuntime& runtime = m_packets[packetID.index];
+    NWB_ASSERT(runtime.state == PacketRuntimeState::Submitting);
+    runtime.state = PacketRuntimeState::Accepted;
     runtime.token = token;
     runtime.nativeCommandListCount = nativeSubmissionInfo.commandListCount;
     runtime.plannedWaitTokenCount = nativeSubmissionInfo.plannedWaitTokenCount;

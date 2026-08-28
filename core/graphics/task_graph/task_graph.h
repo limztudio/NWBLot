@@ -125,20 +125,6 @@ struct GpuTaskGraphTelemetryOptions{
     const GpuTaskGraphQueueAssignmentTelemetryTracker* queueAssignmentTelemetry = nullptr;
 };
 
-namespace GpuTaskLifecycleState{
-    enum Enum : u8{
-        Declared,
-        Recording,
-        Recorded,
-        Discarding,
-        Submitting,
-        Accepting,
-        Accepted,
-        Discarded,
-    };
-};
-
-
 class GpuTaskGraph;
 class GpuNativePacketRecorder;
 class GpuGraphSubmissionTransaction;
@@ -155,6 +141,18 @@ class GpuTaskGraph final : NoCopy{
     friend class GpuGraphSubmissionTransaction;
     friend class GpuRecordedGraph;
     friend class GpuTaskGraphSubmitter;
+
+private:
+    enum class TaskLifecycleState : u8{
+        Declared,
+        Recording,
+        Recorded,
+        Discarding,
+        Submitting,
+        Accepting,
+        Accepted,
+        Discarded,
+    };
 
 private:
     // A packet claim is an opaque runtime capability. Only the recorder that acquired it can invoke task thunks,
@@ -264,7 +262,7 @@ private:
         GpuTaskPayloadDestroyThunk destroyPayload = nullptr;
         // Lifecycle callbacks are scoped to one graph-owned recording attempt. A retry only re-arms every task
         // after the preceding attempt fully discarded, so a stale native packet cannot publish a later attempt.
-        mutable GpuTaskLifecycleState::Enum lifecycleState = GpuTaskLifecycleState::Declared;
+        mutable TaskLifecycleState lifecycleState = TaskLifecycleState::Declared;
         mutable u64 lifecycleAttemptGeneration = 0u;
         mutable u64 recordingClaimGeneration = 0u;
         mutable u64 submissionClaimGeneration = 0u;

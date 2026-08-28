@@ -548,35 +548,35 @@ bool GpuTaskGraph::destroyTaskPayloads()noexcept{
         ScopedLock lock(m_lifecycleMutex);
         for(const GpuTaskNode& task : m_tasks){
             if(
-                task.lifecycleState == GpuTaskLifecycleState::Submitting
-                || task.lifecycleState == GpuTaskLifecycleState::Accepting
-                || task.lifecycleState == GpuTaskLifecycleState::Discarding
-                || task.lifecycleState == GpuTaskLifecycleState::Recording
+                task.lifecycleState == TaskLifecycleState::Submitting
+                || task.lifecycleState == TaskLifecycleState::Accepting
+                || task.lifecycleState == TaskLifecycleState::Discarding
+                || task.lifecycleState == TaskLifecycleState::Recording
             ){
                 return false;
             }
         }
         for(GpuTaskNode& task : m_tasks){
             if(
-                task.lifecycleState == GpuTaskLifecycleState::Declared
-                || task.lifecycleState == GpuTaskLifecycleState::Recording
-                || task.lifecycleState == GpuTaskLifecycleState::Recorded
+                task.lifecycleState == TaskLifecycleState::Declared
+                || task.lifecycleState == TaskLifecycleState::Recording
+                || task.lifecycleState == TaskLifecycleState::Recorded
             )
-                task.lifecycleState = GpuTaskLifecycleState::Discarding;
+                task.lifecycleState = TaskLifecycleState::Discarding;
         }
     }
 
     for(GpuTaskNode& task : m_tasks){
-        if(task.lifecycleState == GpuTaskLifecycleState::Discarding && task.payload && task.discardPayload)
+        if(task.lifecycleState == TaskLifecycleState::Discarding && task.payload && task.discardPayload)
             task.discardPayload(task.payload);
     }
 
     {
         ScopedLock lock(m_lifecycleMutex);
         for(GpuTaskNode& task : m_tasks){
-            if(task.lifecycleState != GpuTaskLifecycleState::Discarding)
+            if(task.lifecycleState != TaskLifecycleState::Discarding)
                 continue;
-            task.lifecycleState = GpuTaskLifecycleState::Discarded;
+            task.lifecycleState = TaskLifecycleState::Discarded;
             task.recordingClaimGeneration = 0u;
             task.submissionClaimGeneration = 0u;
             task.recordThunkInProgress = false;

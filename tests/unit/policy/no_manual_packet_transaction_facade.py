@@ -28,7 +28,11 @@ RETIRED_IDENTIFIER = re.compile(
     r"\b(?:GpuGraphSubmissionTransactionDiagnosticPeer|discardTask|markPacketRecorded|acceptPacket|packetRuntime|"
     r"latestAcceptedToken|submissionWaiterCountForTesting|m_submissionWaiterCount|hasNativeSubmission)\b"
 )
-PACKET_RUNTIME_NAMESPACE = re.compile(r"\bnamespace\s+GpuPacketRuntimeState\s*\{(?P<body>.*?)\};", re.DOTALL)
+PACKET_RUNTIME_STATE_SCOPE = re.compile(
+    r"\b(?:namespace\s+GpuPacketRuntimeState|(?:class|struct)\s+PacketRuntimeState|"
+    r"enum\s+class\s+PacketRuntimeState(?:\s*:\s*[^;{}]+)?)\s*\{(?P<body>.*?)\};",
+    re.DOTALL,
+)
 RECORDED_IDENTIFIER = re.compile(r"\bRecorded\b")
 
 
@@ -38,10 +42,10 @@ def find_manual_transaction_references(source: str) -> list[tuple[int, str]]:
         (line_number(code, match.start()), match.group())
         for match in RETIRED_IDENTIFIER.finditer(code)
     ]
-    for namespace_match in PACKET_RUNTIME_NAMESPACE.finditer(code):
-        body_start = namespace_match.start("body")
-        for recorded_match in RECORDED_IDENTIFIER.finditer(namespace_match.group("body")):
-            references.append((line_number(code, body_start + recorded_match.start()), "GpuPacketRuntimeState::Recorded"))
+    for state_scope_match in PACKET_RUNTIME_STATE_SCOPE.finditer(code):
+        body_start = state_scope_match.start("body")
+        for recorded_match in RECORDED_IDENTIFIER.finditer(state_scope_match.group("body")):
+            references.append((line_number(code, body_start + recorded_match.start()), "PacketRuntimeState::Recorded"))
     return sorted(references)
 
 
@@ -68,7 +72,12 @@ def run_self_test() -> int:
         (
             "duplicate recorded state",
             "namespace GpuPacketRuntimeState{ enum Enum : u8{ Declared, Recorded, Accepted }; };",
-            ((1, "GpuPacketRuntimeState::Recorded"),),
+            ((1, "PacketRuntimeState::Recorded"),),
+        ),
+        (
+            "duplicate nested recorded state",
+            "class GpuGraphSubmissionTransaction{ private: enum class PacketRuntimeState : u8{ Declared, Recorded, Accepted }; };",
+            ((1, "PacketRuntimeState::Recorded"),),
         ),
         ("comment", "// graph.discardTask(task); transaction.acceptPacket(graph, compiled, packet, token);", ()),
         ("literal", 'const char* text = "discardTask markPacketRecorded packetRuntime";', ()),

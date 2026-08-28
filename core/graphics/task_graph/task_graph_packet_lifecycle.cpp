@@ -44,7 +44,7 @@ bool GpuTaskGraph::recordTask(
             return false;
         const GpuTaskNode& task = m_tasks[taskID.index];
         if(
-            task.lifecycleState != GpuTaskLifecycleState::Recording
+            task.lifecycleState != TaskLifecycleState::Recording
             || task.lifecycleAttemptGeneration != context.recordingAttemptGeneration
             || context.recordingAttemptGeneration == 0u
             || task.recordingClaimGeneration != lease.m_claimGeneration
@@ -81,7 +81,7 @@ bool GpuTaskGraph::recordTask(
 
         const GpuTaskNode& task = m_tasks[taskID.index];
         if(
-            task.lifecycleState != GpuTaskLifecycleState::Recording
+            task.lifecycleState != TaskLifecycleState::Recording
             || task.lifecycleAttemptGeneration != context.recordingAttemptGeneration
             || task.recordingClaimGeneration != lease.m_claimGeneration
             || !task.recordThunkInProgress
@@ -124,7 +124,7 @@ bool GpuTaskGraph::beginPacketRecording(
             return false;
         const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
         if(
-            task.lifecycleState != GpuTaskLifecycleState::Declared
+            task.lifecycleState != TaskLifecycleState::Declared
             || task.lifecycleAttemptGeneration != recordingAttemptGeneration
         )
             return false;
@@ -133,7 +133,7 @@ bool GpuTaskGraph::beginPacketRecording(
     if(claimGeneration == 0u)
         return false;
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-        m_tasks[tasks[taskIndex].index].lifecycleState = GpuTaskLifecycleState::Recording;
+        m_tasks[tasks[taskIndex].index].lifecycleState = TaskLifecycleState::Recording;
         m_tasks[tasks[taskIndex].index].recordingClaimGeneration = claimGeneration;
         m_tasks[tasks[taskIndex].index].submissionClaimGeneration = 0u;
         m_tasks[tasks[taskIndex].index].recordThunkInProgress = false;
@@ -177,7 +177,7 @@ bool GpuTaskGraph::completePacketRecording(
             return false;
         const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
         if(
-            task.lifecycleState != GpuTaskLifecycleState::Recording
+            task.lifecycleState != TaskLifecycleState::Recording
             || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
             || task.recordingClaimGeneration != lease.m_claimGeneration
             || task.recordThunkInProgress
@@ -186,7 +186,7 @@ bool GpuTaskGraph::completePacketRecording(
             return false;
     }
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-        m_tasks[tasks[taskIndex].index].lifecycleState = GpuTaskLifecycleState::Recorded;
+        m_tasks[tasks[taskIndex].index].lifecycleState = TaskLifecycleState::Recorded;
         m_tasks[tasks[taskIndex].index].recordingClaimGeneration = 0u;
         m_tasks[tasks[taskIndex].index].recordThunkInProgress = false;
         m_tasks[tasks[taskIndex].index].recordThunkCompleted = false;
@@ -228,7 +228,7 @@ void GpuTaskGraph::abortPacketRecording(
                 return;
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
             if(
-                task.lifecycleState != GpuTaskLifecycleState::Recording
+                task.lifecycleState != TaskLifecycleState::Recording
                 || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
                 || task.recordingClaimGeneration != lease.m_claimGeneration
                 || task.recordThunkInProgress
@@ -236,7 +236,7 @@ void GpuTaskGraph::abortPacketRecording(
                 return;
         }
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex)
-            m_tasks[tasks[taskIndex].index].lifecycleState = GpuTaskLifecycleState::Discarding;
+            m_tasks[tasks[taskIndex].index].lifecycleState = TaskLifecycleState::Discarding;
     }
 
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
@@ -258,14 +258,14 @@ void GpuTaskGraph::abortPacketRecording(
                 return;
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
             if(
-                task.lifecycleState != GpuTaskLifecycleState::Discarding
+                task.lifecycleState != TaskLifecycleState::Discarding
                 || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
                 || task.recordingClaimGeneration != lease.m_claimGeneration
             )
                 return;
         }
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-            m_tasks[tasks[taskIndex].index].lifecycleState = GpuTaskLifecycleState::Discarded;
+            m_tasks[tasks[taskIndex].index].lifecycleState = TaskLifecycleState::Discarded;
             m_tasks[tasks[taskIndex].index].recordingClaimGeneration = 0u;
             m_tasks[tasks[taskIndex].index].recordThunkInProgress = false;
             m_tasks[tasks[taskIndex].index].recordThunkCompleted = false;
@@ -304,7 +304,7 @@ bool GpuTaskGraph::packetReadyForSubmission(
             return false;
         const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
         if(
-            task.lifecycleState != GpuTaskLifecycleState::Recorded
+            task.lifecycleState != TaskLifecycleState::Recorded
             || task.lifecycleAttemptGeneration != recordingAttemptGeneration
         )
             return false;
@@ -344,7 +344,7 @@ bool GpuTaskGraph::beginPacketSubmission(
             return false;
         const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
         if(
-            task.lifecycleState != GpuTaskLifecycleState::Recorded
+            task.lifecycleState != TaskLifecycleState::Recorded
             || task.lifecycleAttemptGeneration != recordingAttemptGeneration
             || task.recordingClaimGeneration != 0u
             || task.submissionClaimGeneration != 0u
@@ -358,7 +358,7 @@ bool GpuTaskGraph::beginPacketSubmission(
         return false;
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
         const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-        task.lifecycleState = GpuTaskLifecycleState::Submitting;
+        task.lifecycleState = TaskLifecycleState::Submitting;
         task.submissionClaimGeneration = claimGeneration;
     }
     outLease.m_packet = packet;
@@ -403,7 +403,7 @@ bool GpuTaskGraph::completePacketSubmission(
                 return false;
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
             if(
-                task.lifecycleState != GpuTaskLifecycleState::Submitting
+                task.lifecycleState != TaskLifecycleState::Submitting
                 || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
                 || task.submissionClaimGeneration != lease.m_claimGeneration
             )
@@ -411,7 +411,7 @@ bool GpuTaskGraph::completePacketSubmission(
         }
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-            task.lifecycleState = GpuTaskLifecycleState::Accepting;
+            task.lifecycleState = TaskLifecycleState::Accepting;
         }
     }
 
@@ -434,7 +434,7 @@ bool GpuTaskGraph::completePacketSubmission(
                 return false;
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
             if(
-                task.lifecycleState != GpuTaskLifecycleState::Accepting
+                task.lifecycleState != TaskLifecycleState::Accepting
                 || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
                 || task.submissionClaimGeneration != lease.m_claimGeneration
             )
@@ -442,7 +442,7 @@ bool GpuTaskGraph::completePacketSubmission(
         }
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-            task.lifecycleState = GpuTaskLifecycleState::Accepted;
+            task.lifecycleState = TaskLifecycleState::Accepted;
             task.submissionClaimGeneration = 0u;
         }
     }
@@ -483,14 +483,14 @@ void GpuTaskGraph::abortPacketSubmission(
                 return;
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
             if(
-                task.lifecycleState != GpuTaskLifecycleState::Submitting
+                task.lifecycleState != TaskLifecycleState::Submitting
                 || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
                 || task.submissionClaimGeneration != lease.m_claimGeneration
             )
                 return;
         }
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex)
-            m_tasks[tasks[taskIndex].index].lifecycleState = GpuTaskLifecycleState::Discarding;
+            m_tasks[tasks[taskIndex].index].lifecycleState = TaskLifecycleState::Discarding;
     }
 
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
@@ -512,7 +512,7 @@ void GpuTaskGraph::abortPacketSubmission(
                 return;
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
             if(
-                task.lifecycleState != GpuTaskLifecycleState::Discarding
+                task.lifecycleState != TaskLifecycleState::Discarding
                 || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
                 || task.submissionClaimGeneration != lease.m_claimGeneration
             )
@@ -520,7 +520,7 @@ void GpuTaskGraph::abortPacketSubmission(
         }
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-            task.lifecycleState = GpuTaskLifecycleState::Discarded;
+            task.lifecycleState = TaskLifecycleState::Discarded;
             task.submissionClaimGeneration = 0u;
         }
     }
@@ -559,9 +559,9 @@ bool GpuTaskGraph::discardUnacceptedPacket(
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
             if(
                 (
-                    task.lifecycleState != GpuTaskLifecycleState::Declared
-                    && task.lifecycleState != GpuTaskLifecycleState::Recorded
-                    && task.lifecycleState != GpuTaskLifecycleState::Discarded
+                    task.lifecycleState != TaskLifecycleState::Declared
+                    && task.lifecycleState != TaskLifecycleState::Recorded
+                    && task.lifecycleState != TaskLifecycleState::Discarded
                 )
                 || task.lifecycleAttemptGeneration != recordingAttemptGeneration
             )
@@ -569,14 +569,14 @@ bool GpuTaskGraph::discardUnacceptedPacket(
         }
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-            if(task.lifecycleState != GpuTaskLifecycleState::Discarded)
-                task.lifecycleState = GpuTaskLifecycleState::Discarding;
+            if(task.lifecycleState != TaskLifecycleState::Discarded)
+                task.lifecycleState = TaskLifecycleState::Discarding;
         }
     }
 
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
         const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-        if(task.lifecycleState != GpuTaskLifecycleState::Discarding)
+        if(task.lifecycleState != TaskLifecycleState::Discarding)
             continue;
         if(task.payload && task.discardPayload)
             task.discardPayload(task.payload);
@@ -595,8 +595,8 @@ bool GpuTaskGraph::discardUnacceptedPacket(
                 return false;
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
             if(
-                task.lifecycleState != GpuTaskLifecycleState::Discarding
-                && task.lifecycleState != GpuTaskLifecycleState::Discarded
+                task.lifecycleState != TaskLifecycleState::Discarding
+                && task.lifecycleState != TaskLifecycleState::Discarded
             )
                 return false;
             if(task.lifecycleAttemptGeneration != recordingAttemptGeneration)
@@ -604,8 +604,8 @@ bool GpuTaskGraph::discardUnacceptedPacket(
         }
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-            if(task.lifecycleState == GpuTaskLifecycleState::Discarding){
-                task.lifecycleState = GpuTaskLifecycleState::Discarded;
+            if(task.lifecycleState == TaskLifecycleState::Discarding){
+                task.lifecycleState = TaskLifecycleState::Discarded;
                 task.recordingClaimGeneration = 0u;
             }
         }

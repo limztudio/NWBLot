@@ -1921,6 +1921,161 @@ TEST_F(DescriptorBufferRoundTripTest, SameClassGraphicsQueuesRouteGraphPacketsAn
 }
 
 
+// Debug queue forcing is a public compiler input, but its selected physical queue must still survive native packet
+// recording and Vulkan submission. Exercise that complete route when the adapter exposes an auxiliary Graphics queue.
+TEST_F(DescriptorBufferRoundTripTest, ForcedTimingQueueOverrideRoutesNativeGraphSubmission){
+    HeadlessGraphicsScope multiQueueScope;
+    ASSERT_TRUE(multiQueueScope.setSameClassMultiQueueEnabled(true));
+    if(!multiQueueScope.initialize())
+        GTEST_SKIP() << "Forced queue override: no usable headless Vulkan device on this host.";
+
+    auto& device = multiQueueScope.graphics().getDevice();
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueInfo* auxiliaryGraphicsQueue = nullptr;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+        if(
+            candidate.queueClass == CommandQueue::Graphics
+            && candidate.id != primaryGraphicsQueue
+            && candidate.familyIndex == device.getQueueFamilyIndex(primaryGraphicsQueue)
+        ){
+            auxiliaryGraphicsQueue = &candidate;
+            break;
+        }
+    }
+    if(!auxiliaryGraphicsQueue)
+        GTEST_SKIP() << "Forced queue override: adapter exposes only one Graphics queue.";
+
+    static constexpr u32 s_ClearValue = 0xa17e5c3du;
+    static constexpr usize s_WordCount = 4u;
+    auto destination = device.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(u32) * s_WordCount)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::Exclusive)
+            .setCpuAccess(CpuAccessMode::Read)
+    );
+    ASSERT_NE(destination.get(), nullptr);
+
+    GpuTaskGraph graph(multiQueueScope.arena());
+    const GpuGraphResourceId destinationResource = graph.importBuffer(
+        destination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/forced_queue_override_destination"))
+            .setMarkerLabel("Forced Queue Override Destination")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(destinationResource.valid());
+
+    GpuQueueRequest graphicsTransferRequest;
+    graphicsTransferRequest.requiredCapabilities = GpuQueueCapability::Transfer;
+    graphicsTransferRequest.preferredQueue = GpuQueuePreference::Graphics;
+    graphicsTransferRequest.allowFallback = false;
+    graphicsTransferRequest.compilerMayOverridePreference = false;
+
+    GpuTaskSchedulingHint scheduling;
+    scheduling.allowSameClassQueueRouting = true;
+    scheduling.allowTimingFeedbackRouting = true;
+    const Name taskIdentity("tests/descriptor_buffer/forced_queue_override_clear");
+    GpuTaskDesc taskDesc;
+    taskDesc
+        .setIdentity(taskIdentity)
+        .setMarkerLabel("Forced Queue Override Clear")
+        .setQueue(graphicsTransferRequest)
+        .setScheduling(scheduling)
+    ;
+    QueueSubmissionToken acceptedToken;
+    const GpuTaskId task = graph.addClearBufferTask(
+        taskDesc,
+        GpuClearBufferTaskDesc{
+            .destination = destinationResource,
+            .clearValue = s_ClearValue,
+            .acceptedToken = &acceptedToken,
+        }
+    );
+    ASSERT_TRUE(task.valid());
+
+    const GpuTaskTimingQueueOverride timingOverrides[]{
+        GpuTaskTimingQueueOverride{
+            .key = GpuTaskTimingKey{
+                .task = taskIdentity,
+                .queue = CommandQueue::Graphics,
+            },
+            .queue = auxiliaryGraphicsQueue->id,
+        },
+    };
+    GpuTaskGraphCompileOptions compileOptions;
+    compileOptions.queueAssignmentOptions.timingQueueOverrides = timingOverrides;
+    compileOptions.queueAssignmentOptions.timingQueueOverrideCount = LengthOf(timingOverrides);
+
+    GpuTaskGraphAnalysis analysis(multiQueueScope.arena());
+    GpuTaskGraphQueueAssignments assignments(multiQueueScope.arena());
+    GpuCompiledGraph compiledGraph(multiQueueScope.arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/forced_queue_override_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(
+        graph,
+        analysis,
+        topology,
+        assignments,
+        compiledGraph,
+        scratchArena,
+        compileOptions
+    ));
+
+    const GpuTaskQueueAssignment* const assignment = assignments.find(task);
+    ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->initialQueue, primaryGraphicsQueue);
+    EXPECT_NE(assignment->initialQueue, assignment->queue);
+    EXPECT_EQ(assignment->queue, auxiliaryGraphicsQueue->id);
+    EXPECT_TRUE(assignment->modifiers & GpuTaskQueueAssignmentModifier::DebugTimingOverride);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packet(packet).queue, auxiliaryGraphicsQueue->id);
+
+    GpuRecordedGraph recordedGraph(multiQueueScope.arena());
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+
+    GpuGraphSubmissionTransaction transaction(multiQueueScope.arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    ASSERT_TRUE(acceptedToken.matchesPhysicalQueue(
+        auxiliaryGraphicsQueue->id.index,
+        auxiliaryGraphicsQueue->id.deviceGeneration
+    ));
+    EXPECT_EQ(acceptedToken.queue, CommandQueue::Graphics);
+    ASSERT_TRUE(device.waitForIdle());
+
+    const u32* const clearedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    ASSERT_NE(clearedWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < s_WordCount; ++wordIndex)
+        EXPECT_EQ(clearedWords[wordIndex], s_ClearValue);
+    device.unmapBuffer(destination.get());
+}
+
+
 // A cross-family same-class route must still preserve the broad Graphics API while lowering exclusive resources
 // through a physical-owner release/acquire pair. This is topology-gated because most adapters expose one Graphics
 // family; when present, exercise the complete compiler -> recorder -> Vulkan submitter path.

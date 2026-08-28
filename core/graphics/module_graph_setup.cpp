@@ -536,7 +536,7 @@ bool SubmitGraphOwnedStandaloneTask(
         return false;
     }
 
-    outSubmissionToken = transaction.packetToken(terminalPacket);
+    outSubmissionToken = transaction.taskToken(compiledGraph, terminalTask);
     if(!transaction.discardUnaccepted(
         graph,
         compiledGraph,

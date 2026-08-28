@@ -1359,8 +1359,8 @@ TEST(EcsGraphics, SurfelGiTopologyUsesSemanticTaskAnchors){
 }
 
 
-// AVBOIT validation follows semantic stage anchors and accepts the compiler-owned packet range between them. It
-// must not constrain that range to the currently generated one-packet or five-packet topology.
+// AVBOIT validation follows semantic stage anchors and accepts their inclusive compiler-owned order. It must not
+// constrain that order to the currently generated one-packet or five-packet topology.
 TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -1506,11 +1506,10 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
     EXPECT_TRUE(ContainsText(avboitValidation, "compiledGraph.tasksSharePacket(\n            taskGraphStage.m_preTask"));
     EXPECT_TRUE(ContainsText(
         avboitValidation,
-        "compiledGraph.packetRangeForTasks(\n"
-        "        stage.firstTask,\n"
-        "        stage.completionTask"
+        "compiledGraph.taskPrecedesOrSharesPacket(stage.firstTask, stage.completionTask)"
     ));
-    EXPECT_TRUE(ContainsText(avboitValidation, "compiledGraph.validPacketRange(packetRange)"));
+    EXPECT_FALSE(ContainsText(avboitValidation, "compiledGraph.packetRangeForTasks("));
+    EXPECT_FALSE(ContainsText(avboitValidation, "compiledGraph.validPacketRange("));
     EXPECT_FALSE(ContainsText(avboitValidation, "s_AsyncComputePacketCount"));
     EXPECT_FALSE(ContainsText(avboitValidation, "s_SinglePacketCount"));
     EXPECT_FALSE(ContainsText(avboitValidation, "expectedPacketCount"));
@@ -1646,8 +1645,14 @@ TEST(EcsGraphics, RendererNormalExecutionUsesSemanticTaskAnchors){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString systemSource;
+    AString queueLookupSource;
     ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph_queue_lookup.h",
+        queueLookupSource
+    ));
     const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView queueLookup(queueLookupSource.data(), queueLookupSource.size());
 
     EXPECT_EQ(CountText(system, "packetForTask("), 0u);
     EXPECT_EQ(CountText(system, "GpuSubmissionPacketId"), 0u);
@@ -1659,6 +1664,9 @@ TEST(EcsGraphics, RendererNormalExecutionUsesSemanticTaskAnchors){
     EXPECT_TRUE(ContainsText(system, "normalExecution.terminalTask = terminalPresentationTask;"));
     EXPECT_TRUE(ContainsText(system, "presentationEndpoint->producer != m_deferredFrameTimingEndTask"));
     EXPECT_TRUE(ContainsText(system, "presentationEndpoint->queue != primaryGraphicsQueue"));
+    EXPECT_TRUE(ContainsText(queueLookup, "return context.graph.queueInfoForTask(*task);"));
+    EXPECT_EQ(CountText(queueLookup, "packetForTask("), 0u);
+    EXPECT_EQ(CountText(queueLookup, "GpuSubmissionPacketId"), 0u);
     EXPECT_EQ(CountText(system, ".recordAndSubmitNormalGraph("), 1u);
     EXPECT_EQ(CountText(system, ".recordAndSubmitAcceptedFrontierTask("), 1u);
     EXPECT_EQ(CountText(system, ".recordAndSubmitTask("), 2u);
@@ -2956,6 +2964,8 @@ TEST(EcsGraphics, SetupUploadReadinessBridgeRemainsGraphOwned){
     EXPECT_TRUE(ContainsText(setupUpload, "bridgePrimaryUploadQueue"));
     EXPECT_TRUE(ContainsText(setupUpload, "requiredTerminalQueue"));
     EXPECT_FALSE(ContainsText(setupUpload, "executeCommandLists"));
+    EXPECT_TRUE(ContainsText(graphics, "outSubmissionToken = transaction.taskToken(compiledGraph, terminalTask);"));
+    EXPECT_FALSE(ContainsText(graphics, "outSubmissionToken = transaction.packetToken(terminalPacket);"));
     EXPECT_TRUE(ContainsText(graphics, "ResolveSetupUploadSameClassRouting"));
     EXPECT_TRUE(ContainsText(graphics, "preferNonPrimarySameClassQueue"));
     EXPECT_TRUE(ContainsText(graphics, "sameClassRouting.enabled ? sameClassRouting.primaryQueue"));

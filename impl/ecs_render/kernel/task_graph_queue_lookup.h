@@ -26,10 +26,7 @@ namespace ECSRenderDetail{
 ){
     if(!task || !task->valid())
         return nullptr;
-    const Core::GpuSubmissionPacketId packet = context.graph.packetForTask(*task);
-    if(!packet.valid())
-        return nullptr;
-    return context.graph.queueInfo(context.graph.packet(packet).queue);
+    return context.graph.queueInfoForTask(*task);
 }
 
 

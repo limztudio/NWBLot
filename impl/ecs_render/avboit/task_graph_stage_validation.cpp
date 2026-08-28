@@ -568,10 +568,6 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         && avboitAccumulationSharedComputeEmulationMerged
     ;
     const RendererTaskGraphTransparencyStage stage = taskGraphStage.transparencyStage();
-    const Core::GpuSubmissionPacketRange packetRange = compiledGraph.packetRangeForTasks(
-        stage.firstTask,
-        stage.completionTask
-    );
     return {
         .m_stage = stage,
         .m_valid =
@@ -606,7 +602,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
             && avboitPreQueue->queueClass == Core::CommandQueue::Graphics
             && avboitOccupancyQueue
             && avboitOccupancyQueue->queueClass == Core::CommandQueue::Graphics
-            && compiledGraph.validPacketRange(packetRange),
+            && compiledGraph.taskPrecedesOrSharesPacket(stage.firstTask, stage.completionTask),
     };
 }
 

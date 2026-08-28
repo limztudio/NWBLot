@@ -44667,6 +44667,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAdaptiveShadowPrimitiveChainReco
         &commandIrCapture
     ));
     EXPECT_TRUE(shadowRecorded);
+    EXPECT_FALSE(statsReadbackAcceptedToken.valid());
     ASSERT_EQ(commandIrCapture.recordCount(), 3u);
     const GpuCommandIrBuiltinTaskRecord* const statsClearCapture = commandIrCapture.recordAt(0u);
     const GpuCommandIrBuiltinTaskRecord* const counterClearCapture = commandIrCapture.recordAt(1u);

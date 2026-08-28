@@ -156,11 +156,11 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     }
 #endif
     const bool splitSoftTransparentFold = preparedSoftTransparentFoldCandidate && graphOwnedSoftTransparentFoldEnabled;
-    // The adaptive fallback remains in the monolithic callback, but its raw buffer primitives are deterministic
-    // from this frozen route.  Lift only the work that actually exists this frame; a non-adaptive frame retains
-    // its native compatibility behavior and does not gain empty graph nodes.
-    GraphOwnedAdaptiveShadowPrimitivePlan graphOwnedAdaptivePrimitives;
-    const bool graphOwnedAdaptivePrimitiveCandidate =
+    // The adaptive fallback remains in the monolithic callback, but its raw buffer primitives and acceptance-time
+    // diagnostic lifecycle are deterministic from this frozen route.  A frame with no clear/copy work still owns
+    // its tick through the semantic task's accepted hook without gaining empty graph nodes.
+    GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan;
+    const bool graphOwnedAdaptiveCandidate =
         !splitSoftTransparentFold
         && m_rayTracingState.m_swShadowAdaptiveEnabled
         && !m_raytracingSystem.softTransparentShadowReady()
@@ -173,17 +173,14 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         && m_rayTracingState.m_swShadowEdgeStatsReadback
         && m_rayTracingState.m_swShadowEdgeCounterBuffer
     ;
-    if(graphOwnedAdaptivePrimitiveCandidate){
-        graphOwnedAdaptivePrimitives.compact = m_rayTracingState.m_swShadowCompactEnabled;
-        graphOwnedAdaptivePrimitives.statsTick = m_rayTracingState.m_swShadowEdgeStatsTick;
-        graphOwnedAdaptivePrimitives.captureStatsSnapshot =
+    if(graphOwnedAdaptiveCandidate){
+        graphOwnedAdaptivePlan.enabled = true;
+        graphOwnedAdaptivePlan.compact = m_rayTracingState.m_swShadowCompactEnabled;
+        graphOwnedAdaptivePlan.statsTick = m_rayTracingState.m_swShadowEdgeStatsTick;
+        graphOwnedAdaptivePlan.captureStatsSnapshot =
             m_rayTracingState.m_swShadowEdgeStatsEnabled
             && !m_rayTracingState.m_swShadowEdgeStatsPending
-            && (graphOwnedAdaptivePrimitives.statsTick % s_SwShadowEdgeStatsPeriod == 0u)
-        ;
-        graphOwnedAdaptivePrimitives.enabled =
-            graphOwnedAdaptivePrimitives.compact
-            || graphOwnedAdaptivePrimitives.captureStatsSnapshot
+            && (graphOwnedAdaptivePlan.statsTick % s_SwShadowEdgeStatsPeriod == 0u)
         ;
     }
     // The merge pipeline is ready before its retained history has an accepted frame. Bootstrap still publishes the
@@ -314,15 +311,6 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         resourceUses.push_back(ReadWriteUse(resource, state));
         return true;
     };
-    const auto appendOptionalWriteBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
-        if(!buffer)
-            return true;
-        const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
-        if(!resource.valid())
-            return false;
-        resourceUses.push_back(WriteUse(resource, state));
-        return true;
-    };
     bool optionalResourcesImported =
         (
             // The retained monolith selects its adaptive fallback only after runtime slot checks. Declare coarse as
@@ -446,15 +434,6 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             "Shadow Edge Statistics",
             Core::ResourceStates::UnorderedAccess
         )
-        && (
-            graphOwnedAdaptivePrimitives.enabled
-            || appendOptionalWriteBuffer(
-                m_rayTracingState.m_swShadowEdgeStatsReadback,
-                Name("render.shadow_visibility.edge_stats_readback"),
-                "Shadow Edge Statistics Readback",
-                Core::ResourceStates::CopyDest
-            )
-        )
         && appendOptionalReadWriteBuffer(
             m_rayTracingState.m_swShadowEdgeCounterBuffer,
             Name("render.shadow_visibility.edge_counter"),
@@ -493,7 +472,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     Core::GpuGraphResourceId adaptiveEdgeStats;
     Core::GpuGraphResourceId adaptiveEdgeStatsReadback;
     Core::GpuGraphResourceId adaptiveEdgeCounter;
-    if(graphOwnedAdaptivePrimitives.enabled){
+    if(graphOwnedAdaptivePlan.captureStatsSnapshot){
         adaptiveEdgeStats = importBuffer(
             m_rayTracingState.m_swShadowEdgeStatsBuffer,
             Name("render.shadow_visibility.edge_stats"),
@@ -504,17 +483,19 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             Name("render.shadow_visibility.edge_stats_readback"),
             "Shadow Edge Statistics Readback"
         );
+        if(!adaptiveEdgeStats.valid() || !adaptiveEdgeStatsReadback.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graph-owned adaptive shadow statistics resources"));
+            return false;
+        }
+    }
+    if(graphOwnedAdaptivePlan.compact){
         adaptiveEdgeCounter = importBuffer(
             m_rayTracingState.m_swShadowEdgeCounterBuffer,
             Name("render.shadow_visibility.edge_counter"),
             "Shadow Edge Counter"
         );
-        if(
-            !adaptiveEdgeStats.valid()
-            || !adaptiveEdgeStatsReadback.valid()
-            || !adaptiveEdgeCounter.valid()
-        ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graph-owned adaptive shadow primitive resources"));
+        if(!adaptiveEdgeCounter.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graph-owned adaptive shadow counter resource"));
             return false;
         }
     }
@@ -1077,7 +1058,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
 
     Core::GpuTaskId shadowVisibilityDependency = prefixTask;
     bool adaptivePrimitivePrecedesVisibility = false;
-    if(graphOwnedAdaptivePrimitives.enabled){
+    if(graphOwnedAdaptivePlan.enabled){
         // Counter/stat buffers are private adaptive scratch.  Their exact CopyDest -> UAV handoff is now lowered by
         // the compiler before the retained Shadow Visibility callback, while the callback still decides at record
         // time whether the adaptive producer actually ran.
@@ -1088,7 +1069,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         EnableSameFamilyComputeEffectRouting(primitiveScheduling, false);
         EnableCrossFamilyComputeEffectRouting(primitiveScheduling);
 
-        if(graphOwnedAdaptivePrimitives.captureStatsSnapshot){
+        if(graphOwnedAdaptivePlan.captureStatsSnapshot){
             Core::GpuTaskDesc statsClearDesc;
             statsClearDesc
                 .setIdentity(Name("render.shadow_visibility.adaptive_stats_clear"))
@@ -1112,7 +1093,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             adaptivePrimitivePrecedesVisibility = true;
         }
 
-        if(graphOwnedAdaptivePrimitives.compact){
+        if(graphOwnedAdaptivePlan.compact){
             Core::GpuTaskSchedulingHint counterClearScheduling = primitiveScheduling;
             counterClearScheduling.mergeWithPrevious = adaptivePrimitivePrecedesVisibility;
             EnableSameFamilyComputeEffectRouting(counterClearScheduling, adaptivePrimitivePrecedesVisibility);
@@ -1214,13 +1195,13 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         timingTicket,
         true,
         true,
-        graphOwnedAdaptivePrimitives
+        graphOwnedAdaptivePlan
     );
     if(!m_deferredShadowVisibilityTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred shadow-visibility graph task"));
         return false;
     }
-    if(graphOwnedAdaptivePrimitives.captureStatsSnapshot){
+    if(graphOwnedAdaptivePlan.captureStatsSnapshot){
         const Core::GpuCopyBufferTaskRegion statsReadbackRegion{
             .source = adaptiveEdgeStats,
             .destination = adaptiveEdgeStatsReadback,

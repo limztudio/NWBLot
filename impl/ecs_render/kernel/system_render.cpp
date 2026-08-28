@@ -294,15 +294,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         .hardwareCaustics = hardwareShadowSupported,
     };
     m_raytracingSystem.discardSoftShadowTemporalHistory();
+    m_raytracingSystem.retireCompletedAdaptiveShadowStatisticsReadback();
 
     // Preserve CPU mirrors so rejected recordings can be retried exactly.
     struct PostGbufferPacketCpuState{
-        u64 swShadowEdgeStatsPendingSubmissionID = 0u;
         Core::QueueSubmissionToken surfelCountReadbackSubmissionToken;
 
         u32 softShadowFrameIndex = 0u;
-        u32 swShadowEdgeStatsTick = 0u;
-        u32 swShadowEdgeStatsPendingTick = 0u;
         u32 causticTemporalReuseFrameCount = 0u;
         u32 swCausticFrameIndex = 0u;
         u32 hwCausticFrameIndex = 0u;
@@ -314,22 +312,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
         bool avboitTargetsNeedClear = true;
         bool deferredBindlessSlotsUploaded = false;
-        bool swShadowEdgeStatsPending = false;
-        bool swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
         bool swShadowDispatchLogged = false;
         bool causticAccumulatorInitialized = false;
         bool swCausticDispatchLogged = false;
         bool hwCausticDispatchLogged = false;
         bool causticEmissionGateLogged = false;
         bool surfelSeeded = false;
-        Core::GpuPhysicalQueueId swShadowEdgeStatsPendingSubmissionPhysicalQueue;
     };
     const PostGbufferPacketCpuState postGbufferPacketCpuState{
-        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionID,
         m_rayTracingState.m_surfelCountReadbackSubmissionToken,
         m_rayTracingState.m_softShadowFrameIndex,
-        m_rayTracingState.m_swShadowEdgeStatsTick,
-        m_rayTracingState.m_swShadowEdgeStatsPendingTick,
         m_rayTracingState.m_causticTemporalReuseFrameCount,
         m_rayTracingState.m_swCausticFrameIndex,
         m_rayTracingState.m_hwCausticFrameIndex,
@@ -340,15 +332,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_rayTracingState.m_causticLightCount,
         m_avboitState.m_targetsNeedClear,
         deferredTargets.bindless.slotsUploaded,
-        m_rayTracingState.m_swShadowEdgeStatsPending,
-        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionUnconfirmed,
         m_rayTracingState.m_swShadowDispatchLogged,
         m_rayTracingState.m_causticAccumulatorInitialized,
         m_rayTracingState.m_swCausticDispatchLogged,
         m_rayTracingState.m_hwCausticDispatchLogged,
         m_rayTracingState.m_causticEmissionGateLogged,
         m_rayTracingState.m_surfelSeeded,
-        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionPhysicalQueue,
     };
     const auto restorePrefixCpuState = [&](){
         // Rejected G-buffer recording invalidates CPU upload mirrors.
@@ -359,12 +348,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     const auto restoreShadowCpuState = [&](){
         m_rayTracingState.m_softShadowFrameIndex = postGbufferPacketCpuState.softShadowFrameIndex;
-        m_rayTracingState.m_swShadowEdgeStatsTick = postGbufferPacketCpuState.swShadowEdgeStatsTick;
-        m_rayTracingState.m_swShadowEdgeStatsPending = postGbufferPacketCpuState.swShadowEdgeStatsPending;
-        m_rayTracingState.m_swShadowEdgeStatsPendingTick = postGbufferPacketCpuState.swShadowEdgeStatsPendingTick;
-        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionID = postGbufferPacketCpuState.swShadowEdgeStatsPendingSubmissionID;
-        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionPhysicalQueue = postGbufferPacketCpuState.swShadowEdgeStatsPendingSubmissionPhysicalQueue;
-        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionUnconfirmed = postGbufferPacketCpuState.swShadowEdgeStatsPendingSubmissionUnconfirmed;
         m_rayTracingState.m_swShadowDispatchLogged = postGbufferPacketCpuState.swShadowDispatchLogged;
     };
 

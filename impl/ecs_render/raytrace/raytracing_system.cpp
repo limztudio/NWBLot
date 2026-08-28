@@ -37,25 +37,41 @@ RendererRayTracingSystem::RendererRayTracingSystem(RendererSystem& renderer)
 
 RendererRayTracingSystem::~RendererRayTracingSystem() = default;
 
-void RendererRayTracingSystem::confirmShadowVisibilitySubmission(const Core::QueueSubmissionToken& submissionToken){
+void RendererRayTracingSystem::retireCompletedAdaptiveShadowStatisticsReadback(){
+    auto& state = rayTracingState();
     if(
-        !rayTracingState().m_swShadowEdgeStatsPending
-        || !rayTracingState().m_swShadowEdgeStatsPendingSubmissionUnconfirmed
-        || !submissionToken.valid()
-        || !submissionToken.hasPhysicalQueueIdentity()
+        !state.m_swShadowEdgeStatsPending
+        || (state.m_swShadowEdgeStatsTick - state.m_swShadowEdgeStatsPendingTick) < s_SwShadowEdgeStatsLogDelay
+        || state.m_swShadowEdgeStatsPendingSubmissionID == 0u
+        || !state.m_swShadowEdgeStatsPendingSubmissionPhysicalQueue.valid()
+        || graphics().getDevice().queueGetCompletedInstance(
+            state.m_swShadowEdgeStatsPendingSubmissionPhysicalQueue
+        ) < state.m_swShadowEdgeStatsPendingSubmissionID
     )
         return;
 
-    rayTracingState().m_swShadowEdgeStatsPendingSubmissionID = submissionToken.value;
-    rayTracingState().m_swShadowEdgeStatsPendingSubmissionPhysicalQueue = Core::GpuPhysicalQueueId{
-        submissionToken.physicalQueueIndex,
-        submissionToken.deviceGeneration,
-    };
-    rayTracingState().m_swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
+    const u32* const stats = static_cast<const u32*>(
+        graphics().getDevice().mapBuffer(state.m_swShadowEdgeStatsReadback.get(), Core::CpuAccessMode::Read)
+    );
+    if(stats){
+        const u32 traced = stats[NWB_SW_SHADOW_EDGE_STATS_TRACED];
+        const u32 total = stats[NWB_SW_SHADOW_EDGE_STATS_TOTAL];
+        graphics().getDevice().unmapBuffer(state.m_swShadowEdgeStatsReadback.get());
+        const f64 fraction = (total > 0u) ? (100.0 * static_cast<f64>(traced) / static_cast<f64>(total)) : 0.0;
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW shadow adaptive edge fraction = {}% ({} traced / {} total rays, threshold {})")
+            , fraction
+            , static_cast<u64>(traced)
+            , static_cast<u64>(total)
+            , static_cast<f64>(state.m_swShadowEdgeThreshold)
+        );
+    }
+    state.m_swShadowEdgeStatsPending = false;
+    state.m_swShadowEdgeStatsPendingSubmissionID = 0u;
+    state.m_swShadowEdgeStatsPendingSubmissionPhysicalQueue = {};
 }
 
-void RendererRayTracingSystem::confirmGraphOwnedAdaptiveShadowPrimitiveSubmission(
-    const GraphOwnedAdaptiveShadowPrimitivePlan& plan,
+void RendererRayTracingSystem::confirmGraphOwnedAdaptiveShadowSubmission(
+    const GraphOwnedAdaptiveShadowPlan& plan,
     const bool adaptiveRouteRecorded,
     const Core::QueueSubmissionToken& submissionToken
 ){
@@ -67,9 +83,9 @@ void RendererRayTracingSystem::confirmGraphOwnedAdaptiveShadowPrimitiveSubmissio
     )
         return;
 
-    // The graph-owned clear/copy primitives can record before a later renderer callback discovers that its
-    // producer is unavailable.  Advance the diagnostic timeline only when that callback actually took the
-    // adaptive route and its shared packet accepted.
+    // The graph-owned plan can schedule clear/copy primitives before a later renderer callback discovers that its
+    // producer is unavailable. Advance the diagnostic timeline only when that callback actually took the adaptive
+    // route and its shared packet accepted.
     rayTracingState().m_swShadowEdgeStatsTick = plan.statsTick + 1u;
     if(!plan.captureStatsSnapshot)
         return;
@@ -81,7 +97,6 @@ void RendererRayTracingSystem::confirmGraphOwnedAdaptiveShadowPrimitiveSubmissio
         submissionToken.physicalQueueIndex,
         submissionToken.deviceGeneration,
     };
-    rayTracingState().m_swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

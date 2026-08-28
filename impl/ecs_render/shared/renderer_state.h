@@ -491,7 +491,6 @@ struct RtShadowState{
     bool m_shadowResolvePipelineFailed = false;
     bool m_shadowResolveRgbPipelineFailed = false;
     Core::GpuPhysicalQueueId m_swShadowEdgeStatsPendingSubmissionPhysicalQueue;
-    bool m_swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
     bool m_shadowPipelineFailed = false;
     bool m_swShadowPipelineFailed = false;
     bool m_swShadowDispatchLogged = false;

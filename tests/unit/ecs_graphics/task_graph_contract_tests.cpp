@@ -4589,12 +4589,29 @@ TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
 
     AString swBvhSource;
     AString shadowSource;
+    AString shadowTaskGraphSource;
+    AString adaptiveLifecycleSource;
     AString uiSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", shadowSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "task_graph_shadow_visibility.cpp", shadowTaskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "kernel/system_render.cpp",
+            "raytrace/raytracing_system.h",
+            "raytrace/raytracing_system.cpp",
+            "raytrace/rt_shadow.cpp",
+            "shared/renderer_state.h",
+            "shared/renderer_state.cpp",
+        },
+        adaptiveLifecycleSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
     const AStringView swBvh(swBvhSource.data(), swBvhSource.size());
     const AStringView shadow(shadowSource.data(), shadowSource.size());
+    const AStringView shadowTaskGraph(shadowTaskGraphSource.data(), shadowTaskGraphSource.size());
+    const AStringView adaptiveLifecycle(adaptiveLifecycleSource.data(), adaptiveLifecycleSource.size());
     const AStringView ui(uiSource.data(), uiSource.size());
 
     // Frozen hybrid plans normally use graph blobs. These six writes exist only behind the retained stale-plan
@@ -4605,10 +4622,30 @@ TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
     EXPECT_TRUE(ContainsText(swBvh, "graph-owned SW shadow material context unexpectedly reused a native cache"));
     EXPECT_TRUE(ContainsText(swBvh, "recordPreparedHybridHardwareMaterialContextFallback"));
 
-    // Adaptive statistics use graph primitives on the normal prepared route. The one direct copy remains only for
-    // a compatibility invocation that did not supply that frozen plan.
-    EXPECT_EQ(CountText(shadow, "copyBuffer("), 1u);
-    EXPECT_TRUE(ContainsText(shadow, "if(snapshot && !graphOwnsAdaptivePrimitives)"));
+    // Adaptive diagnostics are graph-owned on every prepared route. Frames without clear/copy work still freeze
+    // an enabled lifecycle plan so only acceptance advances the tick; compatibility calls disable diagnostics.
+    EXPECT_EQ(CountText(shadow, "clearBufferUInt("), 0u);
+    EXPECT_EQ(CountText(shadow, "copyBuffer("), 0u);
+    EXPECT_EQ(CountText(shadow, "m_swShadowCompactEnabled"), 0u);
+    EXPECT_EQ(CountText(shadow, "m_swShadowEdgeStatsEnabled"), 0u);
+    EXPECT_FALSE(ContainsText(shadow, "m_swShadowEdgeStatsTick++"));
+    EXPECT_FALSE(ContainsText(shadow, "mapBuffer("));
+    EXPECT_FALSE(ContainsText(shadow, "m_swShadowEdgeStatsPending"));
+    EXPECT_FALSE(ContainsText(adaptiveLifecycle, "confirmShadowVisibilitySubmission"));
+    EXPECT_FALSE(ContainsText(adaptiveLifecycle, "PendingSubmissionUnconfirmed"));
+    EXPECT_TRUE(ContainsText(adaptiveLifecycle, "m_swShadowEdgeStatsTick = plan.statsTick + 1u;"));
+    EXPECT_EQ(CountText(adaptiveLifecycle, "m_swShadowEdgeStatsPending = true;"), 1u);
+    EXPECT_TRUE(ContainsText(adaptiveLifecycle, "m_swShadowEdgeStatsPendingSubmissionID = submissionToken.value;"));
+    EXPECT_TRUE(ContainsText(adaptiveLifecycle, "submissionToken.physicalQueueIndex"));
+    EXPECT_TRUE(ContainsText(adaptiveLifecycle, "m_raytracingSystem.retireCompletedAdaptiveShadowStatisticsReadback();"));
+    EXPECT_FALSE(ContainsText(shadowTaskGraph, "appendOptionalWriteBuffer"));
+    EXPECT_EQ(CountText(shadowTaskGraph, "addClearBufferTask("), 2u);
+    EXPECT_EQ(CountText(shadowTaskGraph, "addCopyBufferTask("), 1u);
+    EXPECT_TRUE(ContainsText(
+        shadowTaskGraph,
+        "if(graphOwnedAdaptiveCandidate){\n"
+        "        graphOwnedAdaptivePlan.enabled = true;"
+    ));
 
     // UI presentation is fully graph-owned. Callback-free rejection retains the live frame, while an opaque callback
     // rejection stops the device generation instead of replaying arbitrary user code.

@@ -283,7 +283,6 @@ void RendererRayTracingState::invalidateResources(){
     m_swShadowEdgeStatsPending = false;
     m_swShadowEdgeStatsPendingSubmissionID = 0u;
     m_swShadowEdgeStatsPendingSubmissionPhysicalQueue = {};
-    m_swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
     m_softShadowFrameIndex = 0u;
     m_softShadowSlotMask = 0u;
     m_shadowResolveBindingLayout.reset();

@@ -194,10 +194,10 @@ namespace RayTracingShadowVisibilityTaskDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Adaptive software-shadow diagnostics are normally private scratch work.  The shared deferred graph freezes this
-// small plan before compilation so its counter/stat clears and optional readback can be declared as first-class
-// primitive tasks, while direct compatibility callers retain the native operations.
-struct GraphOwnedAdaptiveShadowPrimitivePlan{
+// Adaptive software-shadow diagnostics are private scratch work.  The shared deferred graph freezes this small
+// plan before compilation so its counter/stat clears and optional readback can be declared as first-class primitive
+// tasks. Enabled may own only the acceptance-time tick when the current frame needs no primitive task.
+struct GraphOwnedAdaptiveShadowPlan{
     bool enabled = false;
     bool compact = false;
     bool captureStatsSnapshot = false;
@@ -213,6 +213,15 @@ class RendererRayTracingSystem final : public RendererSystemSubsystemBase<Render
 public:
     explicit RendererRayTracingSystem(RendererSystem& renderer);
     ~RendererRayTracingSystem();
+    // Retire an accepted readback before graph declaration so native packet recording stays CPU-side-effect-free.
+    void retireCompletedAdaptiveShadowStatisticsReadback();
+    // A graph-owned adaptive plan cannot publish its CPU mirror while recording. The Shadow Visibility task commits
+    // the frozen tick and optional readback token only after its shared packet accepts.
+    void confirmGraphOwnedAdaptiveShadowSubmission(
+        const GraphOwnedAdaptiveShadowPlan& plan,
+        bool adaptiveRouteRecorded,
+        const Core::QueueSubmissionToken& submissionToken
+    );
 
 
 public:
@@ -406,7 +415,7 @@ public:
         Core::GpuTimingSubmissionTicket& timingTicket,
         bool graphEntryStatesOwned = false,
         bool graphOwnsAllLitVisibilityClear = false,
-        GraphOwnedAdaptiveShadowPrimitivePlan graphOwnedAdaptivePrimitives = {}
+        GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan = {}
     );
     // A prepared soft-transparent frame splits opaque soft visibility from its transparent fold while retaining one
     // semantic Shadow Visibility packet. The opaque task starts the legacy timing scopes; the terminal fold task
@@ -548,7 +557,7 @@ public:
         u32* opaqueFrameIndex = nullptr,
         bool graphOwnsOpaqueTemporalMergeEntryStates = false,
         bool splitOpaqueSoftResolve = false,
-        const GraphOwnedAdaptiveShadowPrimitivePlan* graphOwnedAdaptivePrimitives = nullptr
+        const GraphOwnedAdaptiveShadowPlan* graphOwnedAdaptivePlan = nullptr
     );
     [[nodiscard]] bool prepareGpuBvhCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] Core::GpuTaskId declareSoftwareCausticsTask(
@@ -817,15 +826,6 @@ public:
     // Commit soft-shadow history only after ordered submission accepts.
     void finalizeSoftShadowTemporalHistory(DeferredFrameTargets& targets);
     void discardSoftShadowTemporalHistory();
-    // Bind shadow readback to its accepted submission token.
-    void confirmShadowVisibilitySubmission(const Core::QueueSubmissionToken& submissionToken);
-    // A graph-owned primitive chain cannot publish its CPU mirror while recording.  The Shadow Visibility task
-    // commits the frozen adaptive tick and optional readback token only after its shared packet accepts.
-    void confirmGraphOwnedAdaptiveShadowPrimitiveSubmission(
-        const GraphOwnedAdaptiveShadowPrimitivePlan& plan,
-        bool adaptiveRouteRecorded,
-        const Core::QueueSubmissionToken& submissionToken
-    );
 
 
 private:

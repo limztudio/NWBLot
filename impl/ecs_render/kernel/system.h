@@ -248,7 +248,6 @@ public:
     // Test-only proxy; keep the ray-tracing subsystem itself private to ordinary renderer callers.
     void forceHybridSceneTraversalFallbackForTesting()noexcept;
     void forceHybridSceneTraversalFallbackEveryFrameForTesting()noexcept;
-    void forceHybridHardwareFallbackSnapshotStaleForTesting()noexcept;
     // Target-scene A/B seam. Production always uses the graph-owned fold; benchmark arms explicitly select the
     // graph split or the retained monolithic compatibility callback before the first frame is declared.
     void setGraphOwnedSoftTransparentShadowFoldEnabledForTesting(bool enabled)noexcept;

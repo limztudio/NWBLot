@@ -130,29 +130,27 @@ bool ShadowPrepareHybridSoftwareTailGraphTask::record(
     usize hybridHardwareFallbackInstanceMaterialByteCount = 0u;
     usize hybridHardwareFallbackInstanceByteCount = 0u;
     usize hybridHardwareFallbackMaterialTypedByteCount = 0u;
-    if(payload.hybridHardwareFallbackUploadsGraphOwned){
-        hybridHardwareFallbackInstanceMaterialData = context.taskGraph.uploadBlobData(
-            payload.hybridHardwareFallbackInstanceMaterialBlob,
-            hybridHardwareFallbackInstanceMaterialByteCount
-        );
-        hybridHardwareFallbackInstanceData = context.taskGraph.uploadBlobData(
-            payload.hybridHardwareFallbackInstanceBlob,
-            hybridHardwareFallbackInstanceByteCount
-        );
-        hybridHardwareFallbackMaterialTypedData = context.taskGraph.uploadBlobData(
-            payload.hybridHardwareFallbackMaterialTypedBlob,
-            hybridHardwareFallbackMaterialTypedByteCount
-        );
-        if(
-            !hybridHardwareFallbackInstanceMaterialData
-            || !hybridHardwareFallbackInstanceData
-            || !hybridHardwareFallbackMaterialTypedData
-            || hybridHardwareFallbackInstanceMaterialByteCount == 0u
-            || hybridHardwareFallbackInstanceByteCount == 0u
-            || hybridHardwareFallbackMaterialTypedByteCount == 0u
-        )
-            return false;
-    }
+    hybridHardwareFallbackInstanceMaterialData = context.taskGraph.uploadBlobData(
+        payload.hybridHardwareFallbackInstanceMaterialBlob,
+        hybridHardwareFallbackInstanceMaterialByteCount
+    );
+    hybridHardwareFallbackInstanceData = context.taskGraph.uploadBlobData(
+        payload.hybridHardwareFallbackInstanceBlob,
+        hybridHardwareFallbackInstanceByteCount
+    );
+    hybridHardwareFallbackMaterialTypedData = context.taskGraph.uploadBlobData(
+        payload.hybridHardwareFallbackMaterialTypedBlob,
+        hybridHardwareFallbackMaterialTypedByteCount
+    );
+    if(
+        !hybridHardwareFallbackInstanceMaterialData
+        || !hybridHardwareFallbackInstanceData
+        || !hybridHardwareFallbackMaterialTypedData
+        || hybridHardwareFallbackInstanceMaterialByteCount == 0u
+        || hybridHardwareFallbackInstanceByteCount == 0u
+        || hybridHardwareFallbackMaterialTypedByteCount == 0u
+    )
+        return false;
 
     // The tail may record SW-BVH timing scopes, so it shares the accepting packet's timing ticket even though
     // its callback begins after the hardware preparation callback closed its own recording scope.
@@ -166,7 +164,6 @@ bool ShadowPrepareHybridSoftwareTailGraphTask::record(
         payload.sceneBvhBatchGraphOwned,
         payload.meshSwBvhBuildsGraphOwned,
         payload.meshSwBvhInputStatesGraphOwned,
-        payload.hybridHardwareFallbackUploadsGraphOwned,
         hybridHardwareFallbackInstanceMaterialData,
         hybridHardwareFallbackInstanceMaterialByteCount,
         hybridHardwareFallbackInstanceData,

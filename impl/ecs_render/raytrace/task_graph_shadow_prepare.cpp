@@ -542,13 +542,11 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     const bool hybridSoftwareTailGraphOwned =
         m_raytracingSystem.hybridShadowVisibilityResourcesPreflighted();
     // A healthy hybrid preflight retains the opaque-HW material context before it publishes the software context
-    // consumed by the tail. If that tail later declines to record, it can restore the frozen HW bytes from these
-    // graph-owned blobs without re-gathering material descriptors. A missing/stale capture deliberately keeps the
-    // existing direct retry boundary below.
+    // consumed by the tail. If that tail later declines to record, it restores the frozen HW bytes from these
+    // graph-owned blobs without re-gathering material descriptors.
     Core::GpuUploadBlobId hybridHardwareFallbackInstanceMaterialBlob;
     Core::GpuUploadBlobId hybridHardwareFallbackInstanceBlob;
     Core::GpuUploadBlobId hybridHardwareFallbackMaterialTypedBlob;
-    bool hybridHardwareFallbackUploadsGraphOwned = false;
     if(hybridSoftwareTailGraphOwned){
         const bool retainedHybridHardwareFallback =
             m_raytracingSystem.retainPreparedHybridHardwareMaterialContextFallbackUploads(
@@ -563,24 +561,15 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             && hybridHardwareFallbackInstanceBlob.valid()
             && hybridHardwareFallbackMaterialTypedBlob.valid()
         ;
-        const bool hybridHardwareFallbackBlobBatchEmpty =
-            !hybridHardwareFallbackInstanceMaterialBlob.valid()
-            && !hybridHardwareFallbackInstanceBlob.valid()
-            && !hybridHardwareFallbackMaterialTypedBlob.valid()
-        ;
         if(
-            retainedHybridHardwareFallback
-            && hybridHardwareFallbackBlobBatchComplete
-            && shadowInstanceMaterials.valid()
-            && shadowInstances.valid()
-            && shadowMaterialTyped.valid()
+            !retainedHybridHardwareFallback
+            || !hybridHardwareFallbackBlobBatchComplete
+            || !shadowInstanceMaterials.valid()
+            || !shadowInstances.valid()
+            || !shadowMaterialTyped.valid()
         ){
-            hybridHardwareFallbackUploadsGraphOwned = true;
-        }
-        else if(!retainedHybridHardwareFallback || !hybridHardwareFallbackBlobBatchEmpty){
-            NWB_LOGGER_WARNING(NWB_TEXT(
-                "RendererSystem: frozen hybrid hardware material fallback cannot use graph-owned upload blobs; retaining direct retry"
-            ));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: healthy hybrid tail requires a complete graph-owned hardware material fallback"));
+            return false;
         }
     }
     // A fully frozen hybrid packet has a separate software-tail callback, so the graph can now lower its exact
@@ -669,7 +658,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     if(sceneBvhInstances.valid())
         resourceUses.push_back(WriteUse(sceneBvhInstances, Core::ResourceStates::ShaderResource));
 
-    if(hybridHardwareFallbackUploadsGraphOwned){
+    if(hybridSoftwareTailGraphOwned){
         // The tail may conditionally restore these immutable HW bytes after the optional SW traversal fails. Its
         // final shader-visible state is declared here; the graph-owned recorder performs the internal CopyDest
         // writes only on that fallback arm.
@@ -1192,7 +1181,6 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
                 .sceneBvhBatchGraphOwned = sceneBvhBatchGraphOwned,
                 .meshSwBvhBuildsGraphOwned = meshSwBvhBuildsGraphOwned,
                 .meshSwBvhInputStatesGraphOwned = meshSwBvhInputStatesGraphOwned,
-                .hybridHardwareFallbackUploadsGraphOwned = hybridHardwareFallbackUploadsGraphOwned,
                 .hybridHardwareFallbackInstanceMaterialBlob = hybridHardwareFallbackInstanceMaterialBlob,
                 .hybridHardwareFallbackInstanceBlob = hybridHardwareFallbackInstanceBlob,
                 .hybridHardwareFallbackMaterialTypedBlob = hybridHardwareFallbackMaterialTypedBlob,

@@ -257,7 +257,6 @@ public:
         bool sceneBvhBatchGraphOwned = false,
         bool meshSwBvhBuildsGraphOwned = false,
         bool meshSwBvhInputStatesGraphOwned = false,
-        bool hybridHardwareFallbackUploadsGraphOwned = false,
         const void* hybridHardwareFallbackInstanceMaterialData = nullptr,
         usize hybridHardwareFallbackInstanceMaterialByteCount = 0u,
         const void* hybridHardwareFallbackInstanceData = nullptr,
@@ -325,16 +324,15 @@ public:
     )const;
     // A healthy hybrid preflight retains an immutable hardware context before the final software context replaces
     // it. The optional tail may need that exact hardware snapshot again, so retain three graph-owned blobs without
-    // allowing a late recorder to re-read the renderer/material stream. An absent snapshot is a valid request for
-    // the existing direct compatibility retry.
+    // allowing a late recorder to re-read the renderer/material stream. A healthy hybrid tail requires all three.
     [[nodiscard]] bool retainPreparedHybridHardwareMaterialContextFallbackUploads(
         Core::GpuTaskGraph& graph,
         Core::GpuUploadBlobId& outInstanceMaterialBlob,
         Core::GpuUploadBlobId& outInstanceBlob,
         Core::GpuUploadBlobId& outMaterialTypedBlob
     )const;
-    // Records the retained hardware fallback against graph-owned immutable bytes. This is intentionally separate
-    // from the stale-snapshot direct retry, which remains the narrow compatibility boundary after validation fails.
+    // Records the retained hardware fallback against graph-owned immutable bytes. Validation failure rejects the
+    // merged preparation packet so the next frame can preflight a fresh pair of contexts.
     [[nodiscard]] bool recordPreparedHybridHardwareMaterialContextFallback(
         Core::CommandList& commandList,
         const void* instanceMaterialData,
@@ -344,8 +342,6 @@ public:
         const void* materialTypedData,
         usize materialTypedByteCount
     );
-    // Compatibility-only overload for callers that do not have a graph-owned upload blob.
-    [[nodiscard]] bool recordPreparedHybridHardwareMaterialContextFallback(Core::CommandList& commandList);
     void confirmPreparedShadowMaterialContextUploads()noexcept;
     // The software scene hierarchy and its leaf instances share topology and leaf indices, so retain them as one
     // immutable preflight batch and publish both only when the accepting Shadow Preparation packet submits.
@@ -362,8 +358,6 @@ public:
     // Target-hardware benchmark seam. It retains the normal opaque-HW fallback on every hybrid frame without
     // flooding the diagnostic log, so a fixed scene can compare that boundary against the healthy hybrid tail.
     void forceHybridSceneTraversalFallbackEveryFrameForTesting()noexcept;
-    // Makes the retained HW fallback snapshot fail validation once, proving the direct hardware retry boundary.
-    void forceHybridHardwareFallbackSnapshotStaleForTesting()noexcept;
 #endif
     // Opaque and healthy hybrid hardware TLAS work records from this frozen preflight plan in Shadow Preparation.
     // Its static cache becomes valid only after that packet accepts; a hybrid record miss retries direct TLAS work.
@@ -903,7 +897,7 @@ private:
     void clearPreparedShadowTraceMaterialSampledTextures()noexcept;
     // A healthy hybrid preflight gathers the HW context before the final SW context replaces it. Retain that exact
     // immutable HW payload so an optional SW-tail miss can restore opaque consumers without a recording-time
-    // renderer/material regather; stale sources still take the established direct retry.
+    // renderer/material upload; stale sources reject the merged packet so its discard path requests fresh preflight.
     [[nodiscard]] bool capturePreparedHybridHardwareMaterialContextFallback();
     void clearPreparedHybridHardwareMaterialContextFallback()noexcept;
     [[nodiscard]] bool capturePreparedSceneBvh(
@@ -1338,7 +1332,7 @@ private:
     bool m_preparedSceneBvhStatic = false;
     bool m_preparedSceneBvhReady = false;
     // The graph uploads frozen scene/material bytes, and this companion plan freezes the matching traversal table so
-    // healthy hybrid recording need not rebuild CPU scene data. ECS mutation versions preserve the direct retry path.
+    // healthy hybrid recording need not rebuild CPU scene data. ECS mutation versions reject stale frozen plans.
     PreparedSceneSwBvhMeshVector m_preparedSceneSwBvhMeshes;
     u32 m_preparedSceneSwBvhInstanceCount = 0u;
     u64 m_preparedSceneSwBvhRendererMutationVersion = 0u;
@@ -1352,8 +1346,6 @@ private:
     bool m_reportedHybridSceneTraversalFallbackLoopForTesting = false;
     bool m_reportedHybridSceneTraversalFallbackLoopFailureForTesting = false;
     bool m_reportedHybridHardwareFallbackRestoreLoopForTesting = false;
-    bool m_forceHybridHardwareFallbackSnapshotStaleForTesting = false;
-    bool m_expectHybridHardwareFallbackDirectRetryForTesting = false;
 #endif
     // RayTracingInstanceDesc stores raw BLAS pointers, so the frozen TLAS plan retains every corresponding BLAS
     // handle until Shadow Preparation accepts or discards it. The selected TLAS/backing generation is retained too.

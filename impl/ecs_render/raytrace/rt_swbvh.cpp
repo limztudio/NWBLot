@@ -236,33 +236,6 @@ template<typename RayTracingState>
     ;
 }
 
-[[nodiscard]] bool UploadPreparedShadowMaterialContextBuffers(
-    Core::CommandList& commandList,
-    Core::Buffer& instanceBuffer,
-    Core::Buffer& materialTypedBuffer,
-    const InstanceGpuDataVector& instanceData,
-    const MaterialTypedByteDataVector& materialTypedBytes,
-    const usize materialTypedUploadBytes
-){
-    if(materialTypedUploadBytes == 0u || materialTypedUploadBytes > materialTypedBytes.size())
-        return false;
-
-    if(!instanceData.empty()){
-        commandList.setBufferState(&instanceBuffer, Core::ResourceStates::CopyDest);
-        commandList.commitBarriers();
-        commandList.writeBuffer(&instanceBuffer, instanceData.data(), instanceData.size() * sizeof(InstanceGpuData));
-        commandList.setBufferState(&instanceBuffer, Core::ResourceStates::ShaderResource);
-        commandList.commitBarriers();
-    }
-
-    commandList.setBufferState(&materialTypedBuffer, Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(&materialTypedBuffer, materialTypedBytes.data(), materialTypedUploadBytes);
-    commandList.setBufferState(&materialTypedBuffer, Core::ResourceStates::ShaderResource);
-    commandList.commitBarriers();
-    return true;
-}
-
 // Register writable scratch with its explicit owner.
 [[nodiscard]] bool RegisterWritableBvhBuffer(
     Core::GpuDescriptorHeap& heap,
@@ -1298,8 +1271,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     // A healthy hybrid packet publishes the software-compatible descriptor slots as the final shared material
     // context. The HW TLAS itself never reads that buffer; its caustic/surfel consumers run after the retained
     // software traversal table confirms the frozen graph context. Do not overwrite or validate it as a HW-only
-    // snapshot here. If that optional tail misses, recordPreflightShadowVisibilityResources clears the plan and
-    // calls this path again directly.
+    // snapshot here. If that optional tail misses, its declared callback restores the immutable HW fallback triple.
     const bool hybridSoftwareMaterialContextGraphOwned =
         commandList
         && shadowMaterialContextBatchGraphOwned
@@ -1392,30 +1364,8 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
                     }
                 }
                 else{
-                    Core::Buffer* materialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
-                    commandList->setBufferState(materialBuffer, Core::ResourceStates::CopyDest);
-                    commandList->commitBarriers();
-                    commandList->writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
-                    commandList->setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
-                    commandList->commitBarriers();
-                    if(!UploadPreparedShadowMaterialContextBuffers(
-                        *commandList,
-                        *rayTracingState().m_shadowInstanceBuffer.get(),
-                        *rayTracingState().m_shadowMaterialTypedBuffer.get(),
-                        shadowInstanceData,
-                        shadowMaterialTypedBytes,
-                        materialTypedUploadBytes
-                    ))
-                        return false;
-
-                    if(staticScene){
-                        rayTracingState().m_hwShadowMaterialContextHash = hwMaterialContextHash;
-                        rayTracingState().m_hwShadowMaterialContextHashValid = true;
-                    }
-                    else
-                        rayTracingState().m_hwShadowMaterialContextHashValid = false;
-                    // HW context cannot represent SW node slots.
-                    rayTracingState().m_swShadowMaterialContextHashValid = false;
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: changed HW shadow material context has no graph-owned upload batch"));
+                    return false;
                 }
             }
         }
@@ -1472,24 +1422,6 @@ bool RendererRayTracingSystem::buildSceneSwBvh(
     );
 }
 
-bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallback(Core::CommandList& commandList){
-    if(m_preparedHybridHardwareFallbackBytes.empty()){
-        m_preparedHybridHardwareFallbackRecorded = false;
-        return false;
-    }
-    const u8* const bytes = m_preparedHybridHardwareFallbackBytes.data();
-    return recordPreparedHybridHardwareMaterialContextFallback(
-        commandList,
-        bytes,
-        m_preparedHybridHardwareFallbackInstanceMaterialByteCount,
-        bytes + m_preparedHybridHardwareFallbackInstanceMaterialByteCount,
-        m_preparedHybridHardwareFallbackInstanceByteCount,
-        bytes + m_preparedHybridHardwareFallbackInstanceMaterialByteCount
-            + m_preparedHybridHardwareFallbackInstanceByteCount,
-        m_preparedHybridHardwareFallbackMaterialTypedByteCount
-    );
-}
-
 bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallback(
     Core::CommandList& commandList,
     const void* const instanceMaterialData,
@@ -1500,14 +1432,6 @@ bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallba
     const usize sourceMaterialTypedByteCount
 ){
     m_preparedHybridHardwareFallbackRecorded = false;
-#if !defined(NWB_FINAL)
-    if(m_forceHybridHardwareFallbackSnapshotStaleForTesting){
-        m_forceHybridHardwareFallbackSnapshotStaleForTesting = false;
-        m_expectHybridHardwareFallbackDirectRetryForTesting = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test forced frozen hybrid hardware material context stale"));
-        return false;
-    }
-#endif
     const auto isStorageHandle = [](const Core::GpuDescriptorHandle handle){
         return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
     };
@@ -1558,7 +1482,7 @@ bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallba
 
     // A graph-owned caller provides immutable declaration-time blobs. Verify they still equal the retained
     // preflight snapshot before recording, so a caller-side replacement cannot restore a context the compiled task
-    // did not declare. The compatibility overload above passes the same retained ranges directly.
+    // did not declare.
     if(
         NWB_MEMCMP(
             m_preparedHybridHardwareFallbackBytes.data(),
@@ -1972,16 +1896,8 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             }
         }
         else{
-            Core::Buffer* nodeBuffer = rayTracingState().m_sceneBvhNodeBuffer.get();
-            Core::Buffer* instanceBuffer = rayTracingState().m_sceneInstanceBuffer.get();
-            commandList->setBufferState(nodeBuffer, Core::ResourceStates::CopyDest);
-            commandList->setBufferState(instanceBuffer, Core::ResourceStates::CopyDest);
-            commandList->commitBarriers();
-            commandList->writeBuffer(nodeBuffer, nodes.data(), nodes.size() * sizeof(NwbBvhNodeGpu));
-            commandList->writeBuffer(instanceBuffer, instances.data(), instances.size() * sizeof(SceneSwBvhInstanceGpu));
-            commandList->setBufferState(nodeBuffer, Core::ResourceStates::ShaderResource);
-            commandList->setBufferState(instanceBuffer, Core::ResourceStates::ShaderResource);
-            commandList->commitBarriers();
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: changed software scene BVH has no graph-owned upload pair"));
+            return false;
         }
     }
     else if(commandList && sceneBvhBatchGraphOwned){
@@ -2012,8 +1928,13 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         shadowInstanceData,
         shadowMaterialTypedBytes
     );
+    const bool hybridSoftwareMaterialContextCaptureRequired =
+        m_shadowVisibilityHardwareSupported
+        && rayTracingState().m_sceneHasTransparentOccluder
+    ;
     const bool canReuseSwMaterialContext =
-        staticScene
+        !hybridSoftwareMaterialContextCaptureRequired
+        && staticScene
         && rayTracingState().m_swShadowMaterialContextHashValid
         && rayTracingState().m_swShadowMaterialContextHash == swMaterialContextHash
         && HasPreparedShadowMaterialContextBuffers(
@@ -2041,11 +1962,16 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             // immutable context first, so an optional SW-tail miss can restore opaque consumers without regathering
             // renderer/material data while Shadow Preparation is recording.
             if(
-                m_preparedShadowMaterialContextReady
-                && m_preparedShadowMaterialContextRoute == PreparedShadowMaterialContextRoute::Hardware
-                && !capturePreparedHybridHardwareMaterialContextFallback()
-            )
+                hybridSoftwareMaterialContextCaptureRequired
+                && (
+                    !m_preparedShadowMaterialContextReady
+                    || m_preparedShadowMaterialContextRoute != PreparedShadowMaterialContextRoute::Hardware
+                    || !capturePreparedHybridHardwareMaterialContextFallback()
+                )
+            ){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain frozen hybrid hardware material fallback"));
+                return false;
+            }
             if(!capturePreparedShadowMaterialContext(
                 PreparedShadowMaterialContextRoute::Software,
                 staticScene,
@@ -2081,30 +2007,8 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                 }
             }
             else{
-                Core::Buffer* materialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
-                commandList->setBufferState(materialBuffer, Core::ResourceStates::CopyDest);
-                commandList->commitBarriers();
-                commandList->writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
-                commandList->setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
-                commandList->commitBarriers();
-                if(!UploadPreparedShadowMaterialContextBuffers(
-                    *commandList,
-                    *rayTracingState().m_shadowInstanceBuffer.get(),
-                    *rayTracingState().m_shadowMaterialTypedBuffer.get(),
-                    shadowInstanceData,
-                    shadowMaterialTypedBytes,
-                    materialTypedUploadBytes
-                ))
-                    return false;
-
-                if(staticScene){
-                    rayTracingState().m_swShadowMaterialContextHash = swMaterialContextHash;
-                    rayTracingState().m_swShadowMaterialContextHashValid = true;
-                }
-                else
-                    rayTracingState().m_swShadowMaterialContextHashValid = false;
-                // HW context cannot represent SW node slots.
-                rayTracingState().m_hwShadowMaterialContextHashValid = false;
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: changed SW shadow material context has no graph-owned upload batch"));
+                return false;
             }
         }
     }
@@ -2131,9 +2035,9 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                 instanceCount
             )){
                 // The paired immutable uploads remain valid even when their traversal-table snapshot cannot be
-                // retained. The pure graph route keeps its existing direct recorder for this frame; the healthy
-                // hybrid route retains its later optional direct-retry boundary.
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software scene traversal; retaining direct compatibility recorder"));
+                // retained. Recording may re-gather CPU scene data to validate those declared bytes, but it cannot
+                // upload a replacement outside the graph-owned batch.
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software scene traversal; retaining live validation fallback"));
             }
         }
         else

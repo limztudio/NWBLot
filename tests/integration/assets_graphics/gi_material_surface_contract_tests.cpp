@@ -176,8 +176,9 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     EXPECT_TRUE(ContainsText(deferredLightingTaskGraph, "hardwarePhotonResourceSetUses"));
     EXPECT_TRUE(ContainsText(
         rayTracingSystem,
-        "hybrid hardware material-context fallback retried directly; caustics and surfel GI are disabled this frame"
+        "frozen hybrid hardware material-context restore failed; rejecting shadow preparation packet"
     ));
+    EXPECT_FALSE(ContainsText(rayTracingSystem, "hybrid hardware material-context fallback retried directly"));
 }
 
 

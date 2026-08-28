@@ -91,7 +91,6 @@ struct ShadowPrepareHybridSoftwareTailGraphTask{
         bool sceneBvhBatchGraphOwned = false;
         bool meshSwBvhBuildsGraphOwned = false;
         bool meshSwBvhInputStatesGraphOwned = false;
-        bool hybridHardwareFallbackUploadsGraphOwned = false;
         Core::GpuUploadBlobId hybridHardwareFallbackInstanceMaterialBlob;
         Core::GpuUploadBlobId hybridHardwareFallbackInstanceBlob;
         Core::GpuUploadBlobId hybridHardwareFallbackMaterialTypedBlob;

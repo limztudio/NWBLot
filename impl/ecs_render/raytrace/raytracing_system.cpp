@@ -279,7 +279,6 @@ bool RendererRayTracingSystem::capturePreparedShadowMaterialContext(
     const void* const materialTypedData,
     const usize materialTypedByteCount
 ){
-    clearPreparedShadowMaterialContext();
     const auto& state = rayTracingState();
     const bool validStorage =
         state.m_shadowInstanceMaterialBuffer
@@ -309,6 +308,7 @@ bool RendererRayTracingSystem::capturePreparedShadowMaterialContext(
     )
         return false;
 
+    clearPreparedShadowMaterialContext();
     m_preparedShadowInstanceMaterialBytes.resize(instanceMaterialByteCount);
     m_preparedShadowInstanceBytes.resize(instanceByteCount);
     m_preparedShadowMaterialTypedBytes.resize(materialTypedByteCount);
@@ -473,7 +473,7 @@ bool RendererRayTracingSystem::retainPreparedHybridHardwareMaterialContextFallba
     outInstanceBlob = {};
     outMaterialTypedBlob = {};
     if(!m_preparedHybridHardwareFallbackReady)
-        return true;
+        return false;
 
     const auto& state = rayTracingState();
     const usize instanceMaterialByteCount = m_preparedHybridHardwareFallbackInstanceMaterialByteCount;
@@ -937,9 +937,6 @@ void RendererRayTracingSystem::forceHybridSceneTraversalFallbackEveryFrameForTes
     m_reportedHybridHardwareFallbackRestoreLoopForTesting = false;
 }
 
-void RendererRayTracingSystem::forceHybridHardwareFallbackSnapshotStaleForTesting()noexcept{
-    m_forceHybridHardwareFallbackSnapshotStaleForTesting = true;
-}
 #endif
 
 bool RendererRayTracingSystem::retainPreparedSceneBvhUploads(
@@ -1571,20 +1568,19 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent shadow software BVH resource preparation failed"));
             // Guard m_swShadowMeshCount > 0: if no per-mesh software BVH was available this frame the software pass
             // simply does not run (HW opaque-only), rather than aborting.
+            const bool swPipelineReady = meshResourcesReady && ensureSwShadowPipeline();
             const bool swReady =
-                meshResourcesReady
+                swPipelineReady
                 && prepareSceneSwBvhResources(scratchArena)
                 && rayTracingState().m_swShadowMeshCount > 0u
                 && rayTracingState().m_sceneBvhInstanceCount > 0u
             ;
             m_shadowVisibilityHybridResourcesPreflighted = swReady;
-            m_shadowVisibilityHybridPipelinePreflighted = swReady && ensureSwShadowPipeline();
+            m_shadowVisibilityHybridPipelinePreflighted = swReady;
             if(m_shadowVisibilityHybridPipelinePreflighted){
                 rayTracingState().m_hybridTransparentShadowReady = true;
-                // The per-mesh build is independent from the later CPU scene/material gather.  Freeze it as a
-                // graph-owned plan when possible, but keep the latter native: a scene/material recording miss must
-                // not turn an otherwise valid HW opaque result into a rejected frame.  A capture miss simply keeps
-                // the established direct mesh-build compatibility path for this frame.
+                // The per-mesh build is independent from the later CPU scene/material gather. Freeze it as a
+                // graph-owned plan when possible; a capture miss retains the native mesh-build compatibility path.
                 if(!capturePreparedMeshSwBvhBuilds())
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze hybrid transparent software BVH build plan"));
             }
@@ -1593,22 +1589,9 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         }
         // A healthy hybrid packet finishes with the software-compatible material context: its node slots drive the
         // transparent traversal while its shared attribute slots remain valid for the HW caustic and surfel consumers.
-        // Keep that exact immutable snapshot when the software pipeline is ready. If the pipeline itself could not be
-        // prepared, retain the established native fallback rather than publishing a context no later task can validate.
-        if(m_shadowVisibilityHybridResourcesPreflighted && !m_shadowVisibilityHybridPipelinePreflighted)
-            clearPreparedShadowMaterialContext();
-        // Retain the independent frozen TLAS plan only for a fully healthy hybrid preflight. Its recorder retries
-        // the direct hardware path on a generation/BLAS mismatch, while the later software tail remains optional.
-        // If the software side cannot run at all, keep the established direct compatibility path instead.
-        if(
-            rayTracingState().m_sceneHasTransparentOccluder
-            && !m_shadowVisibilityHybridPipelinePreflighted
-        )
-            clearPreparedSceneTlasBuild();
-        // The scene-BVH pair is independent from the native material-context writer. Retain it for a healthy hybrid
-        // frame with its matching traversal table: recording restores that table without a CPU regather, while a
-        // source miss takes the established direct revalidation boundary. Hardware-only frames retain no stale
-        // software pair from an earlier route.
+        // Keep that exact immutable snapshot only after the software pipeline is available. An earlier failure leaves
+        // the already-frozen HW material/TLAS plan intact, so opaque shadows remain graph-owned for this frame.
+        // The scene-BVH pair is retained only for a healthy hybrid frame with its matching traversal table.
         if(!m_shadowVisibilityHybridResourcesPreflighted)
             clearPreparedSceneBvh();
 
@@ -1972,7 +1955,6 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
     const bool sceneBvhBatchGraphOwned,
     const bool meshSwBvhBuildsGraphOwned,
     const bool meshSwBvhInputStatesGraphOwned,
-    const bool hybridHardwareFallbackUploadsGraphOwned,
     const void* const hybridHardwareFallbackInstanceMaterialData,
     const usize hybridHardwareFallbackInstanceMaterialByteCount,
     const void* const hybridHardwareFallbackInstanceData,
@@ -2001,12 +1983,6 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
         rayTracingState().m_softTransparentReady = false;
         rayTracingState().m_softTransparentTemporalReady = false;
     };
-    const auto disableHybridMaterialConsumers = [&](){
-        rayTracingState().m_causticRefractiveInstanceCount = 0u;
-        rayTracingState().m_surfelEnabled = false;
-        rayTracingState().m_surfelUseHwTrace = false;
-    };
-
     rayTracingState().m_hybridTransparentShadowReady = false;
     bool hybridMeshSwBvhBuildRecorded = false;
     bool hybridSceneBvhBuildRecorded = false;
@@ -2117,50 +2093,20 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
             if(reportHybridTraversalFailure)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow recording failed; transparent shadows absent this frame"));
             if(hybridSoftwareMaterialContextGraphOwned){
-                // The immutable graph triple has already recorded in this packet. Replace it with the current
-                // hardware descriptor-slot context before accepting the opaque fallback; otherwise caustics or HW
-                // surfels could observe stale SW node-slot data. A failed restoration still preserves opaque
-                // shadows, but disables every material-context consumer for this frame. Prefer the immutable HW
-                // snapshot retained before the SW context replaced it; only a stale snapshot regathers via the
-                // established direct compatibility retry.
+                // The immutable SW triple has already recorded in this packet. Replace it with the declared HW
+                // fallback triple before accepting opaque shadows; a mismatched fallback rejects the merged packet.
                 discardHybridGraphMaterialContext();
-                const bool restoredFrozenHardwareContext = hybridHardwareFallbackUploadsGraphOwned
-                    ? recordPreparedHybridHardwareMaterialContextFallback(
-                        commandList,
-                        hybridHardwareFallbackInstanceMaterialData,
-                        hybridHardwareFallbackInstanceMaterialByteCount,
-                        hybridHardwareFallbackInstanceData,
-                        hybridHardwareFallbackInstanceByteCount,
-                        hybridHardwareFallbackMaterialTypedData,
-                        hybridHardwareFallbackMaterialTypedByteCount
-                    )
-                    : recordPreparedHybridHardwareMaterialContextFallback(commandList)
-                ;
-                const bool restoredDirectHardwareContext =
-                    !restoredFrozenHardwareContext
-                    && buildSceneTlas(commandList, scratchArena, false);
-#if !defined(NWB_FINAL)
-                if(m_expectHybridHardwareFallbackDirectRetryForTesting){
-                    m_expectHybridHardwareFallbackDirectRetryForTesting = false;
-                    if(restoredDirectHardwareContext)
-                        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test hybrid hardware material fallback retried directly"));
-                }
-#endif
-                if(!restoredFrozenHardwareContext){
-                    // The direct retry intentionally re-gathers current material descriptors after the graph froze
-                    // its trace-texture set. Keep its opaque-HW shadow result, but do not let later caustic/surfel
-                    // consumers sample an untracked bindless texture in this already-compiled frame.
-                    if(restoredDirectHardwareContext){
-                        NWB_LOGGER_WARNING(NWB_TEXT(
-                            "RendererSystem: hybrid hardware material-context fallback retried directly; caustics and surfel GI are disabled this frame"
-                        ));
-                    }
-                    else{
-                        NWB_LOGGER_WARNING(NWB_TEXT(
-                            "RendererSystem: hybrid hardware material-context fallback failed; caustics and surfel GI are disabled this frame"
-                        ));
-                    }
-                    disableHybridMaterialConsumers();
+                if(!recordPreparedHybridHardwareMaterialContextFallback(
+                    commandList,
+                    hybridHardwareFallbackInstanceMaterialData,
+                    hybridHardwareFallbackInstanceMaterialByteCount,
+                    hybridHardwareFallbackInstanceData,
+                    hybridHardwareFallbackInstanceByteCount,
+                    hybridHardwareFallbackMaterialTypedData,
+                    hybridHardwareFallbackMaterialTypedByteCount
+                )){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen hybrid hardware material-context restore failed; rejecting shadow preparation packet"));
+                    return false;
                 }
             }
         }
@@ -2171,9 +2117,8 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
     if(meshSwBvhBuildsGraphOwned && !hybridMeshSwBvhBuildRecorded)
         clearPreparedMeshSwBvhBuilds();
     // The graph may already contain the immutable pair upload, but only a restored traversal table or successful
-    // direct revalidation may publish its static-scene cache. A mismatch is an optional-tail failure, not a reason
-    // to reject hardware opaque shadows; clear the retained pair before the common acceptance callback can observe
-    // it.
+    // immutable traversal may publish its static-scene cache. An optional-tail miss clears the retained pair before
+    // the common acceptance callback can observe it.
     if(sceneBvhBatchGraphOwned && !hybridSceneBvhBuildRecorded)
         clearPreparedSceneBvh();
     return true;

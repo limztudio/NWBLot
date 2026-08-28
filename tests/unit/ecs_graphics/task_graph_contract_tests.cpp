@@ -4558,8 +4558,8 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
 }
 
 
-// The legacy bulk shadow-context uploader has no caller: frozen graph batches and the explicit hybrid restore own
-// those two supported paths. Keep the dead mutable writer out of the ray-tracing subsystem.
+// Frozen graph batches and the explicit hybrid restore own every supported shadow material-context upload. Keep
+// mutable compatibility writers and the no-data hybrid restore overload out of the ray-tracing subsystem.
 TEST(EcsGraphics, ShadowMaterialContextHasNoDeadNativeBulkUploader){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -4576,13 +4576,14 @@ TEST(EcsGraphics, ShadowMaterialContextHasNoDeadNativeBulkUploader){
 
     EXPECT_FALSE(ContainsText(rayTracingHeader, "uploadShadowMaterialContextBuffers"));
     EXPECT_FALSE(ContainsText(shadow, "uploadShadowMaterialContextBuffers"));
-    EXPECT_TRUE(ContainsText(rayTracingHeader, "recordPreparedHybridHardwareMaterialContextFallback"));
-    EXPECT_TRUE(ContainsText(swBvh, "UploadPreparedShadowMaterialContextBuffers"));
+    EXPECT_EQ(CountText(rayTracingHeader, "recordPreparedHybridHardwareMaterialContextFallback("), 1u);
+    EXPECT_EQ(CountText(swBvh, "recordPreparedHybridHardwareMaterialContextFallback("), 1u);
+    EXPECT_FALSE(ContainsText(swBvh, "UploadPreparedShadowMaterialContextBuffers"));
 }
 
 
-// The remaining renderer native writes are intentional compatibility boundaries, not normal prepared-frame
-// uploads. Keep their small, named surface fixed so future work must either graph-own a new writer or document it.
+// Renderer-owned hybrid material/scene bytes must enter through immutable graph batches. Native AS build/state work
+// remains separately documented, but it must not grow another live buffer writer in the scene gather recorder.
 TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -4614,13 +4615,13 @@ TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
     const AStringView adaptiveLifecycle(adaptiveLifecycleSource.data(), adaptiveLifecycleSource.size());
     const AStringView ui(uiSource.data(), uiSource.size());
 
-    // Frozen hybrid plans normally use graph blobs. These six writes exist only behind the retained stale-plan
-    // rebuild/restore route, whose direct retry disables later material consumers when it cannot remain tracked.
-    EXPECT_EQ(CountText(swBvh, "writeBuffer("), 6u);
+    EXPECT_EQ(CountText(swBvh, "writeBuffer("), 0u);
     EXPECT_TRUE(ContainsText(swBvh, "if(shadowMaterialContextBatchGraphOwned){"));
     EXPECT_TRUE(ContainsText(swBvh, "graph-owned HW shadow material context unexpectedly reused a native cache"));
     EXPECT_TRUE(ContainsText(swBvh, "graph-owned SW shadow material context unexpectedly reused a native cache"));
     EXPECT_TRUE(ContainsText(swBvh, "recordPreparedHybridHardwareMaterialContextFallback"));
+    EXPECT_FALSE(ContainsText(adaptiveLifecycle, "forceHybridHardwareFallbackSnapshotStaleForTesting"));
+    EXPECT_FALSE(ContainsText(adaptiveLifecycle, "hybrid hardware material-context fallback retried directly"));
 
     // Adaptive diagnostics are graph-owned on every prepared route. Frames without clear/copy work still freeze
     // an enabled lifecycle plan so only acceptance advances the tick; compatibility calls disable diagnostics.
@@ -4731,10 +4732,9 @@ TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
 }
 
 
-// The hybrid HW-to-SW tail may fail after the software material context has replaced the opaque-HW context. Its
-// successful frozen restore must use declaration-time graph blobs; only a stale snapshot may retain the existing
-// direct re-gather/retry boundary, which disables later consumers before they can observe undeclared resources.
-TEST(EcsGraphics, HybridHardwareFallbackRestoreUsesGraphOwnedBlobsWhenFrozen){
+// A healthy hybrid tail requires both a fresh software triple and a complete frozen hardware restore triple. A tail
+// miss restores only declared blobs; invalid snapshots reject the merged packet for a fresh preflight.
+TEST(EcsGraphics, HybridHardwareFallbackRequiresCompleteGraphOwnedBlobs){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
@@ -4742,6 +4742,10 @@ TEST(EcsGraphics, HybridHardwareFallbackRestoreUsesGraphOwnedBlobsWhenFrozen){
     AString rayTracingHeaderSource;
     AString rayTracingSource;
     AString swBvhSource;
+    AString kernelSystemHeaderSource;
+    AString kernelSystemSource;
+    AString smokeCmakeSource;
+    AString transparentMultiProjectSource;
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
@@ -4754,28 +4758,75 @@ TEST(EcsGraphics, HybridHardwareFallbackRestoreUsesGraphOwnedBlobsWhenFrozen){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", kernelSystemHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", kernelSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "CMakeLists.txt", smokeCmakeSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "transparent_multi_project.cpp", transparentMultiProjectSource));
 
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
     const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
     const AStringView rayTracing(rayTracingSource.data(), rayTracingSource.size());
     const AStringView swBvh(swBvhSource.data(), swBvhSource.size());
+    const AStringView kernelSystemHeader(kernelSystemHeaderSource.data(), kernelSystemHeaderSource.size());
+    const AStringView kernelSystem(kernelSystemSource.data(), kernelSystemSource.size());
+    const AStringView smokeCmake(smokeCmakeSource.data(), smokeCmakeSource.size());
+    const AStringView transparentMultiProject(transparentMultiProjectSource.data(), transparentMultiProjectSource.size());
 
     EXPECT_TRUE(ContainsText(rayTracingHeader, "retainPreparedHybridHardwareMaterialContextFallbackUploads"));
-    EXPECT_TRUE(ContainsText(rayTracingHeader, "hybridHardwareFallbackUploadsGraphOwned"));
+    EXPECT_FALSE(ContainsText(rayTracingHeader, "hybridHardwareFallbackUploadsGraphOwned"));
+    EXPECT_EQ(CountText(rayTracingHeader, "recordPreparedHybridHardwareMaterialContextFallback("), 1u);
+    EXPECT_FALSE(ContainsText(rayTracingHeader, "recordPreparedHybridHardwareMaterialContextFallback(Core::CommandList& commandList);"));
     EXPECT_TRUE(ContainsText(rayTracing, "retainPreparedHybridHardwareMaterialContextFallbackUploads"));
     EXPECT_TRUE(ContainsText(rayTracing, "graph.copyUploadData("));
     EXPECT_TRUE(ContainsText(taskGraph, "hybridHardwareFallbackInstanceMaterialBlob"));
-    EXPECT_TRUE(ContainsText(taskGraph, "hybridHardwareFallbackUploadsGraphOwned"));
+    EXPECT_FALSE(ContainsText(taskGraph, "hybridHardwareFallbackUploadsGraphOwned"));
     EXPECT_TRUE(ContainsText(taskGraph, "context.taskGraph.uploadBlobData("));
-    EXPECT_TRUE(ContainsText(taskGraph, "frozen hybrid hardware material fallback cannot use graph-owned upload blobs"));
+    EXPECT_TRUE(ContainsText(taskGraph, "healthy hybrid tail requires a complete graph-owned hardware material fallback"));
+    const usize hybridTailUsesOffset = taskGraph.find("// The tail may conditionally restore these immutable HW bytes");
+    const usize hybridTailUsesEndOffset = taskGraph.find("    bool resourcesImported = true;", hybridTailUsesOffset);
+    ASSERT_NE(hybridTailUsesOffset, AStringView::npos);
+    ASSERT_NE(hybridTailUsesEndOffset, AStringView::npos);
+    const AStringView hybridTailUses = taskGraph.substr(hybridTailUsesOffset, hybridTailUsesEndOffset - hybridTailUsesOffset);
+    EXPECT_EQ(CountText(hybridTailUses, "WriteUse(shadowInstanceMaterials, Core::ResourceStates::ShaderResource)"), 1u);
+    EXPECT_EQ(CountText(hybridTailUses, "WriteUse(shadowInstances, Core::ResourceStates::ShaderResource)"), 1u);
+    EXPECT_EQ(CountText(hybridTailUses, "WriteUse(shadowMaterialTyped, Core::ResourceStates::ShaderResource)"), 1u);
     EXPECT_TRUE(ContainsText(swBvh, "const void* const instanceMaterialData"));
     EXPECT_TRUE(ContainsText(swBvh, "graph-owned hybrid hardware fallback bytes differ from preflight"));
     EXPECT_TRUE(ContainsText(swBvh, "tryWriteBuffer(instanceMaterialBuffer, instanceMaterialData"));
+    EXPECT_FALSE(ContainsText(swBvh, "bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallback(Core::CommandList& commandList){"));
+    EXPECT_TRUE(ContainsText(
+        swBvh,
+        "const bool canReuseSwMaterialContext =\n"
+        "        !hybridSoftwareMaterialContextCaptureRequired\n"
+        "        && staticScene"
+    ));
+    const usize hybridFallbackCaptureOffset = swBvh.find("|| !capturePreparedHybridHardwareMaterialContextFallback()");
+    const usize softwareMaterialCaptureOffset = swBvh.find("if(!capturePreparedShadowMaterialContext(", hybridFallbackCaptureOffset);
+    ASSERT_NE(hybridFallbackCaptureOffset, AStringView::npos);
+    ASSERT_NE(softwareMaterialCaptureOffset, AStringView::npos);
+    EXPECT_TRUE(ContainsText(
+        swBvh.substr(hybridFallbackCaptureOffset, softwareMaterialCaptureOffset - hybridFallbackCaptureOffset),
+        "return false;"
+    ));
 
-    // Keep the stale-snapshot direct retry explicitly narrow. It remains the compatibility boundary only after the
-    // immutable graph bytes fail validation, and it disables material consumers for this compiled frame.
-    EXPECT_TRUE(ContainsText(rayTracing, "!restoredFrozenHardwareContext\n                    && buildSceneTlas(commandList, scratchArena, false)"));
-    EXPECT_TRUE(ContainsText(rayTracing, "disableHybridMaterialConsumers();"));
+    const usize swPipelineOffset = rayTracing.find("const bool swPipelineReady = meshResourcesReady && ensureSwShadowPipeline();");
+    const usize swGatherOffset = rayTracing.find("&& prepareSceneSwBvhResources(scratchArena)");
+    ASSERT_NE(swPipelineOffset, AStringView::npos);
+    ASSERT_NE(swGatherOffset, AStringView::npos);
+    EXPECT_LT(swPipelineOffset, swGatherOffset);
+    EXPECT_FALSE(ContainsText(rayTracing, "m_shadowVisibilityHybridResourcesPreflighted && !m_shadowVisibilityHybridPipelinePreflighted"));
+    const usize restoreFailureOffset = rayTracing.find("frozen hybrid hardware material-context restore failed; rejecting shadow preparation packet");
+    const usize restoreFailureReturnOffset = rayTracing.find("return false;", restoreFailureOffset);
+    ASSERT_NE(restoreFailureOffset, AStringView::npos);
+    ASSERT_NE(restoreFailureReturnOffset, AStringView::npos);
+    EXPECT_FALSE(ContainsText(rayTracing, "buildSceneTlas(commandList, scratchArena, false)"));
+    EXPECT_FALSE(ContainsText(rayTracingHeader, "forceHybridHardwareFallbackSnapshotStaleForTesting"));
+    EXPECT_FALSE(ContainsText(rayTracing, "retried directly"));
+    EXPECT_FALSE(ContainsText(kernelSystemHeader, "forceHybridHardwareFallbackSnapshotStaleForTesting"));
+    EXPECT_FALSE(ContainsText(kernelSystem, "forceHybridHardwareFallbackSnapshotStaleForTesting"));
+    EXPECT_FALSE(ContainsText(smokeCmake, "NWB_TRANSPARENT_MULTI_FORCE_HYBRID_HARDWARE_FALLBACK_STALE"));
+    EXPECT_FALSE(ContainsText(smokeCmake, "nwb_transparent_multi_hybrid_fallback_stale_smoke"));
+    EXPECT_FALSE(ContainsText(transparentMultiProject, "forceHybridHardwareFallbackSnapshotStaleForTesting"));
 }
 
 

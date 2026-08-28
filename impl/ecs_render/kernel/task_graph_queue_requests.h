@@ -96,8 +96,8 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
     };
 }
 
-// Hybrid shadow preparation's software tail dispatches its per-mesh BVH work and may emit small direct buffer
-// writes while restoring the established hardware fallback. It still belongs in the accepting primary-Graphics
+// Hybrid shadow preparation's software tail dispatches its per-mesh BVH work and may conditionally restore three
+// declared graph blobs into the hardware material buffers. It still belongs in the accepting primary-Graphics
 // packet, but needs both capabilities declared for debug recording to validate the real callback.
 [[nodiscard]] inline Core::GpuQueueRequest GraphicsComputeUploadQueueRequest(){
     return Core::GpuQueueRequest{

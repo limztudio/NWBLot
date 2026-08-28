@@ -83,6 +83,7 @@ HEALTHY_FORBIDDEN_LOGS = FALLBACK_REQUIRED_LOGS
 FALLBACK_FORBIDDEN_LOGS = (
     "RendererSystem: test hybrid software traversal recovered",
     "RendererSystem: hybrid hardware material-context fallback failed",
+    "RendererSystem: frozen hybrid hardware material-context restore failed; rejecting shadow preparation packet",
 )
 
 

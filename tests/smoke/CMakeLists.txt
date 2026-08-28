@@ -133,21 +133,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "${_nwb_transparent_multi_runtime_root}"
         )
 
-        # Test-only stale-snapshot route: the optional tail falls back, then the frozen HW context deliberately
-        # refuses validation so Shadow Preparation must use its direct compatibility retry.
-        nwb_declare_executable(nwb_transparent_multi_hybrid_fallback_stale_smoke)
-        target_sources(nwb_transparent_multi_hybrid_fallback_stale_smoke PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
-        )
-        target_compile_definitions(nwb_transparent_multi_hybrid_fallback_stale_smoke PRIVATE
-            NWB_TRANSPARENT_MULTI_FORCE_HYBRID_TRAVERSAL_FALLBACK=1
-            NWB_TRANSPARENT_MULTI_FORCE_HYBRID_HARDWARE_FALLBACK_STALE=1
-        )
-        nwb_configure_runtime_smoke_target(
-            nwb_transparent_multi_hybrid_fallback_stale_smoke
-            "${_nwb_transparent_multi_runtime_root}"
-        )
-
         # Opt-in target-hardware smoke. It intentionally shares the transparent-multi scene and cooked assets, but
         # turns on frame-lagged lighting at startup and exposes an F1 transition back to normal current-frame lighting.
         nwb_declare_executable(nwb_frame_lagged_async_lighting_smoke)
@@ -193,7 +178,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         add_dependencies(nwb_transparent_multi_smoke nwb_transparent_multi_smoke_assets)
         add_dependencies(nwb_transparent_multi_sw_smoke nwb_transparent_multi_smoke_assets)
         add_dependencies(nwb_transparent_multi_hybrid_fallback_smoke nwb_transparent_multi_smoke_assets)
-        add_dependencies(nwb_transparent_multi_hybrid_fallback_stale_smoke nwb_transparent_multi_smoke_assets)
         add_dependencies(nwb_frame_lagged_async_lighting_smoke nwb_transparent_multi_smoke_assets)
 
         nwb_declare_executable(nwb_transparent_csg_smoke)
@@ -217,6 +201,21 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "${_nwb_transparent_multi_runtime_root}"
             "NWB Transparent Multi Smoke"
             "--expect-transparent-multi"
+            "--expect-log-message" "TransparentMultiSmokeProject: renderer baseline capture ready after 6 rendered frames"
+            "--expect-log-message" "RendererSystem: dispatched software shadow traversal"
+            "--reject-log-message" "RendererSystem: graph-owned SW shadow material context unexpectedly reused a native cache"
+            "--reject-log-message" "RendererSystem: hybrid transparent software shadow recording failed\; transparent shadows absent this frame"
+            "--reject-log-message" "RendererSystem: healthy hybrid tail requires a complete graph-owned hardware material fallback"
+            "--reject-log-message" "RendererSystem: changed HW shadow material context has no graph-owned upload batch"
+            "--reject-log-message" "RendererSystem: changed software scene BVH has no graph-owned upload pair"
+            "--reject-log-message" "RendererSystem: changed SW shadow material context has no graph-owned upload batch"
+            "--reject-log-message" "RendererSystem: frozen hybrid hardware material-context restore failed\; rejecting shadow preparation packet"
+            "--reject-log-message" "RendererSystem: hybrid hardware material-context fallback retried directly"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+        set_tests_properties(nwb_transparent_multi_capture_smoke PROPERTIES
+            ENVIRONMENT "NWB_TRANSPARENT_MULTI_SPIN_ANGLE=0.6;NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME=6"
         )
 
         nwb_add_window_capture_smoke(
@@ -242,23 +241,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "--expect-log-message" "RendererSystem: hybrid transparent software shadow recording failed\; transparent shadows absent this frame"
             "--expect-log-message" "RendererSystem: restored frozen hybrid hardware material context"
             "--expect-log-message" "RendererSystem: test hybrid software traversal recovered"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
-
-        nwb_add_window_capture_smoke(
-            nwb_transparent_multi_hybrid_fallback_stale_capture_smoke
-            transparent_multi_hybrid_fallback_stale_capture.bmp
-            "$<TARGET_FILE:nwb_transparent_multi_hybrid_fallback_stale_smoke>"
-            "${_nwb_transparent_multi_runtime_root}"
-            "NWB Transparent Multi Smoke"
-            "--expect-transparent-multi"
-            "--expect-log-message" "RendererSystem: test forced hybrid software traversal fallback"
-            "--expect-log-message" "RendererSystem: hybrid transparent software shadow recording failed\; transparent shadows absent this frame"
-            "--expect-log-message" "RendererSystem: test forced frozen hybrid hardware material context stale"
-            "--expect-log-message" "RendererSystem: test hybrid hardware material fallback retried directly"
-            "--expect-log-message" "RendererSystem: test hybrid software traversal recovered"
-            "--reject-log-message" "RendererSystem: restored frozen hybrid hardware material context"
+            "--reject-log-message" "RendererSystem: frozen hybrid hardware material-context restore failed\; rejecting shadow preparation packet"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -943,6 +926,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "--expect-log-message" "RendererSystem: hybrid transparent software shadow recording failed\\; transparent shadows absent this frame"
             "--expect-log-message" "RendererSystem: restored frozen hybrid hardware material context"
             "--reject-log-message" "RendererSystem: test hybrid software traversal recovered"
+            "--reject-log-message" "RendererSystem: frozen hybrid hardware material-context restore failed\; rejecting shadow preparation packet"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )

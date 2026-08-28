@@ -135,13 +135,6 @@ bool ShaderTable::setRayGenerationShader(const AStringView exportName){
     if(!allocateSBTBuffer(preflight, newBuffer, newOffset, NWB_TEXT("set ray generation shader"), NWB_TEXT("ray generation")))
         return false;
 
-#if !defined(NWB_FINAL)
-    if(m_rejectNextNewBufferMapForTesting){
-        m_rejectNextNewBufferMapForTesting = false;
-        return false;
-    }
-#endif
-
     void* const mapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
     if(!mapped){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to set ray generation shader: failed to map new SBT buffer"));
@@ -263,18 +256,6 @@ void ShaderTable::captureDispatchSnapshot(DispatchSnapshot& outSnapshot)const{
 
     outSnapshot = Move(snapshot);
 }
-
-#if !defined(NWB_FINAL)
-void ShaderTable::rejectNextBufferAllocationForTesting(){
-    ScopedLock lock(m_mutex);
-    m_rejectNextBufferAllocationForTesting = true;
-}
-
-void ShaderTable::rejectNextNewBufferMapForTesting(){
-    ScopedLock lock(m_mutex);
-    m_rejectNextNewBufferMapForTesting = true;
-}
-#endif
 
 bool ShaderTable::findGroupIndex(
     const AStringView exportName,
@@ -404,13 +385,6 @@ bool ShaderTable::allocateSBTBuffer(
     const tchar* operationName,
     const tchar* recordName
 ){
-#if !defined(NWB_FINAL)
-    if(m_rejectNextBufferAllocationForTesting){
-        m_rejectNextBufferAllocationForTesting = false;
-        return false;
-    }
-#endif
-
     BufferDesc bufferDesc;
     bufferDesc.byteSize = preflight.allocationByteSize;
     bufferDesc.debugName = "SBT_Buffer";
@@ -541,13 +515,6 @@ u32 ShaderTable::appendShaderRecord(
     u64 newOffset = 0u;
     if(!allocateSBTBuffer(preflight, newBuffer, newOffset, operationName, recordName))
         return s_InvalidRayTracingShaderTableRecordIndex;
-
-#if !defined(NWB_FINAL)
-    if(m_rejectNextNewBufferMapForTesting){
-        m_rejectNextNewBufferMapForTesting = false;
-        return s_InvalidRayTracingShaderTableRecordIndex;
-    }
-#endif
 
     void* const newMapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
     if(!newMapped){

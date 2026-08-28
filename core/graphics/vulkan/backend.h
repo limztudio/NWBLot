@@ -2317,10 +2317,6 @@ public:
     void clearCallableShaders();
     [[nodiscard]] RayTracingPipeline* getPipeline(){ return m_pipeline.get(); }
     Object getNativeHandle(ObjectType objectType);
-#if !defined(NWB_FINAL)
-    void rejectNextBufferAllocationForTesting();
-    void rejectNextNewBufferMapForTesting();
-#endif
 
 
 private:
@@ -2385,10 +2381,6 @@ private:
     u32 m_missCount = 0;
     u32 m_hitCount = 0;
     u32 m_callableCount = 0;
-#if !defined(NWB_FINAL)
-    bool m_rejectNextBufferAllocationForTesting = false;
-    bool m_rejectNextNewBufferMapForTesting = false;
-#endif
 };
 
 

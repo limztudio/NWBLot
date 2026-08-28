@@ -649,12 +649,20 @@ TEST_F(RayTracingShaderTableIngressTest, TypedLookupRejectsEmptyWrongKindAndSame
     ASSERT_TRUE(rayGenerationAndMissTable);
     EXPECT_TRUE(rayGenerationAndMissTable->setRayGenerationShader("shared_export"));
     EXPECT_TRUE(rayGenerationAndMissTable->setRayGenerationShader("main"));
+    const Object rayGenerationBuffer = rayGenerationAndMissTable->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Buffer);
+    ASSERT_NE(rayGenerationBuffer.integer, 0u);
     ExpectShaderTableBoolRejection([&](){ return rayGenerationAndMissTable->setRayGenerationShader("unique_miss"); });
     ExpectShaderTableBoolRejection([&](){ return rayGenerationAndMissTable->setRayGenerationShader("unknown_export"); });
+    EXPECT_EQ(
+        rayGenerationAndMissTable->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Buffer).integer,
+        rayGenerationBuffer.integer
+    );
+    EXPECT_TRUE(rayGenerationAndMissTable->setRayGenerationShader("shared_export"));
     EXPECT_EQ(rayGenerationAndMissTable->addMissShader("shared_export"), 0u);
     EXPECT_EQ(rayGenerationAndMissTable->addMissShader("unique_miss"), 1u);
     ExpectShaderTableRecordRejection([&](){ return rayGenerationAndMissTable->addMissShader("main"); });
     ExpectShaderTableRecordRejection([&](){ return rayGenerationAndMissTable->addMissShader("unknown_export"); });
+    EXPECT_EQ(rayGenerationAndMissTable->addMissShader("shared_export"), 2u);
 
     const RayTracingPipelineHandle hitPipeline = CreateShaderTablePipeline(device(), arena(), ShaderTablePipelineShape::Hit);
     ASSERT_TRUE(hitPipeline);
@@ -663,6 +671,7 @@ TEST_F(RayTracingShaderTableIngressTest, TypedLookupRejectsEmptyWrongKindAndSame
     EXPECT_EQ(hitTable->addHitGroup("unique_hit"), 0u);
     EXPECT_EQ(hitTable->addHitGroup("second_hit"), 1u);
     ExpectShaderTableRecordRejection([&](){ return hitTable->addHitGroup("hit_ray_generation"); });
+    EXPECT_EQ(hitTable->addHitGroup("unique_hit"), 2u);
 
     const RayTracingPipelineHandle callablePipeline = CreateShaderTablePipeline(
         device(),
@@ -675,6 +684,8 @@ TEST_F(RayTracingShaderTableIngressTest, TypedLookupRejectsEmptyWrongKindAndSame
     ExpectShaderTableRecordRejection([&](){ return callableTable->addMissShader("callable_first"); });
     EXPECT_EQ(callableTable->addCallableShader("callable_first"), 0u);
     EXPECT_EQ(callableTable->addCallableShader("callable_second"), 1u);
+    ExpectShaderTableRecordRejection([&](){ return callableTable->addCallableShader("unknown_export"); });
+    EXPECT_EQ(callableTable->addCallableShader("callable_first"), 2u);
 
     const RayTracingPipelineHandle ambiguousRayGenerationAndMissPipeline = CreateShaderTablePipeline(
         device(),
@@ -780,67 +791,6 @@ TEST_F(RayTracingShaderTableIngressTest, ImmutableGroupMetadataSurvivesDescripti
     EXPECT_EQ(callableTable->addCallableShader("callable_first"), 0u);
     ExpectShaderTableRecordRejection([&](){ return callableTable->addCallableShader("mutated_callable"); });
 }
-
-#if !defined(NWB_FINAL)
-TEST_F(RayTracingShaderTableIngressTest, AllocationAndNewMapFailuresPreserveEmptyAndNonemptyState){
-    const RayTracingPipelineHandle pipeline = CreateShaderTablePipeline(
-        device(),
-        arena(),
-        ShaderTablePipelineShape::RayGenerationAndMiss
-    );
-    ASSERT_TRUE(pipeline);
-    const RayTracingShaderTableHandle table = pipeline->createShaderTable();
-    ASSERT_TRUE(table);
-
-    ASSERT_TRUE(table->setRayGenerationShader("shared_export"));
-    const Object originalRayGenerationBuffer = table->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Buffer);
-    ASSERT_NE(originalRayGenerationBuffer.integer, 0u);
-
-    table->rejectNextBufferAllocationForTesting();
-    EXPECT_FALSE(table->setRayGenerationShader("main"));
-    EXPECT_EQ(table->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Buffer).integer, originalRayGenerationBuffer.integer);
-    table->rejectNextNewBufferMapForTesting();
-    EXPECT_FALSE(table->setRayGenerationShader("main"));
-    EXPECT_EQ(table->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Buffer).integer, originalRayGenerationBuffer.integer);
-
-    table->rejectNextBufferAllocationForTesting();
-    EXPECT_EQ(table->addMissShader("unique_miss"), s_InvalidRayTracingShaderTableRecordIndex);
-    EXPECT_EQ(table->addMissShader("unique_miss"), 0u);
-    table->rejectNextNewBufferMapForTesting();
-    EXPECT_EQ(table->addMissShader("shared_export"), s_InvalidRayTracingShaderTableRecordIndex);
-    EXPECT_EQ(table->addMissShader("shared_export"), 1u);
-
-    const RayTracingPipelineHandle callablePipeline = CreateShaderTablePipeline(
-        device(),
-        arena(),
-        ShaderTablePipelineShape::Callable
-    );
-    ASSERT_TRUE(callablePipeline);
-    const RayTracingShaderTableHandle callableTable = callablePipeline->createShaderTable();
-    ASSERT_TRUE(callableTable);
-    callableTable->rejectNextBufferAllocationForTesting();
-    EXPECT_EQ(callableTable->addCallableShader("callable_first"), s_InvalidRayTracingShaderTableRecordIndex);
-    EXPECT_EQ(callableTable->addCallableShader("callable_first"), 0u);
-    callableTable->rejectNextNewBufferMapForTesting();
-    EXPECT_EQ(callableTable->addCallableShader("callable_second"), s_InvalidRayTracingShaderTableRecordIndex);
-    EXPECT_EQ(callableTable->addCallableShader("callable_second"), 1u);
-
-    const RayTracingPipelineHandle hitPipeline = CreateShaderTablePipeline(device(), arena(), ShaderTablePipelineShape::Hit);
-    ASSERT_TRUE(hitPipeline);
-    const RayTracingShaderTableHandle hitTable = hitPipeline->createShaderTable();
-    ASSERT_TRUE(hitTable);
-    hitTable->rejectNextBufferAllocationForTesting();
-    ExpectShaderTableRecordRejection([&](){ return hitTable->addHitGroup("unknown_export"); });
-    EXPECT_EQ(hitTable->addHitGroup("unique_hit"), s_InvalidRayTracingShaderTableRecordIndex);
-    EXPECT_EQ(hitTable->addHitGroup("unique_hit"), 0u);
-
-    table->clearMissShaders();
-    table->rejectNextNewBufferMapForTesting();
-    EXPECT_EQ(table->addMissShader("unique_miss"), s_InvalidRayTracingShaderTableRecordIndex);
-    EXPECT_EQ(table->addMissShader("unique_miss"), 0u);
-}
-#endif
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

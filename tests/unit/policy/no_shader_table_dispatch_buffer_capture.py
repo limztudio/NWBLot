@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep the retired ShaderTable dispatch-buffer capture seam out of production C++ sources."""
+"""Keep retired ShaderTable test facades out of production C++ sources."""
 
 from __future__ import annotations
 
@@ -24,14 +24,22 @@ PRODUCTION_DIRECTORIES = (
     "utilities",
 )
 SOURCE_SUFFIXES = frozenset((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ixx"))
-RETIRED_IDENTIFIER = re.compile(r"\bcaptureDispatchBuffersForTesting\b")
+RETIRED_IDENTIFIERS = re.compile(
+    r"\b(?:"
+    r"captureDispatchBuffersForTesting"
+    r"|rejectNextBufferAllocationForTesting"
+    r"|rejectNextNewBufferMapForTesting"
+    r"|m_rejectNextBufferAllocationForTesting"
+    r"|m_rejectNextNewBufferMapForTesting"
+    r")\b"
+)
 
 
-def find_shader_table_dispatch_buffer_capture_references(source: str) -> list[tuple[int, str]]:
+def find_shader_table_test_facade_references(source: str) -> list[tuple[int, str]]:
     code = blank_non_code(source)
     return [
         (line_number(code, match.start()), match.group())
-        for match in RETIRED_IDENTIFIER.finditer(code)
+        for match in RETIRED_IDENTIFIERS.finditer(code)
     ]
 
 
@@ -68,31 +76,53 @@ def run_self_test() -> int:
         (
             "comments",
             "// table.captureDispatchBuffersForTesting(buffers);\n"
-            "/* void captureDispatchBuffersForTesting(); */",
+            "// table.rejectNextBufferAllocationForTesting();\n"
+            "// table.rejectNextNewBufferMapForTesting();\n"
+            "/* bool m_rejectNextBufferAllocationForTesting;\n"
+            "bool m_rejectNextNewBufferMapForTesting; */",
             (),
         ),
         (
             "literals",
-            'const char* text = "captureDispatchBuffersForTesting";\n'
-            'const char* raw = R"tag(captureDispatchBuffersForTesting)tag";',
+            'const char* capture = "captureDispatchBuffersForTesting";\n'
+            'const char* allocation = "rejectNextBufferAllocationForTesting";\n'
+            'const char* map = "rejectNextNewBufferMapForTesting";\n'
+            'const char* raw = R"tag(m_rejectNextBufferAllocationForTesting '
+            'm_rejectNextNewBufferMapForTesting)tag";',
             (),
         ),
         (
-            "remaining rejection hooks",
+            "rejection calls",
             "table.rejectNextBufferAllocationForTesting();\n"
             "table.rejectNextNewBufferMapForTesting();",
-            (),
+            (
+                (1, "rejectNextBufferAllocationForTesting"),
+                (2, "rejectNextNewBufferMapForTesting"),
+            ),
+        ),
+        (
+            "rejection fields",
+            "bool m_rejectNextBufferAllocationForTesting = false;\n"
+            "bool m_rejectNextNewBufferMapForTesting = false;",
+            (
+                (1, "m_rejectNextBufferAllocationForTesting"),
+                (2, "m_rejectNextNewBufferMapForTesting"),
+            ),
         ),
         (
             "near names",
             "void captureDispatchBuffersForTestingAgain();\n"
-            "void captureDispatchBufferForTesting();",
+            "void captureDispatchBufferForTesting();\n"
+            "void rejectNextBufferAllocationForTestingAgain();\n"
+            "void rejectNextNewBufferMapForTestingAgain();\n"
+            "bool m_rejectNextBufferAllocationForTestingAgain;\n"
+            "bool m_rejectNextNewBufferMapForTestingAgain;",
             (),
         ),
     )
     failed = False
     for name, source, expected in cases:
-        actual = tuple(find_shader_table_dispatch_buffer_capture_references(source))
+        actual = tuple(find_shader_table_test_facade_references(source))
         if actual != expected:
             print(f"{name}: expected {expected}, got {actual}", file=sys.stderr)
             failed = True
@@ -107,13 +137,13 @@ def main() -> int:
     violations: list[str] = []
     for path in production_source_files(source_root):
         source = path.read_text(encoding="utf-8", errors="replace")
-        for line, identifier in find_shader_table_dispatch_buffer_capture_references(source):
+        for line, identifier in find_shader_table_test_facade_references(source):
             violations.append(
-                f"{path.relative_to(source_root)}:{line}: retired ShaderTable dispatch-buffer capture '{identifier}'"
+                f"{path.relative_to(source_root)}:{line}: retired ShaderTable test facade '{identifier}'"
             )
 
     if violations:
-        print("Production ShaderTable code must not expose dispatch-buffer capture for tests.", file=sys.stderr)
+        print("Production ShaderTable code must not expose retired test facades.", file=sys.stderr)
         print("\n".join(violations), file=sys.stderr)
         return 1
     return 0

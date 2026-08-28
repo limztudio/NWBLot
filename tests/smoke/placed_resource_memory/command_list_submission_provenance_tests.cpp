@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Command-list submission provenance, native recording-ID wrap, and upload-ledger lease coverage.
+// Command-list submission provenance and upload-ledger lease coverage.
 
 
 #include <gtest/gtest.h>
@@ -401,36 +401,6 @@ TEST_F(CommandListSubmissionProvenanceTest, InjectedNativeFailureOnOldLeaseCanno
 }
 
 
-TEST_F(CommandListSubmissionProvenanceTest, NativeRecordingIDWrapSkipsReservedZeroLease){
-    const GpuPhysicalQueueId queue = device().getPrimaryPhysicalQueue(CommandQueue::Graphics);
-    ASSERT_TRUE(queue.valid());
-    ASSERT_TRUE(device().waitForIdle());
-    ASSERT_TRUE(device().armRecordingIDWrapForTesting(queue));
-
-    CommandListParameters parameters;
-    parameters.setPhysicalQueue(queue).setRecordingWorker(0x4973cbe8126adf05ull, 9u);
-    CommandListHandle maximumIDLease = device().createCommandList(parameters);
-    CommandListHandle wrappedIDLease = device().createCommandList(parameters);
-    ASSERT_TRUE(maximumIDLease);
-    ASSERT_TRUE(wrappedIDLease);
-    maximumIDLease->open();
-    wrappedIDLease->open();
-    ASSERT_TRUE(maximumIDLease->isRecording());
-    ASSERT_TRUE(wrappedIDLease->isRecording());
-    maximumIDLease->close();
-    wrappedIDLease->close();
-    ASSERT_TRUE(maximumIDLease->hasCommandBuffer());
-    ASSERT_TRUE(wrappedIDLease->hasCommandBuffer());
-
-    CommandList* const commandLists[]{ maximumIDLease.get(), wrappedIDLease.get() };
-    ASSERT_TRUE(device().executeCommandLists(
-        commandLists,
-        LengthOf(commandLists),
-        queue,
-        QueueSubmissionDesc{}
-    ).valid());
-    EXPECT_TRUE(device().waitForIdle());
-}
 #endif
 
 

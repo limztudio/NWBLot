@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep retired Vulkan submission synchronization and observation test seams out of production."""
+"""Keep retired Vulkan submission test seams out of production."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ RETIRED_IDENTIFIER = re.compile(
     r"m_submissionWaitTokensForTestingMutex|m_submissionWaitQueueForTesting|"
     r"m_submissionWaitTokensForTesting|rejectNextSubmissionForTesting|"
     r"clearSubmissionRejectionsForTesting|consumeSubmissionRejectionForTesting|"
-    r"m_submissionRejectionsForTesting)\b"
+    r"m_submissionRejectionsForTesting|armRecordingIDWrapForTesting)\b"
 )
 
 
@@ -188,6 +188,14 @@ def run_self_test() -> int:
             "Atomic<u32> m_submissionRejectionsForTestingCount;",
             (),
         ),
+        (
+            "recording ID wrap arm",
+            "device.armRecordingIDWrapForTesting(queue);",
+            ((1, "armRecordingIDWrapForTesting"),),
+        ),
+        ("recording ID wrap comment", "// device.armRecordingIDWrapForTesting(queue);", ()),
+        ("recording ID wrap literal", 'const char* text = "armRecordingIDWrapForTesting";', ()),
+        ("recording ID wrap near name", "void armRecordingIDWrapForTestingAgain();", ()),
         ("legacy comment", "// device.createSubmissionSignalForTesting(signal);", ()),
         ("legacy literal", 'const char* text = "destroySubmissionTimelineForTesting";', ()),
         ("legacy near name", "void createSubmissionSignalForTestingAgain();", ()),
@@ -215,7 +223,7 @@ def main() -> int:
             )
 
     if violations:
-        print("Production Vulkan submission must not expose retired test-owned synchronization or observation seams.", file=sys.stderr)
+        print("Production Vulkan submission must not expose retired test-owned synchronization, observation, or mutation seams.", file=sys.stderr)
         print("\n".join(violations), file=sys.stderr)
         return 1
     return 0

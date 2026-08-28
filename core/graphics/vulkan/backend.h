@@ -3317,7 +3317,6 @@ public:
 #if !defined(NWB_FINAL)
     [[nodiscard]] bool armSubmissionLedgerFinalizeHookForTesting(void* context, void (*invoke)(void*));
     void clearSubmissionLedgerFinalizeHookForTesting();
-    [[nodiscard]] bool armRecordingIDWrapForTesting(const GpuPhysicalQueueId& queue);
 #endif
     [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap(){ return m_gpuDescriptorHeap; }
     // Writes descriptor-buffer entries, including TLAS handles.

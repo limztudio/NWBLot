@@ -284,15 +284,6 @@ void Device::clearSubmissionLedgerFinalizeHookForTesting(){
     m_submissionLedgerFinalizeHookForTesting = nullptr;
 }
 
-bool Device::armRecordingIDWrapForTesting(const GpuPhysicalQueueId& queue){
-    Queue* const resolvedQueue = getQueue(queue);
-    if(!resolvedQueue)
-        return false;
-
-    resolvedQueue->m_lastRecordingID.store(Limit<u64>::s_Max - 1u, MemoryOrder::relaxed);
-    return true;
-}
-
 void Device::invokeSubmissionLedgerFinalizeHookForTesting(){
     void* context = nullptr;
     void (*invoke)(void*) = nullptr;

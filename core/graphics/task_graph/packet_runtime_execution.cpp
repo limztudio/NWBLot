@@ -231,10 +231,8 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
         (desc.recordOverrideCount != 0u && !desc.recordOverrides)
         || (desc.externalCompletionTokenCount != 0u && !desc.externalCompletionTokens)
         || (desc.taskTimingTicketCount != 0u && !desc.taskTimingTickets)
-        || (desc.submissionHookCount != 0u && !desc.submissionHooks)
         || (desc.taskAcceptedCallbackCount != 0u && !desc.taskAcceptedCallbacks)
         || (desc.taskSubmissionHookCount != 0u && !desc.taskSubmissionHooks)
-        || (desc.acceptedCallback && !desc.acceptedCallback->invoke)
         || !__hidden_gpu_packet_runtime_execution::ValidateNormalGraphTaskStateBindings(
             graph,
             compiledGraph,
@@ -311,7 +309,7 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
         }
     }
 
-    if(!submitPacketRangeInCompileOrderFromTasks(
+    if(!submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
@@ -323,9 +321,6 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
         transaction,
         scratchArena,
         &failedPacket,
-        desc.acceptedCallback,
-        desc.submissionHooks,
-        desc.submissionHookCount,
         desc.taskAcceptedCallbacks,
         desc.taskAcceptedCallbackCount,
         desc.taskSubmissionHooks,
@@ -680,15 +675,12 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTask(
         transaction,
         scratchArena,
         &failedPacket,
-        nullptr,
-        nullptr,
-        0u,
         acceptedCallback,
         acceptedCallback ? 1u : 0u
     )){
         if(outFailedPacket)
             *outFailedPacket = failedPacket;
-        // submitPacket() normally rejected the packet already. Keep this idempotent closeout for validation
+        // Range submission normally rejected the packet already. Keep this idempotent closeout for validation
         // failures that happen before packet traversal, so a renderer cannot strand an armed recovery task.
         rejectTask();
         return false;

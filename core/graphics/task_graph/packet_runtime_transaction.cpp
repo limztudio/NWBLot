@@ -364,7 +364,6 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     const QueueSubmissionToken& token,
     GpuTaskPacketSubmissionLease& lease,
     const NativeSubmissionInfo& nativeSubmissionInfo,
-    const GpuTaskGraphPacketAcceptedCallback* const acceptedCallback,
     const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
     const usize taskAcceptedCallbackCount
 )noexcept{
@@ -402,8 +401,6 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     // every matching task callback in compiled order even after an earlier false result; publication below is
     // unconditional because the native submission has already accepted.
     bool callbacksAccepted = true;
-    if(acceptedCallback && !acceptedCallback->invoke(acceptedCallback->context, packetID, token))
-        callbacksAccepted = false;
     const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         for(usize callbackIndex = 0u; callbackIndex < taskAcceptedCallbackCount; ++callbackIndex){

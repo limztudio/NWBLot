@@ -97,6 +97,20 @@ add_test(
         --self-test
 )
 add_test(
+    NAME nwb_no_packet_anchored_submission_bindings
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_packet_anchored_submission_bindings.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_packet_anchored_submission_bindings_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_packet_anchored_submission_bindings.py"
+        --self-test
+)
+add_test(
     NAME nwb_no_upload_pool_diagnostic_facade
     COMMAND
         "${Python3_EXECUTABLE}"

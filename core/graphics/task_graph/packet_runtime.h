@@ -480,15 +480,6 @@ struct GpuTaskGraphExternalResourceHandoff{
 };
 
 
-// Associates one compiler-generated packet with an external timing ticket whose scopes share that packet's exact
-// native acceptance token. Multiple distinct external tickets may target one packet, while one ticket may target
-// only one native packet. A graph-owned automatic ticket remains authoritative and resolves alongside every
-// compatibility ticket rather than being replaced by one.
-struct GpuTaskGraphPacketTimingTicket{
-    GpuSubmissionPacketId packet;
-    GpuTimingSubmissionTicket* timingTicket = nullptr;
-};
-
 // Binds a timing submission ticket to semantic graph work instead of a compiler-generated packet ID. The submitter
 // resolves the task to its current packet after compilation. Semantic anchors sharing a packet may bind the same or
 // distinct external tickets; identical ticket aliases in that packet coalesce, while one ticket cannot span native
@@ -496,14 +487,6 @@ struct GpuTaskGraphPacketTimingTicket{
 struct GpuTaskGraphTaskTimingTicket{
     GpuTaskId task;
     GpuTimingSubmissionTicket* timingTicket = nullptr;
-};
-
-// Associates one packet with a native pre-submit hook. The graph still owns packet routing and all timeline waits;
-// this narrow escape hatch is for one-shot native signals such as the swap-chain binary semaphore that must be
-// emitted by the terminal presentation packet itself.
-struct GpuTaskGraphPacketSubmissionHook{
-    GpuSubmissionPacketId packet;
-    QueueSubmissionPreSubmitHook hook;
 };
 
 // Semantic pre-submit binding for one declared task. The submitter resolves the task after compilation and
@@ -515,24 +498,10 @@ struct GpuTaskGraphTaskSubmissionHook{
 };
 
 
-// Synchronous compatibility obligation run after the graph's typed accepted hooks and Accepted lifecycle, but
-// before the transaction publishes this packet's token or accepted frontier. Returning false stops later range
-// traversal without hiding the native-accepted packet. The callback runs while the transaction's submission gate
-// is held, but without its state mutex or the graph lifecycle mutex. It must not reenter or synchronously wait for
-// work that needs the same transaction gate; same-transaction nested submission fails immediately.
-struct GpuTaskGraphPacketAcceptedCallback{
-    void* context = nullptr;
-    [[nodiscard]] bool (*invoke)(
-        void* context,
-        const GpuSubmissionPacketId& packet,
-        const QueueSubmissionToken& token
-    ) = nullptr;
-};
-
-// Semantic compatibility binding for one declared task. After the packet-wide compatibility callback, the submitter
-// invokes every matching binding in compiled task order even if an earlier callback returned false. The aggregate
-// false result stops later range traversal only after the accepted token/frontier publishes. These callbacks share
-// the same synchronous submission-gate and deadlock restrictions as GpuTaskGraphPacketAcceptedCallback.
+// Semantic compatibility binding for one declared task. The submitter invokes every matching binding in compiled
+// task order even if an earlier callback returned false. The aggregate false result stops later range traversal only
+// after the accepted token/frontier publishes. Callbacks run while the transaction submission gate is held and must
+// not reenter or synchronously wait for work that needs the same gate.
 struct GpuTaskGraphTaskAcceptedCallback{
     GpuTaskId task;
     void* context = nullptr;
@@ -577,9 +546,6 @@ struct GpuTaskGraphNormalExecutionDesc{
     usize externalCompletionTokenCount = 0u;
     const GpuTaskGraphTaskTimingTicket* taskTimingTickets = nullptr;
     usize taskTimingTicketCount = 0u;
-    const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr;
-    const GpuTaskGraphPacketSubmissionHook* submissionHooks = nullptr;
-    usize submissionHookCount = 0u;
     const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr;
     usize taskAcceptedCallbackCount = 0u;
     const GpuTaskGraphTaskSubmissionHook* taskSubmissionHooks = nullptr;
@@ -597,9 +563,9 @@ struct GpuTaskGraphSubmissionStatistics{
     u64 planGeneration = 0u;
     u64 recordingAttemptGeneration = 0u;
     u16 deviceGeneration = 0u;
-    // Includes accepted diagnostic/manual packet completion in addition to submitter-owned native submissions.
+    // Counts packets whose submitter-owned native submission reached Accepted.
     usize acceptedPacketCount = 0u;
-    // Includes every task in an accepted packet, including the manual diagnostic acceptance seam above.
+    // Includes every declared task in an accepted native packet.
     usize acceptedTaskCount = 0u;
     // Counts each packet when this transaction reaches its terminal Rejected state. Repeated cleanup against an
     // already terminal packet does not contribute another sample.
@@ -628,8 +594,8 @@ struct GpuTaskGraphSubmissionStatistics{
 
 
 // Immutable-by-value native submission telemetry for one compiler packet. The query accepts only an exact current
-// compiled-plan handle whose packet reached Accepted through Device::executeCommandLists(); manual acceptance and
-// every rejected or unresolved lifecycle state deliberately return an invalid value. Wait counters preserve the
+// compiled-plan handle whose packet reached Accepted through Device::executeCommandLists(); every rejected or
+// unresolved lifecycle state deliberately returns an invalid value. Wait counters preserve the
 // native submitter decomposition: planned tokens equal same-queue elisions plus emitted and merged timeline waits.
 struct GpuTaskGraphPacketSubmissionStatistics{
     u64 graphGeneration = 0u;
@@ -667,7 +633,7 @@ struct GpuTaskGraphPacketSubmissionStatistics{
 
 // Immutable-by-value native submission telemetry for one exact physical queue in one graph transaction. The queue
 // identity includes its device generation, so an auxiliary same-class queue or a recreated device cannot alias this
-// result. Native-success counters intentionally exclude manual diagnostic packet acceptance. `rejectedSubmissionCount`
+// result. Every accepted-packet counter represents a submitter-owned native submission. `rejectedSubmissionCount`
 // separately reports packets rejected after the transaction reserves the submit path, including a failure before
 // the backend execute call.
 struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
@@ -917,7 +883,6 @@ private:
         const QueueSubmissionToken& token,
         GpuTaskPacketSubmissionLease& lease,
         const NativeSubmissionInfo& nativeSubmissionInfo,
-        const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr,
         const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr,
         usize taskAcceptedCallbackCount = 0u
     )noexcept;
@@ -994,9 +959,9 @@ struct GpuTaskGraphRuntimeStatistics{
 
 class GpuTaskGraphSubmitter final : NoCopy{
 private:
-    // The caller owns one valid SubmissionOperation for the full native-accept, compatibility-callback, and
-    // transaction-publication sequence. Range submission supplies its synchronous compatibility obligations here;
-    // the public single-packet API deliberately supplies none.
+    // The caller owns one valid SubmissionOperation for the full native-accept, task-callback, and
+    // transaction-publication sequence. Range submission supplies its synchronous semantic obligations here; the
+    // public single-packet API deliberately supplies none.
     [[nodiscard]] bool submitPacketWithinSubmissionOperation(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -1009,7 +974,6 @@ private:
         GpuTimingSubmissionTicket* const* timingTickets,
         usize timingTicketCount,
         const QueueSubmissionPreSubmitHook* preSubmitHook,
-        const GpuTaskGraphPacketAcceptedCallback* acceptedCallback,
         const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks,
         usize taskAcceptedCallbackCount
     )const;
@@ -1022,8 +986,8 @@ public:
 
 
 public:
-    // One-packet compatibility entry point. It publishes graph and transaction acceptance synchronously after the
-    // native submit and carries no packet/task compatibility callback obligation.
+    // One-packet native submission entry point. It publishes graph and transaction acceptance synchronously after
+    // the native submit and carries no task timing, callback, or pre-submit-hook binding collection.
     [[nodiscard]] bool submitPacket(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -1032,9 +996,7 @@ public:
         const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
         usize externalCompletionTokenCount,
         GpuGraphSubmissionTransaction& transaction,
-        Alloc::ScratchArena& scratchArena,
-        GpuTimingSubmissionTicket* timingTicket = nullptr,
-        const QueueSubmissionPreSubmitHook* preSubmitHook = nullptr
+        Alloc::ScratchArena& scratchArena
     )const;
     // Submits one compiler-derived non-empty contiguous range. Dependencies outside the range must already be
     // accepted in the transaction; this preserves graph-owned waits while allowing intentional late tails. Every
@@ -1047,19 +1009,18 @@ public:
         const GpuSubmissionPacketRange& range,
         const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
         usize externalCompletionTokenCount,
-        const GpuTaskGraphPacketTimingTicket* timingTickets,
-        usize timingTicketCount,
+        const GpuTaskGraphTaskTimingTicket* taskTimingTickets,
+        usize taskTimingTicketCount,
         GpuGraphSubmissionTransaction& transaction,
         Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
-        const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr,
-        const GpuTaskGraphPacketSubmissionHook* submissionHooks = nullptr,
-        usize submissionHookCount = 0u,
         const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr,
-        usize taskAcceptedCallbackCount = 0u
+        usize taskAcceptedCallbackCount = 0u,
+        const GpuTaskGraphTaskSubmissionHook* taskSubmissionHooks = nullptr,
+        usize taskSubmissionHookCount = 0u
     )const;
-    // Semantic companion to packet-range submission. It resolves the inclusive compiler-order range from declared
-    // task endpoints and leaves packet IDs only for narrow accepted-token and pre-submit hook integrations.
+    // Semantic companion to packet-range submission. It resolves the inclusive compiler-order range and all
+    // optional timing, accepted-callback, and pre-submit bindings from declared tasks after compilation.
     [[nodiscard]] bool submitTaskRangeInCompileOrder(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -1068,16 +1029,15 @@ public:
         GpuTaskId lastTask,
         const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
         usize externalCompletionTokenCount,
-        const GpuTaskGraphPacketTimingTicket* timingTickets,
-        usize timingTicketCount,
+        const GpuTaskGraphTaskTimingTicket* taskTimingTickets,
+        usize taskTimingTicketCount,
         GpuGraphSubmissionTransaction& transaction,
         Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
-        const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr,
-        const GpuTaskGraphPacketSubmissionHook* submissionHooks = nullptr,
-        usize submissionHookCount = 0u,
         const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr,
-        usize taskAcceptedCallbackCount = 0u
+        usize taskAcceptedCallbackCount = 0u,
+        const GpuTaskGraphTaskSubmissionHook* taskSubmissionHooks = nullptr,
+        usize taskSubmissionHookCount = 0u
     )const;
     // Records then submits the descriptor-selected ordinary compiler prefix. Without a semantic terminal task,
     // accepted-frontier packets must form one terminal suffix. The executor rejects a frontier inside its selected
@@ -1180,55 +1140,6 @@ public:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         const GpuTaskGraphTaskAcceptedCallback* acceptedCallback = nullptr
     )const;
-    // Semantic companion to the packet-timing overload above. It resolves timing tickets and one-shot native
-    // pre-submit hooks through the current compiled graph, so packet splitting/merging remains compiler-owned.
-    // Distinct timing tickets may share one packet and resolve with its exact token; pre-submit hooks instead
-    // require one unambiguous packet target.
-    [[nodiscard]] bool submitPacketRangeInCompileOrderFromTasks(
-        GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuRecordedGraph& recordedGraph,
-        const GpuSubmissionPacketRange& range,
-        const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
-        usize externalCompletionTokenCount,
-        const GpuTaskGraphTaskTimingTicket* taskTimingTickets,
-        usize taskTimingTicketCount,
-        GpuGraphSubmissionTransaction& transaction,
-        Alloc::ScratchArena& scratchArena,
-        GpuSubmissionPacketId* outFailedPacket = nullptr,
-        const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr,
-        const GpuTaskGraphPacketSubmissionHook* submissionHooks = nullptr,
-        usize submissionHookCount = 0u,
-        const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr,
-        usize taskAcceptedCallbackCount = 0u,
-        const GpuTaskGraphTaskSubmissionHook* taskSubmissionHooks = nullptr,
-        usize taskSubmissionHookCount = 0u
-    )const;
-    // Resolves both the submitted range and timing bindings from semantic tasks after compilation. Multiple timing
-    // anchors may share one packet with either shared or independent submission tickets.
-    [[nodiscard]] bool submitTaskRangeInCompileOrderFromTasks(
-        GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuRecordedGraph& recordedGraph,
-        GpuTaskId firstTask,
-        GpuTaskId lastTask,
-        const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
-        usize externalCompletionTokenCount,
-        const GpuTaskGraphTaskTimingTicket* taskTimingTickets,
-        usize taskTimingTicketCount,
-        GpuGraphSubmissionTransaction& transaction,
-        Alloc::ScratchArena& scratchArena,
-        GpuSubmissionPacketId* outFailedPacket = nullptr,
-        const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr,
-        const GpuTaskGraphPacketSubmissionHook* submissionHooks = nullptr,
-        usize submissionHookCount = 0u,
-        const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr,
-        usize taskAcceptedCallbackCount = 0u,
-        const GpuTaskGraphTaskSubmissionHook* taskSubmissionHooks = nullptr,
-        usize taskSubmissionHookCount = 0u
-    )const;
-
-
 private:
     Device& m_device;
 };

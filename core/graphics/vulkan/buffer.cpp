@@ -382,66 +382,6 @@ BufferHandle Device::createHandleForNativeBuffer(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !defined(NWB_FINAL)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool Device::revokeBufferNativeIdentityForTesting(
-    Buffer* bufferResource,
-    const Object expectedNativeBufferHandle
-)noexcept{
-    if(!bufferResource)
-        return false;
-
-    Buffer& buffer = *bufferResource;
-    ScopedLock resourceLock(buffer.m_memoryBindingMutex);
-    auto* expectedNativeBuffer = static_cast<VkBuffer_T*>(expectedNativeBufferHandle);
-    if(
-        &buffer.m_context != &m_context
-        || &buffer.m_allocator != &m_allocator
-        || !buffer.m_managed
-        || buffer.m_buffer != expectedNativeBuffer
-        || !m_allocator.isBufferNativeIdentityRegistered(buffer)
-    )
-        return false;
-
-    m_allocator.unregisterBufferNativeIdentity(expectedNativeBuffer, buffer);
-    return !m_allocator.isBufferNativeIdentityRegistered(buffer);
-}
-
-bool Device::restoreBufferNativeIdentityForTesting(
-    Buffer* bufferResource,
-    const Object expectedNativeBufferHandle
-)noexcept{
-    if(!bufferResource)
-        return false;
-
-    Buffer& buffer = *bufferResource;
-    ScopedLock resourceLock(buffer.m_memoryBindingMutex);
-    auto* expectedNativeBuffer = static_cast<VkBuffer_T*>(expectedNativeBufferHandle);
-    if(
-        &buffer.m_context != &m_context
-        || &buffer.m_allocator != &m_allocator
-        || !buffer.m_managed
-        || buffer.m_buffer != expectedNativeBuffer
-        || m_allocator.isBufferNativeIdentityRegistered(buffer)
-    )
-        return false;
-    return m_allocator.tryRegisterBufferNativeIdentity(buffer);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool CommandList::prepareUploadStaging(
     const usize dataSize,
     const tchar* operationName,

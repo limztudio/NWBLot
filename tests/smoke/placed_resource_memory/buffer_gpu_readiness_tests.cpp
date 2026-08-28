@@ -33,44 +33,197 @@ namespace Tests{
 using namespace Core;
 
 
-#if !defined(NWB_FINAL)
 namespace __hidden_buffer_gpu_readiness{
 
 
-struct BufferRevocationHookContext{
-    GraphicsBackend::Device* device = nullptr;
-    Buffer* buffer = nullptr;
-    Object nativeBuffer;
+class CallerOwnedVulkanBuffer final : NoCopy{
+private:
+    [[nodiscard]] static Object encode(const VkBuffer buffer)noexcept{
+#if VK_USE_64_BIT_PTR_DEFINES
+        return Object(static_cast<void*>(buffer));
+#else
+        return Object(static_cast<u64>(buffer));
+#endif
+    }
+
+
+public:
+    CallerOwnedVulkanBuffer(
+        GraphicsBackend::Device& device,
+        const u64 byteSize,
+        const VkBufferUsageFlags usage
+    )
+        : m_context(VulkanTestDeviceProbe::capture(device))
+        , m_usage(usage)
+    {
+        if(
+            !m_context.valid()
+            || byteSize == 0u
+            || usage == 0u
+            || !vkCreateBuffer
+            || !vkDestroyBuffer
+            || !vkGetBufferMemoryRequirements
+            || !vkAllocateMemory
+            || !vkFreeMemory
+            || !vkBindBufferMemory
+            || ((usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0u && !vkGetBufferDeviceAddress)
+        )
+            return;
+
+        const VkBufferCreateInfo bufferInfo{
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0u,
+            .size = byteSize,
+            .usage = usage,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .queueFamilyIndexCount = 0u,
+            .pQueueFamilyIndices = nullptr,
+        };
+        if(vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &m_buffer) != VK_SUCCESS){
+            m_buffer = VK_NULL_HANDLE;
+            return;
+        }
+
+        VkMemoryRequirements memoryRequirements{};
+        vkGetBufferMemoryRequirements(m_context.device, m_buffer, &memoryRequirements);
+        u32 memoryTypeIndex = VK_MAX_MEMORY_TYPES;
+        for(u32 candidateIndex = 0u; candidateIndex < VK_MAX_MEMORY_TYPES; ++candidateIndex){
+            if((memoryRequirements.memoryTypeBits & (1u << candidateIndex)) != 0u){
+                memoryTypeIndex = candidateIndex;
+                break;
+            }
+        }
+        if(memoryTypeIndex == VK_MAX_MEMORY_TYPES)
+            return;
+
+        const VkMemoryAllocateFlagsInfo allocationFlags{
+            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
+            .pNext = nullptr,
+            .flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT,
+            .deviceMask = 0u,
+        };
+        const VkMemoryAllocateInfo allocationInfo{
+            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .pNext = (usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0u ? &allocationFlags : nullptr,
+            .allocationSize = memoryRequirements.size,
+            .memoryTypeIndex = memoryTypeIndex,
+        };
+        if(vkAllocateMemory(
+            m_context.device,
+            &allocationInfo,
+            m_context.allocationCallbacks,
+            &m_memory
+        ) != VK_SUCCESS){
+            m_memory = VK_NULL_HANDLE;
+            return;
+        }
+        if(vkBindBufferMemory(m_context.device, m_buffer, m_memory, 0u) != VK_SUCCESS)
+            return;
+        m_bound = true;
+    }
+    ~CallerOwnedVulkanBuffer(){
+        if(m_buffer != VK_NULL_HANDLE){
+            vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
+            m_buffer = VK_NULL_HANDLE;
+        }
+        if(m_memory != VK_NULL_HANDLE){
+            vkFreeMemory(m_context.device, m_memory, m_context.allocationCallbacks);
+            m_memory = VK_NULL_HANDLE;
+        }
+    }
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{ return m_bound; }
+    [[nodiscard]] Object nativeHandle()const noexcept{
+        return valid() ? encode(m_buffer) : Object(u64{0u});
+    }
+    [[nodiscard]] GpuVirtualAddress deviceAddress()const noexcept{
+        if(!valid() || (m_usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) == 0u)
+            return 0u;
+
+        const VkBufferDeviceAddressInfo addressInfo{
+            .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+            .pNext = nullptr,
+            .buffer = m_buffer,
+        };
+        return vkGetBufferDeviceAddress(m_context.device, &addressInfo);
+    }
+
+
+private:
+    VulkanTestDeviceContext m_context;
+    VkBuffer m_buffer = VK_NULL_HANDLE;
+    VkDeviceMemory m_memory = VK_NULL_HANDLE;
+    VkBufferUsageFlags m_usage = 0u;
+    bool m_bound = false;
+};
+
+
+struct BufferOwnerReleaseHookContext{
+    BufferHandle* owner = nullptr;
+    Buffer* retainedBuffer = nullptr;
     QueueSubmissionNativeSignal signal;
     u32 invocationCount = 0u;
 };
 
+struct BufferDescriptionDriftHookContext{
+    Buffer* buffer = nullptr;
+    QueueSubmissionNativeSignal signal;
+    BufferDesc savedDescription;
+    u32 invocationCount = 0u;
+    bool descriptionMutated = false;
+};
 
-[[nodiscard]] static bool RevokeBufferDuringSubmissionHook(
+
+[[nodiscard]] static bool ReleaseBufferOwnerDuringSubmissionHook(
     void* const rawContext,
     const GpuPhysicalQueueId& executionQueue,
     QueueSubmissionNativeSignal& outSignal
 ){
-    BufferRevocationHookContext* const context = static_cast<BufferRevocationHookContext*>(rawContext);
+    BufferOwnerReleaseHookContext* const context = static_cast<BufferOwnerReleaseHookContext*>(rawContext);
     if(
         !context
-        || !context->device
-        || !context->buffer
+        || !context->owner
+        || !*context->owner
+        || context->owner->get() != context->retainedBuffer
         || !executionQueue.valid()
         || !context->signal.valid()
     )
         return false;
 
     ++context->invocationCount;
-    if(!context->device->revokeBufferNativeIdentityForTesting(context->buffer, context->nativeBuffer))
+    context->owner->reset();
+    outSignal = context->signal;
+    return true;
+}
+
+[[nodiscard]] static bool DriftBufferDescriptionDuringSubmissionHook(
+    void* const rawContext,
+    const GpuPhysicalQueueId& executionQueue,
+    QueueSubmissionNativeSignal& outSignal
+){
+    BufferDescriptionDriftHookContext* const context = static_cast<BufferDescriptionDriftHookContext*>(rawContext);
+    if(
+        !context
+        || !context->buffer
+        || !executionQueue.valid()
+        || !context->signal.valid()
+    )
         return false;
+
+    context->savedDescription = context->buffer->getDescription();
+    BufferDesc& publishedDescription = const_cast<BufferDesc&>(context->buffer->getDescription());
+    publishedDescription.isVirtual = true;
+    context->descriptionMutated = true;
+    ++context->invocationCount;
     outSignal = context->signal;
     return true;
 }
 
 
 };
-#endif
 
 
 static constexpr u32 s_BufferReadinessComputeSpirv[] = {
@@ -390,8 +543,7 @@ TEST_F(BufferGpuReadinessTest, NativeUsageMismatchRejectionDoesNotRetainIdentity
 }
 
 
-#if !defined(NWB_FINAL)
-TEST_F(BufferGpuReadinessTest, RealNativeBufferRetainsExactUsageAndAddressProvenance){
+TEST_F(BufferGpuReadinessTest, CallerOwnedNativeBufferRetainsExactUsageAddressAndReimport){
     auto& device = BufferGpuReadinessTest::device();
     const BufferDesc desc = BufferDesc()
         .setByteSize(256u)
@@ -408,13 +560,23 @@ TEST_F(BufferGpuReadinessTest, RealNativeBufferRetainsExactUsageAndAddressProven
         | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT
         | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
     ;
-    if(device.isBufferReadyForGpuUse(owner.get(), VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT))
+    const bool deviceAddressSupported = device.isBufferReadyForGpuUse(
+        owner.get(),
+        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+    );
+    owner.reset();
+    if(deviceAddressSupported)
         nativeUsage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    const GpuVirtualAddress ownerDeviceAddress = owner->getGpuVirtualAddress();
-    const Object nativeBuffer = owner->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Buffer);
+
+    __hidden_buffer_gpu_readiness::CallerOwnedVulkanBuffer nativeOwner(device, desc.byteSize, nativeUsage);
+    ASSERT_TRUE(nativeOwner.valid());
+    const Object nativeBuffer = nativeOwner.nativeHandle();
     ASSERT_NE(nativeBuffer, nullptr);
-    ASSERT_TRUE(device.revokeBufferNativeIdentityForTesting(owner.get(), nativeBuffer));
-    ASSERT_FALSE(device.isBufferReadyForGpuUse(owner.get()));
+    const GpuVirtualAddress nativeDeviceAddress = nativeOwner.deviceAddress();
+    if(deviceAddressSupported)
+        ASSERT_NE(nativeDeviceAddress, 0u);
+    else
+        ASSERT_EQ(nativeDeviceAddress, 0u);
 
     BufferHandle imported = device.createHandleForNativeBuffer(
         GraphicsBackend::ObjectTypes::VK_Buffer,
@@ -426,99 +588,128 @@ TEST_F(BufferGpuReadinessTest, RealNativeBufferRetainsExactUsageAndAddressProven
     EXPECT_TRUE(device.isBufferReadyForGpuUse(imported.get(), nativeUsage));
     EXPECT_FALSE(device.isBufferReadyForGpuUse(imported.get(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
     EXPECT_FALSE(device.isBufferReadyForGpuUse(imported.get(), VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT));
-    EXPECT_EQ(imported->getGpuVirtualAddress(), ownerDeviceAddress);
+    EXPECT_EQ(imported->getGpuVirtualAddress(), nativeDeviceAddress);
+    EXPECT_FALSE(device.createHandleForNativeBuffer(
+        GraphicsBackend::ObjectTypes::VK_Buffer,
+        nativeBuffer,
+        desc,
+        nativeUsage
+    ));
 
     imported.reset();
-    ASSERT_TRUE(device.restoreBufferNativeIdentityForTesting(owner.get(), nativeBuffer));
-    EXPECT_TRUE(device.isBufferReadyForGpuUse(owner.get(), nativeUsage));
+    BufferHandle reimported = device.createHandleForNativeBuffer(
+        GraphicsBackend::ObjectTypes::VK_Buffer,
+        nativeBuffer,
+        desc,
+        nativeUsage
+    );
+    ASSERT_TRUE(reimported);
+    EXPECT_TRUE(device.isBufferReadyForGpuUse(reimported.get(), nativeUsage));
+    EXPECT_EQ(reimported->getGpuVirtualAddress(), nativeDeviceAddress);
+    reimported.reset();
 }
 
-TEST_F(BufferGpuReadinessTest, SubmissionRevalidatesRetainedBufferIdentityAndDescription){
+TEST_F(BufferGpuReadinessTest, SubmissionRetainsBufferWhenCallerReleasesOwnerInPreSubmitHook){
     auto& device = BufferGpuReadinessTest::device();
-    const auto recordBufferUse = [&device](Buffer& buffer){
-        CommandListHandle commandList = device.createCommandList();
-        if(!commandList)
-            return commandList;
-
-        commandList->open();
-        commandList->beginTrackingBufferState(&buffer, ResourceStates::Common);
-        commandList->close();
-        return commandList;
-    };
-    const auto submit = [&device](CommandList& commandList){
-        CommandList* const commandLists[] = { &commandList };
-        return device.executeCommandLists(
-            commandLists,
-            LengthOf(commandLists),
-            CommandQueue::Graphics,
-            QueueSubmissionDesc{}
-        );
-    };
-
-    BufferHandle identityBuffer = device.createBuffer(
+    BufferHandle owner = device.createBuffer(
         BufferDesc().setByteSize(256u).setInitialState(ResourceStates::Common)
     );
-    ASSERT_TRUE(identityBuffer);
-    CommandListHandle identityList = recordBufferUse(*identityBuffer);
-    ASSERT_TRUE(identityList);
-    ASSERT_FALSE(identityList->commandRecordingFailed());
-    ASSERT_TRUE(identityList->hasCommandBuffer());
+    ASSERT_TRUE(owner);
+    CommandListHandle commandList = device.createCommandList();
+    ASSERT_TRUE(commandList);
+    commandList->open();
+    commandList->beginTrackingBufferState(owner.get(), ResourceStates::Common);
+    commandList->close();
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+    Buffer* const retainedBuffer = owner.get();
+    ASSERT_GT(retainedBuffer->getReferenceCount(), 1u);
 
-    const Object nativeBuffer = identityBuffer->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Buffer);
-    ASSERT_NE(nativeBuffer, nullptr);
     VulkanTestBinarySemaphore signal(device);
     ASSERT_TRUE(signal.valid());
-    __hidden_buffer_gpu_readiness::BufferRevocationHookContext hookContext{
-        .device = &device,
-        .buffer = identityBuffer.get(),
-        .nativeBuffer = nativeBuffer,
+    __hidden_buffer_gpu_readiness::BufferOwnerReleaseHookContext hookContext{
+        .owner = &owner,
+        .retainedBuffer = retainedBuffer,
         .signal = signal.nativeSignal(),
     };
     const QueueSubmissionDesc hookedSubmission{
         .preSubmitHook = QueueSubmissionPreSubmitHook{
             .context = &hookContext,
-            .invoke = __hidden_buffer_gpu_readiness::RevokeBufferDuringSubmissionHook,
+            .invoke = __hidden_buffer_gpu_readiness::ReleaseBufferOwnerDuringSubmissionHook,
         },
     };
-    CommandList* const identityLists[] = { identityList.get() };
-    const QueueSubmissionToken rejectedToken = device.executeCommandLists(
-        identityLists,
-        LengthOf(identityLists),
+    CommandList* const commandLists[] = { commandList.get() };
+    const QueueSubmissionToken token = device.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
         CommandQueue::Graphics,
         hookedSubmission
     );
-    if(rejectedToken.valid()){
-        const bool idle = device.waitForIdle();
-        if(idle){
-            ASSERT_TRUE(device.restoreBufferNativeIdentityForTesting(identityBuffer.get(), nativeBuffer));
-        }
-        ASSERT_TRUE(idle);
-        FAIL() << "Buffer revocation hook unexpectedly reached the native queue";
-    }
-    ASSERT_FALSE(rejectedToken.valid());
+    ASSERT_TRUE(token.valid());
     EXPECT_EQ(hookContext.invocationCount, 1u);
-    EXPECT_TRUE(identityList->hasCommandBuffer());
-    ASSERT_TRUE(device.restoreBufferNativeIdentityForTesting(identityBuffer.get(), nativeBuffer));
-    ASSERT_TRUE(submit(*identityList).valid());
+    EXPECT_FALSE(owner);
+    EXPECT_FALSE(commandList->hasCommandBuffer());
+    EXPECT_TRUE(device.isBufferReadyForGpuUse(retainedBuffer));
     ASSERT_TRUE(device.waitForIdle());
+}
 
-    BufferHandle descriptionBuffer = device.createBuffer(
+
+TEST_F(BufferGpuReadinessTest, SubmissionRevalidatesRetainedBufferDescriptionAfterPreSubmitHook){
+    auto& device = BufferGpuReadinessTest::device();
+    BufferHandle buffer = device.createBuffer(
         BufferDesc().setByteSize(256u).setInitialState(ResourceStates::Common)
     );
-    ASSERT_TRUE(descriptionBuffer);
-    CommandListHandle descriptionList = recordBufferUse(*descriptionBuffer);
-    ASSERT_TRUE(descriptionList);
-    ASSERT_FALSE(descriptionList->commandRecordingFailed());
-    ASSERT_TRUE(descriptionList->hasCommandBuffer());
+    ASSERT_TRUE(buffer);
+    CommandListHandle commandList = device.createCommandList();
+    ASSERT_TRUE(commandList);
+    commandList->open();
+    commandList->beginTrackingBufferState(buffer.get(), ResourceStates::Common);
+    commandList->close();
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+    ASSERT_TRUE(commandList->hasCommandBuffer());
 
-    BufferDesc& publishedDesc = const_cast<BufferDesc&>(descriptionBuffer->getDescription());
-    publishedDesc.isVirtual = true;
-    EXPECT_FALSE(submit(*descriptionList).valid());
-    publishedDesc = descriptionBuffer->getCreationDescription();
-    ASSERT_TRUE(submit(*descriptionList).valid());
-    EXPECT_TRUE(device.waitForIdle());
+    VulkanTestBinarySemaphore signal(device);
+    ASSERT_TRUE(signal.valid());
+    __hidden_buffer_gpu_readiness::BufferDescriptionDriftHookContext hookContext{
+        .buffer = buffer.get(),
+        .signal = signal.nativeSignal(),
+        .savedDescription = {},
+        .invocationCount = 0u,
+        .descriptionMutated = false,
+    };
+    const QueueSubmissionDesc hookedSubmission{
+        .preSubmitHook = QueueSubmissionPreSubmitHook{
+            .context = &hookContext,
+            .invoke = __hidden_buffer_gpu_readiness::DriftBufferDescriptionDuringSubmissionHook,
+        },
+    };
+    CommandList* const commandLists[] = { commandList.get() };
+    const QueueSubmissionToken rejectedToken = device.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        CommandQueue::Graphics,
+        hookedSubmission
+    );
+    if(hookContext.descriptionMutated){
+        BufferDesc& publishedDescription = const_cast<BufferDesc&>(buffer->getDescription());
+        publishedDescription = hookContext.savedDescription;
+    }
+    if(rejectedToken.valid())
+        ASSERT_TRUE(device.waitForIdle());
+    ASSERT_TRUE(hookContext.descriptionMutated);
+    ASSERT_FALSE(rejectedToken.valid());
+    EXPECT_EQ(hookContext.invocationCount, 1u);
+    EXPECT_TRUE(commandList->hasCommandBuffer());
+
+    const QueueSubmissionToken retryToken = device.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(retryToken.valid());
+    ASSERT_TRUE(device.waitForIdle());
 }
-#endif
 
 
 TEST_F(BufferGpuReadinessTest, AmbiguousSynchronizationStatesDoNotInventDescriptorUsage){

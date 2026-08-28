@@ -3181,10 +3181,6 @@ public:
         const BufferDesc& desc,
         VkBufferUsageFlags nativeUsage
     );
-#if !defined(NWB_FINAL)
-    [[nodiscard]] bool revokeBufferNativeIdentityForTesting(Buffer* buffer, Object expectedNativeBuffer)noexcept;
-    [[nodiscard]] bool restoreBufferNativeIdentityForTesting(Buffer* buffer, Object expectedNativeBuffer)noexcept;
-#endif
     [[nodiscard]] ShaderHandle createShader(const ShaderDesc& d, const void* binary, usize binarySize);
     [[nodiscard]] ShaderHandle createShaderSpecialization(Shader* baseShader, const ShaderSpecialization* constants, u32 numConstants);
     [[nodiscard]] ShaderLibraryHandle createShaderLibrary(const void* binary, usize binarySize);

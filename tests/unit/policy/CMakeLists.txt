@@ -181,6 +181,20 @@ add_test(
         --self-test
 )
 add_test(
+    NAME nwb_no_buffer_native_identity_test_facade
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_buffer_native_identity_test_facade.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_buffer_native_identity_test_facade_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_buffer_native_identity_test_facade.py"
+        --self-test
+)
+add_test(
     NAME nwb_no_telemetry_diagnostic_test_hook
     COMMAND
         "${Python3_EXECUTABLE}"

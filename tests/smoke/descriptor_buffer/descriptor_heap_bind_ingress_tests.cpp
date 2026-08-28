@@ -12,6 +12,7 @@
 #include <impl/assets/graphics/bindless/runtime_abi.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
+#include <tests/common/vulkan_test_sync.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -606,17 +607,10 @@ TEST_F(DescriptorHeapBindIngressTest, GraphicsBindingRequiresTheMatchingActiveRe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_FINAL)
-TEST_F(DescriptorHeapBindIngressTest, AcceptedInFlightUsePinsPublicShutdown){
-    GTEST_SKIP() << "accepted in-flight shutdown gating uses the non-Final native submission semaphore seam";
-}
-#else
 TEST_F(DescriptorHeapBindIngressTest, AcceptedInFlightUsePinsPublicShutdown){
     auto& localDevice = device();
     auto& heap = localDevice.getDescriptorHeap();
     const GpuPhysicalQueueId waitQueueID = localDevice.getPrimaryPhysicalQueue(CommandQueue::Graphics);
-    GraphicsBackend::Queue* const waitQueue = localDevice.getQueue(waitQueueID);
-    ASSERT_NE(waitQueue, nullptr);
     const BindingLayoutHandle layouts[] = { heap.getResourceLayout(), heap.getSamplerLayout() };
     ComputePipelineHandle pipeline = CreateComputePipeline(localDevice, arena(), layouts, LengthOf(layouts));
     ASSERT_TRUE(pipeline);
@@ -627,13 +621,9 @@ TEST_F(DescriptorHeapBindIngressTest, AcceptedInFlightUsePinsPublicShutdown){
     heap.bindCompute(*commandList, *pipeline);
     commandList->close();
 
-    GraphicsBackend::Queue::SubmissionWait blocker;
-    if(!localDevice.createSubmissionTimelineForTesting(blocker)){
-        ADD_FAILURE() << "could not create the accepted-in-flight test timeline";
-        return;
-    }
+    VulkanTestSubmissionBlocker blocker(localDevice, waitQueueID);
+    ASSERT_TRUE(blocker.valid());
 
-    waitQueue->addWaitSemaphore(blocker.semaphore, blocker.value);
     CommandList* commandLists[] = { commandList.get() };
     const QueueSubmissionToken blockedToken = localDevice.executeCommandLists(
         commandLists,
@@ -651,19 +641,10 @@ TEST_F(DescriptorHeapBindIngressTest, AcceptedInFlightUsePinsPublicShutdown){
         ExpectHeapStatisticsEqual(blockedStatistics, heap.lifecycleStatistics());
     }
 
-    EXPECT_TRUE(localDevice.signalSubmissionTimelineForTesting(blocker));
-    if(!commandAccepted){
-        const QueueSubmissionToken drainToken = localDevice.executeCommandLists(
-            nullptr,
-            0u,
-            waitQueueID,
-            QueueSubmissionDesc{}
-        );
-        EXPECT_TRUE(drainToken.valid());
-    }
+    ASSERT_TRUE(blocker.release());
+    ASSERT_TRUE(blocker.drain());
     const bool idle = localDevice.waitForIdle();
     EXPECT_TRUE(idle);
-    localDevice.destroySubmissionTimelineForTesting(blocker);
     if(!idle)
         return;
 
@@ -673,7 +654,6 @@ TEST_F(DescriptorHeapBindIngressTest, AcceptedInFlightUsePinsPublicShutdown){
     EXPECT_FALSE(heap.isInitialized());
     EXPECT_TRUE(heap.initialize(MakeDefaultHeapDesc()));
 }
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -3335,13 +3335,6 @@ public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType);
     [[nodiscard]] Queue* getQueue(const GpuPhysicalQueueId& queue);
 #if !defined(NWB_FINAL)
-    // Test-only validated-submit seams exercise production cleanup and submission-local wait capture.
-    [[nodiscard]] bool createSubmissionSignalForTesting(QueueSubmissionNativeSignal& outSignal);
-    // The queue-global timeline seam deterministically holds accepted work in flight until the host releases it.
-    [[nodiscard]] bool createSubmissionTimelineForTesting(Queue::SubmissionWait& outWait);
-    void destroySubmissionSignalForTesting(QueueSubmissionNativeSignal& signal);
-    [[nodiscard]] bool signalSubmissionTimelineForTesting(const Queue::SubmissionWait& wait);
-    void destroySubmissionTimelineForTesting(Queue::SubmissionWait& wait);
     [[nodiscard]] bool armSubmissionLedgerFinalizeHookForTesting(void* context, void (*invoke)(void*));
     void clearSubmissionLedgerFinalizeHookForTesting();
     [[nodiscard]] bool armRecordingIDWrapForTesting(const GpuPhysicalQueueId& queue);

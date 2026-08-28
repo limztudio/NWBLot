@@ -111,6 +111,20 @@ add_test(
         --self-test
 )
 add_test(
+    NAME nwb_no_vulkan_submission_test_sync
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_vulkan_submission_test_sync.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_vulkan_submission_test_sync_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_vulkan_submission_test_sync.py"
+        --self-test
+)
+add_test(
     NAME nwb_no_upload_pool_diagnostic_facade
     COMMAND
         "${Python3_EXECUTABLE}"

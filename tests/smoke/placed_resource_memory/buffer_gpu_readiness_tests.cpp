@@ -12,6 +12,7 @@
 #include <core/graphics/vulkan/backend.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
+#include <tests/common/vulkan_test_sync.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -465,13 +466,13 @@ TEST_F(BufferGpuReadinessTest, SubmissionRevalidatesRetainedBufferIdentityAndDes
 
     const Object nativeBuffer = identityBuffer->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Buffer);
     ASSERT_NE(nativeBuffer, nullptr);
-    QueueSubmissionNativeSignal signal;
-    ASSERT_TRUE(device.createSubmissionSignalForTesting(signal));
+    VulkanTestBinarySemaphore signal(device);
+    ASSERT_TRUE(signal.valid());
     __hidden_buffer_gpu_readiness::BufferRevocationHookContext hookContext{
         .device = &device,
         .buffer = identityBuffer.get(),
         .nativeBuffer = nativeBuffer,
-        .signal = signal,
+        .signal = signal.nativeSignal(),
     };
     const QueueSubmissionDesc hookedSubmission{
         .preSubmitHook = QueueSubmissionPreSubmitHook{
@@ -489,7 +490,6 @@ TEST_F(BufferGpuReadinessTest, SubmissionRevalidatesRetainedBufferIdentityAndDes
     if(rejectedToken.valid()){
         const bool idle = device.waitForIdle();
         if(idle){
-            device.destroySubmissionSignalForTesting(signal);
             ASSERT_TRUE(device.restoreBufferNativeIdentityForTesting(identityBuffer.get(), nativeBuffer));
         }
         ASSERT_TRUE(idle);
@@ -498,7 +498,6 @@ TEST_F(BufferGpuReadinessTest, SubmissionRevalidatesRetainedBufferIdentityAndDes
     ASSERT_FALSE(rejectedToken.valid());
     EXPECT_EQ(hookContext.invocationCount, 1u);
     EXPECT_TRUE(identityList->hasCommandBuffer());
-    device.destroySubmissionSignalForTesting(signal);
     ASSERT_TRUE(device.restoreBufferNativeIdentityForTesting(identityBuffer.get(), nativeBuffer));
     ASSERT_TRUE(submit(*identityList).valid());
     ASSERT_TRUE(device.waitForIdle());

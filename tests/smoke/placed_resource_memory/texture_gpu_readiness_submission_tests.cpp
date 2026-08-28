@@ -12,6 +12,7 @@
 #include <core/graphics/vulkan/backend.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
+#include <tests/common/vulkan_test_sync.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -386,13 +387,13 @@ TEST_F(TextureGpuReadinessSubmissionTest, HookRevocationIsRejectedByQueueWithout
     ASSERT_TRUE(commandList->hasCommandBuffer());
     const u64 recordingLease = commandList->recordingLeaseSerial();
 
-    QueueSubmissionNativeSignal signal;
-    ASSERT_TRUE(device().createSubmissionSignalForTesting(signal));
+    VulkanTestBinarySemaphore signal(device());
+    ASSERT_TRUE(signal.valid());
     __hidden_texture_gpu_readiness_submission::TextureRevocationHookContext hookContext{
         .device = &device(),
         .texture = texture.get(),
         .nativeImage = nativeImage,
-        .signal = signal,
+        .signal = signal.nativeSignal(),
     };
     const QueueSubmissionDesc hookedSubmission{
         .preSubmitHook = QueueSubmissionPreSubmitHook{
@@ -404,7 +405,6 @@ TEST_F(TextureGpuReadinessSubmissionTest, HookRevocationIsRejectedByQueueWithout
     if(rejectedToken.valid()){
         const bool idle = device().waitForIdle();
         if(idle){
-            device().destroySubmissionSignalForTesting(signal);
             ASSERT_FALSE(device().isTextureReadyForGpuUse(texture.get()));
             device().releaseRevokedNativeTextureIdentityForTesting(texture.get(), nativeImage);
         }
@@ -416,7 +416,6 @@ TEST_F(TextureGpuReadinessSubmissionTest, HookRevocationIsRejectedByQueueWithout
     EXPECT_TRUE(commandList->hasCommandBuffer());
     EXPECT_EQ(commandList->recordingLeaseSerial(), recordingLease);
 
-    device().destroySubmissionSignalForTesting(signal);
     ASSERT_FALSE(device().isTextureReadyForGpuUse(texture.get()));
     device().releaseRevokedNativeTextureIdentityForTesting(texture.get(), nativeImage);
 }

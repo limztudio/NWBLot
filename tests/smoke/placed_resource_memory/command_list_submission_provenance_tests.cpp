@@ -12,6 +12,7 @@
 #include <core/graphics/vulkan/backend.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
+#include <tests/common/vulkan_test_sync.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,7 +89,6 @@ struct SubmissionHookObserver{
 }
 
 
-#if !defined(NWB_FINAL)
 struct SubmissionMutationHookContext{
     CommandList* commandList = nullptr;
     QueueSubmissionNativeSignal signal;
@@ -96,17 +96,6 @@ struct SubmissionMutationHookContext{
     u32 invocationCount = 0u;
     bool descriptionMutated = false;
 };
-
-struct LedgerReuseHookContext{
-    CommandList* commandList = nullptr;
-    Buffer* destination = nullptr;
-    u32 value = 0u;
-    bool invoked = false;
-    bool opened = false;
-    bool staged = false;
-    bool closed = false;
-};
-
 
 [[nodiscard]] static CommandListParameters ForgeRecordingWorker(CommandList& commandList){
     CommandListParameters& publicDescription = const_cast<CommandListParameters&>(commandList.getDescription());
@@ -136,6 +125,18 @@ struct LedgerReuseHookContext{
     outSignal = context->signal;
     return true;
 }
+
+#if !defined(NWB_FINAL)
+struct LedgerReuseHookContext{
+    CommandList* commandList = nullptr;
+    Buffer* destination = nullptr;
+    u32 value = 0u;
+    bool invoked = false;
+    bool opened = false;
+    bool staged = false;
+    bool closed = false;
+};
+
 
 static void RecordReusedLeaseUpload(void* const rawContext){
     LedgerReuseHookContext* const context = static_cast<LedgerReuseHookContext*>(rawContext);
@@ -222,7 +223,6 @@ Optional<Common::LoggerRegistrationGuard> CommandListSubmissionProvenanceTest::s
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !defined(NWB_FINAL)
 TEST_F(CommandListSubmissionProvenanceTest, SubmissionHookWorkerForgeryIsRejectedBeforeNativeOwnerDetach){
     using namespace __hidden_command_list_submission_provenance_tests;
 
@@ -239,11 +239,11 @@ TEST_F(CommandListSubmissionProvenanceTest, SubmissionHookWorkerForgeryIsRejecte
     ASSERT_TRUE(commandList->hasCommandBuffer());
     const u64 recordingLease = commandList->recordingLeaseSerial();
 
-    QueueSubmissionNativeSignal signal;
-    ASSERT_TRUE(device().createSubmissionSignalForTesting(signal));
+    VulkanTestBinarySemaphore signal(device());
+    ASSERT_TRUE(signal.valid());
     SubmissionMutationHookContext hookContext{
         .commandList = commandList.get(),
-        .signal = signal,
+        .signal = signal.nativeSignal(),
         .savedDescription = {},
         .invocationCount = 0u,
         .descriptionMutated = false,
@@ -265,8 +265,6 @@ TEST_F(CommandListSubmissionProvenanceTest, SubmissionHookWorkerForgeryIsRejecte
     const bool idleAfterUnexpectedSubmission = !unexpectedlySubmitted || device().waitForIdle();
     if(hookContext.descriptionMutated)
         const_cast<CommandListParameters&>(commandList->getDescription()) = hookContext.savedDescription;
-    device().destroySubmissionSignalForTesting(signal);
-
     ASSERT_FALSE(unexpectedlySubmitted);
     ASSERT_TRUE(idleAfterUnexpectedSubmission);
     EXPECT_EQ(hookContext.invocationCount, 1u);
@@ -285,6 +283,7 @@ TEST_F(CommandListSubmissionProvenanceTest, SubmissionHookWorkerForgeryIsRejecte
 }
 
 
+#if !defined(NWB_FINAL)
 TEST_F(CommandListSubmissionProvenanceTest, RejectedOldLeaseCannotDiscardRecycledLeaseUploadChunks){
     using namespace __hidden_command_list_submission_provenance_tests;
 

@@ -25,16 +25,6 @@ namespace __hidden_vulkan_device_queue{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !defined(NWB_FINAL)
-[[nodiscard]] static Object EncodeSubmissionNativeSemaphore(const VkSemaphore semaphore)noexcept{
-#if VK_USE_64_BIT_PTR_DEFINES
-    return Object(static_cast<void*>(semaphore));
-#else
-    return Object(static_cast<u64>(semaphore));
-#endif
-}
-#endif
-
 [[nodiscard]] static VkSemaphore DecodeSubmissionNativeSemaphore(const Object& semaphore)noexcept{
 #if VK_USE_64_BIT_PTR_DEFINES
     return static_cast<VkSemaphore>(semaphore.pointer);
@@ -274,67 +264,6 @@ bool Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-bool Device::createSubmissionSignalForTesting(QueueSubmissionNativeSignal& outSignal){
-    outSignal = {};
-    auto semaphoreInfo = VulkanDetail::MakeVkStruct<VkSemaphoreCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO);
-    VkSemaphore semaphore = VK_NULL_HANDLE;
-    const VkResult res = vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &semaphore);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create test submission semaphore: {}"), ResultToString(res));
-        return false;
-    }
-
-    outSignal.semaphore = __hidden_vulkan_device_queue::EncodeSubmissionNativeSemaphore(semaphore);
-    outSignal.value = 0u;
-    return true;
-}
-
-bool Device::createSubmissionTimelineForTesting(Queue::SubmissionWait& outWait){
-    outWait = {};
-    auto timelineInfo = VulkanDetail::MakeVkStruct<VkSemaphoreTypeCreateInfo>(
-        VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO
-    );
-    timelineInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
-    timelineInfo.initialValue = 0u;
-    auto semaphoreInfo = VulkanDetail::MakeVkStruct<VkSemaphoreCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO);
-    semaphoreInfo.pNext = &timelineInfo;
-    VkSemaphore semaphore = VK_NULL_HANDLE;
-    const VkResult res = vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &semaphore);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create test submission timeline: {}"), ResultToString(res));
-        return false;
-    }
-
-    outWait.semaphore = semaphore;
-    outWait.value = 1u;
-    return true;
-}
-
-void Device::destroySubmissionSignalForTesting(QueueSubmissionNativeSignal& signal){
-    const VkSemaphore semaphore = __hidden_vulkan_device_queue::DecodeSubmissionNativeSemaphore(signal.semaphore);
-    if(semaphore != VK_NULL_HANDLE)
-        vkDestroySemaphore(m_context.device, semaphore, m_context.allocationCallbacks);
-    signal = {};
-}
-
-bool Device::signalSubmissionTimelineForTesting(const Queue::SubmissionWait& wait){
-    auto signalInfo = VulkanDetail::MakeVkStruct<VkSemaphoreSignalInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO);
-    signalInfo.semaphore = wait.semaphore;
-    signalInfo.value = wait.value;
-    const VkResult res = vkSignalSemaphore(m_context.device, &signalInfo);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to signal test submission timeline: {}"), ResultToString(res));
-        return false;
-    }
-    return true;
-}
-
-void Device::destroySubmissionTimelineForTesting(Queue::SubmissionWait& wait){
-    if(wait.semaphore != VK_NULL_HANDLE)
-        vkDestroySemaphore(m_context.device, wait.semaphore, m_context.allocationCallbacks);
-    wait = {};
-}
 
 bool Device::armSubmissionLedgerFinalizeHookForTesting(void* const context, void (*invoke)(void*)){
     if(!context || !invoke)

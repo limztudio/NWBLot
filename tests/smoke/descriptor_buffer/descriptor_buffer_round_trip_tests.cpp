@@ -39,6 +39,7 @@
 #include <impl/ecs_ui/texture_submission.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
+#include <tests/common/vulkan_test_sync.h>
 
 // The manager lives in the Vulkan backend (Core::GraphicsBackend namespace). The test is inherently Vulkan-aware
 // (VkDescriptorType, descriptor-buffer entry points), so the concrete backend header is the right include here
@@ -103,68 +104,8 @@ inline constexpr GpuTimingScopeDefinition s_UnsplitAvboitIntegrationLifecycleSco
 
 namespace __hidden_descriptor_buffer_round_trip_tests{
 
-struct NativeDeviceCapture{
-    VkDevice device = VK_NULL_HANDLE;
-    const VkAllocationCallbacks* allocationCallbacks = nullptr;
-
-
-    [[nodiscard]] bool valid()const noexcept{ return device != VK_NULL_HANDLE; }
-};
-
-
-class NativeDeviceCaptureProbe final : NoCopy{
-private:
-    static thread_local NativeDeviceCapture* s_activeCapture;
-    static PFN_vkCreateQueryPool s_forwardCreateQueryPool;
-
-    [[nodiscard]] static VKAPI_ATTR VkResult VKAPI_CALL captureCreateQueryPool(
-        const VkDevice device,
-        const VkQueryPoolCreateInfo* const createInfo,
-        const VkAllocationCallbacks* const allocationCallbacks,
-        VkQueryPool* const queryPool
-    ){
-        NativeDeviceCapture* const capture = s_activeCapture;
-        if(capture){
-            capture->device = device;
-            capture->allocationCallbacks = allocationCallbacks;
-        }
-        if(!s_forwardCreateQueryPool)
-            return VK_ERROR_INITIALIZATION_FAILED;
-        return s_forwardCreateQueryPool(device, createInfo, allocationCallbacks, queryPool);
-    }
-
-
-public:
-    [[nodiscard]] static NativeDeviceCapture capture(GraphicsBackend::Device& device){
-        NativeDeviceCapture capture;
-        if(s_activeCapture || !vkCreateQueryPool)
-            return capture;
-
-        s_forwardCreateQueryPool = vkCreateQueryPool;
-        s_activeCapture = &capture;
-        vkCreateQueryPool = &NativeDeviceCaptureProbe::captureCreateQueryPool;
-        auto probe = device.createTimerQuery();
-        vkCreateQueryPool = s_forwardCreateQueryPool;
-        s_activeCapture = nullptr;
-        if(!probe)
-            capture = {};
-        return capture;
-    }
-};
-
-thread_local NativeDeviceCapture* NativeDeviceCaptureProbe::s_activeCapture = nullptr;
-PFN_vkCreateQueryPool NativeDeviceCaptureProbe::s_forwardCreateQueryPool = nullptr;
-
-
 class VulkanBinarySubmissionSignal final : NoCopy{
 private:
-    [[nodiscard]] static Object encodeNativeSemaphore(const VkSemaphore semaphore)noexcept{
-#if VK_USE_64_BIT_PTR_DEFINES
-        return Object(static_cast<void*>(semaphore));
-#else
-        return Object(static_cast<u64>(semaphore));
-#endif
-    }
     [[nodiscard]] static bool prepare(
         void* const context,
         const GpuPhysicalQueueId& executionQueue,
@@ -179,8 +120,7 @@ private:
         )
             return false;
 
-        outSignal.semaphore = encodeNativeSemaphore(signal->m_semaphore);
-        outSignal.value = 0u;
+        outSignal = signal->m_semaphore.nativeSignal();
         ++signal->m_invocationCount;
         return true;
     }
@@ -191,30 +131,14 @@ public:
         GraphicsBackend::Device& device,
         const GpuPhysicalQueueId& expectedQueue
     )
-        : m_device(device)
+        : m_semaphore(device)
         , m_expectedQueue(expectedQueue)
-    {
-        const NativeDeviceCapture capture = NativeDeviceCaptureProbe::capture(device);
-        m_nativeDevice = capture.device;
-        m_allocationCallbacks = capture.allocationCallbacks;
-        if(!capture.valid() || !expectedQueue.valid() || !vkCreateSemaphore)
-            return;
-
-        auto createInfo = HostSync::MakeVkStruct<VkSemaphoreCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO);
-        if(vkCreateSemaphore(m_nativeDevice, &createInfo, m_allocationCallbacks, &m_semaphore) != VK_SUCCESS)
-            m_semaphore = VK_NULL_HANDLE;
-    }
-    ~VulkanBinarySubmissionSignal(){
-        if(m_invocationCount != 0u && !m_device.waitForIdle())
-            return;
-        if(m_semaphore != VK_NULL_HANDLE)
-            vkDestroySemaphore(m_nativeDevice, m_semaphore, m_allocationCallbacks);
-    }
+    {}
 
 
 public:
     [[nodiscard]] bool valid()const noexcept{
-        return m_nativeDevice != VK_NULL_HANDLE && m_expectedQueue.valid() && m_semaphore != VK_NULL_HANDLE;
+        return m_expectedQueue.valid() && m_semaphore.valid();
     }
     [[nodiscard]] QueueSubmissionPreSubmitHook hook()noexcept{
         return QueueSubmissionPreSubmitHook{
@@ -226,11 +150,8 @@ public:
 
 
 private:
-    GraphicsBackend::Device& m_device;
+    VulkanTestBinarySemaphore m_semaphore;
     GpuPhysicalQueueId m_expectedQueue;
-    VkDevice m_nativeDevice = VK_NULL_HANDLE;
-    const VkAllocationCallbacks* m_allocationCallbacks = nullptr;
-    VkSemaphore m_semaphore = VK_NULL_HANDLE;
     u32 m_invocationCount = 0u;
 };
 
@@ -302,7 +223,7 @@ public:
             device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, queue).pointer
         ))
     {
-        const NativeDeviceCapture capture = NativeDeviceCaptureProbe::capture(device);
+        const VulkanTestDeviceContext capture = VulkanTestDeviceProbe::capture(device);
         m_nativeDevice = capture.device;
         m_allocationCallbacks = capture.allocationCallbacks;
         if(!m_queue || m_nativeQueue == VK_NULL_HANDLE || !capture.valid())
@@ -4767,7 +4688,6 @@ struct NativePacketSubmissionHookObserver{
 }
 
 
-#if !defined(NWB_FINAL)
 struct NativePacketSubmissionLeaseMutationContext{
     CommandList* commandList = nullptr;
     QueueSubmissionNativeSignal signal;
@@ -4792,7 +4712,6 @@ struct NativePacketSubmissionLeaseMutationContext{
     outSignal = context->signal;
     return true;
 }
-#endif
 
 
 // The probe observes a graph-owned entry state, then can deliberately perform a task-local transition. That lets
@@ -8744,7 +8663,6 @@ TEST_F(DescriptorBufferRoundTripTest, SubmissionPreflightRejectsInvalidCommandLi
 }
 
 
-#if !defined(NWB_FINAL)
 TEST_F(DescriptorBufferRoundTripTest, SubmissionHookRecordingLeaseReplacementCannotAdvanceTimeline){
     auto& device = DescriptorBufferRoundTripTest::device();
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
@@ -8758,11 +8676,11 @@ TEST_F(DescriptorBufferRoundTripTest, SubmissionHookRecordingLeaseReplacementCan
     commandList->close();
     ASSERT_TRUE(commandList->hasCommandBuffer());
 
-    QueueSubmissionNativeSignal signal;
-    ASSERT_TRUE(device.createSubmissionSignalForTesting(signal));
+    VulkanTestBinarySemaphore signal(device);
+    ASSERT_TRUE(signal.valid());
     NativePacketSubmissionLeaseMutationContext hookContext{
         .commandList = commandList.get(),
-        .signal = signal,
+        .signal = signal.nativeSignal(),
     };
     const QueueSubmissionDesc submissionDesc{
         .preSubmitHook = QueueSubmissionPreSubmitHook{
@@ -8779,8 +8697,6 @@ TEST_F(DescriptorBufferRoundTripTest, SubmissionHookRecordingLeaseReplacementCan
     );
     if(rejectedToken.valid()){
         const bool idle = device.waitForIdle();
-        if(idle)
-            device.destroySubmissionSignalForTesting(signal);
         ASSERT_TRUE(idle);
         FAIL() << "submission hook lease replacement unexpectedly reached the native queue";
     }
@@ -8788,8 +8704,6 @@ TEST_F(DescriptorBufferRoundTripTest, SubmissionHookRecordingLeaseReplacementCan
     EXPECT_EQ(hookContext.invocationCount, 1u);
     EXPECT_TRUE(commandList->hasCommandBuffer());
     EXPECT_EQ(device.queueGetCompletedInstance(graphicsQueue), completedBeforeRejectedHook);
-    device.destroySubmissionSignalForTesting(signal);
-
     const QueueSubmissionToken acceptedToken = device.executeCommandLists(
         commandLists,
         LengthOf(commandLists),
@@ -8799,7 +8713,6 @@ TEST_F(DescriptorBufferRoundTripTest, SubmissionHookRecordingLeaseReplacementCan
     EXPECT_TRUE(acceptedToken.valid());
     EXPECT_TRUE(device.waitForIdle());
 }
-#endif
 
 
 TEST_F(DescriptorBufferRoundTripTest, HostTimerResetRejectsForeignDeviceQueryOwnership){

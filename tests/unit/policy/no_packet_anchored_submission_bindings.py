@@ -27,7 +27,8 @@ SOURCE_SUFFIXES = frozenset((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", "
 RETIRED_IDENTIFIER = re.compile(
     r"\b(?:GpuTaskGraphPacketTimingTicket|GpuTaskGraphPacketSubmissionHook|"
     r"GpuTaskGraphPacketAcceptedCallback|submitPacketRangeInCompileOrderFromTasks|"
-    r"submitTaskRangeInCompileOrderFromTasks)\b"
+    r"submitTaskRangeInCompileOrderFromTasks|recordAndSubmitPacketRangeInCompileOrder|"
+    r"recordAndSubmitPacketRangeInReadyFrontiers)\b"
 )
 NORMAL_EXECUTION_DESC_OPEN = re.compile(
     r"\b(?:class|struct)\s+GpuTaskGraphNormalExecutionDesc\b[^;{]*\{"
@@ -141,6 +142,16 @@ def run_self_test() -> int:
             "task-range from-tasks overload",
             "submitTaskRangeInCompileOrderFromTasks(graph, compiledGraph);",
             ((1, "submitTaskRangeInCompileOrderFromTasks"),),
+        ),
+        (
+            "packet-selected serial executor",
+            "recordAndSubmitPacketRangeInCompileOrder(graph, compiledGraph);",
+            ((1, "recordAndSubmitPacketRangeInCompileOrder"),),
+        ),
+        (
+            "packet-selected ready-frontier executor",
+            "recordAndSubmitPacketRangeInReadyFrontiers(graph, compiledGraph);",
+            ((1, "recordAndSubmitPacketRangeInReadyFrontiers"),),
         ),
         (
             "single-packet timing parameter",

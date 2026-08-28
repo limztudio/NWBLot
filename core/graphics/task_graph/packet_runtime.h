@@ -943,22 +943,9 @@ public:
         Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
-    // Records then submits one compiler-derived normal range in serial compile order. Recovery/finalization packets
-    // that join the accepted queue frontier are deliberately rejected here: callers retain explicit ownership of
-    // their late tail, cleanup, and recovery policy. This helper does not discard or reject any remaining work.
-    [[nodiscard]] bool recordAndSubmitPacketRangeInCompileOrder(
-        GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuNativePacketRecorder& recorder,
-        GpuRecordedGraph& recordedGraph,
-        const GpuSubmissionPacketRange& range,
-        GpuGraphSubmissionTransaction& transaction,
-        Alloc::ScratchArena& scratchArena,
-        GpuSubmissionPacketId* outFailedPacket = nullptr
-    )const;
-    // Semantic companion to the serial normal range executor. It resolves inclusive compiler-order bounds from
-    // declared task endpoints, preserving the packet helper's recovery-tail preflight, failure result, and caller
-    // owned cleanup policy.
+    // Records then submits the inclusive compiler-order range resolved from declared task endpoints. Recovery and
+    // finalization packets that join the accepted queue frontier are deliberately rejected: callers retain explicit
+    // ownership of their late tail, cleanup, and recovery policy. This helper does not discard remaining work.
     [[nodiscard]] bool recordAndSubmitTaskRangeInCompileOrder(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -970,22 +957,9 @@ public:
         Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
-    // Ready-frontier variant of the normal range executor. It preserves the serial helper's recovery-tail
+    // Ready-frontier variant of semantic task-range execution. It preserves the serial helper's recovery-tail
     // preflight and submission order, but gives explicitly opted-in packets isolated worker recording leases.
     // Packets without opt-in retain the recorder's serial fallback. Callers retain all cleanup and recovery policy.
-    [[nodiscard]] bool recordAndSubmitPacketRangeInReadyFrontiers(
-        GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuNativePacketRecorder& recorder,
-        GpuRecordedGraph& recordedGraph,
-        Alloc::ThreadPool& workerPool,
-        const GpuSubmissionPacketRange& range,
-        GpuGraphSubmissionTransaction& transaction,
-        Alloc::ScratchArena& scratchArena,
-        GpuSubmissionPacketId* outFailedPacket = nullptr
-    )const;
-    // Semantic ready-frontier companion. Task endpoints resolve through the current compiled graph before the
-    // packet helper applies its normal recovery-tail preflight and preserves the caller's cleanup ownership.
     [[nodiscard]] bool recordAndSubmitTaskRangeInReadyFrontiers(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

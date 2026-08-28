@@ -145,92 +145,9 @@ Device::Device(const DeviceDesc& desc)
     VkResult res = VK_SUCCESS;
 
     m_context.descriptorBufferManager = &m_descriptorBufferManager;
-    if(desc.physicalQueues && desc.physicalQueueCount != 0u){
-        for(usize queueIndex = 0u; queueIndex < desc.physicalQueueCount; ++queueIndex){
-            if(!registerPhysicalQueue(desc.physicalQueues[queueIndex]))
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to register a native physical queue."));
-        }
-    }
-    else{
-        // Preserve construction compatibility for older callers while assigning registry IDs independently from
-        // CommandQueue ordinals. The grouped fields carry family identity, so retain a Graphics+Compute legacy
-        // fallback when that real family supports it instead of degrading every old caller to Graphics-only.
-        u32 legacyQueueFamilyCount = 0u;
-        if(m_context.physicalDevice != VK_NULL_HANDLE)
-            vkGetPhysicalDeviceQueueFamilyProperties(m_context.physicalDevice, &legacyQueueFamilyCount, nullptr);
-        Alloc::ScratchArena legacyQueueArena(VulkanArenaScope::s_QueueFamilyQueryArena);
-        Vector<VkQueueFamilyProperties, Alloc::ScratchArena> legacyQueueFamilies(legacyQueueFamilyCount, legacyQueueArena);
-        if(!legacyQueueFamilies.empty()){
-            vkGetPhysicalDeviceQueueFamilyProperties(
-                m_context.physicalDevice,
-                &legacyQueueFamilyCount,
-                legacyQueueFamilies.data()
-            );
-        }
-        const auto capabilitiesForLegacyQueue = [&legacyQueueFamilies](
-            const i32 queueFamily,
-            const CommandQueue::Enum queueClass
-        ){
-            if(
-                queueFamily < 0
-                || static_cast<usize>(queueFamily) >= legacyQueueFamilies.size()
-            )
-                return VulkanDetail::DeviceMinimumQueueCapabilities(queueClass);
-            return VulkanDetail::DeviceQueueCapabilitiesForQueueFlags(
-                legacyQueueFamilies[static_cast<usize>(queueFamily)].queueFlags
-            );
-        };
-        const auto timestampValidBitsForLegacyQueue = [&legacyQueueFamilies](const i32 queueFamily){
-            if(queueFamily < 0 || static_cast<usize>(queueFamily) >= legacyQueueFamilies.size())
-                return 0u;
-            return legacyQueueFamilies[static_cast<usize>(queueFamily)].timestampValidBits;
-        };
-        const VulkanPhysicalQueueDesc legacyQueues[] = {
-            VulkanPhysicalQueueDesc{
-                .queue = desc.graphicsQueue,
-                .queueClass = CommandQueue::Graphics,
-                .capabilities = capabilitiesForLegacyQueue(desc.graphicsQueueIndex, CommandQueue::Graphics),
-                .familyIndex = desc.graphicsQueueIndex >= 0
-                    ? static_cast<u32>(desc.graphicsQueueIndex)
-                    : Limit<u32>::s_Max,
-                .queueIndex = s_GraphicsQueueIndex,
-                .timestampValidBits = timestampValidBitsForLegacyQueue(desc.graphicsQueueIndex),
-                .dedicated = false,
-                .primaryForClass = true,
-            },
-            VulkanPhysicalQueueDesc{
-                .queue = desc.computeQueue,
-                .queueClass = CommandQueue::Compute,
-                .capabilities = capabilitiesForLegacyQueue(desc.computeQueueIndex, CommandQueue::Compute),
-                .familyIndex = desc.computeQueueIndex >= 0
-                    ? static_cast<u32>(desc.computeQueueIndex)
-                    : Limit<u32>::s_Max,
-                .queueIndex = s_ComputeQueueIndex,
-                .timestampValidBits = timestampValidBitsForLegacyQueue(desc.computeQueueIndex),
-                .dedicated = desc.asyncComputeLaneEnabled,
-                .primaryForClass = true,
-            },
-            VulkanPhysicalQueueDesc{
-                .queue = desc.transferQueue,
-                .queueClass = CommandQueue::Transfer,
-                .capabilities = capabilitiesForLegacyQueue(desc.transferQueueIndex, CommandQueue::Transfer),
-                .familyIndex = desc.transferQueueIndex >= 0
-                    ? static_cast<u32>(desc.transferQueueIndex)
-                    : Limit<u32>::s_Max,
-                .queueIndex = s_TransferQueueIndex,
-                .timestampValidBits = timestampValidBitsForLegacyQueue(desc.transferQueueIndex),
-                .dedicated = desc.transferQueueEnabled,
-                .primaryForClass = true,
-            },
-        };
-        for(const VulkanPhysicalQueueDesc& queue : legacyQueues){
-            if(
-                queue.queue != VK_NULL_HANDLE
-                && queue.familyIndex != Limit<u32>::s_Max
-                && !registerPhysicalQueue(queue)
-            )
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to register a legacy physical queue."));
-        }
+    for(usize queueIndex = 0u; queueIndex < desc.physicalQueueCount; ++queueIndex){
+        if(!registerPhysicalQueue(desc.physicalQueues[queueIndex]))
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to register a native physical queue."));
     }
     configureLegacyQueueContext();
 
@@ -706,6 +623,10 @@ void Device::runGarbageCollection(){
 
 
 DeviceHandle CreateDevice(const DeviceDesc& desc){
+    if(!desc.physicalQueues || desc.physicalQueueCount == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device creation requires a non-empty physical queue registry."));
+        return {};
+    }
     auto* device = NewArenaObject<Device>(desc.allocator.getObjectArena(), desc);
     return DeviceHandle(device, DeviceHandle::deleter_type(&desc.allocator.getObjectArena()), AdoptRef);
 }

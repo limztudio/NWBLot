@@ -58,21 +58,7 @@ struct DeviceDesc{
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device = VK_NULL_HANDLE;
 
-    // Queue handles grouped together, then their integer indices packed back-to-back, to avoid the
-    // 4-byte padding that an interleaved handle/index layout would otherwise introduce between each pair.
-    VkQueue graphicsQueue = VK_NULL_HANDLE;
-    VkQueue computeQueue = VK_NULL_HANDLE;
-    VkQueue transferQueue = VK_NULL_HANDLE;
-    i32 graphicsQueueIndex = s_InvalidQueueFamilyIndex;
-    i32 computeQueueIndex = s_InvalidQueueFamilyIndex;
-    i32 transferQueueIndex = s_InvalidQueueFamilyIndex;
-    // True only when the renderer requested AsyncCompute and a distinct dedicated Compute family was created.
-    bool asyncComputeLaneEnabled = false;
-    // True only when the renderer requested Transfer and a distinct dedicated transfer-only family was created.
-    bool transferQueueEnabled = false;
-
-    // Preferred native registry input. Existing grouped fields above remain as a source-compatible fallback for
-    // older creation code; new creation paths should enumerate every active VkQueue here.
+    // Required native registry input, synchronously consumed by CreateDevice. Enumerate every active VkQueue here.
     const VulkanPhysicalQueueDesc* physicalQueues = nullptr;
     usize physicalQueueCount = 0u;
 

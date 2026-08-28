@@ -86,18 +86,6 @@ bool BackendContext::createDevice(){
     deviceDesc.instance = m_vulkanInstance;
     deviceDesc.physicalDevice = m_vulkanPhysicalDevice;
     deviceDesc.device = m_vulkanDevice;
-    deviceDesc.graphicsQueue = m_graphicsQueue;
-    deviceDesc.graphicsQueueIndex = m_graphicsQueueFamily;
-    if(m_asyncComputeLaneEnabled){
-        deviceDesc.computeQueue = m_computeQueue;
-        deviceDesc.computeQueueIndex = m_computeQueueFamily;
-    }
-    if(m_transferQueueEnabled){
-        deviceDesc.transferQueue = m_transferQueue;
-        deviceDesc.transferQueueIndex = m_transferQueueFamily;
-    }
-    deviceDesc.asyncComputeLaneEnabled = m_asyncComputeLaneEnabled;
-    deviceDesc.transferQueueEnabled = m_transferQueueEnabled;
     uint32_t physicalQueueFamilyCount = 0u;
     vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysicalDevice, &physicalQueueFamilyCount, nullptr);
     Vector<VkQueueFamilyProperties, Alloc::ScratchArena> physicalQueueFamilies(physicalQueueFamilyCount, scratchArena);

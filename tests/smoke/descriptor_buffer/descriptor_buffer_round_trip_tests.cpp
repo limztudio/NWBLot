@@ -8881,11 +8881,13 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
     retiredTransaction.reset(retiredCompiledGraph);
     {
         const GpuTaskGraphSubmitter submitter(firstDevice);
-        ASSERT_TRUE(submitter.submitPacket(
+        ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
             retiredGraph,
             retiredCompiledGraph,
             nativeRecordedGraph,
-            firstPacket,
+            GpuSubmissionPacketRange{ .first = firstPacket, .packetCount = 1u },
+            nullptr,
+            0u,
             nullptr,
             0u,
             retiredTransaction,
@@ -8953,11 +8955,13 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
 
     {
         const GpuTaskGraphSubmitter submitter(secondDevice);
-        EXPECT_FALSE(submitter.submitPacket(
+        EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
             retiredGraph,
             retiredCompiledGraph,
             staleRecordedGraph,
-            thirdPacket,
+            GpuSubmissionPacketRange{ .first = thirdPacket, .packetCount = 1u },
+            nullptr,
+            0u,
             nullptr,
             0u,
             retiredTransaction,
@@ -9065,11 +9069,13 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
     replacementTransaction.reset(replacementCompiledGraph);
     {
         const GpuTaskGraphSubmitter submitter(secondDevice);
-        ASSERT_TRUE(submitter.submitPacket(
+        ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
             replacementGraph,
             replacementCompiledGraph,
             replacementRecordedGraph,
-            replacementPacket,
+            GpuSubmissionPacketRange{ .first = replacementPacket, .packetCount = 1u },
+            nullptr,
+            0u,
             nullptr,
             0u,
             replacementTransaction,
@@ -9333,11 +9339,13 @@ static void ExpectImportedFinalStateExportAfterTaskLocalTransition(
     stateProbe->close();
 
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        packet,
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -9491,11 +9499,13 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffReleasesToDedicatedCom
     EXPECT_FALSE(transaction.externalResourceHandoff(compiledGraph, recordedGraph, resource).validFor(compiledGraph));
 
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        packet,
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -9742,11 +9752,13 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalStateOrdersOverlappingIndepen
     finalStateProbe->close();
 
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        graphicsPacket,
+        GpuSubmissionPacketRange{ .first = graphicsPacket, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -9759,11 +9771,13 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalStateOrdersOverlappingIndepen
     device.clearSubmissionWaitTokensForTesting();
     device.armSubmissionWaitCaptureForTesting();
 #endif
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        computePacket,
+        GpuSubmissionPacketRange{ .first = computePacket, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -9936,22 +9950,26 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffMergesMultipleTerminal
     EXPECT_FALSE(transaction.externalResourceHandoff(graph, compiledGraph, recordedGraph, resource).validFor(compiledGraph));
 
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        mip0Packet,
+        GpuSubmissionPacketRange{ .first = mip0Packet, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
         scratchArena
     ));
     EXPECT_FALSE(transaction.externalResourceHandoff(graph, compiledGraph, recordedGraph, resource).validFor(compiledGraph));
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        mip1Packet,
+        GpuSubmissionPacketRange{ .first = mip1Packet, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -10126,21 +10144,25 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsIntoLaterGraph)
     EXPECT_TRUE(sourceMip0Recorded);
     EXPECT_TRUE(sourceMip1Recorded);
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         sourceGraph,
         sourceCompiledGraph,
         sourceRecordedGraph,
-        sourceMip0Packet,
+        GpuSubmissionPacketRange{ .first = sourceMip0Packet, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         sourceTransaction,
         sourceScratch
     ));
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         sourceGraph,
         sourceCompiledGraph,
         sourceRecordedGraph,
-        sourceMip1Packet,
+        GpuSubmissionPacketRange{ .first = sourceMip1Packet, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         sourceTransaction,
@@ -10332,47 +10354,55 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsIntoLaterGraph)
     };
     GpuGraphSubmissionTransaction staleTransaction(DescriptorBufferRoundTripTest::arena());
     staleTransaction.reset(destinationCompiledGraph);
-    EXPECT_FALSE(submitter.submitPacket(
+    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
         destinationGraph,
         destinationCompiledGraph,
         destinationRecordedGraph,
-        destinationMip1Packet,
+        GpuSubmissionPacketRange{ .first = destinationMip1Packet, .packetCount = 1u },
         staleCompletionTokens,
         LengthOf(staleCompletionTokens),
+        nullptr,
+        0u,
         staleTransaction,
         destinationScratch
     ));
     EXPECT_FALSE(staleTransaction.taskToken(destinationCompiledGraph, destinationMip1Task).valid());
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         destinationGraph,
         destinationCompiledGraph,
         destinationRecordedGraph,
-        destinationMip0Packet,
+        GpuSubmissionPacketRange{ .first = destinationMip0Packet, .packetCount = 1u },
         completionTokens,
         LengthOf(completionTokens),
+        nullptr,
+        0u,
         destinationTransaction,
         destinationScratch
     ));
     // Once mip 0 accepts, a bad mip 1 completion must still be retryable.  The validation happens before native
     // submission, so it cannot discard this later graph task merely because the transaction is already bound.
-    EXPECT_FALSE(submitter.submitPacket(
+    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
         destinationGraph,
         destinationCompiledGraph,
         destinationRecordedGraph,
-        destinationMip1Packet,
+        GpuSubmissionPacketRange{ .first = destinationMip1Packet, .packetCount = 1u },
         staleCompletionTokens,
         LengthOf(staleCompletionTokens),
+        nullptr,
+        0u,
         destinationTransaction,
         destinationScratch
     ));
     EXPECT_FALSE(destinationTransaction.taskToken(destinationCompiledGraph, destinationMip1Task).valid());
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         destinationGraph,
         destinationCompiledGraph,
         destinationRecordedGraph,
-        destinationMip1Packet,
+        GpuSubmissionPacketRange{ .first = destinationMip1Packet, .packetCount = 1u },
         completionTokens,
         LengthOf(completionTokens),
+        nullptr,
+        0u,
         destinationTransaction,
         destinationScratch
     ));
@@ -10526,22 +10556,26 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsCrossQueueTextu
     EXPECT_TRUE(computeRecorded);
 
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        graphicsPacket,
+        GpuSubmissionPacketRange{ .first = graphicsPacket, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
         scratchArena
     ));
     EXPECT_FALSE(transaction.externalResourceHandoff(graph, compiledGraph, recordedGraph, resource).validFor(compiledGraph));
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        computePacket,
+        GpuSubmissionPacketRange{ .first = computePacket, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -10727,23 +10761,27 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsCrossQueueTextu
             .token = *mip1Wait,
         },
     };
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         destinationGraph,
         destinationCompiledGraph,
         destinationRecordedGraph,
-        mip0Packet,
+        GpuSubmissionPacketRange{ .first = mip0Packet, .packetCount = 1u },
         completionTokens,
         LengthOf(completionTokens),
+        nullptr,
+        0u,
         destinationTransaction,
         destinationScratch
     ));
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         destinationGraph,
         destinationCompiledGraph,
         destinationRecordedGraph,
-        mip1Packet,
+        GpuSubmissionPacketRange{ .first = mip1Packet, .packetCount = 1u },
         completionTokens,
         LengthOf(completionTokens),
+        nullptr,
+        0u,
         destinationTransaction,
         destinationScratch
     ));
@@ -10838,11 +10876,13 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerMatchesFirstPacketQueu
     EXPECT_TRUE(taskRecorded);
 
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        packet,
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -10961,13 +11001,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedExternalCompletionSuppliesNative
         .token = producerToken,
     };
     const GpuTaskGraphSubmitter submitter(device);
-    EXPECT_FALSE(submitter.submitPacket(
+    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        packet,
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         &forbiddenFallback,
         1u,
+        nullptr,
+        0u,
         transaction,
         scratchArena
     ));
@@ -10980,11 +11022,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedExternalCompletionSuppliesNative
     device.clearSubmissionWaitTokensForTesting();
     device.armSubmissionWaitCaptureForTesting();
 #endif
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        packet,
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -11184,13 +11228,15 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
             .token = wrongPhysicalToken,
         },
     };
-    EXPECT_FALSE(submitter.submitPacket(
+    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        packet,
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         wrongExternalTokens,
         LengthOf(wrongExternalTokens),
+        nullptr,
+        0u,
         transaction,
         scratchArena
     ));
@@ -11204,25 +11250,29 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
             .token = staleToken,
         },
     };
-    EXPECT_FALSE(submitter.submitPacket(
+    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        packet,
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         staleExternalTokens,
         LengthOf(staleExternalTokens),
+        nullptr,
+        0u,
         transaction,
         scratchArena
     ));
     EXPECT_FALSE(transaction.packetToken(packet).valid());
     transaction.reset(compiledGraph);
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        packet,
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         externalTokens,
         LengthOf(externalTokens),
+        nullptr,
+        0u,
         transaction,
         scratchArena
     ));
@@ -23127,11 +23177,13 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlo
     // Its task already accepted the first token, so the graph-owned readiness preflight prevents double execution.
     GpuGraphSubmissionTransaction duplicateTransaction(DescriptorBufferRoundTripTest::arena());
     duplicateTransaction.reset(compiledGraph);
-    EXPECT_FALSE(submitter.submitPacket(
+    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        packet,
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         duplicateTransaction,
@@ -23357,11 +23409,13 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitPhaseUploadsKeepImmutableSnapshotsIs
     transaction.reset(compiledGraph);
     const GpuTaskGraphSubmitter submitter(device);
     const auto submitAndVerify = [&](const GpuSubmissionPacketId packet, QueueSubmissionToken& acceptedToken, const u32* const expectedWords){
-        ASSERT_TRUE(submitter.submitPacket(
+        ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
             graph,
             compiledGraph,
             recordedGraph,
-            packet,
+            GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
+            nullptr,
+            0u,
             nullptr,
             0u,
             transaction,
@@ -24328,11 +24382,13 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadTextureTaskRecordsGraphOwnedB
     stateProbe->close();
 
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        packet,
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -45227,11 +45283,13 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreWrites
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        packet,
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -47035,11 +47093,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
     EXPECT_TRUE(compositeRecorded);
 
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        hardwarePacket,
+        GpuSubmissionPacketRange{ .first = hardwarePacket, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -47051,11 +47111,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
     EXPECT_FALSE(transaction.packetToken(lightingPacket).valid());
     EXPECT_FALSE(transaction.packetToken(compositePacket).valid());
 
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        lightingPacket,
+        GpuSubmissionPacketRange{ .first = lightingPacket, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -47067,11 +47129,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
     EXPECT_FALSE(transaction.packetToken(avboitPrePacket).valid());
     EXPECT_FALSE(transaction.packetToken(compositePacket).valid());
 
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        avboitPrePacket,
+        GpuSubmissionPacketRange{ .first = avboitPrePacket, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -47081,11 +47145,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
     ASSERT_TRUE(avboitPreToken.valid());
     EXPECT_FALSE(transaction.packetToken(compositePacket).valid());
 
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        compositePacket,
+        GpuSubmissionPacketRange{ .first = compositePacket, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -48380,11 +48446,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
     GpuSubmissionPacketId failedSubmissionPacket;
     GpuTimingSubmissionTicket resolvedCompanionTicket(timing);
     resolvedCompanionTicket.discard();
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        outsidePrefixPacket,
+        GpuSubmissionPacketRange{ .first = outsidePrefixPacket, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -49763,13 +49831,15 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsRetr
     const GpuTaskGraphSubmitter submitter(device);
     device.clearSubmissionWaitTokensForTesting();
     device.armSubmissionWaitCaptureForTesting();
-    EXPECT_FALSE(submitter.submitPacket(
+    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        packet,
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         &futureBinding,
         1u,
+        nullptr,
+        0u,
         transaction,
         scratchArena
     ));
@@ -49798,13 +49868,15 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsRetr
         .completion = completion,
         .token = producerToken,
     };
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        packet,
+        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
         &currentBinding,
         1u,
+        nullptr,
+        0u,
         transaction,
         scratchArena
     ));
@@ -52836,11 +52908,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_TRUE(rejectedSuffixRecorded);
 
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        transferPacket,
+        GpuSubmissionPacketRange{ .first = transferPacket, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -52854,11 +52928,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_TRUE(transferToken.matchesPhysicalQueue(transferQueue.index, transferQueue.deviceGeneration));
 
     device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
-    EXPECT_FALSE(submitter.submitPacket(
+    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        rejectedSuffixPacket,
+        GpuSubmissionPacketRange{ .first = rejectedSuffixPacket, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
@@ -53870,11 +53946,13 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferStateValidatesMatchingUavAn
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        matchingPacket,
+        GpuSubmissionPacketRange{ .first = matchingPacket, .packetCount = 1u },
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,

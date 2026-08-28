@@ -889,18 +889,6 @@ public:
 
 
 public:
-    // One-packet native submission entry point. It publishes graph and transaction acceptance synchronously after
-    // the native submit and carries no task timing, callback, or pre-submit-hook binding collection.
-    [[nodiscard]] bool submitPacket(
-        GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuRecordedGraph& recordedGraph,
-        const GpuSubmissionPacketId& packet,
-        const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
-        usize externalCompletionTokenCount,
-        GpuGraphSubmissionTransaction& transaction,
-        Alloc::ScratchArena& scratchArena
-    )const;
     // Submits one compiler-derived non-empty contiguous range. Dependencies outside the range must already be
     // accepted in the transaction; this preserves graph-owned waits while allowing intentional late tails. Every
     // accepted callback completes synchronously before that packet's token/frontier becomes observable. A callback
@@ -1045,7 +1033,7 @@ public:
 private:
     // The caller owns one valid SubmissionOperation for the full native-accept, task-callback, and
     // transaction-publication sequence. Range submission supplies its synchronous semantic obligations here; the
-    // public single-packet API deliberately supplies none.
+    // native packet primitive is never exposed as a public entry point.
     [[nodiscard]] bool submitPacketWithinSubmissionOperation(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

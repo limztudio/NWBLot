@@ -420,38 +420,6 @@ bool GpuTaskGraphSubmitter::submitPacketWithinSubmissionOperation(
 }
 
 
-bool GpuTaskGraphSubmitter::submitPacket(
-    GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuRecordedGraph& recordedGraph,
-    const GpuSubmissionPacketId& packet,
-    const GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
-    const usize externalCompletionTokenCount,
-    GpuGraphSubmissionTransaction& transaction,
-    Alloc::ScratchArena& scratchArena
-)const{
-    GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(transaction);
-    if(!submissionOperation.valid())
-        return false;
-
-    return submitPacketWithinSubmissionOperation(
-        graph,
-        compiledGraph,
-        recordedGraph,
-        packet,
-        externalCompletionTokens,
-        externalCompletionTokenCount,
-        transaction,
-        scratchArena,
-        nullptr,
-        0u,
-        nullptr,
-        nullptr,
-        0u
-    );
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

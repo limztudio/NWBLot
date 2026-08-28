@@ -17,6 +17,74 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if !defined(NWB_FINAL)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct BuildScratchPoolStatistics{
+    u64 activeChunkCount = 0u;
+    u64 pooledChunkCount = 0u;
+    u64 pooledChunkBytes = 0u;
+    u64 chunkCreationCount = 0u;
+    u64 poolReuseCount = 0u;
+    u64 suballocationCount = 0u;
+    u64 lastChunkIdentity = 0u;
+    u64 lastSuballocationOffset = 0u;
+};
+
+
+// Narrow diagnostic peer for deterministic native-rejection reuse coverage without a public Device test API.
+class BuildScratchPoolDiagnosticPeer final{
+public:
+    [[nodiscard]] static BuildScratchPoolStatistics statistics(Device& device){
+        UploadManager& manager = device.m_scratchManager;
+        ScopedLock lock(manager.m_mutex);
+
+        BuildScratchPoolStatistics statistics;
+        for(const UploadManager::BufferChunkPtr& chunk : manager.m_chunkPool){
+            if(chunk)
+                ++statistics.pooledChunkCount;
+        }
+        for(const UploadManager::ActiveQueueChunks& entry : manager.m_activeChunks){
+            for(const UploadManager::BufferChunkPtr& chunk : entry.chunks){
+                if(chunk)
+                    ++statistics.activeChunkCount;
+            }
+        }
+        statistics.pooledChunkBytes = manager.m_chunkPoolBytes;
+        statistics.chunkCreationCount = manager.m_chunkCreationCountForTesting;
+        statistics.poolReuseCount = manager.m_poolReuseCountForTesting;
+        statistics.suballocationCount = manager.m_suballocationCountForTesting;
+        statistics.lastChunkIdentity = manager.m_lastChunkIdentityForTesting;
+        statistics.lastSuballocationOffset = manager.m_lastSuballocationOffsetForTesting;
+        return statistics;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_BEGIN
 
 
@@ -865,7 +933,7 @@ TEST_F(RayTracingBuildIngressTest, RejectedNativeSubmissionReusesExactBuildScrat
     const RayTracingAccelStructHandle blas = scratchDevice.createAccelStruct(createDesc);
     ASSERT_TRUE(blas);
 
-    const GraphicsBackend::BuildScratchPoolStatistics initialStatistics = scratchDevice.buildScratchPoolStatisticsForTesting();
+    const auto initialStatistics = GraphicsBackend::BuildScratchPoolDiagnosticPeer::statistics(scratchDevice);
     EXPECT_EQ(initialStatistics.activeChunkCount, 0u);
     EXPECT_EQ(initialStatistics.pooledChunkCount, 0u);
     EXPECT_EQ(initialStatistics.pooledChunkBytes, 0u);
@@ -880,7 +948,7 @@ TEST_F(RayTracingBuildIngressTest, RejectedNativeSubmissionReusesExactBuildScrat
     ASSERT_FALSE(rejectedBuild->commandRecordingFailed());
     rejectedBuild->close();
 
-    const GraphicsBackend::BuildScratchPoolStatistics recordedStatistics = scratchDevice.buildScratchPoolStatisticsForTesting();
+    const auto recordedStatistics = GraphicsBackend::BuildScratchPoolDiagnosticPeer::statistics(scratchDevice);
     EXPECT_EQ(recordedStatistics.activeChunkCount, 1u);
     EXPECT_EQ(recordedStatistics.pooledChunkCount, 0u);
     EXPECT_EQ(recordedStatistics.pooledChunkBytes, 0u);
@@ -903,7 +971,7 @@ TEST_F(RayTracingBuildIngressTest, RejectedNativeSubmissionReusesExactBuildScrat
     ASSERT_FALSE(unexpectedlySubmitted);
     ASSERT_TRUE(idleAfterUnexpectedSubmission);
 
-    const GraphicsBackend::BuildScratchPoolStatistics rejectedStatistics = scratchDevice.buildScratchPoolStatisticsForTesting();
+    const auto rejectedStatistics = GraphicsBackend::BuildScratchPoolDiagnosticPeer::statistics(scratchDevice);
     EXPECT_EQ(rejectedStatistics.activeChunkCount, 0u);
     EXPECT_EQ(rejectedStatistics.pooledChunkCount, 1u);
     EXPECT_GT(rejectedStatistics.pooledChunkBytes, 0u);
@@ -918,7 +986,7 @@ TEST_F(RayTracingBuildIngressTest, RejectedNativeSubmissionReusesExactBuildScrat
     ASSERT_FALSE(retryBuild->commandRecordingFailed());
     retryBuild->close();
 
-    const GraphicsBackend::BuildScratchPoolStatistics retryStatistics = scratchDevice.buildScratchPoolStatisticsForTesting();
+    const auto retryStatistics = GraphicsBackend::BuildScratchPoolDiagnosticPeer::statistics(scratchDevice);
     EXPECT_EQ(retryStatistics.activeChunkCount, 1u);
     EXPECT_EQ(retryStatistics.pooledChunkCount, 0u);
     EXPECT_EQ(retryStatistics.pooledChunkBytes, 0u);
@@ -938,7 +1006,7 @@ TEST_F(RayTracingBuildIngressTest, RejectedNativeSubmissionReusesExactBuildScrat
     ASSERT_TRUE(acceptedToken.valid());
     ASSERT_TRUE(scratchDevice.waitForIdle());
 
-    const GraphicsBackend::BuildScratchPoolStatistics acceptedStatistics = scratchDevice.buildScratchPoolStatisticsForTesting();
+    const auto acceptedStatistics = GraphicsBackend::BuildScratchPoolDiagnosticPeer::statistics(scratchDevice);
     EXPECT_EQ(acceptedStatistics.activeChunkCount, 0u);
     EXPECT_EQ(acceptedStatistics.pooledChunkCount, 1u);
     EXPECT_GT(acceptedStatistics.pooledChunkBytes, 0u);

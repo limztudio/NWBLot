@@ -28,6 +28,9 @@ using VulkanAllocatorHandle = VulkanAllocatorStorage*;
 
 struct VulkanContext;
 class Buffer;
+#if !defined(NWB_FINAL)
+class BuildScratchPoolDiagnosticPeer;
+#endif
 class CommandList;
 class Heap;
 class MeshletPipeline;
@@ -1198,22 +1201,11 @@ private:
 // Handles upload and build-scratch buffer chunks
 
 
-#if !defined(NWB_FINAL)
-struct BuildScratchPoolStatistics{
-    u64 activeChunkCount = 0u;
-    u64 pooledChunkCount = 0u;
-    u64 pooledChunkBytes = 0u;
-    u64 chunkCreationCount = 0u;
-    u64 poolReuseCount = 0u;
-    u64 suballocationCount = 0u;
-    u64 lastChunkIdentity = 0u;
-    u64 lastSuballocationOffset = 0u;
-};
-#endif
-
-
 class UploadManager final : NoCopy{
     friend class Device;
+#if !defined(NWB_FINAL)
+    friend class BuildScratchPoolDiagnosticPeer;
+#endif
 
 
 private:
@@ -1284,9 +1276,6 @@ public:
         u64 nativeRecordingID,
         u64 reusableVersion
     );
-#if !defined(NWB_FINAL)
-    [[nodiscard]] BuildScratchPoolStatistics statisticsForTesting();
-#endif
 
 
 private:
@@ -3166,6 +3155,9 @@ private:
 
 class Device final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Buffer;
+#if !defined(NWB_FINAL)
+    friend class BuildScratchPoolDiagnosticPeer;
+#endif
     friend class CommandList;
     friend class Queue;
     friend class Texture;
@@ -3409,9 +3401,6 @@ public:
         const GpuPhysicalQueueId& executionQueue,
         usize index
     )const noexcept;
-    [[nodiscard]] BuildScratchPoolStatistics buildScratchPoolStatisticsForTesting(){
-        return m_scratchManager.statisticsForTesting();
-    }
 #endif
     [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap(){ return m_gpuDescriptorHeap; }
     // Writes descriptor-buffer entries, including TLAS handles.

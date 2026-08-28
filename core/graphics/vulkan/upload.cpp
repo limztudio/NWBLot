@@ -382,31 +382,6 @@ void UploadManager::discardChunks(
     recycleMatchingActiveChunks(queue, reusableVersion, true, VulkanDetail::IsMatchingOwner, &ownerIdentity);
 }
 
-#if !defined(NWB_FINAL)
-BuildScratchPoolStatistics UploadManager::statisticsForTesting(){
-    ScopedLock lock(m_mutex);
-
-    BuildScratchPoolStatistics statistics;
-    for(const BufferChunkPtr& chunk : m_chunkPool){
-        if(chunk)
-            ++statistics.pooledChunkCount;
-    }
-    for(const ActiveQueueChunks& entry : m_activeChunks){
-        for(const BufferChunkPtr& chunk : entry.chunks){
-            if(chunk)
-                ++statistics.activeChunkCount;
-        }
-    }
-    statistics.pooledChunkBytes = m_chunkPoolBytes;
-    statistics.chunkCreationCount = m_chunkCreationCountForTesting;
-    statistics.poolReuseCount = m_poolReuseCountForTesting;
-    statistics.suballocationCount = m_suballocationCountForTesting;
-    statistics.lastChunkIdentity = m_lastChunkIdentityForTesting;
-    statistics.lastSuballocationOffset = m_lastSuballocationOffsetForTesting;
-    return statistics;
-}
-#endif
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

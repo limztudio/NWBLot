@@ -242,6 +242,7 @@ bool CsgIntervalSampleGraphTask::record(
             || (
                 payload.csgFrameBuffersUploaded
                 && csgSystem.csgFrameBuffersReady(csgFrameData)
+                && payload.frameBindings.bindingValid()
             )
         )
     ;
@@ -309,6 +310,7 @@ bool CsgIntervalSampleGraphTask::record(
                 commandList,
                 deferredTargets,
                 csgFrameData,
+                payload.frameBindings,
                 payload.intervalSampleImageStatesGraphOwned,
                 payload.csgClipBufferStatesGraphOwned,
                 payload.materialFrameStatesGraphOwned

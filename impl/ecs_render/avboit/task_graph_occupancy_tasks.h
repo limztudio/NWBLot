@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
@@ -50,6 +51,7 @@ struct AvboitPreGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* transparentCsgIntervalsTiming = nullptr;
         bool hasTransparentRenderers = false;
+        ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
         bool transparentCsgStreamsUploaded = false;
         bool transparentCsgIntervalTargetsGraphOwned = false;

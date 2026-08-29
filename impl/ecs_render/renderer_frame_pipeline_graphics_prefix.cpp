@@ -50,6 +50,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     DeferredFrameTargets& deferredTargets,
     const Core::GpuTaskId shadowPrepareTask,
     const CsgFrameState& csgFrameState,
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const bool hasOpaqueCsgFrameWork,
     const f32 meshViewAspectRatio,
     const Core::GpuGraphResourceId albedo,
@@ -566,6 +567,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     gbufferPayload.timingTicket = timingTicketSlot(PrefixTimingSlot::Gbuffer);
     gbufferPayload.meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady;
     gbufferPayload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
+    gbufferPayload.frameBindings = frameBindings;
 
     const bool hasOpaqueDrawItems = !opaqueDrawItems.empty();
     // G-buffer and the optional opaque CSG follow-up both declare the shared material entry batch whenever their
@@ -680,10 +682,11 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         CsgClipContextSlots csgClipContextSlotData;
         CsgIntervalSampleStateGpuData csgIntervalSampleStateData;
         if(
-            !m_csgSystem.prepareCsgClipContextSlotData(deferredTargets, csgFrameData, csgClipContextSlotData)
+            !m_csgSystem.prepareCsgClipContextSlotData(deferredTargets, csgFrameData, frameBindings, csgClipContextSlotData)
             || !m_csgSystem.prepareCsgIntervalSampleStateData(
                 deferredTargets,
                 csgFrameData,
+                frameBindings,
                 csgIntervalSampleStateData
             )
         ){
@@ -857,6 +860,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         );
     }
     ECSRenderDetail::CsgIntervalSampleGraphTask::Payload csgIntervalSamplePayload{ m_arena };
+    csgIntervalSamplePayload.frameBindings = frameBindings;
     ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask::Payload
         opaqueCsgIntervalSampleComputeEmulationPayload{ m_arena };
     if(hasOpaqueCsgFrameWork){

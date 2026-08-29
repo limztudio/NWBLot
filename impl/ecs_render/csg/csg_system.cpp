@@ -21,7 +21,6 @@ RendererCsgSystem::RendererCsgSystem(
     Core::ECS::World& world,
     Core::Graphics& graphics,
     CsgShapeRegistry& csgShapeRegistry,
-    RendererDrawState& drawState,
     RendererCsgState& csgState,
     RendererShaderSystem& shaderSystem,
     RendererMeshSystem& meshSystem
@@ -30,7 +29,6 @@ RendererCsgSystem::RendererCsgSystem(
     , m_world(world)
     , m_graphics(graphics)
     , m_csgShapeRegistry(csgShapeRegistry)
-    , m_drawState(drawState)
     , m_csgState(csgState)
     , m_shaderSystem(shaderSystem)
     , m_meshSystem(meshSystem)

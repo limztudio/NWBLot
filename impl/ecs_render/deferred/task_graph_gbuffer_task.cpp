@@ -92,6 +92,7 @@ namespace ECSRenderDetail{
             || (
                 payload.csgFrameBuffersUploaded
                 && csgSystem.csgFrameBuffersReady(csgFrameData)
+                && payload.frameBindings.bindingValid()
             )
         )
     ;
@@ -108,6 +109,7 @@ namespace ECSRenderDetail{
                 commandList,
                 deferredTargets,
                 csgFrameData,
+                payload.frameBindings,
                 payload.csgIntervalPeelTargetStatesGraphOwned,
                 payload.csgClipBufferStatesGraphOwned,
                 payload.materialFrameStatesGraphOwned

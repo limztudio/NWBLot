@@ -129,7 +129,6 @@ private:
 class RendererDrawState final : NoCopy{
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
-    friend class RendererCsgSystem;
 
 public:
     RendererDrawState() = default;

@@ -670,7 +670,6 @@ bool RendererCsgSystem::csgFrameBuffersReady(const CsgFrameGpuData& csgFrameData
         && m_csgState.m_intervalSampleStateBuffer
         && m_csgState.m_intervalSampleStateHeapHandle.valid()
         && m_csgState.m_intervalSampleStateHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
-        && m_meshSystem.meshFrameHeapHandlesReady()
     ;
 }
 
@@ -693,6 +692,7 @@ bool RendererCsgSystem::findCsgClipContextHeapSlot(u32& outHeapSlot)const{
 bool RendererCsgSystem::prepareCsgClipContextSlotData(
     const DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     CsgClipContextSlots& outContextSlots
 )const{
     outContextSlots = CsgClipContextSlots{};
@@ -700,8 +700,7 @@ bool RendererCsgSystem::prepareCsgClipContextSlotData(
         return true;
     if(
         !csgFrameBuffersReady(csgFrameData)
-        || !m_drawState.m_materialTypedBufferHeapHandle.valid()
-        || !m_drawState.m_instanceBufferHeapHandle.valid()
+        || !frameBindings.bindingValid()
         || !targets.bindless.slotsBufferDescriptor.valid()
     )
         return false;
@@ -710,8 +709,8 @@ bool RendererCsgSystem::prepareCsgClipContextSlotData(
     // Capture every indirection now so a later native record never observes handles from a different generation.
     outContextSlots.receiverRanges = m_csgState.m_receiverRangeBufferHeapHandle.slot();
     outContextSlots.cutters = m_csgState.m_cutterBufferHeapHandle.slot();
-    outContextSlots.materialTyped = m_drawState.m_materialTypedBufferHeapHandle.slot();
-    outContextSlots.meshInstances = m_drawState.m_instanceBufferHeapHandle.slot();
+    outContextSlots.materialTyped = frameBindings.materialTypedHeapHandle.slot();
+    outContextSlots.meshInstances = frameBindings.instanceHeapHandle.slot();
     outContextSlots.deferredBindlessResources = targets.bindless.slotsBufferDescriptor.slot();
     outContextSlots.intervalSampleState = m_csgState.m_intervalSampleStateHeapHandle.slot();
     return true;
@@ -808,11 +807,12 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
         worldToClip = LoadFloat(csgWorkRegionMeshViewState->worldToClip);
         meshViewReady = !MatrixIsNaN(worldToClip) && !MatrixIsInfinite(worldToClip);
     }
-    else if(m_drawState.m_meshViewGpuDataValid){
-        ECSRenderDetail::MeshViewGpuData meshViewData;
-        NWB_MEMCPY(&meshViewData, sizeof(meshViewData), m_drawState.m_meshViewGpuData, sizeof(meshViewData));
-        worldToClip = LoadFloat(meshViewData.worldToClip);
-        meshViewReady = !MatrixIsNaN(worldToClip) && !MatrixIsInfinite(worldToClip);
+    else{
+        Float44 acceptedWorldToClip = {};
+        if(m_meshSystem.snapshotAcceptedMeshViewWorldToClip(acceptedWorldToClip)){
+            worldToClip = LoadFloat(acceptedWorldToClip);
+            meshViewReady = !MatrixIsNaN(worldToClip) && !MatrixIsInfinite(worldToClip);
+        }
     }
 
     StoreFloat(worldToReceiver, &outRange.worldToReceiver);

@@ -176,6 +176,7 @@ static void DispatchCsgIntervalCompute(
 bool RendererCsgSystem::prepareCsgIntervalSampleStateData(
     const DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     CsgIntervalSampleStateGpuData& outState
 )const{
     outState = CsgIntervalSampleStateGpuData{};
@@ -183,8 +184,7 @@ bool RendererCsgSystem::prepareCsgIntervalSampleStateData(
         return true;
     if(
         !m_csgState.m_intervalSampleStateBuffer
-        || !m_drawState.m_meshViewBufferHeapHandle.valid()
-        || !m_meshSystem.meshFrameHeapHandlesReady()
+        || !frameBindings.bindingValid()
     )
         return false;
 
@@ -193,7 +193,7 @@ bool RendererCsgSystem::prepareCsgIntervalSampleStateData(
     outState = CsgIntervalDetail::BuildCsgIntervalSampleState(
         targets,
         csgFrameData,
-        m_drawState.m_meshViewBufferHeapHandle.slot()
+        frameBindings.meshView.heapHandle.slot()
     );
     return true;
 }
@@ -207,6 +207,7 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const bool intervalPeelTargetStatesGraphOwned,
     const bool csgClipBufferStatesGraphOwned,
     const bool materialFrameStatesGraphOwned
@@ -215,8 +216,7 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
         return;
     NWB_ASSERT(m_csgState.m_intervalPeelPipeline);
     NWB_ASSERT(m_csgState.m_clipContextSlotsHeapHandle.valid());
-    NWB_ASSERT(m_drawState.m_meshViewBuffer);
-    NWB_ASSERT(m_meshSystem.meshFrameHeapHandlesReady());
+    NWB_ASSERT(frameBindings.bindingValid());
 
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgIntervalPeel, m_graphics.getDevice(), commandList);
 
@@ -227,7 +227,7 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
     // The graph declares the heap-selected view CBV for prepared material streams. Direct and compatibility callers
     // retain the established native setup.
     if(!materialFrameStatesGraphOwned)
-        commandList.setBufferState(m_drawState.m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(frameBindings.meshView.buffer.get(), Core::ResourceStates::ConstantBuffer);
     if(!csgClipBufferStatesGraphOwned)
         setCsgClipBufferStates(commandList);
     commandList.commitBarriers();
@@ -239,7 +239,7 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
         csgFrameData,
         m_csgState.m_intervalPeelPipeline.get(),
         m_csgState.m_clipContextSlotsHeapHandle.slot(),
-        m_drawState.m_meshViewBufferHeapHandle.slot()
+        frameBindings.meshView.heapHandle.slot()
     );
 }
 
@@ -313,15 +313,14 @@ void RendererCsgSystem::renderCsgIntervalCaps(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const bool intervalSampleImageStatesGraphOwned,
     const bool csgClipBufferStatesGraphOwned,
     const bool materialFrameStatesGraphOwned
 ){
     NWB_ASSERT(m_csgState.m_intervalCapFillPipeline);
     NWB_ASSERT(m_csgState.m_clipContextSlotsHeapHandle.valid());
-    NWB_ASSERT(m_drawState.m_materialTypedBuffer);
-    NWB_ASSERT(m_drawState.m_instanceBuffer);
-    NWB_ASSERT(m_drawState.m_meshViewBuffer);
+    NWB_ASSERT(frameBindings.bindingValid());
     NWB_ASSERT(targets.framebuffer);
 
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgCapFill, m_graphics.getDevice(), commandList);
@@ -331,9 +330,9 @@ void RendererCsgSystem::renderCsgIntervalCaps(
     // The cap-fill surface evaluator reaches typed words, mesh instances, and the view through heap slots. Prepared
     // graph tasks declare those shared states before this thunk records; compatibility callers retain this bridge.
     if(!materialFrameStatesGraphOwned){
-        commandList.setBufferState(m_drawState.m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(m_drawState.m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(m_drawState.m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(frameBindings.materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(frameBindings.instanceBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(frameBindings.meshView.buffer.get(), Core::ResourceStates::ConstantBuffer);
     }
     if(!csgClipBufferStatesGraphOwned)
         setCsgClipBufferStates(commandList);

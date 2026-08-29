@@ -6,6 +6,8 @@
 
 #include <impl/ecs_render/deferred/csg_interval_target_clear.h>
 
+#include <impl/ecs_render/mesh/mesh_system.h>
+
 #include <impl/ecs_render/kernel/arena_names.h>
 
 
@@ -213,6 +215,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     DeferredFrameTargets& targets,
     const MaterialPassDrawItems& receiverSurfaceDrawItems,
     const CsgFrameGpuData& csgFrameData,
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const usize instanceCount,
     const usize materialTypedByteCount,
     const bool intervalTargetsGraphOwned,
@@ -230,6 +233,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         !targets.framebuffer
         || receiverSurfaceDrawItems.empty()
         || !csgFrameData.hasWork()
+        || !frameBindings.bindingValid()
     )
         return;
 
@@ -279,7 +283,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         instanceCount,
         materialTypedByteCount
     );
-    const bool csgResourcesReady = m_csgSystem.csgFrameBuffersReady(csgFrameData);
+    const bool csgResourcesReady = m_csgSystem.csgFrameBuffersReady(csgFrameData) && frameBindings.bindingValid();
     const bool receiverSurfaceDrawResourcesReady =
         m_materialSystem.materialPassDrawResourcesReady(receiverSurfaceDrawItems)
     ;
@@ -304,6 +308,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         commandList,
         targets,
         csgFrameData,
+        frameBindings,
         intervalTargetsGraphOwned && intervalPeelTargetStatesGraphOwned,
         csgClipBufferStatesGraphOwned,
         materialFrameStatesGraphOwned
@@ -358,6 +363,7 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     DeferredFrameTargets& targets,
     const MaterialPassDrawItems* const preparedTransparentCsgReceiverSurfaceDrawItems,
     const CsgFrameGpuData* const preparedTransparentCsgFrameData,
+    const ECSRenderDetail::MeshFrameBindingSnapshot* const preparedFrameBindings,
     const usize preparedTransparentCsgInstanceCount,
     const usize preparedTransparentCsgMaterialTypedByteCount,
     const bool preparedTransparentCsgIntervalTargetsGraphOwned,
@@ -374,12 +380,14 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     if(preparedTransparentCsgReceiverSurfaceDrawItems || preparedTransparentCsgFrameData){
         NWB_ASSERT(preparedTransparentCsgReceiverSurfaceDrawItems);
         NWB_ASSERT(preparedTransparentCsgFrameData);
-        if(preparedTransparentCsgReceiverSurfaceDrawItems && preparedTransparentCsgFrameData){
+        NWB_ASSERT(preparedFrameBindings);
+        if(preparedTransparentCsgReceiverSurfaceDrawItems && preparedTransparentCsgFrameData && preparedFrameBindings){
             renderPreparedTransparentCsgIntervals(
                 commandList,
                 targets,
                 *preparedTransparentCsgReceiverSurfaceDrawItems,
                 *preparedTransparentCsgFrameData,
+                *preparedFrameBindings,
                 preparedTransparentCsgInstanceCount,
                 preparedTransparentCsgMaterialTypedByteCount,
                 preparedTransparentCsgIntervalTargetsGraphOwned,

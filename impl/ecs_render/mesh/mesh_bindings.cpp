@@ -164,6 +164,19 @@ bool RendererMeshSystem::meshFrameHeapHandlesReady()const{
     ;
 }
 
+ECSRenderDetail::MeshFrameBindingSnapshot RendererMeshSystem::meshFrameBindingSnapshot()const{
+    return {
+        .instanceBuffer = m_drawState.m_instanceBuffer,
+        .materialTypedBuffer = m_drawState.m_materialTypedBuffer,
+        .meshView = {
+            .buffer = m_drawState.m_meshViewBuffer,
+            .heapHandle = m_drawState.m_meshViewBufferHeapHandle,
+        },
+        .instanceHeapHandle = m_drawState.m_instanceBufferHeapHandle,
+        .materialTypedHeapHandle = m_drawState.m_materialTypedBufferHeapHandle,
+    };
+}
+
 void RendererMeshSystem::populateMeshFrameHeapSlots(ECSRenderDetail::MeshFrameHeapSlots& outSlots)const{
     NWB_ASSERT(meshFrameHeapHandlesReady());
     outSlots.instance = m_drawState.m_instanceBufferHeapHandle.slot();

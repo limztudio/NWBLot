@@ -186,6 +186,7 @@ private:
         DeferredFrameTargets& deferredTargets,
         Core::GpuTaskId shadowPrepareTask,
         const CsgFrameState& csgFrameState,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         bool hasOpaqueCsgFrameWork,
         f32 meshViewAspectRatio,
         Core::GpuGraphResourceId albedo,

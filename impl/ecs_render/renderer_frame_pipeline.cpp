@@ -60,7 +60,6 @@ RendererFramePipeline::RendererFramePipeline(
         world,
         graphics,
         m_csgShapeRegistry,
-        m_drawState,
         m_csgState,
         m_shaderSystem,
         m_meshSystem

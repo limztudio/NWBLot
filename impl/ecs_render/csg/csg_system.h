@@ -49,6 +49,7 @@ namespace ECSRenderDetail{
         Core::BufferHandle intervalSampleState;
     };
 
+    struct MeshFrameBindingSnapshot;
     struct MeshViewGpuData;
 };
 
@@ -58,7 +59,6 @@ namespace ECSRenderDetail{
 
 class CsgShapeRegistry;
 class IMaterialSurfaceLookup;
-class RendererDrawState;
 class RendererCsgState;
 class RendererShaderSystem;
 class RendererMeshSystem;
@@ -74,7 +74,6 @@ public:
         Core::ECS::World& world,
         Core::Graphics& graphics,
         CsgShapeRegistry& csgShapeRegistry,
-        RendererDrawState& drawState,
         RendererCsgState& csgState,
         RendererShaderSystem& shaderSystem,
         RendererMeshSystem& meshSystem
@@ -92,6 +91,7 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         bool intervalPeelTargetStatesGraphOwned = false,
         bool csgClipBufferStatesGraphOwned = false,
         bool materialFrameStatesGraphOwned = false
@@ -114,6 +114,7 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         bool intervalSampleImageStatesGraphOwned = false,
         bool csgClipBufferStatesGraphOwned = false,
         bool materialFrameStatesGraphOwned = false
@@ -132,11 +133,13 @@ public:
     [[nodiscard]] bool prepareCsgClipContextSlotData(
         const DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         CsgClipContextSlots& outContextSlots
     )const;
     [[nodiscard]] bool prepareCsgIntervalSampleStateData(
         const DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         CsgIntervalSampleStateGpuData& outState
     )const;
     void setCsgReceiverSurfaceImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets);
@@ -169,7 +172,6 @@ private:
     Core::ECS::World& m_world;
     Core::Graphics& m_graphics;
     CsgShapeRegistry& m_csgShapeRegistry;
-    RendererDrawState& m_drawState;
     RendererCsgState& m_csgState;
     RendererShaderSystem& m_shaderSystem;
     RendererMeshSystem& m_meshSystem;

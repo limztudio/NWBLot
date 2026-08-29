@@ -6,6 +6,7 @@
 
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/material/renderer_render_state_private.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 #include <impl/ecs_render/shared/renderer_state.h>
@@ -168,7 +169,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval peel requires a CSG clip binding layout"));
         return false;
     }
-    if(!m_drawState.m_meshViewBuffer){
+    if(!m_meshSystem.meshViewBufferSnapshot().valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval peel requires a mesh view buffer"));
         return false;
     }
@@ -324,7 +325,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
 }
 
 bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& targets){
-    if(!m_drawState.m_meshViewBuffer){
+    if(!m_meshSystem.meshViewBufferSnapshot().valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval sampling requires a mesh view buffer"));
         return false;
     }

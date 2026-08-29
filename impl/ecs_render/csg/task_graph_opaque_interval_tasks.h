@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/graphics/task_graph/task_graph.h>
@@ -98,6 +99,7 @@ struct CsgIntervalSampleGraphTask{
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* meshViewSetupReady = nullptr;
         const bool* sceneShadingSetupReady = nullptr;
+        MeshFrameBindingSnapshot frameBindings;
         OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
         bool materialDrawBuffersUploaded = false;
         bool csgFrameBuffersUploaded = false;

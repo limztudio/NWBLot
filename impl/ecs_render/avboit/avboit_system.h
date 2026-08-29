@@ -64,6 +64,9 @@ struct CsgFrameGpuData;
 struct CsgFrameState;
 struct MaterialPassDrawItemPartitions;
 struct MaterialPassDrawItems;
+namespace ECSRenderDetail{
+    struct MeshFrameBindingSnapshot;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -119,6 +122,7 @@ public:
         DeferredFrameTargets& targets,
         const MaterialPassDrawItems* preparedTransparentCsgReceiverSurfaceDrawItems = nullptr,
         const CsgFrameGpuData* preparedTransparentCsgFrameData = nullptr,
+        const ECSRenderDetail::MeshFrameBindingSnapshot* preparedFrameBindings = nullptr,
         usize preparedTransparentCsgInstanceCount = 0u,
         usize preparedTransparentCsgMaterialTypedByteCount = 0u,
         bool preparedTransparentCsgIntervalTargetsGraphOwned = false,
@@ -224,6 +228,7 @@ private:
         DeferredFrameTargets& targets,
         const MaterialPassDrawItems& receiverSurfaceDrawItems,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         usize instanceCount,
         usize materialTypedByteCount,
         bool intervalTargetsGraphOwned,

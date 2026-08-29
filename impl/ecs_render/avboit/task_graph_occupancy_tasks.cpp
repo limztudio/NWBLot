@@ -59,6 +59,7 @@ namespace RendererTaskGraphDetail{
             *payload.targets,
             preparedTransparentCsgReceiverSurfaceDrawItems,
             preparedTransparentCsgFrameData,
+            &payload.frameBindings,
             preparedTransparentCsgInstanceCount,
             preparedTransparentCsgMaterialTypedByteCount,
             payload.transparentCsgIntervalTargetsGraphOwned,

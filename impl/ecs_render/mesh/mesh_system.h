@@ -57,6 +57,27 @@ namespace ECSRenderDetail{
             ;
         }
     };
+    // Mesh owns the descriptor-registration transaction for all three frame bindings.  This retained snapshot keeps
+    // each buffer paired with the exact heap handle published in that transaction while a graph packet is pending.
+    struct MeshFrameBindingSnapshot{
+        Core::BufferHandle instanceBuffer;
+        Core::BufferHandle materialTypedBuffer;
+        MeshViewBufferSnapshot meshView;
+        Core::GpuDescriptorHandle instanceHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle materialTypedHeapHandle = Core::GpuDescriptorHandle::invalid();
+
+        [[nodiscard]] bool bindingValid()const noexcept{
+            return
+                instanceBuffer
+                && materialTypedBuffer
+                && meshView.bindingValid()
+                && instanceHeapHandle.valid()
+                && instanceHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+                && materialTypedHeapHandle.valid()
+                && materialTypedHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+            ;
+        }
+    };
     struct MeshSoftwareBvhParentBuildState{
         Core::BufferHandle buffer;
         Name identity = NAME_NONE;
@@ -219,6 +240,7 @@ public:
     void invalidateMeshViewBufferUploadMirror();
     [[nodiscard]] bool createMeshFrameHeapHandles();
     [[nodiscard]] bool meshFrameHeapHandlesReady()const;
+    [[nodiscard]] ECSRenderDetail::MeshFrameBindingSnapshot meshFrameBindingSnapshot()const;
     void populateMeshFrameHeapSlots(ECSRenderDetail::MeshFrameHeapSlots& outSlots)const;
     void releaseMeshFrameHeapHandles();
     [[nodiscard]] bool meshGeometryHeapHandlesReady(const MeshResources& mesh)const;

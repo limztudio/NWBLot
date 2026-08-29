@@ -379,17 +379,27 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
     AString csgHeaderSource;
     AString csgSystemSource;
     AString csgResourcesSource;
+    AString csgIntervalPeelSource;
+    AString meshHeaderSource;
     AString rendererStateSource;
     AString frameTypesSource;
     AString materialDrawSource;
+    AString deferredGbufferTaskHeaderSource;
+    AString opaqueCsgTaskHeaderSource;
+    AString avboitOccupancyTaskHeaderSource;
     AString rootPrefixSource;
     AString rootGraphSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_system.h", csgHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_system.cpp", csgSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_resources.cpp", csgResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_interval_peel.cpp", csgIntervalPeelSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.h", meshHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_frame_types.h", frameTypesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass_draw.cpp", materialDrawSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_gbuffer_task.h", deferredGbufferTaskHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "task_graph_opaque_interval_tasks.h", opaqueCsgTaskHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "task_graph_occupancy_tasks.h", avboitOccupancyTaskHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graphics_prefix.cpp", rootPrefixSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", rootGraphSource));
 
@@ -400,12 +410,32 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
     const AStringView compactCsgHeader(compactCsgHeaderStorage.data(), compactCsgHeaderStorage.size());
     const AString compactCsgResourcesStorage = CompactSource(csgResources);
     const AStringView compactCsgResources(compactCsgResourcesStorage.data(), compactCsgResourcesStorage.size());
+    const AString compactCsgIntervalPeelStorage = CompactSource(AStringView(csgIntervalPeelSource.data(), csgIntervalPeelSource.size()));
+    const AStringView compactCsgIntervalPeel(compactCsgIntervalPeelStorage.data(), compactCsgIntervalPeelStorage.size());
+    const AString compactMeshHeaderStorage = CompactSource(AStringView(meshHeaderSource.data(), meshHeaderSource.size()));
+    const AStringView compactMeshHeader(compactMeshHeaderStorage.data(), compactMeshHeaderStorage.size());
     const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
     const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
     const AString compactFrameTypesStorage = CompactSource(AStringView(frameTypesSource.data(), frameTypesSource.size()));
     const AStringView compactFrameTypes(compactFrameTypesStorage.data(), compactFrameTypesStorage.size());
     const AString compactMaterialDrawStorage = CompactSource(AStringView(materialDrawSource.data(), materialDrawSource.size()));
     const AStringView compactMaterialDraw(compactMaterialDrawStorage.data(), compactMaterialDrawStorage.size());
+    const AString compactDeferredGbufferTaskHeaderStorage = CompactSource(
+        AStringView(deferredGbufferTaskHeaderSource.data(), deferredGbufferTaskHeaderSource.size())
+    );
+    const AStringView compactDeferredGbufferTaskHeader(
+        compactDeferredGbufferTaskHeaderStorage.data(),
+        compactDeferredGbufferTaskHeaderStorage.size()
+    );
+    const AString compactOpaqueCsgTaskHeaderStorage = CompactSource(AStringView(opaqueCsgTaskHeaderSource.data(), opaqueCsgTaskHeaderSource.size()));
+    const AStringView compactOpaqueCsgTaskHeader(compactOpaqueCsgTaskHeaderStorage.data(), compactOpaqueCsgTaskHeaderStorage.size());
+    const AString compactAvboitOccupancyTaskHeaderStorage = CompactSource(
+        AStringView(avboitOccupancyTaskHeaderSource.data(), avboitOccupancyTaskHeaderSource.size())
+    );
+    const AStringView compactAvboitOccupancyTaskHeader(
+        compactAvboitOccupancyTaskHeaderStorage.data(),
+        compactAvboitOccupancyTaskHeaderStorage.size()
+    );
     const AString compactRootPrefixStorage = CompactSource(AStringView(rootPrefixSource.data(), rootPrefixSource.size()));
     const AStringView compactRootPrefix(compactRootPrefixStorage.data(), compactRootPrefixStorage.size());
     const AString compactRootGraphStorage = CompactSource(AStringView(rootGraphSource.data(), rootGraphSource.size()));
@@ -419,7 +449,6 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
             "Core::ECS::World&",
             "Core::Graphics&",
             "CsgShapeRegistry&",
-            "RendererDrawState&",
             "RendererCsgState&",
             "RendererShaderSystem&",
             "RendererMeshSystem&",
@@ -429,6 +458,13 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
     EXPECT_FALSE(ContainsText(csgHeader, "m_deferredState"));
     EXPECT_FALSE(ContainsText(csgSystem, "m_deferredState"));
     EXPECT_FALSE(ContainsText(csgResources, "m_deferredState"));
+    EXPECT_FALSE(ContainsText(csgHeader, "RendererDrawState"));
+    EXPECT_FALSE(ContainsText(csgSystem, "RendererDrawState"));
+    EXPECT_FALSE(ContainsText(csgResources, "m_drawState"));
+    EXPECT_FALSE(ContainsText(compactCsgIntervalPeel, "m_drawState"));
+    EXPECT_TRUE(ContainsText(compactMeshHeader, "structMeshFrameBindingSnapshot{"));
+    EXPECT_TRUE(ContainsText(compactMeshHeader, "meshFrameBindingSnapshot()const;"));
+    EXPECT_TRUE(ContainsText(compactCsgHeader, "constECSRenderDetail::MeshFrameBindingSnapshot&frameBindings"));
     EXPECT_TRUE(ContainsText(compactCsgHeader, "prepareCsgClipContextSlotData(constDeferredFrameTargets&targets,"));
     EXPECT_TRUE(ContainsText(compactCsgHeader, "setCsgReceiverSurfaceImageStates(Core::CommandList&commandList,constDeferredFrameTargets&targets);"));
     EXPECT_TRUE(ContainsText(compactCsgHeader, "setCsgIntervalSampleImageStates(Core::CommandList&commandList,constDeferredFrameTargets&targets);"));
@@ -441,12 +477,41 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
     const AStringView deferredState = compactRendererState.substr(deferredStateBegin, deferredStateEnd - deferredStateBegin);
     EXPECT_FALSE(ContainsText(deferredState, "friendclassRendererCsgSystem;"));
 
+    const usize drawStateBegin = compactRendererState.find("classRendererDrawStatefinal:NoCopy{");
+    ASSERT_NE(drawStateBegin, AStringView::npos);
+    const usize drawStateEnd = compactRendererState.find("classRendererCsgStatefinal:NoCopy{", drawStateBegin);
+    ASSERT_NE(drawStateEnd, AStringView::npos);
+    const AStringView drawState = compactRendererState.substr(drawStateBegin, drawStateEnd - drawStateBegin);
+    EXPECT_FALSE(ContainsText(drawState, "friendclassRendererCsgSystem;"));
+
     EXPECT_TRUE(ContainsText(compactFrameTypes, "structMaterialPassDrawContext{Core::CommandList&commandList;constDeferredFrameTargets&deferredTargets;"));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "context.deferredTargets"));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "setCsgReceiverSurfaceImageStates(commandList,deferredTargets)"));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "setCsgIntervalSampleImageStates(commandList,deferredTargets)"));
+    EXPECT_TRUE(ContainsText(compactDeferredGbufferTaskHeader, "MeshFrameBindingSnapshotframeBindings;"));
+    EXPECT_TRUE(ContainsText(compactOpaqueCsgTaskHeader, "MeshFrameBindingSnapshotframeBindings;"));
+    EXPECT_TRUE(ContainsText(compactAvboitOccupancyTaskHeader, "MeshFrameBindingSnapshotframeBindings;"));
+    EXPECT_EQ(CountText(compactRootGraph, "m_meshSystem.meshFrameBindingSnapshot()"), 1u);
+    EXPECT_FALSE(ContainsText(compactRootGraph, "m_meshSystem.meshViewBufferSnapshot()"));
+    EXPECT_FALSE(ContainsText(compactRootGraph, "m_materialSystem.materialPassBufferSnapshot()"));
+    EXPECT_TRUE(ContainsText(compactRootGraph, "meshViewBufferSnapshot=frameBindings.meshView;"));
+    EXPECT_TRUE(ContainsText(compactRootGraph, "importBuffer(frameBindings.instanceBuffer,"));
+    EXPECT_TRUE(ContainsText(compactRootGraph, "importBuffer(frameBindings.materialTypedBuffer,"));
+    EXPECT_TRUE(ContainsText(compactRootPrefix, "gbufferPayload.frameBindings=frameBindings;"));
+    EXPECT_TRUE(ContainsText(compactRootPrefix, "csgIntervalSamplePayload.frameBindings=frameBindings;"));
+    EXPECT_TRUE(ContainsText(compactRootGraph, "avboitPrePayload.frameBindings=frameBindings;"));
     EXPECT_EQ(CountText(compactRootPrefix, "prepareCsgClipContextSlotData(deferredTargets,"), 1u);
     EXPECT_EQ(CountText(compactRootGraph, "prepareCsgClipContextSlotData(deferredTargets,"), 4u);
+
+    const usize csgFrameBuffersReadyBegin = compactCsgResources.find("RendererCsgSystem::csgFrameBuffersReady(");
+    ASSERT_NE(csgFrameBuffersReadyBegin, AStringView::npos);
+    const usize csgFrameBuffersReadyEnd = compactCsgResources.find("RendererCsgSystem::populateCsgGraphResourceBuffers(", csgFrameBuffersReadyBegin);
+    ASSERT_NE(csgFrameBuffersReadyEnd, AStringView::npos);
+    const AStringView csgFrameBuffersReady = compactCsgResources.substr(
+        csgFrameBuffersReadyBegin,
+        csgFrameBuffersReadyEnd - csgFrameBuffersReadyBegin
+    );
+    EXPECT_FALSE(ContainsText(csgFrameBuffersReady, "meshFrameHeapHandlesReady()"));
 }
 
 

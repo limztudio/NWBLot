@@ -326,12 +326,13 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const Core::Framebuffer& presentationFramebuffer = *presentationFrame.framebuffer;
     const Core::FramebufferDesc& presentationFramebufferDesc = presentationFramebuffer.getDescription();
     const DeferredLightingGraphResources deferredLightingResources = m_deferredSystem.lightingGraphResources();
-    const ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot = m_meshSystem.meshViewBufferSnapshot();
-    const ECSRenderDetail::MaterialPassBufferSnapshot materialPassBufferSnapshot = m_materialSystem.materialPassBufferSnapshot();
+    const ECSRenderDetail::MeshFrameBindingSnapshot frameBindings = m_meshSystem.meshFrameBindingSnapshot();
+    const ECSRenderDetail::MeshViewBufferSnapshot& meshViewBufferSnapshot = frameBindings.meshView;
     if(
         !deferredTargets.valid()
         || !deferredTargets.bindless.valid()
         || !meshViewBufferSnapshot.valid()
+        || (!csgFrameState.empty() && !frameBindings.bindingValid())
         || !deferredLightingResources.valid()
         || presentationFramebufferDesc.colorAttachments.size() != 1u
         || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()
@@ -690,17 +691,17 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         Name("render.deferred.mesh_view"),
         "Mesh View"
     );
-    const Core::GpuGraphResourceId materialInstances = materialPassBufferSnapshot.instanceBuffer
+    const Core::GpuGraphResourceId materialInstances = frameBindings.instanceBuffer
         ? importBuffer(
-            materialPassBufferSnapshot.instanceBuffer,
+            frameBindings.instanceBuffer,
             Name("render.deferred.material_instances"),
             "Material Instances"
         )
         : Core::GpuGraphResourceId{}
     ;
-    const Core::GpuGraphResourceId materialTyped = materialPassBufferSnapshot.typedBuffer
+    const Core::GpuGraphResourceId materialTyped = frameBindings.materialTypedBuffer
         ? importBuffer(
-            materialPassBufferSnapshot.typedBuffer,
+            frameBindings.materialTypedBuffer,
             Name("render.deferred.material_typed"),
             "Material Typed Data"
         )
@@ -974,6 +975,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         deferredTargets,
         shadowPrepareHandoffTask,
         csgFrameState,
+        frameBindings,
         hasOpaqueCsgFrameWork,
         meshViewAspectRatio,
         albedo,
@@ -2008,6 +2010,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitPrePayload.timingTicket = &avboitPreTimingTicket;
     avboitPrePayload.transparentCsgIntervalsTiming = &transparentCsgIntervalsTiming;
     avboitPrePayload.hasTransparentRenderers = hasTransparentRenderers;
+    avboitPrePayload.frameBindings = frameBindings;
 
 
 // Freeze the transparent CSG interval producer before AVBOIT native recording.  Its shared instance/material
@@ -2132,11 +2135,13 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 !m_csgSystem.prepareCsgClipContextSlotData(
                     deferredTargets,
                     transparentCsgFrameData,
+                    frameBindings,
                     transparentCsgClipContextSlotData
                 )
                 || !m_csgSystem.prepareCsgIntervalSampleStateData(
                     deferredTargets,
                     transparentCsgFrameData,
+                    frameBindings,
                     transparentCsgIntervalSampleStateData
                 )
             ){
@@ -2915,6 +2920,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 if(!m_csgSystem.prepareCsgClipContextSlotData(
                     deferredTargets,
                     occupancyCsgFrameData,
+                    frameBindings,
                     occupancyCsgClipContextSlotData
                 )){
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot AVBOIT occupancy CSG context data"));
@@ -4016,6 +4022,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 if(!m_csgSystem.prepareCsgClipContextSlotData(
                     deferredTargets,
                     extinctionCsgFrameData,
+                    frameBindings,
                     extinctionCsgClipContextSlotData
                 )){
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot AVBOIT extinction CSG context data"));
@@ -4927,6 +4934,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 if(!m_csgSystem.prepareCsgClipContextSlotData(
                     deferredTargets,
                     accumulationCsgFrameData,
+                    frameBindings,
                     accumulationCsgClipContextSlotData
                 )){
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot AVBOIT accumulation CSG context data"));

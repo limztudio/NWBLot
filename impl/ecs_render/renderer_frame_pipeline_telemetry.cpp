@@ -112,7 +112,7 @@ static void AppendCommandArenaWorkerStatistics(
 
 
 bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder){
-    if(!m_deferredSystem.tryFrameTargets())
+    if(!m_frameTargets.valid())
         return false;
 
     using Handle = Core::Telemetry::FrameGraphNodeHandle;

@@ -719,6 +719,96 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
 }
 
 
+TEST(EcsGraphics, RootOwnsTheCrossDomainFrameTargetAggregate){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+    AString pipelineHeaderSource;
+    AString rendererStateSource;
+    AString deferredHeaderSource;
+    AString deferredSystemSource;
+    AString deferredTargetsSource;
+    AString rootResourcesSource;
+    AString rootExecuteSource;
+    AString rootTelemetrySource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.h", pipelineHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.h", deferredHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.cpp", deferredSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_targets.cpp", deferredTargetsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_resources.cpp", rootResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_execute.cpp", rootExecuteSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_telemetry.cpp", rootTelemetrySource));
+
+    const AString compactPipelineHeaderStorage = CompactSource(AStringView(pipelineHeaderSource.data(), pipelineHeaderSource.size()));
+    const AStringView compactPipelineHeader(compactPipelineHeaderStorage.data(), compactPipelineHeaderStorage.size());
+    const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
+    const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
+    const AString compactDeferredHeaderStorage = CompactSource(AStringView(deferredHeaderSource.data(), deferredHeaderSource.size()));
+    const AStringView compactDeferredHeader(compactDeferredHeaderStorage.data(), compactDeferredHeaderStorage.size());
+    const AString compactDeferredSystemStorage = CompactSource(AStringView(deferredSystemSource.data(), deferredSystemSource.size()));
+    const AStringView compactDeferredSystem(compactDeferredSystemStorage.data(), compactDeferredSystemStorage.size());
+    const AString compactDeferredTargetsStorage = CompactSource(AStringView(deferredTargetsSource.data(), deferredTargetsSource.size()));
+    const AStringView compactDeferredTargets(compactDeferredTargetsStorage.data(), compactDeferredTargetsStorage.size());
+    const AString compactRootResourcesStorage = CompactSource(AStringView(rootResourcesSource.data(), rootResourcesSource.size()));
+    const AStringView compactRootResources(compactRootResourcesStorage.data(), compactRootResourcesStorage.size());
+    const AString compactRootExecuteStorage = CompactSource(AStringView(rootExecuteSource.data(), rootExecuteSource.size()));
+    const AStringView compactRootExecute(compactRootExecuteStorage.data(), compactRootExecuteStorage.size());
+    const AString compactRootTelemetryStorage = CompactSource(AStringView(rootTelemetrySource.data(), rootTelemetrySource.size()));
+    const AStringView compactRootTelemetry(compactRootTelemetryStorage.data(), compactRootTelemetryStorage.size());
+
+    EXPECT_EQ(CountText(compactPipelineHeader, "DeferredFrameTargetsm_frameTargets;"), 1u);
+    const usize frameTargetStorage = compactPipelineHeader.find("DeferredFrameTargetsm_frameTargets;");
+    const usize firstDomainSystem = compactPipelineHeader.find("RendererShaderSystemm_shaderSystem;");
+    ASSERT_NE(frameTargetStorage, AStringView::npos);
+    ASSERT_NE(firstDomainSystem, AStringView::npos);
+    EXPECT_LT(frameTargetStorage, firstDomainSystem);
+
+    const usize deferredStateBegin = compactRendererState.find("classRendererDeferredStatefinal:NoCopy{");
+    ASSERT_NE(deferredStateBegin, AStringView::npos);
+    const usize deferredStateEnd = compactRendererState.find("classRendererAvboitStatefinal:NoCopy{", deferredStateBegin);
+    ASSERT_NE(deferredStateEnd, AStringView::npos);
+    const AStringView deferredState = compactRendererState.substr(deferredStateBegin, deferredStateEnd - deferredStateBegin);
+    EXPECT_FALSE(ContainsText(deferredState, "DeferredFrameTargets"));
+    EXPECT_FALSE(ContainsText(compactDeferredHeader, "frameTargetsMatch("));
+    EXPECT_FALSE(ContainsText(compactDeferredHeader, "tryFrameTargets("));
+    EXPECT_FALSE(ContainsText(compactDeferredHeader, "commitDeferredFrameTargets("));
+    EXPECT_FALSE(ContainsText(compactDeferredHeader, "resetDeferredFrameTargets();"));
+    EXPECT_TRUE(ContainsText(compactDeferredHeader, "resetDeferredFrameTargets(DeferredFrameTargets&targets);"));
+    EXPECT_FALSE(ContainsText(compactDeferredSystem, "m_deferredState.m_targets"));
+    EXPECT_FALSE(ContainsText(compactDeferredTargets, "m_deferredState.m_targets"));
+
+    EXPECT_TRUE(ContainsText(compactRootResources, "voidRendererFramePipeline::commitFrameTargets(DeferredFrameTargets&&targets){m_frameTargets=Move(targets);"));
+    const usize resetFunction = compactRootResources.find("voidRendererFramePipeline::resetFrameTargets(){");
+    const usize resetAvboit = compactRootResources.find("m_avboitSystem.resetAvboitFrameTargets(m_frameTargets.avboit);", resetFunction);
+    const usize resetDeferred = compactRootResources.find("m_deferredSystem.resetDeferredFrameTargets(m_frameTargets);", resetFunction);
+    ASSERT_NE(resetFunction, AStringView::npos);
+    ASSERT_NE(resetAvboit, AStringView::npos);
+    ASSERT_NE(resetDeferred, AStringView::npos);
+    EXPECT_LT(resetAvboit, resetDeferred);
+    EXPECT_FALSE(ContainsText(compactRootResources, "m_deferredSystem.tryFrameTargets("));
+    EXPECT_FALSE(ContainsText(compactRootResources, "m_deferredSystem.frameTargetsMatch("));
+    EXPECT_TRUE(ContainsText(compactRootExecute, "if(!m_frameTargets.valid())return;DeferredFrameTargets&deferredTargets=m_frameTargets;"));
+    EXPECT_TRUE(ContainsText(compactRootTelemetry, "if(!m_frameTargets.valid())returnfalse;"));
+
+    const usize createDeferred = compactRootResources.find("m_deferredSystem.createDeferredFrameTargets(createdTargets,width,height)");
+    const usize createAvboit = compactRootResources.find("m_avboitSystem.createAvboitFrameTargets(createdTargets)", createDeferred);
+    const usize createCsg = compactRootResources.find("m_csgSystem.createCsgPeelTargets(createdTargets)", createAvboit);
+    const usize createShadow = compactRootResources.find("m_raytracingSystem.createShadowVisibilityTarget(createdTargets)", createCsg);
+    const usize createCaustics = compactRootResources.find("m_raytracingSystem.createCausticTargets(createdTargets)", createShadow);
+    const usize createSharedResources = compactRootResources.find("m_deferredSystem.createDeferredFrameTargetResources(createdTargets,", createCaustics);
+    const usize registerAvboit = compactRootResources.find("m_avboitSystem.registerAvboitFrameTargetDescriptors(createdTargets,createdTargets.avboit)", createSharedResources);
+    const usize commitTargets = compactRootResources.find("commitFrameTargets(Move(createdTargets));", registerAvboit);
+    ASSERT_NE(createDeferred, AStringView::npos);
+    ASSERT_NE(createAvboit, AStringView::npos);
+    ASSERT_NE(createCsg, AStringView::npos);
+    ASSERT_NE(createShadow, AStringView::npos);
+    ASSERT_NE(createCaustics, AStringView::npos);
+    ASSERT_NE(createSharedResources, AStringView::npos);
+    ASSERT_NE(registerAvboit, AStringView::npos);
+    ASSERT_NE(commitTargets, AStringView::npos);
+}
+
+
 TEST(EcsGraphics, FramePipelineDoesNotPrivilegeNarrowShaderOrMeshSystems){
     TestArena testArena;
     AString headerSource;

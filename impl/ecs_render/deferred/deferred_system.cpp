@@ -31,15 +31,6 @@ RendererDeferredSystem::RendererDeferredSystem(
 {}
 
 
-bool RendererDeferredSystem::frameTargetsMatch(const u32 width, const u32 height)const noexcept{
-    const DeferredFrameTargets& targets = m_deferredState.m_targets;
-    return targets.valid() && targets.width == width && targets.height == height;
-}
-
-DeferredFrameTargets* RendererDeferredSystem::tryFrameTargets()noexcept{
-    return m_deferredState.m_targets.valid() ? &m_deferredState.m_targets : nullptr;
-}
-
 DeferredLightingGraphResources RendererDeferredSystem::lightingGraphResources()const noexcept{
     return {
         m_deferredState.m_sceneShadingBuffer,

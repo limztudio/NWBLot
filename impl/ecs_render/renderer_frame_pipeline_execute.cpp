@@ -167,10 +167,9 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    DeferredFrameTargets* const activeDeferredTargets = m_deferredSystem.tryFrameTargets();
-    if(!activeDeferredTargets)
+    if(!m_frameTargets.valid())
         return;
-    DeferredFrameTargets& deferredTargets = *activeDeferredTargets;
+    DeferredFrameTargets& deferredTargets = m_frameTargets;
 
     NWB_ASSERT(m_preparedCsgFrameStateValid);
     NWB_ASSERT(m_shadowPreparationOutcome.resourcesValid);

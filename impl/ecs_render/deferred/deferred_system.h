@@ -99,8 +99,6 @@ public:
     );
 
 public:
-    [[nodiscard]] bool frameTargetsMatch(u32 width, u32 height)const noexcept;
-    [[nodiscard]] DeferredFrameTargets* tryFrameTargets()noexcept;
     [[nodiscard]] DeferredLightingGraphResources lightingGraphResources()const noexcept;
     void invalidateSceneLightingUploadMirrors()noexcept;
     void invalidateResources();
@@ -142,12 +140,10 @@ public:
     );
     [[nodiscard]] bool createDeferredFrameTargets(DeferredFrameTargets& outTargets, u32 width, u32 height);
     [[nodiscard]] bool createDeferredFrameTargetResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler);
-    void commitDeferredFrameTargets(DeferredFrameTargets&& targets);
     [[nodiscard]] bool createDeferredCompositeResources();
     [[nodiscard]] bool createDeferredCompositePipeline();
     [[nodiscard]] bool createDeferredPresentPipeline(Core::Framebuffer* presentationFramebuffer);
     void resetDeferredFrameTargets(DeferredFrameTargets& targets);
-    void resetDeferredFrameTargets();
     [[nodiscard]] Core::GpuTaskId declareDeferredCompositeTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,

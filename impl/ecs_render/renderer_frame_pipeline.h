@@ -158,6 +158,8 @@ public:
 
 private:
     [[nodiscard]] bool prepareGpuTimingScopes();
+    void commitFrameTargets(DeferredFrameTargets&& targets);
+    void resetFrameTargets();
     // Accepted cross-frame scratch and producer-return state survives ordinary recording attempts. Reset it only
     // when the imported target/resource generation changes.
     void resetTargetGenerationStateHandoffs()noexcept;
@@ -593,6 +595,9 @@ private:
     // A partially accepted frame whose recovery packet cannot be submitted is not recoverable by guessing. End this
     // device generation and rebuild resources before rendering resumes.
     bool m_frameRenderRecoveryFailed = false;
+    // The root composes this aggregate from Deferred, AVBOIT, CSG, and RayTracing resources. Keep its storage before
+    // the domain systems so their service objects are destroyed before the shared frame-resource generation.
+    DeferredFrameTargets m_frameTargets;
 
 private:
     RendererShaderSystem m_shaderSystem;

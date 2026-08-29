@@ -638,10 +638,6 @@ void RendererDeferredSystem::resetDeferredFrameTargets(DeferredFrameTargets& tar
     targets = DeferredFrameTargets{};
 }
 
-void RendererDeferredSystem::resetDeferredFrameTargets(){
-    resetDeferredFrameTargets(m_deferredState.m_targets);
-}
-
 bool RendererDeferredSystem::createDeferredFrameTargets(
     DeferredFrameTargets& outTargets,
     const u32 width,
@@ -860,40 +856,6 @@ bool RendererDeferredSystem::createDeferredFrameTargetResources(
         return true;
     resetDeferredBindlessFrameResources(targets);
     return false;
-}
-
-void RendererDeferredSystem::commitDeferredFrameTargets(DeferredFrameTargets&& targets){
-    m_deferredState.m_targets = Move(targets);
-
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, composite color {}, depth {}, shadow visibility {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver events {} layers: event data {}, event count {}, receiver spans {} layers: span data {}, span count {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, AVBOIT color {}, extinction {}, transmittance {})")
-        , m_deferredState.m_targets.width
-        , m_deferredState.m_targets.height
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.albedoFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.normalFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.worldPositionFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.opaqueColorFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.compositeColorFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.depthFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.shadowVisibilityFormat).name)
-        , m_deferredState.m_targets.csgPeelLayerCount
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgCapNormalFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgIntervalDepthFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgIntervalIdFormat).name)
-        , m_deferredState.m_targets.csgReceiverEventLayerCount
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgReceiverEventDataFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgReceiverEventCountFormat).name)
-        , m_deferredState.m_targets.csgReceiverSpanLayerCount
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgReceiverSpanDataFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgReceiverSpanCountFormat).name)
-        , m_deferredState.m_targets.csgRemovedIntervalLayerCount
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgRemovedIntervalDepthFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgRemovedIntervalCapNormalFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgRemovedIntervalDataFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgRemovedIntervalCountFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.avboit.accumColorFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.avboit.accumExtinctionFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.avboit.transmittanceFormat).name)
-    );
 }
 
 void ClearDeferredCsgIntervalTargets(

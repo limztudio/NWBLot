@@ -30,15 +30,13 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
     if(!prepareGpuTimingScopes())
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU timing scope preparation failed; timing samples may be skipped"));
 
-    DeferredFrameTargets* deferredTargets = m_deferredSystem.tryFrameTargets();
-    bool targetsReady = m_deferredSystem.frameTargetsMatch(width, height);
+    DeferredFrameTargets* deferredTargets = m_frameTargets.valid() ? &m_frameTargets : nullptr;
+    bool targetsReady = deferredTargets && deferredTargets->width == width && deferredTargets->height == height;
     if(!targetsReady){
         // New targets invalidate stale compute scratch and visibility returns.
         resetTargetGenerationStateHandoffs();
         resetLaggedLightingHistoryTracking();
-        if(deferredTargets)
-            m_avboitSystem.resetAvboitFrameTargets(deferredTargets->avboit);
-        m_deferredSystem.resetDeferredFrameTargets();
+        resetFrameTargets();
         m_materialSystem.invalidateRendererPipelines();
 
         DeferredFrameTargets createdTargets;
@@ -79,13 +77,12 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
             return false;
         }
 
-        m_deferredSystem.commitDeferredFrameTargets(Move(createdTargets));
-        deferredTargets = m_deferredSystem.tryFrameTargets();
+        commitFrameTargets(Move(createdTargets));
+        deferredTargets = &m_frameTargets;
         targetsReady = m_deferredSystem.createDeferredLightingPipeline() && m_deferredSystem.createDeferredCompositePipeline();
         if(!targetsReady){
             NWB_ASSERT(deferredTargets);
-            m_avboitSystem.resetAvboitFrameTargets(deferredTargets->avboit);
-            m_deferredSystem.resetDeferredFrameTargets();
+            resetFrameTargets();
         }
     }
     if(!targetsReady || !deferredTargets)
@@ -225,9 +222,7 @@ void RendererFramePipeline::invalidateResources(){
     resetLaggedLightingHistoryTracking();
     m_frameRenderRecoveryFailed = false;
     m_raytracingSystem.invalidateResources();
-    if(DeferredFrameTargets* const deferredTargets = m_deferredSystem.tryFrameTargets())
-        m_avboitSystem.resetAvboitFrameTargets(deferredTargets->avboit);
-    m_deferredSystem.resetDeferredFrameTargets();
+    resetFrameTargets();
     // AVBOIT pipelines also consume Material's shared push layout, so release those pipelines before Material
     // clears the layout owner.
     m_avboitSystem.invalidateResources();
@@ -315,6 +310,46 @@ bool RendererFramePipeline::prepareGpuTimingScopes(){
     return true;
 }
 
+void RendererFramePipeline::commitFrameTargets(DeferredFrameTargets&& targets){
+    m_frameTargets = Move(targets);
+
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, composite color {}, depth {}, shadow visibility {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver events {} layers: event data {}, event count {}, receiver spans {} layers: span data {}, span count {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, AVBOIT color {}, extinction {}, transmittance {})")
+        , m_frameTargets.width
+        , m_frameTargets.height
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.albedoFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.normalFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.worldPositionFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.opaqueColorFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.compositeColorFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.depthFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.shadowVisibilityFormat).name)
+        , m_frameTargets.csgPeelLayerCount
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgCapNormalFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgIntervalDepthFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgIntervalIdFormat).name)
+        , m_frameTargets.csgReceiverEventLayerCount
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgReceiverEventDataFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgReceiverEventCountFormat).name)
+        , m_frameTargets.csgReceiverSpanLayerCount
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgReceiverSpanDataFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgReceiverSpanCountFormat).name)
+        , m_frameTargets.csgRemovedIntervalLayerCount
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalDepthFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalCapNormalFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalDataFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalCountFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.avboit.accumColorFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.avboit.accumExtinctionFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.avboit.transmittanceFormat).name)
+    );
+}
+
+void RendererFramePipeline::resetFrameTargets(){
+    // AVBOIT owns descriptor registrations embedded in the aggregate, so retire them before Deferred clears it.
+    m_avboitSystem.resetAvboitFrameTargets(m_frameTargets.avboit);
+    m_deferredSystem.resetDeferredFrameTargets(m_frameTargets);
+}
+
 bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     m_shadowPreparationOutcome.resourcesValid = false;
     m_shadowPreparationOutcome.ready = false;
@@ -343,10 +378,9 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     m_preparedCsgFrameState = CsgFrameState{};
     m_preparedCsgFrameStateValid = false;
 
-    DeferredFrameTargets* const activeDeferredTargets = m_deferredSystem.tryFrameTargets();
-    if(!activeDeferredTargets)
+    if(!m_frameTargets.valid())
         return true;
-    DeferredFrameTargets& deferredTargets = *activeDeferredTargets;
+    DeferredFrameTargets& deferredTargets = m_frameTargets;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
     m_preparedCsgFrameState = HasCsgFrameCandidates(m_world)

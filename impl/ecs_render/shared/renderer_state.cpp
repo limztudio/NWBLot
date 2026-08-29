@@ -145,7 +145,6 @@ void RendererDeferredState::invalidateResources(){
     m_sceneShadingGpuDataValid = false;
     m_lightGpuDataCount = 0u;
     m_lightGpuDataValid = false;
-    m_targets = DeferredFrameTargets{};
 }
 
 

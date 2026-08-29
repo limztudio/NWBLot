@@ -201,7 +201,6 @@ private:
 static_assert(sizeof(RendererCsgState) == 328u, "RendererCsgState should keep its compact CPU-only layout");
 
 class RendererDeferredState final : NoCopy{
-    friend class RendererCsgSystem;
     friend class RendererDeferredSystem;
     friend class RendererRayTracingSystem;
 

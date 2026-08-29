@@ -21,7 +21,6 @@ RendererCsgSystem::RendererCsgSystem(
     CsgShapeRegistry& csgShapeRegistry,
     RendererDrawState& drawState,
     RendererCsgState& csgState,
-    RendererDeferredState& deferredState,
     RendererShaderSystem& shaderSystem,
     RendererMeshSystem& meshSystem
 )
@@ -31,7 +30,6 @@ RendererCsgSystem::RendererCsgSystem(
     , m_csgShapeRegistry(csgShapeRegistry)
     , m_drawState(drawState)
     , m_csgState(csgState)
-    , m_deferredState(deferredState)
     , m_shaderSystem(shaderSystem)
     , m_meshSystem(meshSystem)
 {}

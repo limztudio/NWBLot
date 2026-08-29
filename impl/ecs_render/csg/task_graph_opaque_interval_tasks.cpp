@@ -276,6 +276,7 @@ bool CsgIntervalSampleGraphTask::record(
         deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
         const MaterialPassDrawContext csgDrawContext{
             commandList,
+            deferredTargets,
             deferredTargets.framebuffer.get(),
             MaterialPipelinePass::Opaque,
             nullptr,

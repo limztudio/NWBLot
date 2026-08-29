@@ -129,6 +129,7 @@ public:
     // deliberately performs no mutable mesh-view or material/CSG buffer updates.
     void renderPreparedMaterialPass(
         Core::CommandList& commandList,
+        const DeferredFrameTargets& deferredTargets,
         Core::Framebuffer* framebuffer,
         MaterialPipelinePass::Enum pass,
         const AvboitFrameTargets* avboitTargets,

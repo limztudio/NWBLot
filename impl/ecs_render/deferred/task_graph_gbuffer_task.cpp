@@ -114,6 +114,7 @@ namespace ECSRenderDetail{
             );
         const MaterialPassDrawContext opaqueDrawContext{
             commandList,
+            deferredTargets,
             deferredTargets.framebuffer.get(),
             MaterialPipelinePass::Opaque,
             nullptr,
@@ -175,6 +176,7 @@ namespace ECSRenderDetail{
         ;
         const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
             commandList,
+            deferredTargets,
             deferredTargets.framebuffer.get(),
             MaterialPipelinePass::CsgReceiverSurface,
             nullptr,

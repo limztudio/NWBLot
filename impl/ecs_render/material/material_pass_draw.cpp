@@ -32,6 +32,7 @@ namespace __hidden_material_pass_draw{
 static void SetCsgHeapResourceStates(
     RendererCsgSystem& csgSystem,
     Core::CommandList& commandList,
+    const DeferredFrameTargets& deferredTargets,
     const MaterialPipelineCsgBindingUse& csgBindingUse,
     const bool receiverSurfaceImageStatesGraphOwned,
     const bool intervalSampleImageStatesGraphOwned,
@@ -45,13 +46,13 @@ static void SetCsgHeapResourceStates(
     if(csgBindingUse.receiverSurface && !receiverSurfaceImageStatesGraphOwned){
         // Compatibility callers still stage the heap-selected receiver-event images themselves. The normal graph
         // declares this exact StorageImage pair before its receiver-surface task records.
-        csgSystem.setCsgReceiverSurfaceImageStates(commandList);
+        csgSystem.setCsgReceiverSurfaceImageStates(commandList, deferredTargets);
     }
     if(csgBindingUse.intervalSample && !intervalSampleImageStatesGraphOwned){
         // Cap/interval sampling loads through StorageImage aliases, so its heap descriptors require GENERAL rather
         // than the sampled-image shader-read layout. The normal opaque graph declares the same UAV use at its
         // combine-to-sample boundary; AVBOIT and direct compatibility callers retain this native bridge.
-        csgSystem.setCsgIntervalSampleImageStates(commandList);
+        csgSystem.setCsgIntervalSampleImageStates(commandList, deferredTargets);
     }
 }
 
@@ -237,6 +238,7 @@ void RendererMaterialSystem::setMaterialPassDrawItemResourceStates(
     __hidden_material_pass_draw::SetCsgHeapResourceStates(
         m_csgSystem,
         context.commandList,
+        context.deferredTargets,
         csgBindingUse,
         context.csgReceiverSurfaceImageStatesGraphOwned,
         context.csgIntervalSampleImageStatesGraphOwned,

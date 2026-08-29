@@ -167,7 +167,7 @@ public:
     );
     void renderAvboitExtinctionPass(
         Core::CommandList& commandList,
-        AvboitFrameTargets& targets,
+        DeferredFrameTargets& targets,
         const MaterialPassDrawItemPartitions* preparedExtinctionDrawItems = nullptr,
         const CsgFrameGpuData* preparedExtinctionCsgFrameData = nullptr,
         usize preparedExtinctionInstanceCount = 0u,

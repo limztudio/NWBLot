@@ -62,7 +62,6 @@ RendererFramePipeline::RendererFramePipeline(
         m_csgShapeRegistry,
         m_drawState,
         m_csgState,
-        m_deferredState,
         m_shaderSystem,
         m_meshSystem
     )

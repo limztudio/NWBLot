@@ -2121,6 +2121,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             CsgIntervalSampleStateGpuData transparentCsgIntervalSampleStateData;
             if(
                 !m_csgSystem.prepareCsgClipContextSlotData(
+                    deferredTargets,
                     transparentCsgFrameData,
                     transparentCsgClipContextSlotData
                 )
@@ -2903,6 +2904,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             if(occupancyHasCsgDrawItems){
                 CsgClipContextSlots occupancyCsgClipContextSlotData;
                 if(!m_csgSystem.prepareCsgClipContextSlotData(
+                    deferredTargets,
                     occupancyCsgFrameData,
                     occupancyCsgClipContextSlotData
                 )){
@@ -4003,6 +4005,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             if(extinctionHasCsgDrawItems){
                 CsgClipContextSlots extinctionCsgClipContextSlotData;
                 if(!m_csgSystem.prepareCsgClipContextSlotData(
+                    deferredTargets,
                     extinctionCsgFrameData,
                     extinctionCsgClipContextSlotData
                 )){
@@ -4913,6 +4916,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             if(accumulationHasCsgDrawItems){
                 CsgClipContextSlots accumulationCsgClipContextSlotData;
                 if(!m_csgSystem.prepareCsgClipContextSlotData(
+                    deferredTargets,
                     accumulationCsgFrameData,
                     accumulationCsgClipContextSlotData
                 )){

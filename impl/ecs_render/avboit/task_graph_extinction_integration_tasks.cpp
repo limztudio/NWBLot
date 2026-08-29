@@ -106,6 +106,7 @@ void AvboitExtinctionComputeEmulationGraphTask::discardTiming(Optional<Core::Gpu
     );
     const MaterialPassDrawContext drawContext{
         commandList,
+        *payload.targets,
         nullptr,
         MaterialPipelinePass::AvboitExtinction,
         &payload.targets->avboit,
@@ -196,6 +197,7 @@ void AvboitExtinctionSharedComputeEmulationGraphTask::discardTiming(Optional<Cor
     );
     const MaterialPassDrawContext drawContext{
         commandList,
+        *payload.targets,
         payload.phase == Phase::Raster ? payload.targets->avboit.lowFramebuffer.get() : nullptr,
         MaterialPipelinePass::AvboitExtinction,
         &payload.targets->avboit,
@@ -263,7 +265,7 @@ void AvboitExtinctionSharedComputeEmulationGraphTask::discarded(Payload& payload
     if(payload.hasTransparentRenderers){
         payload.avboitSystem->renderAvboitExtinctionPass(
             commandList,
-            payload.targets->avboit,
+            *payload.targets,
             preparedExtinctionDrawItems,
             preparedExtinctionCsgFrameData,
             preparedExtinctionInstanceCount,

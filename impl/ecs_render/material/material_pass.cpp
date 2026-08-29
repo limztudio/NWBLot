@@ -160,6 +160,7 @@ bool RendererMaterialSystem::prepareMaterialPassResources(
 
 void RendererMaterialSystem::renderPreparedMaterialPass(
     Core::CommandList& commandList,
+    const DeferredFrameTargets& deferredTargets,
     Core::Framebuffer* framebuffer,
     const MaterialPipelinePass::Enum pass,
     const AvboitFrameTargets* const avboitTargets,
@@ -231,6 +232,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
     const MaterialPassDrawContext regularDrawContext{
         commandList,
+        deferredTargets,
         framebuffer,
         pass,
         avboitTargets,
@@ -246,6 +248,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     // so mixed streams cannot suppress the local interleaving required by an unowned CSG output.
     const MaterialPassDrawContext csgDrawContext{
         commandList,
+        deferredTargets,
         framebuffer,
         pass,
         avboitTargets,

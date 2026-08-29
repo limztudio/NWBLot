@@ -84,6 +84,7 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
     );
     const MaterialPassDrawContext drawContext{
         commandList,
+        *payload.targets,
         nullptr,
         MaterialPipelinePass::Opaque,
         nullptr,
@@ -170,6 +171,7 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::record(
     );
     const MaterialPassDrawContext drawContext{
         commandList,
+        *payload.targets,
         payload.phase == Phase::Raster ? payload.targets->framebuffer.get() : nullptr,
         MaterialPipelinePass::Opaque,
         nullptr,

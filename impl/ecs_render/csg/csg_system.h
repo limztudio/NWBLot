@@ -60,7 +60,6 @@ class CsgShapeRegistry;
 class IMaterialSurfaceLookup;
 class RendererDrawState;
 class RendererCsgState;
-class RendererDeferredState;
 class RendererShaderSystem;
 class RendererMeshSystem;
 
@@ -77,7 +76,6 @@ public:
         CsgShapeRegistry& csgShapeRegistry,
         RendererDrawState& drawState,
         RendererCsgState& csgState,
-        RendererDeferredState& deferredState,
         RendererShaderSystem& shaderSystem,
         RendererMeshSystem& meshSystem
     );
@@ -132,6 +130,7 @@ public:
     // Capture all descriptor-derived CSG uniform bytes while preflight has frozen the current buffer and target
     // generations. The deferred graph retains these values as immutable blobs before native recording begins.
     [[nodiscard]] bool prepareCsgClipContextSlotData(
+        const DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
         CsgClipContextSlots& outContextSlots
     )const;
@@ -140,8 +139,8 @@ public:
         const CsgFrameGpuData& csgFrameData,
         CsgIntervalSampleStateGpuData& outState
     )const;
-    void setCsgReceiverSurfaceImageStates(Core::CommandList& commandList);
-    void setCsgIntervalSampleImageStates(Core::CommandList& commandList);
+    void setCsgReceiverSurfaceImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets);
+    void setCsgIntervalSampleImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets);
     void setCsgClipBufferStates(Core::CommandList& commandList);
     [[nodiscard]] bool resolveCsgReceiverClipDrawInfo(
         const CsgFrameReceiverLookup& receiverLookup,
@@ -169,7 +168,6 @@ private:
     CsgShapeRegistry& m_csgShapeRegistry;
     RendererDrawState& m_drawState;
     RendererCsgState& m_csgState;
-    RendererDeferredState& m_deferredState;
     RendererShaderSystem& m_shaderSystem;
     RendererMeshSystem& m_meshSystem;
 };

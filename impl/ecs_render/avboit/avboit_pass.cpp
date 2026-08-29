@@ -311,6 +311,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
 
     const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
         commandList,
+        targets,
         targets.framebuffer.get(),
         MaterialPipelinePass::CsgReceiverSurface,
         nullptr,
@@ -435,6 +436,7 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
         if(preparedOccupancyDrawItems && preparedOccupancyCsgFrameData){
             m_materialSystem.renderPreparedMaterialPass(
                 commandList,
+                targets,
                 avboitTargets.lowFramebuffer.get(),
                 MaterialPipelinePass::AvboitOccupancy,
                 &avboitTargets,
@@ -457,7 +459,7 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
 
 void RendererAvboitSystem::renderAvboitExtinctionPass(
     Core::CommandList& commandList,
-    AvboitFrameTargets& avboitTargets,
+    DeferredFrameTargets& targets,
     const MaterialPassDrawItemPartitions* const preparedExtinctionDrawItems,
     const CsgFrameGpuData* const preparedExtinctionCsgFrameData,
     const usize preparedExtinctionInstanceCount,
@@ -470,6 +472,7 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
     Optional<Core::GpuTimingMeasure>* const extinctionComputeEmulationTiming,
     const bool extinctionCsgComputeEmulationOutputStatesGraphOwned
 ){
+    AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
 
     // The graph records the warp/control reads and packed-extinction writes as packet-boundary state; this thunk
@@ -481,6 +484,7 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
         if(preparedExtinctionDrawItems && preparedExtinctionCsgFrameData){
             m_materialSystem.renderPreparedMaterialPass(
                 commandList,
+                targets,
                 avboitTargets.lowFramebuffer.get(),
                 MaterialPipelinePass::AvboitExtinction,
                 &avboitTargets,
@@ -529,6 +533,7 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
         if(preparedAccumulationDrawItems && preparedAccumulationCsgFrameData){
             m_materialSystem.renderPreparedMaterialPass(
                 commandList,
+                targets,
                 avboitTargets.accumulationFramebuffer.get(),
                 MaterialPipelinePass::AvboitAccumulate,
                 &avboitTargets,

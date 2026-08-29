@@ -676,7 +676,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         CsgClipContextSlots csgClipContextSlotData;
         CsgIntervalSampleStateGpuData csgIntervalSampleStateData;
         if(
-            !m_csgSystem.prepareCsgClipContextSlotData(csgFrameData, csgClipContextSlotData)
+            !m_csgSystem.prepareCsgClipContextSlotData(deferredTargets, csgFrameData, csgClipContextSlotData)
             || !m_csgSystem.prepareCsgIntervalSampleStateData(
                 deferredTargets,
                 csgFrameData,

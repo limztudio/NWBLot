@@ -106,6 +106,7 @@ void AvboitAccumulationComputeEmulationGraphTask::discardTiming(Optional<Core::G
     );
     const MaterialPassDrawContext drawContext{
         commandList,
+        *payload.targets,
         nullptr,
         MaterialPipelinePass::AvboitAccumulate,
         &payload.targets->avboit,
@@ -198,6 +199,7 @@ void AvboitAccumulationSharedComputeEmulationGraphTask::discardTiming(Optional<C
     );
     const MaterialPassDrawContext drawContext{
         commandList,
+        *payload.targets,
         payload.phase == Phase::Raster ? payload.targets->avboit.accumulationFramebuffer.get() : nullptr,
         MaterialPipelinePass::AvboitAccumulate,
         &payload.targets->avboit,

@@ -20,6 +20,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct DeferredFrameTargets;
+
 struct AvboitFrameTargets{
     u32 fullWidth = 0;
     u32 fullHeight = 0;
@@ -92,6 +94,7 @@ static_assert(sizeof(AvboitFrameTargets) == 232u, "AvboitFrameTargets should kee
 
 struct MaterialPassDrawContext{
     Core::CommandList& commandList;
+    const DeferredFrameTargets& deferredTargets;
     Core::Framebuffer* framebuffer = nullptr;
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
     const AvboitFrameTargets* avboitTargets = nullptr;

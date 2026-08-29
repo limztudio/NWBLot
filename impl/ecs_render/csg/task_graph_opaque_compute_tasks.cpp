@@ -101,6 +101,7 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
     ;
     const MaterialPassDrawContext drawContext{
         commandList,
+        *payload.targets,
         payload.targets->framebuffer.get(),
         MaterialPipelinePass::CsgReceiverSurface,
         nullptr,
@@ -212,6 +213,7 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
     payload.opaqueCsgTiming->value().finishMarker();
     const MaterialPassDrawContext drawContext{
         commandList,
+        *payload.targets,
         nullptr,
         MaterialPipelinePass::Opaque,
         nullptr,

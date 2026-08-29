@@ -706,6 +706,7 @@ bool RendererCsgSystem::findCsgClipContextHeapSlot(u32& outHeapSlot)const{
 }
 
 bool RendererCsgSystem::prepareCsgClipContextSlotData(
+    const DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
     CsgClipContextSlots& outContextSlots
 )const{
@@ -716,7 +717,7 @@ bool RendererCsgSystem::prepareCsgClipContextSlotData(
         !csgFrameBuffersReady(csgFrameData)
         || !m_drawState.m_materialTypedBufferHeapHandle.valid()
         || !m_drawState.m_instanceBufferHeapHandle.valid()
-        || !m_deferredState.m_targets.bindless.slotsBufferDescriptor.valid()
+        || !targets.bindless.slotsBufferDescriptor.valid()
     )
         return false;
 
@@ -726,19 +727,17 @@ bool RendererCsgSystem::prepareCsgClipContextSlotData(
     outContextSlots.cutters = m_csgState.m_cutterBufferHeapHandle.slot();
     outContextSlots.materialTyped = m_drawState.m_materialTypedBufferHeapHandle.slot();
     outContextSlots.meshInstances = m_drawState.m_instanceBufferHeapHandle.slot();
-    outContextSlots.deferredBindlessResources = m_deferredState.m_targets.bindless.slotsBufferDescriptor.slot();
+    outContextSlots.deferredBindlessResources = targets.bindless.slotsBufferDescriptor.slot();
     outContextSlots.intervalSampleState = m_csgState.m_intervalSampleStateHeapHandle.slot();
     return true;
 }
 
-void RendererCsgSystem::setCsgReceiverSurfaceImageStates(Core::CommandList& commandList){
-    const DeferredFrameTargets& targets = m_deferredState.m_targets;
+void RendererCsgSystem::setCsgReceiverSurfaceImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
     commandList.setTextureState(targets.csgReceiverEventData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
     commandList.setTextureState(targets.csgReceiverEventCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
 }
 
-void RendererCsgSystem::setCsgIntervalSampleImageStates(Core::CommandList& commandList){
-    const DeferredFrameTargets& targets = m_deferredState.m_targets;
+void RendererCsgSystem::setCsgIntervalSampleImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
     commandList.setTextureState(targets.csgRemovedIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
     commandList.setTextureState(targets.csgRemovedIntervalCapNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
     commandList.setTextureState(targets.csgRemovedIntervalData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);

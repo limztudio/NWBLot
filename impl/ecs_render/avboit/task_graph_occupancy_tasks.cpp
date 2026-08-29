@@ -167,6 +167,7 @@ void AvboitOccupancyComputeEmulationGraphTask::discardTiming(Optional<Core::GpuT
     );
     const MaterialPassDrawContext drawContext{
         commandList,
+        *payload.targets,
         nullptr,
         MaterialPipelinePass::AvboitOccupancy,
         &payload.targets->avboit,
@@ -259,6 +260,7 @@ void AvboitOccupancySharedComputeEmulationGraphTask::discardTiming(Optional<Core
     );
     const MaterialPassDrawContext drawContext{
         commandList,
+        *payload.targets,
         payload.phase == Phase::Raster ? payload.targets->avboit.lowFramebuffer.get() : nullptr,
         MaterialPipelinePass::AvboitOccupancy,
         &payload.targets->avboit,

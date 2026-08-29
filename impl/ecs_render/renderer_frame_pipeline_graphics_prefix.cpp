@@ -115,13 +115,12 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     m_graphicsPrefixSceneShadingSetupReady = false;
 
     const bool shadowTraceGeometryStatesGraphOwned = shadowTraceGeometrySet.valid();
+    const DeferredLightingGraphResources deferredLightingResources = m_deferredSystem.lightingGraphResources();
 
     if(
         !deferredTargets.valid()
         || !shadowPrepareTask.valid()
-        || !m_drawState.m_meshViewBuffer
-        || !m_deferredState.m_sceneShadingBuffer
-        || !m_deferredState.m_lightBuffer
+        || !deferredLightingResources.valid()
         || !albedo.valid()
         || !normal.valid()
         || !worldPosition.valid()

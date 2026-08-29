@@ -6,7 +6,45 @@
 
 
 #include <impl/ecs_render/avboit/task_graph_stage.h>
-#include <impl/ecs_render/kernel/subsystem_base.h>
+#include <impl/ecs_render/shared/renderer_frame_types.h>
+
+#include <core/alloc/global.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ALLOC_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GlobalArena;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ALLOC_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Graphics;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,9 +56,38 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererAvboitSystem final : public RendererFramePipelineSubsystemBase<RendererFramePipeline>{
+class RendererCsgSystem;
+class RendererDeferredState;
+class RendererMaterialSystem;
+class RendererShaderSystem;
+class RendererAvboitState;
+struct CsgFrameGpuData;
+struct CsgFrameState;
+struct MaterialPassDrawItemPartitions;
+struct MaterialPassDrawItems;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererAvboitSystem final : NoCopy{
 public:
-    explicit RendererAvboitSystem(RendererFramePipeline& renderer);
+    RendererAvboitSystem(
+        Core::Alloc::GlobalArena& arena,
+        Core::Graphics& graphics,
+        RendererDeferredState& deferredState,
+        RendererAvboitState& avboitState,
+        RendererShaderSystem& shaderSystem,
+        RendererMaterialSystem& materialSystem,
+        RendererCsgSystem& csgSystem
+    );
+
+public:
+    [[nodiscard]] bool shouldClearTargets(bool hasTransparentRenderers)const noexcept;
+    [[nodiscard]] bool captureTargetClearState()const noexcept;
+    void restoreTargetClearState(bool targetsNeedClear)noexcept;
+    void markFrameTargetUsage(bool hasTransparentRenderers)noexcept;
+    void invalidateResources();
 
 public:
     // The graph host owns the shared graph artifact; AVBOIT owns every graph-local identifier required by its
@@ -45,14 +112,10 @@ public:
 public:
     [[nodiscard]] bool createAvboitResources();
     [[nodiscard]] bool createAvboitPipelines();
-    [[nodiscard]] bool createAvboitFrameTargets(
-        DeferredFrameTargets& createdTargets,
-        Core::Format::Enum lowRasterFormat,
-        Core::Format::Enum accumColorFormat,
-        Core::Format::Enum accumExtinctionFormat,
-        Core::Format::Enum transmittanceFormat
-    );
+    void resetAvboitFrameTargets(AvboitFrameTargets& targets);
+    [[nodiscard]] bool createAvboitFrameTargets(DeferredFrameTargets& createdTargets);
     [[nodiscard]] bool registerAvboitFrameTargetDescriptors(DeferredFrameTargets& createdTargets, AvboitFrameTargets& avboitTargets);
+    [[nodiscard]] Core::Sampler& linearSampler()const noexcept;
     [[nodiscard]] bool prepareAvboitPassResources(DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
     void renderAvboitTransparentCsgIntervals(
         Core::CommandList& commandList,
@@ -180,6 +243,13 @@ private:
 
 
 private:
+    Core::Alloc::GlobalArena& m_arena;
+    Core::Graphics& m_graphics;
+    RendererDeferredState& m_deferredState;
+    RendererAvboitState& m_avboitState;
+    RendererShaderSystem& m_shaderSystem;
+    RendererMaterialSystem& m_materialSystem;
+    RendererCsgSystem& m_csgSystem;
     RendererAvboitTaskGraphStageState m_taskGraphStage;
 };
 

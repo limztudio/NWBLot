@@ -70,6 +70,9 @@ namespace ECSRenderDetail{
 #if defined(NWB_DEBUG)
 struct MaterialTypedInstanceRangeVector;
 #endif
+struct DeferredClearTimingRecordState;
+struct AvboitClearTimingRecordState;
+struct CsgIntervalClearTimingRecordState;
 // These semantic prefix stages may coalesce into one native submission or split at a compiler-derived
 // cross-queue frontier. Each stage points at a rebindable timing slot so the renderer can attach one ticket
 // to every actual packet after compilation.
@@ -84,31 +87,6 @@ enum class DeferredGraphicsPrefixTimingSlot : u8{
     Normalize,
     kCount,
 };
-struct DeferredClearTimingRecordState{
-    Core::Graphics* graphics = nullptr;
-    Optional<Core::GpuTimingMeasure>* timing = nullptr;
-    Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
-};
-// AVBOIT's typed target-clear chain starts/ends one timing scope from its first/last texture clear, preserving
-// the original measurement while the nine values record as individual graph built-ins.
-struct AvboitClearTimingRecordState{
-    Core::Graphics* graphics = nullptr;
-    Optional<Core::GpuTimingMeasure>* timing = nullptr;
-    Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-};
-// Opaque prefix timing tickets are rebound after compilation, whereas transparent CSG keeps AVBOIT Pre's
-// stable ticket. The rectangular clear pair resolves either form while preserving one timing range.
-struct CsgIntervalClearTimingRecordState{
-    Core::Graphics* graphics = nullptr;
-    Optional<Core::GpuTimingMeasure>* timing = nullptr;
-    Core::GpuTimingSubmissionTicket** rebindableTimingTicket = nullptr;
-    Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -116,14 +94,6 @@ struct CsgIntervalClearTimingRecordState{
 
 
 class RendererFramePipeline final : NoCopy{
-    template<typename RendererT>
-    friend class RendererFramePipelineSubsystemBase;
-    friend class RendererMaterialSystem;
-    friend class RendererCsgSystem;
-    friend class RendererDeferredSystem;
-    friend class RendererAvboitSystem;
-    friend class RendererRayTracingSystem;
-
 private:
     // This is deliberately diagnostic-only: lifecycle ownership remains below in RendererFramePipeline, while the
     // transition-only report lets the opt-in Vulkan smoke prove which accepted-history branch actually ran.
@@ -370,23 +340,6 @@ private:
         bool includeLaggedLightingHistoryCapture
     );
     void reportLaggedLightingTransition(LaggedLightingReport report, u64 targetGeneration);
-    [[nodiscard]] Core::Alloc::GlobalArena& arena()noexcept{ return m_arena; }
-    [[nodiscard]] Core::ECS::World& world()noexcept{ return m_world; }
-    [[nodiscard]] Core::Graphics& graphics()noexcept{ return m_graphics; }
-    [[nodiscard]] Core::Assets::AssetManager& assetManager()noexcept{ return m_assetManager; }
-    [[nodiscard]] RendererMeshState& meshState()noexcept{ return m_meshState; }
-    [[nodiscard]] RendererMaterialState& materialState()noexcept{ return m_materialState; }
-    [[nodiscard]] RendererDrawState& drawState()noexcept{ return m_drawState; }
-    [[nodiscard]] RendererCsgState& csgState()noexcept{ return m_csgState; }
-    [[nodiscard]] RendererDeferredState& deferredState()noexcept{ return m_deferredState; }
-    [[nodiscard]] RendererAvboitState& avboitState()noexcept{ return m_avboitState; }
-    [[nodiscard]] RendererRayTracingState& rayTracingState()noexcept{ return m_rayTracingState; }
-    [[nodiscard]] RendererShaderSystem& shaderSystem()noexcept{ return m_shaderSystem; }
-    [[nodiscard]] RendererMeshSystem& meshSystem()noexcept{ return m_meshSystem; }
-    [[nodiscard]] RendererMaterialSystem& materialSystem()noexcept{ return m_materialSystem; }
-    [[nodiscard]] RendererCsgSystem& csgSystem()noexcept{ return m_csgSystem; }
-    [[nodiscard]] RendererAvboitSystem& avboitSystem()noexcept{ return m_avboitSystem; }
-    [[nodiscard]] RendererRayTracingSystem& raytracingSystem()noexcept{ return m_raytracingSystem; }
 
 private:
     Core::Alloc::GlobalArena& m_arena;
@@ -631,8 +584,8 @@ private:
 private:
     RendererShaderSystem m_shaderSystem;
     RendererMeshSystem m_meshSystem;
-    RendererMaterialSystem m_materialSystem;
     RendererCsgSystem m_csgSystem;
+    RendererMaterialSystem m_materialSystem;
     RendererDeferredSystem m_deferredSystem;
     RendererAvboitSystem m_avboitSystem;
     RendererRayTracingSystem m_raytracingSystem;

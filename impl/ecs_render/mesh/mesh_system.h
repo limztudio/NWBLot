@@ -43,6 +43,25 @@ NWB_IMPL_BEGIN
 namespace ECSRenderDetail{
     struct MeshFrameHeapSlots;
     struct MeshViewGpuData;
+
+    struct MeshViewBufferSnapshot{
+        Core::BufferHandle buffer;
+
+        [[nodiscard]] bool valid()const noexcept{ return static_cast<bool>(buffer); }
+    };
+    struct MeshSoftwareBvhParentBuildState{
+        Core::BufferHandle buffer;
+        Name identity = NAME_NONE;
+    };
+    struct MeshBlasGraphState{
+        Name meshName = NAME_NONE;
+        Core::RayTracingAccelStructHandle blas;
+        bool backingFresh = false;
+        bool nativeBuildsBlas = false;
+    };
+    using MeshSoftwareBvhParentBuildStateVector = Vector<MeshSoftwareBvhParentBuildState, Core::Alloc::ScratchArena>;
+    using MeshRetainedAccelerationStateBufferVector = Vector<Core::BufferHandle, Core::Alloc::ScratchArena>;
+    using MeshBlasGraphStateVector = Vector<MeshBlasGraphState, Core::Alloc::ScratchArena>;
 };
 
 
@@ -128,7 +147,11 @@ public:
     [[nodiscard]] bool createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
     [[nodiscard]] bool findRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
     void pruneRuntimeMeshResources();
+    [[nodiscard]] bool collectSoftwareBvhParentBuildStates(ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector& outStates)const;
+    void collectRetainedAccelerationStateBuffers(ECSRenderDetail::MeshRetainedAccelerationStateBufferVector& outBuffers)const;
+    void collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphStateVector& outStates)const;
     [[nodiscard]] bool createMeshViewBuffer();
+    [[nodiscard]] ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot()const;
     // Resolves the immutable per-frame view payload before graph declaration.  The caller publishes it through a
     // graph-owned upload task, then confirms the CPU mirror only after that packet accepts.
     [[nodiscard]] bool prepareMeshViewBufferUpload(
@@ -137,6 +160,7 @@ public:
         bool& outUploadRequired
     )const;
     void confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState);
+    void invalidateMeshViewBufferUploadMirror();
     [[nodiscard]] bool createMeshFrameHeapHandles();
     [[nodiscard]] bool meshFrameHeapHandlesReady()const;
     void populateMeshFrameHeapSlots(ECSRenderDetail::MeshFrameHeapSlots& outSlots)const;

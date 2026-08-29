@@ -2,11 +2,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include "material_system.h"
+
 #include <impl/ecs_render/avboit/avboit_private.h>
 #include <impl/ecs_render/material/material_shader_variants_private.h>
+#include <impl/ecs_render/shader/shader_system.h>
+#include <impl/ecs_render/shared/renderer_state.h>
 
 #include <impl/assets/graphics/csg/names.h>
+#include <impl/assets_material/shader_stage_names.h>
+
+#include <core/common/log.h>
+#include <core/graphics/module.h>
+#include <core/graphics/shader_archive.h>
+#include <impl/ecs_csg/shape_registry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -142,7 +151,7 @@ bool RendererMaterialSystem::createRendererPipeline(
     const MaterialPipelinePass::Enum pass = pipelineKey.pass;
     NWB_ASSERT(materialKey);
 
-    auto [it, inserted] = materialState().m_pipelines.try_emplace(pipelineKey);
+    auto [it, inserted] = m_materialState.m_pipelines.try_emplace(pipelineKey);
     MaterialPipelineResources& resources = it.value();
     switch(resources.renderPath){
     case RenderPath::MeshShader:
@@ -163,7 +172,7 @@ bool RendererMaterialSystem::createRendererPipeline(
 
     auto removeFailedEntry = [&](){
         if(inserted)
-            materialState().m_pipelines.erase(it);
+            m_materialState.m_pipelines.erase(it);
     };
     auto failMaterialPipeline = [&](){
         removeFailedEntry();
@@ -177,19 +186,19 @@ bool RendererMaterialSystem::createRendererPipeline(
         return false;
     }
     const AStringView shaderVariant(materialInfo.shaderVariant.data(), materialInfo.shaderVariant.size());
-    Core::GraphicsString csgShaderVariant(arena());
-    Core::GraphicsString avboitCsgShaderVariant(arena());
+    Core::GraphicsString csgShaderVariant(m_arena);
+    Core::GraphicsString avboitCsgShaderVariant(m_arena);
     const MaterialPipelineCsgBindingUse csgBindingUse =
         MaterialPipelineResolveCsgBindingUse(pipelineKey, pass);
     const bool csgClipPipeline = csgBindingUse.clip;
     const bool avboitCsgClipPipeline = csgBindingUse.avboitClip;
     ACompactString csgProjectEvaluatorModuleInclude;
-    Core::GraphicsString csgProjectEvaluatorModuleAssignment(arena());
+    Core::GraphicsString csgProjectEvaluatorModuleAssignment(m_arena);
     AStringView materialProjectEvaluatorModuleAssignmentToAdd;
     AStringView avboitProjectEvaluatorModuleAssignmentToAdd;
     if(csgClipPipeline){
         if(!__hidden_material_pipeline::ResolveCsgProjectEvaluatorModuleInclude(
-            csgShapeRegistry(),
+            m_csgShapeRegistry,
             pipelineKey.csgEvaluatorVariant,
             csgProjectEvaluatorModuleInclude
         )){
@@ -294,21 +303,21 @@ bool RendererMaterialSystem::createRendererPipeline(
         break;
     }
 
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     const Core::RenderState renderState = ECSRenderDetail::BuildRenderStateForPass(pass, pipelineKey.twoSided);
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material geometry pipeline requires the global descriptor heap"));
         return failMaterialPipeline();
     }
-    if(!avboitState().m_emptyBindingLayout){
+    if(!m_avboitState.m_emptyBindingLayout){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material pipelines require the shared empty set-0 layout"));
         return failMaterialPipeline();
     }
 
     auto loadPassPixelShader = [&]() -> bool{
         if(pass == MaterialPipelinePass::Opaque){
-            return m_renderer.shaderSystem().loadShader(
+            return m_shaderSystem.loadShader(
                 resources.pixelShader,
                 materialInfo.pixelShader.name(),
                 pixelShaderVariant,
@@ -317,7 +326,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             );
         }
         if(pass == MaterialPipelinePass::CsgReceiverSurface){
-            return m_renderer.shaderSystem().loadShader(
+            return m_shaderSystem.loadShader(
                 resources.pixelShader,
                 passPixelShaderName,
                 Core::ShaderArchive::s_DefaultVariant,
@@ -326,7 +335,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             );
         }
         if(avboitCsgClipPipeline){
-            return m_renderer.shaderSystem().loadShader(
+            return m_shaderSystem.loadShader(
                 resources.pixelShader,
                 passPixelShaderName,
                 AStringView(avboitCsgShaderVariant),
@@ -337,7 +346,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         if(!passPixelShader){
             // AVBOIT pixel shaders are generated for the selected material and use its typed binding and project
             // surface/BXDF contract, so load the resolved per-material pass shader at its default variant.
-            return m_renderer.shaderSystem().loadShader(
+            return m_shaderSystem.loadShader(
                 resources.pixelShader,
                 passPixelShaderName,
                 Core::ShaderArchive::s_DefaultVariant,
@@ -350,7 +359,7 @@ bool RendererMaterialSystem::createRendererPipeline(
     };
 
     auto tryBuildMeshPipeline = [&]() -> bool{
-        if(!m_renderer.shaderSystem().loadShader(resources.meshShader, materialInfo.meshShader.name(), meshShaderVariant, Core::ShaderType::Mesh, "ECSRender_RendererMesh"))
+        if(!m_shaderSystem.loadShader(resources.meshShader, materialInfo.meshShader.name(), meshShaderVariant, Core::ShaderType::Mesh, "ECSRender_RendererMesh"))
             return false;
         if(!loadPassPixelShader())
             return false;
@@ -360,7 +369,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         pipelineDesc.setPixelShader(resources.pixelShader);
         pipelineDesc.setRenderState(renderState);
         // Set 0 is the shared push-only range; all CSG and AVBOIT resources are selected through the global heap.
-        pipelineDesc.addBindingLayout(avboitState().m_emptyBindingLayout);
+        pipelineDesc.addBindingLayout(m_avboitState.m_emptyBindingLayout);
         // The mesh stage resolves every immutable geometry stream through the global StorageBuffer heap. Keep both
         // fixed heap layouts in every mesh pipeline. The sampler layout is part of that frozen heap surface even though geometry uses
         // only the resource table today.
@@ -380,11 +389,11 @@ bool RendererMaterialSystem::createRendererPipeline(
     };
 
     auto tryBuildComputePipeline = [&]() -> bool{
-        NWB_ASSERT(drawState().m_computeBindingLayout);
-        NWB_ASSERT(drawState().m_emulationVertexShader);
-        NWB_ASSERT(drawState().m_emulationInputLayout);
+        NWB_ASSERT(m_drawState.m_computeBindingLayout);
+        NWB_ASSERT(m_drawState.m_emulationVertexShader);
+        NWB_ASSERT(m_drawState.m_emulationInputLayout);
         const Name& meshComputeArchiveStageName = MaterialShaderStageNames::s_MeshComputeArchiveStageName;
-        if(!m_renderer.shaderSystem().loadShader(
+        if(!m_shaderSystem.loadShader(
             resources.computeShader,
             materialInfo.meshShader.name(),
             meshShaderVariant,
@@ -397,7 +406,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             return false;
         Core::ComputePipelineDesc computeDesc;
         computeDesc.setComputeShader(resources.computeShader);
-        computeDesc.addBindingLayout(drawState().m_computeBindingLayout);
+        computeDesc.addBindingLayout(m_drawState.m_computeBindingLayout);
         // The compute-emulation mesh stage shares the same heap-backed source-stream runtime as the mesh-shader
         // path, so it needs the persistent tables before its dispatch as well.
         computeDesc
@@ -411,11 +420,11 @@ bool RendererMaterialSystem::createRendererPipeline(
         }
 
         Core::GraphicsPipelineDesc emulationDesc;
-        emulationDesc.setInputLayout(drawState().m_emulationInputLayout);
-        emulationDesc.setVertexShader(drawState().m_emulationVertexShader);
+        emulationDesc.setInputLayout(m_drawState.m_emulationInputLayout);
+        emulationDesc.setVertexShader(m_drawState.m_emulationVertexShader);
         emulationDesc.setPixelShader(resources.pixelShader);
         emulationDesc.setRenderState(renderState);
-        emulationDesc.addBindingLayout(avboitState().m_emptyBindingLayout);
+        emulationDesc.addBindingLayout(m_avboitState.m_emptyBindingLayout);
         emulationDesc
             .addBindingLayout(heap.getResourceLayout())
             .addBindingLayout(heap.getSamplerLayout())
@@ -431,7 +440,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         return true;
     };
 
-    const bool meshSupported = graphics().queryFeatureSupport(Core::Feature::Meshlets);
+    const bool meshSupported = m_graphics.queryFeatureSupport(Core::Feature::Meshlets);
     if(pass == MaterialPipelinePass::Opaque && !hasPixelShader){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' requires a pixel shader"), StringConvert(materialKey.c_str()));
         return failMaterialPipeline();
@@ -472,8 +481,8 @@ bool RendererMaterialSystem::createRendererPipeline(
 bool RendererMaterialSystem::findRendererPipeline(const MaterialPipelineKey& pipelineKey, MaterialPipelineResources*& outResources){
     outResources = nullptr;
 
-    const auto foundPipeline = materialState().m_pipelines.find(pipelineKey);
-    if(foundPipeline == materialState().m_pipelines.end())
+    const auto foundPipeline = m_materialState.m_pipelines.find(pipelineKey);
+    if(foundPipeline == m_materialState.m_pipelines.end())
         return false;
 
     MaterialPipelineResources& resources = foundPipeline.value();
@@ -494,8 +503,12 @@ bool RendererMaterialSystem::findRendererPipeline(const MaterialPipelineKey& pip
     return true;
 }
 
+void RendererMaterialSystem::invalidateRendererPipelines(){
+    m_materialState.m_pipelines.clear();
+}
+
 void RendererMaterialSystem::logMaterialRenderPathDecision(const Name& materialKey, const RenderPath::Enum renderPath, const bool meshSupported){
-    auto [it, inserted] = materialState().m_loggedMaterialPaths.try_emplace(materialKey, renderPath);
+    auto [it, inserted] = m_materialState.m_loggedMaterialPaths.try_emplace(materialKey, renderPath);
     if(!inserted){
         if(it.value() == renderPath)
             return;

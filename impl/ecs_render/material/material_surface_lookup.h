@@ -2,7 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "csg_system.h"
+#pragma once
+
+
+#include <impl/global.h>
+
+#include <core/assets/ref.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,27 +19,24 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererCsgSystem::RendererCsgSystem(
-    Core::Alloc::GlobalArena& arena,
-    Core::ECS::World& world,
-    Core::Graphics& graphics,
-    CsgShapeRegistry& csgShapeRegistry,
-    RendererDrawState& drawState,
-    RendererCsgState& csgState,
-    RendererDeferredState& deferredState,
-    RendererShaderSystem& shaderSystem,
-    RendererMeshSystem& meshSystem
-)
-    : m_arena(arena)
-    , m_world(world)
-    , m_graphics(graphics)
-    , m_csgShapeRegistry(csgShapeRegistry)
-    , m_drawState(drawState)
-    , m_csgState(csgState)
-    , m_deferredState(deferredState)
-    , m_shaderSystem(shaderSystem)
-    , m_meshSystem(meshSystem)
-{}
+class Material;
+struct MaterialSurfaceInfo;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class IMaterialSurfaceLookup{
+public:
+    virtual ~IMaterialSurfaceLookup() = default;
+
+
+public:
+    [[nodiscard]] virtual bool findMaterialSurfaceInfo(
+        const Core::Assets::AssetRef<Material>& materialAsset,
+        MaterialSurfaceInfo*& outInfo
+    ) = 0;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

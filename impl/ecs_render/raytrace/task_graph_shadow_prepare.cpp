@@ -162,8 +162,8 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
-    const Name causticEmissionTargetsIdentity = graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
-        && graphics().queryFeatureSupport(Core::Feature::RayQuery)
+    const Name causticEmissionTargetsIdentity = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
+        && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
             ? Name("render.hardware_caustics.emission_targets")
             : Name("render.software_caustics.emission_targets")
     ;
@@ -619,11 +619,13 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     Vector<PreparedMeshSwBvhGraphResources, Core::Alloc::ScratchArena> pureSoftwareMeshSwBvhGraphResources{
         scratchArena
     };
+    ECSRenderDetail::MeshBlasGraphStateVector liveMeshBlasGraphStates{ scratchArena };
+    m_meshSystem.collectBlasGraphStates(liveMeshBlasGraphStates);
     resourceUses.reserve(
         19u
         + shadowTraceGeometryResourceCount
         + softwareBvhBuildStateResourceCount
-        + meshState().m_meshes.size()
+        + liveMeshBlasGraphStates.size()
         + preparedMeshBlasBuilds.size() * 2u
     );
     accelStructFinalizeResourceUses.reserve(
@@ -904,28 +906,24 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             }
         }
     }
-    for(auto meshIt = meshState().m_meshes.begin(); meshIt != meshState().m_meshes.end(); ++meshIt){
-        const MeshResources& mesh = meshIt.value();
+    for(const ECSRenderDetail::MeshBlasGraphState& state : liveMeshBlasGraphStates){
         // A frozen plan owns its retained handles even if a record-time replacement later sends it through the
         // native compatibility fallback. Do not collide a replacement with the frozen graph identity here.
-        if(isPreparedMeshBlasBuild(mesh.meshName))
-            continue;
-        if(!mesh.blas)
+        if(isPreparedMeshBlasBuild(state.meshName))
             continue;
 
-        const Name blasIdentity = DeriveName(mesh.meshName, AStringView(":blas"));
-        const Core::ResourceStates::Mask blasInitialState = mesh.blasBackingFresh
+        const Name blasIdentity = DeriveName(state.meshName, AStringView(":blas"));
+        const Core::ResourceStates::Mask blasInitialState = state.backingFresh
             ? Core::ResourceStates::Common
             : Core::ResourceStates::Unknown
         ;
         const Core::GpuGraphResourceId blas = m_deferredLightingTaskGraph.importAccelStruct(
-            mesh.blas,
+            state.blas,
             AccelStructResourceDesc(blasIdentity, "Mesh BLAS").setInitialState(blasInitialState)
         );
         resourcesImported = resourcesImported && blas.valid();
         if(blas.valid()){
-            const bool nativeBuildsBlas = mesh.runtimeMesh || mesh.blasBuildPending;
-            if(nativeBuildsBlas){
+            if(state.nativeBuildsBlas){
                 // Direct hybrid compatibility and frozen opaque plans both record the native write/read sequence
                 // here. The typed graph resource seeds its retained backing state on the next declaration.
                 resourceUses.push_back(ReadWriteUse(blas, Core::ResourceStates::AccelStructRead));

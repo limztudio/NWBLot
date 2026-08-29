@@ -2,9 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include "deferred_system.h"
 
 #include <impl/ecs_render/deferred/deferred_graph_private.h>
+#include <impl/ecs_render/kernel/renderer_format_private.h>
+#include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/shader/shader_system.h>
+#include <impl/ecs_render/shared/renderer_scene_private.h>
+#include <impl/ecs_render/shared/renderer_state.h>
+
+#include <core/common/log.h>
+#include <core/graphics/module.h>
+#include <core/graphics/shader_archive.h>
+
 #include <impl/assets/graphics/deferred/binding_slots.h>
 #include <impl/assets/graphics/deferred/names.h>
 
@@ -70,14 +80,14 @@ struct DeferredLightingGraphTask{
 
 
 bool RendererDeferredSystem::createDeferredLightingResources(){
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred lighting requires the global descriptor heap"));
         return false;
     }
 
-    if(!deferredState().m_sceneShadingBuffer){
+    if(!m_deferredState.m_sceneShadingBuffer){
         Core::BufferDesc sceneShadingBufferDesc;
         sceneShadingBufferDesc
             .setByteSize(sizeof(ECSRenderDetail::SceneShadingGpuData))
@@ -86,14 +96,14 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        deferredState().m_sceneShadingBuffer = graphics().createBuffer(sceneShadingBufferDesc);
-        if(!deferredState().m_sceneShadingBuffer){
+        m_deferredState.m_sceneShadingBuffer = m_graphics.createBuffer(sceneShadingBufferDesc);
+        if(!m_deferredState.m_sceneShadingBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene shading buffer"));
             return false;
         }
     }
 
-    if(!deferredState().m_lightBuffer){
+    if(!m_deferredState.m_lightBuffer){
         Core::BufferDesc lightBufferDesc;
         lightBufferDesc
             .setByteSize(static_cast<u64>(sizeof(ECSRenderDetail::SceneLightGpuData) * NWB_SCENE_MAX_LIGHTS))
@@ -102,15 +112,15 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        deferredState().m_lightBuffer = graphics().createBuffer(lightBufferDesc);
-        if(!deferredState().m_lightBuffer){
+        m_deferredState.m_lightBuffer = m_graphics.createBuffer(lightBufferDesc);
+        if(!m_deferredState.m_lightBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene light buffer"));
             return false;
         }
     }
 
-    if(!deferredState().m_lightingBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc(arena());
+    if(!m_deferredState.m_lightingBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::Compute)
         ;
@@ -118,14 +128,14 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         // effective swap-chain mode so HDR can retain linear values until final presentation.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_lighting::PushConstants)));
 
-        deferredState().m_lightingBindingLayout = device.createBindingLayout(bindingLayoutDesc);
-        if(!deferredState().m_lightingBindingLayout){
+        m_deferredState.m_lightingBindingLayout = device.createBindingLayout(bindingLayoutDesc);
+        if(!m_deferredState.m_lightingBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting binding layout"));
             return false;
         }
     }
 
-    if(!ECSRenderDetail::CreateClampSampler(device, deferredState().m_sampler, false)){
+    if(!ECSRenderDetail::CreateClampSampler(device, m_deferredState.m_sampler, false)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting sampler"));
         return false;
     }
@@ -133,8 +143,8 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
     // The deferred-lighting compute harness includes the cook-generated BXDF dispatch module assembled from every
     // material's `bxdf`. The engine ships no default BXDF and projects do not select a lighting shader -- shading is
     // entirely material-driven (see EmitDeferredBxdfDispatchModule).
-    if(!m_renderer.shaderSystem().loadShader(
-        deferredState().m_lightingComputeShader,
+    if(!m_shaderSystem.loadShader(
+        m_deferredState.m_lightingComputeShader,
         AssetsGraphicsDeferred::s_LightingComputeShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
@@ -149,21 +159,21 @@ bool RendererDeferredSystem::createDeferredLightingPipeline(){
     if(!createDeferredLightingResources())
         return false;
 
-    if(deferredState().m_lightingPipeline)
+    if(m_deferredState.m_lightingPipeline)
         return true;
 
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc
-        .setComputeShader(deferredState().m_lightingComputeShader)
-        .addBindingLayout(deferredState().m_lightingBindingLayout)
+        .setComputeShader(m_deferredState.m_lightingComputeShader)
+        .addBindingLayout(m_deferredState.m_lightingBindingLayout)
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
 
-    deferredState().m_lightingPipeline = device.createComputePipeline(pipelineDesc);
-    if(!deferredState().m_lightingPipeline){
+    m_deferredState.m_lightingPipeline = device.createComputePipeline(pipelineDesc);
+    if(!m_deferredState.m_lightingPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting pipeline"));
         return false;
     }
@@ -198,8 +208,8 @@ bool RendererDeferredSystem::prepareSceneShadingBufferUploads(
     ECSRenderDetail::SceneShadingGpuData& outSceneShadingState,
     bool& outSceneShadingUploadRequired
 ){
-    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
-    NWB_ASSERT(deferredState().m_lightBuffer);
+    NWB_ASSERT(m_deferredState.m_sceneShadingBuffer);
+    NWB_ASSERT(m_deferredState.m_lightBuffer);
     outLightCount = 0u;
     outLightUploadRequired = false;
     outSceneShadingUploadRequired = false;
@@ -208,7 +218,7 @@ bool RendererDeferredSystem::prepareSceneShadingBufferUploads(
 
     f32 causticLightImportance[NWB_SCENE_MAX_LIGHTS];
     const u32 lightCount = ECSRenderDetail::ResolveSceneLights(
-        world(),
+        m_world,
         outLightData,
         causticLightImportance,
         NWB_SCENE_MAX_LIGHTS
@@ -217,17 +227,17 @@ bool RendererDeferredSystem::prepareSceneShadingBufferUploads(
     // Caustic-light classification: rank the opted-in directional/spot lights and assign a caustic slot into
     // each chosen light's params.w, gated on the scene holding at least one refractive instance (gathered earlier this
     // frame by prepareCausticEmissionTargets into the ray-tracing state).
-    const u32 refractiveInstanceCount = rayTracingState().m_causticRefractiveInstanceCount;
+    const u32 refractiveInstanceCount = m_rayTracingState.m_causticRefractiveInstanceCount;
     const u32 causticLightCount = ECSRenderDetail::ResolveCausticLights(
         outLightData,
         causticLightImportance,
         lightCount,
         refractiveInstanceCount
     );
-    rayTracingState().m_causticLightCount = causticLightCount;
+    m_rayTracingState.m_causticLightCount = causticLightCount;
     // Active shadow slots = the importance-ranked pool ResolveSceneLights filled (slots 0..min(lightCount,N)-1); the
     // half-res shadow upsample reads this so it only reconstructs the slots that hold a light.
-    rayTracingState().m_shadowSlotCount = (lightCount < NWB_SCENE_SHADOW_SLOT_COUNT) ? lightCount : NWB_SCENE_SHADOW_SLOT_COUNT;
+    m_rayTracingState.m_shadowSlotCount = (lightCount < NWB_SCENE_SHADOW_SLOT_COUNT) ? lightCount : NWB_SCENE_SHADOW_SLOT_COUNT;
     // Soft opaque shadow (all light types): record which shadow slots hold a light (params.z >= 0), regardless of type.
     // The soft path traces + denoises + upsamples exactly these slots (once per set bit): a directional light softens by
     // its constant angular radius, a point/spot light by the distance-dependent cone its source sphere subtends -- both
@@ -242,26 +252,26 @@ bool RendererDeferredSystem::prepareSceneShadingBufferUploads(
                 softShadowSlotMask |= (1u << slotIndex);
         }
     }
-    rayTracingState().m_softShadowSlotMask = softShadowSlotMask;
+    m_rayTracingState.m_softShadowSlotMask = softShadowSlotMask;
     logCausticClassificationOnce(outLightData, lightCount, causticLightCount, refractiveInstanceCount);
 
     const usize lightByteCount = static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData);
-    NWB_ASSERT(lightByteCount <= sizeof(deferredState().m_lightGpuData));
+    NWB_ASSERT(lightByteCount <= sizeof(m_deferredState.m_lightGpuData));
     const bool lightDataUnchanged =
-        deferredState().m_lightGpuDataValid
-        && deferredState().m_lightGpuDataCount == lightCount
-        && NWB_MEMCMP(deferredState().m_lightGpuData, outLightData, lightByteCount) == 0
+        m_deferredState.m_lightGpuDataValid
+        && m_deferredState.m_lightGpuDataCount == lightCount
+        && NWB_MEMCMP(m_deferredState.m_lightGpuData, outLightData, lightByteCount) == 0
     ;
     // A zero-light scene has no copyable payload. The graph still transitions the buffer for a later SRV use,
     // while acceptance records the empty CPU mirror below.
     outLightUploadRequired = !lightDataUnchanged && lightByteCount != 0u;
     outLightCount = lightCount;
 
-    outSceneShadingState = ECSRenderDetail::ResolveSceneShadingState(world(), fallbackAspectRatio, lightCount);
+    outSceneShadingState = ECSRenderDetail::ResolveSceneShadingState(m_world, fallbackAspectRatio, lightCount);
     outSceneShadingUploadRequired = !(
-        deferredState().m_sceneShadingGpuDataValid
+        m_deferredState.m_sceneShadingGpuDataValid
         && NWB_MEMCMP(
-            deferredState().m_sceneShadingGpuData,
+            m_deferredState.m_sceneShadingGpuData,
             &outSceneShadingState,
             sizeof(outSceneShadingState)
         ) == 0
@@ -283,23 +293,23 @@ void RendererDeferredSystem::confirmSceneShadingBufferUploads(
         NWB_ASSERT(lightData || lightByteCount == 0u);
         if(lightByteCount != 0u){
             NWB_MEMCPY(
-                deferredState().m_lightGpuData,
-                sizeof(deferredState().m_lightGpuData),
+                m_deferredState.m_lightGpuData,
+                sizeof(m_deferredState.m_lightGpuData),
                 lightData,
                 lightByteCount
             );
         }
-        deferredState().m_lightGpuDataCount = lightCount;
-        deferredState().m_lightGpuDataValid = true;
+        m_deferredState.m_lightGpuDataCount = lightCount;
+        m_deferredState.m_lightGpuDataValid = true;
     }
     if(sceneShadingUploadRequired){
         NWB_MEMCPY(
-            deferredState().m_sceneShadingGpuData,
-            sizeof(deferredState().m_sceneShadingGpuData),
+            m_deferredState.m_sceneShadingGpuData,
+            sizeof(m_deferredState.m_sceneShadingGpuData),
             &sceneShadingState,
             sizeof(sceneShadingState)
         );
-        deferredState().m_sceneShadingGpuDataValid = true;
+        m_deferredState.m_sceneShadingGpuDataValid = true;
     }
 }
 
@@ -308,7 +318,7 @@ bool RendererDeferredSystem::renderDeferredLighting(
     DeferredFrameTargets& targets,
     const bool useLaggedLightingHistory
 ){
-    NWB_ASSERT(deferredState().m_lightingPipeline);
+    NWB_ASSERT(m_deferredState.m_lightingPipeline);
 
     const DeferredLaggedLightingHistoryResources* const laggedHistory = useLaggedLightingHistory
         ? &targets.laggedLightingHistory
@@ -325,15 +335,15 @@ bool RendererDeferredSystem::renderDeferredLighting(
     // The compiled task graph owns every packet-boundary bindless transition, including the lagged-history variant.
     // This thunk keeps only its descriptor upload and native lighting commands.
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredLighting, graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_DeferredLighting, m_graphics.getDevice(), commandList);
 
     Core::ComputeState computeState;
-    computeState.setPipeline(deferredState().m_lightingPipeline.get());
+    computeState.setPipeline(m_deferredState.m_lightingPipeline.get());
     commandList.setComputeState(computeState);
-    graphics().getDevice().getDescriptorHeap().bindCompute(commandList, *deferredState().m_lightingPipeline);
+    m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *m_deferredState.m_lightingPipeline);
     const __hidden_deferred_lighting::PushConstants pushConstants{
         resourceSlots.slot(),
-        graphics().isHDR10OutputActive()
+        m_graphics.isHDR10OutputActive()
             ? NWB_DEFERRED_PRESENTATION_HDR10
             : NWB_DEFERRED_PRESENTATION_SDR
     };
@@ -355,12 +365,12 @@ void RendererDeferredSystem::logCausticClassificationOnce(
     // opted-in caustic lights + the refractive emission targets, so a smoke run can confirm the classification +
     // gather without any rendering change. Reports the caustic-light count, the refractive emission-target AABB count
     // + their combined world extent, then one line per chosen caustic light (slot, light index, type).
-    if(rayTracingState().m_causticEmissionGateLogged)
+    if(m_rayTracingState.m_causticEmissionGateLogged)
         return;
-    rayTracingState().m_causticEmissionGateLogged = true;
+    m_rayTracingState.m_causticEmissionGateLogged = true;
 
-    const Float4& boundsMin = rayTracingState().m_causticTargetBoundsMin;
-    const Float4& boundsMax = rayTracingState().m_causticTargetBoundsMax;
+    const Float4& boundsMin = m_rayTracingState.m_causticTargetBoundsMin;
+    const Float4& boundsMax = m_rayTracingState.m_causticTargetBoundsMax;
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: caustic P1 -- {} caustic light(s); {} refractive emission target(s), combined extent min ({}, {}, {}) max ({}, {}, {})")
         , causticLightCount
         , refractiveInstanceCount

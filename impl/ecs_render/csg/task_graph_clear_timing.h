@@ -5,7 +5,11 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include <impl/ecs_render/kernel/timing_names.h>
+
+#include <core/graphics/gpu_timing.h>
+#include <core/graphics/module.h>
+#include <core/graphics/task_graph/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,6 +25,16 @@ namespace ECSRenderDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Opaque prefix timing tickets are rebound after compilation, whereas transparent CSG keeps AVBOIT Pre's
+// stable ticket. The rectangular clear pair resolves either form while preserving one timing range.
+struct CsgIntervalClearTimingRecordState{
+    Core::Graphics* graphics = nullptr;
+    Optional<Core::GpuTimingMeasure>* timing = nullptr;
+    Core::GpuTimingSubmissionTicket** rebindableTimingTicket = nullptr;
+    Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+};
 
 
 [[nodiscard]] inline Core::GpuTimingSubmissionTicket* ResolveCsgIntervalClearTimingTicket(

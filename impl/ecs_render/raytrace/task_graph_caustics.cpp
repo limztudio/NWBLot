@@ -378,6 +378,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         photonResourceUses.push_back(ReadUse(resource, state));
         return true;
     };
+    const ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot = m_meshSystem.meshViewBufferSnapshot();
     const bool optionalResourcesImported =
         appendOptionalReadBuffer(
             m_rayTracingState.m_causticEmissionTargetBuffer,
@@ -386,7 +387,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
             Core::ResourceStates::ShaderResource
         )
         && appendOptionalReadBuffer(
-            m_drawState.m_meshViewBuffer,
+            meshViewBufferSnapshot.buffer,
             Name("render.deferred.mesh_view"),
             "Mesh View",
             Core::ResourceStates::ConstantBuffer

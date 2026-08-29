@@ -801,7 +801,7 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buf
     if(handle.valid())
         return true;
 
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
@@ -816,7 +816,7 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buf
 }
 
 bool RendererRayTracingSystem::replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
@@ -831,7 +831,7 @@ bool RendererRayTracingSystem::replaceRayTraceMaterialContextHeapHandle(Core::Bu
 }
 
 bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
-    if(rayTracingState().m_rayTraceMaterialContextSlotsBuffer)
+    if(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer)
         return true;
 
     Core::BufferDesc slotsBufferDesc;
@@ -842,8 +842,8 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
         .setDebugName(Name("raytrace_material_context_slots"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    rayTracingState().m_rayTraceMaterialContextSlotsBuffer = graphics().createBuffer(slotsBufferDesc);
-    if(!rayTracingState().m_rayTraceMaterialContextSlotsBuffer){
+    m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer = m_graphics.createBuffer(slotsBufferDesc);
+    if(!m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create ray-trace material-context slot buffer"));
         return false;
     }
@@ -855,9 +855,9 @@ bool RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(RayTraceMate
     // preparation packet records. Do not recreate either one here: a recording-time replacement would invalidate
     // the graph's frozen resource identity and the immutable selector snapshot it retains.
     if(
-        !rayTracingState().m_rayTraceMaterialContextSlotsBuffer
-        || !rayTracingState().m_shadowMaterialContextSlotsHeapHandle.valid()
-        || rayTracingState().m_shadowMaterialContextSlotsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
+        !m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer
+        || !m_rayTracingState.m_shadowMaterialContextSlotsHeapHandle.valid()
+        || m_rayTracingState.m_shadowMaterialContextSlotsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
     )
         return false;
 
@@ -874,11 +874,11 @@ bool RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(RayTraceMate
     };
 
     const bool complete =
-        resolveStorageSlot(rayTracingState().m_sceneBvhNodeBuffer.get(), rayTracingState().m_sceneBvhNodeHeapHandle, slots.sceneBvhNodes)
-        && resolveStorageSlot(rayTracingState().m_sceneInstanceBuffer.get(), rayTracingState().m_sceneInstanceHeapHandle, slots.sceneInstances)
-        && resolveStorageSlot(rayTracingState().m_shadowInstanceMaterialBuffer.get(), rayTracingState().m_shadowInstanceMaterialHeapHandle, slots.instanceMaterial)
-        && resolveStorageSlot(rayTracingState().m_shadowMaterialTypedBuffer.get(), rayTracingState().m_shadowMaterialTypedHeapHandle, slots.materialTyped)
-        && resolveStorageSlot(rayTracingState().m_shadowInstanceBuffer.get(), rayTracingState().m_shadowInstanceHeapHandle, slots.meshInstances)
+        resolveStorageSlot(m_rayTracingState.m_sceneBvhNodeBuffer.get(), m_rayTracingState.m_sceneBvhNodeHeapHandle, slots.sceneBvhNodes)
+        && resolveStorageSlot(m_rayTracingState.m_sceneInstanceBuffer.get(), m_rayTracingState.m_sceneInstanceHeapHandle, slots.sceneInstances)
+        && resolveStorageSlot(m_rayTracingState.m_shadowInstanceMaterialBuffer.get(), m_rayTracingState.m_shadowInstanceMaterialHeapHandle, slots.instanceMaterial)
+        && resolveStorageSlot(m_rayTracingState.m_shadowMaterialTypedBuffer.get(), m_rayTracingState.m_shadowMaterialTypedHeapHandle, slots.materialTyped)
+        && resolveStorageSlot(m_rayTracingState.m_shadowInstanceBuffer.get(), m_rayTracingState.m_shadowInstanceHeapHandle, slots.meshInstances)
     ;
     if(!complete){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
@@ -893,16 +893,16 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsHeapHandle(){
     if(!ensureRayTraceMaterialContextSlotsBuffer())
         return false;
 
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(
         !heap.isInitialized()
         || !RayTracingDetail::EnsureHeapBuffer(
             heap,
-            *rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(),
+            *m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get(),
             Core::GpuDescriptorClass::UniformBuffer,
             false,
-            rayTracingState().m_shadowMaterialContextSlotsHeapHandle
+            m_rayTracingState.m_shadowMaterialContextSlotsHeapHandle
         )
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material-context selector in the descriptor heap"));
@@ -912,30 +912,30 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsHeapHandle(){
 }
 
 void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(heap.isInitialized()){
-        heap.free(rayTracingState().m_sceneBvhNodeHeapHandle);
-        heap.free(rayTracingState().m_sceneInstanceHeapHandle);
-        heap.free(rayTracingState().m_shadowInstanceMaterialHeapHandle);
-        heap.free(rayTracingState().m_shadowMaterialTypedHeapHandle);
-        heap.free(rayTracingState().m_shadowInstanceHeapHandle);
-        heap.free(rayTracingState().m_shadowMaterialContextSlotsHeapHandle);
-        heap.free(rayTracingState().m_swShadowEdgeStatsHeapHandle);
-        heap.free(rayTracingState().m_swShadowEdgeCounterHeapHandle);
-        heap.free(rayTracingState().m_swShadowEdgeListHeapHandle);
-        heap.free(rayTracingState().m_swShadowIndirectArgsHeapHandle);
+        heap.free(m_rayTracingState.m_sceneBvhNodeHeapHandle);
+        heap.free(m_rayTracingState.m_sceneInstanceHeapHandle);
+        heap.free(m_rayTracingState.m_shadowInstanceMaterialHeapHandle);
+        heap.free(m_rayTracingState.m_shadowMaterialTypedHeapHandle);
+        heap.free(m_rayTracingState.m_shadowInstanceHeapHandle);
+        heap.free(m_rayTracingState.m_shadowMaterialContextSlotsHeapHandle);
+        heap.free(m_rayTracingState.m_swShadowEdgeStatsHeapHandle);
+        heap.free(m_rayTracingState.m_swShadowEdgeCounterHeapHandle);
+        heap.free(m_rayTracingState.m_swShadowEdgeListHeapHandle);
+        heap.free(m_rayTracingState.m_swShadowIndirectArgsHeapHandle);
     }
-    rayTracingState().m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
-    rayTracingState().m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
-    rayTracingState().m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::invalid();
-    rayTracingState().m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::invalid();
-    rayTracingState().m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
-    rayTracingState().m_shadowMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    rayTracingState().m_swShadowEdgeStatsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    rayTracingState().m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
-    rayTracingState().m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::invalid();
-    rayTracingState().m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_shadowMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_swShadowEdgeStatsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::invalid();
 }
 
 bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& targets){
@@ -955,7 +955,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .setName("engine/shadow/visibility")
     ;
-    targets.shadowVisibility = graphics().createTexture(visibilityDesc);
+    targets.shadowVisibility = m_graphics.createTexture(visibilityDesc);
     if(!targets.shadowVisibility){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow visibility target"));
         return false;
@@ -973,7 +973,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setInUAV(true)
         .setName("engine/shadow/coarse_transmittance")
     ;
-    targets.shadowCoarseTransmittance = graphics().createTexture(coarseDesc);
+    targets.shadowCoarseTransmittance = m_graphics.createTexture(coarseDesc);
     if(!targets.shadowCoarseTransmittance){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow coarse transmittance target"));
         return false;
@@ -995,7 +995,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setInUAV(true)
         .setName("engine/shadow/soft_half_a")
     ;
-    targets.shadowSoftHalfA = graphics().createTexture(softHalfADesc);
+    targets.shadowSoftHalfA = m_graphics.createTexture(softHalfADesc);
     if(!targets.shadowSoftHalfA){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow half-A target"));
         return false;
@@ -1003,7 +1003,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
 
     Core::TextureDesc softHalfBDesc = softHalfADesc;
     softHalfBDesc.setName("engine/shadow/soft_half_b");
-    targets.shadowSoftHalfB = graphics().createTexture(softHalfBDesc);
+    targets.shadowSoftHalfB = m_graphics.createTexture(softHalfBDesc);
     if(!targets.shadowSoftHalfB){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow half-B target"));
         return false;
@@ -1017,7 +1017,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setInUAV(true)
         .setName("engine/shadow/soft_geometry")
     ;
-    targets.shadowSoftGeometry = graphics().createTexture(softGeometryDesc);
+    targets.shadowSoftGeometry = m_graphics.createTexture(softGeometryDesc);
     if(!targets.shadowSoftGeometry){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow geometry cache target"));
         return false;
@@ -1026,76 +1026,76 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     // Recreated history must not reproject through the previous target's matrix.
     Core::TextureDesc shadowHistADesc = softHalfADesc;
     shadowHistADesc.setName("engine/shadow/hist_a");
-    targets.shadowHistA = graphics().createTexture(shadowHistADesc);
+    targets.shadowHistA = m_graphics.createTexture(shadowHistADesc);
     if(!targets.shadowHistA){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow temporal history-A target"));
         return false;
     }
     Core::TextureDesc shadowHistBDesc = softHalfADesc;
     shadowHistBDesc.setName("engine/shadow/hist_b");
-    targets.shadowHistB = graphics().createTexture(shadowHistBDesc);
+    targets.shadowHistB = m_graphics.createTexture(shadowHistBDesc);
     if(!targets.shadowHistB){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow temporal history-B target"));
         return false;
     }
     Core::TextureDesc shadowMomentsADesc = softHalfADesc;
     shadowMomentsADesc.setName("engine/shadow/moments_a");
-    targets.shadowMomentsA = graphics().createTexture(shadowMomentsADesc);
+    targets.shadowMomentsA = m_graphics.createTexture(shadowMomentsADesc);
     if(!targets.shadowMomentsA){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow temporal moments-A target"));
         return false;
     }
     Core::TextureDesc shadowMomentsBDesc = softHalfADesc;
     shadowMomentsBDesc.setName("engine/shadow/moments_b");
-    targets.shadowMomentsB = graphics().createTexture(shadowMomentsBDesc);
+    targets.shadowMomentsB = m_graphics.createTexture(shadowMomentsBDesc);
     if(!targets.shadowMomentsB){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow temporal moments-B target"));
         return false;
     }
     Core::TextureDesc shadowSoftGeometryPrevDesc = softGeometryDesc;
     shadowSoftGeometryPrevDesc.setName("engine/shadow/soft_geometry_prev");
-    targets.shadowSoftGeometryPrev = graphics().createTexture(shadowSoftGeometryPrevDesc);
+    targets.shadowSoftGeometryPrev = m_graphics.createTexture(shadowSoftGeometryPrevDesc);
     if(!targets.shadowSoftGeometryPrev){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow previous-frame geometry cache target"));
         return false;
     }
-    rayTracingState().m_softShadowTemporalSeeded = false;
-    rayTracingState().m_softShadowTemporalHistoryAdvancePending = false;
-    rayTracingState().m_prevWorldToClipValid = false;
-    rayTracingState().m_softShadowHistoryFrontIsA = 1u;
+    m_rayTracingState.m_softShadowTemporalSeeded = false;
+    m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = false;
+    m_rayTracingState.m_prevWorldToClipValid = false;
+    m_rayTracingState.m_softShadowHistoryFrontIsA = 1u;
 
     // Transparent temporal history shares geometry and the opaque history selector.
     Core::TextureDesc transparentSoftHalfDesc = softHalfADesc;
     transparentSoftHalfDesc.setName("engine/shadow/transparent_soft_half");
-    targets.transparentSoftHalf = graphics().createTexture(transparentSoftHalfDesc);
+    targets.transparentSoftHalf = m_graphics.createTexture(transparentSoftHalfDesc);
     if(!targets.transparentSoftHalf){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft transparent shadow half target"));
         return false;
     }
     Core::TextureDesc transparentHistADesc = softHalfADesc;
     transparentHistADesc.setName("engine/shadow/transparent_hist_a");
-    targets.transparentHistA = graphics().createTexture(transparentHistADesc);
+    targets.transparentHistA = m_graphics.createTexture(transparentHistADesc);
     if(!targets.transparentHistA){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft transparent shadow history-A target"));
         return false;
     }
     Core::TextureDesc transparentHistBDesc = softHalfADesc;
     transparentHistBDesc.setName("engine/shadow/transparent_hist_b");
-    targets.transparentHistB = graphics().createTexture(transparentHistBDesc);
+    targets.transparentHistB = m_graphics.createTexture(transparentHistBDesc);
     if(!targets.transparentHistB){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft transparent shadow history-B target"));
         return false;
     }
     Core::TextureDesc transparentMomentsADesc = softHalfADesc;
     transparentMomentsADesc.setName("engine/shadow/transparent_moments_a");
-    targets.transparentMomentsA = graphics().createTexture(transparentMomentsADesc);
+    targets.transparentMomentsA = m_graphics.createTexture(transparentMomentsADesc);
     if(!targets.transparentMomentsA){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft transparent shadow moments-A target"));
         return false;
     }
     Core::TextureDesc transparentMomentsBDesc = softHalfADesc;
     transparentMomentsBDesc.setName("engine/shadow/transparent_moments_b");
-    targets.transparentMomentsB = graphics().createTexture(transparentMomentsBDesc);
+    targets.transparentMomentsB = m_graphics.createTexture(transparentMomentsBDesc);
     if(!targets.transparentMomentsB){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft transparent shadow moments-B target"));
         return false;
@@ -1111,13 +1111,13 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setDebugName(Name("sw_shadow_edge_list"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle edgeListBuffer = graphics().createBuffer(edgeListDesc);
+    Core::BufferHandle edgeListBuffer = m_graphics.createBuffer(edgeListDesc);
     if(!edgeListBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow edge-list buffer"));
-        rayTracingState().m_swShadowEdgeListCapacity = 0u;
+        m_rayTracingState.m_swShadowEdgeListCapacity = 0u;
         return false;
     }
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(
         !heap.isInitialized()
@@ -1126,15 +1126,15 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
             *edgeListBuffer.get(),
             Core::GpuDescriptorClass::StorageBuffer,
             true,
-            rayTracingState().m_swShadowEdgeListHeapHandle
+            m_rayTracingState.m_swShadowEdgeListHeapHandle
         )
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register SW shadow edge-list buffer in the descriptor heap"));
-        rayTracingState().m_swShadowEdgeListCapacity = 0u;
+        m_rayTracingState.m_swShadowEdgeListCapacity = 0u;
         return false;
     }
-    rayTracingState().m_swShadowEdgeListBuffer = Move(edgeListBuffer);
-    rayTracingState().m_swShadowEdgeListCapacity = edgeListCapacityRecords;
+    m_rayTracingState.m_swShadowEdgeListBuffer = Move(edgeListBuffer);
+    m_rayTracingState.m_swShadowEdgeListCapacity = edgeListCapacityRecords;
     return true;
 }
 
@@ -1150,13 +1150,13 @@ bool RendererRayTracingSystem::renderShadowVisibility(
     NWB_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
     if(!targets.shadowVisibility)
         return false;
-    if(!rayTracingState().m_tlas || !rayTracingState().m_shadowPipeline)
+    if(!m_rayTracingState.m_tlas || !m_rayTracingState.m_shadowPipeline)
         return false;
 
-    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(
         !heap.isInitialized()
-        || !rayTracingState().m_tlasHeapHandle.valid()
+        || !m_rayTracingState.m_tlasHeapHandle.valid()
         || !targets.bindless.valid()
         || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
         || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
@@ -1168,21 +1168,21 @@ bool RendererRayTracingSystem::renderShadowVisibility(
 
     Optional<Core::GpuTimingMeasure> timing;
     if(!splitSoftTransparentFold)
-        timing.emplace(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
+        timing.emplace(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, m_graphics.getDevice(), commandList);
 
     if(!graphEntryStatesOwned){
         // Heap-selected resources still need explicit state transitions for direct compatibility callers.
         commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(m_deferredState.m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(m_deferredState.m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setAccelStructState(rayTracingState().m_tlas.get(), Core::ResourceStates::AccelStructRead);
+        commandList.setAccelStructState(m_rayTracingState.m_tlas.get(), Core::ResourceStates::AccelStructRead);
     }
 
     // Hardware tracing shares the half-resolution soft-shadow resolve when available.
-    if(rayTracingState().m_softShadowReady && rayTracingState().m_shadowSoftPipeline && rayTracingState().m_softShadowSlotMask != 0u){
+    if(m_rayTracingState.m_softShadowReady && m_rayTracingState.m_shadowSoftPipeline && m_rayTracingState.m_softShadowSlotMask != 0u){
         const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
         const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
         const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE));
@@ -1202,7 +1202,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(
         commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
         commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
         // Temporal merge writes history before the wavelet pass reads it.
-        if(rayTracingState().m_softShadowTemporalReady){
+        if(m_rayTracingState.m_softShadowTemporalReady){
             commandList.setEnableUavBarriersForTexture(targets.shadowHistA.get(), true);
             commandList.setEnableUavBarriersForTexture(targets.shadowHistB.get(), true);
             commandList.setEnableUavBarriersForTexture(targets.shadowMomentsA.get(), true);
@@ -1210,19 +1210,19 @@ bool RendererRayTracingSystem::renderShadowVisibility(
         }
 
         // Advance the jitter sequence once for the primary shadow producer.
-        const u32 frameIndex = rayTracingState().m_softShadowFrameIndex++;
+        const u32 frameIndex = m_rayTracingState.m_softShadowFrameIndex++;
 
         {
             Core::GpuTimingMeasure opaqueTraceTiming(
-                graphics().gpuTiming(),
+                m_graphics.gpuTiming(),
                 RendererGpuTimingScope::s_ShadowOpaqueTrace,
-                graphics().getDevice(),
+                m_graphics.getDevice(),
                 commandList
             );
             Core::ComputeState softState;
-            softState.setPipeline(rayTracingState().m_shadowSoftPipeline.get());
+            softState.setPipeline(m_rayTracingState.m_shadowSoftPipeline.get());
             commandList.setComputeState(softState);
-            heap.bindCompute(commandList, *rayTracingState().m_shadowSoftPipeline.get(), rayTracingState().m_tlasHeapHandle);
+            heap.bindCompute(commandList, *m_rayTracingState.m_shadowSoftPipeline.get(), m_rayTracingState.m_tlasHeapHandle);
 
             ShadowRqSoftPushConstants softPush;
             softPush.width = targets.width;
@@ -1287,17 +1287,17 @@ bool RendererRayTracingSystem::renderShadowVisibility(
 
     {
         Core::GpuTimingMeasure opaqueTraceTiming(
-            graphics().gpuTiming(),
+            m_graphics.gpuTiming(),
             RendererGpuTimingScope::s_ShadowOpaqueTrace,
-            graphics().getDevice(),
+            m_graphics.getDevice(),
             commandList
         );
         Core::ComputeState shadowState;
-        shadowState.setPipeline(rayTracingState().m_shadowPipeline.get());
+        shadowState.setPipeline(m_rayTracingState.m_shadowPipeline.get());
         commandList.setComputeState(shadowState);
-        heap.bindCompute(commandList, *rayTracingState().m_shadowPipeline.get(), rayTracingState().m_tlasHeapHandle);
+        heap.bindCompute(commandList, *m_rayTracingState.m_shadowPipeline.get(), m_rayTracingState.m_tlasHeapHandle);
         ShadowRqPushConstants shadowPush;
-        shadowPush.frameIndex = rayTracingState().m_softShadowFrameIndex++;
+        shadowPush.frameIndex = m_rayTracingState.m_softShadowFrameIndex++;
         shadowPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
         shadowPush.normalSlot = targets.bindless.gbufferNormal.slot();
         shadowPush.depthSlot = targets.bindless.gbufferDepth.slot();
@@ -1331,7 +1331,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueGraphTask::Payload{
             .raytracingSystem = this,
-            .graphics = &graphics(),
+            .graphics = &m_graphics,
             .targets = &targets,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
@@ -1364,7 +1364,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWave
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueFirstWaveletGraphTask::Payload{
             .raytracingSystem = this,
-            .graphics = &graphics(),
+            .graphics = &m_graphics,
             .targets = &targets,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
@@ -1388,9 +1388,9 @@ bool RendererRayTracingSystem::renderShadowVisibilityOpaque(
 ){
     outFrameIndex = 0u;
     if(
-        !rayTracingState().m_softShadowReady
-        || !rayTracingState().m_softTransparentReady
-        || rayTracingState().m_softShadowSlotMask == 0u
+        !m_rayTracingState.m_softShadowReady
+        || !m_rayTracingState.m_softTransparentReady
+        || m_rayTracingState.m_softShadowSlotMask == 0u
     )
         return false;
     return renderShadowVisibility(
@@ -1443,9 +1443,9 @@ bool RendererRayTracingSystem::renderSoftOpaqueShadowFirstWavelet(
     const bool graphOwnsOpaqueTemporalMergeEntryStates
 ){
     if(
-        !rayTracingState().m_softShadowReady
-        || !rayTracingState().m_softTransparentReady
-        || rayTracingState().m_softShadowSlotMask == 0u
+        !m_rayTracingState.m_softShadowReady
+        || !m_rayTracingState.m_softTransparentReady
+        || m_rayTracingState.m_softShadowSlotMask == 0u
     )
         return false;
     const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
@@ -1486,9 +1486,9 @@ bool RendererRayTracingSystem::renderSoftOpaqueShadowResolveTail(
     const bool graphEntryStatesOwned
 ){
     if(
-        !rayTracingState().m_softShadowReady
-        || !rayTracingState().m_softTransparentReady
-        || rayTracingState().m_softShadowSlotMask == 0u
+        !m_rayTracingState.m_softShadowReady
+        || !m_rayTracingState.m_softTransparentReady
+        || m_rayTracingState.m_softShadowSlotMask == 0u
     )
         return false;
     const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
@@ -1529,9 +1529,9 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
     const bool graphOwnsOpaqueToTransparentBoundary
 ){
     if(
-        !rayTracingState().m_softShadowReady
-        || !rayTracingState().m_softTransparentReady
-        || rayTracingState().m_softShadowSlotMask == 0u
+        !m_rayTracingState.m_softShadowReady
+        || !m_rayTracingState.m_softTransparentReady
+        || m_rayTracingState.m_softShadowSlotMask == 0u
     )
         return false;
     const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
@@ -1568,10 +1568,10 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTemporalMerge(
     const bool graphOwnsTransparentTemporalMergeEntryStates
 ){
     if(
-        !rayTracingState().m_softShadowReady
-        || !rayTracingState().m_softTransparentReady
-        || !rayTracingState().m_softTransparentTemporalReady
-        || rayTracingState().m_softShadowSlotMask == 0u
+        !m_rayTracingState.m_softShadowReady
+        || !m_rayTracingState.m_softTransparentReady
+        || !m_rayTracingState.m_softTransparentTemporalReady
+        || m_rayTracingState.m_softShadowSlotMask == 0u
     )
         return false;
     const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
@@ -1611,9 +1611,9 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFirstWavelet(
     const bool graphOwnsTransparentWaveletInputBoundary
 ){
     if(
-        !rayTracingState().m_softShadowReady
-        || !rayTracingState().m_softTransparentReady
-        || rayTracingState().m_softShadowSlotMask == 0u
+        !m_rayTracingState.m_softShadowReady
+        || !m_rayTracingState.m_softTransparentReady
+        || m_rayTracingState.m_softShadowSlotMask == 0u
     )
         return false;
     const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
@@ -1652,9 +1652,9 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
     const bool graphEntryStatesOwned
 ){
     if(
-        !rayTracingState().m_softShadowReady
-        || !rayTracingState().m_softTransparentReady
-        || rayTracingState().m_softShadowSlotMask == 0u
+        !m_rayTracingState.m_softShadowReady
+        || !m_rayTracingState.m_softTransparentReady
+        || m_rayTracingState.m_softShadowSlotMask == 0u
     )
         return false;
     const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
@@ -1700,7 +1700,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTemporalMe
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTemporalMergeGraphTask::Payload{
             .raytracingSystem = this,
-            .graphics = &graphics(),
+            .graphics = &m_graphics,
             .targets = &targets,
             .timingTicket = &timingTicket,
             .transparentResolveTiming = transparentResolveTiming,
@@ -1730,7 +1730,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFirstWavel
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFirstWaveletGraphTask::Payload{
             .raytracingSystem = this,
-            .graphics = &graphics(),
+            .graphics = &m_graphics,
             .targets = &targets,
             .timingTicket = &timingTicket,
             .transparentResolveTiming = transparentResolveTiming,
@@ -1813,7 +1813,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowVisibilityGraphTask::Payload{
             .raytracingSystem = this,
-            .graphics = &graphics(),
+            .graphics = &m_graphics,
             .targets = &targets,
             .timingTicket = &timingTicket,
             .prepared = prepared,
@@ -1851,27 +1851,27 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     if(!targets.shadowVisibility)
         return false;
     NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
-    NWB_ASSERT(deferredState().m_lightBuffer);
-    if(!rayTracingState().m_sceneBvhNodeBuffer || rayTracingState().m_sceneBvhInstanceCount == 0u)
+    NWB_ASSERT(m_deferredState.m_sceneShadingBuffer);
+    NWB_ASSERT(m_deferredState.m_lightBuffer);
+    if(!m_rayTracingState.m_sceneBvhNodeBuffer || m_rayTracingState.m_sceneBvhInstanceCount == 0u)
         return false;
-    if(!rayTracingState().m_swShadowOpaquePrepassPipeline || rayTracingState().m_swShadowMeshCount == 0u)
+    if(!m_rayTracingState.m_swShadowOpaquePrepassPipeline || m_rayTracingState.m_swShadowMeshCount == 0u)
         return false;
 
-    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(
         !heap.isInitialized()
         || !targets.bindless.valid()
         || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
-        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_shadowMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
+        || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_shadowMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
         || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
         || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowCoarseTransmittanceStorage, Core::GpuDescriptorClass::StorageImage)
         || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
         || !RayTracingDetail::IsHeapHandle(targets.bindless.transparentSoftHalfStorage, Core::GpuDescriptorClass::StorageImage)
-        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_swShadowEdgeStatsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_swShadowEdgeCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_swShadowEdgeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_swShadowIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_swShadowEdgeStatsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_swShadowEdgeCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_swShadowEdgeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_swShadowIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software-shadow heap resources are incomplete"));
         return false;
@@ -1880,18 +1880,18 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     NWB_ASSERT(!splitSoftTransparentFold || !multiplyOntoOpaque);
     Optional<Core::GpuTimingMeasure> timing;
     if(!splitSoftTransparentFold)
-        timing.emplace(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
+        timing.emplace(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, m_graphics.getDevice(), commandList);
 
     if(!graphEntryStatesOwned){
         // BVH build leaves traversal inputs in UAV state. Direct compatibility callers restore them locally.
         transitionSwShadowTraversalResources(commandList);
-        if(rayTracingState().m_shadowInstanceBuffer)
-            commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+        if(m_rayTracingState.m_shadowInstanceBuffer)
+            commandList.setBufferState(m_rayTracingState.m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(m_deferredState.m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(m_deferredState.m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
     }
     // Subsequent visibility passes read/write this UAV in place.
@@ -1911,17 +1911,17 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
 
     const auto makePush = [&](){
         SwShadowHeapPushConstants push;
-        push.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+        push.instanceCount = m_rayTracingState.m_sceneBvhInstanceCount;
         push.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-        push.materialContextSlotsHeapSlot = rayTracingState().m_shadowMaterialContextSlotsHeapHandle.slot();
+        push.materialContextSlotsHeapSlot = m_rayTracingState.m_shadowMaterialContextSlotsHeapHandle.slot();
         push.visibilityStorageSlot = targets.bindless.shadowVisibilityStorage.slot();
         push.coarseStorageSlot = targets.bindless.shadowCoarseTransmittanceStorage.slot();
         push.softHalfStorageSlot = targets.bindless.shadowSoftHalfAStorage.slot();
         push.transparentSoftHalfStorageSlot = targets.bindless.transparentSoftHalfStorage.slot();
-        push.edgeStatsStorageSlot = rayTracingState().m_swShadowEdgeStatsHeapHandle.slot();
-        push.edgeCounterStorageSlot = rayTracingState().m_swShadowEdgeCounterHeapHandle.slot();
-        push.edgeListStorageSlot = rayTracingState().m_swShadowEdgeListHeapHandle.slot();
-        push.indirectArgsStorageSlot = rayTracingState().m_swShadowIndirectArgsHeapHandle.slot();
+        push.edgeStatsStorageSlot = m_rayTracingState.m_swShadowEdgeStatsHeapHandle.slot();
+        push.edgeCounterStorageSlot = m_rayTracingState.m_swShadowEdgeCounterHeapHandle.slot();
+        push.edgeListStorageSlot = m_rayTracingState.m_swShadowEdgeListHeapHandle.slot();
+        push.indirectArgsStorageSlot = m_rayTracingState.m_swShadowIndirectArgsHeapHandle.slot();
         return push;
     };
 
@@ -1934,14 +1934,14 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     const u32 coarseGroupsY = DivideUp(coarseHeight, groupSize);
 
     const auto logSoftwareShadowTraversal = [&]{
-        if(rayTracingState().m_swShadowDispatchLogged)
+        if(m_rayTracingState.m_swShadowDispatchLogged)
             return;
 
-        rayTracingState().m_swShadowDispatchLogged = true;
+        m_rayTracingState.m_swShadowDispatchLogged = true;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched software shadow traversal ({}x{}, {} instances)")
             , static_cast<u64>(targets.width)
             , static_cast<u64>(targets.height)
-            , static_cast<u64>(rayTracingState().m_sceneBvhInstanceCount)
+            , static_cast<u64>(m_rayTracingState.m_sceneBvhInstanceCount)
         );
     };
 
@@ -1951,15 +1951,15 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     // Software-only mode first creates the opaque mask.
     if(!multiplyOntoOpaque){
         // Soft upsample overwrites the opaque prepass.
-        const bool softWillRun = rayTracingState().m_softShadowReady && rayTracingState().m_softShadowSlotMask != 0u;
+        const bool softWillRun = m_rayTracingState.m_softShadowReady && m_rayTracingState.m_softShadowSlotMask != 0u;
         if(!softWillRun){
             commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
             SwShadowHeapPushConstants opaquePush = makePush();
             opaquePush.width = targets.width;
             opaquePush.height = targets.height;
-            commandList.setComputeState(passState(rayTracingState().m_swShadowOpaquePrepassPipeline));
-            bindPassHeap(rayTracingState().m_swShadowOpaquePrepassPipeline);
+            commandList.setComputeState(passState(m_rayTracingState.m_swShadowOpaquePrepassPipeline));
+            bindPassHeap(m_rayTracingState.m_swShadowOpaquePrepassPipeline);
             commandList.setPushConstants(&opaquePush, sizeof(opaquePush));
             commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
         }
@@ -1976,14 +1976,14 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             const u32 softGroupsY = DivideUp(softHalfHeight, groupSize);
 
             // Advance the primary producer's jitter sequence once.
-            const u32 frameIndex = rayTracingState().m_softShadowFrameIndex++;
+            const u32 frameIndex = m_rayTracingState.m_softShadowFrameIndex++;
 
             // Resolve reads the soft trace and geometry scratch in place.
             commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
             commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
             commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
             // Temporal merge writes history before later reads.
-            if(rayTracingState().m_softShadowTemporalReady){
+            if(m_rayTracingState.m_softShadowTemporalReady){
                 commandList.setEnableUavBarriersForTexture(targets.shadowHistA.get(), true);
                 commandList.setEnableUavBarriersForTexture(targets.shadowHistB.get(), true);
                 commandList.setEnableUavBarriersForTexture(targets.shadowMomentsA.get(), true);
@@ -1994,9 +1994,9 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             commandList.commitBarriers();
             {
                 Core::GpuTimingMeasure opaqueTraceTiming(
-                    graphics().gpuTiming(),
+                    m_graphics.gpuTiming(),
                     RendererGpuTimingScope::s_ShadowOpaqueTrace,
-                    graphics().getDevice(),
+                    m_graphics.getDevice(),
                     commandList
                 );
                 SwShadowHeapPushConstants softTracePush = makePush();
@@ -2006,8 +2006,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                 softTracePush.softSampleCount = softShadowTemporalHistoryUsable()
                     ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP
                     : NWB_SW_SHADOW_SOFT_SPP;
-                commandList.setComputeState(passState(rayTracingState().m_swShadowSoftOpaquePipeline));
-                bindPassHeap(rayTracingState().m_swShadowSoftOpaquePipeline);
+                commandList.setComputeState(passState(m_rayTracingState.m_swShadowSoftOpaquePipeline));
+                bindPassHeap(m_rayTracingState.m_swShadowSoftOpaquePipeline);
                 commandList.setPushConstants(&softTracePush, sizeof(softTracePush));
                 commandList.dispatch(softGroupsX, softGroupsY, 1u);
             }
@@ -2048,12 +2048,12 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                 logSoftwareShadowTraversal();
                 return true;
             }
-            softTransparentRan = rayTracingState().m_softTransparentReady;
+            softTransparentRan = m_rayTracingState.m_softTransparentReady;
         }
     }
 
     // Fallback transparent fold; it is mutually exclusive with the soft path.
-    if(!softTransparentRan && rayTracingState().m_swShadowAdaptiveEnabled){
+    if(!softTransparentRan && m_rayTracingState.m_swShadowAdaptiveEnabled){
         // Compacted mode traces only classified edge records; stats are sampled asynchronously.
         const bool graphOwnsAdaptivePlan =
             graphOwnedAdaptivePlan && graphOwnedAdaptivePlan->enabled
@@ -2073,8 +2073,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         coarsePush.height = targets.height;
         coarsePush.coarseWidth = coarseWidth;
         coarsePush.coarseHeight = coarseHeight;
-        commandList.setComputeState(passState(rayTracingState().m_swShadowTransparentCoarsePipeline));
-        bindPassHeap(rayTracingState().m_swShadowTransparentCoarsePipeline);
+        commandList.setComputeState(passState(m_rayTracingState.m_swShadowTransparentCoarsePipeline));
+        bindPassHeap(m_rayTracingState.m_swShadowTransparentCoarsePipeline);
         commandList.setPushConstants(&coarsePush, sizeof(coarsePush));
         commandList.dispatch(coarseGroupsX, coarseGroupsY, 1u);
 
@@ -2084,15 +2084,15 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
 
         if(compact){
             // The append list is bounded by this frame's reset counter.
-            commandList.setEnableUavBarriersForBuffer(rayTracingState().m_swShadowEdgeCounterBuffer.get(), true);
-            commandList.setEnableUavBarriersForBuffer(rayTracingState().m_swShadowEdgeListBuffer.get(), true);
-            commandList.setBufferState(rayTracingState().m_swShadowEdgeCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
-            commandList.setBufferState(rayTracingState().m_swShadowEdgeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
-            commandList.setBufferState(rayTracingState().m_swShadowIndirectArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setEnableUavBarriersForBuffer(m_rayTracingState.m_swShadowEdgeCounterBuffer.get(), true);
+            commandList.setEnableUavBarriersForBuffer(m_rayTracingState.m_swShadowEdgeListBuffer.get(), true);
+            commandList.setBufferState(m_rayTracingState.m_swShadowEdgeCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(m_rayTracingState.m_swShadowEdgeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(m_rayTracingState.m_swShadowIndirectArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
 
             // Classify interpolated interiors and append traceable edges.
-            commandList.setBufferState(rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(m_rayTracingState.m_swShadowEdgeStatsBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
@@ -2101,34 +2101,34 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             classifyPush.height = targets.height;
             classifyPush.coarseWidth = coarseWidth;
             classifyPush.coarseHeight = coarseHeight;
-            classifyPush.edgeThreshold = rayTracingState().m_swShadowEdgeThreshold;
+            classifyPush.edgeThreshold = m_rayTracingState.m_swShadowEdgeThreshold;
             classifyPush.collectStats = snapshot ? 1u : 0u;
-            classifyPush.edgeCapacity = rayTracingState().m_swShadowEdgeListCapacity;
-            commandList.setComputeState(passState(rayTracingState().m_swShadowTransparentClassifyPipeline));
-            bindPassHeap(rayTracingState().m_swShadowTransparentClassifyPipeline);
+            classifyPush.edgeCapacity = m_rayTracingState.m_swShadowEdgeListCapacity;
+            commandList.setComputeState(passState(m_rayTracingState.m_swShadowTransparentClassifyPipeline));
+            bindPassHeap(m_rayTracingState.m_swShadowTransparentClassifyPipeline);
             commandList.setPushConstants(&classifyPush, sizeof(classifyPush));
             commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
 
             // Classify produces the list and in-place visibility writes.
-            commandList.setBufferState(rayTracingState().m_swShadowEdgeCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
-            commandList.setBufferState(rayTracingState().m_swShadowEdgeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(m_rayTracingState.m_swShadowEdgeCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(m_rayTracingState.m_swShadowEdgeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
 
             // Build indirect dispatch arguments from the clamped list count.
-            commandList.setBufferState(rayTracingState().m_swShadowIndirectArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(m_rayTracingState.m_swShadowIndirectArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
             SwShadowHeapPushConstants argsPush = makePush();
             argsPush.traceGroupSize = static_cast<u32>(NWB_SW_SHADOW_TRACE_GROUP);
-            argsPush.edgeCapacity = rayTracingState().m_swShadowEdgeListCapacity;
-            commandList.setComputeState(passState(rayTracingState().m_swShadowTransparentBuildArgsPipeline));
-            bindPassHeap(rayTracingState().m_swShadowTransparentBuildArgsPipeline);
+            argsPush.edgeCapacity = m_rayTracingState.m_swShadowEdgeListCapacity;
+            commandList.setComputeState(passState(m_rayTracingState.m_swShadowTransparentBuildArgsPipeline));
+            bindPassHeap(m_rayTracingState.m_swShadowTransparentBuildArgsPipeline);
             commandList.setPushConstants(&argsPush, sizeof(argsPush));
             commandList.dispatch(1u, 1u, 1u);
 
             // Indirect dispatch consumes the generated arguments and list.
-            commandList.setBufferState(rayTracingState().m_swShadowEdgeCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
-            commandList.setBufferState(rayTracingState().m_swShadowEdgeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(m_rayTracingState.m_swShadowEdgeCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(m_rayTracingState.m_swShadowEdgeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
 
             SwShadowHeapPushConstants tracePush = makePush();
@@ -2136,12 +2136,12 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             tracePush.height = targets.height;
             tracePush.traceGroupSize = static_cast<u32>(NWB_SW_SHADOW_TRACE_GROUP);
             commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-            commandList.setBufferState(rayTracingState().m_swShadowIndirectArgsBuffer.get(), Core::ResourceStates::IndirectArgument);
+            commandList.setBufferState(m_rayTracingState.m_swShadowIndirectArgsBuffer.get(), Core::ResourceStates::IndirectArgument);
             commandList.commitBarriers();
-            Core::ComputeState computeStateIndirect = passState(rayTracingState().m_swShadowTransparentIndirectPipeline);
-            computeStateIndirect.setIndirectParams(rayTracingState().m_swShadowIndirectArgsBuffer.get());
+            Core::ComputeState computeStateIndirect = passState(m_rayTracingState.m_swShadowTransparentIndirectPipeline);
+            computeStateIndirect.setIndirectParams(m_rayTracingState.m_swShadowIndirectArgsBuffer.get());
             commandList.setComputeState(computeStateIndirect);
-            bindPassHeap(rayTracingState().m_swShadowTransparentIndirectPipeline);
+            bindPassHeap(m_rayTracingState.m_swShadowTransparentIndirectPipeline);
             commandList.setPushConstants(&tracePush, sizeof(tracePush));
             commandList.dispatchIndirect(0u);
         }
@@ -2149,17 +2149,17 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             // Full-resolution adaptive fallback.
             commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-            commandList.setBufferState(rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(m_rayTracingState.m_swShadowEdgeStatsBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
             SwShadowHeapPushConstants resolvePush = makePush();
             resolvePush.width = targets.width;
             resolvePush.height = targets.height;
             resolvePush.coarseWidth = coarseWidth;
             resolvePush.coarseHeight = coarseHeight;
-            resolvePush.edgeThreshold = rayTracingState().m_swShadowEdgeThreshold;
+            resolvePush.edgeThreshold = m_rayTracingState.m_swShadowEdgeThreshold;
             resolvePush.collectStats = snapshot ? 1u : 0u;
-            commandList.setComputeState(passState(rayTracingState().m_swShadowTransparentResolvePipeline));
-            bindPassHeap(rayTracingState().m_swShadowTransparentResolvePipeline);
+            commandList.setComputeState(passState(m_rayTracingState.m_swShadowTransparentResolvePipeline));
+            bindPassHeap(m_rayTracingState.m_swShadowTransparentResolvePipeline);
             commandList.setPushConstants(&resolvePush, sizeof(resolvePush));
             commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
         }
@@ -2171,8 +2171,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         SwShadowHeapPushConstants pushConstants = makePush();
         pushConstants.width = targets.width;
         pushConstants.height = targets.height;
-        commandList.setComputeState(passState(rayTracingState().m_swShadowTransparentUniformPipeline));
-        bindPassHeap(rayTracingState().m_swShadowTransparentUniformPipeline);
+        commandList.setComputeState(passState(m_rayTracingState.m_swShadowTransparentUniformPipeline));
+        bindPassHeap(m_rayTracingState.m_swShadowTransparentUniformPipeline);
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         commandList.dispatch(coarseGroupsX, coarseGroupsY, 1u);
     }
@@ -2190,9 +2190,9 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
 ){
     outFrameIndex = 0u;
     if(
-        !rayTracingState().m_softShadowReady
-        || !rayTracingState().m_softTransparentReady
-        || rayTracingState().m_softShadowSlotMask == 0u
+        !m_rayTracingState.m_softShadowReady
+        || !m_rayTracingState.m_softTransparentReady
+        || m_rayTracingState.m_softShadowSlotMask == 0u
     )
         return false;
     return renderGpuBvhShadowVisibility(
@@ -2208,11 +2208,11 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
 }
 
 bool RendererRayTracingSystem::hybridTransparentShadowReady()const noexcept{
-    return rayTracingState().m_hybridTransparentShadowReady;
+    return m_rayTracingState.m_hybridTransparentShadowReady;
 }
 
 bool RendererRayTracingSystem::softTransparentShadowReady()const noexcept{
-    return rayTracingState().m_softTransparentReady;
+    return m_rayTracingState.m_softTransparentReady;
 }
 
 void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const{
@@ -2222,61 +2222,61 @@ void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayou
 }
 
 bool RendererRayTracingSystem::ensureShadowPipeline(){
-    if(rayTracingState().m_shadowPipeline)
+    if(m_rayTracingState.m_shadowPipeline)
         return true;
-    if(rayTracingState().m_shadowPipelineFailed)
+    if(m_rayTracingState.m_shadowPipelineFailed)
         return false;
-    if(!graphics().queryFeatureSupport(Core::Feature::RayQuery) || !graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
-        rayTracingState().m_shadowPipelineFailed = true;
+    if(!m_graphics.queryFeatureSupport(Core::Feature::RayQuery) || !m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
+        m_rayTracingState.m_shadowPipelineFailed = true;
         return false;
     }
 
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: RayQuery shadows require the descriptor-buffer TLAS heap layout"));
-        rayTracingState().m_shadowPipelineFailed = true;
+        m_rayTracingState.m_shadowPipelineFailed = true;
         return false;
     }
 
-    if(!rayTracingState().m_shadowBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(arena());
+    if(!m_rayTracingState.m_shadowBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         appendShadowTraceBindingLayout(layoutDesc);
 
-        rayTracingState().m_shadowBindingLayout = device.createBindingLayout(layoutDesc);
-        if(!rayTracingState().m_shadowBindingLayout){
+        m_rayTracingState.m_shadowBindingLayout = device.createBindingLayout(layoutDesc);
+        if(!m_rayTracingState.m_shadowBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow binding layout"));
-            rayTracingState().m_shadowPipelineFailed = true;
+            m_rayTracingState.m_shadowPipelineFailed = true;
             return false;
         }
     }
 
-    if(!m_renderer.shaderSystem().loadShader(
-        rayTracingState().m_shadowShader,
+    if(!m_shaderSystem.loadShader(
+        m_rayTracingState.m_shadowShader,
         AssetsGraphicsShadow::s_RayQueryShaderName,
         AStringView("NWB_BINDLESS_TLAS=1"),
         Core::ShaderType::Compute,
         "ECSRender_ShadowRayQuery"
     )){
-        rayTracingState().m_shadowPipelineFailed = true;
+        m_rayTracingState.m_shadowPipelineFailed = true;
         return false;
     }
 
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc
-        .setComputeShader(rayTracingState().m_shadowShader)
-        .addBindingLayout(rayTracingState().m_shadowBindingLayout)
+        .setComputeShader(m_rayTracingState.m_shadowShader)
+        .addBindingLayout(m_rayTracingState.m_shadowBindingLayout)
     ;
     pipelineDesc
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
         .addBindingLayout(heap.getAccelStructLayout())
     ;
-    rayTracingState().m_shadowPipeline = device.createComputePipeline(pipelineDesc);
-    if(!rayTracingState().m_shadowPipeline){
+    m_rayTracingState.m_shadowPipeline = device.createComputePipeline(pipelineDesc);
+    if(!m_rayTracingState.m_shadowPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery shadow compute pipeline"));
-        rayTracingState().m_shadowPipelineFailed = true;
+        m_rayTracingState.m_shadowPipelineFailed = true;
         return false;
     }
 
@@ -2285,55 +2285,55 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
 }
 
 bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
-    if(rayTracingState().m_shadowSoftPipeline)
+    if(m_rayTracingState.m_shadowSoftPipeline)
         return true;
-    if(rayTracingState().m_shadowSoftPipelineFailed)
+    if(m_rayTracingState.m_shadowSoftPipelineFailed)
         return false;
-    if(!graphics().queryFeatureSupport(Core::Feature::RayQuery) || !graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
-        rayTracingState().m_shadowSoftPipelineFailed = true;
+    if(!m_graphics.queryFeatureSupport(Core::Feature::RayQuery) || !m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
+        m_rayTracingState.m_shadowSoftPipelineFailed = true;
         return false;
     }
 
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: soft RayQuery shadows require the descriptor-buffer TLAS heap layout"));
-        rayTracingState().m_shadowSoftPipelineFailed = true;
+        m_rayTracingState.m_shadowSoftPipelineFailed = true;
         return false;
     }
 
     // Soft and hard traces share their push-only layout.
-    if(!rayTracingState().m_shadowBindingLayout){
+    if(!m_rayTracingState.m_shadowBindingLayout){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow binding layout missing for the soft RayQuery pipeline"));
-        rayTracingState().m_shadowSoftPipelineFailed = true;
+        m_rayTracingState.m_shadowSoftPipelineFailed = true;
         return false;
     }
 
-    if(!m_renderer.shaderSystem().loadShader(
-        rayTracingState().m_shadowSoftShader,
+    if(!m_shaderSystem.loadShader(
+        m_rayTracingState.m_shadowSoftShader,
         AssetsGraphicsShadow::s_RayQuerySoftShaderName,
         AStringView("NWB_BINDLESS_TLAS=1"),
         Core::ShaderType::Compute,
         "ECSRender_ShadowRayQuerySoft"
     )){
-        rayTracingState().m_shadowSoftPipelineFailed = true;
+        m_rayTracingState.m_shadowSoftPipelineFailed = true;
         return false;
     }
 
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc
-        .setComputeShader(rayTracingState().m_shadowSoftShader)
-        .addBindingLayout(rayTracingState().m_shadowBindingLayout)
+        .setComputeShader(m_rayTracingState.m_shadowSoftShader)
+        .addBindingLayout(m_rayTracingState.m_shadowBindingLayout)
     ;
     pipelineDesc
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
         .addBindingLayout(heap.getAccelStructLayout())
     ;
-    rayTracingState().m_shadowSoftPipeline = device.createComputePipeline(pipelineDesc);
-    if(!rayTracingState().m_shadowSoftPipeline){
+    m_rayTracingState.m_shadowSoftPipeline = device.createComputePipeline(pipelineDesc);
+    if(!m_rayTracingState.m_shadowSoftPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery soft shadow compute pipeline"));
-        rayTracingState().m_shadowSoftPipelineFailed = true;
+        m_rayTracingState.m_shadowSoftPipelineFailed = true;
         return false;
     }
 
@@ -2342,27 +2342,27 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
 }
 
 bool RendererRayTracingSystem::ensureSwShadowPipeline(){
-    if(rayTracingState().m_swShadowPipelineFailed)
+    if(m_rayTracingState.m_swShadowPipelineFailed)
         return false;
 
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software shadows require the initialized global descriptor heap"));
-        rayTracingState().m_swShadowPipelineFailed = true;
+        m_rayTracingState.m_swShadowPipelineFailed = true;
         return false;
     }
 
-    if(!rayTracingState().m_swShadowBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(arena());
+    if(!m_rayTracingState.m_swShadowBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // All pass resources are selected through the fixed push ABI.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwShadowHeapPushConstants)));
 
-        rayTracingState().m_swShadowBindingLayout = device.createBindingLayout(layoutDesc);
-        if(!rayTracingState().m_swShadowBindingLayout){
+        m_rayTracingState.m_swShadowBindingLayout = device.createBindingLayout(layoutDesc);
+        if(!m_rayTracingState.m_swShadowBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow binding layout"));
-            rayTracingState().m_swShadowPipelineFailed = true;
+            m_rayTracingState.m_swShadowPipelineFailed = true;
             return false;
         }
 
@@ -2375,10 +2375,10 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
             .setDebugName(Name("sw_shadow_edge_stats"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        rayTracingState().m_swShadowEdgeStatsBuffer = graphics().createBuffer(edgeStatsDesc);
-        if(!rayTracingState().m_swShadowEdgeStatsBuffer){
+        m_rayTracingState.m_swShadowEdgeStatsBuffer = m_graphics.createBuffer(edgeStatsDesc);
+        if(!m_rayTracingState.m_swShadowEdgeStatsBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow edge-stats buffer"));
-            rayTracingState().m_swShadowPipelineFailed = true;
+            m_rayTracingState.m_swShadowPipelineFailed = true;
             return false;
         }
 
@@ -2389,10 +2389,10 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
             .setDebugName(Name("sw_shadow_edge_stats_readback"))
             .enableAutomaticStateTracking(Core::ResourceStates::CopyDest)
         ;
-        rayTracingState().m_swShadowEdgeStatsReadback = graphics().createBuffer(edgeStatsReadbackDesc);
-        if(!rayTracingState().m_swShadowEdgeStatsReadback){
+        m_rayTracingState.m_swShadowEdgeStatsReadback = m_graphics.createBuffer(edgeStatsReadbackDesc);
+        if(!m_rayTracingState.m_swShadowEdgeStatsReadback){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow edge-stats readback buffer"));
-            rayTracingState().m_swShadowPipelineFailed = true;
+            m_rayTracingState.m_swShadowPipelineFailed = true;
             return false;
         }
 
@@ -2405,10 +2405,10 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
             .setDebugName(Name("sw_shadow_edge_counter"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        rayTracingState().m_swShadowEdgeCounterBuffer = graphics().createBuffer(edgeCounterDesc);
-        if(!rayTracingState().m_swShadowEdgeCounterBuffer){
+        m_rayTracingState.m_swShadowEdgeCounterBuffer = m_graphics.createBuffer(edgeCounterDesc);
+        if(!m_rayTracingState.m_swShadowEdgeCounterBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow edge-counter buffer"));
-            rayTracingState().m_swShadowPipelineFailed = true;
+            m_rayTracingState.m_swShadowPipelineFailed = true;
             return false;
         }
 
@@ -2421,38 +2421,38 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
             .setDebugName(Name("sw_shadow_indirect_args"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        rayTracingState().m_swShadowIndirectArgsBuffer = graphics().createBuffer(indirectArgsDesc);
-        if(!rayTracingState().m_swShadowIndirectArgsBuffer){
+        m_rayTracingState.m_swShadowIndirectArgsBuffer = m_graphics.createBuffer(indirectArgsDesc);
+        if(!m_rayTracingState.m_swShadowIndirectArgsBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow indirect-args buffer"));
-            rayTracingState().m_swShadowPipelineFailed = true;
+            m_rayTracingState.m_swShadowPipelineFailed = true;
             return false;
         }
     }
 
     const bool heapResourcesReady =
-        RayTracingDetail::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowEdgeStatsHeapHandle)
-        && RayTracingDetail::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowEdgeCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowEdgeCounterHeapHandle)
-        && RayTracingDetail::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowIndirectArgsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowIndirectArgsHeapHandle)
+        RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_swShadowEdgeStatsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_swShadowEdgeStatsHeapHandle)
+        && RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_swShadowEdgeCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_swShadowEdgeCounterHeapHandle)
+        && RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_swShadowIndirectArgsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_swShadowIndirectArgsHeapHandle)
     ;
     if(!heapResourcesReady){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register software-shadow work buffers in the descriptor heap"));
-        rayTracingState().m_swShadowPipelineFailed = true;
+        m_rayTracingState.m_swShadowPipelineFailed = true;
         return false;
     }
 
     const bool passesReady =
-        ensureSwShadowPassPipeline(rayTracingState().m_swShadowOpaquePrepassShader, rayTracingState().m_swShadowOpaquePrepassPipeline, AssetsGraphicsShadow::s_SwOpaquePrepassShaderName, "ECSRender_SwShadowOpaquePrepass")
-        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowSoftOpaqueShader, rayTracingState().m_swShadowSoftOpaquePipeline, AssetsGraphicsShadow::s_SwSoftOpaqueShaderName, "ECSRender_SwShadowSoftOpaque")
-        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentCoarseShader, rayTracingState().m_swShadowTransparentCoarsePipeline, AssetsGraphicsShadow::s_SwTransparentCoarseShaderName, "ECSRender_SwShadowTransparentCoarse")
-        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentResolveShader, rayTracingState().m_swShadowTransparentResolvePipeline, AssetsGraphicsShadow::s_SwTransparentResolveShaderName, "ECSRender_SwShadowTransparentResolve")
-        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentClassifyShader, rayTracingState().m_swShadowTransparentClassifyPipeline, AssetsGraphicsShadow::s_SwTransparentClassifyShaderName, "ECSRender_SwShadowTransparentClassify")
-        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentBuildArgsShader, rayTracingState().m_swShadowTransparentBuildArgsPipeline, AssetsGraphicsShadow::s_SwTransparentBuildArgsShaderName, "ECSRender_SwShadowTransparentBuildArgs")
-        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentIndirectShader, rayTracingState().m_swShadowTransparentIndirectPipeline, AssetsGraphicsShadow::s_SwTransparentIndirectShaderName, "ECSRender_SwShadowTransparentIndirect")
-        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentUniformShader, rayTracingState().m_swShadowTransparentUniformPipeline, AssetsGraphicsShadow::s_SwTransparentUniformShaderName, "ECSRender_SwShadowTransparentUniform")
-        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentSoftShader, rayTracingState().m_swShadowTransparentSoftPipeline, AssetsGraphicsShadow::s_SwTransparentSoftShaderName, "ECSRender_SwShadowTransparentSoft")
+        ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowOpaquePrepassShader, m_rayTracingState.m_swShadowOpaquePrepassPipeline, AssetsGraphicsShadow::s_SwOpaquePrepassShaderName, "ECSRender_SwShadowOpaquePrepass")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowSoftOpaqueShader, m_rayTracingState.m_swShadowSoftOpaquePipeline, AssetsGraphicsShadow::s_SwSoftOpaqueShaderName, "ECSRender_SwShadowSoftOpaque")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentCoarseShader, m_rayTracingState.m_swShadowTransparentCoarsePipeline, AssetsGraphicsShadow::s_SwTransparentCoarseShaderName, "ECSRender_SwShadowTransparentCoarse")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentResolveShader, m_rayTracingState.m_swShadowTransparentResolvePipeline, AssetsGraphicsShadow::s_SwTransparentResolveShaderName, "ECSRender_SwShadowTransparentResolve")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentClassifyShader, m_rayTracingState.m_swShadowTransparentClassifyPipeline, AssetsGraphicsShadow::s_SwTransparentClassifyShaderName, "ECSRender_SwShadowTransparentClassify")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentBuildArgsShader, m_rayTracingState.m_swShadowTransparentBuildArgsPipeline, AssetsGraphicsShadow::s_SwTransparentBuildArgsShaderName, "ECSRender_SwShadowTransparentBuildArgs")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentIndirectShader, m_rayTracingState.m_swShadowTransparentIndirectPipeline, AssetsGraphicsShadow::s_SwTransparentIndirectShaderName, "ECSRender_SwShadowTransparentIndirect")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentUniformShader, m_rayTracingState.m_swShadowTransparentUniformPipeline, AssetsGraphicsShadow::s_SwTransparentUniformShaderName, "ECSRender_SwShadowTransparentUniform")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentSoftShader, m_rayTracingState.m_swShadowTransparentSoftPipeline, AssetsGraphicsShadow::s_SwTransparentSoftShaderName, "ECSRender_SwShadowTransparentSoft")
     ;
     if(!passesReady){
-        rayTracingState().m_swShadowPipelineFailed = true;
+        m_rayTracingState.m_swShadowPipelineFailed = true;
         return false;
     }
     return true;
@@ -2462,7 +2462,7 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
     if(pipeline)
         return true;
 
-    if(!m_renderer.shaderSystem().loadShader(
+    if(!m_shaderSystem.loadShader(
         shader,
         shaderName,
         Core::ShaderArchive::s_DefaultVariant,
@@ -2474,16 +2474,16 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc
         .setComputeShader(shader)
-        .addBindingLayout(rayTracingState().m_swShadowBindingLayout)
+        .addBindingLayout(m_rayTracingState.m_swShadowBindingLayout)
     ;
-    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
     pipelineDesc
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    pipeline = graphics().getDevice().createComputePipeline(pipelineDesc);
+    pipeline = m_graphics.getDevice().createComputePipeline(pipelineDesc);
     if(!pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow compute pipeline"));
         return false;
@@ -2493,14 +2493,14 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
 
 bool RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instanceCount){
     // CPU-uploaded material context is shared by the exclusive HW/SW backends.
-    if(rayTracingState().m_shadowInstanceMaterialBuffer && rayTracingState().m_shadowInstanceMaterialCapacity >= instanceCount)
+    if(m_rayTracingState.m_shadowInstanceMaterialBuffer && m_rayTracingState.m_shadowInstanceMaterialCapacity >= instanceCount)
         return ensureRayTraceMaterialContextHeapHandle(
-            *rayTracingState().m_shadowInstanceMaterialBuffer.get(),
-            rayTracingState().m_shadowInstanceMaterialHeapHandle
+            *m_rayTracingState.m_shadowInstanceMaterialBuffer.get(),
+            m_rayTracingState.m_shadowInstanceMaterialHeapHandle
         );
 
     const usize capacity = ::NextGrowingCapacity(
-        rayTracingState().m_shadowInstanceMaterialCapacity,
+        m_rayTracingState.m_shadowInstanceMaterialCapacity,
         instanceCount,
         s_ShadowInstanceMaterialInitialCapacity
     );
@@ -2513,32 +2513,32 @@ bool RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instance
         .setDebugName(Name("shadow_instance_material"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle materialBuffer = graphics().createBuffer(materialBufferDesc);
+    Core::BufferHandle materialBuffer = m_graphics.createBuffer(materialBufferDesc);
     if(!materialBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow instance material buffer"));
         return false;
     }
-    if(!replaceRayTraceMaterialContextHeapHandle(*materialBuffer.get(), rayTracingState().m_shadowInstanceMaterialHeapHandle))
+    if(!replaceRayTraceMaterialContextHeapHandle(*materialBuffer.get(), m_rayTracingState.m_shadowInstanceMaterialHeapHandle))
         return false;
-    rayTracingState().m_shadowInstanceMaterialBuffer = Move(materialBuffer);
-    rayTracingState().m_shadowInstanceMaterialCapacity = capacity;
+    m_rayTracingState.m_shadowInstanceMaterialBuffer = Move(materialBuffer);
+    m_rayTracingState.m_shadowInstanceMaterialCapacity = capacity;
     return true;
 }
 
 bool RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceCount){
     // Shadow tracing needs an instance record for every gathered occluder.
     if(instanceCount == 0u)
-        return !rayTracingState().m_shadowInstanceBuffer || ensureRayTraceMaterialContextHeapHandle(
-            *rayTracingState().m_shadowInstanceBuffer.get(),
-            rayTracingState().m_shadowInstanceHeapHandle
+        return !m_rayTracingState.m_shadowInstanceBuffer || ensureRayTraceMaterialContextHeapHandle(
+            *m_rayTracingState.m_shadowInstanceBuffer.get(),
+            m_rayTracingState.m_shadowInstanceHeapHandle
         );
-    if(rayTracingState().m_shadowInstanceBuffer && rayTracingState().m_shadowInstanceCapacity >= instanceCount)
+    if(m_rayTracingState.m_shadowInstanceBuffer && m_rayTracingState.m_shadowInstanceCapacity >= instanceCount)
         return ensureRayTraceMaterialContextHeapHandle(
-            *rayTracingState().m_shadowInstanceBuffer.get(),
-            rayTracingState().m_shadowInstanceHeapHandle
+            *m_rayTracingState.m_shadowInstanceBuffer.get(),
+            m_rayTracingState.m_shadowInstanceHeapHandle
         );
 
-    const usize capacity = ::NextGrowingCapacity(rayTracingState().m_shadowInstanceCapacity, instanceCount);
+    const usize capacity = ::NextGrowingCapacity(m_rayTracingState.m_shadowInstanceCapacity, instanceCount);
     Core::BufferDesc instanceBufferDesc;
     instanceBufferDesc
         .setByteSize(static_cast<u64>(capacity * sizeof(InstanceGpuData)))
@@ -2547,15 +2547,15 @@ bool RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceC
         .setDebugName(Name("shadow_instance_context"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle instanceBuffer = graphics().createBuffer(instanceBufferDesc);
+    Core::BufferHandle instanceBuffer = m_graphics.createBuffer(instanceBufferDesc);
     if(!instanceBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow instance context buffer"));
         return false;
     }
-    if(!replaceRayTraceMaterialContextHeapHandle(*instanceBuffer.get(), rayTracingState().m_shadowInstanceHeapHandle))
+    if(!replaceRayTraceMaterialContextHeapHandle(*instanceBuffer.get(), m_rayTracingState.m_shadowInstanceHeapHandle))
         return false;
-    rayTracingState().m_shadowInstanceBuffer = Move(instanceBuffer);
-    rayTracingState().m_shadowInstanceCapacity = capacity;
+    m_rayTracingState.m_shadowInstanceBuffer = Move(instanceBuffer);
+    m_rayTracingState.m_shadowInstanceCapacity = capacity;
     return true;
 }
 
@@ -2563,13 +2563,13 @@ bool RendererRayTracingSystem::ensureShadowMaterialTypedBuffer(usize byteCount){
     // Keep one word so the heap binding remains valid with no transparent occluders.
     usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
     requiredByteCount = AlignUp(requiredByteCount, sizeof(u32));
-    if(rayTracingState().m_shadowMaterialTypedBuffer && rayTracingState().m_shadowMaterialTypedCapacity >= requiredByteCount)
+    if(m_rayTracingState.m_shadowMaterialTypedBuffer && m_rayTracingState.m_shadowMaterialTypedCapacity >= requiredByteCount)
         return ensureRayTraceMaterialContextHeapHandle(
-            *rayTracingState().m_shadowMaterialTypedBuffer.get(),
-            rayTracingState().m_shadowMaterialTypedHeapHandle
+            *m_rayTracingState.m_shadowMaterialTypedBuffer.get(),
+            m_rayTracingState.m_shadowMaterialTypedHeapHandle
         );
 
-    const usize capacity = ::NextGrowingCapacity(rayTracingState().m_shadowMaterialTypedCapacity, requiredByteCount);
+    const usize capacity = ::NextGrowingCapacity(m_rayTracingState.m_shadowMaterialTypedCapacity, requiredByteCount);
     Core::BufferDesc materialTypedBufferDesc;
     materialTypedBufferDesc
         .setByteSize(static_cast<u64>(capacity))
@@ -2578,15 +2578,15 @@ bool RendererRayTracingSystem::ensureShadowMaterialTypedBuffer(usize byteCount){
         .setDebugName(Name("shadow_material_typed"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle materialTypedBuffer = graphics().createBuffer(materialTypedBufferDesc);
+    Core::BufferHandle materialTypedBuffer = m_graphics.createBuffer(materialTypedBufferDesc);
     if(!materialTypedBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow material typed buffer"));
         return false;
     }
-    if(!replaceRayTraceMaterialContextHeapHandle(*materialTypedBuffer.get(), rayTracingState().m_shadowMaterialTypedHeapHandle))
+    if(!replaceRayTraceMaterialContextHeapHandle(*materialTypedBuffer.get(), m_rayTracingState.m_shadowMaterialTypedHeapHandle))
         return false;
-    rayTracingState().m_shadowMaterialTypedBuffer = Move(materialTypedBuffer);
-    rayTracingState().m_shadowMaterialTypedCapacity = capacity;
+    m_rayTracingState.m_shadowMaterialTypedBuffer = Move(materialTypedBuffer);
+    m_rayTracingState.m_shadowMaterialTypedCapacity = capacity;
     return true;
 }
 

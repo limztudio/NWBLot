@@ -30,15 +30,65 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
     if(!prepareGpuTimingScopes())
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU timing scope preparation failed; timing samples may be skipped"));
 
-    DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
-    bool targetsReady = deferredTargets.valid() && deferredTargets.width == width && deferredTargets.height == height;
+    DeferredFrameTargets* deferredTargets = m_deferredSystem.tryFrameTargets();
+    bool targetsReady = m_deferredSystem.frameTargetsMatch(width, height);
     if(!targetsReady){
         // New targets invalidate stale compute scratch and visibility returns.
         resetTargetGenerationStateHandoffs();
         resetLaggedLightingHistoryTracking();
-        targetsReady = m_deferredSystem.createDeferredFrameTargets(width, height);
+        if(deferredTargets)
+            m_avboitSystem.resetAvboitFrameTargets(deferredTargets->avboit);
+        m_deferredSystem.resetDeferredFrameTargets();
+        m_materialSystem.invalidateRendererPipelines();
+
+        DeferredFrameTargets createdTargets;
+        const auto resetCreatedTargets = [this, &createdTargets](){
+            m_avboitSystem.resetAvboitFrameTargets(createdTargets.avboit);
+            m_deferredSystem.resetDeferredFrameTargets(createdTargets);
+        };
+        if(!m_deferredSystem.createDeferredFrameTargets(createdTargets, width, height)){
+            resetCreatedTargets();
+            return false;
+        }
+        if(!m_avboitSystem.createAvboitResources()){
+            resetCreatedTargets();
+            return false;
+        }
+        if(!m_avboitSystem.createAvboitFrameTargets(createdTargets)){
+            resetCreatedTargets();
+            return false;
+        }
+        if(!m_csgSystem.createCsgPeelTargets(createdTargets)){
+            resetCreatedTargets();
+            return false;
+        }
+        if(!m_raytracingSystem.createShadowVisibilityTarget(createdTargets)){
+            resetCreatedTargets();
+            return false;
+        }
+        if(!m_raytracingSystem.createCausticTargets(createdTargets)){
+            resetCreatedTargets();
+            return false;
+        }
+        if(!m_deferredSystem.createDeferredFrameTargetResources(createdTargets, m_avboitSystem.linearSampler())){
+            resetCreatedTargets();
+            return false;
+        }
+        if(!m_avboitSystem.registerAvboitFrameTargetDescriptors(createdTargets, createdTargets.avboit)){
+            resetCreatedTargets();
+            return false;
+        }
+
+        m_deferredSystem.commitDeferredFrameTargets(Move(createdTargets));
+        deferredTargets = m_deferredSystem.tryFrameTargets();
+        targetsReady = m_deferredSystem.createDeferredLightingPipeline() && m_deferredSystem.createDeferredCompositePipeline();
+        if(!targetsReady){
+            NWB_ASSERT(deferredTargets);
+            m_avboitSystem.resetAvboitFrameTargets(deferredTargets->avboit);
+            m_deferredSystem.resetDeferredFrameTargets();
+        }
     }
-    if(!targetsReady)
+    if(!targetsReady || !deferredTargets)
         return false;
 
     // Pipeline compatibility setup uses the stable framebuffer-zero prototype, not a currently acquired image.
@@ -58,7 +108,7 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
     if(!m_meshSystem.createMeshViewBuffer())
         return false;
 
-    if(!m_csgSystem.createCsgIntervalPeelResources(deferredTargets, true))
+    if(!m_csgSystem.createCsgIntervalPeelResources(*deferredTargets, true))
         return false;
 
     return true;
@@ -72,8 +122,6 @@ void RendererFramePipeline::invalidateResources(){
     m_preparedHasTransparentRenderers = false;
     m_shadowPreparationOutcome.resourcesValid = false;
     m_shadowPreparationOutcome.ready = false;
-    m_raytracingSystem.discardPreflightShadowVisibilityResources();
-    m_raytracingSystem.invalidatePreparedShadowTraceGeometryBuffers();
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};
@@ -176,15 +224,9 @@ void RendererFramePipeline::invalidateResources(){
     resetInvalidatedResourceStateHandoffs();
     resetLaggedLightingHistoryTracking();
     m_frameRenderRecoveryFailed = false;
-    // Retire heap-retained TLAS resources before releasing their backing state.
-    if(m_rayTracingState.m_tlasHeapHandle.valid()){
-        auto& device = m_graphics.getDevice();
-        device.getDescriptorHeap().free(m_rayTracingState.m_tlasHeapHandle);
-    }
-    m_raytracingSystem.releaseCausticEmissionTargetHeapHandle();
-    m_raytracingSystem.releaseRayTraceMaterialContextHeapHandles();
-    m_raytracingSystem.releaseSwBvhScratchHeapHandles();
-    m_raytracingSystem.releaseSurfelGiHeapHandles();
+    m_raytracingSystem.invalidateResources();
+    if(DeferredFrameTargets* const deferredTargets = m_deferredSystem.tryFrameTargets())
+        m_avboitSystem.resetAvboitFrameTargets(deferredTargets->avboit);
     m_deferredSystem.resetDeferredFrameTargets();
     m_shaderSystem.invalidateResources();
     m_meshSystem.releaseAllMeshGeometryHeapHandles();
@@ -195,9 +237,8 @@ void RendererFramePipeline::invalidateResources(){
     m_drawState.invalidateResources();
     m_csgSystem.releaseCsgClipContextHeapHandles();
     m_csgState.invalidateResources();
-    m_deferredState.invalidateResources();
-    m_avboitState.invalidateResources();
-    m_rayTracingState.invalidateResources();
+    m_deferredSystem.invalidateResources();
+    m_avboitSystem.invalidateResources();
 }
 
 void RendererFramePipeline::update(Core::ECS::World& world, f32 delta){
@@ -304,13 +345,14 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     m_preparedCsgFrameState = CsgFrameState{};
     m_preparedCsgFrameStateValid = false;
 
-    if(!m_deferredState.m_targets.valid())
+    DeferredFrameTargets* const activeDeferredTargets = m_deferredSystem.tryFrameTargets();
+    if(!activeDeferredTargets)
         return true;
-    DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
+    DeferredFrameTargets& deferredTargets = *activeDeferredTargets;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
     m_preparedCsgFrameState = HasCsgFrameCandidates(m_world)
-        ? m_csgSystem.buildFrameState(scratchArena)
+        ? m_csgSystem.buildFrameState(scratchArena, m_materialSystem)
         : CsgFrameState{}
     ;
     m_preparedCsgFrameStateValid = true;

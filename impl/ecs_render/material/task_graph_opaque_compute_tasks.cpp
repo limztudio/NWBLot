@@ -5,8 +5,11 @@
 #include <impl/ecs_render/material/task_graph_opaque_compute_tasks.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include <impl/ecs_render/material/material_system.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/shared/renderer_frame_types.h>
 
+#include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
 
 

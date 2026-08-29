@@ -5,10 +5,66 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/subsystem_base.h>
+#include <impl/ecs_render/shared/renderer_frame_types.h>
 
+#include <core/alloc/global.h>
+#include <core/ecs/global.h>
 #include <core/graphics/gpu_timing.h>
 #include <core/graphics/task_graph/task_graph.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ALLOC_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GlobalArena;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ALLOC_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ECS_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class World;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ECS_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Graphics;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,13 +81,43 @@ namespace ECSRenderDetail{
     struct SceneLightGpuData;
 };
 
+class RendererDeferredState;
+class RendererRayTracingState;
+class RendererShaderSystem;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererDeferredSystem final : public RendererFramePipelineSubsystemBase<RendererFramePipeline>{
+struct DeferredLightingGraphResources{
+    Core::BufferHandle sceneShadingBuffer;
+    Core::BufferHandle lightBuffer;
+
+    [[nodiscard]] bool valid()const noexcept{ return sceneShadingBuffer && lightBuffer; }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererDeferredSystem final : NoCopy{
 public:
-    explicit RendererDeferredSystem(RendererFramePipeline& renderer);
+    RendererDeferredSystem(
+        Core::Alloc::GlobalArena& arena,
+        Core::ECS::World& world,
+        Core::Graphics& graphics,
+        RendererDeferredState& deferredState,
+        RendererRayTracingState& rayTracingState,
+        RendererShaderSystem& shaderSystem
+    );
+
+public:
+    [[nodiscard]] bool frameTargetsMatch(u32 width, u32 height)const noexcept;
+    [[nodiscard]] DeferredFrameTargets* tryFrameTargets()noexcept;
+    [[nodiscard]] const DeferredFrameTargets* tryFrameTargets()const noexcept;
+    [[nodiscard]] DeferredLightingGraphResources lightingGraphResources()const noexcept;
+    void invalidateSceneLightingUploadMirrors()noexcept;
+    void invalidateResources();
 
 public:
     // Resolves immutable per-frame data before graph declaration. The shared renderer publishes changed payloads
@@ -66,13 +152,14 @@ public:
         DeferredFrameTargets& targets,
         bool useLaggedLightingHistory = false
     );
-    [[nodiscard]] bool createDeferredFrameTargets(u32 width, u32 height);
+    [[nodiscard]] bool createDeferredFrameTargets(DeferredFrameTargets& outTargets, u32 width, u32 height);
+    [[nodiscard]] bool createDeferredFrameTargetResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler);
+    void commitDeferredFrameTargets(DeferredFrameTargets&& targets);
     [[nodiscard]] bool createDeferredCompositeResources();
     [[nodiscard]] bool createDeferredCompositePipeline();
     [[nodiscard]] bool createDeferredPresentPipeline(Core::Framebuffer* presentationFramebuffer);
-    void resetAvboitFrameTargets(AvboitFrameTargets& targets);
+    void resetDeferredFrameTargets(DeferredFrameTargets& targets);
     void resetDeferredFrameTargets();
-    void clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::Rect& csgClearRect);
     [[nodiscard]] Core::GpuTaskId declareDeferredCompositeTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -91,11 +178,19 @@ public:
 
 
 private:
-    [[nodiscard]] bool createDeferredBindlessFrameResources(DeferredFrameTargets& targets);
+    [[nodiscard]] bool createDeferredBindlessFrameResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler);
     void resetDeferredBindlessFrameResources(DeferredFrameTargets& targets);
     void resetLaggedLightingHistoryResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool createLaggedLightingHistoryResources(DeferredFrameTargets& targets);
     void logCausticClassificationOnce(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount, u32 causticLightCount, u32 refractiveInstanceCount);
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    Core::ECS::World& m_world;
+    Core::Graphics& m_graphics;
+    RendererDeferredState& m_deferredState;
+    RendererRayTracingState& m_rayTracingState;
+    RendererShaderSystem& m_shaderSystem;
 };
 
 

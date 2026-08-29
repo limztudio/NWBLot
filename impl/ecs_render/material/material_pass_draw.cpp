@@ -2,9 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include "material_system.h"
+
+#include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/material_pass_csg_private.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/shared/renderer_push_constants_private.h>
+#include <impl/ecs_render/shared/renderer_state.h>
+
+#include <core/graphics/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,7 +32,6 @@ namespace __hidden_material_pass_draw{
 static void SetCsgHeapResourceStates(
     RendererCsgSystem& csgSystem,
     Core::CommandList& commandList,
-    const DeferredFrameTargets& targets,
     const MaterialPipelineCsgBindingUse& csgBindingUse,
     const bool receiverSurfaceImageStatesGraphOwned,
     const bool intervalSampleImageStatesGraphOwned,
@@ -39,17 +45,13 @@ static void SetCsgHeapResourceStates(
     if(csgBindingUse.receiverSurface && !receiverSurfaceImageStatesGraphOwned){
         // Compatibility callers still stage the heap-selected receiver-event images themselves. The normal graph
         // declares this exact StorageImage pair before its receiver-surface task records.
-        commandList.setTextureState(targets.csgReceiverEventData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.csgReceiverEventCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+        csgSystem.setCsgReceiverSurfaceImageStates(commandList);
     }
     if(csgBindingUse.intervalSample && !intervalSampleImageStatesGraphOwned){
         // Cap/interval sampling loads through StorageImage aliases, so its heap descriptors require GENERAL rather
         // than the sampled-image shader-read layout. The normal opaque graph declares the same UAV use at its
         // combine-to-sample boundary; AVBOIT and direct compatibility callers retain this native bridge.
-        commandList.setTextureState(targets.csgRemovedIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.csgRemovedIntervalCapNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.csgRemovedIntervalData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.csgRemovedIntervalCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+        csgSystem.setCsgIntervalSampleImageStates(commandList);
     }
 }
 
@@ -75,20 +77,20 @@ void RendererMaterialSystem::setMaterialPassCommonBufferStates(
         });
     }
     if(!materialFrameStatesGraphOwned){
-        commandList.setBufferState(drawState().m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(m_drawState.m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(m_drawState.m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(m_drawState.m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
     }
 }
 
 bool RendererMaterialSystem::materialPassDrawResourcesReady(const MeshResources& mesh)const{
     return
         mesh.valid()
-        && m_renderer.meshSystem().meshGeometryHeapHandlesReady(mesh)
-        && m_renderer.meshSystem().meshFrameHeapHandlesReady()
-        && drawState().m_instanceBuffer
-        && drawState().m_meshViewBuffer
-        && drawState().m_materialTypedBuffer
+        && m_meshSystem.meshGeometryHeapHandlesReady(mesh)
+        && m_meshSystem.meshFrameHeapHandlesReady()
+        && m_drawState.m_instanceBuffer
+        && m_drawState.m_meshViewBuffer
+        && m_drawState.m_materialTypedBuffer
     ;
 }
 
@@ -180,13 +182,13 @@ void RendererMaterialSystem::setMaterialPassDrawPushConstants(
     const u32 dispatchFlags = materialPassDrawDispatchFlags(context, drawItem, mesh);
     const MaterialPipelineCsgBindingUse csgBindingUse =
         MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, context.pass);
-    const u32 csgContextHeapSlot = csgBindingUse.clip
-        ? csgState().m_clipContextSlotsHeapHandle.slot()
-        : 0u
-    ;
-    NWB_ASSERT(!csgBindingUse.clip || csgState().m_clipContextSlotsHeapHandle.valid());
+    u32 csgContextHeapSlot = 0u;
+    const bool csgContextHeapSlotReady = m_csgSystem.findCsgClipContextHeapSlot(csgContextHeapSlot);
+    NWB_ASSERT(!csgBindingUse.clip || csgContextHeapSlotReady);
+    if(!csgBindingUse.clip)
+        csgContextHeapSlot = 0u;
     ECSRenderDetail::MeshFrameHeapSlots frameHeapSlots;
-    m_renderer.meshSystem().populateMeshFrameHeapSlots(frameHeapSlots);
+    m_meshSystem.populateMeshFrameHeapSlots(frameHeapSlots);
     if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
         ECSRenderDetail::SetTransparentDrawPushConstants(
             context.commandList,
@@ -197,7 +199,7 @@ void RendererMaterialSystem::setMaterialPassDrawPushConstants(
             *context.avboitTargets,
             frameHeapSlots,
             dispatchFlags,
-            graphics().isHDR10OutputActive(),
+            m_graphics.isHDR10OutputActive(),
             csgContextHeapSlot
         );
         return;
@@ -233,9 +235,8 @@ void RendererMaterialSystem::setMaterialPassDrawItemResourceStates(
         context.materialGeometryStatesGraphOwned
     );
     __hidden_material_pass_draw::SetCsgHeapResourceStates(
-        m_renderer.csgSystem(),
+        m_csgSystem,
         context.commandList,
-        deferredState().m_targets,
         csgBindingUse,
         context.csgReceiverSurfaceImageStatesGraphOwned,
         context.csgIntervalSampleImageStatesGraphOwned,
@@ -255,10 +256,10 @@ void RendererMaterialSystem::dispatchComputeMaterialPassDrawItem(
     // generated-vertex buffer, is selected through the global descriptor heap.
 
     context.commandList.setComputeState(computeState);
-    graphics().getDevice().getDescriptorHeap().bindCompute(context.commandList, *pipelineResources.computePipeline.get());
+    m_graphics.getDevice().getDescriptorHeap().bindCompute(context.commandList, *pipelineResources.computePipeline.get());
 
     ECSRenderDetail::MeshFrameHeapSlots frameHeapSlots;
-    m_renderer.meshSystem().populateMeshFrameHeapSlots(frameHeapSlots);
+    m_meshSystem.populateMeshFrameHeapSlots(frameHeapSlots);
     frameHeapSlots.generatedVertex = mesh.emulationVertexHeapHandle.slot();
     ECSRenderDetail::SetShaderDrivenPushConstants(
         context.commandList,
@@ -270,7 +271,7 @@ void RendererMaterialSystem::dispatchComputeMaterialPassDrawItem(
         materialPassDrawDispatchFlags(context, drawItem, mesh)
     );
     {
-        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, graphics().getDevice(), context.commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);
 
         context.commandList.dispatch(mesh.meshletCount);
     }
@@ -294,14 +295,14 @@ void RendererMaterialSystem::drawComputeMaterialPassDrawItem(
     );
 
     context.commandList.setGraphicsState(graphicsState);
-    graphics().getDevice().getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.emulationPipeline.get());
+    m_graphics.getDevice().getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.emulationPipeline.get());
 
     setMaterialPassDrawPushConstants(context, drawItem, mesh);
 
     Core::DrawArguments drawArgs;
     drawArgs.setVertexCount(mesh.meshletPrimitiveIndexCount);
     {
-        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_Raster, graphics().getDevice(), context.commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Raster, m_graphics.getDevice(), context.commandList);
 
         context.commandList.draw(drawArgs);
     }
@@ -334,11 +335,11 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
 
         context.commandList.setMeshletState(meshletState);
         // Geometry streams are heap-backed for every raster material pass (opaque and AVBOIT alike).
-        graphics().getDevice().getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.meshletPipeline.get());
+        m_graphics.getDevice().getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.meshletPipeline.get());
 
         setMaterialPassDrawPushConstants(context, drawItem, mesh);
         {
-            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, graphics().getDevice(), context.commandList);
+            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);
 
             context.commandList.dispatchMesh(mesh.meshletCount);
         }
@@ -354,7 +355,7 @@ void RendererMaterialSystem::generateComputeMaterialPassDrawItems(
     // This half deliberately has no local output transition. A graph producer must have declared every selected
     // generated-vertex buffer as a UAV before recording it.
     NWB_ASSERT(context.emulationOutputEntryStateGraphOwned);
-    NWB_ASSERT(drawState().m_meshViewBuffer);
+    NWB_ASSERT(m_drawState.m_meshViewBuffer);
 
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
         NWB_ASSERT(materialPassDrawResourcesReady(mesh));
@@ -375,7 +376,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItemsRasterOnly(
     // This half deliberately has no local output transition. A graph consumer must have declared every selected
     // generated-vertex buffer as a VertexBuffer before recording it.
     NWB_ASSERT(context.emulationOutputEntryStateGraphOwned);
-    NWB_ASSERT(drawState().m_meshViewBuffer);
+    NWB_ASSERT(m_drawState.m_meshViewBuffer);
 
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
         NWB_ASSERT(materialPassDrawResourcesReady(mesh));
@@ -393,7 +394,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
     if(drawItems.empty())
         return;
     NWB_ASSERT(!context.emulationOutputEntryStateGraphOwned);
-    NWB_ASSERT(drawState().m_meshViewBuffer);
+    NWB_ASSERT(m_drawState.m_meshViewBuffer);
 
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
         NWB_ASSERT(materialPassDrawResourcesReady(mesh));

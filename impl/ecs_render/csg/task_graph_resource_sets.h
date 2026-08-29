@@ -5,7 +5,8 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

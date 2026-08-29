@@ -6,6 +6,9 @@
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/renderer_private.h>
+#include <impl/ecs_render/avboit/task_graph_clear_timing_state.h>
+#include <impl/ecs_render/csg/task_graph_clear_timing.h>
+#include <impl/ecs_render/deferred/task_graph_clear_timing_state.h>
 
 #include <impl/ecs_scene/components.h>
 
@@ -164,9 +167,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    if(!m_deferredState.m_targets.valid())
+    DeferredFrameTargets* const activeDeferredTargets = m_deferredSystem.tryFrameTargets();
+    if(!activeDeferredTargets)
         return;
-    DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
+    DeferredFrameTargets& deferredTargets = *activeDeferredTargets;
 
     NWB_ASSERT(m_preparedCsgFrameStateValid);
     NWB_ASSERT(m_shadowPreparationOutcome.resourcesValid);
@@ -297,77 +301,33 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     m_raytracingSystem.retireCompletedAdaptiveShadowStatisticsReadback();
 
     // Preserve CPU mirrors so rejected recordings can be retried exactly.
-    struct PostGbufferPacketCpuState{
-        Core::QueueSubmissionToken surfelCountReadbackSubmissionToken;
-
-        u32 softShadowFrameIndex = 0u;
-        u32 causticTemporalReuseFrameCount = 0u;
-        u32 swCausticFrameIndex = 0u;
-        u32 hwCausticFrameIndex = 0u;
-        u32 surfelFrameIndex = 0u;
-        u32 surfelCountReadbackFrame = 0u;
-        u32 shadowSlotCount = 0u;
-        u32 softShadowSlotMask = 0u;
-        u32 causticLightCount = 0u;
-
-        bool avboitTargetsNeedClear = true;
-        bool deferredBindlessSlotsUploaded = false;
-        bool swShadowDispatchLogged = false;
-        bool causticAccumulatorInitialized = false;
-        bool swCausticDispatchLogged = false;
-        bool hwCausticDispatchLogged = false;
-        bool causticEmissionGateLogged = false;
-        bool surfelSeeded = false;
-    };
-    const PostGbufferPacketCpuState postGbufferPacketCpuState{
-        m_rayTracingState.m_surfelCountReadbackSubmissionToken,
-        m_rayTracingState.m_softShadowFrameIndex,
-        m_rayTracingState.m_causticTemporalReuseFrameCount,
-        m_rayTracingState.m_swCausticFrameIndex,
-        m_rayTracingState.m_hwCausticFrameIndex,
-        m_rayTracingState.m_surfelFrameIndex,
-        m_rayTracingState.m_surfelCountReadbackFrame,
-        m_rayTracingState.m_shadowSlotCount,
-        m_rayTracingState.m_softShadowSlotMask,
-        m_rayTracingState.m_causticLightCount,
-        m_avboitState.m_targetsNeedClear,
-        deferredTargets.bindless.slotsUploaded,
-        m_rayTracingState.m_swShadowDispatchLogged,
-        m_rayTracingState.m_causticAccumulatorInitialized,
-        m_rayTracingState.m_swCausticDispatchLogged,
-        m_rayTracingState.m_hwCausticDispatchLogged,
-        m_rayTracingState.m_causticEmissionGateLogged,
-        m_rayTracingState.m_surfelSeeded,
-    };
+    const RayTracingFrameCpuStateSnapshot rayTracingCpuState = m_raytracingSystem.captureFrameCpuState();
+    const bool avboitTargetsNeedClear = m_avboitSystem.captureTargetClearState();
+    const bool deferredBindlessSlotsUploaded = deferredTargets.bindless.slotsUploaded;
+    const RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources =
+        m_raytracingSystem.snapshotShadowPreparationResources()
+    ;
+    const RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources =
+        m_raytracingSystem.snapshotSurfelPersistentResources()
+    ;
     const auto restorePrefixCpuState = [&](){
         // Rejected G-buffer recording invalidates CPU upload mirrors.
-        m_drawState.m_meshViewGpuDataValid = false;
-        m_deferredState.m_sceneShadingGpuDataValid = false;
-        m_deferredState.m_lightGpuDataValid = false;
+        m_meshSystem.invalidateMeshViewBufferUploadMirror();
+        m_deferredSystem.invalidateSceneLightingUploadMirrors();
     };
 
     const auto restoreShadowCpuState = [&](){
-        m_rayTracingState.m_softShadowFrameIndex = postGbufferPacketCpuState.softShadowFrameIndex;
-        m_rayTracingState.m_swShadowDispatchLogged = postGbufferPacketCpuState.swShadowDispatchLogged;
+        m_raytracingSystem.restoreShadowPacketCpuState(rayTracingCpuState);
     };
 
     const auto restoreCausticsCpuState = [&](){
-        m_rayTracingState.m_causticAccumulatorInitialized = postGbufferPacketCpuState.causticAccumulatorInitialized;
-        m_rayTracingState.m_causticTemporalReuseFrameCount = postGbufferPacketCpuState.causticTemporalReuseFrameCount;
-        m_rayTracingState.m_swCausticFrameIndex = postGbufferPacketCpuState.swCausticFrameIndex;
-        m_rayTracingState.m_hwCausticFrameIndex = postGbufferPacketCpuState.hwCausticFrameIndex;
-        m_rayTracingState.m_swCausticDispatchLogged = postGbufferPacketCpuState.swCausticDispatchLogged;
-        m_rayTracingState.m_hwCausticDispatchLogged = postGbufferPacketCpuState.hwCausticDispatchLogged;
-        m_rayTracingState.m_causticEmissionGateLogged = postGbufferPacketCpuState.causticEmissionGateLogged;
+        m_raytracingSystem.restoreCausticPacketCpuState(rayTracingCpuState);
     };
     const auto restoreSurfelGiCpuState = [&](){
-        m_rayTracingState.m_surfelFrameIndex = postGbufferPacketCpuState.surfelFrameIndex;
-        m_rayTracingState.m_surfelSeeded = postGbufferPacketCpuState.surfelSeeded;
-        m_rayTracingState.m_surfelCountReadbackFrame = postGbufferPacketCpuState.surfelCountReadbackFrame;
-        m_rayTracingState.m_surfelCountReadbackSubmissionToken = postGbufferPacketCpuState.surfelCountReadbackSubmissionToken;
+        m_raytracingSystem.restoreSurfelGiPacketCpuState(rayTracingCpuState);
     };
     const auto restoreAvboitCpuState = [&](){
-        m_avboitState.m_targetsNeedClear = postGbufferPacketCpuState.avboitTargetsNeedClear;
+        m_avboitSystem.restoreTargetClearState(avboitTargetsNeedClear);
     };
     const auto restorePostGbufferEffectsCpuState = [&](){
         restoreCausticsCpuState();
@@ -376,15 +336,13 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     };
     const auto restorePostGbufferPacketCpuState = [&](const bool restoreBindlessSlots){
         if(restoreBindlessSlots)
-            deferredTargets.bindless.slotsUploaded = postGbufferPacketCpuState.deferredBindlessSlotsUploaded;
+            deferredTargets.bindless.slotsUploaded = deferredBindlessSlotsUploaded;
         restorePrefixCpuState();
         restoreShadowCpuState();
         restorePostGbufferEffectsCpuState();
     };
     // The current graph must retain this token even if Surfel GI consumes the completed diagnostic while recording.
-    const Core::QueueSubmissionToken surfelCounterReadbackCompletionToken =
-        m_rayTracingState.m_surfelCountReadbackSubmissionToken
-    ;
+    const Core::QueueSubmissionToken surfelCounterReadbackCompletionToken = rayTracingCpuState.surfelCountReadbackSubmissionToken;
 
     // Each semantic prefix stage starts with its own ticket. After frontier-safe compilation, tasks that share a
     // native packet are rebound to one ticket, while a split prefix retains one complete ticket per submission.
@@ -466,7 +424,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     Optional<Core::GpuTimingMeasure> causticPhotonTiming;
     // Geometry downsample begins the resolve interval and wavelet resolve closes it in the same selected packet.
     Optional<Core::GpuTimingMeasure> causticResolveTiming;
-    const bool clearAvboitTargets = hasTransparentRenderers || m_avboitState.m_targetsNeedClear;
+    const bool clearAvboitTargets = m_avboitSystem.shouldClearTargets(hasTransparentRenderers);
     Core::GpuTimingSubmissionTicket avboitPreTimingTicket(m_graphics.gpuTiming());
     Optional<Core::GpuTimingMeasure> avboitClearTiming;
     ECSRenderDetail::AvboitClearTimingRecordState avboitClearTimingState{
@@ -1501,10 +1459,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         discardGraphicsPrefixTimingTickets();
         // Immutable scene-light preparation happens during graph declaration so it can be copied into graph-owned
         // blobs. No packet has been accepted on this early path; restore its CPU-only classification exactly.
-        m_rayTracingState.m_shadowSlotCount = postGbufferPacketCpuState.shadowSlotCount;
-        m_rayTracingState.m_softShadowSlotMask = postGbufferPacketCpuState.softShadowSlotMask;
-        m_rayTracingState.m_causticLightCount = postGbufferPacketCpuState.causticLightCount;
-        m_rayTracingState.m_causticEmissionGateLogged = postGbufferPacketCpuState.causticEmissionGateLogged;
+        m_raytracingSystem.restorePreparedLightingCpuState(rayTracingCpuState);
         return;
     }
     const bool deferredLightingRunsOnCompute = deferredLightingQueue->queueClass == Core::CommandQueue::Compute;
@@ -1621,9 +1576,9 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         }
         shadowPrepareLiveStateBuffers.push_back(buffer);
     };
-    if(m_rayTracingState.m_tlas)
-        appendShadowPrepareStateBuffer(m_rayTracingState.m_tlas->getBackingBufferHandle());
-    bool shadowPrepareStateCandidateRequired = static_cast<bool>(m_rayTracingState.m_tlas)
+    if(rayTracingShadowResources.sceneTlasBackingBuffer)
+        appendShadowPrepareStateBuffer(rayTracingShadowResources.sceneTlasBackingBuffer);
+    bool shadowPrepareStateCandidateRequired = static_cast<bool>(rayTracingShadowResources.sceneTlas)
         || m_raytracingSystem.preparedMeshSwBvhBuildsReady()
         || m_raytracingSystem.shadowVisibilitySoftwareResourcesPreflighted()
     ;
@@ -1642,32 +1597,22 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         appendShadowPrepareStateBuffer(preparedBuffer.buffer);
         shadowPrepareStateCandidateRequired = true;
     }
-    for(auto meshIt = meshState().m_meshes.begin(); meshIt != meshState().m_meshes.end(); ++meshIt){
-        const MeshResources& mesh = meshIt.value();
-        // A frozen BLAS plan can fall back to the native current-mesh build when runtime geometry changes between
-        // preflight and recording. That bridge leaves its position/index streams in AccelStructBuildInput, even
-        // after a static first-build clears blasBuildPending. Retain every live pair, not only the frozen inputs,
-        // so a later descriptor import never seeds Common over that accepted native state.
-        if(mesh.blas){
-            appendShadowPrepareStateBuffer(mesh.positionBuffer);
-            appendShadowPrepareStateBuffer(mesh.triangleIndexBuffer);
-            appendShadowPrepareStateBuffer(mesh.blas->getBackingBufferHandle());
+    ECSRenderDetail::MeshRetainedAccelerationStateBufferVector meshAccelerationStateBuffers{ shadowPrepareStateScratchArena };
+    m_meshSystem.collectRetainedAccelerationStateBuffers(meshAccelerationStateBuffers);
+    for(const Core::BufferHandle& buffer : meshAccelerationStateBuffers){
+        if(buffer)
             shadowPrepareStateCandidateRequired = true;
-        }
-        // Preserve both mesh-local SW state buffers across route changes. A hybrid native build may leave these UAVs
-        // before the next frame switches to software-only frozen recording.
-        appendShadowPrepareStateBuffer(mesh.swBvhNodeBuffer);
-        appendShadowPrepareStateBuffer(mesh.swBvhParentBuffer);
+        appendShadowPrepareStateBuffer(buffer);
     }
-    appendShadowPrepareStateBuffer(m_rayTracingState.m_bvhSortKeysBuffer);
-    appendShadowPrepareStateBuffer(m_rayTracingState.m_bvhSortPayloadBuffer);
-    appendShadowPrepareStateBuffer(m_rayTracingState.m_bvhVisitCounterBuffer);
+    appendShadowPrepareStateBuffer(rayTracingShadowResources.bvhSortKeysBuffer);
+    appendShadowPrepareStateBuffer(rayTracingShadowResources.bvhSortPayloadBuffer);
+    appendShadowPrepareStateBuffer(rayTracingShadowResources.bvhVisitCounterBuffer);
 
     // The declaration-owned source imports the prior cache. The normal executor builds the sparse
     // AS/software-BVH candidate after recording every ordinary packet and commits it only when Shadow Preparation
     // accepts.
     Core::GpuPersistentResourceStateCache::Candidate shadowPrepareAcceptedStateCandidate(m_arena);
-    m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
+    m_avboitSystem.markFrameTargetUsage(hasTransparentRenderers);
 
     const auto submitFrameRecoveryPacket = [&]() -> bool {
         // Retire the accepted frame scope after a rejected packet. The transaction supplies one latest token from
@@ -1848,11 +1793,11 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         deferredTargets.transparentMomentsB,
     };
     const Core::BufferHandle shadowComputeScratchBuffers[] = {
-        m_rayTracingState.m_swShadowEdgeStatsBuffer,
-        m_rayTracingState.m_swShadowEdgeStatsReadback,
-        m_rayTracingState.m_swShadowEdgeCounterBuffer,
-        m_rayTracingState.m_swShadowEdgeListBuffer,
-        m_rayTracingState.m_swShadowIndirectArgsBuffer,
+        rayTracingShadowResources.swShadowEdgeStatsBuffer,
+        rayTracingShadowResources.swShadowEdgeStatsReadback,
+        rayTracingShadowResources.swShadowEdgeCounterBuffer,
+        rayTracingShadowResources.swShadowEdgeListBuffer,
+        rayTracingShadowResources.swShadowIndirectArgsBuffer,
     };
     Core::GpuPersistentResourceStateCache::Candidate shadowVisibilityReturnStateCandidate(m_arena);
     Core::GpuPersistentResourceStateCache::Candidate shadowComputeScratchStateCandidate(m_arena);
@@ -2056,18 +2001,18 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         deferredTargets.surfelIrradiance,
     };
     const Core::BufferHandle surfelGiCounterBuffers[] = {
-        m_rayTracingState.m_surfelCounterBuffer,
+        rayTracingSurfelResources.counterBuffer,
     };
     const Core::TextureHandle surfelGiComputeScratchTextures[] = {
         deferredTargets.surfelIrradianceHalf,
     };
     const Core::BufferHandle surfelGiComputeScratchBuffers[] = {
-        m_rayTracingState.m_surfelPoolBuffer,
-        m_rayTracingState.m_surfelCellHeadBuffer,
-        m_rayTracingState.m_surfelTraceIndirectArgsBuffer,
-        m_rayTracingState.m_surfelFreeListBuffer,
-        m_rayTracingState.m_surfelPoolSnapshotBuffer,
-        m_rayTracingState.m_surfelCellHeadSnapshotBuffer,
+        rayTracingSurfelResources.poolBuffer,
+        rayTracingSurfelResources.cellHeadBuffer,
+        rayTracingSurfelResources.traceIndirectArgsBuffer,
+        rayTracingSurfelResources.freeListBuffer,
+        rayTracingSurfelResources.poolSnapshotBuffer,
+        rayTracingSurfelResources.cellHeadSnapshotBuffer,
     };
     Core::GpuPersistentResourceStateCache::Candidate surfelIrradianceReturnStateCandidate(m_arena);
     Core::GpuPersistentResourceStateCache::Candidate surfelGiCounterStateCandidate(m_arena);
@@ -2782,7 +2727,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         else{
             Core::GpuPersistentResourceStateCache::Candidate readbackCounterStateCandidate(m_arena);
             const Core::BufferHandle readbackCounterBuffers[] = {
-                m_rayTracingState.m_surfelCounterBuffer,
+                rayTracingSurfelResources.counterBuffer,
             };
             // Keep the filtered final-state candidate private until the Transfer task accepts, so a rejected
             // readback cannot replace the last accepted Surfel-GI counter state.
@@ -2875,14 +2820,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             else{
                 // addCopyBufferTask publishes only on accepted submission, keeping CPU polling tied to the
                 // selected physical transport rather than the preceding Surfel-GI packet.
-                NWB_ASSERT(
-                    m_rayTracingState.m_surfelCountReadbackSubmissionToken.queue == readbackSubmissionToken.queue
-                    && m_rayTracingState.m_surfelCountReadbackSubmissionToken.value == readbackSubmissionToken.value
-                    && m_rayTracingState.m_surfelCountReadbackSubmissionToken.matchesPhysicalQueue(
-                        readbackSubmissionToken.physicalQueueIndex,
-                        readbackSubmissionToken.deviceGeneration
-                    )
-                );
+                NWB_ASSERT(m_raytracingSystem.surfelCountReadbackSubmissionMatches(readbackSubmissionToken));
             }
         }
     }

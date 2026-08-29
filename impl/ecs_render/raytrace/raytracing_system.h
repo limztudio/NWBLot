@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/subsystem_base.h>
+#include <impl/ecs_render/shared/renderer_state.h>
 
 #include <core/alloc/scratch.h>
 #include <core/graphics/gpu_timing.h>
@@ -22,7 +22,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererFramePipeline;
+class RendererShaderSystem;
+class RendererMeshSystem;
+class RendererMaterialSystem;
 struct MaterialSurfaceInfo;
 
 
@@ -219,10 +221,112 @@ struct ShadowPreparationOutcome{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererRayTracingSystem final : public RendererFramePipelineSubsystemBase<RendererFramePipeline>{
+// A shared packet may optimistically advance several independent temporal domains while recording. Preserve the
+// exact CPU mirrors so each rejected semantic stage can roll back only the state it owned.
+struct RayTracingFrameCpuStateSnapshot{
+    Core::QueueSubmissionToken surfelCountReadbackSubmissionToken;
+
+    u32 softShadowFrameIndex = 0u;
+    u32 causticTemporalReuseFrameCount = 0u;
+    u32 swCausticFrameIndex = 0u;
+    u32 hwCausticFrameIndex = 0u;
+    u32 surfelFrameIndex = 0u;
+    u32 surfelCountReadbackFrame = 0u;
+    u32 shadowSlotCount = 0u;
+    u32 softShadowSlotMask = 0u;
+    u32 causticLightCount = 0u;
+
+    bool swShadowDispatchLogged = false;
+    bool causticAccumulatorInitialized = false;
+    bool swCausticDispatchLogged = false;
+    bool hwCausticDispatchLogged = false;
+    bool causticEmissionGateLogged = false;
+    bool surfelSeeded = false;
+};
+
+
+// Shadow Preparation retains native state for the scene TLAS, shared software-BVH scratch, and adaptive-shadow
+// scratch across packets. The coordinator receives owning handles without reaching into mutable domain state.
+struct RayTracingShadowPreparationResourceSnapshot{
+    Core::RayTracingAccelStructHandle sceneTlas;
+    Core::BufferHandle sceneTlasBackingBuffer;
+    Core::BufferHandle bvhSortKeysBuffer;
+    Core::BufferHandle bvhSortPayloadBuffer;
+    Core::BufferHandle bvhVisitCounterBuffer;
+    Core::BufferHandle swShadowEdgeStatsBuffer;
+    Core::BufferHandle swShadowEdgeStatsReadback;
+    Core::BufferHandle swShadowEdgeCounterBuffer;
+    Core::BufferHandle swShadowEdgeListBuffer;
+    Core::BufferHandle swShadowIndirectArgsBuffer;
+};
+
+
+// Graph declaration freezes the descriptor-visible effects resources and route decisions selected by preflight.
+// Keeping this read-only snapshot separate from CPU rollback state prevents the coordinator from mutating caches.
+struct RayTracingDeferredGraphResourceSnapshot{
+    Core::BufferHandle materialContextSlotsBuffer;
+    Core::BufferHandle shadowInstanceMaterialBuffer;
+    Core::BufferHandle shadowMaterialTypedBuffer;
+    Core::BufferHandle shadowInstanceBuffer;
+    Core::BufferHandle causticEmissionTargetBuffer;
+    Core::RayTracingAccelStructHandle sceneTlas;
+
+    f32 causticTemporalDecay = 0.f;
+    bool causticAccumulatorInitialized = false;
+    bool surfelUsesHardwareTrace = false;
+};
+
+
+// Persistent surfel resources outlive resizable targets. The accepted readback token belongs to the same resource
+// generation as the counter/readback pair and is captured with it for graph dependency and rollback planning.
+struct RayTracingSurfelPersistentResourceSnapshot{
+    Core::BufferHandle poolBuffer;
+    Core::BufferHandle cellHeadBuffer;
+    Core::BufferHandle counterBuffer;
+    Core::BufferHandle traceIndirectArgsBuffer;
+    Core::BufferHandle freeListBuffer;
+    Core::BufferHandle poolSnapshotBuffer;
+    Core::BufferHandle cellHeadSnapshotBuffer;
+    Core::BufferHandle counterReadbackBuffer;
+    Core::QueueSubmissionToken countReadbackSubmissionToken;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererRayTracingSystem final : NoCopy{
 public:
-    explicit RendererRayTracingSystem(RendererFramePipeline& renderer);
+    RendererRayTracingSystem(
+        Core::Alloc::GlobalArena& arena,
+        Core::ECS::World& world,
+        Core::Graphics& graphics,
+        RendererShaderSystem& shaderSystem,
+        RendererMeshSystem& meshSystem,
+        RendererMaterialSystem& materialSystem,
+        RendererMeshState& meshState,
+        RendererDrawState& drawState,
+        RendererDeferredState& deferredState,
+        RendererRayTracingState& rayTracingState
+    );
     ~RendererRayTracingSystem();
+
+
+public:
+    // Domain invalidation retires every descriptor generation before dropping its backing handles.
+    void invalidateResources();
+    void releaseSceneTlasHeapHandle();
+
+    [[nodiscard]] RayTracingFrameCpuStateSnapshot captureFrameCpuState()const noexcept;
+    void restoreShadowPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
+    void restoreCausticPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
+    void restoreSurfelGiPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
+    void restorePreparedLightingCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
+
+    [[nodiscard]] RayTracingShadowPreparationResourceSnapshot snapshotShadowPreparationResources()const;
+    [[nodiscard]] RayTracingDeferredGraphResourceSnapshot snapshotDeferredGraphResources()const;
+    [[nodiscard]] RayTracingSurfelPersistentResourceSnapshot snapshotSurfelPersistentResources()const;
+    [[nodiscard]] bool surfelCountReadbackSubmissionMatches(const Core::QueueSubmissionToken& submissionToken)const noexcept;
 
 
 public:
@@ -1275,6 +1379,16 @@ private:
     [[nodiscard]] bool ensureShadowMaterialTypedBuffer(usize byteCount);
 
 private:
+    Core::Alloc::GlobalArena& m_arena;
+    Core::ECS::World& m_world;
+    Core::Graphics& m_graphics;
+    RendererShaderSystem& m_shaderSystem;
+    RendererMeshSystem& m_meshSystem;
+    RendererMaterialSystem& m_materialSystem;
+    RendererMeshState& m_meshState;
+    RendererDrawState& m_drawState;
+    RendererDeferredState& m_deferredState;
+    RendererRayTracingState& m_rayTracingState;
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;
     PreparedShadowTraceMaterialSampledTextureVector m_preparedShadowTraceMaterialSampledTextures;

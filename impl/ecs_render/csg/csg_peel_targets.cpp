@@ -2,7 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include "csg_system.h"
+
+#include <impl/ecs_render/kernel/renderer_constants_private.h>
+#include <impl/ecs_render/shared/renderer_frame_types.h>
+
+#include <core/common/log.h>
+#include <core/graphics/backend_selection.h>
+#include <core/graphics/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,7 +68,7 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         if(renderTarget)
             desc.setInRenderTarget(true);
         desc.setInUAV(true).setName(name);
-        return graphics().createTexture(desc);
+        return m_graphics.createTexture(desc);
     };
     auto createPeelTexture = [&](const Core::Format::Enum format, const Name& name){
         return createCsgTexture(format, name, targets.csgPeelLayerCount, true);

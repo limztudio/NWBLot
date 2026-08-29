@@ -188,6 +188,16 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 ){
     using namespace RendererTaskGraphDetail;
 
+    const RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources =
+        m_raytracingSystem.snapshotShadowPreparationResources()
+    ;
+    const RayTracingDeferredGraphResourceSnapshot rayTracingGraphResources =
+        m_raytracingSystem.snapshotDeferredGraphResources()
+    ;
+    const RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources =
+        m_raytracingSystem.snapshotSurfelPersistentResources()
+    ;
+
     m_deferredLightingTaskGraphValid = false;
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
@@ -287,7 +297,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     // immediately before core compilation, whose total duration remains separate.
     const Timer declarationBegin = TimerNow();
 
-    const auto& device = graphics().getDevice();
+    const auto& device = m_graphics.getDevice();
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
     const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
     const bool dedicatedAsyncCompute = computeFamilyIndex != Limit<u32>::s_Max
@@ -315,12 +325,14 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         return;
     const Core::Framebuffer& presentationFramebuffer = *presentationFrame.framebuffer;
     const Core::FramebufferDesc& presentationFramebufferDesc = presentationFramebuffer.getDescription();
+    const DeferredLightingGraphResources deferredLightingResources = m_deferredSystem.lightingGraphResources();
+    const ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot = m_meshSystem.meshViewBufferSnapshot();
+    const ECSRenderDetail::MaterialPassBufferSnapshot materialPassBufferSnapshot = m_materialSystem.materialPassBufferSnapshot();
     if(
         !deferredTargets.valid()
         || !deferredTargets.bindless.valid()
-        || !m_drawState.m_meshViewBuffer
-        || !m_deferredState.m_sceneShadingBuffer
-        || !m_deferredState.m_lightBuffer
+        || !meshViewBufferSnapshot.valid()
+        || !deferredLightingResources.valid()
         || presentationFramebufferDesc.colorAttachments.size() != 1u
         || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()
         || hasTransparentRenderers != features.hasTransparentRenderers
@@ -358,9 +370,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     hardwareTraceAttributeResources.reserve(preparedTraceGeometry.size());
     softwareTraceGeometryResources.reserve(preparedTraceGeometry.size());
     traceMaterialSampledTextureResources.reserve(preparedTraceMaterialSampledTextures.size());
-    softwareBvhBuildStateResources.reserve(meshState().m_meshes.size() + 3u);
-    softwareBvhBuildStateBuffers.reserve(meshState().m_meshes.size() + 3u);
-
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
     };
@@ -489,6 +498,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         }
     }
     if(softwareTraceResourcesPrepared){
+        ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector meshSoftwareBvhParentBuildStates{ traceGeometryScratchArena };
+        if(!m_meshSystem.collectSoftwareBvhParentBuildStates(meshSoftwareBvhParentBuildStates))
+            return;
+        softwareBvhBuildStateResources.reserve(meshSoftwareBvhParentBuildStates.size() + 3u);
+        softwareBvhBuildStateBuffers.reserve(meshSoftwareBvhParentBuildStates.size() + 3u);
         const auto appendSoftwareBvhBuildState = [&](
             const Core::BufferHandle& buffer,
             const Name identity,
@@ -507,40 +521,28 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             softwareBvhBuildStateResources.push_back(resource);
             return true;
         };
-        for(auto meshIt = meshState().m_meshes.begin(); meshIt != meshState().m_meshes.end(); ++meshIt){
-            const MeshResources& mesh = meshIt.value();
-            if(!mesh.swBvhNodeBuffer && !mesh.swBvhParentBuffer)
-                continue;
-            if(
-                !mesh.swBvhNodeBuffer
-                || !mesh.swBvhParentBuffer
-                || !appendSoftwareBvhBuildState(
-                    mesh.swBvhParentBuffer,
-                    DeriveName(mesh.meshName, AStringView(":shadow_trace_sw_parent")),
-                    "Software BVH Parent"
-                )
-            ){
+        for(const ECSRenderDetail::MeshSoftwareBvhParentBuildState& state : meshSoftwareBvhParentBuildStates){
+            if(!appendSoftwareBvhBuildState(state.buffer, state.identity, "Software BVH Parent")){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import software BVH parent build state"));
                 return;
             }
         }
-        const RendererRayTracingState& traceState = rayTracingState();
         if(
-            !traceState.m_bvhSortKeysBuffer
-            || !traceState.m_bvhSortPayloadBuffer
-            || !traceState.m_bvhVisitCounterBuffer
+            !rayTracingShadowResources.bvhSortKeysBuffer
+            || !rayTracingShadowResources.bvhSortPayloadBuffer
+            || !rayTracingShadowResources.bvhVisitCounterBuffer
             || !appendSoftwareBvhBuildState(
-                traceState.m_bvhSortKeysBuffer,
+                rayTracingShadowResources.bvhSortKeysBuffer,
                 Name("render.shadow_trace.sw_bvh_sort_keys"),
                 "Software BVH Sort Keys"
             )
             || !appendSoftwareBvhBuildState(
-                traceState.m_bvhSortPayloadBuffer,
+                rayTracingShadowResources.bvhSortPayloadBuffer,
                 Name("render.shadow_trace.sw_bvh_sort_payload"),
                 "Software BVH Sort Payload"
             )
             || !appendSoftwareBvhBuildState(
-                traceState.m_bvhVisitCounterBuffer,
+                rayTracingShadowResources.bvhVisitCounterBuffer,
                 Name("render.shadow_trace.sw_bvh_visit_counter"),
                 "Software BVH Visit Counter"
             )
@@ -674,63 +676,65 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         "Opaque Color"
     );
     const Core::GpuGraphResourceId sceneShading = importBuffer(
-        m_deferredState.m_sceneShadingBuffer,
+        deferredLightingResources.sceneShadingBuffer,
         Name("render.deferred_lighting.scene_shading"),
         "Scene Shading"
     );
     const Core::GpuGraphResourceId lights = importBuffer(
-        m_deferredState.m_lightBuffer,
+        deferredLightingResources.lightBuffer,
         Name("render.deferred_lighting.lights"),
         "Lights"
     );
     const Core::GpuGraphResourceId meshView = importBuffer(
-        m_drawState.m_meshViewBuffer,
+        meshViewBufferSnapshot.buffer,
         Name("render.deferred.mesh_view"),
         "Mesh View"
     );
-    const Core::GpuGraphResourceId materialInstances = m_drawState.m_instanceBuffer
+    const Core::GpuGraphResourceId materialInstances = materialPassBufferSnapshot.instanceBuffer
         ? importBuffer(
-            m_drawState.m_instanceBuffer,
+            materialPassBufferSnapshot.instanceBuffer,
             Name("render.deferred.material_instances"),
             "Material Instances"
         )
         : Core::GpuGraphResourceId{}
     ;
-    const Core::GpuGraphResourceId materialTyped = m_drawState.m_materialTypedBuffer
+    const Core::GpuGraphResourceId materialTyped = materialPassBufferSnapshot.typedBuffer
         ? importBuffer(
-            m_drawState.m_materialTypedBuffer,
+            materialPassBufferSnapshot.typedBuffer,
             Name("render.deferred.material_typed"),
             "Material Typed Data"
         )
         : Core::GpuGraphResourceId{}
     ;
-    const Core::GpuGraphResourceId csgReceiverRanges = m_csgState.m_receiverRangeBuffer
+    ECSRenderDetail::CsgGraphResourceBuffers csgGraphResources;
+    m_csgSystem.populateCsgGraphResourceBuffers(csgGraphResources);
+    const Core::GpuGraphResourceId csgReceiverRanges = csgGraphResources.receiverRanges
         ? importBuffer(
-            m_csgState.m_receiverRangeBuffer,
+            csgGraphResources.receiverRanges,
             Name("render.deferred.csg_receiver_ranges"),
             "CSG Receiver Ranges"
         )
         : Core::GpuGraphResourceId{}
     ;
-    const Core::GpuGraphResourceId csgCutters = m_csgState.m_cutterBuffer
+    const Core::GpuGraphResourceId csgCutters = csgGraphResources.cutters
         ? importBuffer(
-            m_csgState.m_cutterBuffer,
+            csgGraphResources.cutters,
             Name("render.deferred.csg_cutters"),
             "CSG Cutters"
         )
         : Core::GpuGraphResourceId{}
     ;
-    const Core::GpuGraphResourceId csgClipContextSlots = m_csgState.m_clipContextSlotsBuffer
+    const Core::GpuGraphResourceId csgClipContextSlots = csgGraphResources.clipContextSlots
         ? importBuffer(
-            m_csgState.m_clipContextSlotsBuffer,
+            csgGraphResources.clipContextSlots,
             Name("render.deferred.csg_clip_context_slots"),
             "CSG Clip Context Slots"
         )
         : Core::GpuGraphResourceId{}
     ;
-    const Core::GpuGraphResourceId csgIntervalSampleState = m_csgState.m_intervalSampleStateBuffer
+    const Core::GpuGraphResourceId csgIntervalSampleState = csgGraphResources.intervalSampleState
         ? importBuffer(
-            m_csgState.m_intervalSampleStateBuffer,
+            csgGraphResources.intervalSampleState,
             Name("render.deferred.csg_interval_sample_state"),
             "CSG Interval Sample State"
         )
@@ -755,9 +759,9 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 "Deferred Bindless Slots"
             )
     ;
-    const Core::GpuGraphResourceId materialContextSlots = m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer
+    const Core::GpuGraphResourceId materialContextSlots = rayTracingGraphResources.materialContextSlotsBuffer
         ? importBuffer(
-            m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer,
+            rayTracingGraphResources.materialContextSlotsBuffer,
             Name("render.deferred.material_context_slots"),
             "Ray Trace Material Context Slots"
         )
@@ -890,7 +894,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         || !meshView.valid()
         || !bindlessSlots.valid()
         || !currentBindlessSlots.valid()
-        || (m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer && !materialContextSlots.valid())
+        || (rayTracingGraphResources.materialContextSlotsBuffer && !materialContextSlots.valid())
         || (capturesLaggedLightingHistory && (
             !historyCopyShadowVisibility.valid()
             || !historyCopyCausticIrradiance.valid()
@@ -1047,7 +1051,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     if(
         m_raytracingSystem.hasSurfelWork()
-        && m_rayTracingState.m_surfelCountReadbackSubmissionToken.valid()
+        && rayTracingSurfelResources.countReadbackSubmissionToken.valid()
     ){
         Core::GpuExternalCompletionDesc surfelCounterReadbackCompletionDesc;
         surfelCounterReadbackCompletionDesc
@@ -1131,17 +1135,17 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         lights,
         materialContextSlots,
         (
-            m_rayTracingState.m_surfelUseHwTrace
+            rayTracingGraphResources.surfelUsesHardwareTrace
                 ? hardwareTraceGeometryResources.data()
                 : softwareTraceGeometryResources.data()
         ),
         (
-            m_rayTracingState.m_surfelUseHwTrace
+            rayTracingGraphResources.surfelUsesHardwareTrace
                 ? hardwareTraceGeometryResources.size()
                 : softwareTraceGeometryResources.size()
         ),
         (
-            m_rayTracingState.m_surfelUseHwTrace
+            rayTracingGraphResources.surfelUsesHardwareTrace
                 ? hardwareTraceGeometrySet
                 : softwareTraceGeometrySet
         ),
@@ -1474,31 +1478,31 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         };
         bool optionalResourcesImported =
             appendOptionalReadBuffer(
-                m_drawState.m_meshViewBuffer,
+                meshViewBufferSnapshot.buffer,
                 Name("render.deferred.mesh_view"),
                 "Mesh View",
                 Core::ResourceStates::ConstantBuffer
             )
             && appendOptionalReadBuffer(
-                m_rayTracingState.m_shadowInstanceMaterialBuffer,
+                rayTracingGraphResources.shadowInstanceMaterialBuffer,
                 Name("render.deferred_effects.instance_material"),
                 "Shadow Instance Materials",
                 Core::ResourceStates::ShaderResource
             )
             && appendOptionalReadBuffer(
-                m_rayTracingState.m_shadowMaterialTypedBuffer,
+                rayTracingGraphResources.shadowMaterialTypedBuffer,
                 Name("render.deferred_effects.material_typed"),
                 "Shadow Typed Materials",
                 Core::ResourceStates::ShaderResource
             )
             && appendOptionalReadBuffer(
-                m_rayTracingState.m_shadowInstanceBuffer,
+                rayTracingGraphResources.shadowInstanceBuffer,
                 Name("render.deferred_effects.shadow_instances"),
                 "Shadow Instances",
                 Core::ResourceStates::ShaderResource
             )
             && appendOptionalReadBuffer(
-                m_rayTracingState.m_causticEmissionTargetBuffer,
+                rayTracingGraphResources.causticEmissionTargetBuffer,
                 Name("render.hardware_caustics.emission_targets"),
                 "Caustic Emission Targets",
                 Core::ResourceStates::ShaderResource
@@ -1521,9 +1525,9 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             if(!hardwareTraceAttributeStatesGraphOwned)
                 hardwarePhotonResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         }
-        if(m_rayTracingState.m_tlas){
+        if(rayTracingGraphResources.sceneTlas){
             const Core::GpuGraphResourceId tlas = m_deferredLightingTaskGraph.importAccelStruct(
-                m_rayTracingState.m_tlas,
+                rayTracingGraphResources.sceneTlas,
                 AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
                     .setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())
             );
@@ -1597,7 +1601,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         m_deferredCausticIrradianceClearTask = irradianceClearTask;
 
         Core::GpuTaskId causticsDependency = irradianceClearTask;
-        const bool graphOwnsNonTemporalAccumulatorClear = m_rayTracingState.m_causticTemporalDecay <= 0.f;
+        const bool graphOwnsNonTemporalAccumulatorClear = rayTracingGraphResources.causticTemporalDecay <= 0.f;
         if(graphOwnsNonTemporalAccumulatorClear){
             Core::GpuTaskSchedulingHint accumulatorNonTemporalClearScheduling = irradianceClearScheduling;
             accumulatorNonTemporalClearScheduling.mergeWithPrevious = true;
@@ -1630,8 +1634,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             causticsDependency = accumulatorNonTemporalClearTask;
         }
         const bool graphOwnsAccumulatorBootstrapClear =
-            !m_rayTracingState.m_causticAccumulatorInitialized
-            && m_rayTracingState.m_causticTemporalDecay > 0.f
+            !rayTracingGraphResources.causticAccumulatorInitialized
+            && rayTracingGraphResources.causticTemporalDecay > 0.f
         ;
         if(graphOwnsAccumulatorBootstrapClear){
             Core::GpuTaskSchedulingHint accumulatorBootstrapClearScheduling;
@@ -1669,8 +1673,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         }
 
         const bool graphOwnsAccumulatorDecay =
-            m_rayTracingState.m_causticAccumulatorInitialized
-            && m_rayTracingState.m_causticTemporalDecay > 0.f
+            rayTracingGraphResources.causticAccumulatorInitialized
+            && rayTracingGraphResources.causticTemporalDecay > 0.f
         ;
         if(graphOwnsAccumulatorDecay){
             Core::GpuTaskSchedulingHint accumulatorDecayScheduling;
@@ -1703,7 +1707,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 accumulatorDecayDesc,
                 deferredTargets,
                 &m_shadowPreparationOutcome.ready,
-                m_rayTracingState.m_causticTemporalDecay,
+                rayTracingGraphResources.causticTemporalDecay,
                 true,
                 hardwareCausticsTimingTicket,
                 &causticPhotonTiming,

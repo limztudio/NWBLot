@@ -66,13 +66,13 @@ TEST(EcsGraphics, CausticRayTracingPipelineAndShaderTablePublishAsOneValidatedPa
     const AStringView functionSource = fullSource.substr(functionBegin, functionEnd - functionBegin);
 
     EXPECT_NE(functionSource.find(
-        "if(rayTracingState().m_hwCausticPipeline && rayTracingState().m_hwCausticShaderTable)"
+        "if(m_rayTracingState.m_hwCausticPipeline && m_rayTracingState.m_hwCausticShaderTable)"
     ), AStringView::npos);
     EXPECT_NE(functionSource.find(
-        "if(rayTracingState().m_hwCausticPipeline || rayTracingState().m_hwCausticShaderTable){"
+        "if(m_rayTracingState.m_hwCausticPipeline || m_rayTracingState.m_hwCausticShaderTable){"
     ), AStringView::npos);
-    EXPECT_EQ(CountText(functionSource, "rayTracingState().m_hwCausticPipeline.reset();"), 1u);
-    EXPECT_EQ(CountText(functionSource, "rayTracingState().m_hwCausticShaderTable.reset();"), 1u);
+    EXPECT_EQ(CountText(functionSource, "m_rayTracingState.m_hwCausticPipeline.reset();"), 1u);
+    EXPECT_EQ(CountText(functionSource, "m_rayTracingState.m_hwCausticShaderTable.reset();"), 1u);
 
     const usize pipelineCandidate = functionSource.find(
         "Core::RayTracingPipelineHandle pipeline = device.createRayTracingPipeline(pipelineDesc);"
@@ -90,10 +90,10 @@ TEST(EcsGraphics, CausticRayTracingPipelineAndShaderTablePublishAsOneValidatedPa
         "shaderTable->addHitGroup(__hidden_caustics::s_HwHitGroupExportName) != 0u"
     );
     const usize pipelinePublication = functionSource.find(
-        "rayTracingState().m_hwCausticPipeline = Move(pipeline);"
+        "m_rayTracingState.m_hwCausticPipeline = Move(pipeline);"
     );
     const usize tablePublication = functionSource.find(
-        "rayTracingState().m_hwCausticShaderTable = Move(shaderTable);"
+        "m_rayTracingState.m_hwCausticShaderTable = Move(shaderTable);"
     );
 
     ASSERT_NE(pipelineCandidate, AStringView::npos);
@@ -110,10 +110,10 @@ TEST(EcsGraphics, CausticRayTracingPipelineAndShaderTablePublishAsOneValidatedPa
     EXPECT_LT(hitCheck, pipelinePublication);
     EXPECT_LT(pipelinePublication, tablePublication);
 
-    EXPECT_EQ(CountText(functionSource, "rayTracingState().m_hwCausticPipeline = Move(pipeline);"), 1u);
-    EXPECT_EQ(CountText(functionSource, "rayTracingState().m_hwCausticShaderTable = Move(shaderTable);"), 1u);
-    EXPECT_EQ(CountText(functionSource, "rayTracingState().m_hwCausticPipeline = device.createRayTracingPipeline"), 0u);
-    EXPECT_EQ(CountText(functionSource, "rayTracingState().m_hwCausticShaderTable = pipeline->createShaderTable"), 0u);
+    EXPECT_EQ(CountText(functionSource, "m_rayTracingState.m_hwCausticPipeline = Move(pipeline);"), 1u);
+    EXPECT_EQ(CountText(functionSource, "m_rayTracingState.m_hwCausticShaderTable = Move(shaderTable);"), 1u);
+    EXPECT_EQ(CountText(functionSource, "m_rayTracingState.m_hwCausticPipeline = device.createRayTracingPipeline"), 0u);
+    EXPECT_EQ(CountText(functionSource, "m_rayTracingState.m_hwCausticShaderTable = pipeline->createShaderTable"), 0u);
 }
 
 

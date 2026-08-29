@@ -5,10 +5,27 @@
 #pragma once
 
 
-#include <impl/ecs_render/csg/renderer_csg_types.h>
+#include <impl/global.h>
 
-#include <impl/assets/graphics/csg/constants.h>
-#include <impl/assets/graphics/csg/names.h>
+#include <core/graphics/gpu_timing.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Graphics;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,39 +37,17 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace CsgIntervalDetail{
+namespace ECSRenderDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CsgIntervalDispatchPushConstants{
-    u32 frameWidth = 0u;
-    u32 frameHeight = 0u;
-    u32 receiverCount = 0u;
-    u32 layerCount = 0u;
-    u32 workOffsetX = 0u;
-    u32 workOffsetY = 0u;
-    u32 workExtentX = 0u;
-    u32 workExtentY = 0u;
-    u32 meshViewHeapSlot = 0u;
-    u32 csgContextHeapSlot = 0u;
-    u32 resourceSlotPadding1 = 0u;
-    u32 resourceSlotPadding2 = 0u;
-};
-
-static_assert(sizeof(CsgIntervalDispatchPushConstants) == NWB_CSG_INTERVAL_DISPATCH_PUSH_CONSTANT_BYTE_SIZE, "CSG interval dispatch push constants must match shader layout");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace CsgTextureAccess{
-    enum Enum : u8{
-        None,
-        SRV,
-        UAV
-    };
+// AVBOIT's typed target-clear chain starts and ends one timing scope across its graph-built clear operations.
+struct AvboitClearTimingRecordState{
+    Core::Graphics* graphics = nullptr;
+    Optional<Core::GpuTimingMeasure>* timing = nullptr;
+    Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
 };
 
 

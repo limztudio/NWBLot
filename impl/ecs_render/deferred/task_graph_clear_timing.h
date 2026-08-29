@@ -5,7 +5,12 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include "task_graph_clear_timing_state.h"
+
+#include <impl/ecs_render/kernel/timing_names.h>
+
+#include <core/graphics/module.h>
+#include <core/graphics/task_graph/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

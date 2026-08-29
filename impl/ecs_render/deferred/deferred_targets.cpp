@@ -2,7 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include "deferred_system.h"
+
+#include "csg_interval_target_clear.h"
+
+#include <impl/ecs_render/kernel/renderer_format_private.h>
+#include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/shared/renderer_state.h>
+
+#include <core/common/log.h>
+#include <core/graphics/module.h>
+
+#include <impl/assets/graphics/mesh/runtime_constants.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -107,47 +118,19 @@ static void ClearCsgIntervalTargets(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererDeferredSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
-    // AVBOIT owns its five transient work-buffer registrations plus the writable transmittance StorageImage. The
-    // shared deferred slot-payload descriptor is borrowed, so release only owned descriptors before their targets.
-    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
-    if(heap.isInitialized()){
-        heap.free(targets.coverageBufferDescriptor);
-        heap.free(targets.depthWarpBufferDescriptor);
-        heap.free(targets.controlBufferDescriptor);
-        heap.free(targets.extinctionBufferDescriptor);
-        heap.free(targets.extinctionOverflowBufferDescriptor);
-        heap.free(targets.transmittanceTextureStorageDescriptor);
-    }
-
-    targets.lowFramebuffer.reset();
-    targets.accumulationFramebuffer.reset();
-
-    targets.lowRasterTarget.reset();
-    targets.accumColor.reset();
-    targets.accumExtinction.reset();
-    targets.transmittanceTexture.reset();
-
-    targets.coverageBuffer.reset();
-    targets.depthWarpBuffer.reset();
-    targets.controlBuffer.reset();
-    targets.extinctionBuffer.reset();
-    targets.extinctionOverflowBuffer.reset();
-
-    targets = AvboitFrameTargets{};
-}
-
-bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameTargets& targets){
-    auto& device = graphics().getDevice();
+bool RendererDeferredSystem::createDeferredBindlessFrameResources(
+    DeferredFrameTargets& targets,
+    Core::Sampler& avboitLinearSampler
+){
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred lighting/compositor requires the global descriptor heap"));
         return false;
     }
-    NWB_ASSERT(deferredState().m_sampler);
-    NWB_ASSERT(avboitState().m_linearSampler);
-    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
-    NWB_ASSERT(deferredState().m_lightBuffer);
+    NWB_ASSERT(m_deferredState.m_sampler);
+    NWB_ASSERT(m_deferredState.m_sceneShadingBuffer);
+    NWB_ASSERT(m_deferredState.m_lightBuffer);
     NWB_ASSERT(targets.csgIntervalTargetsValid());
 
     auto registerTexture = [&heap](
@@ -244,7 +227,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         // push constants; both writable irradiance views therefore have StorageImage registrations.
         && registerTexture(bindless.surfelIrradianceHalf, Core::GpuDescriptorClass::SampledImage, targets.surfelIrradianceHalf.get(), targets.surfelIrradianceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerStorageTexture(bindless.surfelIrradianceHalfStorage, targets.surfelIrradianceHalf.get(), targets.surfelIrradianceFormat, Core::TextureDimension::Texture2D)
-        && registerSampler(bindless.sampler, deferredState().m_sampler.get())
+        && registerSampler(bindless.sampler, m_deferredState.m_sampler.get())
         && registerTexture(bindless.opaqueColor, Core::GpuDescriptorClass::SampledImage, targets.opaqueColor.get(), targets.opaqueColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerStorageTexture(bindless.opaqueColorStorage, targets.opaqueColor.get(), targets.opaqueColorFormat, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.compositeColor, Core::GpuDescriptorClass::SampledImage, targets.compositeColor.get(), targets.compositeColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
@@ -252,11 +235,11 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         && registerTexture(bindless.avboitAccumColor, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumColor.get(), targets.avboit.accumColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitAccumExtinction, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumExtinction.get(), targets.avboit.accumExtinctionFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitTransmittance, Core::GpuDescriptorClass::SampledImage3D, targets.avboit.transmittanceTexture.get(), targets.avboit.transmittanceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D)
-        && registerSampler(bindless.avboitLinearSampler, avboitState().m_linearSampler.get())
+        && registerSampler(bindless.avboitLinearSampler, &avboitLinearSampler)
         // Scene-shading cbuffer (uniform-buffer table) + light-list storage buffer (structured-buffer table): the two
         // shared singletons the deferred lighting pass now reads from the heap via its two spare avboit slot lanes.
-        && registerConstantBuffer(bindless.sceneShading, deferredState().m_sceneShadingBuffer.get())
-        && registerStructuredBuffer(bindless.lightList, deferredState().m_lightBuffer.get())
+        && registerConstantBuffer(bindless.sceneShading, m_deferredState.m_sceneShadingBuffer.get())
+        && registerStructuredBuffer(bindless.lightList, m_deferredState.m_lightBuffer.get())
         // CSG interval/peel resources use one persistent StorageImage descriptor each. Their target-generation slots
         // are consumed by the CSG compute, material surface, and cap-fill shaders through the shared slot cbuffer.
         && registerStorageTexture(bindless.csgCapBackNormal, targets.csgCapBackNormal.get(), targets.csgCapNormalFormat, Core::TextureDimension::Texture2DArray)
@@ -356,7 +339,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         // the compiler's ConstantBuffer handoffs agree with Vulkan state tracking without a record-time bridge.
         .enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer)
     ;
-    bindless.slotsBuffer = graphics().createBuffer(slotsBufferDesc);
+    bindless.slotsBuffer = m_graphics.createBuffer(slotsBufferDesc);
     if(!bindless.slotsBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred bindless slot buffer"));
         resetDeferredBindlessFrameResources(targets);
@@ -383,7 +366,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
 }
 
 void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTargets& targets){
-    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(heap.isInitialized()){
         heap.free(targets.bindless.slotsBufferDescriptor);
         heap.free(targets.bindless.gbufferBaseColor);
@@ -460,7 +443,7 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTa
 }
 
 void RendererDeferredSystem::resetLaggedLightingHistoryResources(DeferredFrameTargets& targets){
-    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(heap.isInitialized()){
         heap.free(targets.laggedLightingHistory.slotsBufferDescriptor);
         heap.free(targets.laggedLightingHistory.shadowVisibilityDescriptor);
@@ -483,7 +466,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
 
     resetLaggedLightingHistoryResources(targets);
 
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: lagged lighting history requires the global descriptor heap"));
@@ -502,7 +485,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .setName("engine/temporal/lagged_shadow_visibility")
     ;
-    history.shadowVisibility = graphics().createTexture(shadowHistoryDesc);
+    history.shadowVisibility = m_graphics.createTexture(shadowHistoryDesc);
     if(!history.shadowVisibility){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged shadow-visibility history"));
         resetLaggedLightingHistoryResources(targets);
@@ -519,7 +502,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .setName("engine/temporal/lagged_caustic_irradiance")
     ;
-    history.causticIrradiance = graphics().createTexture(irradianceHistoryDesc);
+    history.causticIrradiance = m_graphics.createTexture(irradianceHistoryDesc);
     if(!history.causticIrradiance){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged caustic-irradiance history"));
         resetLaggedLightingHistoryResources(targets);
@@ -530,7 +513,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
         .setFormat(targets.surfelIrradianceFormat)
         .setName("engine/temporal/lagged_surfel_irradiance")
     ;
-    history.surfelIrradiance = graphics().createTexture(irradianceHistoryDesc);
+    history.surfelIrradiance = m_graphics.createTexture(irradianceHistoryDesc);
     if(!history.surfelIrradiance){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged surfel-irradiance history"));
         resetLaggedLightingHistoryResources(targets);
@@ -600,7 +583,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    history.slotsBuffer = graphics().createBuffer(slotsBufferDesc);
+    history.slotsBuffer = m_graphics.createBuffer(slotsBufferDesc);
     if(!history.slotsBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged lighting-history slot buffer"));
         resetLaggedLightingHistoryResources(targets);
@@ -628,41 +611,46 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
     return true;
 }
 
-void RendererDeferredSystem::resetDeferredFrameTargets(){
-    resetLaggedLightingHistoryResources(deferredState().m_targets);
-    resetDeferredBindlessFrameResources(deferredState().m_targets);
-    resetAvboitFrameTargets(deferredState().m_targets.avboit);
-    deferredState().m_targets.framebuffer.reset();
+void RendererDeferredSystem::resetDeferredFrameTargets(DeferredFrameTargets& targets){
+    resetLaggedLightingHistoryResources(targets);
+    resetDeferredBindlessFrameResources(targets);
+    targets.framebuffer.reset();
 
-    deferredState().m_targets.albedo.reset();
-    deferredState().m_targets.normal.reset();
-    deferredState().m_targets.worldPosition.reset();
-    deferredState().m_targets.csgCapBackNormal.reset();
-    deferredState().m_targets.csgIntervalDepth.reset();
-    deferredState().m_targets.csgIntervalId.reset();
-    deferredState().m_targets.csgReceiverEventData.reset();
-    deferredState().m_targets.csgReceiverEventCount.reset();
-    deferredState().m_targets.csgReceiverSpanData.reset();
-    deferredState().m_targets.csgReceiverSpanCount.reset();
-    deferredState().m_targets.csgRemovedIntervalDepth.reset();
-    deferredState().m_targets.csgRemovedIntervalCapNormal.reset();
-    deferredState().m_targets.csgRemovedIntervalData.reset();
-    deferredState().m_targets.csgRemovedIntervalCount.reset();
-    deferredState().m_targets.opaqueColor.reset();
-    deferredState().m_targets.compositeColor.reset();
-    deferredState().m_targets.depth.reset();
-    deferredState().m_targets.shadowVisibility.reset();
+    targets.albedo.reset();
+    targets.normal.reset();
+    targets.worldPosition.reset();
+    targets.csgCapBackNormal.reset();
+    targets.csgIntervalDepth.reset();
+    targets.csgIntervalId.reset();
+    targets.csgReceiverEventData.reset();
+    targets.csgReceiverEventCount.reset();
+    targets.csgReceiverSpanData.reset();
+    targets.csgReceiverSpanCount.reset();
+    targets.csgRemovedIntervalDepth.reset();
+    targets.csgRemovedIntervalCapNormal.reset();
+    targets.csgRemovedIntervalData.reset();
+    targets.csgRemovedIntervalCount.reset();
+    targets.opaqueColor.reset();
+    targets.compositeColor.reset();
+    targets.depth.reset();
+    targets.shadowVisibility.reset();
 
-    deferredState().m_targets = DeferredFrameTargets{};
+    targets = DeferredFrameTargets{};
 }
 
-bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u32 height){
-    if(width == 0 || height == 0){
-        resetDeferredFrameTargets();
-        return false;
-    }
+void RendererDeferredSystem::resetDeferredFrameTargets(){
+    resetDeferredFrameTargets(m_deferredState.m_targets);
+}
 
-    auto& device = graphics().getDevice();
+bool RendererDeferredSystem::createDeferredFrameTargets(
+    DeferredFrameTargets& outTargets,
+    const u32 width,
+    const u32 height
+){
+    if(width == 0 || height == 0)
+        return false;
+
+    auto& device = m_graphics.getDevice();
     const Core::Format::Enum albedoFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(device);
     const Core::Format::Enum normalFormat = ECSRenderDetail::SelectGBufferVectorFormat(device);
     const Core::Format::Enum worldPositionFormat = ECSRenderDetail::SelectGBufferVectorFormat(device);
@@ -679,10 +667,6 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     const Core::Format::Enum csgRemovedIntervalCapNormalFormat = ECSRenderDetail::SelectCsgRemovedIntervalCapNormalFormat(device);
     const Core::Format::Enum csgRemovedIntervalDataFormat = ECSRenderDetail::SelectCsgRemovedIntervalDataFormat(device);
     const Core::Format::Enum csgRemovedIntervalCountFormat = ECSRenderDetail::SelectCsgRemovedIntervalCountFormat(device);
-    const Core::Format::Enum avboitLowRasterFormat = SelectRendererAvboitLowRasterFormat(device);
-    const Core::Format::Enum avboitAccumColorFormat = SelectRendererAvboitAccumColorFormat(device);
-    const Core::Format::Enum avboitAccumExtinctionFormat = SelectRendererAvboitAccumExtinctionFormat(device);
-    const Core::Format::Enum avboitTransmittanceFormat = SelectRendererAvboitTransmittanceFormat(device);
     if(
         albedoFormat == Core::Format::UNKNOWN
         || normalFormat == Core::Format::UNKNOWN
@@ -704,28 +688,14 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to find supported deferred framebuffer formats"));
         return false;
     }
-    if(
-        avboitLowRasterFormat == Core::Format::UNKNOWN
-        || avboitAccumColorFormat == Core::Format::UNKNOWN
-        || avboitAccumExtinctionFormat == Core::Format::UNKNOWN
-        || avboitTransmittanceFormat == Core::Format::UNKNOWN
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to find supported AVBOIT framebuffer formats"));
-        return false;
-    }
-
     if(!createDeferredLightingResources())
         return false;
     if(!createDeferredCompositeResources())
         return false;
-    if(!m_renderer.avboitSystem().createAvboitResources())
-        return false;
 
-    resetDeferredFrameTargets();
-    materialState().m_pipelines.clear();
-    deferredState().m_lightingPipeline.reset();
-    deferredState().m_compositeComputePipeline.reset();
-    deferredState().m_presentPipeline.reset();
+    m_deferredState.m_lightingPipeline.reset();
+    m_deferredState.m_compositeComputePipeline.reset();
+    m_deferredState.m_presentPipeline.reset();
 
     DeferredFrameTargets createdTargets;
     createdTargets.width = width;
@@ -764,7 +734,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setName("engine/deferred/gbuffer_albedo")
         .setClearValue(ECSRenderDetail::s_ClearColor)
     ;
-    createdTargets.albedo = graphics().createTexture(albedoDesc);
+    createdTargets.albedo = m_graphics.createTexture(albedoDesc);
     if(!createdTargets.albedo){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred albedo target"));
         return false;
@@ -780,7 +750,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setName("engine/deferred/gbuffer_normal")
         .setClearValue(ECSRenderDetail::s_GBufferNormalClearColor)
     ;
-    createdTargets.normal = graphics().createTexture(normalDesc);
+    createdTargets.normal = m_graphics.createTexture(normalDesc);
     if(!createdTargets.normal){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred normal target"));
         return false;
@@ -796,7 +766,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setName("engine/deferred/gbuffer_world_position")
         .setClearValue(ECSRenderDetail::s_GBufferWorldPositionClearColor)
     ;
-    createdTargets.worldPosition = graphics().createTexture(worldPositionDesc);
+    createdTargets.worldPosition = m_graphics.createTexture(worldPositionDesc);
     if(!createdTargets.worldPosition){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred world-position target"));
         return false;
@@ -814,7 +784,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setName("engine/deferred/opaque_color")
         .setClearValue(ECSRenderDetail::s_ClearColor)
     ;
-    createdTargets.opaqueColor = graphics().createTexture(opaqueColorDesc);
+    createdTargets.opaqueColor = m_graphics.createTexture(opaqueColorDesc);
     if(!createdTargets.opaqueColor){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred opaque color target"));
         return false;
@@ -832,7 +802,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setName("engine/deferred/composite_color")
         .setClearValue(ECSRenderDetail::s_ClearColor)
     ;
-    createdTargets.compositeColor = graphics().createTexture(compositeColorDesc);
+    createdTargets.compositeColor = m_graphics.createTexture(compositeColorDesc);
     if(!createdTargets.compositeColor){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite color target"));
         return false;
@@ -847,7 +817,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/depth")
     ;
-    createdTargets.depth = graphics().createTexture(depthDesc);
+    createdTargets.depth = m_graphics.createTexture(depthDesc);
     if(!createdTargets.depth){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred depth target"));
         return false;
@@ -876,86 +846,65 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     }
 
-    if(!m_renderer.avboitSystem().createAvboitFrameTargets(
-        createdTargets,
-        avboitLowRasterFormat,
-        avboitAccumColorFormat,
-        avboitAccumExtinctionFormat,
-        avboitTransmittanceFormat
-    ))
-        return false;
-
-    if(!m_renderer.csgSystem().createCsgPeelTargets(createdTargets))
-        return false;
-
-    if(!m_renderer.raytracingSystem().createShadowVisibilityTarget(createdTargets))
-        return false;
-
-    if(!m_renderer.raytracingSystem().createCausticTargets(createdTargets))
-        return false;
-
-    if(!createDeferredBindlessFrameResources(createdTargets))
-        return false;
-    if(!createLaggedLightingHistoryResources(createdTargets))
-        return false;
-
-    deferredState().m_targets = Move(createdTargets);
-    if(!createDeferredLightingPipeline()){
-        resetDeferredFrameTargets();
-        return false;
-    }
-    if(!createDeferredCompositePipeline()){
-        resetDeferredFrameTargets();
-        return false;
-    }
-
-    // AVBOIT registers its target-generation work resources after deferred lighting has created the shared slot
-    // payload. The material and compute pipeline layouts remain push-only gaps; no local descriptor object is allocated.
-    if(!m_renderer.avboitSystem().registerAvboitFrameTargetDescriptors(
-            deferredState().m_targets,
-            deferredState().m_targets.avboit
-        )
-    ){
-        resetDeferredFrameTargets();
-        return false;
-    }
-
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, composite color {}, depth {}, shadow visibility {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver events {} layers: event data {}, event count {}, receiver spans {} layers: span data {}, span count {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, AVBOIT color {}, extinction {}, transmittance {})")
-        , deferredState().m_targets.width
-        , deferredState().m_targets.height
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.albedoFormat).name)
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.normalFormat).name)
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.worldPositionFormat).name)
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.opaqueColorFormat).name)
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.compositeColorFormat).name)
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.depthFormat).name)
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.shadowVisibilityFormat).name)
-        , deferredState().m_targets.csgPeelLayerCount
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgCapNormalFormat).name)
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgIntervalDepthFormat).name)
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgIntervalIdFormat).name)
-        , deferredState().m_targets.csgReceiverEventLayerCount
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgReceiverEventDataFormat).name)
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgReceiverEventCountFormat).name)
-        , deferredState().m_targets.csgReceiverSpanLayerCount
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgReceiverSpanDataFormat).name)
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgReceiverSpanCountFormat).name)
-        , deferredState().m_targets.csgRemovedIntervalLayerCount
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgRemovedIntervalDepthFormat).name)
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgRemovedIntervalCapNormalFormat).name)
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgRemovedIntervalDataFormat).name)
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgRemovedIntervalCountFormat).name)
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.avboit.accumColorFormat).name)
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.avboit.accumExtinctionFormat).name)
-        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.avboit.transmittanceFormat).name)
-    );
+    outTargets = Move(createdTargets);
     return true;
 }
 
-void RendererDeferredSystem::clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::Rect& csgClearRect){
+bool RendererDeferredSystem::createDeferredFrameTargetResources(
+    DeferredFrameTargets& targets,
+    Core::Sampler& avboitLinearSampler
+){
+    if(!createDeferredBindlessFrameResources(targets, avboitLinearSampler))
+        return false;
+    if(createLaggedLightingHistoryResources(targets))
+        return true;
+    resetDeferredBindlessFrameResources(targets);
+    return false;
+}
+
+void RendererDeferredSystem::commitDeferredFrameTargets(DeferredFrameTargets&& targets){
+    m_deferredState.m_targets = Move(targets);
+
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, composite color {}, depth {}, shadow visibility {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver events {} layers: event data {}, event count {}, receiver spans {} layers: span data {}, span count {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, AVBOIT color {}, extinction {}, transmittance {})")
+        , m_deferredState.m_targets.width
+        , m_deferredState.m_targets.height
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.albedoFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.normalFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.worldPositionFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.opaqueColorFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.compositeColorFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.depthFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.shadowVisibilityFormat).name)
+        , m_deferredState.m_targets.csgPeelLayerCount
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgCapNormalFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgIntervalDepthFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgIntervalIdFormat).name)
+        , m_deferredState.m_targets.csgReceiverEventLayerCount
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgReceiverEventDataFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgReceiverEventCountFormat).name)
+        , m_deferredState.m_targets.csgReceiverSpanLayerCount
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgReceiverSpanDataFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgReceiverSpanCountFormat).name)
+        , m_deferredState.m_targets.csgRemovedIntervalLayerCount
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgRemovedIntervalDepthFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgRemovedIntervalCapNormalFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgRemovedIntervalDataFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.csgRemovedIntervalCountFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.avboit.accumColorFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.avboit.accumExtinctionFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.avboit.transmittanceFormat).name)
+    );
+}
+
+void ClearDeferredCsgIntervalTargets(
+    Core::Graphics& graphics,
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const Core::Rect& csgClearRect
+){
     __hidden_deferred_targets::AssertCsgIntervalTargetsAvailable(targets);
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, graphics.getDevice(), commandList);
 
     const __hidden_deferred_targets::CsgIntervalSubresources csgSubresources =
         __hidden_deferred_targets::MakeCsgIntervalSubresources(targets)

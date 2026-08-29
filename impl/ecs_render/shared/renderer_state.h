@@ -92,7 +92,6 @@ struct CsgFrameStateCacheSignature{
 
 
 class RendererMeshState final : NoCopy{
-    friend class RendererFramePipeline;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
@@ -113,7 +112,6 @@ private:
 };
 
 class RendererMaterialState final : NoCopy{
-    friend class RendererFramePipeline;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
@@ -138,7 +136,6 @@ private:
 };
 
 class RendererDrawState final : NoCopy{
-    friend class RendererFramePipeline;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
@@ -173,7 +170,6 @@ private:
 static_assert(sizeof(RendererDrawState) == 368u, "RendererDrawState should keep its compact CPU-only layout");
 
 class RendererCsgState final : NoCopy{
-    friend class RendererFramePipeline;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
@@ -219,7 +215,6 @@ private:
 static_assert(sizeof(RendererCsgState) == 328u, "RendererCsgState should keep its compact CPU-only layout");
 
 class RendererDeferredState final : NoCopy{
-    friend class RendererFramePipeline;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
@@ -258,7 +253,6 @@ private:
 };
 
 class RendererAvboitState final : NoCopy{
-    friend class RendererFramePipeline;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
@@ -658,7 +652,6 @@ struct RtSurfelGiState{
 
 
 class RendererRayTracingState final : NoCopy, public RtSceneBvhState, public RtShadowState, public RtSoftShadowState, public RtCausticState, public RtSurfelGiState{
-    friend class RendererFramePipeline;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;

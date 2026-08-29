@@ -5,7 +5,11 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/material/material_system.h>
+#include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
+#include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

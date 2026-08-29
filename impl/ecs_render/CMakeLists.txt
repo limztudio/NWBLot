@@ -139,7 +139,6 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/deferred/deferred_graph_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/shared/renderer_scene_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/shared/renderer_state.h"
-    "${CMAKE_CURRENT_LIST_DIR}/kernel/subsystem_base.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader/shader_path_resolver.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader/shader_system.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/mesh_system.h"

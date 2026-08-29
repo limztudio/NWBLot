@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/avboit/avboit_private.h>
 
+#include <impl/ecs_render/deferred/csg_interval_target_clear.h>
+
 #include <impl/ecs_render/kernel/arena_names.h>
 
 
@@ -171,7 +173,7 @@ bool RendererAvboitSystem::prepareAvboitPassResources(
     const bool hasTransparentCsgWork = csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork;
     if(
         hasTransparentCsgWork
-        && !m_renderer.materialSystem().prepareMaterialPassResources(
+        && !m_materialSystem.prepareMaterialPassResources(
             targets.framebuffer.get(),
             MaterialPipelinePass::CsgReceiverSurface,
             true,
@@ -182,21 +184,21 @@ bool RendererAvboitSystem::prepareAvboitPassResources(
         return false;
 
     return
-        m_renderer.materialSystem().prepareMaterialPassResources(
+        m_materialSystem.prepareMaterialPassResources(
             avboitTargets.lowFramebuffer.get(),
             MaterialPipelinePass::AvboitOccupancy,
             true,
             csgFrameState,
             &avboitTargets
         )
-        && m_renderer.materialSystem().prepareMaterialPassResources(
+        && m_materialSystem.prepareMaterialPassResources(
             avboitTargets.lowFramebuffer.get(),
             MaterialPipelinePass::AvboitExtinction,
             true,
             csgFrameState,
             &avboitTargets
         )
-        && m_renderer.materialSystem().prepareMaterialPassResources(
+        && m_materialSystem.prepareMaterialPassResources(
             avboitTargets.accumulationFramebuffer.get(),
             MaterialPipelinePass::AvboitAccumulate,
             true,
@@ -254,15 +256,16 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         intervalTiming->reset();
     }
     intervalTiming->emplace(
-        graphics().gpuTiming(),
+        m_graphics.gpuTiming(),
         RendererGpuTimingScope::s_TransparentCsgIntervals,
-        graphics().getDevice(),
+        m_graphics.getDevice(),
         commandList
     );
     // The normal prepared path records the two exact rect clears as preceding graph primitives. Retain the direct helper
     // for compatibility callers, including its historical all-target state preparation before readiness checks.
     if(!intervalTargetsGraphOwned){
-        m_renderer.m_deferredSystem.clearCsgIntervalTargets(
+        ClearDeferredCsgIntervalTargets(
+            m_graphics,
             commandList,
             targets,
             csgFrameData.workRegion.resolveRect(targets.width, targets.height)
@@ -272,13 +275,13 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     // The graph copied the material and CSG bytes after preflight froze every selected handle.  Do not rebuild or
     // rewrite them here: a rejected packet will re-declare the retained blobs, while this native step only consumes
     // the graph-owned data.
-    const bool drawBuffersReady = m_renderer.materialSystem().materialPassDrawBuffersReady(
+    const bool drawBuffersReady = m_materialSystem.materialPassDrawBuffersReady(
         instanceCount,
         materialTypedByteCount
     );
-    const bool csgResourcesReady = m_renderer.csgSystem().csgFrameBuffersReady(csgFrameData);
+    const bool csgResourcesReady = m_csgSystem.csgFrameBuffersReady(csgFrameData);
     const bool receiverSurfaceDrawResourcesReady =
-        m_renderer.materialSystem().materialPassDrawResourcesReady(receiverSurfaceDrawItems)
+        m_materialSystem.materialPassDrawResourcesReady(receiverSurfaceDrawItems)
     ;
     if(!drawBuffersReady || !csgResourcesReady || !receiverSurfaceDrawResourcesReady){
         if(splitIntervalCombine){
@@ -297,7 +300,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         .addScissorRect(csgFrameData.workRegion.resolveRect(targets.width, targets.height))
     ;
 
-    m_renderer.csgSystem().dispatchCsgIntervalPeels(
+    m_csgSystem.dispatchCsgIntervalPeels(
         commandList,
         targets,
         csgFrameData,
@@ -318,13 +321,13 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         materialFrameStatesGraphOwned,
         materialGeometryStatesGraphOwned
     };
-    m_renderer.materialSystem().renderMaterialPassDrawItems(
+    m_materialSystem.renderMaterialPassDrawItems(
         csgReceiverSurfaceDrawContext,
         receiverSurfaceDrawItems
     );
 
     if(!splitReceiverSpanBuild){
-        m_renderer.csgSystem().dispatchCsgReceiverSpanBuild(
+        m_csgSystem.dispatchCsgReceiverSpanBuild(
             commandList,
             targets,
             csgFrameData,
@@ -332,7 +335,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         );
     }
     if(!splitIntervalCombine){
-        m_renderer.csgSystem().dispatchCsgIntervalCombine(
+        m_csgSystem.dispatchCsgIntervalCombine(
             commandList,
             targets,
             csgFrameData,
@@ -411,8 +414,8 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
-    NWB_ASSERT(avboitState().m_depthWarpPipeline);
-    NWB_ASSERT(avboitState().m_integratePipeline);
+    NWB_ASSERT(m_avboitState.m_depthWarpPipeline);
+    NWB_ASSERT(m_avboitState.m_integratePipeline);
 
     // Occupancy discovers opaque depth and writes coverage solely through global heap descriptors. The normal graph
     // path declares those exact states at its packet boundary; direct compatibility callers retain this bridge.
@@ -430,7 +433,7 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
         NWB_ASSERT(preparedOccupancyDrawItems);
         NWB_ASSERT(preparedOccupancyCsgFrameData);
         if(preparedOccupancyDrawItems && preparedOccupancyCsgFrameData){
-            m_renderer.materialSystem().renderPreparedMaterialPass(
+            m_materialSystem.renderPreparedMaterialPass(
                 commandList,
                 avboitTargets.lowFramebuffer.get(),
                 MaterialPipelinePass::AvboitOccupancy,
@@ -476,7 +479,7 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
         NWB_ASSERT(preparedExtinctionDrawItems);
         NWB_ASSERT(preparedExtinctionCsgFrameData);
         if(preparedExtinctionDrawItems && preparedExtinctionCsgFrameData){
-            m_renderer.materialSystem().renderPreparedMaterialPass(
+            m_materialSystem.renderPreparedMaterialPass(
                 commandList,
                 avboitTargets.lowFramebuffer.get(),
                 MaterialPipelinePass::AvboitExtinction,
@@ -524,7 +527,7 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
         NWB_ASSERT(preparedAccumulationDrawItems);
         NWB_ASSERT(preparedAccumulationCsgFrameData);
         if(preparedAccumulationDrawItems && preparedAccumulationCsgFrameData){
-            m_renderer.materialSystem().renderPreparedMaterialPass(
+            m_materialSystem.renderPreparedMaterialPass(
                 commandList,
                 avboitTargets.accumulationFramebuffer.get(),
                 MaterialPipelinePass::AvboitAccumulate,
@@ -574,9 +577,9 @@ void RendererAvboitSystem::dispatchAvboitDepthWarp(
     bool* const timingRecorded
 ){
     Core::GpuTimingMeasure timing(
-        graphics().gpuTiming(),
+        m_graphics.gpuTiming(),
         RendererGpuTimingScope::s_AvboitDepthWarp,
-        graphics().getDevice(),
+        m_graphics.getDevice(),
         commandList,
         timingAttribution
     );
@@ -586,15 +589,15 @@ void RendererAvboitSystem::dispatchAvboitDepthWarp(
     // The graph records the coverage read and warp/control writes as packet-boundary state; this thunk contains only
     // the native dispatch itself.
 
-    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
 
     __hidden_avboit::DispatchAvboitCompute(
         commandList,
-        avboitState().m_depthWarpPipeline.get(),
+        m_avboitState.m_depthWarpPipeline.get(),
         heap,
         targets,
         NWB_AVBOIT_DEPTH_WARP_DISPATCH_GROUP_COUNT_X,
-        graphics().isHDR10OutputActive()
+        m_graphics.isHDR10OutputActive()
     );
 }
 
@@ -606,9 +609,9 @@ void RendererAvboitSystem::dispatchAvboitIntegration(
 ){
     const u32 pixelCount = targets.lowWidth * targets.lowHeight;
     Core::GpuTimingMeasure timing(
-        graphics().gpuTiming(),
+        m_graphics.gpuTiming(),
         RendererGpuTimingScope::s_AvboitIntegration,
-        graphics().getDevice(),
+        m_graphics.getDevice(),
         commandList,
         timingAttribution
     );
@@ -618,15 +621,15 @@ void RendererAvboitSystem::dispatchAvboitIntegration(
     // The graph records packed-extinction reads and the Texture3D UAV write as packet-boundary state; this thunk
     // contains only the native dispatch itself.
 
-    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
 
     __hidden_avboit::DispatchAvboitCompute(
         commandList,
-        avboitState().m_integratePipeline.get(),
+        m_avboitState.m_integratePipeline.get(),
         heap,
         targets,
         DivideUp(pixelCount, static_cast<u32>(NWB_AVBOIT_INTEGRATE_GROUP_SIZE_X)),
-        graphics().isHDR10OutputActive()
+        m_graphics.isHDR10OutputActive()
     );
 }
 

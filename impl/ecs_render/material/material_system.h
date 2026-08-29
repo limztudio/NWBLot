@@ -5,8 +5,46 @@
 #pragma once
 
 
+#include <impl/ecs_render/material/material_surface_lookup.h>
 #include <impl/ecs_render/material/material_typed_private.h>
-#include <impl/ecs_render/kernel/subsystem_base.h>
+
+#include <core/graphics/gpu_timing.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Graphics;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSETS_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class AssetManager;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,11 +65,48 @@ namespace RendererResourceLookupMode{
 
 namespace ECSRenderDetail{
     struct MeshViewGpuData;
+
+    struct MaterialPassBufferSnapshot{
+        Core::BufferHandle instanceBuffer;
+        Core::BufferHandle typedBuffer;
+    };
 };
 
-class RendererMaterialSystem final : public RendererFramePipelineSubsystemBase<RendererFramePipeline>{
+struct MaterialInstanceOverrideField{
+    const MaterialTypedLayoutField* field = nullptr;
+    u32 blockByteBegin = 0u;
+    bool mutableBlock = false;
+};
+
+class CsgShapeRegistry;
+class RendererMeshState;
+class RendererMaterialState;
+class RendererDrawState;
+class RendererAvboitState;
+class RendererShaderSystem;
+class RendererMeshSystem;
+class RendererCsgSystem;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererMaterialSystem final : public IMaterialSurfaceLookup, NoCopy{
 public:
-    explicit RendererMaterialSystem(RendererFramePipeline& renderer);
+    RendererMaterialSystem(
+        Core::Alloc::GlobalArena& arena,
+        Core::ECS::World& world,
+        Core::Graphics& graphics,
+        Core::Assets::AssetManager& assetManager,
+        CsgShapeRegistry& csgShapeRegistry,
+        RendererMeshState& meshState,
+        RendererMaterialState& materialState,
+        RendererDrawState& drawState,
+        RendererAvboitState& avboitState,
+        RendererShaderSystem& shaderSystem,
+        RendererMeshSystem& meshSystem,
+        RendererCsgSystem& csgSystem
+    );
 
 public:
     [[nodiscard]] static bool splitMaterialTypedBytesByClass(
@@ -42,13 +117,14 @@ public:
     );
     [[nodiscard]] bool createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
     // Prepared-only lookup: creation and descriptor-backed resource resolution belong to preparation.
-    [[nodiscard]] bool findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
+    [[nodiscard]] virtual bool findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo)override;
     [[nodiscard]] bool resolveMaterialResourceReferences(MaterialSurfaceInfo& materialInfo);
     void releaseMaterialResourceReferences();
     [[nodiscard]] bool prepareVisibleMaterialSurfaceInfos();
     void prepareVisibleMaterialInstanceMutableCache();
     [[nodiscard]] bool createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer* framebuffer, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool findRendererPipeline(const MaterialPipelineKey& pipelineKey, MaterialPipelineResources*& outResources);
+    void invalidateRendererPipelines();
     [[nodiscard]] bool hasTransparentRenderers(RendererResourceLookupMode::Enum lookupMode);
     void logMaterialRenderPathDecision(const Name& materialKey, RenderPath::Enum renderPath, bool meshSupported);
     [[nodiscard]] bool createComputeEmulationResources();
@@ -112,7 +188,7 @@ public:
         Core::ECS::EntityID entity,
         const MaterialSurfaceInfo& materialInfo,
         const MaterialInstanceParameter& parameter,
-        RendererMaterialInstanceOverrideField& outField
+        MaterialInstanceOverrideField& outField
     );
     [[nodiscard]] static bool applyMaterialInstanceOverrides(
         Core::ECS::EntityID entity,
@@ -220,6 +296,7 @@ public:
         usize instanceCount,
         usize materialTypedByteCount
     )const;
+    [[nodiscard]] ECSRenderDetail::MaterialPassBufferSnapshot materialPassBufferSnapshot()const;
     // The CSG context descriptor is selected through every instance's retained heap-slot lane. Graph declaration
     // patches the immutable upload copy before the packet is recorded so every prepared phase keeps the same ABI.
     void prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData);
@@ -243,6 +320,20 @@ public:
             handler(drawItem, *mesh, *pipelineResources);
         }
     }
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    Core::ECS::World& m_world;
+    Core::Graphics& m_graphics;
+    Core::Assets::AssetManager& m_assetManager;
+    CsgShapeRegistry& m_csgShapeRegistry;
+    RendererMeshState& m_meshState;
+    RendererMaterialState& m_materialState;
+    RendererDrawState& m_drawState;
+    RendererAvboitState& m_avboitState;
+    RendererShaderSystem& m_shaderSystem;
+    RendererMeshSystem& m_meshSystem;
+    RendererCsgSystem& m_csgSystem;
 };
 
 

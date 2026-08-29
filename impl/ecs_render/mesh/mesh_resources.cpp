@@ -669,6 +669,60 @@ void RendererMeshSystem::pruneRuntimeMeshResources(){
     }
 }
 
+bool RendererMeshSystem::collectSoftwareBvhParentBuildStates(ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector& outStates)const{
+    outStates.clear();
+    outStates.reserve(m_meshState.m_meshes.size());
+    for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
+        const MeshResources& mesh = meshIt.value();
+        if(!mesh.swBvhNodeBuffer && !mesh.swBvhParentBuffer)
+            continue;
+        if(!mesh.swBvhNodeBuffer || !mesh.swBvhParentBuffer){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererMeshSystem: incomplete software BVH state for a live mesh"));
+            return false;
+        }
+        outStates.push_back({
+            .buffer = mesh.swBvhParentBuffer,
+            .identity = DeriveName(mesh.meshName, AStringView(":shadow_trace_sw_parent")),
+        });
+    }
+    return true;
+}
+
+void RendererMeshSystem::collectRetainedAccelerationStateBuffers(ECSRenderDetail::MeshRetainedAccelerationStateBufferVector& outBuffers)const{
+    outBuffers.clear();
+    outBuffers.reserve(m_meshState.m_meshes.size() * 5u);
+    for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
+        const MeshResources& mesh = meshIt.value();
+        // A frozen BLAS plan can fall back to the native current-mesh build when runtime geometry changes between
+        // preflight and recording. Retain every live source pair and backing buffer, not only the frozen inputs.
+        if(mesh.blas){
+            outBuffers.push_back(mesh.positionBuffer);
+            outBuffers.push_back(mesh.triangleIndexBuffer);
+            outBuffers.push_back(mesh.blas->getBackingBufferHandle());
+        }
+        // Preserve both mesh-local SW state buffers across route changes. A hybrid native build may leave these UAVs
+        // before the next frame switches to software-only frozen recording.
+        outBuffers.push_back(mesh.swBvhNodeBuffer);
+        outBuffers.push_back(mesh.swBvhParentBuffer);
+    }
+}
+
+void RendererMeshSystem::collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphStateVector& outStates)const{
+    outStates.clear();
+    outStates.reserve(m_meshState.m_meshes.size());
+    for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
+        const MeshResources& mesh = meshIt.value();
+        if(!mesh.blas)
+            continue;
+        outStates.push_back({
+            .meshName = mesh.meshName,
+            .blas = mesh.blas,
+            .backingFresh = mesh.blasBackingFresh,
+            .nativeBuildsBlas = mesh.runtimeMesh || mesh.blasBuildPending,
+        });
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

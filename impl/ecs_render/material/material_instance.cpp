@@ -4,9 +4,14 @@
 
 #include "material_instance.h"
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include <impl/ecs_render/material/material_system.h>
+
+#include <impl/ecs_render/shared/renderer_state.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
+
+#include <core/common/log.h>
+#include <core/ecs/world.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -89,7 +94,7 @@ bool RendererMaterialSystem::findMaterialInstanceOverrideField(
     const Core::ECS::EntityID entity,
     const MaterialSurfaceInfo& materialInfo,
     const MaterialInstanceParameter& parameter,
-    RendererMaterialInstanceOverrideField& outField
+    MaterialInstanceOverrideField& outField
 ){
     outField = {};
 
@@ -177,7 +182,7 @@ bool RendererMaterialSystem::applyMaterialInstanceOverrides(
             return false;
         }
 
-        RendererMaterialInstanceOverrideField resolvedField;
+        MaterialInstanceOverrideField resolvedField;
         if(!findMaterialInstanceOverrideField(entity, materialInfo, parameter, resolvedField))
             return false;
 
@@ -235,7 +240,7 @@ bool RendererMaterialSystem::prepareMaterialInstanceMutableTypedBytes(
         return true;
     }
 
-    auto it = materialState().m_instanceMutableCache.try_emplace(entity, arena()).first;
+    auto it = m_materialState.m_instanceMutableCache.try_emplace(entity, m_arena).first;
     MaterialInstanceMutableCacheEntry& cacheEntry = it.value();
     if(__hidden_material_instance::materialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance)){
         outMutableTypedBytes = &cacheEntry.mutableTypedBytes;
@@ -246,7 +251,7 @@ bool RendererMaterialSystem::prepareMaterialInstanceMutableTypedBytes(
     MaterialTypedByteDataVector mutableTypedBytes{scratchArena};
     mutableTypedBytes.assign(materialInfo.mutableDefaultTypedBytes.begin(), materialInfo.mutableDefaultTypedBytes.end());
     if(!applyMaterialInstanceOverrides(entity, materialInfo, *materialInstance, mutableTypedBytes)){
-        materialState().m_instanceMutableCache.erase(it);
+        m_materialState.m_instanceMutableCache.erase(it);
         return false;
     }
 
@@ -272,8 +277,8 @@ bool RendererMaterialSystem::findPreparedMaterialInstanceMutableTypedBytes(
         return true;
     }
 
-    const auto found = materialState().m_instanceMutableCache.find(entity);
-    if(found == materialState().m_instanceMutableCache.end())
+    const auto found = m_materialState.m_instanceMutableCache.find(entity);
+    if(found == m_materialState.m_instanceMutableCache.end())
         return false;
 
     const MaterialInstanceMutableCacheEntry& cacheEntry = found.value();
@@ -309,7 +314,7 @@ bool RendererMaterialSystem::appendShadowOccluderMaterialContext(
 
     // Mutable block: the per-instance override bytes (or the material default), content-deduped so instances
     // sharing identical mutable storage share one appended range -- mirroring the draw pass.
-    const MaterialInstanceComponent* materialInstance = world().tryGetComponent<MaterialInstanceComponent>(entity);
+    const MaterialInstanceComponent* materialInstance = m_world.tryGetComponent<MaterialInstanceComponent>(entity);
     const MaterialTypedByteVector* mutableTypedBytes = nullptr;
     if(!prepareMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance, mutableTypedBytes))
         return false;
@@ -327,12 +332,12 @@ bool RendererMaterialSystem::appendShadowOccluderMaterialContext(
 }
 
 void RendererMaterialSystem::pruneMaterialInstanceMutableCache(){
-    const u64 componentMutationVersion = world().componentMutationVersion<MaterialInstanceComponent>();
-    if(componentMutationVersion == materialState().m_instanceMutableCacheComponentMutationVersion)
+    const u64 componentMutationVersion = m_world.componentMutationVersion<MaterialInstanceComponent>();
+    if(componentMutationVersion == m_materialState.m_instanceMutableCacheComponentMutationVersion)
         return;
 
-    materialState().m_instanceMutableCache.clear();
-    materialState().m_instanceMutableCacheComponentMutationVersion = componentMutationVersion;
+    m_materialState.m_instanceMutableCache.clear();
+    m_materialState.m_instanceMutableCacheComponentMutationVersion = componentMutationVersion;
 }
 
 

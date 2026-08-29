@@ -3394,7 +3394,7 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
     const AStringView surfelTaskGraph(surfelTaskGraphSource.data(), surfelTaskGraphSource.size());
     const AStringView system(systemSource.data(), systemSource.size());
 
-    const usize counterOffset = surfel.find("if(!rayTracingState().m_surfelCounterBuffer){");
+    const usize counterOffset = surfel.find("if(!m_rayTracingState.m_surfelCounterBuffer){");
     const usize traceArgsOffset = surfel.find("// Build-args rewrites the indirect dispatch buffer each frame.", counterOffset);
     ASSERT_NE(counterOffset, AStringView::npos);
     ASSERT_NE(traceArgsOffset, AStringView::npos);
@@ -3927,7 +3927,7 @@ TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
     ASSERT_NE(softwareOpaqueOffset, AStringView::npos);
     ASSERT_LT(softwareVisibilityOffset, softwareOpaqueOffset);
     const AStringView softwareVisibility = shadowSourceView.substr(softwareVisibilityOffset, softwareOpaqueOffset - softwareVisibilityOffset);
-    const usize adaptiveOffset = softwareVisibility.find("if(!softTransparentRan && rayTracingState().m_swShadowAdaptiveEnabled)");
+    const usize adaptiveOffset = softwareVisibility.find("if(!softTransparentRan && m_rayTracingState.m_swShadowAdaptiveEnabled)");
     ASSERT_NE(adaptiveOffset, AStringView::npos);
     const AStringView preAdaptive = softwareVisibility.substr(0u, adaptiveOffset);
     const AStringView adaptive = softwareVisibility.substr(adaptiveOffset);
@@ -5817,7 +5817,7 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     EXPECT_TRUE(ContainsText(taskGraph, "AccelStructResourceDesc(blasIdentity, \"Prepared Mesh BLAS\").setInitialState(blasInitialState)"));
     EXPECT_TRUE(ContainsText(
         taskGraph,
-        "const Core::ResourceStates::Mask blasInitialState = mesh.blasBackingFresh\n"
+        "const Core::ResourceStates::Mask blasInitialState = state.backingFresh\n"
         "            ? Core::ResourceStates::Common\n"
         "            : Core::ResourceStates::Unknown\n"
         "        ;"
@@ -5828,11 +5828,11 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     EXPECT_TRUE(ContainsText(rendererStateHeader, "bool m_tlasBackingStateHandoffPending = false;"));
     EXPECT_TRUE(ContainsText(rendererState, "m_tlasBackingFresh = false;"));
     EXPECT_TRUE(ContainsText(rendererState, "m_tlasBackingStateHandoffPending = false;"));
-    EXPECT_TRUE(ContainsText(swBvh, "rayTracingState().m_tlasBackingFresh = true;"));
+    EXPECT_TRUE(ContainsText(swBvh, "m_rayTracingState.m_tlasBackingFresh = true;"));
     EXPECT_TRUE(ContainsText(
         swBvh,
-        "if(rayTracingState().m_tlasBackingFresh)\n"
-        "            rayTracingState().m_tlasBackingStateHandoffPending = true;"
+        "if(m_rayTracingState.m_tlasBackingFresh)\n"
+        "            m_rayTracingState.m_tlasBackingStateHandoffPending = true;"
     ));
     EXPECT_TRUE(ContainsText(rayTracingHeader, "sceneTlasBackingInitialState()const noexcept"));
     EXPECT_FALSE(ContainsText(rayTracingHeader, "preparedSceneTlasBuildInitialState()const noexcept"));

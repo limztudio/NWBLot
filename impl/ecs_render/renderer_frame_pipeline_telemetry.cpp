@@ -112,7 +112,7 @@ static void AppendCommandArenaWorkerStatistics(
 
 
 bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder){
-    if(!m_deferredState.m_targets.valid())
+    if(!m_deferredSystem.tryFrameTargets())
         return false;
 
     using Handle = Core::Telemetry::FrameGraphNodeHandle;
@@ -129,7 +129,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         && (csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork)
     ;
     const bool hasTransparentRenderers = m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::PreparedOnly);
-    const bool hasAvboitWork = hasTransparentRenderers || m_avboitState.m_targetsNeedClear;
+    const bool hasAvboitWork = m_avboitSystem.shouldClearTargets(hasTransparentRenderers);
 
     Core::GpuTaskGraphRuntimeStatistics deferredRuntimeStatistics{};
     if(builder.frameIndex() == m_frameGraphSourceFrameIndex)

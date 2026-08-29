@@ -4,8 +4,6 @@
 
 #include "material_system.h"
 
-#include <impl/ecs_render/renderer_frame_pipeline.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -16,8 +14,32 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererMaterialSystem::RendererMaterialSystem(RendererFramePipeline& renderer)
-    : RendererFramePipelineSubsystemBase<RendererFramePipeline>(renderer)
+RendererMaterialSystem::RendererMaterialSystem(
+    Core::Alloc::GlobalArena& arena,
+    Core::ECS::World& world,
+    Core::Graphics& graphics,
+    Core::Assets::AssetManager& assetManager,
+    CsgShapeRegistry& csgShapeRegistry,
+    RendererMeshState& meshState,
+    RendererMaterialState& materialState,
+    RendererDrawState& drawState,
+    RendererAvboitState& avboitState,
+    RendererShaderSystem& shaderSystem,
+    RendererMeshSystem& meshSystem,
+    RendererCsgSystem& csgSystem
+)
+    : m_arena(arena)
+    , m_world(world)
+    , m_graphics(graphics)
+    , m_assetManager(assetManager)
+    , m_csgShapeRegistry(csgShapeRegistry)
+    , m_meshState(meshState)
+    , m_materialState(materialState)
+    , m_drawState(drawState)
+    , m_avboitState(avboitState)
+    , m_shaderSystem(shaderSystem)
+    , m_meshSystem(meshSystem)
+    , m_csgSystem(csgSystem)
 {}
 
 

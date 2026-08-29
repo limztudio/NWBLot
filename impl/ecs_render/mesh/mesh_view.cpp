@@ -46,6 +46,10 @@ bool RendererMeshSystem::createMeshViewBuffer(){
     return true;
 }
 
+ECSRenderDetail::MeshViewBufferSnapshot RendererMeshSystem::meshViewBufferSnapshot()const{
+    return { m_drawState.m_meshViewBuffer };
+}
+
 bool RendererMeshSystem::prepareMeshViewBufferUpload(
     const f32 fallbackAspectRatio,
     ECSRenderDetail::MeshViewGpuData& outViewState,
@@ -64,6 +68,10 @@ bool RendererMeshSystem::prepareMeshViewBufferUpload(
 void RendererMeshSystem::confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState){
     NWB_MEMCPY(m_drawState.m_meshViewGpuData, sizeof(m_drawState.m_meshViewGpuData), &viewState, sizeof(viewState));
     m_drawState.m_meshViewGpuDataValid = true;
+}
+
+void RendererMeshSystem::invalidateMeshViewBufferUploadMirror(){
+    m_drawState.m_meshViewGpuDataValid = false;
 }
 
 

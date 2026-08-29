@@ -55,11 +55,53 @@ RendererFramePipeline::RendererFramePipeline(
     , m_surfelIrradianceReturnState(arena)
     , m_shaderSystem(graphics, assetManager, m_shaderPathResolver)
     , m_meshSystem(arena, world, graphics, assetManager, m_meshState, m_drawState)
-    , m_materialSystem(*this)
-    , m_csgSystem(*this)
-    , m_deferredSystem(*this)
-    , m_avboitSystem(*this)
-    , m_raytracingSystem(*this)
+    , m_csgSystem(
+        arena,
+        world,
+        graphics,
+        m_csgShapeRegistry,
+        m_drawState,
+        m_csgState,
+        m_deferredState,
+        m_shaderSystem,
+        m_meshSystem
+    )
+    , m_materialSystem(
+        arena,
+        world,
+        graphics,
+        assetManager,
+        m_csgShapeRegistry,
+        m_meshState,
+        m_materialState,
+        m_drawState,
+        m_avboitState,
+        m_shaderSystem,
+        m_meshSystem,
+        m_csgSystem
+    )
+    , m_deferredSystem(arena, world, graphics, m_deferredState, m_rayTracingState, m_shaderSystem)
+    , m_avboitSystem(
+        arena,
+        graphics,
+        m_deferredState,
+        m_avboitState,
+        m_shaderSystem,
+        m_materialSystem,
+        m_csgSystem
+    )
+    , m_raytracingSystem(
+        arena,
+        world,
+        graphics,
+        m_shaderSystem,
+        m_meshSystem,
+        m_materialSystem,
+        m_meshState,
+        m_drawState,
+        m_deferredState,
+        m_rayTracingState
+    )
 {
     if(!RegisterBuiltInCsgShapeTypes(m_csgShapeRegistry))
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register built-in CSG shape types"));

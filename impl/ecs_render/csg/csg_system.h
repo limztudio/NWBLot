@@ -5,7 +5,27 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/subsystem_base.h>
+#include <impl/ecs_render/kernel/renderer_types.h>
+
+#include <impl/ecs_csg/frame_state.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Graphics;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,6 +42,13 @@ namespace Scene{
 };
 
 namespace ECSRenderDetail{
+    struct CsgGraphResourceBuffers{
+        Core::BufferHandle receiverRanges;
+        Core::BufferHandle cutters;
+        Core::BufferHandle clipContextSlots;
+        Core::BufferHandle intervalSampleState;
+    };
+
     struct MeshViewGpuData;
 };
 
@@ -29,12 +56,34 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererCsgSystem final : public RendererFramePipelineSubsystemBase<RendererFramePipeline>{
+class CsgShapeRegistry;
+class IMaterialSurfaceLookup;
+class RendererDrawState;
+class RendererCsgState;
+class RendererDeferredState;
+class RendererShaderSystem;
+class RendererMeshSystem;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererCsgSystem final : NoCopy{
 public:
-    explicit RendererCsgSystem(RendererFramePipeline& renderer);
+    RendererCsgSystem(
+        Core::Alloc::GlobalArena& arena,
+        Core::ECS::World& world,
+        Core::Graphics& graphics,
+        CsgShapeRegistry& csgShapeRegistry,
+        RendererDrawState& drawState,
+        RendererCsgState& csgState,
+        RendererDeferredState& deferredState,
+        RendererShaderSystem& shaderSystem,
+        RendererMeshSystem& meshSystem
+    );
 
 public:
-    [[nodiscard]] CsgFrameState buildFrameState(Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] CsgFrameState buildFrameState(Core::Alloc::ScratchArena& scratchArena, IMaterialSurfaceLookup& materialSurfaceLookup);
     [[nodiscard]] bool createCsgClipResources();
     void releaseCsgClipContextHeapHandles();
     [[nodiscard]] bool createCsgPeelTargets(DeferredFrameTargets& targets);
@@ -78,6 +127,8 @@ public:
     // consume these resources after this prepass has completed.
     [[nodiscard]] bool prepareCsgFrameResources(usize receiverRangeCount, usize cutterCount);
     [[nodiscard]] bool csgFrameBuffersReady(const CsgFrameGpuData& csgFrameData)const;
+    void populateCsgGraphResourceBuffers(ECSRenderDetail::CsgGraphResourceBuffers& outBuffers)const;
+    [[nodiscard]] bool findCsgClipContextHeapSlot(u32& outHeapSlot)const;
     // Capture all descriptor-derived CSG uniform bytes while preflight has frozen the current buffer and target
     // generations. The deferred graph retains these values as immutable blobs before native recording begins.
     [[nodiscard]] bool prepareCsgClipContextSlotData(
@@ -89,6 +140,8 @@ public:
         const CsgFrameGpuData& csgFrameData,
         CsgIntervalSampleStateGpuData& outState
     )const;
+    void setCsgReceiverSurfaceImageStates(Core::CommandList& commandList);
+    void setCsgIntervalSampleImageStates(Core::CommandList& commandList);
     void setCsgClipBufferStates(Core::CommandList& commandList);
     [[nodiscard]] bool resolveCsgReceiverClipDrawInfo(
         const CsgFrameReceiverLookup& receiverLookup,
@@ -108,6 +161,17 @@ public:
         CsgReceiverRangeGpuData& outRange,
         const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState = nullptr
     )const;
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    Core::ECS::World& m_world;
+    Core::Graphics& m_graphics;
+    CsgShapeRegistry& m_csgShapeRegistry;
+    RendererDrawState& m_drawState;
+    RendererCsgState& m_csgState;
+    RendererDeferredState& m_deferredState;
+    RendererShaderSystem& m_shaderSystem;
+    RendererMeshSystem& m_meshSystem;
 };
 
 

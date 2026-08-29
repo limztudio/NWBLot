@@ -189,6 +189,8 @@ private:
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         bool hasOpaqueCsgFrameWork,
         f32 meshViewAspectRatio,
+        const ECSRenderDetail::MeshViewGpuData& meshViewState,
+        bool meshViewUploadRequired,
         Core::GpuGraphResourceId albedo,
         Core::GpuGraphResourceId normal,
         Core::GpuGraphResourceId worldPosition,

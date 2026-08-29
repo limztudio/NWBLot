@@ -53,6 +53,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const bool hasOpaqueCsgFrameWork,
     const f32 meshViewAspectRatio,
+    const ECSRenderDetail::MeshViewGpuData& meshViewState,
+    const bool meshViewUploadRequired,
     const Core::GpuGraphResourceId albedo,
     const Core::GpuGraphResourceId normal,
     const Core::GpuGraphResourceId worldPosition,
@@ -188,8 +190,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     );
     const Core::TextureSubresourceSet csgRemovedIntervalCountSubresources(0u, 1u, 0u, 1u);
 
-    ECSRenderDetail::MeshViewGpuData meshViewState;
-    bool meshViewUploadRequired = false;
     ECSRenderDetail::SceneLightGpuData sceneLightData[NWB_SCENE_MAX_LIGHTS] = {};
     ECSRenderDetail::SceneShadingGpuData sceneShadingState;
     u32 sceneLightCount = 0u;
@@ -197,25 +197,18 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     RayTracingLightingClassification rayTracingLightingClassification;
     bool sceneLightUploadRequired = false;
     bool sceneShadingUploadRequired = false;
-    if(
-        !m_meshSystem.prepareMeshViewBufferUpload(
-            meshViewAspectRatio,
-            meshViewState,
-            meshViewUploadRequired
-        )
-        || !m_deferredSystem.prepareSceneShadingBufferUploads(
-            meshViewAspectRatio,
-            rayTracingLightingInput,
-            sceneLightData,
-            LengthOf(sceneLightData),
-            sceneLightCount,
-            rayTracingLightingClassification,
-            sceneLightUploadRequired,
-            sceneShadingState,
-            sceneShadingUploadRequired
-        )
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not prepare immutable graphics-prefix upload data"));
+    if(!m_deferredSystem.prepareSceneShadingBufferUploads(
+        meshViewAspectRatio,
+        rayTracingLightingInput,
+        sceneLightData,
+        LengthOf(sceneLightData),
+        sceneLightCount,
+        rayTracingLightingClassification,
+        sceneLightUploadRequired,
+        sceneShadingState,
+        sceneShadingUploadRequired
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not prepare immutable scene-shading upload data"));
         return false;
     }
 

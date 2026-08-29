@@ -4364,6 +4364,78 @@ TEST(EcsGraphics, DeferredSceneShadingUploadsHaveNoNativeCompatibilityDispatcher
 }
 
 
+// Every CSG work-region gather must use the same immutable mesh-view value scheduled for upload.  Falling back to
+// the previously accepted CPU mirror during graph declaration can under-bound work after the camera moves.
+TEST(EcsGraphics, CsgWorkRegionsUseTheFrozenMeshViewUploadPayload){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString graphSource;
+    AString prefixSource;
+    AString materialHeaderSource;
+    AString materialPassSource;
+    AString csgHeaderSource;
+    AString csgResourcesSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", graphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graphics_prefix.cpp", prefixSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_system.h", materialHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass.cpp", materialPassSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_system.h", csgHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_resources.cpp", csgResourcesSource));
+    const AStringView graph(graphSource.data(), graphSource.size());
+    const AStringView prefix(prefixSource.data(), prefixSource.size());
+    const AStringView materialHeader(materialHeaderSource.data(), materialHeaderSource.size());
+    const AStringView materialPass(materialPassSource.data(), materialPassSource.size());
+    const AStringView csgHeader(csgHeaderSource.data(), csgHeaderSource.size());
+    const AStringView csgResources(csgResourcesSource.data(), csgResourcesSource.size());
+
+    EXPECT_EQ(CountText(graph, "m_meshSystem.prepareMeshViewBufferUpload("), 1u);
+    EXPECT_EQ(CountText(prefix, "m_meshSystem.prepareMeshViewBufferUpload("), 0u);
+    EXPECT_EQ(CountText(graph, "ECSRenderDetail::MeshViewGpuData meshViewState;"), 1u);
+    EXPECT_FALSE(ContainsText(graph, "transparentCsgMeshViewState"));
+    EXPECT_TRUE(ContainsText(prefix, ".viewState = meshViewState,"));
+
+    const usize prepareOffset = graph.find("m_meshSystem.prepareMeshViewBufferUpload(");
+    const usize prefixDeclarationOffset = graph.find("declareDeferredGraphicsPrefixTasks(", prepareOffset);
+    ASSERT_NE(prepareOffset, AStringView::npos);
+    ASSERT_NE(prefixDeclarationOffset, AStringView::npos);
+    EXPECT_LT(prepareOffset, prefixDeclarationOffset);
+
+    const auto expectFrozenPreparedGather = [](const AStringView source, const AStringView passMarker){
+        SCOPED_TRACE(passMarker.data());
+        EXPECT_EQ(CountText(source, passMarker), 1u);
+        const usize passOffset = source.find(passMarker);
+        ASSERT_NE(passOffset, AStringView::npos);
+        const usize callEnd = source.find(");", passOffset);
+        ASSERT_NE(callEnd, AStringView::npos);
+        const AStringView callTail = source.substr(passOffset, callEnd + 2u - passOffset);
+        EXPECT_EQ(CountText(callTail, "RendererResourceLookupMode::PreparedOnly"), 1u);
+        EXPECT_EQ(CountText(callTail, "&meshViewState"), 1u);
+        EXPECT_FALSE(ContainsText(callTail, "nullptr"));
+    };
+    expectFrozenPreparedGather(prefix, "MaterialPipelinePass::Opaque");
+    expectFrozenPreparedGather(graph, "MaterialPipelinePass::CsgReceiverSurface");
+    expectFrozenPreparedGather(graph, "MaterialPipelinePass::AvboitOccupancy");
+    expectFrozenPreparedGather(graph, "MaterialPipelinePass::AvboitExtinction");
+    expectFrozenPreparedGather(graph, "MaterialPipelinePass::AvboitAccumulate");
+
+    const usize compatibilityBegin = materialPass.find("bool RendererMaterialSystem::prepareMaterialPassResources(");
+    ASSERT_NE(compatibilityBegin, AStringView::npos);
+    const usize compatibilityEnd = materialPass.find("\nvoid RendererMaterialSystem::renderPreparedMaterialPass(", compatibilityBegin);
+    ASSERT_NE(compatibilityEnd, AStringView::npos);
+    const AStringView compatibility = materialPass.substr(compatibilityBegin, compatibilityEnd - compatibilityBegin);
+    EXPECT_EQ(CountText(compatibility, "gatherMaterialPassDrawItems("), 1u);
+    EXPECT_TRUE(ContainsText(compatibility, "RendererResourceLookupMode::CreateMissing,\n        nullptr"));
+
+    constexpr AStringView viewPointerParameter = "const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState";
+    EXPECT_EQ(CountText(materialHeader, viewPointerParameter), 1u);
+    EXPECT_EQ(CountText(csgHeader, viewPointerParameter), 1u);
+    EXPECT_FALSE(ContainsText(materialHeader, "csgWorkRegionMeshViewState = nullptr"));
+    EXPECT_FALSE(ContainsText(csgHeader, "csgWorkRegionMeshViewState = nullptr"));
+    EXPECT_TRUE(ContainsText(csgResources, "m_meshSystem.snapshotAcceptedMeshViewWorldToClip(acceptedWorldToClip)"));
+}
+
+
 // AVBOIT's normal path rejects an uncaptured transparent phase before recording. Its last aggregate native
 // dispatcher therefore had no caller and only kept mutable mesh/material/CSG writes reachable in dead code.
 // Keep that bridge retired so every supported transparent phase starts from its declaration-time graph snapshot.

@@ -161,7 +161,7 @@ public:
         u32 frameHeight,
         CsgFrameGpuData& csgFrameData,
         CsgReceiverRangeGpuData& outRange,
-        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState = nullptr
+        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState
     )const;
 
 private:

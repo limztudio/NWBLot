@@ -138,7 +138,8 @@ bool RendererMaterialSystem::prepareMaterialPassResources(
         materialTypedRanges,
 #endif
         materialTypedBytes,
-        RendererResourceLookupMode::CreateMissing
+        RendererResourceLookupMode::CreateMissing,
+        nullptr
     );
     if(drawItems.empty())
         return true;

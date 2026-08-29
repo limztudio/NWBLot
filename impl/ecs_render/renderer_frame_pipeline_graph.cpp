@@ -971,6 +971,17 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             : m_deferredShadowPrepareTask)
     ;
 
+    ECSRenderDetail::MeshViewGpuData meshViewState;
+    bool meshViewUploadRequired = false;
+    if(!m_meshSystem.prepareMeshViewBufferUpload(
+        meshViewAspectRatio,
+        meshViewState,
+        meshViewUploadRequired
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not prepare immutable mesh-view upload data"));
+        return;
+    }
+
     if(!declareDeferredGraphicsPrefixTasks(
         deferredTargets,
         shadowPrepareHandoffTask,
@@ -978,6 +989,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         frameBindings,
         hasOpaqueCsgFrameWork,
         meshViewAspectRatio,
+        meshViewState,
+        meshViewUploadRequired,
         albedo,
         normal,
         worldPosition,
@@ -2032,16 +2045,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         ECSRenderDetail::MaterialTypedInstanceRangeVector transparentCsgMaterialTypedRanges{ transparentCsgUploadScratch };
 #endif
         MaterialTypedByteDataVector transparentCsgMaterialTypedBytes{ transparentCsgUploadScratch };
-        ECSRenderDetail::MeshViewGpuData transparentCsgMeshViewState;
-        bool transparentCsgMeshViewUploadRequired = false;
-        if(!m_meshSystem.prepareMeshViewBufferUpload(
-            meshViewAspectRatio,
-            transparentCsgMeshViewState,
-            transparentCsgMeshViewUploadRequired
-        )){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not prepare transparent CSG interval mesh-view data"));
-            return;
-        }
         m_materialSystem.gatherMaterialPassDrawItems(
             deferredTargets.framebuffer.get(),
             MaterialPipelinePass::CsgReceiverSurface,
@@ -2055,7 +2058,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 #endif
             transparentCsgMaterialTypedBytes,
             RendererResourceLookupMode::PreparedOnly,
-            &transparentCsgMeshViewState
+            &meshViewState
         );
 
         if(!transparentCsgDrawItems.csgReceiverSurface.empty() && transparentCsgFrameData.hasWork()){
@@ -2772,7 +2775,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             occupancyMaterialTypedRanges,
 #endif
             occupancyMaterialTypedBytes,
-            RendererResourceLookupMode::PreparedOnly
+            RendererResourceLookupMode::PreparedOnly,
+            &meshViewState
         );
 
         const bool occupancyHasCsgDrawItems = !occupancyDrawItems.csg.empty();
@@ -3874,7 +3878,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             extinctionMaterialTypedRanges,
 #endif
             extinctionMaterialTypedBytes,
-            RendererResourceLookupMode::PreparedOnly
+            RendererResourceLookupMode::PreparedOnly,
+            &meshViewState
         );
 
         const bool extinctionHasCsgDrawItems = !extinctionDrawItems.csg.empty();
@@ -4786,7 +4791,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             accumulationMaterialTypedRanges,
 #endif
             accumulationMaterialTypedBytes,
-            RendererResourceLookupMode::PreparedOnly
+            RendererResourceLookupMode::PreparedOnly,
+            &meshViewState
         );
 
         const bool accumulationHasCsgDrawItems = !accumulationDrawItems.csg.empty();

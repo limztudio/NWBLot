@@ -182,7 +182,7 @@ public:
         RendererResourceLookupMode::Enum lookupMode,
         // Graph declaration can supply the exact immutable view payload that will be uploaded before this CSG
         // work records. Compatibility paths retain the accepted CPU mirror fallback.
-        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState = nullptr
+        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState
     );
     [[nodiscard]] static bool findMaterialInstanceOverrideField(
         Core::ECS::EntityID entity,

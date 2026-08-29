@@ -34,7 +34,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererFramePipeline;
 class RendererMeshSystem;
 class RendererMaterialSystem;
 class RendererCsgSystem;
@@ -94,9 +93,6 @@ struct CsgFrameStateCacheSignature{
 class RendererMeshState final : NoCopy{
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
-    friend class RendererCsgSystem;
-    friend class RendererDeferredSystem;
-    friend class RendererAvboitSystem;
     friend class RendererRayTracingSystem;
 
 public:
@@ -112,11 +108,7 @@ private:
 };
 
 class RendererMaterialState final : NoCopy{
-    friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
-    friend class RendererCsgSystem;
-    friend class RendererDeferredSystem;
-    friend class RendererAvboitSystem;
 
 public:
     explicit RendererMaterialState(Core::Alloc::GlobalArena& arena);
@@ -139,8 +131,6 @@ class RendererDrawState final : NoCopy{
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
-    friend class RendererDeferredSystem;
-    friend class RendererAvboitSystem;
     friend class RendererRayTracingSystem;
 
 public:
@@ -170,11 +160,7 @@ private:
 static_assert(sizeof(RendererDrawState) == 368u, "RendererDrawState should keep its compact CPU-only layout");
 
 class RendererCsgState final : NoCopy{
-    friend class RendererMeshSystem;
-    friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
-    friend class RendererDeferredSystem;
-    friend class RendererAvboitSystem;
 
 public:
     RendererCsgState() = default;
@@ -215,8 +201,6 @@ private:
 static_assert(sizeof(RendererCsgState) == 328u, "RendererCsgState should keep its compact CPU-only layout");
 
 class RendererDeferredState final : NoCopy{
-    friend class RendererMeshSystem;
-    friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
     friend class RendererDeferredSystem;
     friend class RendererAvboitSystem;
@@ -253,10 +237,7 @@ private:
 };
 
 class RendererAvboitState final : NoCopy{
-    friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
-    friend class RendererCsgSystem;
-    friend class RendererDeferredSystem;
     friend class RendererAvboitSystem;
 
 public:
@@ -652,11 +633,6 @@ struct RtSurfelGiState{
 
 
 class RendererRayTracingState final : NoCopy, public RtSceneBvhState, public RtShadowState, public RtSoftShadowState, public RtCausticState, public RtSurfelGiState{
-    friend class RendererMeshSystem;
-    friend class RendererMaterialSystem;
-    friend class RendererCsgSystem;
-    friend class RendererDeferredSystem;
-    friend class RendererAvboitSystem;
     friend class RendererRayTracingSystem;
 
 public:

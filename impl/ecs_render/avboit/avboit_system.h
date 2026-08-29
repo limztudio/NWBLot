@@ -94,7 +94,6 @@ public:
     // transparency stage. Cross-domain users consume the typed stage boundary instead of those local identifiers.
     void resetTaskGraphStage()noexcept;
     [[nodiscard]] RendererAvboitTaskGraphStageState& taskGraphStage()noexcept{ return m_taskGraphStage; }
-    [[nodiscard]] const RendererAvboitTaskGraphStageState& taskGraphStage()const noexcept{ return m_taskGraphStage; }
     [[nodiscard]] RendererAvboitTaskGraphValidation validateTaskGraphStage(
         const Core::GpuCompiledGraph& compiledGraph,
         bool clearTargets,

@@ -42,10 +42,6 @@ DeferredFrameTargets* RendererDeferredSystem::tryFrameTargets()noexcept{
     return m_deferredState.m_targets.valid() ? &m_deferredState.m_targets : nullptr;
 }
 
-const DeferredFrameTargets* RendererDeferredSystem::tryFrameTargets()const noexcept{
-    return m_deferredState.m_targets.valid() ? &m_deferredState.m_targets : nullptr;
-}
-
 DeferredLightingGraphResources RendererDeferredSystem::lightingGraphResources()const noexcept{
     return {
         m_deferredState.m_sceneShadingBuffer,

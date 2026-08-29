@@ -114,7 +114,6 @@ public:
 public:
     [[nodiscard]] bool frameTargetsMatch(u32 width, u32 height)const noexcept;
     [[nodiscard]] DeferredFrameTargets* tryFrameTargets()noexcept;
-    [[nodiscard]] const DeferredFrameTargets* tryFrameTargets()const noexcept;
     [[nodiscard]] DeferredLightingGraphResources lightingGraphResources()const noexcept;
     void invalidateSceneLightingUploadMirrors()noexcept;
     void invalidateResources();

@@ -190,7 +190,6 @@ namespace RayTracingShadowVisibilityTaskDetail{
     struct ShadowTransparentSoftTemporalMergeGraphTask;
     struct ShadowTransparentSoftFirstWaveletGraphTask;
     struct ShadowTransparentSoftFoldGraphTask;
-    struct ShadowVisibilityGraphTask;
 }
 
 
@@ -961,7 +960,6 @@ private:
     friend struct RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTemporalMergeGraphTask;
     friend struct RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFirstWaveletGraphTask;
     friend struct RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFoldGraphTask;
-    friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityGraphTask;
     friend struct RayTracingSurfelGiTaskDetail::SurfelGiAgeFreeGraphTask;
     friend struct RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask;
     friend struct RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask;

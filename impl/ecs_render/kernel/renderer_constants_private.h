@@ -5,8 +5,6 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/renderer_types.h>
-
 #include <core/graphics/api.h>
 #include <impl/assets/graphics/csg/constants.h>
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>

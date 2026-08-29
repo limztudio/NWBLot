@@ -5,13 +5,14 @@
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
-#include <impl/ecs_render/kernel/renderer_private.h>
 #include <impl/ecs_render/avboit/task_graph_clear_timing_state.h>
 #include <impl/ecs_render/csg/task_graph_clear_timing.h>
 #include <impl/ecs_render/deferred/task_graph_clear_timing_state.h>
+#include <impl/ecs_render/shared/renderer_scene_private.h>
 
 #include <impl/ecs_scene/components.h>
 
+#include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
 
 

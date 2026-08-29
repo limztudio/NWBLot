@@ -4,7 +4,13 @@
 
 #include "task_graph_accumulation_tasks.h"
 
+#include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/material/material_system.h>
+#include <impl/ecs_render/shared/renderer_frame_types.h>
+
+#include <core/graphics/backend_selection.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

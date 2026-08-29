@@ -133,7 +133,6 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/shared/renderer_frame_types.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/renderer_mesh_types.h"
     "${CMAKE_CURRENT_LIST_DIR}/material/renderer_pipeline_types.h"
-    "${CMAKE_CURRENT_LIST_DIR}/kernel/renderer_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/shared/renderer_push_constants_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/material/renderer_render_state_private.h"
@@ -147,10 +146,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/csg/csg_system.h"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/deferred_system.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_system.h"
-    "${CMAKE_CURRENT_LIST_DIR}/kernel/subsystems.h"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/timing_names.h"
-    "${CMAKE_CURRENT_LIST_DIR}/kernel/renderer_types.h"
 )
 target_link_libraries(nwb_ecs_render PUBLIC
     nwb_ecs_render_components

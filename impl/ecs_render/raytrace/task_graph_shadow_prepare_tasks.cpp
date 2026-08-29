@@ -4,9 +4,10 @@
 
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_tasks.h>
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include <impl/ecs_render/kernel/timing_names.h>
 
 #include <core/graphics/gpu_timing.h>
+#include <core/graphics/task_graph/compiled_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

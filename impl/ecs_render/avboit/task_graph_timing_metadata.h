@@ -5,7 +5,9 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include <impl/ecs_render/shared/renderer_frame_types.h>
+
+#include <core/graphics/task_graph/task_desc.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

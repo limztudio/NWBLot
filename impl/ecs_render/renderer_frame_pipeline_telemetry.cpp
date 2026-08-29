@@ -6,8 +6,9 @@
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/frame_graph_runtime_statistics.h>
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include <impl/ecs_render/kernel/timing_names.h>
 
+#include <core/graphics/backend_selection.h>
 #include <core/graphics/frame_graph_nodes.h>
 
 

@@ -11,7 +11,6 @@
 #include <impl/ecs_render/raytrace/task_graph_surfel_tasks.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
-#include <impl/ecs_render/kernel/renderer_private.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>

@@ -5,7 +5,8 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include <impl/ecs_render/material/renderer_draw_types.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

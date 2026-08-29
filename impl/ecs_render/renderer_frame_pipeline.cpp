@@ -5,7 +5,6 @@
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
-#include <impl/ecs_render/kernel/renderer_private.h>
 
 #include <core/graphics/gpu_timing.h>
 

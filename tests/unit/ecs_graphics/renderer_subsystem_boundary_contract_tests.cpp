@@ -5,6 +5,7 @@
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
+#include <global/filesystem/directory_iterator.h>
 #include <global/filesystem/operations.h>
 #include <global/filesystem/path.h>
 
@@ -1004,6 +1005,82 @@ TEST(EcsGraphics, FramePipelineDoesNotPrivilegeNarrowShaderOrMeshSystems){
 
     EXPECT_FALSE(ContainsText(compactHeader, "friendclassRendererShaderSystem;"));
     EXPECT_FALSE(ContainsText(compactHeader, "friendclassRendererMeshSystem;"));
+}
+
+
+TEST(EcsGraphics, KernelDoesNotOwnRootOrAllDomainUmbrellas){
+    TestArena testArena;
+    const TestPath rendererDirectory = RepoRoot(testArena) / "impl" / "ecs_render";
+    AString pipelineHeaderSource;
+    AString cmakeSource;
+    ASSERT_TRUE(ReadTextFile(rendererDirectory / "renderer_frame_pipeline.h", pipelineHeaderSource));
+    ASSERT_TRUE(ReadTextFile(rendererDirectory / "CMakeLists.txt", cmakeSource));
+    const AStringView pipelineHeader(pipelineHeaderSource.data(), pipelineHeaderSource.size());
+    const AStringView cmake(cmakeSource.data(), cmakeSource.size());
+
+    EXPECT_TRUE(ContainsText(pipelineHeader, "impl/ecs_render/avboit/avboit_system.h"));
+    EXPECT_TRUE(ContainsText(pipelineHeader, "impl/ecs_render/csg/csg_system.h"));
+    EXPECT_TRUE(ContainsText(pipelineHeader, "impl/ecs_render/deferred/deferred_system.h"));
+    EXPECT_TRUE(ContainsText(pipelineHeader, "impl/ecs_render/material/material_system.h"));
+    EXPECT_TRUE(ContainsText(pipelineHeader, "impl/ecs_render/mesh/mesh_system.h"));
+    EXPECT_TRUE(ContainsText(pipelineHeader, "impl/ecs_render/raytrace/raytracing_system.h"));
+    EXPECT_TRUE(ContainsText(pipelineHeader, "impl/ecs_render/shader/shader_system.h"));
+
+    ErrorCode rendererPrivateError;
+    ErrorCode rendererTypesError;
+    ErrorCode subsystemsError;
+    EXPECT_FALSE(FileExists(rendererDirectory / "kernel" / "renderer_private.h", rendererPrivateError));
+    EXPECT_FALSE(rendererPrivateError);
+    EXPECT_FALSE(FileExists(rendererDirectory / "kernel" / "renderer_types.h", rendererTypesError));
+    EXPECT_FALSE(rendererTypesError);
+    EXPECT_FALSE(FileExists(rendererDirectory / "kernel" / "subsystems.h", subsystemsError));
+    EXPECT_FALSE(subsystemsError);
+    EXPECT_FALSE(ContainsText(cmake, "kernel/renderer_private.h"));
+    EXPECT_FALSE(ContainsText(cmake, "kernel/renderer_types.h"));
+    EXPECT_FALSE(ContainsText(cmake, "kernel/subsystems.h"));
+
+    for(const StringView domainNameStorage : {
+        "avboit",
+        "csg",
+        "deferred",
+        "kernel",
+        "material",
+        "mesh",
+        "raytrace",
+        "shader",
+        "shared",
+    }){
+        const AStringView domainName(domainNameStorage.data(), domainNameStorage.size());
+        ErrorCode directoryError;
+        RecursiveDirectoryIterator domainDirectory(rendererDirectory / domainName.data(), directoryError);
+        ASSERT_FALSE(directoryError);
+        for(const auto& entry : domainDirectory){
+            ErrorCode regularFileError;
+            const bool regularFile = entry.is_regular_file(regularFileError);
+            ASSERT_FALSE(regularFileError);
+            if(!regularFile)
+                continue;
+
+            AString sourceStorage;
+            ASSERT_TRUE(ReadTextFile(entry.path(), sourceStorage));
+            const AStringView source(sourceStorage.data(), sourceStorage.size());
+            EXPECT_FALSE(ContainsText(source, "kernel/renderer_private.h"));
+            EXPECT_FALSE(ContainsText(source, "kernel/renderer_types.h"));
+            EXPECT_FALSE(ContainsText(source, "kernel/subsystems.h"));
+            EXPECT_FALSE(ContainsText(source, "renderer_frame_pipeline.h"));
+
+            if(domainName != "kernel")
+                continue;
+            EXPECT_FALSE(ContainsText(source, "impl/ecs_render/avboit/"));
+            EXPECT_FALSE(ContainsText(source, "impl/ecs_render/csg/"));
+            EXPECT_FALSE(ContainsText(source, "impl/ecs_render/deferred/"));
+            EXPECT_FALSE(ContainsText(source, "impl/ecs_render/material/"));
+            EXPECT_FALSE(ContainsText(source, "impl/ecs_render/mesh/"));
+            EXPECT_FALSE(ContainsText(source, "impl/ecs_render/raytrace/"));
+            EXPECT_FALSE(ContainsText(source, "impl/ecs_render/shader/"));
+            EXPECT_FALSE(ContainsText(source, "impl/ecs_render/shared/renderer_state.h"));
+        }
+    }
 }
 
 

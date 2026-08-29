@@ -4,9 +4,11 @@
 
 #include <impl/ecs_render/raytrace/task_graph_shadow_visibility_tasks.h>
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include <impl/ecs_render/kernel/renderer_constants_private.h>
 
+#include <core/graphics/backend_selection.h>
 #include <core/graphics/capture/command_ir.h>
+#include <core/graphics/task_graph/compiled_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -4,7 +4,15 @@
 
 #include "task_graph_extinction_integration_tasks.h"
 
+#include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_render/kernel/task_timing_feedback.h>
+#include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/material/material_system.h>
+#include <impl/ecs_render/shared/renderer_frame_types.h>
+
+#include <core/graphics/backend_selection.h>
+#include <core/graphics/task_graph/compiled_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

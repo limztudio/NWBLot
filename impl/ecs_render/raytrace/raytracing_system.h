@@ -28,6 +28,7 @@ class RendererMaterialSystem;
 struct MaterialSurfaceInfo;
 namespace ECSRenderDetail{
     struct MeshRayTracingResourceSnapshot;
+    struct MeshViewBufferSnapshot;
     struct SceneLightGpuData;
 };
 
@@ -324,7 +325,6 @@ public:
         RendererShaderSystem& shaderSystem,
         RendererMeshSystem& meshSystem,
         RendererMaterialSystem& materialSystem,
-        RendererDrawState& drawState,
         RendererRayTracingState& rayTracingState
     );
     ~RendererRayTracingSystem();
@@ -672,6 +672,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
         const bool* shadowVisibilityPrepared,
         f32 decayFactor,
         bool hardwareCaustics,
@@ -707,6 +708,7 @@ public:
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
+        const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
         const bool* shadowVisibilityPrepared,
         Core::GpuTimingSubmissionTicket& timingTicket,
         bool graphEntryStatesOwned = false,
@@ -730,12 +732,25 @@ public:
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr
     );
     [[nodiscard]] bool hasCausticWork()const noexcept;
+    [[nodiscard]] bool hasCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept;
+    [[nodiscard]] bool renderGpuBvhCaustics(
+        Core::CommandList& commandList,
+        const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
+        DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
+        bool graphEntryStatesOwned = false,
+        bool graphOwnsAccumulatorBootstrapClear = false,
+        bool graphOwnsAccumulatorDecay = false,
+        bool graphOwnsResolve = false,
+        Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr
+    );
     [[nodiscard]] bool prepareHwCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] Core::GpuTaskId declareHardwareCausticsTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
+        const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
         const bool* shadowVisibilityPrepared,
         Core::GpuTimingSubmissionTicket& timingTicket,
         bool graphEntryStatesOwned = false,
@@ -750,6 +765,17 @@ public:
     // compatibility callers retain native setup by leaving this false.
     [[nodiscard]] bool renderHwCaustics(
         Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
+        bool graphEntryStatesOwned = false,
+        bool graphOwnsAccumulatorBootstrapClear = false,
+        bool graphOwnsAccumulatorDecay = false,
+        bool graphOwnsResolve = false,
+        Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr
+    );
+    [[nodiscard]] bool renderHwCaustics(
+        Core::CommandList& commandList,
+        const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         bool graphEntryStatesOwned = false,
@@ -870,6 +896,7 @@ public:
         bool graphEntryStatesOwned = false
     );
     [[nodiscard]] bool hasHwCausticWork()const noexcept;
+    [[nodiscard]] bool hasHwCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept;
     [[nodiscard]] bool hasSurfelWork()const noexcept;
     [[nodiscard]] bool needsSurfelResourceInitialization()const noexcept;
     // Typed graph clear primitives own the persistent-buffer writes. This resource-free task only records and
@@ -1462,7 +1489,6 @@ private:
     RendererShaderSystem& m_shaderSystem;
     RendererMeshSystem& m_meshSystem;
     RendererMaterialSystem& m_materialSystem;
-    RendererDrawState& m_drawState;
     RendererRayTracingState& m_rayTracingState;
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;

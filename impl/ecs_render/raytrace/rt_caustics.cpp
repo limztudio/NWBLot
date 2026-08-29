@@ -36,6 +36,7 @@ struct CausticAccumulatorDecayGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::Graphics* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        ECSRenderDetail::MeshViewBufferSnapshot meshView;
         const bool* shadowVisibilityPrepared = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr;
@@ -64,8 +65,8 @@ struct CausticAccumulatorDecayGraphTask{
         if(!payload.shadowVisibilityPrepared || !*payload.shadowVisibilityPrepared)
             return true;
         const bool hasWork = payload.hardwareCaustics
-            ? payload.raytracingSystem->hasHwCausticWork()
-            : payload.raytracingSystem->hasCausticWork()
+            ? payload.raytracingSystem->hasHwCausticWork(payload.meshView)
+            : payload.raytracingSystem->hasCausticWork(payload.meshView)
         ;
         if(!hasWork)
             return true;
@@ -113,6 +114,7 @@ struct SoftwareCausticsGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         DeferredLightingGraphResources deferredLightingResources;
+        ECSRenderDetail::MeshViewBufferSnapshot meshView;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* shadowVisibilityPrepared = nullptr;
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr;
@@ -144,6 +146,7 @@ struct SoftwareCausticsGraphTask{
         if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
             const bool causticsDispatched = payload.raytracingSystem->renderGpuBvhCaustics(
                 commandList,
+                payload.meshView,
                 *payload.targets,
                 payload.deferredLightingResources,
                 payload.graphEntryStatesOwned,
@@ -158,7 +161,7 @@ struct SoftwareCausticsGraphTask{
             }
             if(payload.causticProducerDispatched)
                 *payload.causticProducerDispatched = causticsDispatched;
-            if(!causticsDispatched && payload.raytracingSystem->hasCausticWork())
+            if(!causticsDispatched && payload.raytracingSystem->hasCausticWork(payload.meshView))
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software caustic render pass failed"));
         }
         return true;
@@ -193,6 +196,7 @@ struct HardwareCausticsGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         DeferredLightingGraphResources deferredLightingResources;
+        ECSRenderDetail::MeshViewBufferSnapshot meshView;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* shadowVisibilityPrepared = nullptr;
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr;
@@ -224,6 +228,7 @@ struct HardwareCausticsGraphTask{
         if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
             const bool causticsDispatched = payload.raytracingSystem->renderHwCaustics(
                 commandList,
+                payload.meshView,
                 *payload.targets,
                 payload.deferredLightingResources,
                 payload.graphEntryStatesOwned,
@@ -238,7 +243,7 @@ struct HardwareCausticsGraphTask{
             }
             if(payload.causticProducerDispatched)
                 *payload.causticProducerDispatched = causticsDispatched;
-            if(!causticsDispatched && payload.raytracingSystem->hasHwCausticWork())
+            if(!causticsDispatched && payload.raytracingSystem->hasHwCausticWork(payload.meshView))
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic render pass failed"));
         }
         return true;
@@ -1479,6 +1484,11 @@ bool RendererRayTracingSystem::dispatchCausticAccumulatorDecay(
 }
 
 bool RendererRayTracingSystem::hasCausticWork()const noexcept{
+    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
+    return hasCausticWork(meshView);
+}
+
+bool RendererRayTracingSystem::hasCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
     // Software photons require a caustic light, refractor, and software scene BVH.
     const bool hardwareShadowSupported =
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
@@ -1496,9 +1506,7 @@ bool RendererRayTracingSystem::hasCausticWork()const noexcept{
         && m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer
         && m_rayTracingState.m_causticMaterialContextSlotsHeapHandle.valid()
         && m_rayTracingState.m_causticMaterialContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
-        && m_drawState.m_meshViewBuffer
-        && m_drawState.m_meshViewBufferHeapHandle.valid()
-        && m_drawState.m_meshViewBufferHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
+        && meshView.bindingValid()
     ;
 }
 
@@ -1513,16 +1521,17 @@ bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTarget
         || !m_rayTracingState.m_causticEmissionTargetBuffer
     )
         return true;
+    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
     if(
         !targets.causticAccumulator
         || !targets.causticIrradiance
-        || !m_drawState.m_meshViewBuffer
-        || !m_drawState.m_meshViewBufferHeapHandle.valid()
+        || !meshView.buffer
+        || !meshView.heapHandle.valid()
         || !m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
     )
         return true;
     if(
-        m_drawState.m_meshViewBufferHeapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
+        meshView.heapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
         || m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic photon heap input has an unexpected descriptor class"));
@@ -1549,6 +1558,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareCausticAccumulatorDecayTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
     const bool* const shadowVisibilityPrepared,
     const f32 decayFactor,
     const bool hardwareCaustics,
@@ -1562,6 +1572,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareCausticAccumulatorDecayTask(
             .raytracingSystem = this,
             .graphics = &m_graphics,
             .targets = &targets,
+            .meshView = meshView,
             .shadowVisibilityPrepared = shadowVisibilityPrepared,
             .timingTicket = &timingTicket,
             .causticPhotonTiming = causticPhotonTiming,
@@ -1577,6 +1588,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSoftwareCausticsTask(
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
+    const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
     const bool* const shadowVisibilityPrepared,
     Core::GpuTimingSubmissionTicket& timingTicket,
     const bool graphEntryStatesOwned,
@@ -1593,6 +1605,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSoftwareCausticsTask(
             .raytracingSystem = this,
             .targets = &targets,
             .deferredLightingResources = deferredLightingResources,
+            .meshView = meshView,
             .timingTicket = &timingTicket,
             .shadowVisibilityPrepared = shadowVisibilityPrepared,
             .causticPhotonTiming = causticPhotonTiming,
@@ -1611,6 +1624,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareHardwareCausticsTask(
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
+    const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
     const bool* const shadowVisibilityPrepared,
     Core::GpuTimingSubmissionTicket& timingTicket,
     const bool graphEntryStatesOwned,
@@ -1627,6 +1641,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareHardwareCausticsTask(
             .raytracingSystem = this,
             .targets = &targets,
             .deferredLightingResources = deferredLightingResources,
+            .meshView = meshView,
             .timingTicket = &timingTicket,
             .shadowVisibilityPrepared = shadowVisibilityPrepared,
             .causticPhotonTiming = causticPhotonTiming,
@@ -1907,10 +1922,36 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
     const bool graphOwnsResolve,
     Optional<Core::GpuTimingMeasure>* const causticPhotonTiming
 ){
+    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
+    return renderGpuBvhCaustics(
+        commandList,
+        meshView,
+        targets,
+        deferredLightingResources,
+        graphEntryStatesOwned,
+        graphOwnsAccumulatorBootstrapClear,
+        graphOwnsAccumulatorDecay,
+        graphOwnsResolve,
+        causticPhotonTiming
+    );
+}
+
+bool RendererRayTracingSystem::renderGpuBvhCaustics(
+    Core::CommandList& commandList,
+    const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
+    DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsAccumulatorBootstrapClear,
+    const bool graphOwnsAccumulatorDecay,
+    const bool graphOwnsResolve,
+    Optional<Core::GpuTimingMeasure>* const causticPhotonTiming
+){
     // Software photon producer runs before deferred lighting.
 
-    if(!hasCausticWork())
+    if(!hasCausticWork(meshView))
         return false;
+    NWB_ASSERT(meshView.bindingValid());
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(deferredLightingResources.valid());
     const f32 temporalDecay = causticTemporalDecay();
@@ -1933,7 +1974,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
             transitionSwShadowTraversalResources(commandList);
             commandList.setBufferState(m_rayTracingState.m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
             commandList.setBufferState(m_rayTracingState.m_causticEmissionTargetBuffer.get(), Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(m_drawState.m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(meshView.buffer.get(), Core::ResourceStates::ConstantBuffer);
             commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
             commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
             commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -1961,7 +2002,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
         pushConstants.depthSlot = targets.bindless.gbufferDepth.slot();
         pushConstants.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
         pushConstants.emissionTargetSlot = m_rayTracingState.m_causticEmissionTargetHeapHandle.slot();
-        pushConstants.viewSlot = m_drawState.m_meshViewBufferHeapHandle.slot();
+        pushConstants.viewSlot = meshView.heapHandle.slot();
         pushConstants.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
         pushConstants.materialContextSlotsHeapSlot = m_rayTracingState.m_causticMaterialContextSlotsHeapHandle.slot();
         pushConstants.accumulatorStorageSlot = targets.bindless.causticAccumulatorStorage.slot();
@@ -2364,6 +2405,11 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
 }
 
 bool RendererRayTracingSystem::hasHwCausticWork()const noexcept{
+    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
+    return hasHwCausticWork(meshView);
+}
+
+bool RendererRayTracingSystem::hasHwCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
     // Hardware photons require a caustic light, refractor, TLAS, and tracked mesh.
     return m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
         && m_rayTracingState.m_causticLightCount > 0u
@@ -2376,9 +2422,7 @@ bool RendererRayTracingSystem::hasHwCausticWork()const noexcept{
         && m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer
         && m_rayTracingState.m_causticMaterialContextSlotsHeapHandle.valid()
         && m_rayTracingState.m_causticMaterialContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
-        && m_drawState.m_meshViewBuffer
-        && m_drawState.m_meshViewBufferHeapHandle.valid()
-        && m_drawState.m_meshViewBufferHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
+        && meshView.bindingValid()
     ;
 }
 
@@ -2393,16 +2437,17 @@ bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& t
         || !m_rayTracingState.m_causticEmissionTargetBuffer
     )
         return true;
+    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
     if(
         !targets.causticAccumulator
         || !targets.causticIrradiance
-        || !m_drawState.m_meshViewBuffer
-        || !m_drawState.m_meshViewBufferHeapHandle.valid()
+        || !meshView.buffer
+        || !meshView.heapHandle.valid()
         || !m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
     )
         return true;
     if(
-        m_drawState.m_meshViewBufferHeapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
+        meshView.heapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
         || m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic photon heap input has an unexpected descriptor class"));
@@ -2435,9 +2480,35 @@ bool RendererRayTracingSystem::renderHwCaustics(
     const bool graphOwnsResolve,
     Optional<Core::GpuTimingMeasure>* const causticPhotonTiming
 ){
+    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
+    return renderHwCaustics(
+        commandList,
+        meshView,
+        targets,
+        deferredLightingResources,
+        graphEntryStatesOwned,
+        graphOwnsAccumulatorBootstrapClear,
+        graphOwnsAccumulatorDecay,
+        graphOwnsResolve,
+        causticPhotonTiming
+    );
+}
+
+bool RendererRayTracingSystem::renderHwCaustics(
+    Core::CommandList& commandList,
+    const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
+    DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsAccumulatorBootstrapClear,
+    const bool graphOwnsAccumulatorDecay,
+    const bool graphOwnsResolve,
+    Optional<Core::GpuTimingMeasure>* const causticPhotonTiming
+){
     // Hardware photons share the accumulator and resolve with the software reference.
-    if(!hasHwCausticWork())
+    if(!hasHwCausticWork(meshView))
         return false;
+    NWB_ASSERT(meshView.bindingValid());
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(deferredLightingResources.valid());
     {
@@ -2471,7 +2542,7 @@ bool RendererRayTracingSystem::renderHwCaustics(
             commandList.setBufferState(m_rayTracingState.m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
             commandList.setBufferState(m_rayTracingState.m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
             commandList.setBufferState(m_rayTracingState.m_causticEmissionTargetBuffer.get(), Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(m_drawState.m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(meshView.buffer.get(), Core::ResourceStates::ConstantBuffer);
             commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
             commandList.setBufferState(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
             commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -2498,7 +2569,7 @@ bool RendererRayTracingSystem::renderHwCaustics(
         pushConstants.depthSlot = targets.bindless.gbufferDepth.slot();
         pushConstants.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
         pushConstants.emissionTargetSlot = m_rayTracingState.m_causticEmissionTargetHeapHandle.slot();
-        pushConstants.viewSlot = m_drawState.m_meshViewBufferHeapHandle.slot();
+        pushConstants.viewSlot = meshView.heapHandle.slot();
         pushConstants.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
         pushConstants.materialContextSlotsHeapSlot = m_rayTracingState.m_causticMaterialContextSlotsHeapHandle.slot();
         pushConstants.accumulatorStorageSlot = targets.bindless.causticAccumulatorStorage.slot();

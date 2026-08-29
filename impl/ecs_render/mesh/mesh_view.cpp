@@ -47,7 +47,20 @@ bool RendererMeshSystem::createMeshViewBuffer(){
 }
 
 ECSRenderDetail::MeshViewBufferSnapshot RendererMeshSystem::meshViewBufferSnapshot()const{
-    return { m_drawState.m_meshViewBuffer };
+    ECSRenderDetail::MeshViewBufferSnapshot snapshot;
+    snapshot.buffer = m_drawState.m_meshViewBuffer;
+    snapshot.heapHandle = m_drawState.m_meshViewBufferHeapHandle;
+    return snapshot;
+}
+
+bool RendererMeshSystem::snapshotAcceptedMeshViewWorldToClip(Float44& outWorldToClip)const noexcept{
+    if(!m_drawState.m_meshViewGpuDataValid)
+        return false;
+
+    ECSRenderDetail::MeshViewGpuData acceptedView;
+    NWB_MEMCPY(&acceptedView, sizeof(acceptedView), m_drawState.m_meshViewGpuData, sizeof(m_drawState.m_meshViewGpuData));
+    outWorldToClip = acceptedView.worldToClip;
+    return true;
 }
 
 bool RendererMeshSystem::prepareMeshViewBufferUpload(

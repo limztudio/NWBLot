@@ -46,8 +46,16 @@ namespace ECSRenderDetail{
 
     struct MeshViewBufferSnapshot{
         Core::BufferHandle buffer;
+        Core::GpuDescriptorHandle heapHandle = Core::GpuDescriptorHandle::invalid();
 
         [[nodiscard]] bool valid()const noexcept{ return static_cast<bool>(buffer); }
+        [[nodiscard]] bool bindingValid()const noexcept{
+            return
+                buffer
+                && heapHandle.valid()
+                && heapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
+            ;
+        }
     };
     struct MeshSoftwareBvhParentBuildState{
         Core::BufferHandle buffer;
@@ -199,6 +207,7 @@ public:
     void collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphStateVector& outStates)const;
     [[nodiscard]] bool createMeshViewBuffer();
     [[nodiscard]] ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot()const;
+    [[nodiscard]] bool snapshotAcceptedMeshViewWorldToClip(Float44& outWorldToClip)const noexcept;
     // Resolves the immutable per-frame view payload before graph declaration.  The caller publishes it through a
     // graph-owned upload task, then confirms the CPU mirror only after that packet accepts.
     [[nodiscard]] bool prepareMeshViewBufferUpload(

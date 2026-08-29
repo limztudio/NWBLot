@@ -11,7 +11,6 @@
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/avboit/avboit.h>
 #include <impl/ecs_render/material/material_typed_private.h>
-#include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/ecs_render/kernel/renderer_format_private.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>

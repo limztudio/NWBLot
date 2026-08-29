@@ -804,9 +804,9 @@ void RendererRayTracingSystem::swapSoftShadowTemporalHistory(DeferredFrameTarget
     if(!m_rayTracingState.m_softShadowTemporalReady)
         return;
 
-    if(m_drawState.m_meshViewGpuDataValid){
-        const auto* meshView = reinterpret_cast<const ECSRenderDetail::MeshViewGpuData*>(m_drawState.m_meshViewGpuData);
-        NWB_MEMCPY(&m_rayTracingState.m_prevWorldToClip, sizeof(m_rayTracingState.m_prevWorldToClip), &meshView->worldToClip, sizeof(m_rayTracingState.m_prevWorldToClip));
+    Float44 acceptedWorldToClip = {};
+    if(m_meshSystem.snapshotAcceptedMeshViewWorldToClip(acceptedWorldToClip)){
+        NWB_MEMCPY(&m_rayTracingState.m_prevWorldToClip, sizeof(m_rayTracingState.m_prevWorldToClip), &acceptedWorldToClip, sizeof(m_rayTracingState.m_prevWorldToClip));
         m_rayTracingState.m_prevWorldToClipValid = true;
     }
     m_rayTracingState.m_softShadowTemporalSeeded = true;

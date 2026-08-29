@@ -166,38 +166,51 @@ TEST(EcsGraphics, MeshSystemOwnsOnlyItsNarrowConstructionBoundary){
 }
 
 
-TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutMeshStatePrivilege){
+TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
     AString meshHeaderSource;
     AString meshResourcesSource;
+    AString meshViewSource;
     AString rayTracingHeaderSource;
     AString rayTracingSystemSource;
     AString rayTracingPrivateSource;
+    AString rayTracingCausticsSource;
     AString rayTracingDetailSource;
+    AString rayTracingSoftShadowSource;
     AString rayTracingSwBvhSource;
     AString rendererStateSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.h", meshHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_resources.cpp", meshResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_view.cpp", meshViewSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_private.h", rayTracingPrivateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_caustics.cpp", rayTracingCausticsSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_detail.cpp", rayTracingDetailSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow.cpp", rayTracingSoftShadowSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", rayTracingSwBvhSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
 
     const AStringView meshHeader(meshHeaderSource.data(), meshHeaderSource.size());
     const AStringView meshResources(meshResourcesSource.data(), meshResourcesSource.size());
+    const AStringView meshView(meshViewSource.data(), meshViewSource.size());
     const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
     const AStringView rayTracingSystem(rayTracingSystemSource.data(), rayTracingSystemSource.size());
     const AStringView rayTracingPrivate(rayTracingPrivateSource.data(), rayTracingPrivateSource.size());
+    const AStringView rayTracingCaustics(rayTracingCausticsSource.data(), rayTracingCausticsSource.size());
     const AStringView rayTracingDetail(rayTracingDetailSource.data(), rayTracingDetailSource.size());
+    const AStringView rayTracingSoftShadow(rayTracingSoftShadowSource.data(), rayTracingSoftShadowSource.size());
     const AStringView rayTracingSwBvh(rayTracingSwBvhSource.data(), rayTracingSwBvhSource.size());
     const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
     const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
 
     EXPECT_FALSE(ContainsText(rayTracingHeader, "RendererMeshState"));
+    EXPECT_FALSE(ContainsText(rayTracingHeader, "RendererDrawState"));
     EXPECT_FALSE(ContainsText(rayTracingSystem, "m_meshState"));
+    EXPECT_FALSE(ContainsText(rayTracingSystem, "m_drawState"));
+    EXPECT_FALSE(ContainsText(rayTracingCaustics, "m_drawState"));
+    EXPECT_FALSE(ContainsText(rayTracingSoftShadow, "m_drawState"));
     EXPECT_FALSE(ContainsText(rayTracingSwBvh, "m_meshState"));
     EXPECT_FALSE(ContainsText(rayTracingPrivate, "MeshResources*&"));
     EXPECT_FALSE(ContainsText(rayTracingDetail, "MeshResources*&"));
@@ -207,9 +220,24 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutMeshStatePrivilege){
     EXPECT_TRUE(ContainsText(meshHeader, "commitRayTracingResourceSnapshot("));
     EXPECT_TRUE(ContainsText(meshHeader, "confirmAcceptedRayTracingStateHandoffs()noexcept;"));
     EXPECT_TRUE(ContainsText(meshHeader, "discardRayTracingBuildState()noexcept;"));
+    EXPECT_TRUE(ContainsText(meshHeader, "Core::GpuDescriptorHandle heapHandle"));
+    EXPECT_TRUE(ContainsText(meshHeader, "bool bindingValid()const noexcept"));
+    EXPECT_TRUE(ContainsText(meshHeader, "snapshotAcceptedMeshViewWorldToClip(Float44& outWorldToClip)const noexcept;"));
+    EXPECT_TRUE(ContainsText(meshView, "snapshot.heapHandle = m_drawState.m_meshViewBufferHeapHandle;"));
+    EXPECT_TRUE(ContainsText(meshView, "if(!m_drawState.m_meshViewGpuDataValid)"));
+    EXPECT_TRUE(ContainsText(meshView, "ECSRenderDetail::MeshViewGpuData acceptedView;"));
+    EXPECT_TRUE(ContainsText(meshView, "outWorldToClip = acceptedView.worldToClip;"));
     EXPECT_TRUE(ContainsText(meshResources, "RayTracingResourceSnapshotMatches(found.value(), expected)"));
     EXPECT_TRUE(ContainsText(rayTracingSystem, "m_meshSystem.confirmAcceptedRayTracingStateHandoffs();"));
     EXPECT_TRUE(ContainsText(rayTracingSystem, "m_meshSystem.discardRayTracingBuildState();"));
+    EXPECT_TRUE(ContainsText(rayTracingCaustics, "m_meshSystem.meshViewBufferSnapshot()"));
+    EXPECT_TRUE(ContainsText(rayTracingCaustics, "ECSRenderDetail::MeshViewBufferSnapshot meshView;"));
+    EXPECT_TRUE(ContainsText(rayTracingCaustics, ".meshView = meshView,"));
+    EXPECT_TRUE(ContainsText(rayTracingCaustics, "payload.raytracingSystem->hasCausticWork(payload.meshView)"));
+    EXPECT_TRUE(ContainsText(rayTracingCaustics, "payload.raytracingSystem->hasHwCausticWork(payload.meshView)"));
+    EXPECT_TRUE(ContainsText(rayTracingSoftShadow, "m_meshSystem.snapshotAcceptedMeshViewWorldToClip(acceptedWorldToClip)"));
+    EXPECT_FALSE(ContainsText(rayTracingPrivate, "mesh_view_private.h"));
+    EXPECT_FALSE(ContainsText(rayTracingSoftShadow, "reinterpret_cast<const ECSRenderDetail::MeshViewGpuData*>"));
 
     const usize meshStateBegin = compactRendererState.find("classRendererMeshStatefinal:NoCopy{");
     const usize meshStateEnd = compactRendererState.find("classRendererMaterialStatefinal:NoCopy{", meshStateBegin);
@@ -217,6 +245,13 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutMeshStatePrivilege){
     ASSERT_NE(meshStateEnd, AStringView::npos);
     const AStringView meshState = compactRendererState.substr(meshStateBegin, meshStateEnd - meshStateBegin);
     EXPECT_FALSE(ContainsText(meshState, "friendclassRendererRayTracingSystem;"));
+
+    const usize drawStateBegin = compactRendererState.find("classRendererDrawStatefinal:NoCopy{");
+    const usize drawStateEnd = compactRendererState.find("classRendererCsgStatefinal:NoCopy{", drawStateBegin);
+    ASSERT_NE(drawStateBegin, AStringView::npos);
+    ASSERT_NE(drawStateEnd, AStringView::npos);
+    const AStringView drawState = compactRendererState.substr(drawStateBegin, drawStateEnd - drawStateBegin);
+    EXPECT_FALSE(ContainsText(drawState, "friendclassRendererRayTracingSystem;"));
 }
 
 
@@ -717,7 +752,6 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
             "RendererShaderSystem&",
             "RendererMeshSystem&",
             "RendererMaterialSystem&",
-            "RendererDrawState&",
             "RendererRayTracingState&",
         }
     ));

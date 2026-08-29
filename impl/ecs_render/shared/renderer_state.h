@@ -130,7 +130,6 @@ class RendererDrawState final : NoCopy{
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
-    friend class RendererRayTracingSystem;
 
 public:
     RendererDrawState() = default;

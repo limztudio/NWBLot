@@ -93,7 +93,6 @@ RendererFramePipeline::RendererFramePipeline(
         m_shaderSystem,
         m_meshSystem,
         m_materialSystem,
-        m_drawState,
         m_rayTracingState
     )
 {

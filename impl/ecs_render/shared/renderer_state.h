@@ -203,7 +203,6 @@ static_assert(sizeof(RendererCsgState) == 328u, "RendererCsgState should keep it
 class RendererDeferredState final : NoCopy{
     friend class RendererCsgSystem;
     friend class RendererDeferredSystem;
-    friend class RendererAvboitSystem;
     friend class RendererRayTracingSystem;
 
 public:

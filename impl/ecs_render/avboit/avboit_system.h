@@ -57,7 +57,6 @@ NWB_IMPL_BEGIN
 
 
 class RendererCsgSystem;
-class RendererDeferredState;
 class RendererMaterialSystem;
 class RendererShaderSystem;
 class RendererAvboitState;
@@ -75,7 +74,6 @@ public:
     RendererAvboitSystem(
         Core::Alloc::GlobalArena& arena,
         Core::Graphics& graphics,
-        RendererDeferredState& deferredState,
         RendererAvboitState& avboitState,
         RendererShaderSystem& shaderSystem,
         RendererMaterialSystem& materialSystem,
@@ -244,7 +242,6 @@ private:
 private:
     Core::Alloc::GlobalArena& m_arena;
     Core::Graphics& m_graphics;
-    RendererDeferredState& m_deferredState;
     RendererAvboitState& m_avboitState;
     RendererShaderSystem& m_shaderSystem;
     RendererMaterialSystem& m_materialSystem;

@@ -224,6 +224,66 @@ TEST(EcsGraphics, MaterialDomainOwnsTheSharedMaterialPassLayout){
 }
 
 
+TEST(EcsGraphics, AvboitDoesNotDependOnDeferredPrivateState){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+    AString avboitHeaderSource;
+    AString avboitSystemSource;
+    AString avboitResourcesSource;
+    AString rendererStateSource;
+    AString rootResourcesSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_system.h", avboitHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_system.cpp", avboitSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_resources.cpp", avboitResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_resources.cpp", rootResourcesSource));
+
+    const AStringView avboitHeader(avboitHeaderSource.data(), avboitHeaderSource.size());
+    const AStringView avboitSystem(avboitSystemSource.data(), avboitSystemSource.size());
+    const AStringView avboitResources(avboitResourcesSource.data(), avboitResourcesSource.size());
+    const AString compactAvboitHeaderStorage = CompactSource(avboitHeader);
+    const AStringView compactAvboitHeader(compactAvboitHeaderStorage.data(), compactAvboitHeaderStorage.size());
+    const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
+    const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
+    const AStringView rootResources(rootResourcesSource.data(), rootResourcesSource.size());
+
+    EXPECT_TRUE(ConstructorParameterTypesMatch(
+        compactAvboitHeader,
+        "RendererAvboitSystem(",
+        {
+            "Core::Alloc::GlobalArena&",
+            "Core::Graphics&",
+            "RendererAvboitState&",
+            "RendererShaderSystem&",
+            "RendererMaterialSystem&",
+            "RendererCsgSystem&",
+        }
+    ));
+    EXPECT_FALSE(ContainsText(avboitHeader, "RendererDeferredState"));
+    EXPECT_FALSE(ContainsText(avboitHeader, "RendererDeferredSystem"));
+    EXPECT_FALSE(ContainsText(avboitHeader, "DeferredLightingGraphResources"));
+    EXPECT_FALSE(ContainsText(avboitSystem, "m_deferredState"));
+    EXPECT_FALSE(ContainsText(avboitResources, "m_deferredState"));
+    EXPECT_TRUE(ContainsText(avboitResources, "m_avboitState.m_linearSampler"));
+
+    const usize deferredStateBegin = compactRendererState.find("classRendererDeferredStatefinal:NoCopy{");
+    ASSERT_NE(deferredStateBegin, AStringView::npos);
+    const usize deferredStateEnd = compactRendererState.find("classRendererAvboitStatefinal:NoCopy{", deferredStateBegin);
+    ASSERT_NE(deferredStateEnd, AStringView::npos);
+    const AStringView deferredState = compactRendererState.substr(deferredStateBegin, deferredStateEnd - deferredStateBegin);
+    EXPECT_FALSE(ContainsText(deferredState, "friendclassRendererAvboitSystem;"));
+
+    const usize createDeferredTargets = rootResources.find("m_deferredSystem.createDeferredFrameTargets");
+    const usize createAvboitResources = rootResources.find("m_avboitSystem.createAvboitResources");
+    const usize createDeferredTargetResources = rootResources.find("m_deferredSystem.createDeferredFrameTargetResources");
+    ASSERT_NE(createDeferredTargets, AStringView::npos);
+    ASSERT_NE(createAvboitResources, AStringView::npos);
+    ASSERT_NE(createDeferredTargetResources, AStringView::npos);
+    EXPECT_LT(createDeferredTargets, createAvboitResources);
+    EXPECT_LT(createAvboitResources, createDeferredTargetResources);
+}
+
+
 TEST(EcsGraphics, FramePipelineDoesNotPrivilegeNarrowShaderOrMeshSystems){
     TestArena testArena;
     AString headerSource;

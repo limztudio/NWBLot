@@ -62,22 +62,8 @@ static bool CreateHeapComputePipeline(
 bool RendererAvboitSystem::createAvboitResources(){
     auto& device = m_graphics.getDevice();
 
-    if(!ECSRenderDetail::CreateClampSampler(device, m_deferredState.m_sampler, false)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shared point sampler for AVBOIT"));
-        return false;
-    }
     if(!ECSRenderDetail::CreateClampSampler(device, m_avboitState.m_linearSampler, true)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create linear sampler for AVBOIT"));
-        return false;
-    }
-
-    if(!m_deferredState.m_sceneShadingBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT accumulation requires a scene shading buffer"));
-        return false;
-    }
-
-    if(!m_deferredState.m_lightBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT accumulation requires a scene light buffer"));
         return false;
     }
 

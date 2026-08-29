@@ -19,7 +19,6 @@ NWB_IMPL_BEGIN
 RendererAvboitSystem::RendererAvboitSystem(
     Core::Alloc::GlobalArena& arena,
     Core::Graphics& graphics,
-    RendererDeferredState& deferredState,
     RendererAvboitState& avboitState,
     RendererShaderSystem& shaderSystem,
     RendererMaterialSystem& materialSystem,
@@ -27,7 +26,6 @@ RendererAvboitSystem::RendererAvboitSystem(
 )
     : m_arena(arena)
     , m_graphics(graphics)
-    , m_deferredState(deferredState)
     , m_avboitState(avboitState)
     , m_shaderSystem(shaderSystem)
     , m_materialSystem(materialSystem)

@@ -82,7 +82,6 @@ RendererFramePipeline::RendererFramePipeline(
     , m_avboitSystem(
         arena,
         graphics,
-        m_deferredState,
         m_avboitState,
         m_shaderSystem,
         m_materialSystem,

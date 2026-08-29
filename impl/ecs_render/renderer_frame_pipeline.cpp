@@ -77,7 +77,7 @@ RendererFramePipeline::RendererFramePipeline(
         m_meshSystem,
         m_csgSystem
     )
-    , m_deferredSystem(arena, world, graphics, m_deferredState, m_rayTracingState, m_shaderSystem)
+    , m_deferredSystem(arena, world, graphics, m_deferredState, m_shaderSystem)
     , m_avboitSystem(
         arena,
         graphics,

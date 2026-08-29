@@ -309,9 +309,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         && features.laggedLightingHistoryReadReady
     ;
     const bool declaresHardwareCaustics = features.hardwareCaustics;
-    const RayTracingShadowVisibilityGraphPlanSnapshot rayTracingShadowVisibilityPlan =
-        m_raytracingSystem.snapshotShadowVisibilityGraphPlan(declaresHardwareCaustics)
-    ;
     const bool capturesLaggedLightingHistory = includeLaggedLightingHistoryCapture
         && dedicatedAsyncCompute
         && features.frameLaggedAsyncLightingEnabled
@@ -1021,6 +1018,12 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred graphics-prefix packet"));
         return;
     }
+
+    // Graphics-prefix declaration publishes the current light classification. Freeze shadow routing only after that
+    // owner-mediated handoff so transparent folding never observes the prior frame's soft-shadow mask.
+    const RayTracingShadowVisibilityGraphPlanSnapshot rayTracingShadowVisibilityPlan =
+        m_raytracingSystem.snapshotShadowVisibilityGraphPlan(declaresHardwareCaustics)
+    ;
 
     if(useLaggedLightingHistory){
         Core::GpuExternalCompletionDesc lightingHistoryReadReadyDesc;

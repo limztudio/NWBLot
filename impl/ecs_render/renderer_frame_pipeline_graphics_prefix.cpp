@@ -192,6 +192,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     ECSRenderDetail::SceneLightGpuData sceneLightData[NWB_SCENE_MAX_LIGHTS] = {};
     ECSRenderDetail::SceneShadingGpuData sceneShadingState;
     u32 sceneLightCount = 0u;
+    const RayTracingLightingClassificationInput rayTracingLightingInput = m_raytracingSystem.snapshotLightingClassificationInput();
+    RayTracingLightingClassification rayTracingLightingClassification;
     bool sceneLightUploadRequired = false;
     bool sceneShadingUploadRequired = false;
     if(
@@ -202,9 +204,11 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         )
         || !m_deferredSystem.prepareSceneShadingBufferUploads(
             meshViewAspectRatio,
+            rayTracingLightingInput,
             sceneLightData,
             LengthOf(sceneLightData),
             sceneLightCount,
+            rayTracingLightingClassification,
             sceneLightUploadRequired,
             sceneShadingState,
             sceneShadingUploadRequired
@@ -2129,6 +2133,13 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare post-G-buffer normalization task"));
         return false;
     }
+    // Publish only after every prefix task accepts declaration. The caller freezes dependent ray-tracing routes
+    // immediately after this successful return.
+    m_raytracingSystem.publishPreparedLightingClassification(
+        rayTracingLightingClassification,
+        sceneLightData,
+        sceneLightCount
+    );
     return true;
 }
 

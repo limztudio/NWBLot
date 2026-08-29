@@ -77,6 +77,57 @@ void RendererRayTracingSystem::releaseSceneTlasHeapHandle(){
     m_rayTracingState.m_tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
 }
 
+RayTracingLightingClassificationInput RendererRayTracingSystem::snapshotLightingClassificationInput()const noexcept{
+    return {
+        .refractiveInstanceCount = m_rayTracingState.m_causticRefractiveInstanceCount,
+    };
+}
+
+void RendererRayTracingSystem::publishPreparedLightingClassification(
+    const RayTracingLightingClassification& classification,
+    const ECSRenderDetail::SceneLightGpuData* const lights,
+    const u32 lightCount
+){
+    m_rayTracingState.m_causticLightCount = classification.causticLightCount;
+    m_rayTracingState.m_softShadowSlotMask = classification.softShadowSlotMask;
+
+    // Emit the selected caustic-light and refractive-target gate once from the domain that owns the gathered bounds
+    // and diagnostic latch. A successful prefix publication leaves the latch set across optional graph-build retries;
+    // final declaration failure restores the earlier snapshot.
+    if(m_rayTracingState.m_causticEmissionGateLogged)
+        return;
+    m_rayTracingState.m_causticEmissionGateLogged = true;
+
+    const Float4& boundsMin = m_rayTracingState.m_causticTargetBoundsMin;
+    const Float4& boundsMax = m_rayTracingState.m_causticTargetBoundsMax;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: caustic P1 -- {} caustic light(s); {} refractive emission target(s), combined extent min ({}, {}, {}) max ({}, {}, {})")
+        , classification.causticLightCount
+        , m_rayTracingState.m_causticRefractiveInstanceCount
+        , boundsMin.x
+        , boundsMin.y
+        , boundsMin.z
+        , boundsMax.x
+        , boundsMax.y
+        , boundsMax.z
+    );
+
+    NWB_ASSERT(lights || lightCount == 0u);
+    if(!lights)
+        return;
+    for(u32 i = 0u; i < lightCount; ++i){
+        if(lights[i].params.w < 0.f)
+            continue;
+        // params.y carries the light type (Directional=0, Point=1, Spot=2); point lights are excluded so only
+        // directional/spot reach here.
+        const bool directional = lights[i].params.y < ECSRenderDetail::s_LightTypeDirectionalMax;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: caustic P1 -- caustic slot {} -> light index {} ({})")
+            , static_cast<u32>(lights[i].params.w)
+            , i
+            , directional ? NWB_TEXT("directional") : NWB_TEXT("spot")
+        );
+    }
+}
+
 RayTracingFrameCpuStateSnapshot RendererRayTracingSystem::captureFrameCpuState()const noexcept{
     return RayTracingFrameCpuStateSnapshot{
         .surfelCountReadbackSubmissionToken = m_rayTracingState.m_surfelCountReadbackSubmissionToken,
@@ -86,7 +137,6 @@ RayTracingFrameCpuStateSnapshot RendererRayTracingSystem::captureFrameCpuState()
         .hwCausticFrameIndex = m_rayTracingState.m_hwCausticFrameIndex,
         .surfelFrameIndex = m_rayTracingState.m_surfelFrameIndex,
         .surfelCountReadbackFrame = m_rayTracingState.m_surfelCountReadbackFrame,
-        .shadowSlotCount = m_rayTracingState.m_shadowSlotCount,
         .softShadowSlotMask = m_rayTracingState.m_softShadowSlotMask,
         .causticLightCount = m_rayTracingState.m_causticLightCount,
         .swShadowDispatchLogged = m_rayTracingState.m_swShadowDispatchLogged,
@@ -121,7 +171,6 @@ void RendererRayTracingSystem::restoreSurfelGiPacketCpuState(const RayTracingFra
 }
 
 void RendererRayTracingSystem::restorePreparedLightingCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept{
-    m_rayTracingState.m_shadowSlotCount = snapshot.shadowSlotCount;
     m_rayTracingState.m_softShadowSlotMask = snapshot.softShadowSlotMask;
     m_rayTracingState.m_causticLightCount = snapshot.causticLightCount;
     m_rayTracingState.m_causticEmissionGateLogged = snapshot.causticEmissionGateLogged;

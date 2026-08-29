@@ -82,7 +82,6 @@ namespace ECSRenderDetail{
 };
 
 class RendererDeferredState;
-class RendererRayTracingState;
 class RendererShaderSystem;
 
 
@@ -107,7 +106,6 @@ public:
         Core::ECS::World& world,
         Core::Graphics& graphics,
         RendererDeferredState& deferredState,
-        RendererRayTracingState& rayTracingState,
         RendererShaderSystem& shaderSystem
     );
 
@@ -123,9 +121,11 @@ public:
     // through built-in graph uploads and confirms these CPU mirrors only after the packet accepts.
     [[nodiscard]] bool prepareSceneShadingBufferUploads(
         f32 fallbackAspectRatio,
+        const RayTracingLightingClassificationInput& rayTracingInput,
         ECSRenderDetail::SceneLightGpuData* outLightData,
         usize lightDataCapacity,
         u32& outLightCount,
+        RayTracingLightingClassification& outRayTracingClassification,
         bool& outLightUploadRequired,
         ECSRenderDetail::SceneShadingGpuData& outSceneShadingState,
         bool& outSceneShadingUploadRequired
@@ -181,14 +181,12 @@ private:
     void resetDeferredBindlessFrameResources(DeferredFrameTargets& targets);
     void resetLaggedLightingHistoryResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool createLaggedLightingHistoryResources(DeferredFrameTargets& targets);
-    void logCausticClassificationOnce(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount, u32 causticLightCount, u32 refractiveInstanceCount);
 
 private:
     Core::Alloc::GlobalArena& m_arena;
     Core::ECS::World& m_world;
     Core::Graphics& m_graphics;
     RendererDeferredState& m_deferredState;
-    RendererRayTracingState& m_rayTracingState;
     RendererShaderSystem& m_shaderSystem;
 };
 

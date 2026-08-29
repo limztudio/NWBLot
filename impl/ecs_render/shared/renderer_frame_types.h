@@ -121,6 +121,20 @@ struct MaterialPassDrawContext{
 };
 
 
+// Ray tracing gathers refractive emission targets before Deferred ranks the current scene lights. The root module
+// brokers this compact per-frame contract so neither feature reaches into the other's private state.
+struct RayTracingLightingClassificationInput{
+    u32 refractiveInstanceCount = 0u;
+};
+static_assert(sizeof(RayTracingLightingClassificationInput) == sizeof(u32));
+
+struct RayTracingLightingClassification{
+    u32 causticLightCount = 0u;
+    u32 softShadowSlotMask = 0u;
+};
+static_assert(sizeof(RayTracingLightingClassification) == sizeof(u32) * 2u);
+
+
 // Heap-slot indirection for the ray-tracing material context.
 struct RayTraceMaterialContextSlots{
     u32 sceneBvhNodes = 0u;

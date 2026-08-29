@@ -21,14 +21,12 @@ RendererDeferredSystem::RendererDeferredSystem(
     Core::ECS::World& world,
     Core::Graphics& graphics,
     RendererDeferredState& deferredState,
-    RendererRayTracingState& rayTracingState,
     RendererShaderSystem& shaderSystem
 )
     : m_arena(arena)
     , m_world(world)
     , m_graphics(graphics)
     , m_deferredState(deferredState)
-    , m_rayTracingState(rayTracingState)
     , m_shaderSystem(shaderSystem)
 {}
 

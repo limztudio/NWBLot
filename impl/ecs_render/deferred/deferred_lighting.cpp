@@ -201,9 +201,11 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredLightingTask(
 
 bool RendererDeferredSystem::prepareSceneShadingBufferUploads(
     const f32 fallbackAspectRatio,
+    const RayTracingLightingClassificationInput& rayTracingInput,
     ECSRenderDetail::SceneLightGpuData* const outLightData,
     const usize lightDataCapacity,
     u32& outLightCount,
+    RayTracingLightingClassification& outRayTracingClassification,
     bool& outLightUploadRequired,
     ECSRenderDetail::SceneShadingGpuData& outSceneShadingState,
     bool& outSceneShadingUploadRequired
@@ -211,6 +213,7 @@ bool RendererDeferredSystem::prepareSceneShadingBufferUploads(
     NWB_ASSERT(m_deferredState.m_sceneShadingBuffer);
     NWB_ASSERT(m_deferredState.m_lightBuffer);
     outLightCount = 0u;
+    outRayTracingClassification = {};
     outLightUploadRequired = false;
     outSceneShadingUploadRequired = false;
     if(!outLightData || lightDataCapacity < NWB_SCENE_MAX_LIGHTS)
@@ -225,19 +228,15 @@ bool RendererDeferredSystem::prepareSceneShadingBufferUploads(
     );
 
     // Caustic-light classification: rank the opted-in directional/spot lights and assign a caustic slot into
-    // each chosen light's params.w, gated on the scene holding at least one refractive instance (gathered earlier this
-    // frame by prepareCausticEmissionTargets into the ray-tracing state).
-    const u32 refractiveInstanceCount = m_rayTracingState.m_causticRefractiveInstanceCount;
+    // each chosen light's params.w, gated on the scene holding at least one refractive instance gathered earlier by
+    // ray-tracing preflight and passed through the root-owned frame contract.
     const u32 causticLightCount = ECSRenderDetail::ResolveCausticLights(
         outLightData,
         causticLightImportance,
         lightCount,
-        refractiveInstanceCount
+        rayTracingInput.refractiveInstanceCount
     );
-    m_rayTracingState.m_causticLightCount = causticLightCount;
-    // Active shadow slots = the importance-ranked pool ResolveSceneLights filled (slots 0..min(lightCount,N)-1); the
-    // half-res shadow upsample reads this so it only reconstructs the slots that hold a light.
-    m_rayTracingState.m_shadowSlotCount = (lightCount < NWB_SCENE_SHADOW_SLOT_COUNT) ? lightCount : NWB_SCENE_SHADOW_SLOT_COUNT;
+    outRayTracingClassification.causticLightCount = causticLightCount;
     // Soft opaque shadow (all light types): record which shadow slots hold a light (params.z >= 0), regardless of type.
     // The soft path traces + denoises + upsamples exactly these slots (once per set bit): a directional light softens by
     // its constant angular radius, a point/spot light by the distance-dependent cone its source sphere subtends -- both
@@ -252,8 +251,7 @@ bool RendererDeferredSystem::prepareSceneShadingBufferUploads(
                 softShadowSlotMask |= (1u << slotIndex);
         }
     }
-    m_rayTracingState.m_softShadowSlotMask = softShadowSlotMask;
-    logCausticClassificationOnce(outLightData, lightCount, causticLightCount, refractiveInstanceCount);
+    outRayTracingClassification.softShadowSlotMask = softShadowSlotMask;
 
     const usize lightByteCount = static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData);
     NWB_ASSERT(lightByteCount <= sizeof(m_deferredState.m_lightGpuData));
@@ -354,48 +352,6 @@ bool RendererDeferredSystem::renderDeferredLighting(
     commandList.dispatch(groupCountX, groupCountY, 1u);
     return true;
 }
-
-void RendererDeferredSystem::logCausticClassificationOnce(
-    const ECSRenderDetail::SceneLightGpuData* lights,
-    const u32 lightCount,
-    const u32 causticLightCount,
-    const u32 refractiveInstanceCount
-){
-    // Caustic-emission gate observable: emit ONCE (rate-limited by the ray-tracing-state flag, not per-frame spam) the chosen
-    // opted-in caustic lights + the refractive emission targets, so a smoke run can confirm the classification +
-    // gather without any rendering change. Reports the caustic-light count, the refractive emission-target AABB count
-    // + their combined world extent, then one line per chosen caustic light (slot, light index, type).
-    if(m_rayTracingState.m_causticEmissionGateLogged)
-        return;
-    m_rayTracingState.m_causticEmissionGateLogged = true;
-
-    const Float4& boundsMin = m_rayTracingState.m_causticTargetBoundsMin;
-    const Float4& boundsMax = m_rayTracingState.m_causticTargetBoundsMax;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: caustic P1 -- {} caustic light(s); {} refractive emission target(s), combined extent min ({}, {}, {}) max ({}, {}, {})")
-        , causticLightCount
-        , refractiveInstanceCount
-        , boundsMin.x
-        , boundsMin.y
-        , boundsMin.z
-        , boundsMax.x
-        , boundsMax.y
-        , boundsMax.z
-    );
-
-    for(u32 i = 0u; i < lightCount; ++i){
-        if(lights[i].params.w < 0.f)
-            continue;
-        // params.y carries the light type (Directional=0, Point=1, Spot=2); point lights are excluded so only
-        // directional/spot reach here.
-        const bool directional = lights[i].params.y < ECSRenderDetail::s_LightTypeDirectionalMax;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: caustic P1 -- caustic slot {} -> light index {} ({})")
-            , static_cast<u32>(lights[i].params.w)
-            , i
-            , directional ? NWB_TEXT("directional") : NWB_TEXT("spot")
-        );
-    }
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

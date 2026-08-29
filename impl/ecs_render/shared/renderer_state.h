@@ -427,7 +427,6 @@ struct RtShadowState{
     RtMeshHeapHandleCache m_hwMeshHeapHandleCache;
     RtMeshHeapHandleCache m_swMeshHeapHandleCache;
 
-    u32 m_shadowSlotCount = 0u;
     // Fresh heap views preserve old buffers for in-flight work.
     Core::GpuDescriptorHandle m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();

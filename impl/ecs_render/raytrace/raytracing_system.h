@@ -26,6 +26,9 @@ class RendererShaderSystem;
 class RendererMeshSystem;
 class RendererMaterialSystem;
 struct MaterialSurfaceInfo;
+namespace ECSRenderDetail{
+    struct SceneLightGpuData;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -244,7 +247,6 @@ struct RayTracingFrameCpuStateSnapshot{
     u32 hwCausticFrameIndex = 0u;
     u32 surfelFrameIndex = 0u;
     u32 surfelCountReadbackFrame = 0u;
-    u32 shadowSlotCount = 0u;
     u32 softShadowSlotMask = 0u;
     u32 causticLightCount = 0u;
 
@@ -334,6 +336,12 @@ public:
     void invalidateResources();
     void releaseSceneTlasHeapHandle();
 
+    [[nodiscard]] RayTracingLightingClassificationInput snapshotLightingClassificationInput()const noexcept;
+    void publishPreparedLightingClassification(
+        const RayTracingLightingClassification& classification,
+        const ECSRenderDetail::SceneLightGpuData* lights,
+        u32 lightCount
+    );
     [[nodiscard]] RayTracingFrameCpuStateSnapshot captureFrameCpuState()const noexcept;
     void restoreShadowPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
     void restoreCausticPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;

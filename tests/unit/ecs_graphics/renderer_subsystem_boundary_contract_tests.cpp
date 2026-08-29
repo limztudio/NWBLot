@@ -497,6 +497,104 @@ TEST(EcsGraphics, RootInvalidatesFeatureResourcesThroughDomainSystems){
 }
 
 
+TEST(EcsGraphics, RootMediatesDeferredRayTracingLightingClassification){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+    AString frameTypesSource;
+    AString deferredHeaderSource;
+    AString deferredSystemSource;
+    AString deferredLightingSource;
+    AString rayTracingHeaderSource;
+    AString rayTracingSystemSource;
+    AString rendererStateSource;
+    AString rootPrefixSource;
+    AString rootGraphSource;
+    AString rootExecuteSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_frame_types.h", frameTypesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.h", deferredHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.cpp", deferredSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_lighting.cpp", deferredLightingSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graphics_prefix.cpp", rootPrefixSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", rootGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_execute.cpp", rootExecuteSource));
+
+    const AString compactFrameTypesStorage = CompactSource(AStringView(frameTypesSource.data(), frameTypesSource.size()));
+    const AStringView compactFrameTypes(compactFrameTypesStorage.data(), compactFrameTypesStorage.size());
+    const AString compactDeferredHeaderStorage = CompactSource(AStringView(deferredHeaderSource.data(), deferredHeaderSource.size()));
+    const AStringView compactDeferredHeader(compactDeferredHeaderStorage.data(), compactDeferredHeaderStorage.size());
+    const AStringView deferredHeader(deferredHeaderSource.data(), deferredHeaderSource.size());
+    const AStringView deferredSystem(deferredSystemSource.data(), deferredSystemSource.size());
+    const AStringView deferredLighting(deferredLightingSource.data(), deferredLightingSource.size());
+    const AString compactRayTracingHeaderStorage = CompactSource(AStringView(rayTracingHeaderSource.data(), rayTracingHeaderSource.size()));
+    const AStringView compactRayTracingHeader(compactRayTracingHeaderStorage.data(), compactRayTracingHeaderStorage.size());
+    const AString compactRayTracingSystemStorage = CompactSource(AStringView(rayTracingSystemSource.data(), rayTracingSystemSource.size()));
+    const AStringView compactRayTracingSystem(compactRayTracingSystemStorage.data(), compactRayTracingSystemStorage.size());
+    const AStringView rendererState(rendererStateSource.data(), rendererStateSource.size());
+    const AString compactRootPrefixStorage = CompactSource(AStringView(rootPrefixSource.data(), rootPrefixSource.size()));
+    const AStringView compactRootPrefix(compactRootPrefixStorage.data(), compactRootPrefixStorage.size());
+    const AString compactRootGraphStorage = CompactSource(AStringView(rootGraphSource.data(), rootGraphSource.size()));
+    const AStringView compactRootGraph(compactRootGraphStorage.data(), compactRootGraphStorage.size());
+    const AStringView rootExecute(rootExecuteSource.data(), rootExecuteSource.size());
+
+    EXPECT_TRUE(ConstructorParameterTypesMatch(
+        compactDeferredHeader,
+        "RendererDeferredSystem(",
+        {
+            "Core::Alloc::GlobalArena&",
+            "Core::ECS::World&",
+            "Core::Graphics&",
+            "RendererDeferredState&",
+            "RendererShaderSystem&",
+        }
+    ));
+    EXPECT_FALSE(ContainsText(deferredHeader, "RendererRayTracingState"));
+    EXPECT_FALSE(ContainsText(deferredHeader, "m_rayTracingState"));
+    EXPECT_FALSE(ContainsText(deferredSystem, "m_rayTracingState"));
+    EXPECT_FALSE(ContainsText(deferredLighting, "m_rayTracingState"));
+    EXPECT_TRUE(ContainsText(compactFrameTypes, "structRayTracingLightingClassificationInput{u32refractiveInstanceCount=0u;};"));
+    EXPECT_TRUE(ContainsText(compactFrameTypes, "structRayTracingLightingClassification{u32causticLightCount=0u;u32softShadowSlotMask=0u;};"));
+    EXPECT_TRUE(ContainsText(compactDeferredHeader, "constRayTracingLightingClassificationInput&rayTracingInput"));
+    EXPECT_TRUE(ContainsText(compactDeferredHeader, "RayTracingLightingClassification&outRayTracingClassification"));
+
+    const usize inputSnapshot = compactRootPrefix.find("m_raytracingSystem.snapshotLightingClassificationInput()");
+    const usize deferredClassification = compactRootPrefix.find("m_deferredSystem.prepareSceneShadingBufferUploads(");
+    const usize graphicsPrefixAcceptance = compactRootPrefix.find("if(!m_graphicsPrefixTask.valid())");
+    const usize classificationPublication = compactRootPrefix.find("m_raytracingSystem.publishPreparedLightingClassification(");
+    ASSERT_NE(inputSnapshot, AStringView::npos);
+    ASSERT_NE(deferredClassification, AStringView::npos);
+    ASSERT_NE(graphicsPrefixAcceptance, AStringView::npos);
+    ASSERT_NE(classificationPublication, AStringView::npos);
+    EXPECT_LT(inputSnapshot, deferredClassification);
+    EXPECT_LT(deferredClassification, graphicsPrefixAcceptance);
+    EXPECT_LT(graphicsPrefixAcceptance, classificationPublication);
+
+    EXPECT_TRUE(ContainsText(compactRayTracingSystem, "m_rayTracingState.m_causticLightCount=classification.causticLightCount;"));
+    EXPECT_TRUE(ContainsText(compactRayTracingSystem, "m_rayTracingState.m_softShadowSlotMask=classification.softShadowSlotMask;"));
+    EXPECT_TRUE(ContainsText(compactRayTracingSystem, ".softShadowSlotMask=m_rayTracingState.m_softShadowSlotMask"));
+    EXPECT_TRUE(ContainsText(compactRayTracingSystem, ".causticLightCount=m_rayTracingState.m_causticLightCount"));
+    EXPECT_TRUE(ContainsText(compactRayTracingSystem, ".causticEmissionGateLogged=m_rayTracingState.m_causticEmissionGateLogged"));
+    EXPECT_TRUE(ContainsText(compactRayTracingSystem, "m_rayTracingState.m_softShadowSlotMask=snapshot.softShadowSlotMask;"));
+    EXPECT_TRUE(ContainsText(compactRayTracingSystem, "m_rayTracingState.m_causticLightCount=snapshot.causticLightCount;"));
+    EXPECT_TRUE(ContainsText(compactRayTracingSystem, "m_rayTracingState.m_causticEmissionGateLogged=snapshot.causticEmissionGateLogged;"));
+    EXPECT_FALSE(ContainsText(compactRayTracingHeader, "shadowSlotCount"));
+    EXPECT_FALSE(ContainsText(rendererState, "m_shadowSlotCount"));
+    EXPECT_FALSE(ContainsText(deferredLighting, "shadowSlotCount"));
+    EXPECT_TRUE(ContainsText(rootExecute, "m_raytracingSystem.restorePreparedLightingCpuState(rayTracingCpuState);"));
+
+    const usize graphicsPrefixDeclaration = compactRootGraph.find("if(!declareDeferredGraphicsPrefixTasks(");
+    const usize shadowPlanSnapshot = compactRootGraph.find("m_raytracingSystem.snapshotShadowVisibilityGraphPlan(");
+    const usize shadowVisibilityDeclaration = compactRootGraph.find("if(!declareDeferredShadowVisibilityTask(");
+    ASSERT_NE(graphicsPrefixDeclaration, AStringView::npos);
+    ASSERT_NE(shadowPlanSnapshot, AStringView::npos);
+    ASSERT_NE(shadowVisibilityDeclaration, AStringView::npos);
+    EXPECT_LT(graphicsPrefixDeclaration, shadowPlanSnapshot);
+    EXPECT_LT(shadowPlanSnapshot, shadowVisibilityDeclaration);
+}
+
+
 TEST(EcsGraphics, FramePipelineDoesNotPrivilegeNarrowShaderOrMeshSystems){
     TestArena testArena;
     AString headerSource;

@@ -189,7 +189,6 @@ void RendererRayTracingState::invalidateResources(){
     m_shadowBindingLayout.reset();
     m_shadowSoftShader.reset();
     m_shadowSoftPipeline.reset();
-    m_shadowSlotCount = 0u;
     m_shadowMeshCount = 0u;
     m_shadowMeshIndexBuffers.clear();
     m_shadowMeshAttributeBuffers.clear();

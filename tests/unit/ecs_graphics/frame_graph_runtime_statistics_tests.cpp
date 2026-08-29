@@ -393,7 +393,7 @@ TEST(EcsGraphics, FrameGraphExportsEveryCompiledPhysicalQueueAsStructuredRuntime
     ;
     NWB::Tests::TestAString source;
     ASSERT_TRUE(ReadTextFile(
-        repoRoot / "impl" / "ecs_render" / "kernel" / "frame_graph_export.cpp",
+        repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_telemetry.cpp",
         source
     ));
     const AStringView frameGraph(source.data(), source.size());

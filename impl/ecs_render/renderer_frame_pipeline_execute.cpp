@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/system.h>
+#include <impl/ecs_render/renderer_frame_pipeline.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/renderer_private.h>
@@ -21,7 +21,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace RendererSystemRenderDetail{
+namespace RendererFramePipelineExecuteDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,7 +42,7 @@ inline constexpr usize s_DeferredTimingTicketCapacity = 15u + s_AvboitTaskGraphT
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererSystem::render(Core::Framebuffer* framebuffer){
+void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     m_frameGraphSourceFrameIndex = m_graphics.getFrameIndex();
 
     // Preserve the exact accepted frontier even when frame-graph capture was disabled for the completed frame. The
@@ -169,8 +169,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
 
     NWB_ASSERT(m_preparedCsgFrameStateValid);
-    NWB_ASSERT(m_preparedShadowVisibilityResourcesValid);
-    if(!m_preparedShadowVisibilityResourcesValid){
+    NWB_ASSERT(m_shadowPreparationOutcome.resourcesValid);
+    if(!m_shadowPreparationOutcome.resourcesValid){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow-visibility resource preflight was unavailable"));
         return;
     }
@@ -282,7 +282,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // History capture is graph-owned and remains available whenever the opt-in path has a distinct compute
     // transport. Its tail is optional: a failed tail build must leave the current frame's deferred path intact.
     const bool requestsLaggedLightingHistoryCapture = laggedAsyncLightingRequested;
-    m_preparedShadowVisibilityReady = false;
+    m_shadowPreparationOutcome.ready = false;
     // Compile every independent graph before native recording. The graphics prefix records all five ordered tasks
     // natively from mesh-view setup through post-G-buffer normalization.
     const ECSRenderDetail::RendererFrameGraphFeatures frameGraphFeatures{
@@ -1739,7 +1739,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     struct ShadowPrepareStateLifecycleContext{
         Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
-        RendererSystem* renderer = nullptr;
+        RendererFramePipeline* renderer = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* stateCandidate = nullptr;
         const Core::BufferHandle* buffers = nullptr;
         usize bufferCount = 0u;
@@ -1801,7 +1801,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             context->frameTimingTransaction->discard();
         }
 
-        RendererSystem& renderer = *context->renderer;
+        RendererFramePipeline& renderer = *context->renderer;
         if(context->bufferCount == 0u){
             renderer.m_shadowPreparePersistentState.reset();
             return true;
@@ -1857,7 +1857,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuPersistentResourceStateCache::Candidate shadowVisibilityReturnStateCandidate(m_arena);
     Core::GpuPersistentResourceStateCache::Candidate shadowComputeScratchStateCandidate(m_arena);
     struct ShadowVisibilityStateLifecycleContext{
-        RendererSystem* renderer = nullptr;
+        RendererFramePipeline* renderer = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* returnStateCandidate = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* scratchStateCandidate = nullptr;
@@ -1965,7 +1965,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuPersistentResourceStateCache::Candidate causticReturnStateCandidate(m_arena);
     Core::GpuPersistentResourceStateCache::Candidate causticsScratchStateCandidate(m_arena);
     struct SoftwareCausticsStateLifecycleContext{
-        RendererSystem* renderer = nullptr;
+        RendererFramePipeline* renderer = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* returnStateCandidate = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* scratchStateCandidate = nullptr;
         const Core::TextureHandle* irradianceTextures = nullptr;
@@ -2073,7 +2073,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuPersistentResourceStateCache::Candidate surfelGiCounterStateCandidate(m_arena);
     Core::GpuPersistentResourceStateCache::Candidate surfelGiComputeStateCandidate(m_arena);
     struct SurfelGiStateLifecycleContext{
-        RendererSystem* renderer = nullptr;
+        RendererFramePipeline* renderer = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* returnStateCandidate = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* counterStateCandidate = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* computeStateCandidate = nullptr;
@@ -2165,7 +2165,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         )
             return false;
 
-        RendererSystem& renderer = *context->renderer;
+        RendererFramePipeline& renderer = *context->renderer;
         const bool returnStateReady = renderer.m_surfelIrradianceReturnState.commit(*context->returnStateCandidate);
         const bool counterStateReady = renderer.m_surfelGiCounterPersistentState.commit(*context->counterStateCandidate);
         const bool computeStateReady = renderer.m_surfelGiComputePersistentState.commit(*context->computeStateCandidate);
@@ -2178,7 +2178,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     };
     Core::GpuPersistentResourceStateCache::Candidate hardwareCausticAccumulatorStateCandidate(m_arena);
     struct HardwareCausticsStateLifecycleContext{
-        RendererSystem* renderer = nullptr;
+        RendererFramePipeline* renderer = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* accumulatorStateCandidate = nullptr;
         const Core::TextureHandle* accumulatorTextures = nullptr;
         usize accumulatorTextureCount = 0u;
@@ -2255,7 +2255,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuPersistentResourceStateCache::Candidate deferredLightingCausticReturnStateCandidate(m_arena);
     Core::GpuPersistentResourceStateCache::Candidate deferredLightingSurfelReturnStateCandidate(m_arena);
     struct DeferredLightingStateLifecycleContext{
-        RendererSystem* renderer = nullptr;
+        RendererFramePipeline* renderer = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* shadowReturnStateCandidate = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* causticReturnStateCandidate = nullptr;
@@ -2356,7 +2356,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         )
             return false;
 
-        RendererSystem& renderer = *context->renderer;
+        RendererFramePipeline& renderer = *context->renderer;
         if(context->usesLaggedHistory)
             context->targets->laggedLightingHistory.slotsUploaded = true;
         bool shadowStateReady = true;
@@ -2380,7 +2380,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     };
 
     Core::GpuTaskGraphTaskRecordedCallback normalRecordedCallbacks[
-        RendererSystemRenderDetail::s_DeferredStateLifecycleCallbackCapacity
+        RendererFramePipelineExecuteDetail::s_DeferredStateLifecycleCallbackCapacity
     ] = {};
     usize normalRecordedCallbackCount = 0u;
     normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
@@ -2420,7 +2420,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(normalRecordedCallbackCount <= LengthOf(normalRecordedCallbacks));
 
     Core::GpuTaskGraphTaskAcceptedCallback normalAcceptedCallbacks[
-        RendererSystemRenderDetail::s_DeferredStateLifecycleCallbackCapacity
+        RendererFramePipelineExecuteDetail::s_DeferredStateLifecycleCallbackCapacity
     ] = {};
     usize normalAcceptedCallbackCount = 0u;
     normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
@@ -2460,7 +2460,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(normalAcceptedCallbackCount <= LengthOf(normalAcceptedCallbacks));
 
     Core::GpuTaskGraphTaskTimingTicket normalTimingTickets[
-        RendererSystemRenderDetail::s_DeferredTimingTicketCapacity
+        RendererFramePipelineExecuteDetail::s_DeferredTimingTicketCapacity
     ] = {};
     usize normalTimingTicketCount = 0u;
     const auto appendNormalTimingTicket = [&](
@@ -2787,7 +2787,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             // Keep the filtered final-state candidate private until the Transfer task accepts, so a rejected
             // readback cannot replace the last accepted Surfel-GI counter state.
             struct SurfelCounterReadbackContext{
-                RendererSystem* renderer = nullptr;
+                RendererFramePipeline* renderer = nullptr;
                 Core::GpuPersistentResourceStateCache::Candidate* candidate = nullptr;
                 const Core::BufferHandle* buffers = nullptr;
                 usize bufferCount = 0u;
@@ -2922,7 +2922,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             Core::GpuPersistentResourceStateCache::Candidate causticHistoryReturnStateCandidate(m_arena);
             Core::GpuPersistentResourceStateCache::Candidate surfelHistoryReturnStateCandidate(m_arena);
             struct HistoryCopyAcceptanceContext{
-                RendererSystem* renderer = nullptr;
+                RendererFramePipeline* renderer = nullptr;
                 DeferredFrameTargets* targets = nullptr;
                 Core::GpuPersistentResourceStateCache::Candidate* shadowStateCandidate = nullptr;
                 Core::GpuPersistentResourceStateCache::Candidate* causticStateCandidate = nullptr;

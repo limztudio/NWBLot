@@ -2,12 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/system.h>
+#include <impl/ecs_render/renderer_frame_pipeline.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/renderer_private.h>
-
-#include <impl/ecs_scene/components.h>
 
 #include <core/graphics/gpu_timing.h>
 
@@ -21,16 +19,14 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererSystem::RendererSystem(
+RendererFramePipeline::RendererFramePipeline(
     Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolveCallback shaderPathResolver
 )
-    : Core::ECS::ISystem(arena)
-    , Core::IRenderPass(graphics)
-    , m_arena(arena)
+    : m_arena(arena)
     , m_world(world)
     , m_graphics(graphics)
     , m_assetManager(assetManager)
@@ -57,8 +53,8 @@ RendererSystem::RendererSystem(
     , m_surfelGiComputePersistentState(arena)
     , m_surfelGiCounterPersistentState(arena)
     , m_surfelIrradianceReturnState(arena)
-    , m_shaderSystem(*this)
-    , m_meshSystem(*this)
+    , m_shaderSystem(graphics, assetManager, m_shaderPathResolver)
+    , m_meshSystem(arena, world, graphics, assetManager, m_meshState, m_drawState)
     , m_materialSystem(*this)
     , m_csgSystem(*this)
     , m_deferredSystem(*this)
@@ -68,27 +64,19 @@ RendererSystem::RendererSystem(
     if(!RegisterBuiltInCsgShapeTypes(m_csgShapeRegistry))
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register built-in CSG shape types"));
 
-    readAccess<NWB::Impl::Scene::ActiveCameraComponent>();
-    readAccess<NWB::Impl::Scene::TransformComponent>();
-    readAccess<NWB::Impl::Scene::CameraComponent>();
-    readAccess<RendererComponent>();
-    readAccess<MaterialInstanceComponent>();
-    readAccess<StaticCsgMeshComponent>();
-    readAccess<SkinnedCsgMeshComponent>();
-    readAccess<CsgCutterComponent>();
     m_deferredTaskTimingFeedback.activate();
 }
-RendererSystem::~RendererSystem(){
+RendererFramePipeline::~RendererFramePipeline(){
     m_deferredTaskTimingFeedback.deactivate();
 }
 
 
-bool RendererSystem::setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy){
+bool RendererFramePipeline::setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy){
     return m_deferredTaskTimingFeedback.setPolicy(policy);
 }
 
 
-Core::GpuTaskGraphRuntimeStatistics RendererSystem::deferredTaskGraphRuntimeStatistics()const noexcept{
+Core::GpuTaskGraphRuntimeStatistics RendererFramePipeline::deferredTaskGraphRuntimeStatistics()const noexcept{
     return Core::CollectGpuTaskGraphRuntimeStatistics(
         m_deferredLightingCompiledGraph,
         m_deferredLightingRecordedGraph,
@@ -100,7 +88,7 @@ Core::GpuTaskGraphRuntimeStatistics RendererSystem::deferredTaskGraphRuntimeStat
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererSystem::reportLaggedLightingTransition(const LaggedLightingReport report, const u64 targetGeneration){
+void RendererFramePipeline::reportLaggedLightingTransition(const LaggedLightingReport report, const u64 targetGeneration){
     if(m_laggedLightingReport == report && m_laggedLightingReportGeneration == targetGeneration)
         return;
 
@@ -136,26 +124,26 @@ void RendererSystem::reportLaggedLightingTransition(const LaggedLightingReport r
     }
 }
 
-void RendererSystem::invalidateLaggedLightingHistorySubmission()noexcept{
+void RendererFramePipeline::invalidateLaggedLightingHistorySubmission()noexcept{
     m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
 }
 
-void RendererSystem::invalidateLaggedLightingHistoryWriterDrain()noexcept{
+void RendererFramePipeline::invalidateLaggedLightingHistoryWriterDrain()noexcept{
     m_laggedLightingHistoryWriterDrainToken = Core::QueueSubmissionToken{};
     m_laggedLightingHistoryWriterDrainGeneration = 0u;
 }
 
-void RendererSystem::resetLaggedLightingHistoryReadTracking()noexcept{
+void RendererFramePipeline::resetLaggedLightingHistoryReadTracking()noexcept{
     invalidateLaggedLightingHistorySubmission();
     m_laggedLightingHistoryGeneration = 0u;
 }
 
-void RendererSystem::resetLaggedLightingHistoryTracking()noexcept{
+void RendererFramePipeline::resetLaggedLightingHistoryTracking()noexcept{
     resetLaggedLightingHistoryReadTracking();
     invalidateLaggedLightingHistoryWriterDrain();
 }
 
-void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
+void RendererFramePipeline::resetTargetGenerationStateHandoffs()noexcept{
     // Replaced targets invalidate retained compute-local state.
     m_shadowComputePersistentState.reset();
     m_shadowVisibilityReturnState.reset();
@@ -167,7 +155,7 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     m_surfelIrradianceReturnState.reset();
 }
 
-void RendererSystem::resetInvalidatedResourceStateHandoffs()noexcept{
+void RendererFramePipeline::resetInvalidatedResourceStateHandoffs()noexcept{
     // The shadow-preparation packet owns its serial export; only retained cross-frame state is reset here.
     resetTargetGenerationStateHandoffs();
     m_shadowPreparePersistentState.reset();

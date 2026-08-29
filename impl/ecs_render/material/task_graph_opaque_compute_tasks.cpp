@@ -37,7 +37,8 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
 ){
     static_cast<void>(context);
     if(
-        !payload.renderer
+        !payload.meshSystem
+        || !payload.materialSystem
         || !payload.targets
         || !payload.timingTicket
         || !*payload.timingTicket
@@ -47,7 +48,8 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
     )
         return false;
 
-    RendererSystem& renderer = *payload.renderer;
+    RendererMeshSystem& meshSystem = *payload.meshSystem;
+    RendererMaterialSystem& materialSystem = *payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
     const bool frameSetupReady =
         *payload.meshViewSetupReady
@@ -61,15 +63,15 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
     payload.plan.materialize(drawItems);
     // The graph imported the exact persistent output handles retained by the frozen plan. Reject a live mesh
     // resource replacement instead of dispatching into a newly selected descriptor target outside that set.
-    if(!payload.plan.matches(renderer.m_meshSystem, drawItems.computeDrawItems))
+    if(!payload.plan.matches(meshSystem, drawItems.computeDrawItems))
         return false;
     if(
         !payload.materialDrawBuffersUploaded
-        || !renderer.m_materialSystem.materialPassDrawBuffersReady(
+        || !materialSystem.materialPassDrawBuffersReady(
             payload.instanceCount,
             payload.materialTypedByteCount
         )
-        || !renderer.m_materialSystem.materialPassDrawResourcesReady(drawItems)
+        || !materialSystem.materialPassDrawResourcesReady(drawItems)
     )
         return true;
 
@@ -90,7 +92,7 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
         payload.materialGeometryStatesGraphOwned,
         true,
     };
-    renderer.m_materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+    materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
 }
 
@@ -112,7 +114,8 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::record(
 ){
     static_cast<void>(context);
     if(
-        !payload.renderer
+        !payload.meshSystem
+        || !payload.materialSystem
         || !payload.targets
         || !payload.timingTicket
         || !*payload.timingTicket
@@ -132,12 +135,13 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::record(
         return true;
     }
 
-    RendererSystem& renderer = *payload.renderer;
+    RendererMeshSystem& meshSystem = *payload.meshSystem;
+    RendererMaterialSystem& materialSystem = *payload.materialSystem;
     const bool frameSetupReady =
         *payload.meshViewSetupReady
         && *payload.sceneShadingSetupReady
     ;
-    if(!frameSetupReady || !payload.plan.matches(renderer.m_meshSystem, payload.drawIndex))
+    if(!frameSetupReady || !payload.plan.matches(meshSystem, payload.drawIndex))
         return false;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
@@ -145,11 +149,11 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::record(
     payload.plan.materialize(payload.drawIndex, drawItems);
     if(
         !payload.materialDrawBuffersUploaded
-        || !renderer.m_materialSystem.materialPassDrawBuffersReady(
+        || !materialSystem.materialPassDrawBuffersReady(
             payload.instanceCount,
             payload.materialTypedByteCount
         )
-        || !renderer.m_materialSystem.materialPassDrawResourcesReady(drawItems)
+        || !materialSystem.materialPassDrawResourcesReady(drawItems)
     ){
         discardTiming(payload.opaqueRegularTiming);
         if(payload.phase == Phase::Raster)
@@ -175,9 +179,9 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::record(
         true,
     };
     if(payload.phase == Phase::Generate)
-        renderer.m_materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+        materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     else{
-        renderer.m_materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(
+        materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(
             drawContext,
             drawItems.computeDrawItems
         );

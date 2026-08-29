@@ -16,8 +16,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererRayTracingSystem::RendererRayTracingSystem(RendererSystem& renderer)
-    : RendererSystemSubsystemBase<RendererSystem>(renderer)
+RendererRayTracingSystem::RendererRayTracingSystem(RendererFramePipeline& renderer)
+    : RendererFramePipelineSubsystemBase<RendererFramePipeline>(renderer)
     , m_preparedShadowTraceGeometryBuffers(arena())
     , m_acceptedShadowTraceGeometryBuffers(arena())
     , m_preparedShadowTraceMaterialSampledTextures(arena())

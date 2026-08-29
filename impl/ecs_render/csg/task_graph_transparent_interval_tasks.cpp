@@ -37,7 +37,8 @@ bool AvboitCsgReceiverSpanGraphTask::record(
 ){
     static_cast<void>(context);
     if(
-        !payload.renderer
+        !payload.materialSystem
+        || !payload.csgSystem
         || !payload.targets
         || !payload.timingTicket
         || !payload.transparentCsgIntervalsTiming
@@ -54,13 +55,14 @@ bool AvboitCsgReceiverSpanGraphTask::record(
     MaterialPassDrawItems receiverSurfaceDrawItems{ scratchArena };
     CsgFrameGpuData csgFrameData{ scratchArena };
     payload.transparentCsgSnapshot.materialize(receiverSurfaceDrawItems, csgFrameData);
-    RendererSystem& renderer = *payload.renderer;
-    const bool drawBuffersReady = renderer.m_materialSystem.materialPassDrawBuffersReady(
+    RendererMaterialSystem& materialSystem = *payload.materialSystem;
+    RendererCsgSystem& csgSystem = *payload.csgSystem;
+    const bool drawBuffersReady = materialSystem.materialPassDrawBuffersReady(
         payload.transparentCsgSnapshot.instanceCount,
         payload.transparentCsgSnapshot.materialTypedByteCount
     );
-    const bool csgResourcesReady = renderer.m_csgSystem.csgFrameBuffersReady(csgFrameData);
-    const bool receiverSurfaceDrawResourcesReady = renderer.m_materialSystem.materialPassDrawResourcesReady(
+    const bool csgResourcesReady = csgSystem.csgFrameBuffersReady(csgFrameData);
+    const bool receiverSurfaceDrawResourcesReady = materialSystem.materialPassDrawResourcesReady(
         receiverSurfaceDrawItems
     );
     const bool spanReady =
@@ -73,7 +75,7 @@ bool AvboitCsgReceiverSpanGraphTask::record(
         && receiverSurfaceDrawResourcesReady
     ;
     if(spanReady){
-        renderer.m_csgSystem.dispatchCsgReceiverSpanBuild(
+        csgSystem.dispatchCsgReceiverSpanBuild(
             commandList,
             *payload.targets,
             csgFrameData,
@@ -112,7 +114,8 @@ bool AvboitCsgIntervalCombineGraphTask::record(
 ){
     static_cast<void>(context);
     if(
-        !payload.renderer
+        !payload.materialSystem
+        || !payload.csgSystem
         || !payload.targets
         || !payload.timingTicket
         || !payload.transparentCsgIntervalsTiming
@@ -129,13 +132,14 @@ bool AvboitCsgIntervalCombineGraphTask::record(
     MaterialPassDrawItems receiverSurfaceDrawItems{ scratchArena };
     CsgFrameGpuData csgFrameData{ scratchArena };
     payload.transparentCsgSnapshot.materialize(receiverSurfaceDrawItems, csgFrameData);
-    RendererSystem& renderer = *payload.renderer;
-    const bool drawBuffersReady = renderer.m_materialSystem.materialPassDrawBuffersReady(
+    RendererMaterialSystem& materialSystem = *payload.materialSystem;
+    RendererCsgSystem& csgSystem = *payload.csgSystem;
+    const bool drawBuffersReady = materialSystem.materialPassDrawBuffersReady(
         payload.transparentCsgSnapshot.instanceCount,
         payload.transparentCsgSnapshot.materialTypedByteCount
     );
-    const bool csgResourcesReady = renderer.m_csgSystem.csgFrameBuffersReady(csgFrameData);
-    const bool receiverSurfaceDrawResourcesReady = renderer.m_materialSystem.materialPassDrawResourcesReady(
+    const bool csgResourcesReady = csgSystem.csgFrameBuffersReady(csgFrameData);
+    const bool receiverSurfaceDrawResourcesReady = materialSystem.materialPassDrawResourcesReady(
         receiverSurfaceDrawItems
     );
     const bool combineReady =
@@ -148,7 +152,7 @@ bool AvboitCsgIntervalCombineGraphTask::record(
         && receiverSurfaceDrawResourcesReady
     ;
     if(combineReady){
-        renderer.m_csgSystem.dispatchCsgIntervalCombine(
+        csgSystem.dispatchCsgIntervalCombine(
             commandList,
             *payload.targets,
             csgFrameData,

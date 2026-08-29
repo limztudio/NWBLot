@@ -29,9 +29,9 @@ namespace ECSRenderDetail{
     struct MeshViewGpuData;
 };
 
-class RendererMaterialSystem final : public RendererSystemSubsystemBase<RendererSystem>{
+class RendererMaterialSystem final : public RendererFramePipelineSubsystemBase<RendererFramePipeline>{
 public:
-    explicit RendererMaterialSystem(RendererSystem& renderer);
+    explicit RendererMaterialSystem(RendererFramePipeline& renderer);
 
 public:
     [[nodiscard]] static bool splitMaterialTypedBytesByClass(

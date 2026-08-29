@@ -20,6 +20,13 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class RendererMaterialSystem;
+class RendererCsgSystem;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace ECSRenderDetail{
 
 
@@ -28,7 +35,8 @@ namespace ECSRenderDetail{
 
 struct CsgReceiverSpanBuildGraphTask{
     struct Payload{
-        RendererSystem* renderer = nullptr;
+        RendererMaterialSystem* materialSystem = nullptr;
+        RendererCsgSystem* csgSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* meshViewSetupReady = nullptr;
@@ -55,7 +63,8 @@ struct CsgReceiverSpanBuildGraphTask{
 // Graphics submission when safe, but let the graph lower their exact same-UAV fences.
 struct CsgIntervalCombineGraphTask{
     struct Payload{
-        RendererSystem* renderer = nullptr;
+        RendererMaterialSystem* materialSystem = nullptr;
+        RendererCsgSystem* csgSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* meshViewSetupReady = nullptr;
@@ -82,7 +91,9 @@ struct CsgIntervalCombineGraphTask{
 // renderer thunk.
 struct CsgIntervalSampleGraphTask{
     struct Payload{
-        RendererSystem* renderer = nullptr;
+        Core::Graphics* graphics = nullptr;
+        RendererMaterialSystem* materialSystem = nullptr;
+        RendererCsgSystem* csgSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* meshViewSetupReady = nullptr;

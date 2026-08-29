@@ -5,15 +5,26 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/system.h>
-
+#include <impl/global.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
+
+#include <core/graphics/gpu_timing.h>
+#include <core/graphics/module.h>
+#include <core/graphics/task_graph/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererMaterialSystem;
+class RendererCsgSystem;
+struct DeferredFrameTargets;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,7 +38,9 @@ namespace ECSRenderDetail{
 
 struct GbufferGraphTask{
     struct Payload{
-        RendererSystem* renderer = nullptr;
+        Core::Graphics* graphics = nullptr;
+        RendererMaterialSystem* materialSystem = nullptr;
+        RendererCsgSystem* csgSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* meshViewSetupReady = nullptr;

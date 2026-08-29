@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/system.h>
+#include <impl/ecs_render/renderer_frame_pipeline.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/frame_graph_runtime_statistics.h>
@@ -111,7 +111,7 @@ static void AppendCommandArenaWorkerStatistics(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder){
+bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder){
     if(!m_deferredState.m_targets.valid())
         return false;
 

@@ -30,25 +30,31 @@ bool ShadowPrepareGraphTask::record(
     const Core::GpuTaskRecordContext& context
 ){
     static_cast<void>(context);
-    if(!payload.renderer || !payload.targets || !payload.frameTimingTransaction || !payload.timingTicket)
+    if(
+        !payload.graphics
+        || !payload.raytracingSystem
+        || !payload.outcome
+        || !payload.targets
+        || !payload.frameTimingTransaction
+        || !payload.timingTicket
+    )
         return false;
 
-    RendererSystem& renderer = *payload.renderer;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     if(!payload.frameTimingTransaction->begin(
         RendererGpuTimingScope::s_Frame,
-        renderer.m_graphics.getDevice(),
+        payload.graphics->getDevice(),
         commandList
     ))
         return false;
-    renderer.m_preparedShadowVisibilityReady = false;
+    payload.outcome->ready = false;
     // The compiled ConstantBuffer use established this packet's selector state before this thunk records. The
     // retained descriptor-visible state is also ConstantBuffer, so normal graph frames need no native bridge.
     const bool shadowResourcesPrepared = payload.targets->bindless.valid()
-        && renderer.m_raytracingSystem.recordPreflightShadowVisibilityResources(
+        && payload.raytracingSystem->recordPreflightShadowVisibilityResources(
             commandList,
             *payload.targets,
-            renderer.m_preparedShadowVisibilityReady,
+            payload.outcome->ready,
             payload.shadowMaterialContextBatchGraphOwned,
             payload.sceneBvhBatchGraphOwned,
             payload.sceneTlasBuildGraphOwned,
@@ -75,28 +81,27 @@ void ShadowPrepareGraphTask::accepted(Payload& payload, const Core::QueueSubmiss
     static_cast<void>(token);
     if(payload.targets && payload.currentBindlessSlotsGraphOwned)
         payload.targets->bindless.slotsUploaded = true;
-    if(payload.renderer)
-        payload.renderer->m_raytracingSystem.confirmPreparedShadowTraceGeometryNormalization();
-    if(payload.renderer && payload.shadowMaterialContextBatchGraphOwned)
-        payload.renderer->m_raytracingSystem.confirmPreparedShadowMaterialContextUploads();
-    if(payload.renderer && payload.sceneBvhBatchGraphOwned)
-        payload.renderer->m_raytracingSystem.confirmPreparedSceneBvhUploads();
+    if(payload.raytracingSystem)
+        payload.raytracingSystem->confirmPreparedShadowTraceGeometryNormalization();
+    if(payload.raytracingSystem && payload.shadowMaterialContextBatchGraphOwned)
+        payload.raytracingSystem->confirmPreparedShadowMaterialContextUploads();
+    if(payload.raytracingSystem && payload.sceneBvhBatchGraphOwned)
+        payload.raytracingSystem->confirmPreparedSceneBvhUploads();
 }
 
 
 void ShadowPrepareGraphTask::discarded(Payload& payload){
     if(payload.timingTicket)
         payload.timingTicket->discard();
-    if(!payload.renderer)
+    if(!payload.raytracingSystem || !payload.outcome)
         return;
 
-    RendererSystem& renderer = *payload.renderer;
     // Failed preparation keeps resource storage but invalidates the selected frame plan and every semantic cache.
-    renderer.m_preparedShadowVisibilityReady = false;
-    renderer.m_preparedShadowVisibilityResourcesValid = false;
+    payload.outcome->ready = false;
+    payload.outcome->resourcesValid = false;
     if(payload.targets)
         payload.targets->bindless.slotsUploaded = payload.deferredBindlessSlotsWereUploaded;
-    renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();
+    payload.raytracingSystem->discardPreflightShadowVisibilityResources();
 }
 
 

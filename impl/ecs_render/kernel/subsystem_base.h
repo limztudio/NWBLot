@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/components.h>
 #include <impl/ecs_render/material/material_instance.h>
+#include <impl/ecs_render/shader/shader_path_resolver.h>
 #include <impl/ecs_render/shared/renderer_state.h>
 
 #include <core/assets/global.h>
@@ -44,7 +45,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererSystem;
+class RendererFramePipeline;
 class Shader;
 class Mesh;
 
@@ -72,9 +73,6 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using RendererShaderPathResolveCallback = Function<bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)>;
-
-
 struct RendererMaterialInstanceOverrideField{
     const MaterialTypedLayoutField* field = nullptr;
     u32 blockByteBegin = 0u;
@@ -82,9 +80,9 @@ struct RendererMaterialInstanceOverrideField{
 };
 
 template<typename RendererT>
-class RendererSystemSubsystemBase : NoCopy{
+class RendererFramePipelineSubsystemBase : NoCopy{
 protected:
-    explicit RendererSystemSubsystemBase(RendererT& renderer)
+    explicit RendererFramePipelineSubsystemBase(RendererT& renderer)
         : m_renderer(renderer)
     {}
 
@@ -94,7 +92,6 @@ protected:
     [[nodiscard]] Core::ECS::World& world()const noexcept{ return m_renderer.world(); }
     [[nodiscard]] Core::Graphics& graphics()const noexcept{ return m_renderer.graphics(); }
     [[nodiscard]] Core::Assets::AssetManager& assetManager()const noexcept{ return m_renderer.assetManager(); }
-    [[nodiscard]] RendererShaderPathResolveCallback& shaderPathResolver()const noexcept{ return m_renderer.shaderPathResolver(); }
     [[nodiscard]] CsgShapeRegistry& csgShapeRegistry()const noexcept{ return m_renderer.csgShapeRegistry(); }
     [[nodiscard]] RendererMeshState& meshState()const noexcept{ return m_renderer.meshState(); }
     [[nodiscard]] RendererMaterialState& materialState()const noexcept{ return m_renderer.materialState(); }

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/system.h>
+#include <impl/ecs_render/renderer_frame_pipeline.h>
 
 #include <impl/ecs_render/raytrace/task_graph_shadow_visibility_tasks.h>
 
@@ -30,7 +30,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::declareDeferredShadowVisibilityTask(
+bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     DeferredFrameTargets& deferredTargets,
     const bool hardwareShadowSupported,
     const Core::GpuGraphResourceId worldPosition,
@@ -830,7 +830,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             m_deferredLightingTaskGraph,
             opaqueDesc,
             deferredTargets,
-            &m_preparedShadowVisibilityReady,
+            &m_shadowPreparationOutcome.ready,
             hardwareShadowSupported,
             timingTicket,
             &asyncTiming,
@@ -1174,7 +1174,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         m_deferredLightingTaskGraph,
         desc,
         deferredTargets,
-        &m_preparedShadowVisibilityReady,
+        &m_shadowPreparationOutcome.ready,
         hardwareShadowSupported,
         timingTicket,
         true,

@@ -4,7 +4,7 @@
 
 #include "deferred_system.h"
 
-#include <impl/ecs_render/kernel/system.h>
+#include <impl/ecs_render/renderer_frame_pipeline.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,8 +16,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererDeferredSystem::RendererDeferredSystem(RendererSystem& renderer)
-    : RendererSystemSubsystemBase<RendererSystem>(renderer)
+RendererDeferredSystem::RendererDeferredSystem(RendererFramePipeline& renderer)
+    : RendererFramePipelineSubsystemBase<RendererFramePipeline>(renderer)
 {}
 
 

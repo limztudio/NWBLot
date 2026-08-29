@@ -4,7 +4,7 @@
 
 #include "material_system.h"
 
-#include <impl/ecs_render/kernel/system.h>
+#include <impl/ecs_render/renderer_frame_pipeline.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,8 +16,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererMaterialSystem::RendererMaterialSystem(RendererSystem& renderer)
-    : RendererSystemSubsystemBase<RendererSystem>(renderer)
+RendererMaterialSystem::RendererMaterialSystem(RendererFramePipeline& renderer)
+    : RendererFramePipelineSubsystemBase<RendererFramePipeline>(renderer)
 {}
 
 

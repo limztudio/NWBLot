@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/system.h>
+#include <impl/global.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/graphics/task_graph/task_graph.h>

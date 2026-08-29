@@ -29,9 +29,9 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererCsgSystem final : public RendererSystemSubsystemBase<RendererSystem>{
+class RendererCsgSystem final : public RendererFramePipelineSubsystemBase<RendererFramePipeline>{
 public:
-    explicit RendererCsgSystem(RendererSystem& renderer);
+    explicit RendererCsgSystem(RendererFramePipeline& renderer);
 
 public:
     [[nodiscard]] CsgFrameState buildFrameState(Core::Alloc::ScratchArena& scratchArena);

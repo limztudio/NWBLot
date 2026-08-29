@@ -22,6 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class RendererFramePipeline;
 struct MaterialSurfaceInfo;
 
 
@@ -209,9 +210,18 @@ struct GraphOwnedAdaptiveShadowPlan{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererRayTracingSystem final : public RendererSystemSubsystemBase<RendererSystem>{
+struct ShadowPreparationOutcome{
+    bool resourcesValid = false;
+    bool ready = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererRayTracingSystem final : public RendererFramePipelineSubsystemBase<RendererFramePipeline>{
 public:
-    explicit RendererRayTracingSystem(RendererSystem& renderer);
+    explicit RendererRayTracingSystem(RendererFramePipeline& renderer);
     ~RendererRayTracingSystem();
 
 

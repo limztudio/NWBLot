@@ -4,8 +4,6 @@
 
 #include "shader_system.h"
 
-#include <impl/ecs_render/kernel/system.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -16,9 +14,20 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererShaderSystem::RendererShaderSystem(RendererSystem& renderer)
-    : RendererSystemSubsystemBase<RendererSystem>(renderer)
+RendererShaderSystem::RendererShaderSystem(
+    Core::Graphics& graphics,
+    Core::Assets::AssetManager& assetManager,
+    RendererShaderPathResolveCallback& shaderPathResolver
+)
+    : m_graphics(graphics)
+    , m_assetManager(assetManager)
+    , m_shaderPathResolver(shaderPathResolver)
 {}
+
+
+void RendererShaderSystem::invalidateResources(){
+    m_deferredCompositeVertexShader.reset();
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

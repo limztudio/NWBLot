@@ -5,7 +5,46 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/subsystem_base.h>
+#include "shader_path_resolver.h"
+
+#include <core/assets/global.h>
+#include <core/graphics/rhi/shader.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Graphics;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSETS_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class AssetManager;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,12 +56,16 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererShaderSystem final : public RendererSystemSubsystemBase<RendererSystem>{
+class RendererShaderSystem final : NoCopy{
 public:
-    explicit RendererShaderSystem(RendererSystem& renderer);
+    RendererShaderSystem(
+        Core::Graphics& graphics,
+        Core::Assets::AssetManager& assetManager,
+        RendererShaderPathResolveCallback& shaderPathResolver
+    );
 
 public:
-    [[nodiscard]] bool loadDeferredCompositeVertexShader();
+    void invalidateResources();
     [[nodiscard]] bool loadShader(
         Core::ShaderHandle& outShader,
         const Name& shaderName,
@@ -31,6 +74,16 @@ public:
         const Name& debugName,
         const Name* archiveStageName = nullptr
     );
+    [[nodiscard]] bool loadDeferredCompositeVertexShader();
+    [[nodiscard]] const Core::ShaderHandle& deferredCompositeVertexShader()const noexcept{
+        return m_deferredCompositeVertexShader;
+    }
+
+private:
+    Core::Graphics& m_graphics;
+    Core::Assets::AssetManager& m_assetManager;
+    RendererShaderPathResolveCallback& m_shaderPathResolver;
+    Core::ShaderHandle m_deferredCompositeVertexShader;
 };
 
 

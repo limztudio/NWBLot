@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/system.h>
+#include <impl/ecs_render/renderer_frame_pipeline.h>
 
 #include <impl/ecs_render/raytrace/task_graph_surfel_tasks.h>
 
@@ -30,7 +30,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::declareDeferredSurfelGiTask(
+bool RendererFramePipeline::declareDeferredSurfelGiTask(
     DeferredFrameTargets& deferredTargets,
     const Core::GpuGraphResourceId worldPosition,
     const Core::GpuGraphResourceId normal,
@@ -902,7 +902,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
 }
 
 
-void RendererSystem::declareDeferredSurfelCountReadbackTask(){
+void RendererFramePipeline::declareDeferredSurfelCountReadbackTask(){
     using namespace RendererTaskGraphDetail;
 
     m_deferredSurfelGiCounterReadbackTask = {};

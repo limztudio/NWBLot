@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/system.h>
+#include <impl/ecs_render/renderer_frame_pipeline.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/renderer_private.h>
@@ -21,7 +21,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
+bool RendererFramePipeline::validateResources(const u32 width, const u32 height, const u32 sampleCount){
     static_cast<void>(sampleCount);
     m_raytracingSystem.logCapabilityOnce();
     if(width == 0 || height == 0)
@@ -64,14 +64,14 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
     return true;
 }
 
-void RendererSystem::invalidateResources(){
+void RendererFramePipeline::invalidateResources(){
     m_deferredTaskTimingFeedback.reset();
     m_deferredLightingTaskGraphQueueAssignmentTelemetry.reset();
     m_preparedCsgFrameState = CsgFrameState{};
     m_preparedCsgFrameStateValid = false;
     m_preparedHasTransparentRenderers = false;
-    m_preparedShadowVisibilityResourcesValid = false;
-    m_preparedShadowVisibilityReady = false;
+    m_shadowPreparationOutcome.resourcesValid = false;
+    m_shadowPreparationOutcome.ready = false;
     m_raytracingSystem.discardPreflightShadowVisibilityResources();
     m_raytracingSystem.invalidatePreparedShadowTraceGeometryBuffers();
     m_deferredBindlessSlotsUploadTask = {};
@@ -186,6 +186,7 @@ void RendererSystem::invalidateResources(){
     m_raytracingSystem.releaseSwBvhScratchHeapHandles();
     m_raytracingSystem.releaseSurfelGiHeapHandles();
     m_deferredSystem.resetDeferredFrameTargets();
+    m_shaderSystem.invalidateResources();
     m_meshSystem.releaseAllMeshGeometryHeapHandles();
     m_meshSystem.releaseMeshFrameHeapHandles();
     m_meshState.invalidateResources();
@@ -199,12 +200,12 @@ void RendererSystem::invalidateResources(){
     m_rayTracingState.invalidateResources();
 }
 
-void RendererSystem::update(Core::ECS::World& world, f32 delta){
+void RendererFramePipeline::update(Core::ECS::World& world, f32 delta){
     static_cast<void>(world);
     static_cast<void>(delta);
 }
 
-bool RendererSystem::prepareGpuTimingScopes(){
+bool RendererFramePipeline::prepareGpuTimingScopes(){
     auto& device = m_graphics.getDevice();
     // A timestamp range consumes a begin/end query pair. High-frequency raster/mesh scopes may emit many ranges;
     // the sort and interval-clear scopes each emit two ranges.
@@ -275,9 +276,9 @@ bool RendererSystem::prepareGpuTimingScopes(){
     return true;
 }
 
-bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
-    m_preparedShadowVisibilityResourcesValid = false;
-    m_preparedShadowVisibilityReady = false;
+bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
+    m_shadowPreparationOutcome.resourcesValid = false;
+    m_shadowPreparationOutcome.ready = false;
     m_preparedHasTransparentRenderers = false;
     m_preparedTaskGraphPresentationContributor = nullptr;
 
@@ -368,12 +369,12 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     // records the corresponding GPU work later, after every selected handle has been imported declaratively.
     m_raytracingSystem.discardSurfelResourceInitialization();
     if(!m_raytracingSystem.preflightShadowVisibilityResources(deferredTargets, scratchArena)){
-        m_preparedShadowVisibilityResourcesValid = false;
-        m_preparedShadowVisibilityReady = false;
+        m_shadowPreparationOutcome.resourcesValid = false;
+        m_shadowPreparationOutcome.ready = false;
         m_raytracingSystem.discardPreflightShadowVisibilityResources();
         return false;
     }
-    m_preparedShadowVisibilityResourcesValid = true;
+    m_shadowPreparationOutcome.resourcesValid = true;
 
     if(Core::IGpuTaskGraphPresentationContributor* const contributor = m_graphics.taskGraphPresentationContributor()){
         if(contributor->prepareTaskGraphPresentation(presentationFrame))

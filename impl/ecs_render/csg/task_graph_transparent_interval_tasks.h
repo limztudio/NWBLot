@@ -20,6 +20,13 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class RendererMaterialSystem;
+class RendererCsgSystem;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace ECSRenderDetail{
 
 
@@ -28,7 +35,8 @@ namespace ECSRenderDetail{
 
 struct AvboitCsgReceiverSpanGraphTask{
     struct Payload{
-        RendererSystem* renderer = nullptr;
+        RendererMaterialSystem* materialSystem = nullptr;
+        RendererCsgSystem* csgSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* transparentCsgIntervalsTiming = nullptr;
@@ -52,7 +60,8 @@ struct AvboitCsgReceiverSpanGraphTask{
 // Interval combine consumes the five graph-visible span/peel inputs and writes the four removed-interval outputs.
 struct AvboitCsgIntervalCombineGraphTask{
     struct Payload{
-        RendererSystem* renderer = nullptr;
+        RendererMaterialSystem* materialSystem = nullptr;
+        RendererCsgSystem* csgSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* transparentCsgIntervalsTiming = nullptr;

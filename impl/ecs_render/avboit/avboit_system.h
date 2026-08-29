@@ -18,9 +18,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererAvboitSystem final : public RendererSystemSubsystemBase<RendererSystem>{
+class RendererAvboitSystem final : public RendererFramePipelineSubsystemBase<RendererFramePipeline>{
 public:
-    explicit RendererAvboitSystem(RendererSystem& renderer);
+    explicit RendererAvboitSystem(RendererFramePipeline& renderer);
 
 public:
     // The graph host owns the shared graph artifact; AVBOIT owns every graph-local identifier required by its

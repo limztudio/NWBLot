@@ -36,7 +36,10 @@ void AvboitAccumulationComputeEmulationGraphTask::discardTiming(Optional<Core::G
 ){
     static_cast<void>(context);
     if(
-        !payload.renderer
+        !payload.graphics
+        || !payload.meshSystem
+        || !payload.materialSystem
+        || !payload.csgSystem
         || !payload.targets
         || !payload.timingTicket
         || !payload.accumulationTiming
@@ -45,15 +48,18 @@ void AvboitAccumulationComputeEmulationGraphTask::discardTiming(Optional<Core::G
     )
         return false;
 
-    RendererSystem& renderer = *payload.renderer;
+    Core::Graphics& graphics = *payload.graphics;
+    RendererMeshSystem& meshSystem = *payload.meshSystem;
+    RendererMaterialSystem& materialSystem = *payload.materialSystem;
+    RendererCsgSystem& csgSystem = *payload.csgSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     const bool csgComputeEmulation = payload.csgPlan.captured;
     if(
         !(csgComputeEmulation
-            ? payload.csgPlan.matches(renderer.meshSystem())
-            : payload.plan.matches(renderer.meshSystem()))
+            ? payload.csgPlan.matches(meshSystem)
+            : payload.plan.matches(meshSystem))
         || !payload.materialDrawBuffersUploaded
-        || !renderer.materialSystem().materialPassDrawBuffersReady(
+        || !materialSystem.materialPassDrawBuffersReady(
             payload.instanceCount,
             payload.materialTypedByteCount
         )
@@ -71,13 +77,13 @@ void AvboitAccumulationComputeEmulationGraphTask::discardTiming(Optional<Core::G
     // Reject a late material/pipeline loss so the packet is discarded and the next frame re-preflights instead
     // of accepting an all-or-nothing Accumulation phase with stale generated vertices.
     if(
-        !renderer.materialSystem().materialPassDrawResourcesReady(drawItems)
+        !materialSystem.materialPassDrawResourcesReady(drawItems)
         || (csgComputeEmulation && (
             !payload.csgFrameBuffersUploaded
             || !payload.csgIntervalSampleImageStatesGraphOwned
             || !payload.csgClipBufferStatesGraphOwned
             || !csgFrameData.hasWork()
-            || !renderer.csgSystem().csgFrameBuffersReady(csgFrameData)
+            || !csgSystem.csgFrameBuffersReady(csgFrameData)
         ))
     )
         return false;
@@ -86,9 +92,9 @@ void AvboitAccumulationComputeEmulationGraphTask::discardTiming(Optional<Core::G
 
     commandList.endRenderPass();
     payload.accumulationTiming->emplace(
-        renderer.graphics().gpuTiming(),
+        graphics.gpuTiming(),
         RendererGpuTimingScope::s_AvboitAccumulate,
-        renderer.graphics().getDevice(),
+        graphics.getDevice(),
         commandList
     );
     // Accumulation's raster half records after this producer in the selected terminal Graphics packet. Close
@@ -111,7 +117,7 @@ void AvboitAccumulationComputeEmulationGraphTask::discardTiming(Optional<Core::G
         payload.materialGeometryStatesGraphOwned,
         true,
     };
-    renderer.materialSystem().generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+    materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
 }
 
@@ -131,7 +137,9 @@ void AvboitAccumulationSharedComputeEmulationGraphTask::discardTiming(Optional<C
 ){
     static_cast<void>(context);
     if(
-        !payload.renderer
+        !payload.graphics
+        || !payload.meshSystem
+        || !payload.materialSystem
         || !payload.targets
         || !payload.targets->avboit.accumulationFramebuffer
         || !payload.timingTicket
@@ -141,12 +149,14 @@ void AvboitAccumulationSharedComputeEmulationGraphTask::discardTiming(Optional<C
     )
         return false;
 
-    RendererSystem& renderer = *payload.renderer;
+    Core::Graphics& graphics = *payload.graphics;
+    RendererMeshSystem& meshSystem = *payload.meshSystem;
+    RendererMaterialSystem& materialSystem = *payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     if(
-        !payload.plan.matches(renderer.meshSystem(), payload.drawIndex)
+        !payload.plan.matches(meshSystem, payload.drawIndex)
         || !payload.materialDrawBuffersUploaded
-        || !renderer.materialSystem().materialPassDrawBuffersReady(
+        || !materialSystem.materialPassDrawBuffersReady(
             payload.instanceCount,
             payload.materialTypedByteCount
         )
@@ -156,7 +166,7 @@ void AvboitAccumulationSharedComputeEmulationGraphTask::discardTiming(Optional<C
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     MaterialPassDrawItems drawItems{ scratchArena };
     payload.plan.materialize(payload.drawIndex, drawItems);
-    if(!renderer.materialSystem().materialPassDrawResourcesReady(drawItems))
+    if(!materialSystem.materialPassDrawResourcesReady(drawItems))
         return false;
 
     if(payload.phase == Phase::Generate){
@@ -167,9 +177,9 @@ void AvboitAccumulationSharedComputeEmulationGraphTask::discardTiming(Optional<C
             if(payload.accumulationTiming->has_value())
                 return false;
             payload.accumulationTiming->emplace(
-                renderer.graphics().gpuTiming(),
+                graphics.gpuTiming(),
                 RendererGpuTimingScope::s_AvboitAccumulate,
-                renderer.graphics().getDevice(),
+                graphics.getDevice(),
                 commandList
             );
             // The range spans serial callbacks, but this opening command list still needs its marker closed
@@ -200,10 +210,10 @@ void AvboitAccumulationSharedComputeEmulationGraphTask::discardTiming(Optional<C
         true,
     };
     if(payload.phase == Phase::Generate){
-        renderer.materialSystem().generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+        materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     }
     else{
-        renderer.materialSystem().renderComputeMaterialPassDrawItemsRasterOnly(
+        materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(
             drawContext,
             drawItems.computeDrawItems
         );

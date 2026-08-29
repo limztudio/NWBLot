@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/system.h>
+#include <impl/ecs_render/renderer_frame_pipeline.h>
 
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_finalize_task.h>
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_tasks.h>
@@ -31,7 +31,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::declareDeferredShadowPrepareTask(
+bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     DeferredFrameTargets& deferredTargets,
     const Core::GpuGraphResourceId currentBindlessSlots,
     const Core::GpuGraphResourceId materialContextSlots,
@@ -1125,7 +1125,9 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     m_deferredShadowPrepareTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::ShadowPrepareGraphTask>(
         desc,
         ECSRenderDetail::ShadowPrepareGraphTask::Payload{
-            .renderer = this,
+            .graphics = &m_graphics,
+            .raytracingSystem = &m_raytracingSystem,
+            .outcome = &m_shadowPreparationOutcome,
             .targets = &deferredTargets,
             .frameTimingTransaction = &frameTimingTransaction,
             .timingTicket = &timingTicket,
@@ -1175,7 +1177,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             ECSRenderDetail::ShadowPrepareHybridSoftwareTailGraphTask::Payload{
                 .raytracingSystem = &m_raytracingSystem,
                 .targets = &deferredTargets,
-                .hardwarePreparationReady = &m_preparedShadowVisibilityReady,
+                .hardwarePreparationReady = &m_shadowPreparationOutcome.ready,
                 .timingTicket = &timingTicket,
                 .shadowMaterialContextBatchGraphOwned = shadowMaterialContextBatchGraphOwned,
                 .sceneBvhBatchGraphOwned = sceneBvhBatchGraphOwned,

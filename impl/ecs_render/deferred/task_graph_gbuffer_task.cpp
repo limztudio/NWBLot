@@ -30,7 +30,9 @@ namespace ECSRenderDetail{
 ){
     static_cast<void>(context);
     if(
-        !payload.renderer
+        !payload.graphics
+        || !payload.materialSystem
+        || !payload.csgSystem
         || !payload.targets
         || !payload.timingTicket
         || !*payload.timingTicket
@@ -40,7 +42,9 @@ namespace ECSRenderDetail{
     )
         return false;
 
-    RendererSystem& renderer = *payload.renderer;
+    Core::Graphics& graphics = *payload.graphics;
+    RendererMaterialSystem& materialSystem = *payload.materialSystem;
+    RendererCsgSystem& csgSystem = *payload.csgSystem;
     DeferredFrameTargets& deferredTargets = *payload.targets;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
@@ -63,14 +67,14 @@ namespace ECSRenderDetail{
     const bool deferredResourcesReady =
         hasDeferredDrawItems
         && payload.materialDrawBuffersUploaded
-        && renderer.m_materialSystem.materialPassDrawBuffersReady(
+        && materialSystem.materialPassDrawBuffersReady(
             payload.opaqueDrawSnapshot.instanceCount,
             payload.opaqueDrawSnapshot.materialTypedByteCount
         )
     ;
     const bool regularDrawResourcesReady =
         deferredResourcesReady
-        && renderer.m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.regular)
+        && materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.regular)
     ;
     MaterialPassDrawItems regularMeshDrawItems{ scratchArena };
     const MaterialPassDrawItems* regularDrawItemsForGbuffer = &opaqueDrawItems.regular;
@@ -87,20 +91,20 @@ namespace ECSRenderDetail{
             !csgFrameData.hasWork()
             || (
                 payload.csgFrameBuffersUploaded
-                && renderer.m_csgSystem.csgFrameBuffersReady(csgFrameData)
+                && csgSystem.csgFrameBuffersReady(csgFrameData)
             )
         )
     ;
     const bool csgReceiverSurfaceDrawResourcesReady =
         csgResourcesReady
-        && (opaqueDrawItems.csgReceiverSurface.empty() || renderer.m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
+        && (opaqueDrawItems.csgReceiverSurface.empty() || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
     ;
     if(deferredResourcesReady){
         // Every opaque CSG frame byte is now captured in immutable graph uploads. Native recording consumes those
         // declared resources without rewriting the clip-context or interval-sample uniform payloads.
         const bool csgSampleStateReady = csgResourcesReady;
         if(csgSampleStateReady && csgFrameData.hasWork())
-            renderer.m_csgSystem.dispatchCsgIntervalPeels(
+            csgSystem.dispatchCsgIntervalPeels(
                 commandList,
                 deferredTargets,
                 csgFrameData,
@@ -135,16 +139,16 @@ namespace ECSRenderDetail{
                 )
                     return false;
                 payload.regularSharedComputeEmulationTiming->emplace(
-                    renderer.m_graphics.gpuTiming(),
+                    graphics.gpuTiming(),
                     RendererGpuTimingScope::s_OpaqueRegular,
-                    renderer.m_graphics.getDevice(),
+                    graphics.getDevice(),
                     commandList
                 );
                 // The timestamps span ordered graph callbacks; the marker must still close in this producer
                 // callback before its command list can be finalized.
                 payload.regularSharedComputeEmulationTiming->value().finishMarker();
                 if(!regularDrawItemsForGbuffer->empty()){
-                    renderer.m_materialSystem.renderMaterialPassDrawItems(
+                    materialSystem.renderMaterialPassDrawItems(
                         opaqueDrawContext,
                         *regularDrawItemsForGbuffer
                     );
@@ -152,12 +156,12 @@ namespace ECSRenderDetail{
             }
             else{
                 Core::GpuTimingMeasure timing(
-                    renderer.m_graphics.gpuTiming(),
+                    graphics.gpuTiming(),
                     RendererGpuTimingScope::s_OpaqueRegular,
-                    renderer.m_graphics.getDevice(),
+                    graphics.getDevice(),
                     commandList
                 );
-                renderer.m_materialSystem.renderMaterialPassDrawItems(
+                materialSystem.renderMaterialPassDrawItems(
                     opaqueDrawContext,
                     *regularDrawItemsForGbuffer
                 );
@@ -184,12 +188,12 @@ namespace ECSRenderDetail{
         };
         if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
             Core::GpuTimingMeasure timing(
-                renderer.m_graphics.gpuTiming(),
+                graphics.gpuTiming(),
                 RendererGpuTimingScope::s_OpaqueCsgReceiverSurface,
-                renderer.m_graphics.getDevice(),
+                graphics.getDevice(),
                 commandList
             );
-            renderer.m_materialSystem.renderMaterialPassDrawItems(
+            materialSystem.renderMaterialPassDrawItems(
                 csgReceiverSurfaceDrawContext,
                 opaqueDrawItems.csgReceiverSurface
             );

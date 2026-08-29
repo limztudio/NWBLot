@@ -84,15 +84,6 @@ enum class DeferredGraphicsPrefixTimingSlot : u8{
     Normalize,
     kCount,
 };
-struct ShadowPrepareGraphTask;
-struct MeshViewSetupGraphTask;
-struct MeshViewUploadCommitGraphTask;
-struct SceneShadingSetupGraphTask;
-struct CsgReceiverSpanBuildGraphTask;
-struct CsgIntervalCombineGraphTask;
-struct AvboitCsgReceiverSpanGraphTask;
-struct AvboitCsgIntervalCombineGraphTask;
-struct CsgIntervalSampleGraphTask;
 struct DeferredClearTimingRecordState{
     Core::Graphics* graphics = nullptr;
     Optional<Core::GpuTimingMeasure>* timing = nullptr;
@@ -113,11 +104,6 @@ struct CsgIntervalClearTimingRecordState{
     Core::GpuTimingSubmissionTicket** rebindableTimingTicket = nullptr;
     Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
 };
-struct OpaqueRegularComputeEmulationGraphTask;
-struct OpaqueRegularSharedComputeEmulationGraphTask;
-struct OpaqueCsgReceiverComputeEmulationGraphTask;
-struct OpaqueCsgIntervalSampleComputeEmulationGraphTask;
-struct GbufferGraphTask;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -129,62 +115,17 @@ struct GbufferGraphTask;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct AvboitOccupancyComputeEmulationGraphTask;
-struct AvboitOccupancySharedComputeEmulationGraphTask;
-struct AvboitExtinctionComputeEmulationGraphTask;
-struct AvboitExtinctionSharedComputeEmulationGraphTask;
-struct AvboitAccumulationComputeEmulationGraphTask;
-struct AvboitAccumulationSharedComputeEmulationGraphTask;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass, public Core::Telemetry::IFrameGraphContributor{
+class RendererFramePipeline final : NoCopy{
     template<typename RendererT>
-    friend class RendererSystemSubsystemBase;
-    friend class RendererShaderSystem;
-    friend class RendererMeshSystem;
+    friend class RendererFramePipelineSubsystemBase;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
     friend class RendererDeferredSystem;
     friend class RendererAvboitSystem;
     friend class RendererRayTracingSystem;
-    friend struct ECSRenderDetail::ShadowPrepareGraphTask;
-    friend struct ECSRenderDetail::MeshViewSetupGraphTask;
-    friend struct ECSRenderDetail::MeshViewUploadCommitGraphTask;
-    friend struct ECSRenderDetail::SceneShadingSetupGraphTask;
-    friend struct ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask;
-    friend struct ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask;
-    friend struct ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask;
-    friend struct ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask;
-    friend struct RendererTaskGraphDetail::AvboitOccupancyComputeEmulationGraphTask;
-    friend struct RendererTaskGraphDetail::AvboitOccupancySharedComputeEmulationGraphTask;
-    friend struct RendererTaskGraphDetail::AvboitExtinctionComputeEmulationGraphTask;
-    friend struct RendererTaskGraphDetail::AvboitExtinctionSharedComputeEmulationGraphTask;
-    friend struct RendererTaskGraphDetail::AvboitAccumulationComputeEmulationGraphTask;
-    friend struct RendererTaskGraphDetail::AvboitAccumulationSharedComputeEmulationGraphTask;
-    friend struct ECSRenderDetail::GbufferGraphTask;
-    friend struct ECSRenderDetail::CsgReceiverSpanBuildGraphTask;
-    friend struct ECSRenderDetail::CsgIntervalCombineGraphTask;
-    friend struct ECSRenderDetail::AvboitCsgReceiverSpanGraphTask;
-    friend struct ECSRenderDetail::AvboitCsgIntervalCombineGraphTask;
-    friend struct ECSRenderDetail::CsgIntervalSampleGraphTask;
 
 private:
-    // This is deliberately diagnostic-only: lifecycle ownership remains below in RendererSystem, while the
+    // This is deliberately diagnostic-only: lifecycle ownership remains below in RendererFramePipeline, while the
     // transition-only report lets the opt-in Vulkan smoke prove which accepted-history branch actually ran.
     enum class LaggedLightingReport : u8{
         Unreported,
@@ -199,25 +140,25 @@ public:
 
 
 public:
-    RendererSystem(
+    RendererFramePipeline(
         Core::Alloc::GlobalArena& arena,
         Core::ECS::World& world,
         Core::Graphics& graphics,
         Core::Assets::AssetManager& assetManager,
         ShaderPathResolveCallback shaderPathResolver
     );
-    virtual ~RendererSystem()override;
+    ~RendererFramePipeline();
 
 
 public:
-    virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
-    virtual void invalidateResources()override;
+    [[nodiscard]] bool validateResources(u32 width, u32 height, u32 sampleCount);
+    void invalidateResources();
 
-    virtual void update(Core::ECS::World& world, f32 delta)override;
+    void update(Core::ECS::World& world, f32 delta);
 
-    virtual bool prepareResources(Core::Framebuffer* framebuffer)override;
-    virtual void render(Core::Framebuffer* framebuffer)override;
-    virtual bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override;
+    [[nodiscard]] bool prepareResources(Core::Framebuffer* framebuffer);
+    void render(Core::Framebuffer* framebuffer);
+    [[nodiscard]] bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder);
     [[nodiscard]] CsgShapeRegistry& csgShapeRegistry(){ return m_csgShapeRegistry; }
     [[nodiscard]] const CsgShapeRegistry& csgShapeRegistry()const{ return m_csgShapeRegistry; }
     // This explicitly trades one frame of shadow/caustic/surfel latency for overlap: Graphics lights the current G-buffer from
@@ -433,7 +374,6 @@ private:
     [[nodiscard]] Core::ECS::World& world()noexcept{ return m_world; }
     [[nodiscard]] Core::Graphics& graphics()noexcept{ return m_graphics; }
     [[nodiscard]] Core::Assets::AssetManager& assetManager()noexcept{ return m_assetManager; }
-    [[nodiscard]] ShaderPathResolveCallback& shaderPathResolver()noexcept{ return m_shaderPathResolver; }
     [[nodiscard]] RendererMeshState& meshState()noexcept{ return m_meshState; }
     [[nodiscard]] RendererMaterialState& materialState()noexcept{ return m_materialState; }
     [[nodiscard]] RendererDrawState& drawState()noexcept{ return m_drawState; }
@@ -670,8 +610,7 @@ private:
     Core::GpuPersistentResourceStateCache m_surfelIrradianceReturnState;
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;
-    bool m_preparedShadowVisibilityResourcesValid = false;
-    bool m_preparedShadowVisibilityReady = false;
+    ShadowPreparationOutcome m_shadowPreparationOutcome;
     bool m_frameLaggedAsyncLightingEnabled = false;
     LaggedLightingReport m_laggedLightingReport = LaggedLightingReport::Unreported;
     u64 m_laggedLightingReportGeneration = 0u;

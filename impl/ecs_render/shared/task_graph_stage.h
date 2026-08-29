@@ -26,7 +26,7 @@ namespace ECSRenderDetail{
 
 
 // Shared-output compute emulation alternates one generate and one raster phase for every retained regular
-// draw. Keep the supported range in the task-graph contract so task-owning domains do not depend on RendererSystem.
+// draw. Keep the supported range in the task-graph contract so task-owning domains do not depend on RendererFramePipeline.
 inline constexpr usize s_SharedComputeEmulationPhasesPerDraw = 2u;
 inline constexpr usize s_SharedComputeEmulationMinimumDrawCount = 2u;
 inline constexpr usize s_SharedComputeEmulationMaximumDrawCount = 5u;

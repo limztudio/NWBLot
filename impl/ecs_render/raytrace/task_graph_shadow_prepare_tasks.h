@@ -19,7 +19,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererSystem;
 struct DeferredFrameTargets;
 
 
@@ -34,7 +33,9 @@ namespace ECSRenderDetail{
 
 struct ShadowPrepareGraphTask{
     struct Payload{
-        RendererSystem* renderer = nullptr;
+        Core::Graphics* graphics = nullptr;
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+        ShadowPreparationOutcome* outcome = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;

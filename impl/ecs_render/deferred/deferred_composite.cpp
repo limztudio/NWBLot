@@ -178,7 +178,7 @@ bool RendererDeferredSystem::createDeferredPresentPipeline(Core::Framebuffer* pr
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     Core::GraphicsPipelineDesc pipelineDesc;
     pipelineDesc
-        .setVertexShader(deferredState().m_compositeVertexShader)
+        .setVertexShader(m_renderer.shaderSystem().deferredCompositeVertexShader())
         .setPixelShader(deferredState().m_presentPixelShader)
         .setRenderState(ECSRenderDetail::BuildCompositeRenderState())
         .addBindingLayout(deferredState().m_presentBindingLayout)

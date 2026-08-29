@@ -2,11 +2,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
-#include <impl/ecs_render/kernel/arena_names.h>
+#include "mesh_system.h"
 
+#include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_render/shared/renderer_state.h>
+
+#include <core/alloc/scratch.h>
+#include <core/assets/manager.h>
+#include <core/common/log.h>
+#include <core/ecs/world.h>
+#include <core/graphics/backend_selection.h>
+#include <core/graphics/module.h>
+#include <impl/assets_mesh/asset.h>
 #include <impl/assets_mesh/meshlet_triangle_indices.h>
 #include <impl/assets_mesh/meshlet_vertex_attributes.h>
+#include <impl/ecs_mesh/module.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
 
 
@@ -238,8 +248,8 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         return false;
     }
 
-    const auto foundMesh = meshState().m_meshes.find(meshPath);
-    if(foundMesh != meshState().m_meshes.end()){
+    const auto foundMesh = m_meshState.m_meshes.find(meshPath);
+    if(foundMesh != m_meshState.m_meshes.end()){
         if(!meshRenderBindingsReady(foundMesh.value())){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached mesh '{}' is missing creation-time render bindings")
                 , StringConvert(meshPath.c_str())
@@ -252,7 +262,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     }
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
-    if(!assetManager().loadSync(Mesh::AssetTypeName(), meshPath, loadedAsset)){
+    if(!m_assetManager.loadSync(Mesh::AssetTypeName(), meshPath, loadedAsset)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to load mesh '{}'"), StringConvert(meshPath.c_str()));
         return false;
     }
@@ -285,14 +295,14 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         return false;
     }
 
-    const bool rtSupported = graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
+    const bool rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
     // Without hardware ray tracing the software BVH shadow fallback runs instead; it reads positions and the
     // reconstructed triangle indices as raw byte buffers, so those buffers need raw views in that case.
     const bool swShadow = !rtSupported;
 
     bool uploaded = true;
     uploaded = __hidden_mesh::AssignMeshBuffer<Float3U>(
-        graphics(),
+        m_graphics,
         meshPath,
         createdMesh.positionBuffer,
         AStringView(":positions"),
@@ -302,7 +312,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         rtSupported
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(
-        graphics(),
+        m_graphics,
         meshPath,
         createdMesh.normalBuffer,
         AStringView(":normals"),
@@ -310,7 +320,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         NWB_TEXT("normal")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(
-        graphics(),
+        m_graphics,
         meshPath,
         createdMesh.tangentBuffer,
         AStringView(":tangents"),
@@ -318,7 +328,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         NWB_TEXT("tangent")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Float2U>(
-        graphics(),
+        m_graphics,
         meshPath,
         createdMesh.uv0Buffer,
         AStringView(":uv0"),
@@ -326,7 +336,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         NWB_TEXT("uv0")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(
-        graphics(),
+        m_graphics,
         meshPath,
         createdMesh.colorBuffer,
         AStringView(":colors"),
@@ -334,7 +344,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         NWB_TEXT("color")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<MeshletDesc>(
-        graphics(),
+        m_graphics,
         meshPath,
         createdMesh.meshletDescBuffer,
         AStringView(":meshlets"),
@@ -342,7 +352,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         NWB_TEXT("meshlet descriptor")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<MeshletBounds>(
-        graphics(),
+        m_graphics,
         meshPath,
         createdMesh.meshletBoundsBuffer,
         AStringView(":meshlet_bounds"),
@@ -351,8 +361,8 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         true
     ) && uploaded;
     uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
-        graphics(),
-        arena(),
+        m_graphics,
+        m_arena,
         meshPath,
         createdMesh.meshletPositionRefDeltaBuffer,
         AStringView(":meshlet_position_ref_deltas"),
@@ -360,8 +370,8 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         NWB_TEXT("meshlet position ref delta")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
-        graphics(),
-        arena(),
+        m_graphics,
+        m_arena,
         meshPath,
         createdMesh.meshletAttributeRefDeltaBuffer,
         AStringView(":meshlet_attribute_ref_deltas"),
@@ -369,7 +379,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         NWB_TEXT("meshlet attribute ref delta")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<MeshletLocalVertexRef>(
-        graphics(),
+        m_graphics,
         meshPath,
         createdMesh.meshletLocalVertexRefBuffer,
         AStringView(":meshlet_local_vertex_refs"),
@@ -377,8 +387,8 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         NWB_TEXT("meshlet local vertex ref")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
-        graphics(),
-        arena(),
+        m_graphics,
+        m_arena,
         meshPath,
         createdMesh.meshletPrimitiveIndexBuffer,
         AStringView(":meshlet_primitive_indices"),
@@ -422,7 +432,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         // never needs an ownership transfer during the Graphics -> Compute overlap.
         indexFlags.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
         const RuntimeMeshBufferUpload::BufferSetupFailure::Enum indexFailure = RuntimeMeshBufferUpload::SetupRequiredBuffer<u32>(
-            graphics(),
+            m_graphics,
             indexBufferName,
             triangleIndices,
             indexFlags,
@@ -482,7 +492,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         // has prepared the frame, so this trace-only stream is a shared read input too.
         attributeFlags.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
         const RuntimeMeshBufferUpload::BufferSetupFailure::Enum attributeFailure = RuntimeMeshBufferUpload::SetupRequiredBuffer<AttribGpu>(
-            graphics(),
+            m_graphics,
             attributeBufferName,
             triangleAttributes,
             attributeFlags,
@@ -500,7 +510,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     if(!createMeshRenderBindings(createdMesh))
         return false;
 
-    auto result = meshState().m_meshes.try_emplace(meshPath, Move(createdMesh));
+    auto result = m_meshState.m_meshes.try_emplace(meshPath, Move(createdMesh));
     auto it = result.first;
 
     outMesh = &it.value();
@@ -520,8 +530,8 @@ bool RendererMeshSystem::findMeshResources(const Name& meshKey, MeshResources*& 
     if(!meshKey)
         return false;
 
-    const auto foundMesh = meshState().m_meshes.find(meshKey);
-    if(foundMesh == meshState().m_meshes.end())
+    const auto foundMesh = m_meshState.m_meshes.find(meshKey);
+    if(foundMesh == m_meshState.m_meshes.end())
         return false;
 
     if(!meshRenderBindingsReady(foundMesh.value()))
@@ -537,8 +547,8 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
 
     NWB_ASSERT(desc.valid());
 
-    const auto foundMesh = meshState().m_meshes.find(desc.meshKey);
-    if(foundMesh != meshState().m_meshes.end()){
+    const auto foundMesh = m_meshState.m_meshes.find(desc.meshKey);
+    if(foundMesh != m_meshState.m_meshes.end()){
         if(!foundMesh.value().runtimeMesh){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' collides with a static mesh resource")
                 , StringConvert(desc.meshKey.c_str())
@@ -547,7 +557,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
         }
         if(foundMesh.value().runtimeMeshVersion != desc.version){
             releaseMeshGeometryHeapHandles(foundMesh.value());
-            meshState().m_meshes.erase(foundMesh);
+            m_meshState.m_meshes.erase(foundMesh);
         }
         else{
             if(!meshRenderBindingsReady(foundMesh.value())){
@@ -609,7 +619,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
     if(!createMeshRenderBindings(createdMesh))
         return false;
 
-    auto result = meshState().m_meshes.try_emplace(desc.meshKey, Move(createdMesh));
+    auto result = m_meshState.m_meshes.try_emplace(desc.meshKey, Move(createdMesh));
     auto it = result.first;
 
     outMesh = &it.value();
@@ -621,8 +631,8 @@ bool RendererMeshSystem::findRuntimeMeshResources(const RuntimeMeshDesc& desc, M
     outMesh = nullptr;
     NWB_ASSERT(desc.valid());
 
-    const auto foundMesh = meshState().m_meshes.find(desc.meshKey);
-    if(foundMesh == meshState().m_meshes.end())
+    const auto foundMesh = m_meshState.m_meshes.find(desc.meshKey);
+    if(foundMesh == m_meshState.m_meshes.end())
         return false;
 
     MeshResources& mesh = foundMesh.value();
@@ -638,11 +648,11 @@ bool RendererMeshSystem::findRuntimeMeshResources(const RuntimeMeshDesc& desc, M
 }
 
 void RendererMeshSystem::pruneRuntimeMeshResources(){
-    if(meshState().m_meshes.empty())
+    if(m_meshState.m_meshes.empty())
         return;
 
-    const auto* meshSystem = world().getSystem<NWB::Impl::MeshSystem>();
-    for(auto it = meshState().m_meshes.begin(); it != meshState().m_meshes.end();){
+    const auto* meshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
+    for(auto it = m_meshState.m_meshes.begin(); it != m_meshState.m_meshes.end();){
         const MeshResources& mesh = it.value();
         if(!mesh.runtimeMesh){
             ++it;
@@ -655,7 +665,7 @@ void RendererMeshSystem::pruneRuntimeMeshResources(){
         }
 
         releaseMeshGeometryHeapHandles(it.value());
-        it = meshState().m_meshes.erase(it);
+        it = m_meshState.m_meshes.erase(it);
     }
 }
 

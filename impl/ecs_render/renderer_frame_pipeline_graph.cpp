@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/system.h>
+#include <impl/ecs_render/renderer_frame_pipeline.h>
 
 #include <impl/ecs_render/raytrace/task_graph_post_gbuffer_normalize_task.h>
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_finalize_task.h>
@@ -133,7 +133,7 @@ namespace __hidden_task_graph_deferred_lighting{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererSystem::buildDeferredLightingTaskGraph(
+void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const ECSRenderDetail::RendererFrameGraphFeatures& features,
     DeferredFrameTargets& deferredTargets,
     const CsgFrameState& csgFrameState,
@@ -1702,7 +1702,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 m_deferredLightingTaskGraph,
                 accumulatorDecayDesc,
                 deferredTargets,
-                &m_preparedShadowVisibilityReady,
+                &m_shadowPreparationOutcome.ready,
                 m_rayTracingState.m_causticTemporalDecay,
                 true,
                 hardwareCausticsTimingTicket,
@@ -1740,7 +1740,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             m_deferredLightingTaskGraph,
             hardwarePhotonDesc,
             deferredTargets,
-            &m_preparedShadowVisibilityReady,
+            &m_shadowPreparationOutcome.ready,
             hardwareCausticsTimingTicket,
             true,
             graphOwnsAccumulatorBootstrapClear,
@@ -2558,7 +2558,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             csgReceiverSpanCountSubresources,
             Core::ResourceStates::UnorderedAccess
         ));
-        avboitCsgReceiverSpanPayload.renderer = this;
+        avboitCsgReceiverSpanPayload.materialSystem = &m_materialSystem;
+        avboitCsgReceiverSpanPayload.csgSystem = &m_csgSystem;
         avboitCsgReceiverSpanPayload.targets = &deferredTargets;
         avboitCsgReceiverSpanPayload.timingTicket = &avboitPreTimingTicket;
         avboitCsgReceiverSpanPayload.transparentCsgIntervalsTiming = &transparentCsgIntervalsTiming;
@@ -2620,7 +2621,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             csgRemovedIntervalCountSubresources,
             Core::ResourceStates::UnorderedAccess
         ));
-        avboitCsgIntervalCombinePayload.renderer = this;
+        avboitCsgIntervalCombinePayload.materialSystem = &m_materialSystem;
+        avboitCsgIntervalCombinePayload.csgSystem = &m_csgSystem;
         avboitCsgIntervalCombinePayload.targets = &deferredTargets;
         avboitCsgIntervalCombinePayload.timingTicket = &avboitPreTimingTicket;
         avboitCsgIntervalCombinePayload.transparentCsgIntervalsTiming = &transparentCsgIntervalsTiming;
@@ -3415,7 +3417,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     // and acceptance contract when later split stages form a cross-queue consumer frontier.
     avboitOccupancyScheduling.allowMergeAcrossConsumerFrontier = true;
     if(occupancyComputeEmulationOutputStatesGraphOwned){
-        avboitOccupancyComputeEmulationPayload.renderer = this;
+        avboitOccupancyComputeEmulationPayload.graphics = &m_graphics;
+        avboitOccupancyComputeEmulationPayload.meshSystem = &m_meshSystem;
+        avboitOccupancyComputeEmulationPayload.materialSystem = &m_materialSystem;
+        avboitOccupancyComputeEmulationPayload.csgSystem = &m_csgSystem;
         avboitOccupancyComputeEmulationPayload.targets = &deferredTargets;
         avboitOccupancyComputeEmulationPayload.timingTicket = &avboitPreTimingTicket;
         avboitOccupancyComputeEmulationPayload.occupancyTiming = &avboitOccupancyComputeEmulationTiming;
@@ -3621,7 +3626,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 .setResourceSetUses(resourceSetUses, resourceSetUseCount)
             ;
             AvboitOccupancySharedComputeEmulationGraphTask::Payload payload;
-            payload.renderer = this;
+            payload.graphics = &m_graphics;
+            payload.meshSystem = &m_meshSystem;
+            payload.materialSystem = &m_materialSystem;
             payload.targets = &deferredTargets;
             payload.timingTicket = &avboitPreTimingTicket;
             payload.occupancyTiming = &avboitOccupancyComputeEmulationTiming;
@@ -4343,7 +4350,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         m_avboitSystem.taskGraphStage().m_extinctionStreamTask = extinctionStreamTask;
     Core::GpuTaskId extinctionDependency = extinctionUploadTask;
     if(extinctionComputeEmulationOutputStatesGraphOwned){
-        avboitExtinctionComputeEmulationPayload.renderer = this;
+        avboitExtinctionComputeEmulationPayload.graphics = &m_graphics;
+        avboitExtinctionComputeEmulationPayload.meshSystem = &m_meshSystem;
+        avboitExtinctionComputeEmulationPayload.materialSystem = &m_materialSystem;
+        avboitExtinctionComputeEmulationPayload.csgSystem = &m_csgSystem;
         avboitExtinctionComputeEmulationPayload.targets = &deferredTargets;
         avboitExtinctionComputeEmulationPayload.timingTicket = avboitExtinctionPayload.timingTicket;
         avboitExtinctionComputeEmulationPayload.extinctionTiming = &avboitExtinctionComputeEmulationTiming;
@@ -4547,7 +4557,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 .setResourceSetUses(resourceSetUses, resourceSetUseCount)
             ;
             AvboitExtinctionSharedComputeEmulationGraphTask::Payload payload;
-            payload.renderer = this;
+            payload.graphics = &m_graphics;
+            payload.meshSystem = &m_meshSystem;
+            payload.materialSystem = &m_materialSystem;
             payload.targets = &deferredTargets;
             payload.timingTicket = avboitExtinctionTimingTicket;
             payload.extinctionTiming = &avboitExtinctionComputeEmulationTiming;
@@ -5269,7 +5281,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         m_avboitSystem.taskGraphStage().m_accumulationStreamTask = accumulationStreamTask;
     Core::GpuTaskId accumulationDependency = accumulationUploadTask;
     if(accumulationComputeEmulationOutputStatesGraphOwned){
-        avboitAccumulationComputeEmulationPayload.renderer = this;
+        avboitAccumulationComputeEmulationPayload.graphics = &m_graphics;
+        avboitAccumulationComputeEmulationPayload.meshSystem = &m_meshSystem;
+        avboitAccumulationComputeEmulationPayload.materialSystem = &m_materialSystem;
+        avboitAccumulationComputeEmulationPayload.csgSystem = &m_csgSystem;
         avboitAccumulationComputeEmulationPayload.targets = &deferredTargets;
         avboitAccumulationComputeEmulationPayload.timingTicket = avboitAccumulationPayload.timingTicket;
         avboitAccumulationComputeEmulationPayload.accumulationTiming = &avboitAccumulationComputeEmulationTiming;
@@ -5472,7 +5487,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 .setResourceSetUses(resourceSetUses, resourceSetUseCount)
             ;
             AvboitAccumulationSharedComputeEmulationGraphTask::Payload payload;
-            payload.renderer = this;
+            payload.graphics = &m_graphics;
+            payload.meshSystem = &m_meshSystem;
+            payload.materialSystem = &m_materialSystem;
             payload.targets = &deferredTargets;
             payload.timingTicket = avboitAccumulationTimingTicket;
             payload.accumulationTiming = &avboitAccumulationComputeEmulationTiming;

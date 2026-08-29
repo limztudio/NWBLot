@@ -20,6 +20,14 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class RendererMeshSystem;
+class RendererMaterialSystem;
+class RendererCsgSystem;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace ECSRenderDetail{
 
 
@@ -28,7 +36,9 @@ namespace ECSRenderDetail{
 
 struct OpaqueCsgReceiverComputeEmulationGraphTask{
     struct Payload{
-        RendererSystem* renderer = nullptr;
+        RendererMeshSystem* meshSystem = nullptr;
+        RendererMaterialSystem* materialSystem = nullptr;
+        RendererCsgSystem* csgSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* meshViewSetupReady = nullptr;
@@ -57,7 +67,10 @@ struct OpaqueCsgReceiverComputeEmulationGraphTask{
 // original Opaque CSG timing range inside that one semantic Graphics packet.
 struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
     struct Payload{
-        RendererSystem* renderer = nullptr;
+        Core::Graphics* graphics = nullptr;
+        RendererMeshSystem* meshSystem = nullptr;
+        RendererMaterialSystem* materialSystem = nullptr;
+        RendererCsgSystem* csgSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* meshViewSetupReady = nullptr;

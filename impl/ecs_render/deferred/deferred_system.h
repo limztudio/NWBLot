@@ -29,9 +29,9 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererDeferredSystem final : public RendererSystemSubsystemBase<RendererSystem>{
+class RendererDeferredSystem final : public RendererFramePipelineSubsystemBase<RendererFramePipeline>{
 public:
-    explicit RendererDeferredSystem(RendererSystem& renderer);
+    explicit RendererDeferredSystem(RendererFramePipeline& renderer);
 
 public:
     // Resolves immutable per-frame data before graph declaration. The shared renderer publishes changed payloads

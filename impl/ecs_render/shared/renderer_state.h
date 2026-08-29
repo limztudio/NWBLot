@@ -34,8 +34,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererSystem;
-class RendererShaderSystem;
+class RendererFramePipeline;
 class RendererMeshSystem;
 class RendererMaterialSystem;
 class RendererCsgSystem;
@@ -93,8 +92,7 @@ struct CsgFrameStateCacheSignature{
 
 
 class RendererMeshState final : NoCopy{
-    friend class RendererSystem;
-    friend class RendererShaderSystem;
+    friend class RendererFramePipeline;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
@@ -115,8 +113,7 @@ private:
 };
 
 class RendererMaterialState final : NoCopy{
-    friend class RendererSystem;
-    friend class RendererShaderSystem;
+    friend class RendererFramePipeline;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
@@ -141,8 +138,7 @@ private:
 };
 
 class RendererDrawState final : NoCopy{
-    friend class RendererSystem;
-    friend class RendererShaderSystem;
+    friend class RendererFramePipeline;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
@@ -177,8 +173,7 @@ private:
 static_assert(sizeof(RendererDrawState) == 368u, "RendererDrawState should keep its compact CPU-only layout");
 
 class RendererCsgState final : NoCopy{
-    friend class RendererSystem;
-    friend class RendererShaderSystem;
+    friend class RendererFramePipeline;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
@@ -224,8 +219,7 @@ private:
 static_assert(sizeof(RendererCsgState) == 328u, "RendererCsgState should keep its compact CPU-only layout");
 
 class RendererDeferredState final : NoCopy{
-    friend class RendererSystem;
-    friend class RendererShaderSystem;
+    friend class RendererFramePipeline;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
@@ -245,7 +239,6 @@ private:
     Core::BindingLayoutHandle m_lightingBindingLayout;
     Core::BufferHandle m_sceneShadingBuffer;
     Core::BufferHandle m_lightBuffer;
-    Core::ShaderHandle m_compositeVertexShader;
     Core::ShaderHandle m_lightingComputeShader;
     Core::ComputePipelineHandle m_lightingPipeline;
     Core::BindingLayoutHandle m_compositeComputeBindingLayout;
@@ -265,8 +258,7 @@ private:
 };
 
 class RendererAvboitState final : NoCopy{
-    friend class RendererSystem;
-    friend class RendererShaderSystem;
+    friend class RendererFramePipeline;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;
@@ -666,8 +658,7 @@ struct RtSurfelGiState{
 
 
 class RendererRayTracingState final : NoCopy, public RtSceneBvhState, public RtShadowState, public RtSoftShadowState, public RtCausticState, public RtSurfelGiState{
-    friend class RendererSystem;
-    friend class RendererShaderSystem;
+    friend class RendererFramePipeline;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
     friend class RendererCsgSystem;

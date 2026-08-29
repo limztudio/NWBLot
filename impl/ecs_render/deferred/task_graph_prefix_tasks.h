@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererSystem;
+class RendererDeferredSystem;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,7 +34,7 @@ namespace ECSRenderDetail{
 
 struct SceneShadingSetupGraphTask{
     struct Payload{
-        RendererSystem* renderer = nullptr;
+        RendererDeferredSystem* deferredSystem = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         bool* ready = nullptr;
         ECSRenderDetail::SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS] = {};

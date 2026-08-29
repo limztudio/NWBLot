@@ -5,7 +5,6 @@
 #include <impl/ecs_render/deferred/task_graph_prefix_tasks.h>
 
 #include <impl/ecs_render/deferred/deferred_system.h>
-#include <impl/ecs_render/kernel/system.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,7 +29,7 @@ namespace ECSRenderDetail{
 ){
     static_cast<void>(commandList);
     static_cast<void>(context);
-    if(!payload.renderer || !payload.timingTicket || !*payload.timingTicket || !payload.ready)
+    if(!payload.deferredSystem || !payload.timingTicket || !*payload.timingTicket || !payload.ready)
         return false;
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
@@ -41,9 +40,9 @@ namespace ECSRenderDetail{
 
 void SceneShadingSetupGraphTask::accepted(Payload& payload, const Core::QueueSubmissionToken& token){
     static_cast<void>(token);
-    if(!payload.renderer)
+    if(!payload.deferredSystem)
         return;
-    payload.renderer->m_deferredSystem.confirmSceneShadingBufferUploads(
+    payload.deferredSystem->confirmSceneShadingBufferUploads(
         payload.lightData,
         payload.lightCount,
         payload.lightUploadRequired,

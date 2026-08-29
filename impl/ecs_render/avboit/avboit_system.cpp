@@ -4,7 +4,7 @@
 
 #include "avboit_system.h"
 
-#include <impl/ecs_render/kernel/system.h>
+#include <impl/ecs_render/renderer_frame_pipeline.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,8 +16,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererAvboitSystem::RendererAvboitSystem(RendererSystem& renderer)
-    : RendererSystemSubsystemBase<RendererSystem>(renderer)
+RendererAvboitSystem::RendererAvboitSystem(RendererFramePipeline& renderer)
+    : RendererFramePipelineSubsystemBase<RendererFramePipeline>(renderer)
 {}
 
 

@@ -37,7 +37,8 @@ bool CsgReceiverSpanBuildGraphTask::record(
 ){
     static_cast<void>(context);
     if(
-        !payload.renderer
+        !payload.materialSystem
+        || !payload.csgSystem
         || !payload.targets
         || !payload.timingTicket
         || !*payload.timingTicket
@@ -47,7 +48,8 @@ bool CsgReceiverSpanBuildGraphTask::record(
     )
         return false;
 
-    RendererSystem& renderer = *payload.renderer;
+    RendererMaterialSystem& materialSystem = *payload.materialSystem;
+    RendererCsgSystem& csgSystem = *payload.csgSystem;
     DeferredFrameTargets& deferredTargets = *payload.targets;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
@@ -66,7 +68,7 @@ bool CsgReceiverSpanBuildGraphTask::record(
     const bool deferredResourcesReady =
         hasDeferredDrawItems
         && payload.materialDrawBuffersUploaded
-        && renderer.m_materialSystem.materialPassDrawBuffersReady(
+        && materialSystem.materialPassDrawBuffersReady(
             payload.opaqueDrawSnapshot.instanceCount,
             payload.opaqueDrawSnapshot.materialTypedByteCount
         )
@@ -77,17 +79,17 @@ bool CsgReceiverSpanBuildGraphTask::record(
             !csgFrameData.hasWork()
             || (
                 payload.csgFrameBuffersUploaded
-                && renderer.m_csgSystem.csgFrameBuffersReady(csgFrameData)
+                && csgSystem.csgFrameBuffersReady(csgFrameData)
             )
         )
     ;
     const bool csgReceiverSurfaceDrawResourcesReady =
         csgResourcesReady
         && (opaqueDrawItems.csgReceiverSurface.empty()
-            || renderer.m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
+            || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
     ;
     if(csgResourcesReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady){
-        renderer.m_csgSystem.dispatchCsgReceiverSpanBuild(
+        csgSystem.dispatchCsgReceiverSpanBuild(
             commandList,
             deferredTargets,
             csgFrameData,
@@ -112,7 +114,8 @@ bool CsgIntervalCombineGraphTask::record(
 ){
     static_cast<void>(context);
     if(
-        !payload.renderer
+        !payload.materialSystem
+        || !payload.csgSystem
         || !payload.targets
         || !payload.timingTicket
         || !*payload.timingTicket
@@ -122,7 +125,8 @@ bool CsgIntervalCombineGraphTask::record(
     )
         return false;
 
-    RendererSystem& renderer = *payload.renderer;
+    RendererMaterialSystem& materialSystem = *payload.materialSystem;
+    RendererCsgSystem& csgSystem = *payload.csgSystem;
     DeferredFrameTargets& deferredTargets = *payload.targets;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
@@ -141,7 +145,7 @@ bool CsgIntervalCombineGraphTask::record(
     const bool deferredResourcesReady =
         hasDeferredDrawItems
         && payload.materialDrawBuffersUploaded
-        && renderer.m_materialSystem.materialPassDrawBuffersReady(
+        && materialSystem.materialPassDrawBuffersReady(
             payload.opaqueDrawSnapshot.instanceCount,
             payload.opaqueDrawSnapshot.materialTypedByteCount
         )
@@ -152,17 +156,17 @@ bool CsgIntervalCombineGraphTask::record(
             !csgFrameData.hasWork()
             || (
                 payload.csgFrameBuffersUploaded
-                && renderer.m_csgSystem.csgFrameBuffersReady(csgFrameData)
+                && csgSystem.csgFrameBuffersReady(csgFrameData)
             )
         )
     ;
     const bool csgReceiverSurfaceDrawResourcesReady =
         csgResourcesReady
         && (opaqueDrawItems.csgReceiverSurface.empty()
-            || renderer.m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
+            || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
     ;
     if(csgResourcesReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady){
-        renderer.m_csgSystem.dispatchCsgIntervalCombine(
+        csgSystem.dispatchCsgIntervalCombine(
             commandList,
             deferredTargets,
             csgFrameData,
@@ -187,7 +191,9 @@ bool CsgIntervalSampleGraphTask::record(
 ){
     static_cast<void>(context);
     if(
-        !payload.renderer
+        !payload.graphics
+        || !payload.materialSystem
+        || !payload.csgSystem
         || !payload.targets
         || !payload.timingTicket
         || !*payload.timingTicket
@@ -199,7 +205,9 @@ bool CsgIntervalSampleGraphTask::record(
     )
         return false;
 
-    RendererSystem& renderer = *payload.renderer;
+    Core::Graphics& graphics = *payload.graphics;
+    RendererMaterialSystem& materialSystem = *payload.materialSystem;
+    RendererCsgSystem& csgSystem = *payload.csgSystem;
     DeferredFrameTargets& deferredTargets = *payload.targets;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
@@ -218,7 +226,7 @@ bool CsgIntervalSampleGraphTask::record(
     const bool deferredResourcesReady =
         hasDeferredDrawItems
         && payload.materialDrawBuffersUploaded
-        && renderer.m_materialSystem.materialPassDrawBuffersReady(
+        && materialSystem.materialPassDrawBuffersReady(
             payload.opaqueDrawSnapshot.instanceCount,
             payload.opaqueDrawSnapshot.materialTypedByteCount
         )
@@ -229,18 +237,18 @@ bool CsgIntervalSampleGraphTask::record(
             !csgFrameData.hasWork()
             || (
                 payload.csgFrameBuffersUploaded
-                && renderer.m_csgSystem.csgFrameBuffersReady(csgFrameData)
+                && csgSystem.csgFrameBuffersReady(csgFrameData)
             )
         )
     ;
     const bool csgDrawResourcesReady =
         csgResourcesReady
-        && (opaqueDrawItems.csg.empty() || renderer.m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csg))
+        && (opaqueDrawItems.csg.empty() || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csg))
     ;
     const bool csgReceiverSurfaceDrawResourcesReady =
         csgResourcesReady
         && (opaqueDrawItems.csgReceiverSurface.empty()
-            || renderer.m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
+            || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
     ;
     // The producer validates the same frozen full CSG stream before opening this cross-callback measure. Keep
     // the fallback defensive: if a later readiness check disagrees, retire the reservation instead of leaving
@@ -277,22 +285,22 @@ bool CsgIntervalSampleGraphTask::record(
         };
         if(!opaqueDrawItems.csg.empty()){
             if(payload.csgComputeEmulationOutputStatesGraphOwned){
-                renderer.m_materialSystem.renderMaterialPassDrawItems(csgDrawContext, opaqueDrawItems.csg);
+                materialSystem.renderMaterialPassDrawItems(csgDrawContext, opaqueDrawItems.csg);
                 payload.opaqueCsgComputeEmulationTiming->value().finishTiming(commandList);
                 payload.opaqueCsgComputeEmulationTiming->reset();
             }
             else{
                 Core::GpuTimingMeasure timing(
-                    renderer.m_graphics.gpuTiming(),
+                    graphics.gpuTiming(),
                     RendererGpuTimingScope::s_OpaqueCsg,
-                    renderer.m_graphics.getDevice(),
+                    graphics.getDevice(),
                     commandList
                 );
-                renderer.m_materialSystem.renderMaterialPassDrawItems(csgDrawContext, opaqueDrawItems.csg);
+                materialSystem.renderMaterialPassDrawItems(csgDrawContext, opaqueDrawItems.csg);
             }
         }
         if(csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady){
-            renderer.m_csgSystem.renderCsgIntervalCaps(
+            csgSystem.renderCsgIntervalCaps(
                 commandList,
                 deferredTargets,
                 csgFrameData,

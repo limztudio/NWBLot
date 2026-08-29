@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/system.h>
+#include <impl/ecs_render/renderer_frame_pipeline.h>
 
 #include <impl/ecs_render/raytrace/task_graph_post_gbuffer_normalize_task.h>
 
@@ -46,7 +46,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::declareDeferredGraphicsPrefixTasks(
+bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     DeferredFrameTargets& deferredTargets,
     const Core::GpuTaskId shadowPrepareTask,
     const CsgFrameState& csgFrameState,
@@ -230,7 +230,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     m_graphicsPrefixMeshViewSetupTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::MeshViewSetupGraphTask>(
         meshViewSetupDesc,
         ECSRenderDetail::MeshViewSetupGraphTask::Payload{
-            .renderer = this,
+            .graphics = &m_graphics,
             .asyncPrefixTiming = &asyncPrefixTiming,
             .timingTicket = timingTicketSlot(PrefixTimingSlot::MeshViewSetup),
             .asyncPrefixTimingSpansOnePacket = asyncPrefixTimingSpansOnePacket,
@@ -295,7 +295,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     const Core::GpuTaskId meshViewCommitTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::MeshViewUploadCommitGraphTask>(
         meshViewCommitDesc,
         ECSRenderDetail::MeshViewUploadCommitGraphTask::Payload{
-            .renderer = this,
+            .meshSystem = &m_meshSystem,
             .viewState = meshViewState,
             .uploadRequired = meshViewUploadRequired,
             .ready = &m_graphicsPrefixMeshViewSetupReady,
@@ -388,7 +388,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         .setDependencies(&sceneUploadTask, 1u)
     ;
     ECSRenderDetail::SceneShadingSetupGraphTask::Payload sceneShadingSetupPayload;
-    sceneShadingSetupPayload.renderer = this;
+    sceneShadingSetupPayload.deferredSystem = &m_deferredSystem;
     sceneShadingSetupPayload.timingTicket = timingTicketSlot(PrefixTimingSlot::SceneShadingSetup);
     sceneShadingSetupPayload.ready = &m_graphicsPrefixSceneShadingSetupReady;
     NWB_MEMCPY(
@@ -556,7 +556,9 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     );
 
     ECSRenderDetail::GbufferGraphTask::Payload gbufferPayload{ m_arena };
-    gbufferPayload.renderer = this;
+    gbufferPayload.graphics = &m_graphics;
+    gbufferPayload.materialSystem = &m_materialSystem;
+    gbufferPayload.csgSystem = &m_csgSystem;
     gbufferPayload.targets = &deferredTargets;
     gbufferPayload.timingTicket = timingTicketSlot(PrefixTimingSlot::Gbuffer);
     gbufferPayload.meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady;
@@ -811,7 +813,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     );
     ECSRenderDetail::CsgReceiverSpanBuildGraphTask::Payload csgReceiverSpanPayload{ m_arena };
     if(hasOpaqueCsgFrameWork){
-        csgReceiverSpanPayload.renderer = this;
+        csgReceiverSpanPayload.materialSystem = &m_materialSystem;
+        csgReceiverSpanPayload.csgSystem = &m_csgSystem;
         csgReceiverSpanPayload.targets = &deferredTargets;
         // The graph owns the receiver-surface producer fence. Normal prefix compilation merges this callback with
         // G-buffer, while a FrontierSafe boundary retains its own submission-local timing ticket.
@@ -831,7 +834,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     }
     ECSRenderDetail::CsgIntervalCombineGraphTask::Payload csgIntervalCombinePayload{ m_arena };
     if(hasOpaqueCsgFrameWork){
-        csgIntervalCombinePayload.renderer = this;
+        csgIntervalCombinePayload.materialSystem = &m_materialSystem;
+        csgIntervalCombinePayload.csgSystem = &m_csgSystem;
         csgIntervalCombinePayload.targets = &deferredTargets;
         // The graph owns the preceding producer fence. Normal prefix compilation merges this callback with
         // G-buffer, while a FrontierSafe boundary retains its own submission-local timing ticket.
@@ -853,7 +857,9 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask::Payload
         opaqueCsgIntervalSampleComputeEmulationPayload{ m_arena };
     if(hasOpaqueCsgFrameWork){
-        csgIntervalSamplePayload.renderer = this;
+        csgIntervalSamplePayload.graphics = &m_graphics;
+        csgIntervalSamplePayload.materialSystem = &m_materialSystem;
+        csgIntervalSamplePayload.csgSystem = &m_csgSystem;
         csgIntervalSamplePayload.targets = &deferredTargets;
         csgIntervalSamplePayload.timingTicket = timingTicketSlot(PrefixTimingSlot::CsgIntervalSample);
         csgIntervalSamplePayload.meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady;
@@ -1310,7 +1316,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
     Core::GpuTaskId gbufferDependency = csgIntervalClearTask;
     if(opaqueComputeEmulationOutputStatesGraphOwned){
-        opaqueComputeEmulationPayload.renderer = this;
+        opaqueComputeEmulationPayload.meshSystem = &m_meshSystem;
+        opaqueComputeEmulationPayload.materialSystem = &m_materialSystem;
         opaqueComputeEmulationPayload.targets = &deferredTargets;
         // G-buffer's semantic timing ticket spans its preparatory compute half and its raster half in one packet.
         opaqueComputeEmulationPayload.timingTicket = timingTicketSlot(PrefixTimingSlot::Gbuffer);
@@ -1372,7 +1379,9 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         gbufferDependency = m_graphicsPrefixOpaqueComputeEmulationTask;
     }
     if(opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned){
-        opaqueCsgReceiverComputeEmulationPayload.renderer = this;
+        opaqueCsgReceiverComputeEmulationPayload.meshSystem = &m_meshSystem;
+        opaqueCsgReceiverComputeEmulationPayload.materialSystem = &m_materialSystem;
+        opaqueCsgReceiverComputeEmulationPayload.csgSystem = &m_csgSystem;
         opaqueCsgReceiverComputeEmulationPayload.targets = &deferredTargets;
         // The receiver producer is an early part of G-buffer's one semantic Graphics submission; its dispatch
         // timing shares the existing ticket while the receiver raster retains its own scope in G-buffer.
@@ -1600,7 +1609,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
                 .setResourceSetUses(resourceSetUses, resourceSetUseCount)
             ;
             ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Payload payload;
-            payload.renderer = this;
+            payload.meshSystem = &m_meshSystem;
+            payload.materialSystem = &m_materialSystem;
             payload.targets = &deferredTargets;
             payload.timingTicket = timingTicketSlot(PrefixTimingSlot::Gbuffer);
             payload.meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady;
@@ -1898,7 +1908,10 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
         Core::GpuTaskId csgIntervalSampleDependency = m_graphicsPrefixCsgIntervalCombineTask;
         if(opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned){
-            opaqueCsgIntervalSampleComputeEmulationPayload.renderer = this;
+            opaqueCsgIntervalSampleComputeEmulationPayload.graphics = &m_graphics;
+            opaqueCsgIntervalSampleComputeEmulationPayload.meshSystem = &m_meshSystem;
+            opaqueCsgIntervalSampleComputeEmulationPayload.materialSystem = &m_materialSystem;
+            opaqueCsgIntervalSampleComputeEmulationPayload.csgSystem = &m_csgSystem;
             opaqueCsgIntervalSampleComputeEmulationPayload.targets = &deferredTargets;
             // Producer and sample share the semantic CSG interval-sample submission/ticket; the timer opens here
             // and closes after the raster half, exactly preserving the former local material timing scope.

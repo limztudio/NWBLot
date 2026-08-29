@@ -486,7 +486,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     }
 
     // Do not mutate the target-generation handles while the sibling caustics and surfel-GI workers can still validate
-    // targets.bindless. RendererSystem finalizes this pending CPU-side swap only after its complete ordered Graphics
+    // targets.bindless. RendererFramePipeline finalizes this pending CPU-side swap only after its complete ordered Graphics
     // submission succeeds.
     if(
         ((dispatchTransparentResolve && !splitTransparentResolve) || dispatchTransparentResolveTail)

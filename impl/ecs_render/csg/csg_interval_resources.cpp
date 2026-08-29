@@ -297,7 +297,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     if(capFillRequired && !CsgIntervalDetail::CreateIntervalCapFillPipeline(
         device,
         csgState().m_intervalCapFillPipeline,
-        deferredState().m_compositeVertexShader,
+        m_renderer.shaderSystem().deferredCompositeVertexShader(),
         csgState().m_intervalCapFillPixelShader,
         csgState().m_clipBindingLayout,
         targets.framebuffer->getFramebufferInfo()

@@ -97,7 +97,10 @@ void AvboitOccupancyComputeEmulationGraphTask::discardTiming(Optional<Core::GpuT
 ){
     static_cast<void>(context);
     if(
-        !payload.renderer
+        !payload.graphics
+        || !payload.meshSystem
+        || !payload.materialSystem
+        || !payload.csgSystem
         || !payload.targets
         || !payload.timingTicket
         || !payload.occupancyTiming
@@ -106,15 +109,18 @@ void AvboitOccupancyComputeEmulationGraphTask::discardTiming(Optional<Core::GpuT
     )
         return false;
 
-    RendererSystem& renderer = *payload.renderer;
+    Core::Graphics& graphics = *payload.graphics;
+    RendererMeshSystem& meshSystem = *payload.meshSystem;
+    RendererMaterialSystem& materialSystem = *payload.materialSystem;
+    RendererCsgSystem& csgSystem = *payload.csgSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     const bool csgComputeEmulation = payload.csgPlan.captured;
     if(
         !(csgComputeEmulation
-            ? payload.csgPlan.matches(renderer.meshSystem())
-            : payload.plan.matches(renderer.meshSystem()))
+            ? payload.csgPlan.matches(meshSystem)
+            : payload.plan.matches(meshSystem))
         || !payload.materialDrawBuffersUploaded
-        || !renderer.materialSystem().materialPassDrawBuffersReady(
+        || !materialSystem.materialPassDrawBuffersReady(
             payload.instanceCount,
             payload.materialTypedByteCount
         )
@@ -132,13 +138,13 @@ void AvboitOccupancyComputeEmulationGraphTask::discardTiming(Optional<Core::GpuT
     // material/pipeline loss so the packet is discarded and the next frame re-preflights instead of accepting
     // Occupancy with stale generated vertices.
     if(
-        !renderer.materialSystem().materialPassDrawResourcesReady(drawItems)
+        !materialSystem.materialPassDrawResourcesReady(drawItems)
         || (csgComputeEmulation && (
             !payload.csgFrameBuffersUploaded
             || !payload.csgIntervalSampleImageStatesGraphOwned
             || !payload.csgClipBufferStatesGraphOwned
             || !csgFrameData.hasWork()
-            || !renderer.csgSystem().csgFrameBuffersReady(csgFrameData)
+            || !csgSystem.csgFrameBuffersReady(csgFrameData)
         ))
     )
         return false;
@@ -147,9 +153,9 @@ void AvboitOccupancyComputeEmulationGraphTask::discardTiming(Optional<Core::GpuT
 
     commandList.endRenderPass();
     payload.occupancyTiming->emplace(
-        renderer.graphics().gpuTiming(),
+        graphics.gpuTiming(),
         RendererGpuTimingScope::s_AvboitOccupancy,
-        renderer.graphics().getDevice(),
+        graphics.getDevice(),
         commandList
     );
     // Occupancy's raster half records after this producer in the same selected Graphics packet. Close the
@@ -172,7 +178,7 @@ void AvboitOccupancyComputeEmulationGraphTask::discardTiming(Optional<Core::GpuT
         payload.materialGeometryStatesGraphOwned,
         true,
     };
-    renderer.materialSystem().generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+    materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
 }
 
@@ -192,7 +198,9 @@ void AvboitOccupancySharedComputeEmulationGraphTask::discardTiming(Optional<Core
 ){
     static_cast<void>(context);
     if(
-        !payload.renderer
+        !payload.graphics
+        || !payload.meshSystem
+        || !payload.materialSystem
         || !payload.targets
         || !payload.targets->avboit.lowFramebuffer
         || !payload.timingTicket
@@ -202,12 +210,14 @@ void AvboitOccupancySharedComputeEmulationGraphTask::discardTiming(Optional<Core
     )
         return false;
 
-    RendererSystem& renderer = *payload.renderer;
+    Core::Graphics& graphics = *payload.graphics;
+    RendererMeshSystem& meshSystem = *payload.meshSystem;
+    RendererMaterialSystem& materialSystem = *payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     if(
-        !payload.plan.matches(renderer.meshSystem(), payload.drawIndex)
+        !payload.plan.matches(meshSystem, payload.drawIndex)
         || !payload.materialDrawBuffersUploaded
-        || !renderer.materialSystem().materialPassDrawBuffersReady(
+        || !materialSystem.materialPassDrawBuffersReady(
             payload.instanceCount,
             payload.materialTypedByteCount
         )
@@ -217,7 +227,7 @@ void AvboitOccupancySharedComputeEmulationGraphTask::discardTiming(Optional<Core
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     MaterialPassDrawItems drawItems{ scratchArena };
     payload.plan.materialize(payload.drawIndex, drawItems);
-    if(!renderer.materialSystem().materialPassDrawResourcesReady(drawItems))
+    if(!materialSystem.materialPassDrawResourcesReady(drawItems))
         return false;
 
     if(payload.phase == Phase::Generate){
@@ -228,9 +238,9 @@ void AvboitOccupancySharedComputeEmulationGraphTask::discardTiming(Optional<Core
             if(payload.occupancyTiming->has_value())
                 return false;
             payload.occupancyTiming->emplace(
-                renderer.graphics().gpuTiming(),
+                graphics.gpuTiming(),
                 RendererGpuTimingScope::s_AvboitOccupancy,
-                renderer.graphics().getDevice(),
+                graphics.getDevice(),
                 commandList
             );
             // The range spans serial callbacks, but this opening command list still needs its marker closed
@@ -261,10 +271,10 @@ void AvboitOccupancySharedComputeEmulationGraphTask::discardTiming(Optional<Core
         true,
     };
     if(payload.phase == Phase::Generate){
-        renderer.materialSystem().generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+        materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     }
     else{
-        renderer.materialSystem().renderComputeMaterialPassDrawItemsRasterOnly(
+        materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(
             drawContext,
             drawItems.computeDrawItems
         );

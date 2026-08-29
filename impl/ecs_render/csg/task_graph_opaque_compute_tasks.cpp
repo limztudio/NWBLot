@@ -37,7 +37,9 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
 ){
     static_cast<void>(context);
     if(
-        !payload.renderer
+        !payload.meshSystem
+        || !payload.materialSystem
+        || !payload.csgSystem
         || !payload.targets
         || !payload.timingTicket
         || !*payload.timingTicket
@@ -47,7 +49,9 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
     )
         return false;
 
-    RendererSystem& renderer = *payload.renderer;
+    RendererMeshSystem& meshSystem = *payload.meshSystem;
+    RendererMaterialSystem& materialSystem = *payload.materialSystem;
+    RendererCsgSystem& csgSystem = *payload.csgSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
     const bool frameSetupReady =
         *payload.meshViewSetupReady
@@ -62,12 +66,12 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
     payload.plan.materialize(drawItems, csgFrameData);
     // The output set imported by the graph is immutable.  Do not re-resolve a changed mesh resource into an
     // arbitrary descriptor slot after declaration; reject and let the existing graph retry path rebuild it.
-    if(!payload.plan.matches(renderer.m_meshSystem))
+    if(!payload.plan.matches(meshSystem))
         return false;
 
     const bool deferredResourcesReady =
         payload.materialDrawBuffersUploaded
-        && renderer.m_materialSystem.materialPassDrawBuffersReady(
+        && materialSystem.materialPassDrawBuffersReady(
             payload.instanceCount,
             payload.materialTypedByteCount
         )
@@ -76,11 +80,11 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
         deferredResourcesReady
         && payload.csgFrameBuffersUploaded
         && csgFrameData.hasWork()
-        && renderer.m_csgSystem.csgFrameBuffersReady(csgFrameData)
+        && csgSystem.csgFrameBuffersReady(csgFrameData)
     ;
     if(
         !csgResourcesReady
-        || !renderer.m_materialSystem.materialPassDrawResourcesReady(drawItems)
+        || !materialSystem.materialPassDrawResourcesReady(drawItems)
     )
         return true;
 
@@ -104,7 +108,7 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
         payload.materialGeometryStatesGraphOwned,
         true,
     };
-    renderer.m_materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+    materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
 }
 
@@ -131,7 +135,10 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
 ){
     static_cast<void>(context);
     if(
-        !payload.renderer
+        !payload.graphics
+        || !payload.meshSystem
+        || !payload.materialSystem
+        || !payload.csgSystem
         || !payload.targets
         || !payload.timingTicket
         || !*payload.timingTicket
@@ -142,7 +149,10 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
     )
         return false;
 
-    RendererSystem& renderer = *payload.renderer;
+    Core::Graphics& graphics = *payload.graphics;
+    RendererMeshSystem& meshSystem = *payload.meshSystem;
+    RendererMaterialSystem& materialSystem = *payload.materialSystem;
+    RendererCsgSystem& csgSystem = *payload.csgSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
     const bool frameSetupReady =
         *payload.meshViewSetupReady
@@ -157,12 +167,12 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
     payload.plan.materialize(drawItems, csgFrameData);
     // The graph imported these exact output handles and descriptor slots. A live replacement must reject the
     // packet, not write through a newly selected CSG material descriptor after declaration.
-    if(!payload.plan.matches(renderer.m_meshSystem))
+    if(!payload.plan.matches(meshSystem))
         return false;
 
     const bool deferredResourcesReady =
         payload.materialDrawBuffersUploaded
-        && renderer.m_materialSystem.materialPassDrawBuffersReady(
+        && materialSystem.materialPassDrawBuffersReady(
             payload.instanceCount,
             payload.materialTypedByteCount
         )
@@ -171,11 +181,11 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
         deferredResourcesReady
         && payload.csgFrameBuffersUploaded
         && csgFrameData.hasWork()
-        && renderer.m_csgSystem.csgFrameBuffersReady(csgFrameData)
+        && csgSystem.csgFrameBuffersReady(csgFrameData)
     ;
     if(
         !csgResourcesReady
-        || !renderer.m_materialSystem.materialPassDrawResourcesReady(drawItems)
+        || !materialSystem.materialPassDrawResourcesReady(drawItems)
     )
         return true;
     if(payload.opaqueCsgTiming->has_value())
@@ -186,9 +196,9 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
         payload.targets->framebuffer->getFramebufferInfo().getViewport()
     );
     payload.opaqueCsgTiming->emplace(
-        renderer.m_graphics.gpuTiming(),
+        graphics.gpuTiming(),
         RendererGpuTimingScope::s_OpaqueCsg,
-        renderer.m_graphics.getDevice(),
+        graphics.getDevice(),
         commandList
     );
     // The scope crosses the following raster callback, so close its marker in this producer before command-list
@@ -207,7 +217,7 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
         payload.materialGeometryStatesGraphOwned,
         true,
     };
-    renderer.m_materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+    materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
 }
 

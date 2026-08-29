@@ -106,7 +106,7 @@ struct CausticAccumulatorDecayGraphTask{
     }
 };
 
-// Caustic producers own typed graph-task payloads; RendererSystem composes their packet chain. The renderer still
+// Caustic producers own typed graph-task payloads; RendererFramePipeline composes their packet chain. The renderer still
 // supplies declaration-filtered external state until the graph has every producer in the same frame transaction.
 struct SoftwareCausticsGraphTask{
     struct Payload{

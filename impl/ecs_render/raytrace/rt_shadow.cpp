@@ -667,7 +667,7 @@ struct ShadowTransparentSoftFoldGraphTask{
 };
 
 
-// Shadow visibility owns its graph task; RendererSystem composes the optional software-caustics successor into the
+// Shadow visibility owns its graph task; RendererFramePipeline composes the optional software-caustics successor into the
 // same packet chain. It still provides declaration-filtered external state for producers outside that graph.
 struct ShadowVisibilityGraphTask{
     struct Payload{

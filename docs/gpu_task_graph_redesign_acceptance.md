@@ -410,7 +410,7 @@ can receive an unconditional final sign-off.
 | Check | Result |
 | --- | --- |
 | Serial rebuild of graph, descriptor-buffer smoke, Transfer-profile, and command-IR-profile targets | passed |
-| Recompile of `impl/ecs_render/kernel/system.cpp` | passed |
+| Recompile of `impl/ecs_render/renderer_frame_pipeline.cpp` | passed |
 | `ctest -C dbg -R '^(nwb_graphics_task_graph_tests|nwb_descriptor_buffer_tests)$'` | 2/2 passed |
 | `graphics_task_graph_tests` | 37/37 passed |
 | `descriptor_buffer_tests` | 67 passed; 9 expected skips because this host has no dedicated Compute-only or Transfer-only family |
@@ -751,7 +751,7 @@ runtime IR templates or general direct-Vulkan IR replay.
   `frame-lagged-async-lighting` runner therefore returns its intentional `77` topology skip after the renderer
   accepts the Graphics fallback; its launcher/parser/lifecycle self-tests pass. This is evidence that the harness
   rejects a non-async route, not evidence that the dedicated-Compute path is performant or pixel-equivalent.
-- **Affected behavior and safe fallback:** `RendererSystem::frameLaggedAsyncLightingEnabled` remains disabled by
+- **Affected behavior and safe fallback:** `RendererFramePipeline::frameLaggedAsyncLightingEnabled` remains disabled by
   default. When the option is requested but no dedicated Compute queue is available, the renderer retains the
   current-frame Graphics route and the harness reports a skip; no Graphics-route result may be presented as async
   evidence.

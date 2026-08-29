@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/system.h>
+#include <impl/ecs_render/renderer_frame_pipeline.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/renderer_private.h>
@@ -28,7 +28,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::declareDeferredSoftwareCausticsTask(
+bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     const bool hardwareCaustics,
     DeferredFrameTargets& deferredTargets,
     const Core::GpuGraphResourceId worldPosition,
@@ -627,7 +627,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
             m_deferredLightingTaskGraph,
             accumulatorDecayDesc,
             deferredTargets,
-            &m_preparedShadowVisibilityReady,
+            &m_shadowPreparationOutcome.ready,
             m_rayTracingState.m_causticTemporalDecay,
             false,
             timingTicket,
@@ -665,7 +665,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         m_deferredLightingTaskGraph,
         photonDesc,
         deferredTargets,
-        &m_preparedShadowVisibilityReady,
+        &m_shadowPreparationOutcome.ready,
         timingTicket,
         true,
         graphOwnsAccumulatorBootstrapClear,

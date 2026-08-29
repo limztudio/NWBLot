@@ -5,18 +5,33 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/system.h>
-
+#include <impl/global.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
 #include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
+
+#include <core/graphics/gpu_timing.h>
+#include <core/graphics/module.h>
+#include <core/graphics/task_graph/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererMeshSystem;
+class RendererMaterialSystem;
+class RendererCsgSystem;
+class RendererAvboitSystem;
+class RendererTaskTimingFeedback;
+struct AvboitFrameTargets;
+struct DeferredFrameTargets;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,7 +82,10 @@ struct AvboitPreGraphTask{
 // raster endpoint, while mixed or shared-output streams retain the established local bridge.
 struct AvboitOccupancyComputeEmulationGraphTask{
     struct Payload{
-        RendererSystem* renderer = nullptr;
+        Core::Graphics* graphics = nullptr;
+        RendererMeshSystem* meshSystem = nullptr;
+        RendererMaterialSystem* materialSystem = nullptr;
+        RendererCsgSystem* csgSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* occupancyTiming = nullptr;
@@ -111,7 +129,9 @@ struct AvboitOccupancySharedComputeEmulationGraphTask{
     };
 
     struct Payload{
-        RendererSystem* renderer = nullptr;
+        Core::Graphics* graphics = nullptr;
+        RendererMeshSystem* meshSystem = nullptr;
+        RendererMaterialSystem* materialSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* occupancyTiming = nullptr;

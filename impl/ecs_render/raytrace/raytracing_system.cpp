@@ -25,7 +25,6 @@ RendererRayTracingSystem::RendererRayTracingSystem(
     RendererMaterialSystem& materialSystem,
     RendererMeshState& meshState,
     RendererDrawState& drawState,
-    RendererDeferredState& deferredState,
     RendererRayTracingState& rayTracingState
 )
     : m_arena(arena)
@@ -36,7 +35,6 @@ RendererRayTracingSystem::RendererRayTracingSystem(
     , m_materialSystem(materialSystem)
     , m_meshState(meshState)
     , m_drawState(drawState)
-    , m_deferredState(deferredState)
     , m_rayTracingState(rayTracingState)
     , m_preparedShadowTraceGeometryBuffers(arena)
     , m_acceptedShadowTraceGeometryBuffers(arena)

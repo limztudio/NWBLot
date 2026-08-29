@@ -1081,6 +1081,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     // Shadow/Software are declared first so their queue assignments are stable before Surf, AVBOIT, and Lighting.
     if(!declareDeferredShadowVisibilityTask(
         deferredTargets,
+        deferredLightingResources,
         rayTracingShadowResources,
         rayTracingGraphResources,
         rayTracingShadowVisibilityPlan,
@@ -1114,6 +1115,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     if(!declaresHardwareCaustics && !declareDeferredSoftwareCausticsTask(
         declaresHardwareCaustics,
         deferredTargets,
+        deferredLightingResources,
         rayTracingGraphResources,
         worldPosition,
         depth,
@@ -1139,6 +1141,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     // effects -> surfel -> suffix order without renderer-side completion stitching.
     if(!declareDeferredSurfelGiTask(
         deferredTargets,
+        deferredLightingResources,
         rayTracingGraphResources,
         rayTracingSurfelResources,
         worldPosition,
@@ -1758,6 +1761,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             m_deferredLightingTaskGraph,
             hardwarePhotonDesc,
             deferredTargets,
+            deferredLightingResources,
             &m_shadowPreparationOutcome.ready,
             hardwareCausticsTimingTicket,
             true,

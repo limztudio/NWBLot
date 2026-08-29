@@ -31,6 +31,7 @@ NWB_IMPL_BEGIN
 bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     const bool hardwareCaustics,
     DeferredFrameTargets& deferredTargets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
     const Core::GpuGraphResourceId worldPosition,
     const Core::GpuGraphResourceId depth,
@@ -667,6 +668,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         m_deferredLightingTaskGraph,
         photonDesc,
         deferredTargets,
+        deferredLightingResources,
         &m_shadowPreparationOutcome.ready,
         timingTicket,
         true,

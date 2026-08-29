@@ -58,6 +58,7 @@ bool RendererRayTracingSystem::softShadowTemporalHistoryUsable()const noexcept{
 void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const u32 frameIndex,
     const u32 softGroupsX,
     const u32 softGroupsY,
@@ -78,8 +79,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const bool dispatchTransparentTemporalMerge
 ){
     NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(m_deferredState.m_sceneShadingBuffer);
-    NWB_ASSERT(m_deferredState.m_lightBuffer);
+    NWB_ASSERT(deferredLightingResources.valid());
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(
@@ -114,7 +114,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
             commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
             commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(m_deferredState.m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
             commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
         }
         commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
@@ -308,12 +308,12 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             m_graphics.getDevice(),
             commandList
         );
-        dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, opaqueDispatch);
+        dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, 0u, slotRangeCount, opaqueDispatch);
     }
     else if(dispatchOpaqueResolve)
-        dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, opaqueDispatch, true, false);
+        dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, 0u, slotRangeCount, opaqueDispatch, true, false);
     else
-        dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, opaqueDispatch, false, true);
+        dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, 0u, slotRangeCount, opaqueDispatch, false, true);
     }
 
     if(dispatchTransparentTrace && m_rayTracingState.m_softTransparentReady){
@@ -331,8 +331,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 transitionSwShadowTraversalResources(commandList);
                 commandList.setBufferState(m_rayTracingState.m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
                 commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-                commandList.setBufferState(m_deferredState.m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-                commandList.setBufferState(m_deferredState.m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+                commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+                commandList.setBufferState(deferredLightingResources.lightBuffer.get(), Core::ResourceStates::ShaderResource);
             }
             if(!graphOwnsOpaqueToTransparentBoundary){
                 commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
@@ -476,12 +476,12 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 m_graphics.getDevice(),
                 commandList
             );
-            dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, transparentDispatch);
+            dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, 0u, slotRangeCount, transparentDispatch);
         }
         else if(dispatchTransparentResolve)
-            dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, transparentDispatch, true, false);
+            dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, 0u, slotRangeCount, transparentDispatch, true, false);
         else
-            dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, transparentDispatch, false, true);
+            dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, 0u, slotRangeCount, transparentDispatch, false, true);
         }
     }
 
@@ -623,6 +623,7 @@ bool RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
 void RendererRayTracingSystem::dispatchSoftShadowResolve(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const u32 slotStart,
     const u32 slotCount,
     const SoftShadowResolveDispatch& dispatch,
@@ -665,7 +666,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
                     commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
                     commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
                     commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-                    commandList.setBufferState(m_deferredState.m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+                    commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
                 }
                 if(!graphOwnsInputColorState)
                     commandList.setTextureState(resources.inputColorTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);

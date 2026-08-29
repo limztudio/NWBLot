@@ -595,6 +595,130 @@ TEST(EcsGraphics, RootMediatesDeferredRayTracingLightingClassification){
 }
 
 
+TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+    AString frameTypesSource;
+    AString deferredHeaderSource;
+    AString rayTracingHeaderSource;
+    AString rayTracingSystemSource;
+    AString rayTracingShadowSource;
+    AString rayTracingSoftShadowSource;
+    AString rayTracingCausticsSource;
+    AString rayTracingSurfelSource;
+    AString rendererStateSource;
+    AString rootGraphSource;
+    AString rootShadowSource;
+    AString rootCausticsSource;
+    AString rootSurfelSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_frame_types.h", frameTypesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.h", deferredHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", rayTracingShadowSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow.cpp", rayTracingSoftShadowSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_caustics.cpp", rayTracingCausticsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_surfel_gi.cpp", rayTracingSurfelSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", rootGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", rootShadowSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_caustics.cpp", rootCausticsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_surfel_gi.cpp", rootSurfelSource));
+
+    const AString compactFrameTypesStorage = CompactSource(AStringView(frameTypesSource.data(), frameTypesSource.size()));
+    const AStringView compactFrameTypes(compactFrameTypesStorage.data(), compactFrameTypesStorage.size());
+    const AString compactDeferredHeaderStorage = CompactSource(AStringView(deferredHeaderSource.data(), deferredHeaderSource.size()));
+    const AStringView compactDeferredHeader(compactDeferredHeaderStorage.data(), compactDeferredHeaderStorage.size());
+    const AString compactRayTracingHeaderStorage = CompactSource(AStringView(rayTracingHeaderSource.data(), rayTracingHeaderSource.size()));
+    const AStringView compactRayTracingHeader(compactRayTracingHeaderStorage.data(), compactRayTracingHeaderStorage.size());
+    const AString compactRayTracingShadowStorage = CompactSource(AStringView(rayTracingShadowSource.data(), rayTracingShadowSource.size()));
+    const AStringView compactRayTracingShadow(compactRayTracingShadowStorage.data(), compactRayTracingShadowStorage.size());
+    const AString compactRayTracingCausticsStorage = CompactSource(AStringView(rayTracingCausticsSource.data(), rayTracingCausticsSource.size()));
+    const AStringView compactRayTracingCaustics(compactRayTracingCausticsStorage.data(), compactRayTracingCausticsStorage.size());
+    const AString compactRayTracingSurfelStorage = CompactSource(AStringView(rayTracingSurfelSource.data(), rayTracingSurfelSource.size()));
+    const AStringView compactRayTracingSurfel(compactRayTracingSurfelStorage.data(), compactRayTracingSurfelStorage.size());
+    const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
+    const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
+    const AString compactRootGraphStorage = CompactSource(AStringView(rootGraphSource.data(), rootGraphSource.size()));
+    const AStringView compactRootGraph(compactRootGraphStorage.data(), compactRootGraphStorage.size());
+    const AString compactRootShadowStorage = CompactSource(AStringView(rootShadowSource.data(), rootShadowSource.size()));
+    const AStringView compactRootShadow(compactRootShadowStorage.data(), compactRootShadowStorage.size());
+    const AString compactRootCausticsStorage = CompactSource(AStringView(rootCausticsSource.data(), rootCausticsSource.size()));
+    const AStringView compactRootCaustics(compactRootCausticsStorage.data(), compactRootCausticsStorage.size());
+    const AString compactRootSurfelStorage = CompactSource(AStringView(rootSurfelSource.data(), rootSurfelSource.size()));
+    const AStringView compactRootSurfel(compactRootSurfelStorage.data(), compactRootSurfelStorage.size());
+
+    EXPECT_TRUE(ContainsText(
+        compactFrameTypes,
+        "structDeferredLightingGraphResources{Core::BufferHandlesceneShadingBuffer;Core::BufferHandlelightBuffer;"
+    ));
+    EXPECT_FALSE(ContainsText(compactDeferredHeader, "structDeferredLightingGraphResources{"));
+    EXPECT_TRUE(ConstructorParameterTypesMatch(
+        compactRayTracingHeader,
+        "public:RendererRayTracingSystem(",
+        {
+            "Core::Alloc::GlobalArena&",
+            "Core::ECS::World&",
+            "Core::Graphics&",
+            "RendererShaderSystem&",
+            "RendererMeshSystem&",
+            "RendererMaterialSystem&",
+            "RendererMeshState&",
+            "RendererDrawState&",
+            "RendererRayTracingState&",
+        }
+    ));
+    EXPECT_FALSE(ContainsText(AStringView(rayTracingHeaderSource.data(), rayTracingHeaderSource.size()), "RendererDeferredState"));
+    EXPECT_FALSE(ContainsText(AStringView(rayTracingSystemSource.data(), rayTracingSystemSource.size()), "m_deferredState"));
+    EXPECT_FALSE(ContainsText(AStringView(rayTracingShadowSource.data(), rayTracingShadowSource.size()), "m_deferredState"));
+    EXPECT_FALSE(ContainsText(AStringView(rayTracingSoftShadowSource.data(), rayTracingSoftShadowSource.size()), "m_deferredState"));
+    EXPECT_FALSE(ContainsText(AStringView(rayTracingCausticsSource.data(), rayTracingCausticsSource.size()), "m_deferredState"));
+    EXPECT_FALSE(ContainsText(AStringView(rayTracingSurfelSource.data(), rayTracingSurfelSource.size()), "m_deferredState"));
+
+    const usize deferredStateBegin = compactRendererState.find("classRendererDeferredStatefinal:NoCopy{");
+    ASSERT_NE(deferredStateBegin, AStringView::npos);
+    const usize deferredStateEnd = compactRendererState.find("classRendererAvboitStatefinal:NoCopy{", deferredStateBegin);
+    ASSERT_NE(deferredStateEnd, AStringView::npos);
+    const AStringView deferredState = compactRendererState.substr(deferredStateBegin, deferredStateEnd - deferredStateBegin);
+    EXPECT_FALSE(ContainsText(deferredState, "friendclassRendererRayTracingSystem;"));
+
+    EXPECT_TRUE(ContainsText(compactRayTracingHeader, "renderShadowVisibility(Core::CommandList&commandList,DeferredFrameTargets&targets,constDeferredLightingGraphResources&deferredLightingResources,"));
+    EXPECT_TRUE(ContainsText(compactRayTracingHeader, "renderGpuBvhShadowVisibility(Core::CommandList&commandList,DeferredFrameTargets&targets,constDeferredLightingGraphResources&deferredLightingResources,"));
+    EXPECT_TRUE(ContainsText(compactRayTracingHeader, "renderGpuBvhCaustics(Core::CommandList&commandList,DeferredFrameTargets&targets,constDeferredLightingGraphResources&deferredLightingResources,"));
+    EXPECT_TRUE(ContainsText(compactRayTracingHeader, "renderHwCaustics(Core::CommandList&commandList,DeferredFrameTargets&targets,constDeferredLightingGraphResources&deferredLightingResources,"));
+    EXPECT_TRUE(ContainsText(compactRayTracingHeader, "renderSurfelGi(Core::CommandList&commandList,DeferredFrameTargets&targets,constDeferredLightingGraphResources&deferredLightingResources,"));
+
+    EXPECT_EQ(CountText(compactRayTracingShadow, "DeferredLightingGraphResourcesdeferredLightingResources;"), 8u);
+    EXPECT_EQ(CountText(compactRayTracingCaustics, "DeferredLightingGraphResourcesdeferredLightingResources;"), 2u);
+    EXPECT_EQ(CountText(compactRayTracingSurfel, "DeferredLightingGraphResourcesdeferredLightingResources;"), 7u);
+    EXPECT_EQ(CountText(compactRayTracingShadow, ".deferredLightingResources=deferredLightingResources,"), 8u);
+    EXPECT_EQ(CountText(compactRayTracingCaustics, ".deferredLightingResources=deferredLightingResources,"), 2u);
+    EXPECT_EQ(CountText(compactRayTracingSurfel, ".deferredLightingResources=deferredLightingResources,"), 7u);
+    EXPECT_TRUE(ContainsText(compactRayTracingShadow, "deferredLightingResources.sceneShadingBuffer.get()"));
+    EXPECT_TRUE(ContainsText(compactRayTracingCaustics, "deferredLightingResources.lightBuffer.get()"));
+    EXPECT_TRUE(ContainsText(compactRayTracingSurfel, "deferredLightingResources.sceneShadingBuffer.get()"));
+
+    const usize lightingSnapshot = compactRootGraph.find("constDeferredLightingGraphResourcesdeferredLightingResources=m_deferredSystem.lightingGraphResources();");
+    const usize sceneShadingImport = compactRootGraph.find("deferredLightingResources.sceneShadingBuffer", lightingSnapshot);
+    const usize shadowDeclaration = compactRootGraph.find("declareDeferredShadowVisibilityTask(deferredTargets,deferredLightingResources,", lightingSnapshot);
+    const usize softwareCausticsDeclaration = compactRootGraph.find("declareDeferredSoftwareCausticsTask(declaresHardwareCaustics,deferredTargets,deferredLightingResources,", lightingSnapshot);
+    const usize surfelDeclaration = compactRootGraph.find("declareDeferredSurfelGiTask(deferredTargets,deferredLightingResources,", lightingSnapshot);
+    const usize hardwareCausticsDeclaration = compactRootGraph.find("declareHardwareCausticsTask(m_deferredLightingTaskGraph,hardwarePhotonDesc,deferredTargets,deferredLightingResources,", lightingSnapshot);
+    ASSERT_NE(lightingSnapshot, AStringView::npos);
+    ASSERT_NE(sceneShadingImport, AStringView::npos);
+    ASSERT_NE(shadowDeclaration, AStringView::npos);
+    ASSERT_NE(softwareCausticsDeclaration, AStringView::npos);
+    ASSERT_NE(surfelDeclaration, AStringView::npos);
+    ASSERT_NE(hardwareCausticsDeclaration, AStringView::npos);
+    EXPECT_LT(lightingSnapshot, sceneShadingImport);
+    EXPECT_LT(sceneShadingImport, shadowDeclaration);
+    EXPECT_TRUE(ContainsText(compactRootShadow, "declareDeferredShadowVisibilityTask(DeferredFrameTargets&deferredTargets,constDeferredLightingGraphResources&deferredLightingResources,"));
+    EXPECT_TRUE(ContainsText(compactRootShadow, "declareShadowVisibilityOpaqueTask(m_deferredLightingTaskGraph,opaqueDesc,deferredTargets,deferredLightingResources,"));
+    EXPECT_TRUE(ContainsText(compactRootCaustics, "declareSoftwareCausticsTask(m_deferredLightingTaskGraph,photonDesc,deferredTargets,deferredLightingResources,"));
+    EXPECT_TRUE(ContainsText(compactRootSurfel, "declareSurfelGiAgeFreeTask(m_deferredLightingTaskGraph,ageFreeDesc,deferredTargets,deferredLightingResources,"));
+}
+
+
 TEST(EcsGraphics, FramePipelineDoesNotPrivilegeNarrowShaderOrMeshSystems){
     TestArena testArena;
     AString headerSource;

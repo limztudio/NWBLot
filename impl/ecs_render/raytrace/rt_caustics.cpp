@@ -112,6 +112,7 @@ struct SoftwareCausticsGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* shadowVisibilityPrepared = nullptr;
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr;
@@ -131,7 +132,7 @@ struct SoftwareCausticsGraphTask{
         static_cast<void>(context);
         if(payload.causticProducerDispatched)
             *payload.causticProducerDispatched = false;
-        if(!payload.raytracingSystem || !payload.targets || !payload.timingTicket)
+        if(!payload.raytracingSystem || !payload.targets || !payload.deferredLightingResources.valid() || !payload.timingTicket)
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
@@ -144,6 +145,7 @@ struct SoftwareCausticsGraphTask{
             const bool causticsDispatched = payload.raytracingSystem->renderGpuBvhCaustics(
                 commandList,
                 *payload.targets,
+                payload.deferredLightingResources,
                 payload.graphEntryStatesOwned,
                 payload.graphOwnsAccumulatorBootstrapClear,
                 payload.graphOwnsAccumulatorDecay,
@@ -190,6 +192,7 @@ struct HardwareCausticsGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* shadowVisibilityPrepared = nullptr;
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr;
@@ -209,7 +212,7 @@ struct HardwareCausticsGraphTask{
         static_cast<void>(context);
         if(payload.causticProducerDispatched)
             *payload.causticProducerDispatched = false;
-        if(!payload.raytracingSystem || !payload.targets || !payload.timingTicket)
+        if(!payload.raytracingSystem || !payload.targets || !payload.deferredLightingResources.valid() || !payload.timingTicket)
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
@@ -222,6 +225,7 @@ struct HardwareCausticsGraphTask{
             const bool causticsDispatched = payload.raytracingSystem->renderHwCaustics(
                 commandList,
                 *payload.targets,
+                payload.deferredLightingResources,
                 payload.graphEntryStatesOwned,
                 payload.graphOwnsAccumulatorBootstrapClear,
                 payload.graphOwnsAccumulatorDecay,
@@ -1572,6 +1576,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSoftwareCausticsTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool* const shadowVisibilityPrepared,
     Core::GpuTimingSubmissionTicket& timingTicket,
     const bool graphEntryStatesOwned,
@@ -1587,6 +1592,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSoftwareCausticsTask(
         __hidden_caustics::SoftwareCausticsGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .shadowVisibilityPrepared = shadowVisibilityPrepared,
             .causticPhotonTiming = causticPhotonTiming,
@@ -1604,6 +1610,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareHardwareCausticsTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool* const shadowVisibilityPrepared,
     Core::GpuTimingSubmissionTicket& timingTicket,
     const bool graphEntryStatesOwned,
@@ -1619,6 +1626,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareHardwareCausticsTask(
         __hidden_caustics::HardwareCausticsGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .shadowVisibilityPrepared = shadowVisibilityPrepared,
             .causticPhotonTiming = causticPhotonTiming,
@@ -1892,6 +1900,7 @@ bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameT
 bool RendererRayTracingSystem::renderGpuBvhCaustics(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool graphEntryStatesOwned,
     const bool graphOwnsAccumulatorBootstrapClear,
     const bool graphOwnsAccumulatorDecay,
@@ -1903,8 +1912,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
     if(!hasCausticWork())
         return false;
     NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(m_deferredState.m_sceneShadingBuffer);
-    NWB_ASSERT(m_deferredState.m_lightBuffer);
+    NWB_ASSERT(deferredLightingResources.valid());
     const f32 temporalDecay = causticTemporalDecay();
     if(
         !m_rayTracingState.m_swCausticPipeline
@@ -1935,8 +1943,8 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
             commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
         }
         if(!graphEntryStatesOwned){
-            commandList.setBufferState(m_deferredState.m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-            commandList.setBufferState(m_deferredState.m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(deferredLightingResources.lightBuffer.get(), Core::ResourceStates::ShaderResource);
         }
         if(!graphEntryStatesOwned || !graphOwnsAccumulatorDecay)
             commandList.commitBarriers();
@@ -2420,6 +2428,7 @@ bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& t
 bool RendererRayTracingSystem::renderHwCaustics(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool graphEntryStatesOwned,
     const bool graphOwnsAccumulatorBootstrapClear,
     const bool graphOwnsAccumulatorDecay,
@@ -2430,8 +2439,7 @@ bool RendererRayTracingSystem::renderHwCaustics(
     if(!hasHwCausticWork())
         return false;
     NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(m_deferredState.m_sceneShadingBuffer);
-    NWB_ASSERT(m_deferredState.m_lightBuffer);
+    NWB_ASSERT(deferredLightingResources.valid());
     {
         Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
         if(!heap.isInitialized() || !m_rayTracingState.m_tlasHeapHandle.valid()){
@@ -2468,8 +2476,8 @@ bool RendererRayTracingSystem::renderHwCaustics(
             commandList.setBufferState(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
             commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
             commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(m_deferredState.m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-            commandList.setBufferState(m_deferredState.m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(deferredLightingResources.lightBuffer.get(), Core::ResourceStates::ShaderResource);
         }
         if(!graphOwnsAccumulatorDecay){
             commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess);

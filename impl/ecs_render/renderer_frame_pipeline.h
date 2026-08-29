@@ -227,6 +227,7 @@ private:
     );
     [[nodiscard]] bool declareDeferredShadowVisibilityTask(
         DeferredFrameTargets& deferredTargets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
         const RayTracingShadowVisibilityGraphPlanSnapshot& rayTracingPlan,
@@ -257,6 +258,7 @@ private:
     [[nodiscard]] bool declareDeferredSoftwareCausticsTask(
         bool hardwareCaustics,
         DeferredFrameTargets& deferredTargets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
         Core::GpuGraphResourceId worldPosition,
         Core::GpuGraphResourceId depth,
@@ -275,6 +277,7 @@ private:
     );
     [[nodiscard]] bool declareDeferredSurfelGiTask(
         DeferredFrameTargets& deferredTargets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
         const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources,
         Core::GpuGraphResourceId worldPosition,

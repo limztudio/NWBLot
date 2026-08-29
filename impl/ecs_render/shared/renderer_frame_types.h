@@ -134,6 +134,15 @@ struct RayTracingLightingClassification{
 };
 static_assert(sizeof(RayTracingLightingClassification) == sizeof(u32) * 2u);
 
+// Deferred owns these buffers, while the root module freezes their current generation for all later graph imports
+// and ray-tracing task payloads. Owning handles keep deferred replacement from invalidating an accepted packet.
+struct DeferredLightingGraphResources{
+    Core::BufferHandle sceneShadingBuffer;
+    Core::BufferHandle lightBuffer;
+
+    [[nodiscard]] bool valid()const noexcept{ return sceneShadingBuffer && lightBuffer; }
+};
+
 
 // Heap-slot indirection for the ray-tracing material context.
 struct RayTraceMaterialContextSlots{

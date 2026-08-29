@@ -29,6 +29,7 @@ struct ShadowVisibilityOpaqueGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::Graphics* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming = nullptr;
@@ -49,6 +50,7 @@ struct ShadowVisibilityOpaqueGraphTask{
             !payload.raytracingSystem
             || !payload.graphics
             || !payload.targets
+            || !payload.deferredLightingResources.valid()
             || !payload.timingTicket
             || !payload.asyncTiming
             || !payload.shadowVisibilityTiming
@@ -95,6 +97,7 @@ struct ShadowVisibilityOpaqueGraphTask{
                 ? payload.raytracingSystem->renderShadowVisibilityOpaque(
                     commandList,
                     *payload.targets,
+                    payload.deferredLightingResources,
                     *payload.opaqueFrameIndex,
                     payload.graphEntryStatesOwned,
                     payload.graphOwnsOpaqueTemporalMergeEntryStates
@@ -102,6 +105,7 @@ struct ShadowVisibilityOpaqueGraphTask{
                 : payload.raytracingSystem->renderGpuBvhShadowVisibilityOpaque(
                     commandList,
                     *payload.targets,
+                    payload.deferredLightingResources,
                     *payload.opaqueFrameIndex,
                     payload.graphEntryStatesOwned,
                     payload.graphOwnsOpaqueTemporalMergeEntryStates
@@ -160,6 +164,7 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::Graphics* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming = nullptr;
@@ -181,6 +186,7 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
             !payload.raytracingSystem
             || !payload.graphics
             || !payload.targets
+            || !payload.deferredLightingResources.valid()
             || !payload.timingTicket
             || !payload.asyncTiming
             || !payload.shadowVisibilityTiming
@@ -206,6 +212,7 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
         if(payload.raytracingSystem->renderSoftOpaqueShadowFirstWavelet(
             commandList,
             *payload.targets,
+            payload.deferredLightingResources,
             *payload.opaqueFrameIndex,
             payload.hardwareShadowSupported,
             payload.graphEntryStatesOwned,
@@ -262,6 +269,7 @@ struct ShadowVisibilityOpaqueResolveTailGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming = nullptr;
@@ -281,6 +289,7 @@ struct ShadowVisibilityOpaqueResolveTailGraphTask{
         if(
             !payload.raytracingSystem
             || !payload.targets
+            || !payload.deferredLightingResources.valid()
             || !payload.timingTicket
             || !payload.asyncTiming
             || !payload.shadowVisibilityTiming
@@ -298,6 +307,7 @@ struct ShadowVisibilityOpaqueResolveTailGraphTask{
         if(payload.raytracingSystem->renderSoftOpaqueShadowResolveTail(
             commandList,
             *payload.targets,
+            payload.deferredLightingResources,
             *payload.opaqueFrameIndex,
             payload.hardwareShadowSupported,
             payload.graphEntryStatesOwned
@@ -354,6 +364,7 @@ struct ShadowTransparentSoftTraceGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* opaqueProduced = nullptr;
         const u32* opaqueFrameIndex = nullptr;
@@ -370,6 +381,7 @@ struct ShadowTransparentSoftTraceGraphTask{
         if(
             !payload.raytracingSystem
             || !payload.targets
+            || !payload.deferredLightingResources.valid()
             || !payload.timingTicket
             || !payload.opaqueProduced
             || !payload.opaqueFrameIndex
@@ -385,6 +397,7 @@ struct ShadowTransparentSoftTraceGraphTask{
         if(!payload.raytracingSystem->renderSoftTransparentShadowTrace(
             commandList,
             *payload.targets,
+            payload.deferredLightingResources,
             *payload.opaqueFrameIndex,
             payload.graphEntryStatesOwned,
             true
@@ -410,6 +423,7 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::Graphics* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* transparentResolveTiming = nullptr;
         const bool* opaqueProduced = nullptr;
@@ -429,6 +443,7 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
             !payload.raytracingSystem
             || !payload.graphics
             || !payload.targets
+            || !payload.deferredLightingResources.valid()
             || !payload.timingTicket
             || !payload.transparentResolveTiming
             || !payload.opaqueProduced
@@ -453,6 +468,7 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
         if(payload.raytracingSystem->renderSoftTransparentShadowTemporalMerge(
             commandList,
             *payload.targets,
+            payload.deferredLightingResources,
             *payload.opaqueFrameIndex,
             payload.graphEntryStatesOwned,
             payload.graphOwnsTransparentTemporalMergeEntryStates
@@ -486,6 +502,7 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::Graphics* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* transparentResolveTiming = nullptr;
         const bool* opaqueProduced = nullptr;
@@ -506,6 +523,7 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
             !payload.raytracingSystem
             || !payload.graphics
             || !payload.targets
+            || !payload.deferredLightingResources.valid()
             || !payload.timingTicket
             || !payload.transparentResolveTiming
             || !payload.opaqueProduced
@@ -538,6 +556,7 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
         if(payload.raytracingSystem->renderSoftTransparentShadowFirstWavelet(
             commandList,
             *payload.targets,
+            payload.deferredLightingResources,
             *payload.opaqueFrameIndex,
             payload.graphEntryStatesOwned,
             payload.graphOwnsTransparentWaveletInputBoundary
@@ -571,6 +590,7 @@ struct ShadowTransparentSoftFoldGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming = nullptr;
@@ -589,6 +609,7 @@ struct ShadowTransparentSoftFoldGraphTask{
         if(
             !payload.raytracingSystem
             || !payload.targets
+            || !payload.deferredLightingResources.valid()
             || !payload.timingTicket
             || !payload.asyncTiming
             || !payload.shadowVisibilityTiming
@@ -617,6 +638,7 @@ struct ShadowTransparentSoftFoldGraphTask{
             if(payload.raytracingSystem->renderSoftTransparentShadowFold(
                 commandList,
                 *payload.targets,
+                payload.deferredLightingResources,
                 *payload.opaqueFrameIndex,
                 payload.graphEntryStatesOwned
             )){
@@ -674,6 +696,7 @@ struct ShadowVisibilityGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::Graphics* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* prepared = nullptr;
         bool hardwareShadowSupported = false;
@@ -693,6 +716,7 @@ struct ShadowVisibilityGraphTask{
             !payload.raytracingSystem
             || !payload.graphics
             || !payload.targets
+            || !payload.deferredLightingResources.valid()
             || !payload.timingTicket
         )
             return false;
@@ -723,6 +747,7 @@ struct ShadowVisibilityGraphTask{
             shadowVisibilityWritten = payload.raytracingSystem->renderShadowVisibility(
                 commandList,
                 *payload.targets,
+                payload.deferredLightingResources,
                 payload.graphEntryStatesOwned
             );
             if(!shadowVisibilityWritten)
@@ -734,6 +759,7 @@ struct ShadowVisibilityGraphTask{
                 if(!payload.raytracingSystem->renderGpuBvhShadowVisibility(
                     commandList,
                     *payload.targets,
+                    payload.deferredLightingResources,
                     true,
                     payload.graphEntryStatesOwned,
                     false,
@@ -749,6 +775,7 @@ struct ShadowVisibilityGraphTask{
             shadowVisibilityWritten = payload.raytracingSystem->renderGpuBvhShadowVisibility(
                 commandList,
                 *payload.targets,
+                payload.deferredLightingResources,
                 false,
                 payload.graphEntryStatesOwned,
                 false,
@@ -1141,6 +1168,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
 bool RendererRayTracingSystem::renderShadowVisibility(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool graphEntryStatesOwned,
     const bool splitSoftTransparentFold,
     u32* const opaqueFrameIndex,
@@ -1148,6 +1176,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(
     const bool splitOpaqueSoftResolve
 ){
     NWB_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
+    NWB_ASSERT(deferredLightingResources.valid());
     if(!targets.shadowVisibility)
         return false;
     if(!m_rayTracingState.m_tlas || !m_rayTracingState.m_shadowPipeline)
@@ -1175,8 +1204,8 @@ bool RendererRayTracingSystem::renderShadowVisibility(
         commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(m_deferredState.m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(m_deferredState.m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(deferredLightingResources.lightBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
         commandList.setAccelStructState(m_rayTracingState.m_tlas.get(), Core::ResourceStates::AccelStructRead);
     }
@@ -1251,6 +1280,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(
         dispatchSoftShadowDenoiseAndTransparentFold(
             commandList,
             targets,
+            deferredLightingResources,
             frameIndex,
             softGroupsX,
             softGroupsY,
@@ -1317,6 +1347,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool* const prepared,
     const bool hardwareShadowSupported,
     Core::GpuTimingSubmissionTicket& timingTicket,
@@ -1333,6 +1364,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
             .raytracingSystem = this,
             .graphics = &m_graphics,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
             .shadowVisibilityTiming = shadowVisibilityTiming,
@@ -1350,6 +1382,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWave
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>* const asyncTiming,
     Optional<Core::GpuTimingMeasure>* const shadowVisibilityTiming,
@@ -1366,6 +1399,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWave
             .raytracingSystem = this,
             .graphics = &m_graphics,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
             .shadowVisibilityTiming = shadowVisibilityTiming,
@@ -1382,6 +1416,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWave
 bool RendererRayTracingSystem::renderShadowVisibilityOpaque(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     u32& outFrameIndex,
     const bool graphEntryStatesOwned,
     const bool graphOwnsOpaqueTemporalMergeEntryStates
@@ -1396,6 +1431,7 @@ bool RendererRayTracingSystem::renderShadowVisibilityOpaque(
     return renderShadowVisibility(
         commandList,
         targets,
+        deferredLightingResources,
         graphEntryStatesOwned,
         true,
         &outFrameIndex,
@@ -1408,6 +1444,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTa
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>* const asyncTiming,
     Optional<Core::GpuTimingMeasure>* const shadowVisibilityTiming,
@@ -1422,6 +1459,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTa
         RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueResolveTailGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
             .shadowVisibilityTiming = shadowVisibilityTiming,
@@ -1437,6 +1475,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTa
 bool RendererRayTracingSystem::renderSoftOpaqueShadowFirstWavelet(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const u32 frameIndex,
     const bool hardwareShadowSupported,
     const bool graphEntryStatesOwned,
@@ -1459,6 +1498,7 @@ bool RendererRayTracingSystem::renderSoftOpaqueShadowFirstWavelet(
     dispatchSoftShadowDenoiseAndTransparentFold(
         commandList,
         targets,
+        deferredLightingResources,
         frameIndex,
         softGroupsX,
         softGroupsY,
@@ -1481,6 +1521,7 @@ bool RendererRayTracingSystem::renderSoftOpaqueShadowFirstWavelet(
 bool RendererRayTracingSystem::renderSoftOpaqueShadowResolveTail(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const u32 frameIndex,
     const bool hardwareShadowSupported,
     const bool graphEntryStatesOwned
@@ -1502,6 +1543,7 @@ bool RendererRayTracingSystem::renderSoftOpaqueShadowResolveTail(
     dispatchSoftShadowDenoiseAndTransparentFold(
         commandList,
         targets,
+        deferredLightingResources,
         frameIndex,
         softGroupsX,
         softGroupsY,
@@ -1524,6 +1566,7 @@ bool RendererRayTracingSystem::renderSoftOpaqueShadowResolveTail(
 bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const u32 frameIndex,
     const bool graphEntryStatesOwned,
     const bool graphOwnsOpaqueToTransparentBoundary
@@ -1541,6 +1584,7 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
     dispatchSoftShadowDenoiseAndTransparentFold(
         commandList,
         targets,
+        deferredLightingResources,
         frameIndex,
         softGroupsX,
         softGroupsY,
@@ -1563,6 +1607,7 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
 bool RendererRayTracingSystem::renderSoftTransparentShadowTemporalMerge(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const u32 frameIndex,
     const bool graphEntryStatesOwned,
     const bool graphOwnsTransparentTemporalMergeEntryStates
@@ -1581,6 +1626,7 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTemporalMerge(
     dispatchSoftShadowDenoiseAndTransparentFold(
         commandList,
         targets,
+        deferredLightingResources,
         frameIndex,
         softGroupsX,
         softGroupsY,
@@ -1606,6 +1652,7 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTemporalMerge(
 bool RendererRayTracingSystem::renderSoftTransparentShadowFirstWavelet(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const u32 frameIndex,
     const bool graphEntryStatesOwned,
     const bool graphOwnsTransparentWaveletInputBoundary
@@ -1623,6 +1670,7 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFirstWavelet(
     dispatchSoftShadowDenoiseAndTransparentFold(
         commandList,
         targets,
+        deferredLightingResources,
         frameIndex,
         softGroupsX,
         softGroupsY,
@@ -1648,6 +1696,7 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFirstWavelet(
 bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const u32 frameIndex,
     const bool graphEntryStatesOwned
 ){
@@ -1664,6 +1713,7 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
     dispatchSoftShadowDenoiseAndTransparentFold(
         commandList,
         targets,
+        deferredLightingResources,
         frameIndex,
         softGroupsX,
         softGroupsY,
@@ -1688,6 +1738,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTemporalMe
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>* const transparentResolveTiming,
     const bool* const opaqueProduced,
@@ -1702,6 +1753,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTemporalMe
             .raytracingSystem = this,
             .graphics = &m_graphics,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .transparentResolveTiming = transparentResolveTiming,
             .opaqueProduced = opaqueProduced,
@@ -1717,6 +1769,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFirstWavel
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>* const transparentResolveTiming,
     const bool* const opaqueProduced,
@@ -1732,6 +1785,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFirstWavel
             .raytracingSystem = this,
             .graphics = &m_graphics,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .transparentResolveTiming = transparentResolveTiming,
             .opaqueProduced = opaqueProduced,
@@ -1748,6 +1802,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>* const asyncTiming,
     Optional<Core::GpuTimingMeasure>* const shadowVisibilityTiming,
@@ -1762,6 +1817,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
         RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFoldGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
             .shadowVisibilityTiming = shadowVisibilityTiming,
@@ -1778,6 +1834,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTraceTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
     const bool* const opaqueProduced,
     const u32* const opaqueFrameIndex,
@@ -1789,6 +1846,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTraceTask(
         RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTraceGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .opaqueProduced = opaqueProduced,
             .opaqueFrameIndex = opaqueFrameIndex,
@@ -1802,6 +1860,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool* const prepared,
     const bool hardwareShadowSupported,
     Core::GpuTimingSubmissionTicket& timingTicket,
@@ -1815,6 +1874,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
             .raytracingSystem = this,
             .graphics = &m_graphics,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .prepared = prepared,
             .hardwareShadowSupported = hardwareShadowSupported,
@@ -1838,6 +1898,7 @@ void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandL
 bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool multiplyOntoOpaque,
     const bool graphEntryStatesOwned,
     const bool splitSoftTransparentFold,
@@ -1851,8 +1912,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     if(!targets.shadowVisibility)
         return false;
     NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(m_deferredState.m_sceneShadingBuffer);
-    NWB_ASSERT(m_deferredState.m_lightBuffer);
+    NWB_ASSERT(deferredLightingResources.valid());
     if(!m_rayTracingState.m_sceneBvhNodeBuffer || m_rayTracingState.m_sceneBvhInstanceCount == 0u)
         return false;
     if(!m_rayTracingState.m_swShadowOpaquePrepassPipeline || m_rayTracingState.m_swShadowMeshCount == 0u)
@@ -1890,8 +1950,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(m_deferredState.m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(m_deferredState.m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(deferredLightingResources.lightBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
     }
     // Subsequent visibility passes read/write this UAV in place.
@@ -2023,6 +2083,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             dispatchSoftShadowDenoiseAndTransparentFold(
                 commandList,
                 targets,
+                deferredLightingResources,
                 frameIndex,
                 softGroupsX,
                 softGroupsY,
@@ -2184,6 +2245,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
 bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     u32& outFrameIndex,
     const bool graphEntryStatesOwned,
     const bool graphOwnsOpaqueTemporalMergeEntryStates
@@ -2198,6 +2260,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
     return renderGpuBvhShadowVisibility(
         commandList,
         targets,
+        deferredLightingResources,
         false,
         graphEntryStatesOwned,
         true,

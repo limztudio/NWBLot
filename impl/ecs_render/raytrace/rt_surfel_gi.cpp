@@ -69,6 +69,7 @@ struct SurfelGiAgeFreeGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::Graphics* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         bool graphEntryStatesOwned = false;
@@ -83,6 +84,7 @@ struct SurfelGiAgeFreeGraphTask{
             !payload.raytracingSystem
             || !payload.graphics
             || !payload.targets
+            || !payload.deferredLightingResources.valid()
             || !payload.timingTicket
             || !payload.asyncTiming
         )
@@ -105,6 +107,7 @@ struct SurfelGiAgeFreeGraphTask{
         if(!payload.raytracingSystem->renderSurfelGiAgeFree(
             commandList,
             *payload.targets,
+            payload.deferredLightingResources,
             payload.graphEntryStatesOwned
         )){
             if(payload.asyncTiming->has_value()){
@@ -133,6 +136,7 @@ struct SurfelGiHashBuildGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         bool graphEntryStatesOwned = false;
@@ -146,6 +150,7 @@ struct SurfelGiHashBuildGraphTask{
         if(
             !payload.raytracingSystem
             || !payload.targets
+            || !payload.deferredLightingResources.valid()
             || !payload.timingTicket
             || !payload.asyncTiming
         )
@@ -162,6 +167,7 @@ struct SurfelGiHashBuildGraphTask{
         if(!payload.raytracingSystem->renderSurfelGiHashBuild(
             commandList,
             *payload.targets,
+            payload.deferredLightingResources,
             payload.graphEntryStatesOwned
         )){
             if(payload.asyncTiming->has_value()){
@@ -186,6 +192,7 @@ struct SurfelGiSpawnGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         bool graphEntryStatesOwned = false;
@@ -199,6 +206,7 @@ struct SurfelGiSpawnGraphTask{
         if(
             !payload.raytracingSystem
             || !payload.targets
+            || !payload.deferredLightingResources.valid()
             || !payload.timingTicket
             || !payload.asyncTiming
         )
@@ -215,6 +223,7 @@ struct SurfelGiSpawnGraphTask{
         if(!payload.raytracingSystem->renderSurfelGiSpawn(
             commandList,
             *payload.targets,
+            payload.deferredLightingResources,
             payload.graphEntryStatesOwned
         )){
             if(payload.asyncTiming->has_value()){
@@ -239,6 +248,7 @@ struct SurfelGiTraceBuildArgsGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         bool graphEntryStatesOwned = false;
@@ -252,6 +262,7 @@ struct SurfelGiTraceBuildArgsGraphTask{
         if(
             !payload.raytracingSystem
             || !payload.targets
+            || !payload.deferredLightingResources.valid()
             || !payload.timingTicket
             || !payload.asyncTiming
         )
@@ -268,6 +279,7 @@ struct SurfelGiTraceBuildArgsGraphTask{
         if(!payload.raytracingSystem->renderSurfelGiTraceBuildArgs(
             commandList,
             *payload.targets,
+            payload.deferredLightingResources,
             payload.graphEntryStatesOwned
         )){
             if(payload.asyncTiming->has_value()){
@@ -292,6 +304,7 @@ struct SurfelGiTraceGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         bool graphEntryStatesOwned = false;
@@ -305,6 +318,7 @@ struct SurfelGiTraceGraphTask{
         if(
             !payload.raytracingSystem
             || !payload.targets
+            || !payload.deferredLightingResources.valid()
             || !payload.timingTicket
             || !payload.asyncTiming
         )
@@ -321,6 +335,7 @@ struct SurfelGiTraceGraphTask{
         if(!payload.raytracingSystem->renderSurfelGiTrace(
             commandList,
             *payload.targets,
+            payload.deferredLightingResources,
             payload.graphEntryStatesOwned
         )){
             if(payload.asyncTiming->has_value()){
@@ -345,6 +360,7 @@ struct SurfelGiResolveGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         bool graphEntryStatesOwned = false;
@@ -358,6 +374,7 @@ struct SurfelGiResolveGraphTask{
         if(
             !payload.raytracingSystem
             || !payload.targets
+            || !payload.deferredLightingResources.valid()
             || !payload.timingTicket
             || !payload.asyncTiming
         )
@@ -374,6 +391,7 @@ struct SurfelGiResolveGraphTask{
         if(!payload.raytracingSystem->renderSurfelGiResolve(
             commandList,
             *payload.targets,
+            payload.deferredLightingResources,
             payload.graphEntryStatesOwned
         )){
             if(payload.asyncTiming->has_value()){
@@ -399,6 +417,7 @@ struct SurfelGiGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::Graphics* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         bool graphEntryStatesOwned = false;
@@ -415,7 +434,7 @@ struct SurfelGiGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        if(!payload.raytracingSystem || !payload.graphics || !payload.targets || !payload.timingTicket)
+        if(!payload.raytracingSystem || !payload.graphics || !payload.targets || !payload.deferredLightingResources.valid() || !payload.timingTicket)
             return false;
 
         const Core::GpuPhysicalQueueInfo* const queue = context.graph.queueInfo(context.queue);
@@ -432,6 +451,7 @@ struct SurfelGiGraphTask{
             if(!payload.raytracingSystem->renderSurfelGiAfterAgeFree(
                 commandList,
                 *payload.targets,
+                payload.deferredLightingResources,
                 payload.graphEntryStatesOwned,
                 true,
                 payload.graphOwnsHashBuild,
@@ -466,6 +486,7 @@ struct SurfelGiGraphTask{
         if(!payload.raytracingSystem->renderSurfelGi(
             commandList,
             *payload.targets,
+            payload.deferredLightingResources,
             payload.graphEntryStatesOwned
         ))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel GI render pass failed"));
@@ -1295,6 +1316,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiAgeFreeTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming,
     const bool graphEntryStatesOwned
@@ -1305,6 +1327,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiAgeFreeTask(
             .raytracingSystem = this,
             .graphics = &m_graphics,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = &asyncTiming,
             .graphEntryStatesOwned = graphEntryStatesOwned,
@@ -1316,6 +1339,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiHashBuildTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>* const asyncTiming,
     const bool graphEntryStatesOwned
@@ -1325,6 +1349,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiHashBuildTask(
         RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
             .graphEntryStatesOwned = graphEntryStatesOwned,
@@ -1336,6 +1361,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiSpawnTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>* const asyncTiming,
     const bool graphEntryStatesOwned
@@ -1345,6 +1371,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiSpawnTask(
         RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
             .graphEntryStatesOwned = graphEntryStatesOwned,
@@ -1356,6 +1383,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceBuildArgsTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>* const asyncTiming,
     const bool graphEntryStatesOwned
@@ -1365,6 +1393,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceBuildArgsTask(
         RayTracingSurfelGiTaskDetail::SurfelGiTraceBuildArgsGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
             .graphEntryStatesOwned = graphEntryStatesOwned,
@@ -1376,6 +1405,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>* const asyncTiming,
     const bool graphEntryStatesOwned
@@ -1385,6 +1415,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceTask(
         RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
             .graphEntryStatesOwned = graphEntryStatesOwned,
@@ -1396,6 +1427,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiResolveTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>* const asyncTiming,
     const bool graphEntryStatesOwned
@@ -1405,6 +1437,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiResolveTask(
         RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
             .graphEntryStatesOwned = graphEntryStatesOwned,
@@ -1416,6 +1449,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
     const bool graphEntryStatesOwned,
     const bool graphOwnsCellHeadClear,
@@ -1432,6 +1466,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
             .raytracingSystem = this,
             .graphics = &m_graphics,
             .targets = &targets,
+            .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
             .graphEntryStatesOwned = graphEntryStatesOwned,
@@ -1462,11 +1497,13 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelResourceInitializationLif
 bool RendererRayTracingSystem::renderSurfelGi(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool graphEntryStatesOwned
 ){
     return renderSurfelGiPhases(
         commandList,
         targets,
+        deferredLightingResources,
         graphEntryStatesOwned,
         true,
         true,
@@ -1487,11 +1524,13 @@ bool RendererRayTracingSystem::renderSurfelGi(
 bool RendererRayTracingSystem::renderSurfelGiAgeFree(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool graphEntryStatesOwned
 ){
     return renderSurfelGiPhases(
         commandList,
         targets,
+        deferredLightingResources,
         graphEntryStatesOwned,
         true,
         false,
@@ -1512,6 +1551,7 @@ bool RendererRayTracingSystem::renderSurfelGiAgeFree(
 bool RendererRayTracingSystem::renderSurfelGiAfterAgeFree(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool graphEntryStatesOwned,
     const bool graphOwnsCellHeadClear,
     const bool graphOwnsHashBuild,
@@ -1523,6 +1563,7 @@ bool RendererRayTracingSystem::renderSurfelGiAfterAgeFree(
     return renderSurfelGiPhases(
         commandList,
         targets,
+        deferredLightingResources,
         graphEntryStatesOwned,
         false,
         !graphOwnsHashBuild,
@@ -1543,11 +1584,13 @@ bool RendererRayTracingSystem::renderSurfelGiAfterAgeFree(
 bool RendererRayTracingSystem::renderSurfelGiHashBuild(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool graphEntryStatesOwned
 ){
     return renderSurfelGiPhases(
         commandList,
         targets,
+        deferredLightingResources,
         graphEntryStatesOwned,
         false,
         true,
@@ -1568,11 +1611,13 @@ bool RendererRayTracingSystem::renderSurfelGiHashBuild(
 bool RendererRayTracingSystem::renderSurfelGiSpawn(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool graphEntryStatesOwned
 ){
     return renderSurfelGiPhases(
         commandList,
         targets,
+        deferredLightingResources,
         graphEntryStatesOwned,
         false,
         false,
@@ -1593,11 +1638,13 @@ bool RendererRayTracingSystem::renderSurfelGiSpawn(
 bool RendererRayTracingSystem::renderSurfelGiTraceBuildArgs(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool graphEntryStatesOwned
 ){
     return renderSurfelGiPhases(
         commandList,
         targets,
+        deferredLightingResources,
         graphEntryStatesOwned,
         false,
         false,
@@ -1618,11 +1665,13 @@ bool RendererRayTracingSystem::renderSurfelGiTraceBuildArgs(
 bool RendererRayTracingSystem::renderSurfelGiTrace(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool graphEntryStatesOwned
 ){
     return renderSurfelGiPhases(
         commandList,
         targets,
+        deferredLightingResources,
         graphEntryStatesOwned,
         false,
         false,
@@ -1643,11 +1692,13 @@ bool RendererRayTracingSystem::renderSurfelGiTrace(
 bool RendererRayTracingSystem::renderSurfelGiResolve(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool graphEntryStatesOwned
 ){
     return renderSurfelGiPhases(
         commandList,
         targets,
+        deferredLightingResources,
         graphEntryStatesOwned,
         false,
         false,
@@ -1668,6 +1719,7 @@ bool RendererRayTracingSystem::renderSurfelGiResolve(
 bool RendererRayTracingSystem::renderSurfelGiPhases(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const bool graphEntryStatesOwned,
     const bool dispatchAgeFree,
     const bool dispatchHashBuild,
@@ -1707,8 +1759,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
 
     if(
         !targets.bindless.valid()
-        || !m_deferredState.m_sceneShadingBuffer
-        || !m_deferredState.m_lightBuffer
+        || !deferredLightingResources.valid()
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelConstantsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelPoolHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelCellHeadHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
@@ -1883,8 +1934,8 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
             commandList.setBufferState(m_rayTracingState.m_surfelPoolSnapshotBuffer.get(), Core::ResourceStates::ShaderResource);
             commandList.setBufferState(m_rayTracingState.m_surfelCellHeadSnapshotBuffer.get(), Core::ResourceStates::ShaderResource);
             commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-            commandList.setBufferState(m_deferredState.m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-            commandList.setBufferState(m_deferredState.m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(deferredLightingResources.lightBuffer.get(), Core::ResourceStates::ShaderResource);
         }
         if(!graphOwnsTraceBuildArgs)
             commandList.setBufferState(m_rayTracingState.m_surfelTraceIndirectArgsBuffer.get(), Core::ResourceStates::IndirectArgument);

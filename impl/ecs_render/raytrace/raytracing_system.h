@@ -325,7 +325,6 @@ public:
         RendererMaterialSystem& materialSystem,
         RendererMeshState& meshState,
         RendererDrawState& drawState,
-        RendererDeferredState& deferredState,
         RendererRayTracingState& rayTracingState
     );
     ~RendererRayTracingSystem();
@@ -531,6 +530,7 @@ public:
     [[nodiscard]] bool renderShadowVisibility(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         bool graphEntryStatesOwned = false,
         bool splitSoftTransparentFold = false,
         u32* opaqueFrameIndex = nullptr,
@@ -541,6 +541,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         const bool* prepared,
         bool hardwareShadowSupported,
         Core::GpuTimingSubmissionTicket& timingTicket,
@@ -555,6 +556,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         const bool* prepared,
         bool hardwareShadowSupported,
         Core::GpuTimingSubmissionTicket& timingTicket,
@@ -572,6 +574,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>* asyncTiming,
         Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming,
@@ -586,6 +589,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>* asyncTiming,
         Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming,
@@ -601,6 +605,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>* transparentResolveTiming,
         const bool* opaqueProduced,
@@ -616,6 +621,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>* transparentResolveTiming,
         const bool* opaqueProduced,
@@ -629,6 +635,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>* asyncTiming,
         Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming,
@@ -642,6 +649,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
         const bool* opaqueProduced,
         const u32* opaqueFrameIndex,
@@ -682,6 +690,7 @@ public:
     [[nodiscard]] bool renderGpuBvhShadowVisibility(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         bool multiplyOntoOpaque = false,
         bool graphEntryStatesOwned = false,
         bool splitSoftTransparentFold = false,
@@ -695,6 +704,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         const bool* shadowVisibilityPrepared,
         Core::GpuTimingSubmissionTicket& timingTicket,
         bool graphEntryStatesOwned = false,
@@ -710,6 +720,7 @@ public:
     [[nodiscard]] bool renderGpuBvhCaustics(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         bool graphEntryStatesOwned = false,
         bool graphOwnsAccumulatorBootstrapClear = false,
         bool graphOwnsAccumulatorDecay = false,
@@ -722,6 +733,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         const bool* shadowVisibilityPrepared,
         Core::GpuTimingSubmissionTicket& timingTicket,
         bool graphEntryStatesOwned = false,
@@ -737,6 +749,7 @@ public:
     [[nodiscard]] bool renderHwCaustics(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         bool graphEntryStatesOwned = false,
         bool graphOwnsAccumulatorBootstrapClear = false,
         bool graphOwnsAccumulatorDecay = false,
@@ -872,6 +885,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming,
         bool graphEntryStatesOwned = false
@@ -880,6 +894,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr,
         bool graphEntryStatesOwned = false
@@ -888,6 +903,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr,
         bool graphEntryStatesOwned = false
@@ -896,6 +912,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr,
         bool graphEntryStatesOwned = false
@@ -904,6 +921,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr,
         bool graphEntryStatesOwned = false
@@ -912,6 +930,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr,
         bool graphEntryStatesOwned = false
@@ -920,6 +939,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
         bool graphEntryStatesOwned = false,
         bool graphOwnsCellHeadClear = false,
@@ -935,6 +955,7 @@ public:
     [[nodiscard]] bool renderSurfelGi(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         bool graphEntryStatesOwned = false
     );
     // Persistent surfel storage survives resize.
@@ -1108,11 +1129,13 @@ private:
     [[nodiscard]] bool renderSurfelGiAgeFree(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         bool graphEntryStatesOwned = false
     );
     [[nodiscard]] bool renderSurfelGiAfterAgeFree(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         bool graphEntryStatesOwned = false,
         bool graphOwnsCellHeadClear = false,
         bool graphOwnsHashBuild = false,
@@ -1124,31 +1147,37 @@ private:
     [[nodiscard]] bool renderSurfelGiHashBuild(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         bool graphEntryStatesOwned = false
     );
     [[nodiscard]] bool renderSurfelGiSpawn(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         bool graphEntryStatesOwned = false
     );
     [[nodiscard]] bool renderSurfelGiTraceBuildArgs(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         bool graphEntryStatesOwned = false
     );
     [[nodiscard]] bool renderSurfelGiTrace(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         bool graphEntryStatesOwned = false
     );
     [[nodiscard]] bool renderSurfelGiResolve(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         bool graphEntryStatesOwned = false
     );
     [[nodiscard]] bool renderSurfelGiPhases(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         bool graphEntryStatesOwned,
         bool dispatchAgeFree,
         bool dispatchHashBuild,
@@ -1222,6 +1251,7 @@ private:
     void dispatchSoftShadowResolve(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         u32 slotStart,
         u32 slotCount,
         const SoftShadowResolveDispatch& dispatch,
@@ -1235,6 +1265,7 @@ private:
     void dispatchSoftShadowDenoiseAndTransparentFold(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         u32 frameIndex,
         u32 softGroupsX,
         u32 softGroupsY,
@@ -1259,6 +1290,7 @@ private:
     [[nodiscard]] bool renderShadowVisibilityOpaque(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         u32& outFrameIndex,
         bool graphEntryStatesOwned,
         bool graphOwnsOpaqueTemporalMergeEntryStates
@@ -1266,6 +1298,7 @@ private:
     [[nodiscard]] bool renderSoftOpaqueShadowFirstWavelet(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         u32 frameIndex,
         bool hardwareShadowSupported,
         bool graphEntryStatesOwned,
@@ -1274,6 +1307,7 @@ private:
     [[nodiscard]] bool renderSoftOpaqueShadowResolveTail(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         u32 frameIndex,
         bool hardwareShadowSupported,
         bool graphEntryStatesOwned
@@ -1281,6 +1315,7 @@ private:
     [[nodiscard]] bool renderGpuBvhShadowVisibilityOpaque(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         u32& outFrameIndex,
         bool graphEntryStatesOwned,
         bool graphOwnsOpaqueTemporalMergeEntryStates
@@ -1288,6 +1323,7 @@ private:
     [[nodiscard]] bool renderSoftTransparentShadowTrace(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         u32 frameIndex,
         bool graphEntryStatesOwned,
         bool graphOwnsOpaqueToTransparentBoundary
@@ -1295,6 +1331,7 @@ private:
     [[nodiscard]] bool renderSoftTransparentShadowTemporalMerge(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         u32 frameIndex,
         bool graphEntryStatesOwned,
         bool graphOwnsTransparentTemporalMergeEntryStates
@@ -1302,6 +1339,7 @@ private:
     [[nodiscard]] bool renderSoftTransparentShadowFirstWavelet(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         u32 frameIndex,
         bool graphEntryStatesOwned,
         bool graphOwnsTransparentWaveletInputBoundary
@@ -1309,6 +1347,7 @@ private:
     [[nodiscard]] bool renderSoftTransparentShadowFold(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
         u32 frameIndex,
         bool graphEntryStatesOwned
     );
@@ -1415,7 +1454,6 @@ private:
     RendererMaterialSystem& m_materialSystem;
     RendererMeshState& m_meshState;
     RendererDrawState& m_drawState;
-    RendererDeferredState& m_deferredState;
     RendererRayTracingState& m_rayTracingState;
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;

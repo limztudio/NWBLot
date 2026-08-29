@@ -32,6 +32,7 @@ NWB_IMPL_BEGIN
 
 bool RendererFramePipeline::declareDeferredSurfelGiTask(
     DeferredFrameTargets& deferredTargets,
+    const DeferredLightingGraphResources& deferredLightingResources,
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
     const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources,
     const Core::GpuGraphResourceId worldPosition,
@@ -675,6 +676,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             m_deferredLightingTaskGraph,
             ageFreeDesc,
             deferredTargets,
+            deferredLightingResources,
             timingTicket,
             asyncTiming,
             true
@@ -724,6 +726,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             m_deferredLightingTaskGraph,
             hashBuildDesc,
             deferredTargets,
+            deferredLightingResources,
             timingTicket,
             &asyncTiming,
             true
@@ -753,6 +756,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             m_deferredLightingTaskGraph,
             spawnDesc,
             deferredTargets,
+            deferredLightingResources,
             timingTicket,
             &asyncTiming,
             true
@@ -782,6 +786,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             m_deferredLightingTaskGraph,
             traceBuildArgsDesc,
             deferredTargets,
+            deferredLightingResources,
             timingTicket,
             &asyncTiming,
             true
@@ -812,6 +817,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             m_deferredLightingTaskGraph,
             traceDesc,
             deferredTargets,
+            deferredLightingResources,
             timingTicket,
             &asyncTiming,
             true
@@ -838,6 +844,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             m_deferredLightingTaskGraph,
             resolveDesc,
             deferredTargets,
+            deferredLightingResources,
             timingTicket,
             &asyncTiming,
             true
@@ -878,6 +885,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         m_deferredLightingTaskGraph,
         desc,
         deferredTargets,
+        deferredLightingResources,
         timingTicket,
         true,
         graphOwnsSurfelGiResolve,

@@ -6,7 +6,7 @@
 
 
 #include "api.h"
-#include "gpu_timing_metrics.h"
+#include "gpu_timing_metric_correlator.h"
 
 #include <core/perf/timing.h>
 
@@ -24,7 +24,6 @@ class GpuTimingAccumulator;
 class GpuTimingFrameTransaction;
 class GpuTimingMeasure;
 class GpuTimingRecorder;
-class GpuTimingRecorderDiagnosticPeer;
 class GpuTimingSubmissionTicket;
 class GpuTaskGraphSubmitter;
 
@@ -215,20 +214,6 @@ struct GpuTimingRecorderStatistics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct GpuPacketEnvelopeMetricScope{
-    Name scopeName = NAME_NONE;
-    GpuPhysicalQueueId physicalQueue;
-};
-
-struct GpuPacketEnvelopeMetricQueueOutput{
-    GpuPhysicalQueueId physicalQueue;
-    Name internalIdleScopeName = NAME_NONE;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class GpuTimingAccumulator final : NoCopy{
     friend class GpuTimingRecorder;
 
@@ -351,7 +336,6 @@ class GpuTimingRecorder final : NoCopy{
     friend class GpuTimingAccumulator;
     friend class GpuTimingFrameTransaction;
     friend class GpuTimingMeasure;
-    friend class GpuTimingRecorderDiagnosticPeer;
     friend class GpuTimingSubmissionTicket;
 
 private:
@@ -363,67 +347,12 @@ private:
         u64 value = 0u;
     };
 
-    struct PendingOverlapFrame{
-        u64 frameIndex = 0u;
-        GpuComparableTimestampRange first;
-        GpuComparableTimestampRange second;
-        bool hasFirst = false;
-        bool hasSecond = false;
-    };
-
-    struct OverlapRecord{
-        Name firstScope = NAME_NONE;
-        Name secondScope = NAME_NONE;
-        Name outputScopeName = NAME_NONE;
-        Perf::TimingScopeId outputScope;
-        Vector<PendingOverlapFrame, Alloc::GlobalArena> pendingFrames;
-
-        explicit OverlapRecord(Alloc::GlobalArena& arena)
-            : pendingFrames(arena)
-        {}
-    };
-
-    struct PacketEnvelopeMetricScopeRecord{
-        Name scopeName = NAME_NONE;
-        GpuPhysicalQueueId physicalQueue;
-        GpuComparableTimestampRange range;
-        bool received = false;
-    };
-
-    struct PacketEnvelopeMetricQueueOutputRecord{
-        GpuPhysicalQueueId physicalQueue;
-        Name internalIdleScopeName = NAME_NONE;
-        Perf::TimingScopeId internalIdleScope;
-    };
-
-    struct PacketEnvelopeMetricOutputRoleRecord{
-        Name scopeName = NAME_NONE;
-        GpuPhysicalQueueId physicalQueue;
-        bool queueInternalIdle = false;
-    };
-
-    struct PendingPacketEnvelopeMetric{
-        u64 sourceFrameIndex = 0u;
-        Name queueOverlapScopeName = NAME_NONE;
-        Perf::TimingScopeId queueOverlapScope;
-        Vector<PacketEnvelopeMetricScopeRecord, Alloc::GlobalArena> scopes;
-        Vector<PacketEnvelopeMetricQueueOutputRecord, Alloc::GlobalArena> queueOutputs;
-
-        explicit PendingPacketEnvelopeMetric(Alloc::GlobalArena& arena)
-            : scopes(arena)
-            , queueOutputs(arena)
-        {}
-    };
-
     struct SampleListenerRecord{
         GpuTimingSampleSubscription subscription;
         GpuTimingSampleListener listener;
         bool feedbackCollectionEnabled = false;
     };
 
-    using OverlapVector = Vector<OverlapRecord, Alloc::GlobalArena>;
-    using PendingPacketEnvelopeMetricVector = Vector<PendingPacketEnvelopeMetric, Alloc::GlobalArena>;
-    using PacketEnvelopeMetricOutputRoleVector = Vector<PacketEnvelopeMetricOutputRoleRecord, Alloc::GlobalArena>;
     using SampleListenerVector = Vector<SampleListenerRecord, Alloc::GlobalArena>;
     using SampleSubscriptionVector = Vector<GpuTimingSampleSubscription, Alloc::GlobalArena>;
     using SampleVector = Vector<GpuTimingSample, Alloc::GlobalArena>;
@@ -540,12 +469,6 @@ private:
         const SampleSubscriptionVector& subscriptions
     );
     void retirePendingAttributionsLocked(SampleVector& outSamples);
-    void recordTimestampRange(
-        const Name& scopeName,
-        u64 frameIndex,
-        const GpuComparableTimestampRange& range,
-        Alloc::ScratchArena& scratchArena
-    );
     void discardFrameResetLocked();
     void noteSkippedScope(GpuTimingScopeSkipReason::Enum reason);
     void syncActiveState();
@@ -557,11 +480,9 @@ private:
 
     Alloc::GlobalArena& m_arena;
     Perf::TimingSink& m_timing;
+    GpuTimingMetricCorrelator m_metricCorrelator;
     AccumulatorMap m_accumulators;
     Vector<QueueCompletion, Alloc::GlobalArena> m_queueCompletions;
-    OverlapVector m_overlapRecords;
-    PendingPacketEnvelopeMetricVector m_pendingPacketEnvelopeMetrics;
-    PacketEnvelopeMetricOutputRoleVector m_packetEnvelopeMetricOutputRoles;
     SampleListenerVector m_sampleListeners;
     // Listener mutation may re-enter from a callback. Whenever both recorder locks are needed, acquire this listener
     // lock first and m_mutex second; no path retains m_mutex while acquiring this lock.

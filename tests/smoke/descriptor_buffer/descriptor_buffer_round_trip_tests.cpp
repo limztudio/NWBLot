@@ -520,7 +520,7 @@ PFN_vkCmdCopyBuffer ScopedNativeUploadReuseTrace::s_forwardCmdCopyBuffer = nullp
 
 
 struct GpuTimingSampleCapture{
-    GpuTimingSample samples[2u] = {};
+    GpuTimingSample samples[4u] = {};
     u32 sampleCount = 0u;
 
 
@@ -531,6 +531,42 @@ struct GpuTimingSampleCapture{
 
         capture->samples[capture->sampleCount] = sample;
         ++capture->sampleCount;
+    }
+};
+
+struct ReplacingGpuTimingSampleCapture{
+    GpuTimingSampleCapture capturedSamples;
+    GpuTimingSampleCapture replacementSamples;
+    GpuTimingRecorder& timing;
+    GpuTimingSampleSubscription subscription;
+    GpuTimingSampleSubscription replacementSubscription;
+    bool replaceOnFirstSample = false;
+
+
+    static void Invoke(void* const context, const GpuTimingSample& sample){
+        ReplacingGpuTimingSampleCapture* const capture = static_cast<ReplacingGpuTimingSampleCapture*>(context);
+        if(!capture)
+            return;
+
+        GpuTimingSampleCapture::Invoke(&capture->capturedSamples, sample);
+        if(!capture->replaceOnFirstSample)
+            return;
+
+        capture->replaceOnFirstSample = false;
+        capture->timing.unsubscribeSampleListener(capture->subscription);
+        capture->replacementSubscription = capture->timing.subscribeSampleListener(GpuTimingSampleListener{
+            .context = &capture->replacementSamples,
+            .invoke = &GpuTimingSampleCapture::Invoke,
+        });
+    }
+
+
+    explicit ReplacingGpuTimingSampleCapture(GpuTimingRecorder& timingRecorder)
+        : timing(timingRecorder)
+    {}
+    ~ReplacingGpuTimingSampleCapture(){
+        timing.unsubscribeSampleListener(subscription);
+        timing.unsubscribeSampleListener(replacementSubscription);
     }
 };
 
@@ -48139,6 +48175,7 @@ inline constexpr GpuTimingScopeDefinition s_SubmissionTicketScope("tests/timing_
 inline constexpr GpuTimingScopeDefinition s_GraphCompanionSubmissionTicketScope("tests/timing_graph_companion_submission_ticket");
 inline constexpr GpuTimingScopeDefinition s_GraphPacketEnvelopeOverlapScope("tests/timing_graph_packet_envelope_overlap");
 inline constexpr GpuTimingScopeDefinition s_GraphPacketEnvelopeInternalIdleScope("tests/timing_graph_packet_envelope_internal_idle");
+inline constexpr GpuTimingScopeDefinition s_GraphPacketPairOverlapScope("tests/timing_graph_packet_pair_overlap");
 inline constexpr GpuTimingScopeDefinition s_ConcurrentSubmissionTicketScope("tests/timing_submission_ticket_concurrent");
 inline constexpr GpuTimingScopeDefinition s_StableSubmissionTicketScope("tests/timing_stable_submission_ticket");
 inline constexpr GpuTimingScopeDefinition s_StableFrameTransactionScope("tests/timing_stable_frame_transaction");
@@ -48665,6 +48702,16 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
             .internalIdleScopeName = s_GraphPacketEnvelopeInternalIdleScope.identity,
         },
     };
+    ASSERT_TRUE(timing.prepareOverlapMetric(
+        envelopeOnlyPacketScope,
+        packetOnlyPacketScope,
+        s_GraphPacketPairOverlapScope.identity
+    ));
+    ASSERT_TRUE(timing.prepareOverlapMetric(
+        packetOnlyPacketScope,
+        envelopeOnlyPacketScope,
+        s_GraphPacketPairOverlapScope.identity
+    ));
     ASSERT_TRUE(timing.preparePacketEnvelopeMetrics(
         260u,
         MakeNotNull(&packetEnvelopeScopes[0u]),
@@ -48884,6 +48931,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
     const auto companionTimingStatistics = timingSink.stats(s_GraphCompanionSubmissionTicketScope.identity);
     const auto envelopeOverlapStatistics = timingSink.stats(s_GraphPacketEnvelopeOverlapScope.identity);
     const auto envelopeInternalIdleStatistics = timingSink.stats(s_GraphPacketEnvelopeInternalIdleScope.identity);
+    const auto packetPairOverlapStatistics = timingSink.stats(s_GraphPacketPairOverlapScope.identity);
     ASSERT_TRUE(envelopeOnlyPacketStatistics.valid());
     ASSERT_TRUE(packetOnlyPacketStatistics.valid());
     ASSERT_TRUE(taskPacketStatistics.valid());
@@ -48891,6 +48939,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
     ASSERT_TRUE(companionTimingStatistics.valid());
     ASSERT_TRUE(envelopeOverlapStatistics.valid());
     ASSERT_TRUE(envelopeInternalIdleStatistics.valid());
+    ASSERT_TRUE(packetPairOverlapStatistics.valid());
     EXPECT_EQ(envelopeOnlyPacketStatistics.sampleCount, 1u);
     EXPECT_EQ(packetOnlyPacketStatistics.sampleCount, 1u);
     EXPECT_EQ(taskPacketStatistics.sampleCount, 1u);
@@ -48898,10 +48947,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
     EXPECT_EQ(companionTimingStatistics.sampleCount, 1u);
     EXPECT_EQ(envelopeOverlapStatistics.sampleCount, 1u);
     EXPECT_EQ(envelopeInternalIdleStatistics.sampleCount, 1u);
+    EXPECT_EQ(packetPairOverlapStatistics.sampleCount, 1u);
     EXPECT_DOUBLE_EQ(envelopeOverlapStatistics.seconds, 0.0);
     EXPECT_GE(envelopeInternalIdleStatistics.seconds, 0.0);
+    EXPECT_GE(packetPairOverlapStatistics.seconds, 0.0);
     EXPECT_EQ(envelopeOverlapStatistics.firstSampleFrameIndex, 260u);
     EXPECT_EQ(envelopeInternalIdleStatistics.firstSampleFrameIndex, 260u);
+    EXPECT_EQ(packetPairOverlapStatistics.firstSampleFrameIndex, 260u);
     EXPECT_FALSE(timingSink.stats(outsidePrefixPacketScope).valid());
     EXPECT_FALSE(timingSink.stats(outsidePrefixIdentity).valid());
     EXPECT_FALSE(timingSink.stats(envelopeOnlyIdentity).valid());
@@ -48910,6 +48962,73 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
     EXPECT_FALSE(timingSink.stats(outsideSuffixIdentity).valid());
 
     s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
+// Query accumulators and derived metric outputs own mutually exclusive timing-scope names. Exercise both ownership
+// directions through the supported recorder API so neither registration order can silently merge the roles.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingQueryAndMetricOutputNamesRemainDisjoint){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = s_scope->graphics().gpuTiming();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+
+    const Name firstOverlapInput("tests/timing_role_disjoint/overlap_first");
+    const Name secondOverlapInput("tests/timing_role_disjoint/overlap_second");
+    const Name queryOwnedOverlapOutput("tests/timing_role_disjoint/query_owned_overlap_output");
+    const Name metricOwnedOverlapOutput("tests/timing_role_disjoint/metric_owned_overlap_output");
+    ASSERT_TRUE(timing.prepareScopeQueries(queryOwnedOverlapOutput, device, 1u));
+    EXPECT_FALSE(timing.prepareOverlapMetric(firstOverlapInput, secondOverlapInput, queryOwnedOverlapOutput));
+    ASSERT_TRUE(timing.prepareOverlapMetric(firstOverlapInput, secondOverlapInput, metricOwnedOverlapOutput));
+    EXPECT_FALSE(timing.prepareScopeQueries(metricOwnedOverlapOutput, device, 1u));
+
+    const Name packetInput("tests/timing_role_disjoint/packet_input");
+    const Name queryOwnedPacketOverlapOutput("tests/timing_role_disjoint/query_owned_packet_overlap_output");
+    const Name queryOwnedPacketIdleOutput("tests/timing_role_disjoint/query_owned_packet_idle_output");
+    const Name metricOwnedPacketOverlapOutput("tests/timing_role_disjoint/metric_owned_packet_overlap_output");
+    const Name metricOwnedPacketIdleOutput("tests/timing_role_disjoint/metric_owned_packet_idle_output");
+    const GpuPacketEnvelopeMetricScope packetScopes[] = {
+        { .scopeName = packetInput, .physicalQueue = graphicsQueue },
+    };
+    const GpuPacketEnvelopeMetricQueueOutput queryOwnedIdleOutputs[] = {
+        { .physicalQueue = graphicsQueue, .internalIdleScopeName = queryOwnedPacketIdleOutput },
+    };
+    const GpuPacketEnvelopeMetricQueueOutput metricOwnedIdleOutputs[] = {
+        { .physicalQueue = graphicsQueue, .internalIdleScopeName = metricOwnedPacketIdleOutput },
+    };
+    ASSERT_TRUE(timing.prepareScopeQueries(queryOwnedPacketOverlapOutput, device, 1u));
+    ASSERT_TRUE(timing.prepareScopeQueries(queryOwnedPacketIdleOutput, device, 1u));
+    EXPECT_FALSE(timing.preparePacketEnvelopeMetrics(
+        270u,
+        MakeNotNull(&packetScopes[0u]),
+        LengthOf(packetScopes),
+        queryOwnedPacketOverlapOutput,
+        MakeNotNull(&metricOwnedIdleOutputs[0u]),
+        LengthOf(metricOwnedIdleOutputs)
+    ));
+    EXPECT_FALSE(timing.preparePacketEnvelopeMetrics(
+        270u,
+        MakeNotNull(&packetScopes[0u]),
+        LengthOf(packetScopes),
+        metricOwnedPacketOverlapOutput,
+        MakeNotNull(&queryOwnedIdleOutputs[0u]),
+        LengthOf(queryOwnedIdleOutputs)
+    ));
+    ASSERT_TRUE(timing.preparePacketEnvelopeMetrics(
+        270u,
+        MakeNotNull(&packetScopes[0u]),
+        LengthOf(packetScopes),
+        metricOwnedPacketOverlapOutput,
+        MakeNotNull(&metricOwnedIdleOutputs[0u]),
+        LengthOf(metricOwnedIdleOutputs)
+    ));
+    EXPECT_FALSE(timing.prepareScopeQueries(metricOwnedPacketOverlapOutput, device, 1u));
+    EXPECT_FALSE(timing.prepareScopeQueries(metricOwnedPacketIdleOutput, device, 1u));
+
     timing.resetQueries();
 }
 
@@ -48957,58 +49076,117 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQuer
 
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();
-    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingFeedbackOnlyScope.identity, device, 1u));
-    GpuTimingSampleCapture completedSamples;
-    ScopedGpuTimingSampleListener sampleListener(timing, completedSamples);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingFeedbackOnlyScope.identity, device, 2u));
+    ReplacingGpuTimingSampleCapture replacingSamples(timing);
+    replacingSamples.replaceOnFirstSample = true;
+    replacingSamples.subscription = timing.subscribeSampleListener(GpuTimingSampleListener{
+        .context = &replacingSamples,
+        .invoke = &ReplacingGpuTimingSampleCapture::Invoke,
+    });
     GpuTimingSampleCapture observingSamples;
     ScopedGpuTimingSampleListener observingListener(timing, observingSamples);
-    ASSERT_TRUE(sampleListener.valid());
+    ASSERT_TRUE(replacingSamples.subscription.valid());
     ASSERT_TRUE(observingListener.valid());
-    const GpuTimingSampleAttribution feedbackOnlyAttribution = timing.allocateSampleAttribution();
-    ASSERT_TRUE(feedbackOnlyAttribution.valid());
+    const GpuTimingSampleAttribution firstAttribution = timing.allocateSampleAttribution();
+    const GpuTimingSampleAttribution secondAttribution = timing.allocateSampleAttribution();
+    const GpuTimingSampleAttribution thirdAttribution = timing.allocateSampleAttribution();
+    ASSERT_TRUE(firstAttribution.valid());
+    ASSERT_TRUE(secondAttribution.valid());
+    ASSERT_TRUE(thirdAttribution.valid());
 
-    ASSERT_TRUE(sampleListener.setFeedbackCollectionEnabled(true));
+    ASSERT_TRUE(timing.setFeedbackCollectionEnabled(replacingSamples.subscription, true));
     ASSERT_TRUE(observingListener.setFeedbackCollectionEnabled(true));
-    ASSERT_TRUE(sampleListener.setFeedbackCollectionEnabled(false));
+    ASSERT_TRUE(timing.setFeedbackCollectionEnabled(replacingSamples.subscription, false));
     ASSERT_TRUE(timing.collectionActive());
     ASSERT_TRUE(graphics.prepareFramePreamble());
 
-    auto commandList = device.createCommandList();
-    ASSERT_NE(commandList.get(), nullptr);
-    GpuTimingSubmissionTicket timingTicket(timing);
+    auto firstCommandList = device.createCommandList();
+    ASSERT_NE(firstCommandList.get(), nullptr);
+    GpuTimingSubmissionTicket firstTimingTicket(timing);
     {
-        GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(firstTimingTicket);
 
-        commandList->open();
+        firstCommandList->open();
         {
-            GpuTimingMeasure timingMeasure(
+            GpuTimingMeasure firstTimingMeasure(
                 timing,
                 s_FrameTimingFeedbackOnlyScope,
                 device,
-                *commandList,
-                feedbackOnlyAttribution
+                *firstCommandList,
+                firstAttribution
             );
-            ASSERT_TRUE(timingMeasure.valid());
+            ASSERT_TRUE(firstTimingMeasure.valid());
         }
-        commandList->close();
+        {
+            GpuTimingMeasure secondTimingMeasure(
+                timing,
+                s_FrameTimingFeedbackOnlyScope,
+                device,
+                *firstCommandList,
+                secondAttribution
+            );
+            ASSERT_TRUE(secondTimingMeasure.valid());
+        }
+        firstCommandList->close();
     }
 
-    CommandList* commandLists[] = { commandList.get() };
-    ASSERT_TRUE(timingTicket.submit(device, commandLists, 1u));
+    CommandList* firstCommandLists[] = { firstCommandList.get() };
+    ASSERT_TRUE(firstTimingTicket.submit(device, firstCommandLists, LengthOf(firstCommandLists)));
     ASSERT_TRUE(device.waitForIdle());
     ASSERT_TRUE(graphics.prepareFramePreamble());
     ASSERT_TRUE(device.waitForIdle());
 
-    ASSERT_EQ(completedSamples.sampleCount, 1u);
-    EXPECT_EQ(completedSamples.samples[0u].scopeName, s_FrameTimingFeedbackOnlyScope.identity);
-    EXPECT_EQ(completedSamples.samples[0u].attribution, feedbackOnlyAttribution);
-    EXPECT_TRUE(completedSamples.samples[0u].published);
-    EXPECT_GE(completedSamples.samples[0u].durationSeconds, 0.0);
-    ASSERT_EQ(observingSamples.sampleCount, 1u);
+    ASSERT_TRUE(replacingSamples.replacementSubscription.valid());
+    ASSERT_EQ(replacingSamples.capturedSamples.sampleCount, 1u);
+    EXPECT_EQ(replacingSamples.capturedSamples.samples[0u].scopeName, s_FrameTimingFeedbackOnlyScope.identity);
+    EXPECT_EQ(replacingSamples.capturedSamples.samples[0u].attribution, firstAttribution);
+    EXPECT_TRUE(replacingSamples.capturedSamples.samples[0u].published);
+    EXPECT_GE(replacingSamples.capturedSamples.samples[0u].durationSeconds, 0.0);
+    ASSERT_EQ(observingSamples.sampleCount, 2u);
     EXPECT_EQ(observingSamples.samples[0u].scopeName, s_FrameTimingFeedbackOnlyScope.identity);
-    EXPECT_EQ(observingSamples.samples[0u].attribution, feedbackOnlyAttribution);
+    EXPECT_EQ(observingSamples.samples[0u].attribution, firstAttribution);
     EXPECT_TRUE(observingSamples.samples[0u].published);
+    EXPECT_EQ(observingSamples.samples[1u].scopeName, s_FrameTimingFeedbackOnlyScope.identity);
+    EXPECT_EQ(observingSamples.samples[1u].attribution, secondAttribution);
+    EXPECT_TRUE(observingSamples.samples[1u].published);
+    EXPECT_EQ(replacingSamples.replacementSamples.sampleCount, 0u);
     EXPECT_FALSE(timingSink.stats(s_FrameTimingFeedbackOnlyScope.identity).valid());
+
+    auto secondCommandList = device.createCommandList();
+    ASSERT_NE(secondCommandList.get(), nullptr);
+    GpuTimingSubmissionTicket secondTimingTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(secondTimingTicket);
+
+        secondCommandList->open();
+        {
+            GpuTimingMeasure thirdTimingMeasure(
+                timing,
+                s_FrameTimingFeedbackOnlyScope,
+                device,
+                *secondCommandList,
+                thirdAttribution
+            );
+            ASSERT_TRUE(thirdTimingMeasure.valid());
+        }
+        secondCommandList->close();
+    }
+
+    CommandList* secondCommandLists[] = { secondCommandList.get() };
+    ASSERT_TRUE(secondTimingTicket.submit(device, secondCommandLists, LengthOf(secondCommandLists)));
+    ASSERT_TRUE(device.waitForIdle());
+    ASSERT_TRUE(graphics.prepareFramePreamble());
+    ASSERT_TRUE(device.waitForIdle());
+
+    EXPECT_EQ(replacingSamples.capturedSamples.sampleCount, 1u);
+    ASSERT_EQ(observingSamples.sampleCount, 3u);
+    EXPECT_EQ(observingSamples.samples[2u].scopeName, s_FrameTimingFeedbackOnlyScope.identity);
+    EXPECT_EQ(observingSamples.samples[2u].attribution, thirdAttribution);
+    EXPECT_TRUE(observingSamples.samples[2u].published);
+    ASSERT_EQ(replacingSamples.replacementSamples.sampleCount, 1u);
+    EXPECT_EQ(replacingSamples.replacementSamples.samples[0u].scopeName, s_FrameTimingFeedbackOnlyScope.identity);
+    EXPECT_EQ(replacingSamples.replacementSamples.samples[0u].attribution, thirdAttribution);
+    EXPECT_TRUE(replacingSamples.replacementSamples.samples[0u].published);
 
     ASSERT_TRUE(observingListener.setFeedbackCollectionEnabled(false));
     EXPECT_FALSE(timing.collectionActive());

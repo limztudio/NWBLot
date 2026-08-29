@@ -294,15 +294,15 @@ bool RendererMaterialSystem::findMaterialPassDrawItemResources(
     outMesh = nullptr;
     outPipelineResources = nullptr;
 
-    const auto foundMesh = m_meshState.m_meshes.find(drawItem.meshKey);
-    if(foundMesh == m_meshState.m_meshes.end())
+    MeshResources* mesh = nullptr;
+    if(!m_meshSystem.findMeshResources(drawItem.meshKey, mesh))
         return false;
 
     const auto foundPipeline = m_materialState.m_pipelines.find(drawItem.pipelineKey);
     if(foundPipeline == m_materialState.m_pipelines.end())
         return false;
 
-    outMesh = &foundMesh.value();
+    outMesh = mesh;
     outPipelineResources = &foundPipeline.value();
     return true;
 }

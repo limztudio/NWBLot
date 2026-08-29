@@ -92,7 +92,6 @@ struct CsgFrameStateCacheSignature{
 
 class RendererMeshState final : NoCopy{
     friend class RendererMeshSystem;
-    friend class RendererMaterialSystem;
     friend class RendererRayTracingSystem;
 
 public:

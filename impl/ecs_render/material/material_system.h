@@ -79,7 +79,6 @@ struct MaterialInstanceOverrideField{
 };
 
 class CsgShapeRegistry;
-class RendererMeshState;
 class RendererMaterialState;
 class RendererDrawState;
 class RendererAvboitState;
@@ -99,7 +98,6 @@ public:
         Core::Graphics& graphics,
         Core::Assets::AssetManager& assetManager,
         CsgShapeRegistry& csgShapeRegistry,
-        RendererMeshState& meshState,
         RendererMaterialState& materialState,
         RendererDrawState& drawState,
         RendererAvboitState& avboitState,
@@ -327,7 +325,6 @@ private:
     Core::Graphics& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
     CsgShapeRegistry& m_csgShapeRegistry;
-    RendererMeshState& m_meshState;
     RendererMaterialState& m_materialState;
     RendererDrawState& m_drawState;
     RendererAvboitState& m_avboitState;

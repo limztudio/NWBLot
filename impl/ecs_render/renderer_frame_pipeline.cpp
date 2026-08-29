@@ -72,7 +72,6 @@ RendererFramePipeline::RendererFramePipeline(
         graphics,
         assetManager,
         m_csgShapeRegistry,
-        m_meshState,
         m_materialState,
         m_drawState,
         m_avboitState,

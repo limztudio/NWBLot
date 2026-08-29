@@ -166,6 +166,28 @@ TEST(EcsGraphics, MeshSystemOwnsOnlyItsNarrowConstructionBoundary){
 }
 
 
+TEST(EcsGraphics, MaterialSystemUsesMeshDomainLookupWithoutMeshStatePrivilege){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+    AString materialHeaderSource;
+    AString materialResourcesSource;
+    AString rendererStateSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_system.h", materialHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass_resources.cpp", materialResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+
+    const AStringView materialHeader(materialHeaderSource.data(), materialHeaderSource.size());
+    const AStringView materialResources(materialResourcesSource.data(), materialResourcesSource.size());
+    const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
+    const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
+
+    EXPECT_FALSE(ContainsText(materialHeader, "RendererMeshState"));
+    EXPECT_FALSE(ContainsText(materialResources, "m_meshState"));
+    EXPECT_TRUE(ContainsText(materialResources, "m_meshSystem.findMeshResources(drawItem.meshKey, mesh)"));
+    EXPECT_FALSE(ContainsText(compactRendererState, "friendclassRendererMaterialSystem;friendclassRendererRayTracingSystem;"));
+}
+
+
 TEST(EcsGraphics, FramePipelineDoesNotPrivilegeNarrowShaderOrMeshSystems){
     TestArena testArena;
     AString headerSource;

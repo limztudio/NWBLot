@@ -20,7 +20,6 @@ RendererMaterialSystem::RendererMaterialSystem(
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,
     CsgShapeRegistry& csgShapeRegistry,
-    RendererMeshState& meshState,
     RendererMaterialState& materialState,
     RendererDrawState& drawState,
     RendererAvboitState& avboitState,
@@ -33,7 +32,6 @@ RendererMaterialSystem::RendererMaterialSystem(
     , m_graphics(graphics)
     , m_assetManager(assetManager)
     , m_csgShapeRegistry(csgShapeRegistry)
-    , m_meshState(meshState)
     , m_materialState(materialState)
     , m_drawState(drawState)
     , m_avboitState(avboitState)

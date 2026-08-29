@@ -542,7 +542,9 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     // explicit. The tail remains absent for pure-HW and pure-SW routes, whose established aggregate callbacks stay
     // untouched.
     const bool hybridSoftwareTailGraphOwned =
-        m_raytracingSystem.hybridShadowVisibilityResourcesPreflighted();
+        m_raytracingSystem.hybridShadowVisibilityResourcesPreflighted()
+        && m_raytracingSystem.preparedMeshSwBvhBuildPlanFrozen()
+    ;
     // A healthy hybrid preflight retains the opaque-HW material context before it publishes the software context
     // consumed by the tail. If that tail later declines to record, it restores the frozen HW bytes from these
     // graph-owned blobs without re-gathering material descriptors.

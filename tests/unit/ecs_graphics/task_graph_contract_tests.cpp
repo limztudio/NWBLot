@@ -5769,6 +5769,7 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     AString rayTracingHeaderSource;
     AString rayTracingSource;
     AString swBvhSource;
+    AString meshResourcesSource;
     AString meshTypesSource;
     AString rendererStateHeaderSource;
     AString rendererStateSource;
@@ -5786,6 +5787,7 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_resources.cpp", meshResourcesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "renderer_mesh_types.h", meshTypesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.cpp", rendererStateSource));
@@ -5794,6 +5796,7 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
     const AStringView rayTracing(rayTracingSource.data(), rayTracingSource.size());
     const AStringView swBvh(swBvhSource.data(), swBvhSource.size());
+    const AStringView meshResources(meshResourcesSource.data(), meshResourcesSource.size());
     const AStringView meshTypes(meshTypesSource.data(), meshTypesSource.size());
     const AStringView rendererStateHeader(rendererStateHeaderSource.data(), rendererStateHeaderSource.size());
     const AStringView rendererState(rendererStateSource.data(), rendererStateSource.size());
@@ -5865,9 +5868,13 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     ));
     EXPECT_TRUE(ContainsText(
         rayTracing,
-        "if(meshResources.blasBackingFresh && meshResources.blasBackingStateHandoffPending){\n"
-        "            meshResources.blasBackingFresh = false;\n"
-        "            meshResources.blasBackingStateHandoffPending = false;"
+        "m_meshSystem.confirmAcceptedRayTracingStateHandoffs();"
+    ));
+    EXPECT_TRUE(ContainsText(
+        meshResources,
+        "if(mesh.blasBackingFresh && mesh.blasBackingStateHandoffPending){\n"
+        "            mesh.blasBackingFresh = false;\n"
+        "            mesh.blasBackingStateHandoffPending = false;"
     ));
     EXPECT_TRUE(ContainsText(
         taskGraph,
@@ -5919,7 +5926,7 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     ));
     EXPECT_TRUE(ContainsText(
         rayTracing.substr(discardPreflightOffset, preflightOffset - discardPreflightOffset),
-        "meshResources.blasBackingStateHandoffPending = false;"
+        "m_meshSystem.discardRayTracingBuildState();"
     ));
     EXPECT_FALSE(ContainsText(
         rayTracing.substr(discardPreflightOffset, preflightOffset - discardPreflightOffset),
@@ -5929,6 +5936,21 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
         rayTracing.substr(discardPreflightOffset, preflightOffset - discardPreflightOffset),
         "meshResources.blasBackingFresh = false;"
     ));
+    const usize discardMeshBuildStateOffset = meshResources.find("void RendererMeshSystem::discardRayTracingBuildState()noexcept");
+    const usize collectMeshBuildStateOffset = meshResources.find(
+        "bool RendererMeshSystem::collectSoftwareBvhParentBuildStates(",
+        discardMeshBuildStateOffset
+    );
+    ASSERT_NE(discardMeshBuildStateOffset, AStringView::npos);
+    ASSERT_NE(collectMeshBuildStateOffset, AStringView::npos);
+    const AStringView discardMeshBuildState = meshResources.substr(
+        discardMeshBuildStateOffset,
+        collectMeshBuildStateOffset - discardMeshBuildStateOffset
+    );
+    EXPECT_TRUE(ContainsText(discardMeshBuildState, "mesh.blasBackingStateHandoffPending = false;"));
+    EXPECT_TRUE(ContainsText(discardMeshBuildState, "mesh.blasBuildPending = true;"));
+    EXPECT_TRUE(ContainsText(discardMeshBuildState, "mesh.swBvhBuildPending = true;"));
+    EXPECT_FALSE(ContainsText(discardMeshBuildState, "mesh.blasBackingFresh = false;"));
     // Candidate creation happens after recording but before native acceptance. A failed prepare callback therefore
     // rejects the graph without publishing state; a failed accepted callback is surfaced by the unified state guard.
     EXPECT_TRUE(ContainsText(

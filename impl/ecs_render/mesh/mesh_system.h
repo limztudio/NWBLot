@@ -59,9 +59,36 @@ namespace ECSRenderDetail{
         bool backingFresh = false;
         bool nativeBuildsBlas = false;
     };
+    // Owning cross-domain view of mesh-bound acceleration resources. Consumers may prepare changes against this
+    // value, but only RendererMeshSystem may publish them into the live mesh registry.
+    struct MeshRayTracingResourceSnapshot{
+        Name meshName = NAME_NONE;
+        Core::BufferHandle positionBuffer;
+        Core::BufferHandle triangleIndexBuffer;
+        Core::BufferHandle attributeBuffer;
+        Core::RayTracingAccelStructHandle blas;
+        Core::GpuDescriptorHandle swBvhPositionHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::BufferHandle swBvhNodeBuffer;
+        Core::BufferHandle swBvhParentBuffer;
+        Core::GpuDescriptorHandle swBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
+        u32 meshletPrimitiveIndexCount = 0u;
+        u32 blasRefitsSinceRebuild = 0u;
+        u32 swBvhRefitsSinceRebuild = 0u;
+        bool runtimeMesh = false;
+        bool blasBuildPending = false;
+        bool blasBackingFresh = false;
+        bool blasBackingStateHandoffPending = false;
+        bool swBvhBuildPending = false;
+        bool swBvhTopologyBuilt = false;
+        u64 runtimeMeshVersion = 0u;
+        CsgReceiverCpuBounds csgLocalBounds;
+    };
     using MeshSoftwareBvhParentBuildStateVector = Vector<MeshSoftwareBvhParentBuildState, Core::Alloc::ScratchArena>;
     using MeshRetainedAccelerationStateBufferVector = Vector<Core::BufferHandle, Core::Alloc::ScratchArena>;
     using MeshBlasGraphStateVector = Vector<MeshBlasGraphState, Core::Alloc::ScratchArena>;
+    using MeshRayTracingResourceSnapshotVector = Vector<MeshRayTracingResourceSnapshot, Core::Alloc::ScratchArena>;
 };
 
 
@@ -148,6 +175,25 @@ public:
     [[nodiscard]] bool createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
     [[nodiscard]] bool findRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
     void pruneRuntimeMeshResources();
+    void collectRayTracingResourceSnapshots(ECSRenderDetail::MeshRayTracingResourceSnapshotVector& outSnapshots)const;
+    [[nodiscard]] bool findRayTracingResourceSnapshot(
+        const Name& meshName,
+        ECSRenderDetail::MeshRayTracingResourceSnapshot& outSnapshot
+    )const;
+    [[nodiscard]] bool findRenderableRayTracingResourceSnapshot(
+        const RenderableMeshDesc& mesh,
+        ECSRenderDetail::MeshRayTracingResourceSnapshot& outSnapshot
+    )const;
+    [[nodiscard]] bool commitRayTracingResourceSnapshot(
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected,
+        ECSRenderDetail::MeshRayTracingResourceSnapshot& desired
+    );
+    [[nodiscard]] bool ensureRayTracingInputHeapHandles(
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected,
+        ECSRenderDetail::MeshRayTracingResourceSnapshot& outSnapshot
+    );
+    void confirmAcceptedRayTracingStateHandoffs()noexcept;
+    void discardRayTracingBuildState()noexcept;
     [[nodiscard]] bool collectSoftwareBvhParentBuildStates(ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector& outStates)const;
     void collectRetainedAccelerationStateBuffers(ECSRenderDetail::MeshRetainedAccelerationStateBufferVector& outBuffers)const;
     void collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphStateVector& outStates)const;
@@ -168,7 +214,6 @@ public:
     void releaseMeshFrameHeapHandles();
     [[nodiscard]] bool meshGeometryHeapHandlesReady(const MeshResources& mesh)const;
     void populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const;
-    [[nodiscard]] bool ensureMeshSwBvhInputHeapHandles(MeshResources& mesh);
     void releaseMeshGeometryHeapHandles(MeshResources& mesh);
 
 private:
@@ -178,6 +223,7 @@ private:
     [[nodiscard]] bool meshRenderBindingsReady(const MeshResources& mesh)const;
     [[nodiscard]] bool createComputeEmulationHeapHandle(MeshResources& mesh);
     [[nodiscard]] bool createMeshGeometryHeapHandles(MeshResources& mesh);
+    [[nodiscard]] bool ensureMeshSwBvhInputHeapHandles(MeshResources& mesh);
 
 private:
     void releaseAllMeshGeometryHeapHandles();

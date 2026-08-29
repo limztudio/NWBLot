@@ -480,7 +480,7 @@ void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noe
     RendererMeshSystem& rendererMeshSystem,
     const Core::ECS::EntityID entity,
     RenderableMeshDesc& outResolvedMesh,
-    MeshResources*& outMesh
+    ECSRenderDetail::MeshRayTracingResourceSnapshot& outMesh
 );
 [[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass);
 [[nodiscard]] bool RegisterHeapBuffer(

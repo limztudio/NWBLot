@@ -345,7 +345,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     // raw descriptor-table pointers, import every physical buffer once, and fan the same IDs out to all packets.
     // A fresh/replaced buffer starts from its creation state; a buffer normalized by an accepted earlier Prefix is
     // explicitly imported as SRV so the first packet never claims a stale state.
-    if(!m_raytracingSystem.freezePreparedShadowTraceGeometryBuffers()){
+    Core::Alloc::ScratchArena traceGeometryScratchArena(RendererArenaScope::s_TaskGraphArena);
+    if(!m_raytracingSystem.freezePreparedShadowTraceGeometryBuffers(traceGeometryScratchArena)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted shadow-trace geometry buffers"));
         return;
     }
@@ -355,7 +356,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const PreparedShadowTraceMaterialSampledTextureVector& preparedTraceMaterialSampledTextures =
         m_raytracingSystem.preparedShadowTraceMaterialSampledTextures()
     ;
-    Core::Alloc::ScratchArena traceGeometryScratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> traceGeometryResources{ traceGeometryScratchArena };
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hardwareTraceGeometryResources{ traceGeometryScratchArena };
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hardwareTraceAttributeResources{ traceGeometryScratchArena };

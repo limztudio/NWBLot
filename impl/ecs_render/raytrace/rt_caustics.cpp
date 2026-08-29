@@ -673,7 +673,7 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
         if(!renderer.visible)
             continue;
 
-        MeshResources* mesh = nullptr;
+        ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         RenderableMeshDesc resolvedMesh;
         const bool meshReady = RayTracingDetail::ResolveRenderableMeshResources(
             *meshSystem,
@@ -682,7 +682,7 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
             resolvedMesh,
             mesh
         );
-        if(!meshReady || !mesh || !mesh->csgLocalBounds.valid())
+        if(!meshReady || !mesh.csgLocalBounds.valid())
             continue;
 
         MaterialSurfaceInfo* materialInfo = nullptr;
@@ -702,8 +702,8 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
             : MatrixIdentity()
         ;
 
-        SIMDVector localMin = LoadFloatInt(mesh->csgLocalBounds.minBounds);
-        SIMDVector localMax = LoadFloatInt(mesh->csgLocalBounds.maxBounds);
+        SIMDVector localMin = LoadFloatInt(mesh.csgLocalBounds.minBounds);
+        SIMDVector localMax = LoadFloatInt(mesh.csgLocalBounds.maxBounds);
         if(resolvedMesh.runtime){
             // Conservative deformation inflation keeps skinned refractors in the emission domain.
             const SIMDVector center = VectorMultiply(VectorAdd(localMin, localMax), VectorReplicate(0.5f));

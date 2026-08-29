@@ -27,6 +27,7 @@ class RendererMeshSystem;
 class RendererMaterialSystem;
 struct MaterialSurfaceInfo;
 namespace ECSRenderDetail{
+    struct MeshRayTracingResourceSnapshot;
     struct SceneLightGpuData;
 };
 
@@ -323,7 +324,6 @@ public:
         RendererShaderSystem& shaderSystem,
         RendererMeshSystem& meshSystem,
         RendererMaterialSystem& materialSystem,
-        RendererMeshState& meshState,
         RendererDrawState& drawState,
         RendererRayTracingState& rayTracingState
     );
@@ -395,6 +395,7 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool hardwareBackendReady,
+        bool directMeshSwBvhBuildReady,
         bool shadowMaterialContextBatchGraphOwned = false,
         bool sceneBvhBatchGraphOwned = false,
         bool meshSwBvhBuildsGraphOwned = false,
@@ -413,7 +414,7 @@ public:
     void discardPreflightShadowVisibilityResources()noexcept;
     // These are retained handles for the current frozen trace plan. The graph imports each physical buffer once and
     // uses the shared IDs for every packet that manually stages it.
-    [[nodiscard]] bool freezePreparedShadowTraceGeometryBuffers();
+    [[nodiscard]] bool freezePreparedShadowTraceGeometryBuffers(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] const PreparedShadowTraceGeometryBufferVector& preparedShadowTraceGeometryBuffers()const noexcept;
     [[nodiscard]] const PreparedShadowTraceMaterialSampledTextureVector&
         preparedShadowTraceMaterialSampledTextures()const noexcept;
@@ -423,8 +424,8 @@ public:
     void confirmPreparedShadowTraceGeometryNormalization()noexcept;
     void invalidatePreparedShadowTraceGeometryBuffers()noexcept;
 
-    [[nodiscard]] bool buildPendingMeshBlas(Core::CommandList& commandList);
-    [[nodiscard]] bool buildPendingMeshSwBvh(Core::CommandList& commandList);
+    [[nodiscard]] bool buildPendingMeshBlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] bool buildPendingMeshSwBvh(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool buildSceneTlas(
         Core::CommandList& commandList,
         Core::Alloc::ScratchArena& scratchArena,
@@ -513,6 +514,7 @@ public:
     // against its shared scratch generation. Hybrid scene/material snapshots remain independently graph-owned while
     // their optional software tail preserves its narrow direct compatibility fallback.
     [[nodiscard]] bool preparedMeshSwBvhBuildsReady()const noexcept;
+    [[nodiscard]] bool preparedMeshSwBvhBuildPlanFrozen()const noexcept{ return m_preparedMeshSwBvhBuildPlanFrozen; }
     [[nodiscard]] const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds()const noexcept;
     // The pure-software Shadow Preparation packet records each frozen build after graph-owned typed sentinel
     // clears.  Revalidate this immutable snapshot immediately before its native compute sequence; any miss rejects
@@ -1002,7 +1004,7 @@ private:
         Software,
     };
 
-    [[nodiscard]] bool preparePendingMeshBlasResources();
+    [[nodiscard]] bool preparePendingMeshBlasResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool prepareSceneTlasResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool prepareSceneSwBvhResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool buildSceneTlasImpl(
@@ -1103,14 +1105,14 @@ private:
         bool sceneTlasBuildStatesGraphOwned
     );
     void clearPreparedSceneTlasBuild()noexcept;
-    [[nodiscard]] bool capturePreparedMeshBlasBuilds();
+    [[nodiscard]] bool capturePreparedMeshBlasBuilds(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool recordPreparedMeshBlasBuilds(
         Core::CommandList& commandList,
         bool meshBlasAccelStructStatesGraphOwned,
         bool meshBlasGeometryBuildInputStatesGraphOwned
     );
     void clearPreparedMeshBlasBuilds()noexcept;
-    [[nodiscard]] bool capturePreparedMeshSwBvhBuilds();
+    [[nodiscard]] bool capturePreparedMeshSwBvhBuilds(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool recordPreparedMeshSwBvhBuilds(
         Core::CommandList& commandList,
         bool meshSwBvhInputStatesGraphOwned
@@ -1123,7 +1125,9 @@ private:
         bool sentinelClearsGraphOwned,
         bool graphBoundaryStatesOwned
     );
-    [[nodiscard]] bool preparedMeshSwBvhBuildProducesTopology(const MeshResources& mesh)const noexcept;
+    [[nodiscard]] bool preparedMeshSwBvhBuildProducesTopology(
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
+    )const noexcept;
     void clearPreparedMeshSwBvhBuilds()noexcept;
     [[nodiscard]] bool prepareSurfelResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool renderSurfelGiAgeFree(
@@ -1192,10 +1196,13 @@ private:
         bool graphOwnsTrace,
         bool graphOwnsResolve
     );
-    [[nodiscard]] bool prepareMeshBlasResources(MeshResources& meshResources);
-    [[nodiscard]] bool buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources);
+    [[nodiscard]] bool prepareMeshBlasResources(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources);
+    [[nodiscard]] bool buildMeshBlas(
+        Core::CommandList& commandList,
+        ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources
+    );
     // Runtime meshes prepare every frame; static meshes remain dirty until first build.
-    [[nodiscard]] bool preparePendingMeshSwBvhResources();
+    [[nodiscard]] bool preparePendingMeshSwBvhResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool ensureShadowPipeline();
     // Hardware soft trace feeds the shared software denoise chain.
     [[nodiscard]] bool ensureShadowSoftPipeline();
@@ -1432,7 +1439,10 @@ private:
     [[nodiscard]] bool meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle);
     [[nodiscard]] bool buildMeshSwBvhPrepared(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, const SIMDVector aabbMin, const SIMDVector aabbMax, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle, bool sentinelClearsGraphOwned = false, bool graphBoundaryStatesOwned = false);
     [[nodiscard]] bool refitMeshSwBvhPrepared(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle, bool sentinelClearsGraphOwned = false, bool graphBoundaryStatesOwned = false);
-    [[nodiscard]] bool updateMeshSwBvh(Core::CommandList& commandList, MeshResources& meshResources);
+    [[nodiscard]] bool updateMeshSwBvh(
+        Core::CommandList& commandList,
+        ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources
+    );
     [[nodiscard]] bool ensureSceneBvhBuffers(u32 instanceCount);
     [[nodiscard]] bool ensureRayTraceMaterialContextSlotsBuffer();
     [[nodiscard]] bool ensureRayTraceMaterialContextSlotsHeapHandle();
@@ -1452,7 +1462,6 @@ private:
     RendererShaderSystem& m_shaderSystem;
     RendererMeshSystem& m_meshSystem;
     RendererMaterialSystem& m_materialSystem;
-    RendererMeshState& m_meshState;
     RendererDrawState& m_drawState;
     RendererRayTracingState& m_rayTracingState;
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
@@ -1545,6 +1554,7 @@ private:
     bool m_preparedMeshBlasBuildsReady = false;
     PreparedMeshSwBvhBuildVector m_preparedMeshSwBvhBuilds;
     bool m_preparedMeshSwBvhBuildsReady = false;
+    bool m_preparedMeshSwBvhBuildPlanFrozen = false;
     DeferredFrameTargets* m_shadowVisibilityPreparedTargets = nullptr;
     bool m_shadowVisibilityResourcesPreflighted = false;
     bool m_shadowVisibilityHardwareSupported = false;

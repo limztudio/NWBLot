@@ -92,7 +92,6 @@ struct CsgFrameStateCacheSignature{
 
 class RendererMeshState final : NoCopy{
     friend class RendererMeshSystem;
-    friend class RendererRayTracingSystem;
 
 public:
     explicit RendererMeshState(Core::Alloc::GlobalArena& arena);

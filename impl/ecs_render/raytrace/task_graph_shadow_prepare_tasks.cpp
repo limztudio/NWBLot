@@ -165,6 +165,7 @@ bool ShadowPrepareHybridSoftwareTailGraphTask::record(
         commandList,
         *payload.targets,
         *payload.hardwarePreparationReady,
+        true,
         payload.shadowMaterialContextBatchGraphOwned,
         payload.sceneBvhBatchGraphOwned,
         payload.meshSwBvhBuildsGraphOwned,

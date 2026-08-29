@@ -38,16 +38,13 @@ bool ResolveRenderableMeshResources(
     RendererMeshSystem& rendererMeshSystem,
     const Core::ECS::EntityID entity,
     RenderableMeshDesc& outResolvedMesh,
-    MeshResources*& outMesh
+    ECSRenderDetail::MeshRayTracingResourceSnapshot& outMesh
 ){
-    outMesh = nullptr;
+    outMesh = {};
     if(!meshSystem.resolveRenderableMesh(entity, outResolvedMesh))
         return false;
 
-    return outResolvedMesh.runtime
-        ? rendererMeshSystem.findRuntimeMeshResources(outResolvedMesh.runtimeMesh, outMesh)
-        : rendererMeshSystem.findMeshResources(outResolvedMesh.mesh, outMesh)
-    ;
+    return rendererMeshSystem.findRenderableRayTracingResourceSnapshot(outResolvedMesh, outMesh);
 }
 
 [[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass){

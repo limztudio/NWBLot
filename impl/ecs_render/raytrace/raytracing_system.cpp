@@ -23,7 +23,6 @@ RendererRayTracingSystem::RendererRayTracingSystem(
     RendererShaderSystem& shaderSystem,
     RendererMeshSystem& meshSystem,
     RendererMaterialSystem& materialSystem,
-    RendererMeshState& meshState,
     RendererDrawState& drawState,
     RendererRayTracingState& rayTracingState
 )
@@ -33,7 +32,6 @@ RendererRayTracingSystem::RendererRayTracingSystem(
     , m_shaderSystem(shaderSystem)
     , m_meshSystem(meshSystem)
     , m_materialSystem(materialSystem)
-    , m_meshState(meshState)
     , m_drawState(drawState)
     , m_rayTracingState(rayTracingState)
     , m_preparedShadowTraceGeometryBuffers(arena)
@@ -1228,7 +1226,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
     }
 
     const auto matchesMesh = [this, &validStorageHandle](
-        const MeshResources& mesh,
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh,
         const PreparedSceneSwBvhMesh& prepared
     ){
         const auto attributeCache = m_rayTracingState.m_swMeshHeapHandleCache.find(prepared.attributeBuffer.get());
@@ -1259,10 +1257,9 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
         ;
     };
 
-    const auto& meshes = m_meshState.m_meshes;
     for(const PreparedSceneSwBvhMesh& prepared : m_preparedSceneSwBvhMeshes){
-        const auto found = meshes.find(prepared.meshName);
-        if(found == meshes.end() || !matchesMesh(found.value(), prepared)){
+        ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
+        if(!m_meshSystem.findRayTracingResourceSnapshot(prepared.meshName, mesh) || !matchesMesh(mesh, prepared)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene lost mesh '{}'")
                 , StringConvert(prepared.meshName.c_str())
             );
@@ -1530,26 +1527,21 @@ void RendererRayTracingSystem::confirmAcceptedShadowPrepareAccelStructStateHando
         state.m_tlasBackingStateHandoffPending = false;
     }
 
-    auto& meshes = m_meshState.m_meshes;
-    for(auto it = meshes.begin(); it != meshes.end(); ++it){
-        MeshResources& meshResources = it.value();
-        if(meshResources.blasBackingFresh && meshResources.blasBackingStateHandoffPending){
-            meshResources.blasBackingFresh = false;
-            meshResources.blasBackingStateHandoffPending = false;
-        }
-    }
+    m_meshSystem.confirmAcceptedRayTracingStateHandoffs();
 }
 
-bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(){
+bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(Core::Alloc::ScratchArena& scratchArena){
     m_preparedShadowTraceGeometryBuffers.clear();
     if(!m_shadowVisibilityResourcesPreflighted)
         return false;
 
+    ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
+    m_meshSystem.collectRayTracingResourceSnapshots(meshes);
+
     // Keep accepted invisible meshes: their last Prefix tail is still their real state. Prune only resources whose
     // owning mesh has been removed, so the retained handles cannot pin retired mesh storage indefinitely.
     const auto meshStillOwnsBuffer = [&](const Core::Buffer* const buffer){
-        for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
-            const MeshResources& mesh = meshIt.value();
+        for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh : meshes){
             if(
                 mesh.positionBuffer.get() == buffer
                 || mesh.triangleIndexBuffer.get() == buffer
@@ -1587,7 +1579,7 @@ bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(){
     };
     const auto appendBuffer = [&](
         const Core::BufferHandle& buffer,
-        const MeshResources& mesh,
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh,
         const AStringView identitySuffix,
         const u8 role
     ){
@@ -1617,7 +1609,7 @@ bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(){
     };
     const auto appendSelected = [&]<typename SelectedBuffersT>(
         const SelectedBuffersT& selectedBuffers,
-        const Core::BufferHandle MeshResources::* const bufferMember,
+        const Core::BufferHandle ECSRenderDetail::MeshRayTracingResourceSnapshot::* const bufferMember,
         const AStringView identitySuffix,
         const u8 role
     ){
@@ -1626,8 +1618,7 @@ bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(){
                 return false;
 
             bool found = false;
-            for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
-                const MeshResources& mesh = meshIt.value();
+            for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh : meshes){
                 const Core::BufferHandle& buffer = mesh.*bufferMember;
                 if(buffer.get() != selectedBuffer)
                     continue;
@@ -1645,8 +1636,7 @@ bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(){
     // build inputs in the frozen graph set too: otherwise an off-screen build can leave a buffer in BLAS-input/UAV
     // state, then a later frame would import that same physical buffer as Common when it becomes visible.
     const auto appendPendingBlasBuildInputs = [&]{
-        for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
-            const MeshResources& mesh = meshIt.value();
+        for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh : meshes){
             if(!mesh.runtimeMesh && !mesh.blasBuildPending)
                 continue;
             if(
@@ -1668,8 +1658,7 @@ bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(){
         return true;
     };
     const auto appendPendingSwBvhBuildInputs = [&]{
-        for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
-            const MeshResources& mesh = meshIt.value();
+        for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh : meshes){
             if(!mesh.runtimeMesh && !mesh.swBvhBuildPending)
                 continue;
             if(
@@ -1702,19 +1691,19 @@ bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(){
         collected =
             appendSelected(
                 m_rayTracingState.m_shadowMeshPositionBuffers,
-                &MeshResources::positionBuffer,
+                &ECSRenderDetail::MeshRayTracingResourceSnapshot::positionBuffer,
                 AStringView(":shadow_trace_hw_position"),
                 PreparedShadowTraceGeometryRole::HardwarePosition
             )
             && appendSelected(
                 m_rayTracingState.m_shadowMeshIndexBuffers,
-                &MeshResources::triangleIndexBuffer,
+                &ECSRenderDetail::MeshRayTracingResourceSnapshot::triangleIndexBuffer,
                 AStringView(":shadow_trace_hw_index"),
                 PreparedShadowTraceGeometryRole::HardwareIndex
             )
             && appendSelected(
                 m_rayTracingState.m_shadowMeshAttributeBuffers,
-                &MeshResources::attributeBuffer,
+                &ECSRenderDetail::MeshRayTracingResourceSnapshot::attributeBuffer,
                 AStringView(":shadow_trace_hw_attribute"),
                 PreparedShadowTraceGeometryRole::HardwareAttribute
             )
@@ -1725,25 +1714,25 @@ bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(){
         collected =
             appendSelected(
                 m_rayTracingState.m_swShadowMeshNodeBuffers,
-                &MeshResources::swBvhNodeBuffer,
+                &ECSRenderDetail::MeshRayTracingResourceSnapshot::swBvhNodeBuffer,
                 AStringView(":shadow_trace_sw_nodes"),
                 PreparedShadowTraceGeometryRole::SoftwareNode
             )
             && appendSelected(
                 m_rayTracingState.m_swShadowMeshPositionBuffers,
-                &MeshResources::positionBuffer,
+                &ECSRenderDetail::MeshRayTracingResourceSnapshot::positionBuffer,
                 AStringView(":shadow_trace_sw_position"),
                 PreparedShadowTraceGeometryRole::SoftwarePosition
             )
             && appendSelected(
                 m_rayTracingState.m_swShadowMeshIndexBuffers,
-                &MeshResources::triangleIndexBuffer,
+                &ECSRenderDetail::MeshRayTracingResourceSnapshot::triangleIndexBuffer,
                 AStringView(":shadow_trace_sw_index"),
                 PreparedShadowTraceGeometryRole::SoftwareIndex
             )
             && appendSelected(
                 m_rayTracingState.m_swShadowMeshAttributeBuffers,
-                &MeshResources::attributeBuffer,
+                &ECSRenderDetail::MeshRayTracingResourceSnapshot::attributeBuffer,
                 AStringView(":shadow_trace_sw_attribute"),
                 PreparedShadowTraceGeometryRole::SoftwareAttribute
             )
@@ -1852,19 +1841,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
 
     // Recording updates these flags optimistically.  If the shared packet never submits, make every retained
     // acceleration structure rebuildable instead of allowing a later frame to consume its unrecorded contents.
-    auto& meshes = m_meshState.m_meshes;
-    for(auto it = meshes.begin(); it != meshes.end(); ++it){
-        MeshResources& meshResources = it.value();
-        meshResources.blasBackingStateHandoffPending = false;
-        if(meshResources.blas)
-            meshResources.blasBuildPending = true;
-        if(meshResources.swBvhNodeBuffer || meshResources.swBvhParentBuffer){
-            meshResources.swBvhBuildPending = true;
-            meshResources.swBvhTopologyBuilt = false;
-        }
-        meshResources.blasRefitsSinceRebuild = 0u;
-        meshResources.swBvhRefitsSinceRebuild = 0u;
-    }
+    m_meshSystem.discardRayTracingBuildState();
 }
 
 bool RendererRayTracingSystem::preflightShadowVisibilityResources(
@@ -1909,7 +1886,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
     ;
     if(m_shadowVisibilityHardwareSupported){
-        if(!preparePendingMeshBlasResources()){
+        if(!preparePendingMeshBlasResources(scratchArena)){
             if(!ensureRayTraceMaterialContextSlotsHeapHandle())
                 return false;
             m_shadowVisibilityPreparedTargets = &targets;
@@ -1928,7 +1905,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         // Per-mesh hardware BLAS work is independent from the later software material/scene gather.  Freeze it
         // for both opaque and hybrid frames. An opaque capture miss must drop the paired frozen TLAS; a hybrid miss
         // retains the established direct hardware path, whose result remains valid when the optional SW tail fails.
-        if(!capturePreparedMeshBlasBuilds()){
+        if(!capturePreparedMeshBlasBuilds(scratchArena)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze hardware BLAS build plan"));
             if(!m_rayTracingState.m_sceneHasTransparentOccluder)
                 clearPreparedSceneTlasBuild();
@@ -1950,7 +1927,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         // the shared material-context cbuffer. Opaque-only scenes skip all of this and pay no software cost.
         m_rayTracingState.m_hybridTransparentShadowReady = false;
         if(backendReady && m_rayTracingState.m_sceneHasTransparentOccluder){
-            const bool meshResourcesReady = preparePendingMeshSwBvhResources();
+            const bool meshResourcesReady = preparePendingMeshSwBvhResources(scratchArena);
             if(!meshResourcesReady)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent shadow software BVH resource preparation failed"));
             // Guard m_swShadowMeshCount > 0: if no per-mesh software BVH was available this frame the software pass
@@ -1968,7 +1945,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
                 m_rayTracingState.m_hybridTransparentShadowReady = true;
                 // The per-mesh build is independent from the later CPU scene/material gather. Freeze it as a
                 // graph-owned plan when possible; a capture miss retains the native mesh-build compatibility path.
-                if(!capturePreparedMeshSwBvhBuilds())
+                if(!capturePreparedMeshSwBvhBuilds(scratchArena))
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze hybrid transparent software BVH build plan"));
             }
             else
@@ -2051,7 +2028,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
 
     // No hardware ray tracing: build/refit the per-mesh software BVHs from the already skinned geometry, then
     // build the per-frame software scene/instance BVH over them before the render pass consumes it.
-    const bool meshResourcesReady = preparePendingMeshSwBvhResources();
+    const bool meshResourcesReady = preparePendingMeshSwBvhResources(scratchArena);
     if(!meshResourcesReady)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow BVH resource preparation failed"));
     if(!meshResourcesReady || !prepareSceneSwBvhResources(scratchArena)){
@@ -2081,7 +2058,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     // The software-only route can freeze every selected per-mesh build/refit because it has no later non-fatal
     // hardware fallback. A capture miss keeps the established direct recorder for this frame rather than mixing a
     // partially frozen operation with a live one.
-    if(!capturePreparedMeshSwBvhBuilds())
+    if(!capturePreparedMeshSwBvhBuilds(scratchArena))
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software BVH mesh build plan"));
     m_shadowVisibilityTraceResourcesPreflighted = true;
 
@@ -2202,11 +2179,11 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
                 true,
                 meshBlasGeometryBuildInputStatesGraphOwned
             )
-            : buildPendingMeshBlas(commandList)
+            : buildPendingMeshBlas(commandList, scratchArena)
         ;
         if(!meshBlasReady && meshBlasBuildsGraphOwned && hybridHardwareFallback){
             clearPreparedMeshBlasBuilds();
-            meshBlasReady = buildPendingMeshBlas(commandList);
+            meshBlasReady = buildPendingMeshBlas(commandList, scratchArena);
         }
         if(!meshBlasReady){
             if(
@@ -2272,10 +2249,14 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
         outBackendReady = m_shadowVisibilityBackendPipelinePreflighted;
         if(deferHybridSoftwareTail)
             return true;
+        const bool directMeshSwBvhBuildReady = meshSwBvhBuildsGraphOwned
+            || buildPendingMeshSwBvh(commandList, scratchArena)
+        ;
         return recordPreflightHybridSoftwareTail(
             commandList,
             targets,
             outBackendReady,
+            directMeshSwBvhBuildReady,
             shadowMaterialContextBatchGraphOwned,
             sceneBvhBatchGraphOwned,
             meshSwBvhBuildsGraphOwned
@@ -2288,7 +2269,7 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
         // already recorded in this same accepting packet, retain only the existing scene-BVH/material tail here.
         ? (preparedMeshSwBvhBuildsRecordedByGraph
             || recordPreparedMeshSwBvhBuilds(commandList, meshSwBvhBuildsGraphOwned))
-        : buildPendingMeshSwBvh(commandList)
+        : buildPendingMeshSwBvh(commandList, scratchArena)
     ;
     if(!meshSwBvhReady){
         if(meshSwBvhBuildsGraphOwned)
@@ -2319,6 +2300,7 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const bool hardwareBackendReady,
+    const bool directMeshSwBvhBuildReady,
     const bool shadowMaterialContextBatchGraphOwned,
     const bool sceneBvhBatchGraphOwned,
     const bool meshSwBvhBuildsGraphOwned,
@@ -2366,7 +2348,7 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
             // plan, so the packet runtime lowers their exact AccelStructBuildInput -> ShaderResource handoff before
             // this recorder runs. Direct, retry, and incomplete-plan paths retain the native bridge.
             ? recordPreparedMeshSwBvhBuilds(commandList, meshSwBvhInputStatesGraphOwned)
-            : buildPendingMeshSwBvh(commandList)
+            : directMeshSwBvhBuildReady
         ;
         hybridMeshSwBvhBuildRecorded = meshSwBvhBuildsGraphOwned && meshSwBvhReady;
         if(!meshSwBvhReady){

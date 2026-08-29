@@ -6,7 +6,6 @@
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/timing_names.h>
-#include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
@@ -45,7 +44,6 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
     if(
         !payload.meshSystem
         || !payload.materialSystem
-        || !payload.csgSystem
         || !payload.targets
         || !payload.timingTicket
         || !*payload.timingTicket
@@ -57,7 +55,6 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
 
     RendererMeshSystem& meshSystem = *payload.meshSystem;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    RendererCsgSystem& csgSystem = *payload.csgSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
     const bool frameSetupReady =
         *payload.meshViewSetupReady
@@ -86,7 +83,7 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
         deferredResourcesReady
         && payload.csgFrameBuffersUploaded
         && csgFrameData.hasWork()
-        && csgSystem.csgFrameBuffersReady(csgFrameData)
+        && payload.csgResources.frameReady(csgFrameData)
     ;
     if(
         !csgResourcesReady
@@ -114,6 +111,7 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true,
+        &payload.csgResources
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
@@ -145,7 +143,6 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
         !payload.graphics
         || !payload.meshSystem
         || !payload.materialSystem
-        || !payload.csgSystem
         || !payload.targets
         || !payload.timingTicket
         || !*payload.timingTicket
@@ -159,7 +156,6 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
     Core::Graphics& graphics = *payload.graphics;
     RendererMeshSystem& meshSystem = *payload.meshSystem;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    RendererCsgSystem& csgSystem = *payload.csgSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
     const bool frameSetupReady =
         *payload.meshViewSetupReady
@@ -188,7 +184,7 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
         deferredResourcesReady
         && payload.csgFrameBuffersUploaded
         && csgFrameData.hasWork()
-        && csgSystem.csgFrameBuffersReady(csgFrameData)
+        && payload.csgResources.frameReady(csgFrameData)
     ;
     if(
         !csgResourcesReady
@@ -224,6 +220,7 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true,
+        &payload.csgResources
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;

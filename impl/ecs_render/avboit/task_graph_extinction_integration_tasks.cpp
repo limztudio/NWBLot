@@ -39,7 +39,6 @@ void AvboitExtinctionComputeEmulationGraphTask::discardTiming(Optional<Core::Gpu
         !payload.graphics
         || !payload.meshSystem
         || !payload.materialSystem
-        || !payload.csgSystem
         || !payload.targets
         || !payload.timingTicket
         || !payload.extinctionTiming
@@ -51,7 +50,6 @@ void AvboitExtinctionComputeEmulationGraphTask::discardTiming(Optional<Core::Gpu
     Core::Graphics& graphics = *payload.graphics;
     RendererMeshSystem& meshSystem = *payload.meshSystem;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    RendererCsgSystem& csgSystem = *payload.csgSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     const bool csgComputeEmulation = payload.csgPlan.captured;
     if(
@@ -83,7 +81,7 @@ void AvboitExtinctionComputeEmulationGraphTask::discardTiming(Optional<Core::Gpu
             || !payload.csgIntervalSampleImageStatesGraphOwned
             || !payload.csgClipBufferStatesGraphOwned
             || !csgFrameData.hasWork()
-            || !csgSystem.csgFrameBuffersReady(csgFrameData)
+            || !payload.csgResources.frameReady(csgFrameData)
         ))
     )
         return false;
@@ -117,6 +115,7 @@ void AvboitExtinctionComputeEmulationGraphTask::discardTiming(Optional<Core::Gpu
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true,
+        csgComputeEmulation ? &payload.csgResources : nullptr
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
@@ -268,6 +267,7 @@ void AvboitExtinctionSharedComputeEmulationGraphTask::discarded(Payload& payload
             *payload.targets,
             preparedExtinctionDrawItems,
             preparedExtinctionCsgFrameData,
+            &payload.csgResources,
             preparedExtinctionInstanceCount,
             preparedExtinctionMaterialTypedByteCount,
             payload.extinctionCsgIntervalSampleImageStatesGraphOwned,

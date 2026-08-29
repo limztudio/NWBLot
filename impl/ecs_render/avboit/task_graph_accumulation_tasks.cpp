@@ -39,7 +39,6 @@ void AvboitAccumulationComputeEmulationGraphTask::discardTiming(Optional<Core::G
         !payload.graphics
         || !payload.meshSystem
         || !payload.materialSystem
-        || !payload.csgSystem
         || !payload.targets
         || !payload.timingTicket
         || !payload.accumulationTiming
@@ -51,7 +50,6 @@ void AvboitAccumulationComputeEmulationGraphTask::discardTiming(Optional<Core::G
     Core::Graphics& graphics = *payload.graphics;
     RendererMeshSystem& meshSystem = *payload.meshSystem;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    RendererCsgSystem& csgSystem = *payload.csgSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     const bool csgComputeEmulation = payload.csgPlan.captured;
     if(
@@ -83,7 +81,7 @@ void AvboitAccumulationComputeEmulationGraphTask::discardTiming(Optional<Core::G
             || !payload.csgIntervalSampleImageStatesGraphOwned
             || !payload.csgClipBufferStatesGraphOwned
             || !csgFrameData.hasWork()
-            || !csgSystem.csgFrameBuffersReady(csgFrameData)
+            || !payload.csgResources.frameReady(csgFrameData)
         ))
     )
         return false;
@@ -117,6 +115,7 @@ void AvboitAccumulationComputeEmulationGraphTask::discardTiming(Optional<Core::G
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true,
+        csgComputeEmulation ? &payload.csgResources : nullptr
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
@@ -270,6 +269,7 @@ void AvboitAccumulationSharedComputeEmulationGraphTask::discarded(Payload& paylo
             *payload.targets,
             preparedAccumulationDrawItems,
             preparedAccumulationCsgFrameData,
+            &payload.csgResources,
             preparedAccumulationInstanceCount,
             preparedAccumulationMaterialTypedByteCount,
             // The following mergeable Graphics finalizer owns every accumulation-framebuffer handoff.

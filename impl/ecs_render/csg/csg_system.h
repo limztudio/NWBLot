@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/kernel/renderer_types.h>
 
 #include <impl/ecs_csg/frame_state.h>
@@ -42,13 +43,6 @@ namespace Scene{
 };
 
 namespace ECSRenderDetail{
-    struct CsgGraphResourceBuffers{
-        Core::BufferHandle receiverRanges;
-        Core::BufferHandle cutters;
-        Core::BufferHandle clipContextSlots;
-        Core::BufferHandle intervalSampleState;
-    };
-
     struct MeshFrameBindingSnapshot;
     struct MeshViewGpuData;
 };
@@ -91,6 +85,7 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         bool intervalPeelTargetStatesGraphOwned = false,
         bool csgClipBufferStatesGraphOwned = false,
@@ -100,6 +95,7 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         bool receiverSpanOutputImageStatesGraphOwned = false,
         bool receiverSpanInputImageStatesGraphOwned = false
     );
@@ -107,6 +103,7 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         bool removedIntervalOutputImageStatesGraphOwned = false,
         bool intervalCombineInputImageStatesGraphOwned = false
     );
@@ -114,6 +111,7 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         bool intervalSampleImageStatesGraphOwned = false,
         bool csgClipBufferStatesGraphOwned = false,
@@ -125,26 +123,26 @@ public:
     // Renderer preparation owns CSG buffer growth and descriptor registration.  Material/draw paths only verify and
     // consume these resources after this prepass has completed.
     [[nodiscard]] bool prepareCsgFrameResources(usize receiverRangeCount, usize cutterCount);
-    [[nodiscard]] bool csgFrameBuffersReady(const CsgFrameGpuData& csgFrameData)const;
-    void populateCsgGraphResourceBuffers(ECSRenderDetail::CsgGraphResourceBuffers& outBuffers)const;
-    [[nodiscard]] bool findCsgClipContextHeapSlot(u32& outHeapSlot)const;
+    [[nodiscard]] ECSRenderDetail::CsgGraphResourceSnapshot csgGraphResourceSnapshot()const;
     // Capture all descriptor-derived CSG uniform bytes while preflight has frozen the current buffer and target
     // generations. The deferred graph retains these values as immutable blobs before native recording begins.
     [[nodiscard]] bool prepareCsgClipContextSlotData(
         const DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         CsgClipContextSlots& outContextSlots
     )const;
     [[nodiscard]] bool prepareCsgIntervalSampleStateData(
         const DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         CsgIntervalSampleStateGpuData& outState
     )const;
     void setCsgReceiverSurfaceImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets);
     void setCsgIntervalSampleImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets);
-    void setCsgClipBufferStates(Core::CommandList& commandList);
+    void setCsgClipBufferStates(Core::CommandList& commandList, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
     [[nodiscard]] bool resolveCsgReceiverClipDrawInfo(
         const CsgFrameReceiverLookup& receiverLookup,
         const CsgReceiverDrawState& receiverDrawState,

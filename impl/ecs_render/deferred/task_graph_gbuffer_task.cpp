@@ -91,7 +91,7 @@ namespace ECSRenderDetail{
             !csgFrameData.hasWork()
             || (
                 payload.csgFrameBuffersUploaded
-                && csgSystem.csgFrameBuffersReady(csgFrameData)
+                && payload.csgResources.frameReady(csgFrameData)
                 && payload.frameBindings.bindingValid()
             )
         )
@@ -109,6 +109,7 @@ namespace ECSRenderDetail{
                 commandList,
                 deferredTargets,
                 csgFrameData,
+                payload.csgResources,
                 payload.frameBindings,
                 payload.csgIntervalPeelTargetStatesGraphOwned,
                 payload.csgClipBufferStatesGraphOwned,
@@ -188,7 +189,8 @@ namespace ECSRenderDetail{
             payload.csgClipBufferStatesGraphOwned,
             payload.materialFrameStatesGraphOwned,
             payload.materialGeometryStatesGraphOwned,
-            payload.csgReceiverComputeEmulationOutputStatesGraphOwned
+            payload.csgReceiverComputeEmulationOutputStatesGraphOwned,
+            &payload.csgResources
         };
         if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
             Core::GpuTimingMeasure timing(

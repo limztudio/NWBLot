@@ -327,6 +327,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const Core::FramebufferDesc& presentationFramebufferDesc = presentationFramebuffer.getDescription();
     const DeferredLightingGraphResources deferredLightingResources = m_deferredSystem.lightingGraphResources();
     const ECSRenderDetail::MeshFrameBindingSnapshot frameBindings = m_meshSystem.meshFrameBindingSnapshot();
+    const ECSRenderDetail::CsgGraphResourceSnapshot csgResources = m_csgSystem.csgGraphResourceSnapshot();
     const ECSRenderDetail::MeshViewBufferSnapshot& meshViewBufferSnapshot = frameBindings.meshView;
     if(
         !deferredTargets.valid()
@@ -707,35 +708,33 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         )
         : Core::GpuGraphResourceId{}
     ;
-    ECSRenderDetail::CsgGraphResourceBuffers csgGraphResources;
-    m_csgSystem.populateCsgGraphResourceBuffers(csgGraphResources);
-    const Core::GpuGraphResourceId csgReceiverRanges = csgGraphResources.receiverRanges
+    const Core::GpuGraphResourceId csgReceiverRanges = csgResources.receiverRanges
         ? importBuffer(
-            csgGraphResources.receiverRanges,
+            csgResources.receiverRanges,
             Name("render.deferred.csg_receiver_ranges"),
             "CSG Receiver Ranges"
         )
         : Core::GpuGraphResourceId{}
     ;
-    const Core::GpuGraphResourceId csgCutters = csgGraphResources.cutters
+    const Core::GpuGraphResourceId csgCutters = csgResources.cutters
         ? importBuffer(
-            csgGraphResources.cutters,
+            csgResources.cutters,
             Name("render.deferred.csg_cutters"),
             "CSG Cutters"
         )
         : Core::GpuGraphResourceId{}
     ;
-    const Core::GpuGraphResourceId csgClipContextSlots = csgGraphResources.clipContextSlots
+    const Core::GpuGraphResourceId csgClipContextSlots = csgResources.clipContextSlots
         ? importBuffer(
-            csgGraphResources.clipContextSlots,
+            csgResources.clipContextSlots,
             Name("render.deferred.csg_clip_context_slots"),
             "CSG Clip Context Slots"
         )
         : Core::GpuGraphResourceId{}
     ;
-    const Core::GpuGraphResourceId csgIntervalSampleState = csgGraphResources.intervalSampleState
+    const Core::GpuGraphResourceId csgIntervalSampleState = csgResources.intervalSampleState
         ? importBuffer(
-            csgGraphResources.intervalSampleState,
+            csgResources.intervalSampleState,
             Name("render.deferred.csg_interval_sample_state"),
             "CSG Interval Sample State"
         )
@@ -987,6 +986,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         shadowPrepareHandoffTask,
         csgFrameState,
         frameBindings,
+        csgResources,
         hasOpaqueCsgFrameWork,
         meshViewAspectRatio,
         meshViewState,
@@ -2024,6 +2024,9 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitPrePayload.transparentCsgIntervalsTiming = &transparentCsgIntervalsTiming;
     avboitPrePayload.hasTransparentRenderers = hasTransparentRenderers;
     avboitPrePayload.frameBindings = frameBindings;
+    avboitPrePayload.csgResources = csgResources;
+    avboitCsgReceiverSpanPayload.csgResources = csgResources;
+    avboitCsgIntervalCombinePayload.csgResources = csgResources;
 
 
 // Freeze the transparent CSG interval producer before AVBOIT native recording.  Its shared instance/material
@@ -2073,7 +2076,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                     transparentCsgInstanceData,
                     transparentCsgMaterialTypedBytes
                 )
-                || !m_csgSystem.csgFrameBuffersReady(transparentCsgFrameData)
+                || !csgResources.frameReady(transparentCsgFrameData)
                 || !m_materialSystem.materialPassDrawResourcesReady(transparentCsgDrawItems.csgReceiverSurface)
             ){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared transparent CSG interval resources were unavailable during graph declaration"));
@@ -2115,7 +2118,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 return;
             }
 
-            m_materialSystem.prepareMaterialPassInstanceUploadData(transparentCsgInstanceData);
+            m_materialSystem.prepareMaterialPassInstanceUploadData(transparentCsgInstanceData, csgResources);
 #if defined(NWB_DEBUG)
             if(
                 transparentCsgInstanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
@@ -2138,12 +2141,14 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 !m_csgSystem.prepareCsgClipContextSlotData(
                     deferredTargets,
                     transparentCsgFrameData,
+                    csgResources,
                     frameBindings,
                     transparentCsgClipContextSlotData
                 )
                 || !m_csgSystem.prepareCsgIntervalSampleStateData(
                     deferredTargets,
                     transparentCsgFrameData,
+                    csgResources,
                     frameBindings,
                     transparentCsgIntervalSampleStateData
                 )
@@ -2741,6 +2746,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitOccupancyPayload.targets = &deferredTargets;
     avboitOccupancyPayload.timingTicket = &avboitPreTimingTicket;
     avboitOccupancyPayload.hasTransparentRenderers = hasTransparentRenderers;
+    avboitOccupancyPayload.csgResources = csgResources;
+    avboitOccupancyComputeEmulationPayload.csgResources = csgResources;
 
     Core::GpuTaskId occupancyUploadTask = avboitIntervalCompletionTask;
     bool occupancyCsgStreamsUploaded = false;
@@ -2795,7 +2802,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                     !csgReceiverRanges.valid()
                     || !csgCutters.valid()
                     || !csgClipContextSlots.valid()
-                    || !m_csgSystem.csgFrameBuffersReady(occupancyCsgFrameData)
+                    || !csgResources.frameReady(occupancyCsgFrameData)
                     || !m_materialSystem.materialPassDrawResourcesReady(occupancyDrawItems.csg)
                 ))
             ){
@@ -2839,7 +2846,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 return;
             }
 
-            m_materialSystem.prepareMaterialPassInstanceUploadData(occupancyInstanceData);
+            m_materialSystem.prepareMaterialPassInstanceUploadData(occupancyInstanceData, csgResources);
 #if defined(NWB_DEBUG)
             if(
                 occupancyInstanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
@@ -2924,6 +2931,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 if(!m_csgSystem.prepareCsgClipContextSlotData(
                     deferredTargets,
                     occupancyCsgFrameData,
+                    csgResources,
                     frameBindings,
                     occupancyCsgClipContextSlotData
                 )){
@@ -3456,7 +3464,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitOccupancyComputeEmulationPayload.graphics = &m_graphics;
         avboitOccupancyComputeEmulationPayload.meshSystem = &m_meshSystem;
         avboitOccupancyComputeEmulationPayload.materialSystem = &m_materialSystem;
-        avboitOccupancyComputeEmulationPayload.csgSystem = &m_csgSystem;
         avboitOccupancyComputeEmulationPayload.targets = &deferredTargets;
         avboitOccupancyComputeEmulationPayload.timingTicket = &avboitPreTimingTicket;
         avboitOccupancyComputeEmulationPayload.occupancyTiming = &avboitOccupancyComputeEmulationTiming;
@@ -3844,6 +3851,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitExtinctionPayload.targets = &deferredTargets;
     avboitExtinctionPayload.timingTicket = &avboitExtinctionTimingTicket;
     avboitExtinctionPayload.hasTransparentRenderers = hasTransparentRenderers;
+    avboitExtinctionPayload.csgResources = csgResources;
+    avboitExtinctionComputeEmulationPayload.csgResources = csgResources;
 
     Core::GpuTaskId extinctionUploadTask = avboitDepthWarpCompletionTask;
     bool extinctionStreamsUploaded = false;
@@ -3898,7 +3907,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                     || !csgCutters.valid()
                     || !csgClipContextSlots.valid()
                     || !csgIntervalSampleState.valid()
-                    || !m_csgSystem.csgFrameBuffersReady(extinctionCsgFrameData)
+                    || !csgResources.frameReady(extinctionCsgFrameData)
                     || !m_materialSystem.materialPassDrawResourcesReady(extinctionDrawItems.csg)
                 ))
             ){
@@ -3942,7 +3951,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 return;
             }
 
-            m_materialSystem.prepareMaterialPassInstanceUploadData(extinctionInstanceData);
+            m_materialSystem.prepareMaterialPassInstanceUploadData(extinctionInstanceData, csgResources);
 #if defined(NWB_DEBUG)
             if(
                 extinctionInstanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
@@ -4027,6 +4036,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 if(!m_csgSystem.prepareCsgClipContextSlotData(
                     deferredTargets,
                     extinctionCsgFrameData,
+                    csgResources,
                     frameBindings,
                     extinctionCsgClipContextSlotData
                 )){
@@ -4392,7 +4402,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitExtinctionComputeEmulationPayload.graphics = &m_graphics;
         avboitExtinctionComputeEmulationPayload.meshSystem = &m_meshSystem;
         avboitExtinctionComputeEmulationPayload.materialSystem = &m_materialSystem;
-        avboitExtinctionComputeEmulationPayload.csgSystem = &m_csgSystem;
         avboitExtinctionComputeEmulationPayload.targets = &deferredTargets;
         avboitExtinctionComputeEmulationPayload.timingTicket = avboitExtinctionPayload.timingTicket;
         avboitExtinctionComputeEmulationPayload.extinctionTiming = &avboitExtinctionComputeEmulationTiming;
@@ -4756,6 +4765,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitAccumulationPayload.targets = &deferredTargets;
     avboitAccumulationPayload.timingTicket = &avboitAccumulationTimingTicket;
     avboitAccumulationPayload.hasTransparentRenderers = hasTransparentRenderers;
+    avboitAccumulationPayload.csgResources = csgResources;
+    avboitAccumulationComputeEmulationPayload.csgResources = csgResources;
 
     Core::GpuTaskId accumulationUploadTask = m_avboitSystem.taskGraphStage().m_integrationTask;
     bool accumulationStreamsUploaded = false;
@@ -4811,7 +4822,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                     || !csgCutters.valid()
                     || !csgClipContextSlots.valid()
                     || !csgIntervalSampleState.valid()
-                    || !m_csgSystem.csgFrameBuffersReady(accumulationCsgFrameData)
+                    || !csgResources.frameReady(accumulationCsgFrameData)
                     || !m_materialSystem.materialPassDrawResourcesReady(accumulationDrawItems.csg)
                 ))
             ){
@@ -4855,7 +4866,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 return;
             }
 
-            m_materialSystem.prepareMaterialPassInstanceUploadData(accumulationInstanceData);
+            m_materialSystem.prepareMaterialPassInstanceUploadData(accumulationInstanceData, csgResources);
 #if defined(NWB_DEBUG)
             if(
                 accumulationInstanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
@@ -4940,6 +4951,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 if(!m_csgSystem.prepareCsgClipContextSlotData(
                     deferredTargets,
                     accumulationCsgFrameData,
+                    csgResources,
                     frameBindings,
                     accumulationCsgClipContextSlotData
                 )){
@@ -5326,7 +5338,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitAccumulationComputeEmulationPayload.graphics = &m_graphics;
         avboitAccumulationComputeEmulationPayload.meshSystem = &m_meshSystem;
         avboitAccumulationComputeEmulationPayload.materialSystem = &m_materialSystem;
-        avboitAccumulationComputeEmulationPayload.csgSystem = &m_csgSystem;
         avboitAccumulationComputeEmulationPayload.targets = &deferredTargets;
         avboitAccumulationComputeEmulationPayload.timingTicket = avboitAccumulationPayload.timingTicket;
         avboitAccumulationComputeEmulationPayload.accumulationTiming = &avboitAccumulationComputeEmulationTiming;

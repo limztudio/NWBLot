@@ -64,7 +64,7 @@ bool AvboitCsgReceiverSpanGraphTask::record(
         payload.transparentCsgSnapshot.instanceCount,
         payload.transparentCsgSnapshot.materialTypedByteCount
     );
-    const bool csgResourcesReady = csgSystem.csgFrameBuffersReady(csgFrameData);
+    const bool csgResourcesReady = payload.csgResources.frameReady(csgFrameData);
     const bool receiverSurfaceDrawResourcesReady = materialSystem.materialPassDrawResourcesReady(
         receiverSurfaceDrawItems
     );
@@ -82,6 +82,7 @@ bool AvboitCsgReceiverSpanGraphTask::record(
             commandList,
             *payload.targets,
             csgFrameData,
+            payload.csgResources,
             payload.receiverSpanOutputImageStatesGraphOwned,
             payload.receiverSpanInputImageStatesGraphOwned
         );
@@ -141,7 +142,7 @@ bool AvboitCsgIntervalCombineGraphTask::record(
         payload.transparentCsgSnapshot.instanceCount,
         payload.transparentCsgSnapshot.materialTypedByteCount
     );
-    const bool csgResourcesReady = csgSystem.csgFrameBuffersReady(csgFrameData);
+    const bool csgResourcesReady = payload.csgResources.frameReady(csgFrameData);
     const bool receiverSurfaceDrawResourcesReady = materialSystem.materialPassDrawResourcesReady(
         receiverSurfaceDrawItems
     );
@@ -159,6 +160,7 @@ bool AvboitCsgIntervalCombineGraphTask::record(
             commandList,
             *payload.targets,
             csgFrameData,
+            payload.csgResources,
             payload.removedIntervalOutputImageStatesGraphOwned,
             payload.intervalCombineInputImageStatesGraphOwned
         );

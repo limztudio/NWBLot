@@ -51,6 +51,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const Core::GpuTaskId shadowPrepareTask,
     const CsgFrameState& csgFrameState,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const bool hasOpaqueCsgFrameWork,
     const f32 meshViewAspectRatio,
     const ECSRenderDetail::MeshViewGpuData& meshViewState,
@@ -561,6 +562,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     gbufferPayload.meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady;
     gbufferPayload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
     gbufferPayload.frameBindings = frameBindings;
+    gbufferPayload.csgResources = csgResources;
 
     const bool hasOpaqueDrawItems = !opaqueDrawItems.empty();
     // G-buffer and the optional opaque CSG follow-up both declare the shared material entry batch whenever their
@@ -576,7 +578,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared opaque material draw buffers were unavailable during graph declaration"));
             return false;
         }
-        m_materialSystem.prepareMaterialPassInstanceUploadData(instanceData);
+        m_materialSystem.prepareMaterialPassInstanceUploadData(instanceData, csgResources);
 #if defined(NWB_DEBUG)
         if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: opaque material instance upload size overflows graph blob capacity"));
@@ -657,7 +659,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             || !csgCutters.valid()
             || !csgClipContextSlots.valid()
             || !csgIntervalSampleState.valid()
-            || !m_csgSystem.csgFrameBuffersReady(csgFrameData)
+            || !csgResources.frameReady(csgFrameData)
         ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared CSG frame buffers were unavailable during graph declaration"));
             return false;
@@ -675,10 +677,17 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         CsgClipContextSlots csgClipContextSlotData;
         CsgIntervalSampleStateGpuData csgIntervalSampleStateData;
         if(
-            !m_csgSystem.prepareCsgClipContextSlotData(deferredTargets, csgFrameData, frameBindings, csgClipContextSlotData)
+            !m_csgSystem.prepareCsgClipContextSlotData(
+                deferredTargets,
+                csgFrameData,
+                csgResources,
+                frameBindings,
+                csgClipContextSlotData
+            )
             || !m_csgSystem.prepareCsgIntervalSampleStateData(
                 deferredTargets,
                 csgFrameData,
+                csgResources,
                 frameBindings,
                 csgIntervalSampleStateData
             )
@@ -822,6 +831,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         csgReceiverSpanPayload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
         csgReceiverSpanPayload.materialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
         csgReceiverSpanPayload.csgFrameBuffersUploaded = gbufferPayload.csgFrameBuffersUploaded;
+        csgReceiverSpanPayload.csgResources = csgResources;
         csgReceiverSpanPayload.receiverSpanInputImageStatesGraphOwned = true;
         csgReceiverSpanPayload.receiverSpanOutputImageStatesGraphOwned = true;
         csgReceiverSpanPayload.opaqueDrawSnapshot.capture(
@@ -843,6 +853,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         csgIntervalCombinePayload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
         csgIntervalCombinePayload.materialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
         csgIntervalCombinePayload.csgFrameBuffersUploaded = gbufferPayload.csgFrameBuffersUploaded;
+        csgIntervalCombinePayload.csgResources = csgResources;
         csgIntervalCombinePayload.intervalCombineInputImageStatesGraphOwned = true;
         csgIntervalCombinePayload.removedIntervalOutputImageStatesGraphOwned = true;
         csgIntervalCombinePayload.opaqueDrawSnapshot.capture(
@@ -854,6 +865,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     }
     ECSRenderDetail::CsgIntervalSampleGraphTask::Payload csgIntervalSamplePayload{ m_arena };
     csgIntervalSamplePayload.frameBindings = frameBindings;
+    csgIntervalSamplePayload.csgResources = csgResources;
     ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask::Payload
         opaqueCsgIntervalSampleComputeEmulationPayload{ m_arena };
     if(hasOpaqueCsgFrameWork){
@@ -1381,7 +1393,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     if(opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned){
         opaqueCsgReceiverComputeEmulationPayload.meshSystem = &m_meshSystem;
         opaqueCsgReceiverComputeEmulationPayload.materialSystem = &m_materialSystem;
-        opaqueCsgReceiverComputeEmulationPayload.csgSystem = &m_csgSystem;
+        opaqueCsgReceiverComputeEmulationPayload.csgResources = csgResources;
         opaqueCsgReceiverComputeEmulationPayload.targets = &deferredTargets;
         // The receiver producer is an early part of G-buffer's one semantic Graphics submission; its dispatch
         // timing shares the existing ticket while the receiver raster retains its own scope in G-buffer.
@@ -1911,7 +1923,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             opaqueCsgIntervalSampleComputeEmulationPayload.graphics = &m_graphics;
             opaqueCsgIntervalSampleComputeEmulationPayload.meshSystem = &m_meshSystem;
             opaqueCsgIntervalSampleComputeEmulationPayload.materialSystem = &m_materialSystem;
-            opaqueCsgIntervalSampleComputeEmulationPayload.csgSystem = &m_csgSystem;
+            opaqueCsgIntervalSampleComputeEmulationPayload.csgResources = csgResources;
             opaqueCsgIntervalSampleComputeEmulationPayload.targets = &deferredTargets;
             // Producer and sample share the semantic CSG interval-sample submission/ticket; the timer opens here
             // and closes after the raster half, exactly preserving the former local material timing scope.

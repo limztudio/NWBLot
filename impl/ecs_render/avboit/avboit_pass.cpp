@@ -215,6 +215,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     DeferredFrameTargets& targets,
     const MaterialPassDrawItems& receiverSurfaceDrawItems,
     const CsgFrameGpuData& csgFrameData,
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const usize instanceCount,
     const usize materialTypedByteCount,
@@ -233,6 +234,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         !targets.framebuffer
         || receiverSurfaceDrawItems.empty()
         || !csgFrameData.hasWork()
+        || !csgResources.frameReady(csgFrameData)
         || !frameBindings.bindingValid()
     )
         return;
@@ -283,7 +285,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         instanceCount,
         materialTypedByteCount
     );
-    const bool csgResourcesReady = m_csgSystem.csgFrameBuffersReady(csgFrameData) && frameBindings.bindingValid();
+    const bool csgResourcesReady = csgResources.frameReady(csgFrameData) && frameBindings.bindingValid();
     const bool receiverSurfaceDrawResourcesReady =
         m_materialSystem.materialPassDrawResourcesReady(receiverSurfaceDrawItems)
     ;
@@ -308,6 +310,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         commandList,
         targets,
         csgFrameData,
+        csgResources,
         frameBindings,
         intervalTargetsGraphOwned && intervalPeelTargetStatesGraphOwned,
         csgClipBufferStatesGraphOwned,
@@ -325,7 +328,9 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         false,
         csgClipBufferStatesGraphOwned,
         materialFrameStatesGraphOwned,
-        materialGeometryStatesGraphOwned
+        materialGeometryStatesGraphOwned,
+        false,
+        &csgResources
     };
     m_materialSystem.renderMaterialPassDrawItems(
         csgReceiverSurfaceDrawContext,
@@ -337,6 +342,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
             commandList,
             targets,
             csgFrameData,
+            csgResources,
             intervalTargetsGraphOwned && receiverSpanOutputImageStatesGraphOwned
         );
     }
@@ -345,6 +351,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
             commandList,
             targets,
             csgFrameData,
+            csgResources,
             intervalTargetsGraphOwned && removedIntervalOutputImageStatesGraphOwned
         );
     }
@@ -363,6 +370,7 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     DeferredFrameTargets& targets,
     const MaterialPassDrawItems* const preparedTransparentCsgReceiverSurfaceDrawItems,
     const CsgFrameGpuData* const preparedTransparentCsgFrameData,
+    const ECSRenderDetail::CsgGraphResourceSnapshot* const preparedTransparentCsgResources,
     const ECSRenderDetail::MeshFrameBindingSnapshot* const preparedFrameBindings,
     const usize preparedTransparentCsgInstanceCount,
     const usize preparedTransparentCsgMaterialTypedByteCount,
@@ -377,16 +385,23 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     const bool deferPreparedTransparentCsgIntervalCombine,
     Optional<Core::GpuTimingMeasure>* const deferredPreparedTransparentCsgIntervalTiming
 ){
-    if(preparedTransparentCsgReceiverSurfaceDrawItems || preparedTransparentCsgFrameData){
+    if(preparedTransparentCsgReceiverSurfaceDrawItems || preparedTransparentCsgFrameData || preparedTransparentCsgResources){
         NWB_ASSERT(preparedTransparentCsgReceiverSurfaceDrawItems);
         NWB_ASSERT(preparedTransparentCsgFrameData);
+        NWB_ASSERT(preparedTransparentCsgResources);
         NWB_ASSERT(preparedFrameBindings);
-        if(preparedTransparentCsgReceiverSurfaceDrawItems && preparedTransparentCsgFrameData && preparedFrameBindings){
+        if(
+            preparedTransparentCsgReceiverSurfaceDrawItems
+            && preparedTransparentCsgFrameData
+            && preparedTransparentCsgResources
+            && preparedFrameBindings
+        ){
             renderPreparedTransparentCsgIntervals(
                 commandList,
                 targets,
                 *preparedTransparentCsgReceiverSurfaceDrawItems,
                 *preparedTransparentCsgFrameData,
+                *preparedTransparentCsgResources,
                 *preparedFrameBindings,
                 preparedTransparentCsgInstanceCount,
                 preparedTransparentCsgMaterialTypedByteCount,
@@ -410,6 +425,7 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
     DeferredFrameTargets& targets,
     const MaterialPassDrawItemPartitions* const preparedOccupancyDrawItems,
     const CsgFrameGpuData* const preparedOccupancyCsgFrameData,
+    const ECSRenderDetail::CsgGraphResourceSnapshot* const preparedOccupancyCsgResources,
     const usize preparedOccupancyInstanceCount,
     const usize preparedOccupancyMaterialTypedByteCount,
     const bool occupancyStatesGraphOwned,
@@ -438,10 +454,11 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
         commandList.commitBarriers();
     }
 
-    if(preparedOccupancyDrawItems || preparedOccupancyCsgFrameData){
+    if(preparedOccupancyDrawItems || preparedOccupancyCsgFrameData || preparedOccupancyCsgResources){
         NWB_ASSERT(preparedOccupancyDrawItems);
         NWB_ASSERT(preparedOccupancyCsgFrameData);
-        if(preparedOccupancyDrawItems && preparedOccupancyCsgFrameData){
+        NWB_ASSERT(preparedOccupancyCsgResources);
+        if(preparedOccupancyDrawItems && preparedOccupancyCsgFrameData && preparedOccupancyCsgResources){
             m_materialSystem.renderPreparedMaterialPass(
                 commandList,
                 targets,
@@ -450,6 +467,7 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
                 &avboitTargets,
                 *preparedOccupancyDrawItems,
                 *preparedOccupancyCsgFrameData,
+                *preparedOccupancyCsgResources,
                 preparedOccupancyInstanceCount,
                 preparedOccupancyMaterialTypedByteCount,
                 occupancyCsgIntervalSampleImageStatesGraphOwned,
@@ -470,6 +488,7 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
     DeferredFrameTargets& targets,
     const MaterialPassDrawItemPartitions* const preparedExtinctionDrawItems,
     const CsgFrameGpuData* const preparedExtinctionCsgFrameData,
+    const ECSRenderDetail::CsgGraphResourceSnapshot* const preparedExtinctionCsgResources,
     const usize preparedExtinctionInstanceCount,
     const usize preparedExtinctionMaterialTypedByteCount,
     const bool extinctionCsgIntervalSampleImageStatesGraphOwned,
@@ -486,10 +505,11 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
     // The graph records the warp/control reads and packed-extinction writes as packet-boundary state; this thunk
     // contains only the native raster pass.
 
-    if(preparedExtinctionDrawItems || preparedExtinctionCsgFrameData){
+    if(preparedExtinctionDrawItems || preparedExtinctionCsgFrameData || preparedExtinctionCsgResources){
         NWB_ASSERT(preparedExtinctionDrawItems);
         NWB_ASSERT(preparedExtinctionCsgFrameData);
-        if(preparedExtinctionDrawItems && preparedExtinctionCsgFrameData){
+        NWB_ASSERT(preparedExtinctionCsgResources);
+        if(preparedExtinctionDrawItems && preparedExtinctionCsgFrameData && preparedExtinctionCsgResources){
             m_materialSystem.renderPreparedMaterialPass(
                 commandList,
                 targets,
@@ -498,6 +518,7 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
                 &avboitTargets,
                 *preparedExtinctionDrawItems,
                 *preparedExtinctionCsgFrameData,
+                *preparedExtinctionCsgResources,
                 preparedExtinctionInstanceCount,
                 preparedExtinctionMaterialTypedByteCount,
                 extinctionCsgIntervalSampleImageStatesGraphOwned,
@@ -518,6 +539,7 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     DeferredFrameTargets& targets,
     const MaterialPassDrawItemPartitions* const preparedAccumulationDrawItems,
     const CsgFrameGpuData* const preparedAccumulationCsgFrameData,
+    const ECSRenderDetail::CsgGraphResourceSnapshot* const preparedAccumulationCsgResources,
     const usize preparedAccumulationInstanceCount,
     const usize preparedAccumulationMaterialTypedByteCount,
     const bool accumulationFinalStatesGraphOwned,
@@ -535,10 +557,11 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     // The graph records the integrated volume and work-buffer reads as packet-boundary state; this thunk owns only
     // the native raster pass and its explicit final cross-graph transition below.
 
-    if(preparedAccumulationDrawItems || preparedAccumulationCsgFrameData){
+    if(preparedAccumulationDrawItems || preparedAccumulationCsgFrameData || preparedAccumulationCsgResources){
         NWB_ASSERT(preparedAccumulationDrawItems);
         NWB_ASSERT(preparedAccumulationCsgFrameData);
-        if(preparedAccumulationDrawItems && preparedAccumulationCsgFrameData){
+        NWB_ASSERT(preparedAccumulationCsgResources);
+        if(preparedAccumulationDrawItems && preparedAccumulationCsgFrameData && preparedAccumulationCsgResources){
             m_materialSystem.renderPreparedMaterialPass(
                 commandList,
                 targets,
@@ -547,6 +570,7 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
                 &avboitTargets,
                 *preparedAccumulationDrawItems,
                 *preparedAccumulationCsgFrameData,
+                *preparedAccumulationCsgResources,
                 preparedAccumulationInstanceCount,
                 preparedAccumulationMaterialTypedByteCount,
                 accumulationCsgIntervalSampleImageStatesGraphOwned,

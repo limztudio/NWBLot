@@ -22,6 +22,10 @@ NWB_IMPL_BEGIN
 
 struct DeferredFrameTargets;
 
+namespace ECSRenderDetail{
+    struct CsgGraphResourceSnapshot;
+};
+
 struct AvboitFrameTargets{
     u32 fullWidth = 0;
     u32 fullHeight = 0;
@@ -118,6 +122,9 @@ struct MaterialPassDrawContext{
     // entry state from the graph (UAV for the producer and VertexBuffer for the raster consumer). Compatibility
     // callers leave this false and retain the per-item native UAV-to-VertexBuffer handoff.
     bool emulationOutputEntryStateGraphOwned = false;
+    // Prepared CSG draws consume the root-captured descriptor/buffer tuple. Regular and compatibility paths leave
+    // this null because no CSG heap binding is part of their draw contract.
+    const ECSRenderDetail::CsgGraphResourceSnapshot* csgResources = nullptr;
 };
 
 

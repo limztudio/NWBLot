@@ -33,6 +33,7 @@ static void SetCsgHeapResourceStates(
     RendererCsgSystem& csgSystem,
     Core::CommandList& commandList,
     const DeferredFrameTargets& deferredTargets,
+    const ECSRenderDetail::CsgGraphResourceSnapshot* const csgResources,
     const MaterialPipelineCsgBindingUse& csgBindingUse,
     const bool receiverSurfaceImageStatesGraphOwned,
     const bool intervalSampleImageStatesGraphOwned,
@@ -41,8 +42,12 @@ static void SetCsgHeapResourceStates(
     if(!csgBindingUse.clip)
         return;
 
+    NWB_ASSERT(csgResources);
+    if(!csgResources)
+        return;
+
     if(!csgClipBufferStatesGraphOwned)
-        csgSystem.setCsgClipBufferStates(commandList);
+        csgSystem.setCsgClipBufferStates(commandList, *csgResources);
     if(csgBindingUse.receiverSurface && !receiverSurfaceImageStatesGraphOwned){
         // Compatibility callers still stage the heap-selected receiver-event images themselves. The normal graph
         // declares this exact StorageImage pair before its receiver-surface task records.
@@ -184,7 +189,12 @@ void RendererMaterialSystem::setMaterialPassDrawPushConstants(
     const MaterialPipelineCsgBindingUse csgBindingUse =
         MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, context.pass);
     u32 csgContextHeapSlot = 0u;
-    const bool csgContextHeapSlotReady = m_csgSystem.findCsgClipContextHeapSlot(csgContextHeapSlot);
+    const bool csgContextHeapSlotReady = !csgBindingUse.clip
+        || (
+            context.csgResources
+            && context.csgResources->findClipContextHeapSlot(csgContextHeapSlot)
+        )
+    ;
     NWB_ASSERT(!csgBindingUse.clip || csgContextHeapSlotReady);
     if(!csgBindingUse.clip)
         csgContextHeapSlot = 0u;
@@ -239,6 +249,7 @@ void RendererMaterialSystem::setMaterialPassDrawItemResourceStates(
         m_csgSystem,
         context.commandList,
         context.deferredTargets,
+        context.csgResources,
         csgBindingUse,
         context.csgReceiverSurfaceImageStatesGraphOwned,
         context.csgIntervalSampleImageStatesGraphOwned,

@@ -83,7 +83,7 @@ bool CsgReceiverSpanBuildGraphTask::record(
             !csgFrameData.hasWork()
             || (
                 payload.csgFrameBuffersUploaded
-                && csgSystem.csgFrameBuffersReady(csgFrameData)
+                && payload.csgResources.frameReady(csgFrameData)
             )
         )
     ;
@@ -97,6 +97,7 @@ bool CsgReceiverSpanBuildGraphTask::record(
             commandList,
             deferredTargets,
             csgFrameData,
+            payload.csgResources,
             payload.receiverSpanOutputImageStatesGraphOwned,
             payload.receiverSpanInputImageStatesGraphOwned
         );
@@ -160,7 +161,7 @@ bool CsgIntervalCombineGraphTask::record(
             !csgFrameData.hasWork()
             || (
                 payload.csgFrameBuffersUploaded
-                && csgSystem.csgFrameBuffersReady(csgFrameData)
+                && payload.csgResources.frameReady(csgFrameData)
             )
         )
     ;
@@ -174,6 +175,7 @@ bool CsgIntervalCombineGraphTask::record(
             commandList,
             deferredTargets,
             csgFrameData,
+            payload.csgResources,
             payload.removedIntervalOutputImageStatesGraphOwned,
             payload.intervalCombineInputImageStatesGraphOwned
         );
@@ -241,7 +243,7 @@ bool CsgIntervalSampleGraphTask::record(
             !csgFrameData.hasWork()
             || (
                 payload.csgFrameBuffersUploaded
-                && csgSystem.csgFrameBuffersReady(csgFrameData)
+                && payload.csgResources.frameReady(csgFrameData)
                 && payload.frameBindings.bindingValid()
             )
         )
@@ -287,7 +289,8 @@ bool CsgIntervalSampleGraphTask::record(
             payload.csgClipBufferStatesGraphOwned,
             payload.materialFrameStatesGraphOwned,
             payload.materialGeometryStatesGraphOwned,
-            payload.csgComputeEmulationOutputStatesGraphOwned
+            payload.csgComputeEmulationOutputStatesGraphOwned,
+            &payload.csgResources
         };
         if(!opaqueDrawItems.csg.empty()){
             if(payload.csgComputeEmulationOutputStatesGraphOwned){
@@ -310,6 +313,7 @@ bool CsgIntervalSampleGraphTask::record(
                 commandList,
                 deferredTargets,
                 csgFrameData,
+                payload.csgResources,
                 payload.frameBindings,
                 payload.intervalSampleImageStatesGraphOwned,
                 payload.csgClipBufferStatesGraphOwned,

@@ -8,6 +8,7 @@
 #include <impl/global.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
+#include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
 #include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
 
@@ -27,7 +28,6 @@ NWB_IMPL_BEGIN
 
 class RendererMeshSystem;
 class RendererMaterialSystem;
-class RendererCsgSystem;
 class RendererAvboitSystem;
 struct DeferredFrameTargets;
 
@@ -46,7 +46,7 @@ struct AvboitAccumulationComputeEmulationGraphTask{
         Core::Graphics* graphics = nullptr;
         RendererMeshSystem* meshSystem = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
-        RendererCsgSystem* csgSystem = nullptr;
+        ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* accumulationTiming = nullptr;
@@ -125,6 +125,7 @@ struct AvboitAccumulationGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot accumulationSnapshot;
+        ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         bool accumulationPhasePrepared = false;
         bool accumulationCsgIntervalSampleImageStatesGraphOwned = false;
         bool accumulationCsgClipBufferStatesGraphOwned = false;

@@ -8,6 +8,7 @@
 #include <impl/global.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
+#include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
 #include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
 
@@ -27,7 +28,6 @@ NWB_IMPL_BEGIN
 
 class RendererMeshSystem;
 class RendererMaterialSystem;
-class RendererCsgSystem;
 class RendererAvboitSystem;
 class RendererTaskTimingFeedback;
 struct AvboitFrameTargets;
@@ -48,7 +48,7 @@ struct AvboitExtinctionComputeEmulationGraphTask{
         Core::Graphics* graphics = nullptr;
         RendererMeshSystem* meshSystem = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
-        RendererCsgSystem* csgSystem = nullptr;
+        ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* extinctionTiming = nullptr;
@@ -128,6 +128,7 @@ struct AvboitExtinctionGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot extinctionSnapshot;
+        ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         bool extinctionPhasePrepared = false;
         bool extinctionCsgIntervalSampleImageStatesGraphOwned = false;
         bool extinctionCsgClipBufferStatesGraphOwned = false;

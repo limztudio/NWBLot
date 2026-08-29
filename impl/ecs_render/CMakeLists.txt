@@ -31,6 +31,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/avboit/task_graph_resource_sets.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/task_graph_timing_metadata.h"
     "${CMAKE_CURRENT_LIST_DIR}/csg/task_graph_clear_timing.h"
+    "${CMAKE_CURRENT_LIST_DIR}/csg/csg_graph_resource_snapshot.h"
     "${CMAKE_CURRENT_LIST_DIR}/csg/task_graph_opaque_compute_emulation_plan.h"
     "${CMAKE_CURRENT_LIST_DIR}/csg/task_graph_opaque_compute_tasks.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg/task_graph_opaque_compute_tasks.h"

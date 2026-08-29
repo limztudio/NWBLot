@@ -9,6 +9,7 @@
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
+#include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
 #include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
 
@@ -28,7 +29,6 @@ NWB_IMPL_BEGIN
 
 class RendererMeshSystem;
 class RendererMaterialSystem;
-class RendererCsgSystem;
 class RendererAvboitSystem;
 class RendererTaskTimingFeedback;
 struct AvboitFrameTargets;
@@ -52,6 +52,7 @@ struct AvboitPreGraphTask{
         Optional<Core::GpuTimingMeasure>* transparentCsgIntervalsTiming = nullptr;
         bool hasTransparentRenderers = false;
         ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
+        ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         ECSRenderDetail::TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
         bool transparentCsgStreamsUploaded = false;
         bool transparentCsgIntervalTargetsGraphOwned = false;
@@ -87,7 +88,7 @@ struct AvboitOccupancyComputeEmulationGraphTask{
         Core::Graphics* graphics = nullptr;
         RendererMeshSystem* meshSystem = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
-        RendererCsgSystem* csgSystem = nullptr;
+        ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* occupancyTiming = nullptr;
@@ -170,6 +171,7 @@ struct AvboitOccupancyGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool hasTransparentRenderers = false;
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot occupancySnapshot;
+        ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         bool occupancyPhasePrepared = false;
         bool occupancyStreamsUploaded = false;
         bool occupancyCsgIntervalSampleImageStatesGraphOwned = false;

@@ -64,6 +64,7 @@ namespace RendererResourceLookupMode{
 };
 
 namespace ECSRenderDetail{
+    struct CsgGraphResourceSnapshot;
     struct MeshViewGpuData;
 
     struct MaterialPassBufferSnapshot{
@@ -137,6 +138,7 @@ public:
         const AvboitFrameTargets* avboitTargets,
         const MaterialPassDrawItemPartitions& drawItems,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         usize instanceCount,
         usize materialTypedByteCount,
         // The graph can declare the removed-interval StorageImage reads at a producer/consumer boundary. Direct
@@ -299,7 +301,10 @@ public:
     [[nodiscard]] ECSRenderDetail::MaterialPassBufferSnapshot materialPassBufferSnapshot()const;
     // The CSG context descriptor is selected through every instance's retained heap-slot lane. Graph declaration
     // patches the immutable upload copy before the packet is recorded so every prepared phase keeps the same ABI.
-    void prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData);
+    void prepareMaterialPassInstanceUploadData(
+        InstanceGpuDataVector& instanceData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
+    );
     [[nodiscard]] bool findMaterialPassDrawItemResources(
         const MaterialPassDrawItem& drawItem,
         MeshResources*& outMesh,

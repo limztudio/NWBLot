@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 
 #include <core/graphics/gpu_timing.h>
@@ -40,6 +41,7 @@ struct AvboitCsgReceiverSpanGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* transparentCsgIntervalsTiming = nullptr;
+        CsgGraphResourceSnapshot csgResources;
         TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
         bool csgFrameBuffersUploaded = false;
         bool receiverSpanInputImageStatesGraphOwned = false;
@@ -65,6 +67,7 @@ struct AvboitCsgIntervalCombineGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* transparentCsgIntervalsTiming = nullptr;
+        CsgGraphResourceSnapshot csgResources;
         TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
         bool csgFrameBuffersUploaded = false;
         bool intervalCombineInputImageStatesGraphOwned = false;

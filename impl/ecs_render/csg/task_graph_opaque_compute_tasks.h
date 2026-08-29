@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
 
 #include <core/graphics/gpu_timing.h>
@@ -22,7 +23,6 @@ NWB_IMPL_BEGIN
 
 class RendererMeshSystem;
 class RendererMaterialSystem;
-class RendererCsgSystem;
 struct DeferredFrameTargets;
 
 
@@ -39,11 +39,11 @@ struct OpaqueCsgReceiverComputeEmulationGraphTask{
     struct Payload{
         RendererMeshSystem* meshSystem = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
-        RendererCsgSystem* csgSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* meshViewSetupReady = nullptr;
         const bool* sceneShadingSetupReady = nullptr;
+        CsgGraphResourceSnapshot csgResources;
         OpaqueCsgReceiverComputeEmulationGraphPlan plan;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
@@ -71,12 +71,12 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
         Core::Graphics* graphics = nullptr;
         RendererMeshSystem* meshSystem = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
-        RendererCsgSystem* csgSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* meshViewSetupReady = nullptr;
         const bool* sceneShadingSetupReady = nullptr;
         Optional<Core::GpuTimingMeasure>* opaqueCsgTiming = nullptr;
+        CsgGraphResourceSnapshot csgResources;
         OpaqueCsgIntervalSampleComputeEmulationGraphPlan plan;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;

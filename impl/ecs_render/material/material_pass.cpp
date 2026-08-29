@@ -167,6 +167,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     const AvboitFrameTargets* const avboitTargets,
     const MaterialPassDrawItemPartitions& drawItems,
     const CsgFrameGpuData& csgFrameData,
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const usize instanceCount,
     const usize materialTypedByteCount,
     const bool csgIntervalSampleImageStatesGraphOwned,
@@ -220,7 +221,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         discardEmulationOutputTiming();
         return;
     }
-    const bool csgResourcesReady = !csgFrameData.hasWork() || m_csgSystem.csgFrameBuffersReady(csgFrameData);
+    const bool csgResourcesReady = csgResources.frameReady(csgFrameData);
     const bool csgDrawResourcesReady = csgResourcesReady
         && (drawItems.csg.empty() || materialPassDrawResourcesReady(drawItems.csg))
     ;
@@ -259,7 +260,8 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         csgClipBufferStatesGraphOwned,
         materialFrameStatesGraphOwned,
         materialGeometryStatesGraphOwned,
-        csgEmulationOutputEntryStateGraphOwned
+        csgEmulationOutputEntryStateGraphOwned,
+        &csgResources
     };
     const auto recordPreparedDraws = [&](){
         if(regularDrawResourcesReady)

@@ -65,6 +65,7 @@ struct CsgFrameState;
 struct MaterialPassDrawItemPartitions;
 struct MaterialPassDrawItems;
 namespace ECSRenderDetail{
+    struct CsgGraphResourceSnapshot;
     struct MeshFrameBindingSnapshot;
 };
 
@@ -122,6 +123,7 @@ public:
         DeferredFrameTargets& targets,
         const MaterialPassDrawItems* preparedTransparentCsgReceiverSurfaceDrawItems = nullptr,
         const CsgFrameGpuData* preparedTransparentCsgFrameData = nullptr,
+        const ECSRenderDetail::CsgGraphResourceSnapshot* preparedTransparentCsgResources = nullptr,
         const ECSRenderDetail::MeshFrameBindingSnapshot* preparedFrameBindings = nullptr,
         usize preparedTransparentCsgInstanceCount = 0u,
         usize preparedTransparentCsgMaterialTypedByteCount = 0u,
@@ -149,6 +151,7 @@ public:
         DeferredFrameTargets& targets,
         const MaterialPassDrawItemPartitions* preparedOccupancyDrawItems = nullptr,
         const CsgFrameGpuData* preparedOccupancyCsgFrameData = nullptr,
+        const ECSRenderDetail::CsgGraphResourceSnapshot* preparedOccupancyCsgResources = nullptr,
         usize preparedOccupancyInstanceCount = 0u,
         usize preparedOccupancyMaterialTypedByteCount = 0u,
         // The normal task-graph path declares depth as ShaderResource and coverage as UnorderedAccess before this
@@ -174,6 +177,7 @@ public:
         DeferredFrameTargets& targets,
         const MaterialPassDrawItemPartitions* preparedExtinctionDrawItems = nullptr,
         const CsgFrameGpuData* preparedExtinctionCsgFrameData = nullptr,
+        const ECSRenderDetail::CsgGraphResourceSnapshot* preparedExtinctionCsgResources = nullptr,
         usize preparedExtinctionInstanceCount = 0u,
         usize preparedExtinctionMaterialTypedByteCount = 0u,
         bool extinctionCsgIntervalSampleImageStatesGraphOwned = false,
@@ -191,6 +195,7 @@ public:
         DeferredFrameTargets& targets,
         const MaterialPassDrawItemPartitions* preparedAccumulationDrawItems = nullptr,
         const CsgFrameGpuData* preparedAccumulationCsgFrameData = nullptr,
+        const ECSRenderDetail::CsgGraphResourceSnapshot* preparedAccumulationCsgResources = nullptr,
         usize preparedAccumulationInstanceCount = 0u,
         usize preparedAccumulationMaterialTypedByteCount = 0u,
         // The normal task-graph path declares the two accumulation attachments and read-only deferred depth as
@@ -228,6 +233,7 @@ private:
         DeferredFrameTargets& targets,
         const MaterialPassDrawItems& receiverSurfaceDrawItems,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         usize instanceCount,
         usize materialTypedByteCount,

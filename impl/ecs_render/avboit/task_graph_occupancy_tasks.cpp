@@ -41,6 +41,7 @@ namespace RendererTaskGraphDetail{
     CsgFrameGpuData transparentCsgFrameData{ scratchArena };
     const MaterialPassDrawItems* preparedTransparentCsgReceiverSurfaceDrawItems = nullptr;
     const CsgFrameGpuData* preparedTransparentCsgFrameData = nullptr;
+    const ECSRenderDetail::CsgGraphResourceSnapshot* preparedTransparentCsgResources = nullptr;
     usize preparedTransparentCsgInstanceCount = 0u;
     usize preparedTransparentCsgMaterialTypedByteCount = 0u;
     if(payload.transparentCsgStreamsUploaded && payload.transparentCsgSnapshot.captured){
@@ -50,6 +51,7 @@ namespace RendererTaskGraphDetail{
         );
         preparedTransparentCsgReceiverSurfaceDrawItems = &transparentCsgReceiverSurfaceDrawItems;
         preparedTransparentCsgFrameData = &transparentCsgFrameData;
+        preparedTransparentCsgResources = &payload.csgResources;
         preparedTransparentCsgInstanceCount = payload.transparentCsgSnapshot.instanceCount;
         preparedTransparentCsgMaterialTypedByteCount = payload.transparentCsgSnapshot.materialTypedByteCount;
     }
@@ -59,6 +61,7 @@ namespace RendererTaskGraphDetail{
             *payload.targets,
             preparedTransparentCsgReceiverSurfaceDrawItems,
             preparedTransparentCsgFrameData,
+            preparedTransparentCsgResources,
             &payload.frameBindings,
             preparedTransparentCsgInstanceCount,
             preparedTransparentCsgMaterialTypedByteCount,
@@ -101,7 +104,6 @@ void AvboitOccupancyComputeEmulationGraphTask::discardTiming(Optional<Core::GpuT
         !payload.graphics
         || !payload.meshSystem
         || !payload.materialSystem
-        || !payload.csgSystem
         || !payload.targets
         || !payload.timingTicket
         || !payload.occupancyTiming
@@ -113,7 +115,6 @@ void AvboitOccupancyComputeEmulationGraphTask::discardTiming(Optional<Core::GpuT
     Core::Graphics& graphics = *payload.graphics;
     RendererMeshSystem& meshSystem = *payload.meshSystem;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    RendererCsgSystem& csgSystem = *payload.csgSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     const bool csgComputeEmulation = payload.csgPlan.captured;
     if(
@@ -145,7 +146,7 @@ void AvboitOccupancyComputeEmulationGraphTask::discardTiming(Optional<Core::GpuT
             || !payload.csgIntervalSampleImageStatesGraphOwned
             || !payload.csgClipBufferStatesGraphOwned
             || !csgFrameData.hasWork()
-            || !csgSystem.csgFrameBuffersReady(csgFrameData)
+            || !payload.csgResources.frameReady(csgFrameData)
         ))
     )
         return false;
@@ -179,6 +180,7 @@ void AvboitOccupancyComputeEmulationGraphTask::discardTiming(Optional<Core::GpuT
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true,
+        csgComputeEmulation ? &payload.csgResources : nullptr
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
@@ -332,6 +334,7 @@ void AvboitOccupancySharedComputeEmulationGraphTask::discarded(Payload& payload)
             *payload.targets,
             preparedOccupancyDrawItems,
             preparedOccupancyCsgFrameData,
+            &payload.csgResources,
             preparedOccupancyInstanceCount,
             preparedOccupancyMaterialTypedByteCount,
             // The task's declared depth/coverage uses have already lowered and committed their graph barrier.

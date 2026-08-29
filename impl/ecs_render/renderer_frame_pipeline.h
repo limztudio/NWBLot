@@ -187,6 +187,7 @@ private:
         Core::GpuTaskId shadowPrepareTask,
         const CsgFrameState& csgFrameState,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         bool hasOpaqueCsgFrameWork,
         f32 meshViewAspectRatio,
         const ECSRenderDetail::MeshViewGpuData& meshViewState,

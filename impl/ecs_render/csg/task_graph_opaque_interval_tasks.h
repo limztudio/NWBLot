@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 
@@ -42,6 +43,7 @@ struct CsgReceiverSpanBuildGraphTask{
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* meshViewSetupReady = nullptr;
         const bool* sceneShadingSetupReady = nullptr;
+        CsgGraphResourceSnapshot csgResources;
         OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
         bool materialDrawBuffersUploaded = false;
         bool csgFrameBuffersUploaded = false;
@@ -70,6 +72,7 @@ struct CsgIntervalCombineGraphTask{
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* meshViewSetupReady = nullptr;
         const bool* sceneShadingSetupReady = nullptr;
+        CsgGraphResourceSnapshot csgResources;
         OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
         bool materialDrawBuffersUploaded = false;
         bool csgFrameBuffersUploaded = false;
@@ -100,6 +103,7 @@ struct CsgIntervalSampleGraphTask{
         const bool* meshViewSetupReady = nullptr;
         const bool* sceneShadingSetupReady = nullptr;
         MeshFrameBindingSnapshot frameBindings;
+        CsgGraphResourceSnapshot csgResources;
         OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
         bool materialDrawBuffersUploaded = false;
         bool csgFrameBuffersUploaded = false;

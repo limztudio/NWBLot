@@ -297,11 +297,14 @@ ECSRenderDetail::MaterialPassBufferSnapshot RendererMaterialSystem::materialPass
     };
 }
 
-void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData){
+void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(
+    InstanceGpuDataVector& instanceData,
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
+){
     // Slot 6 carries CSG's heap-selected UniformBuffer context for every raster instance, avoiding a second
     // pipeline-local resource descriptor in the mesh and compute geometry stages.
     u32 csgContextHeapSlot = 0u;
-    if(!m_csgSystem.findCsgClipContextHeapSlot(csgContextHeapSlot))
+    if(!csgResources.findClipContextHeapSlot(csgContextHeapSlot))
         csgContextHeapSlot = 0u;
     for(InstanceGpuData& instance : instanceData)
         instance.geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT] = csgContextHeapSlot;

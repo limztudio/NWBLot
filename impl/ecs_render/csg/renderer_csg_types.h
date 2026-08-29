@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/components.h>
+#include <impl/ecs_render/components.h>
 
 #include <core/alloc/scratch.h>
 #include <core/graphics/api.h>

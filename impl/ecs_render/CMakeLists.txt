@@ -1,6 +1,6 @@
 nwb_declare_interface_library(nwb_ecs_render_components)
 target_sources(nwb_ecs_render_components INTERFACE
-    "${CMAKE_CURRENT_LIST_DIR}/kernel/components.h"
+    "${CMAKE_CURRENT_LIST_DIR}/components.h"
     "${CMAKE_CURRENT_LIST_DIR}/material/material_instance.h"
 )
 target_link_libraries(nwb_ecs_render_components INTERFACE
@@ -116,7 +116,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_caustics.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_surfel_gi.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shared/renderer_state.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/kernel/module.h"
+    "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit.h"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/system.h"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/task_timing_feedback.h"

@@ -10,7 +10,7 @@
 #include <global/math/frame.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
-#include <impl/ecs_render/kernel/module.h>
+#include <impl/ecs_render/module.h>
 
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"

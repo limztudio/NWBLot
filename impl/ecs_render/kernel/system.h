@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/components.h>
+#include <impl/ecs_render/components.h>
 #include <impl/ecs_render/kernel/task_timing_feedback.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/shared/renderer_state.h>

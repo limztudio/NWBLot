@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/components.h>
+#include <impl/ecs_render/components.h>
 
 #include <core/ecs/entity.h>
 #include <impl/ecs_model/system.h>

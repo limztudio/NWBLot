@@ -13,7 +13,7 @@
 #endif
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
-#include <impl/ecs_render/kernel/module.h>
+#include <impl/ecs_render/module.h>
 #include <impl/ecs_render/material/material_instance.h>
 
 #include "arrow_yaw_input_handler.h"

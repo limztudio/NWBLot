@@ -209,6 +209,19 @@ struct GraphOwnedAdaptiveShadowPlan{
 };
 
 
+// Shadow Visibility freezes its domain-owned route policy before the coordinator declares target and dependency
+// topology. Resource handles remain in the dedicated resource snapshots below.
+struct RayTracingShadowVisibilityGraphPlanSnapshot{
+    GraphOwnedAdaptiveShadowPlan adaptivePlan;
+
+    bool softTransparentFoldReady = false;
+    bool softShadowHistoryReadable = false;
+    bool opaqueTemporalMergeReady = false;
+    bool transparentTemporalMergeReady = false;
+    bool historyFrontIsA = false;
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -269,17 +282,22 @@ struct RayTracingDeferredGraphResourceSnapshot{
     Core::BufferHandle shadowMaterialTypedBuffer;
     Core::BufferHandle shadowInstanceBuffer;
     Core::BufferHandle causticEmissionTargetBuffer;
+    Core::BufferHandle surfelFrameConstantsBuffer;
+    Core::BufferHandle sceneBvhNodeBuffer;
+    Core::BufferHandle sceneInstanceBuffer;
     Core::RayTracingAccelStructHandle sceneTlas;
 
     f32 causticTemporalDecay = 0.f;
     bool causticAccumulatorInitialized = false;
     bool surfelUsesHardwareTrace = false;
+    bool surfelSplitGraphPipelinesReady = false;
 };
 
 
 // Persistent surfel resources outlive resizable targets. The accepted readback token belongs to the same resource
 // generation as the counter/readback pair and is captured with it for graph dependency and rollback planning.
 struct RayTracingSurfelPersistentResourceSnapshot{
+    Core::BufferHandle constantsBuffer;
     Core::BufferHandle poolBuffer;
     Core::BufferHandle cellHeadBuffer;
     Core::BufferHandle counterBuffer;
@@ -326,7 +344,11 @@ public:
     [[nodiscard]] RayTracingShadowPreparationResourceSnapshot snapshotShadowPreparationResources()const;
     [[nodiscard]] RayTracingDeferredGraphResourceSnapshot snapshotDeferredGraphResources()const;
     [[nodiscard]] RayTracingSurfelPersistentResourceSnapshot snapshotSurfelPersistentResources()const;
+    [[nodiscard]] RayTracingShadowVisibilityGraphPlanSnapshot snapshotShadowVisibilityGraphPlan(
+        bool hardwareShadowSupported
+    )const noexcept;
     [[nodiscard]] bool surfelCountReadbackSubmissionMatches(const Core::QueueSubmissionToken& submissionToken)const noexcept;
+    void confirmSurfelCountReadbackSubmission(const Core::QueueSubmissionToken& submissionToken)noexcept;
 
 
 public:

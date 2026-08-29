@@ -3387,12 +3387,15 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
     AString surfelSource;
     AString surfelTaskGraphSource;
     AString systemSource;
+    AString rayTracingSystemSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_surfel_gi.cpp", surfelSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_surfel_gi.cpp", surfelTaskGraphSource));
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
     const AStringView surfel(surfelSource.data(), surfelSource.size());
     const AStringView surfelTaskGraph(surfelTaskGraphSource.data(), surfelTaskGraphSource.size());
     const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView rayTracingSystem(rayTracingSystemSource.data(), rayTracingSystemSource.size());
 
     const usize counterOffset = surfel.find("if(!m_rayTracingState.m_surfelCounterBuffer){");
     const usize traceArgsOffset = surfel.find("// Build-args rewrites the indirect dispatch buffer each frame.", counterOffset);
@@ -3407,15 +3410,22 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
     const usize readbackOffset = surfelTaskGraph.find("void RendererFramePipeline::declareDeferredSurfelCountReadbackTask");
     ASSERT_NE(readbackOffset, AStringView::npos);
     const AStringView readback = surfelTaskGraph.substr(readbackOffset);
-    EXPECT_TRUE(ContainsText(readback, "m_rayTracingState.m_surfelCounterBuffer"));
+    EXPECT_TRUE(ContainsText(readback, "rayTracingSurfelResources.counterBuffer"));
     EXPECT_TRUE(ContainsText(readback, ".source = counter,"));
     EXPECT_TRUE(ContainsText(readback, ".setQueue(TransferQueueRequest())"));
+    EXPECT_FALSE(ContainsText(readback, ".acceptedToken ="));
 
     EXPECT_TRUE(ContainsText(surfelTaskGraph, ".states = m_surfelGiCounterPersistentState.source(),"));
     EXPECT_TRUE(ContainsText(system, "m_surfelGiCounterPersistentState.buildFilteredBufferSubset("));
     EXPECT_TRUE(ContainsText(system, "m_surfelGiCounterPersistentState.commit(\n                    *context->candidate"));
     EXPECT_TRUE(ContainsText(system, ".task = m_deferredSurfelGiCounterReadbackTask,"));
     EXPECT_TRUE(ContainsText(system, "scratchArena,\n                nullptr,\n                &readbackAcceptedCallback"));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "if(context->acceptedStateReady)\n"
+        "                    context->renderer->m_raytracingSystem.confirmSurfelCountReadbackSubmission(token);"
+    ));
+    EXPECT_TRUE(ContainsText(rayTracingSystem, "m_rayTracingState.m_surfelCountReadbackSubmissionToken = submissionToken;"));
     const usize readbackSubmitOffset = system.find("const bool readbackAccepted = submitter.recordAndSubmitTask(");
     const usize readbackTokenOffset = system.find(
         "const Core::QueueSubmissionToken readbackSubmissionToken =",
@@ -3863,12 +3873,15 @@ TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
     AString shadowVisibilitySource;
     AString shadowSource;
     AString softShadowSource;
+    AString rayTracingSystemSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", shadowVisibilitySource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", shadowSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow.cpp", softShadowSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
     const AStringView shadowVisibility(shadowVisibilitySource.data(), shadowVisibilitySource.size());
     const AStringView shadowSourceView(shadowSource.data(), shadowSource.size());
     const AStringView softShadowSourceView(softShadowSource.data(), softShadowSource.size());
+    const AStringView rayTracingSystem(rayTracingSystemSource.data(), rayTracingSystemSource.size());
 
     const usize opaqueResourcesOffset = shadowVisibility.find("opaqueResourceUses.reserve(");
     const usize opaqueFirstWaveletOffset = shadowVisibility.find("opaqueFirstWaveletResourceUses.reserve(", opaqueResourcesOffset);
@@ -3912,10 +3925,8 @@ TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
     EXPECT_FALSE(ContainsText(transparentTraceUses, "ReadWriteUse(shadowSoftHalfA"));
     EXPECT_FALSE(ContainsText(transparentTraceUses, "ReadWriteUse(shadowSoftHalfB"));
 
-    EXPECT_TRUE(ContainsText(shadowVisibility, "const bool softShadowHistoryReadable ="));
-    EXPECT_TRUE(ContainsText(shadowVisibility, "m_softShadowTemporalReady"));
-    EXPECT_TRUE(ContainsText(shadowVisibility, "m_prevWorldToClipValid"));
-    EXPECT_TRUE(ContainsText(shadowVisibility, "m_softShadowTemporalSeeded"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, "const bool softShadowHistoryReadable = rayTracingPlan.softShadowHistoryReadable;"));
+    EXPECT_TRUE(ContainsText(rayTracingSystem, "state.m_softShadowTemporalReady\n            && state.m_prevWorldToClipValid\n            && state.m_softShadowTemporalSeeded"));
     EXPECT_TRUE(ContainsText(shadowVisibility, "if(softShadowHistoryReadable){\n                opaqueFirstWaveletResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious"));
     EXPECT_TRUE(ContainsText(shadowVisibility, "if(softShadowHistoryReadable){\n                transparentTemporalMergeResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious"));
     EXPECT_TRUE(ContainsText(shadowVisibility, "WriteUse(transparentHistoryOut, Core::ResourceStates::UnorderedAccess)"));
@@ -3980,8 +3991,8 @@ TEST(EcsGraphics, MonolithicShadowVisibilityKeepsFreshScratchAsFirstWrites){
 
     EXPECT_TRUE(ContainsText(opaqueHistoryHelper, "else if(!splitSoftTransparentFold){"));
     EXPECT_TRUE(ContainsText(opaqueHistoryHelper, "if(softShadowHistoryReadable)\n                    resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));"));
-    EXPECT_TRUE(ContainsText(opaqueHistoryHelper, "else if(m_rayTracingState.m_softShadowTemporalReady)\n                resourceUses.push_back(WriteUse(resource, Core::ResourceStates::UnorderedAccess));"));
-    EXPECT_TRUE(ContainsText(transparentHistoryHelper, "if(m_rayTracingState.m_softTransparentTemporalReady){"));
+    EXPECT_TRUE(ContainsText(opaqueHistoryHelper, "else if(rayTracingPlan.opaqueTemporalMergeReady)\n                resourceUses.push_back(WriteUse(resource, Core::ResourceStates::UnorderedAccess));"));
+    EXPECT_TRUE(ContainsText(transparentHistoryHelper, "if(rayTracingPlan.transparentTemporalMergeReady){"));
     EXPECT_TRUE(ContainsText(transparentHistoryHelper, "if(softShadowHistoryReadable)\n                    resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));"));
     EXPECT_TRUE(ContainsText(transparentHistoryHelper, "resourceUses.push_back(WriteUse(resource, Core::ResourceStates::UnorderedAccess));"));
 
@@ -4901,11 +4912,8 @@ TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
     EXPECT_FALSE(ContainsText(shadowTaskGraph, "appendOptionalWriteBuffer"));
     EXPECT_EQ(CountText(shadowTaskGraph, "addClearBufferTask("), 2u);
     EXPECT_EQ(CountText(shadowTaskGraph, "addCopyBufferTask("), 1u);
-    EXPECT_TRUE(ContainsText(
-        shadowTaskGraph,
-        "if(graphOwnedAdaptiveCandidate){\n"
-        "        graphOwnedAdaptivePlan.enabled = true;"
-    ));
+    EXPECT_TRUE(ContainsText(shadowTaskGraph, "!splitSoftTransparentFold && rayTracingPlan.adaptivePlan.enabled"));
+    EXPECT_TRUE(ContainsText(shadowTaskGraph, "GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan = graphOwnedAdaptiveCandidate"));
 
     // UI presentation is fully graph-owned. Callback-free rejection retains the live frame, while an opaque callback
     // rejection stops the device generation instead of replaying arbitrary user code.

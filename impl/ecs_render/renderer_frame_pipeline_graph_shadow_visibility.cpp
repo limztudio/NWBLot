@@ -32,6 +32,9 @@ NWB_IMPL_BEGIN
 
 bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     DeferredFrameTargets& deferredTargets,
+    const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
+    const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
+    const RayTracingShadowVisibilityGraphPlanSnapshot& rayTracingPlan,
     const bool hardwareShadowSupported,
     const Core::GpuGraphResourceId worldPosition,
     const Core::GpuGraphResourceId normal,
@@ -114,9 +117,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     // Only the fully prepared soft-transparent route can expose this boundary. Direct, adaptive/hybrid, and
     // resource-degraded paths retain the established monolithic Shadow Visibility callback.
     const bool preparedSoftTransparentFoldCandidate =
-        m_rayTracingState.m_softShadowReady
-        && m_rayTracingState.m_softShadowSlotMask != 0u
-        && m_raytracingSystem.softTransparentShadowReady()
+        rayTracingPlan.softTransparentFoldReady
         && deferredTargets.shadowCoarseTransmittance
         && deferredTargets.shadowSoftHalfA
         && deferredTargets.shadowSoftHalfB
@@ -131,11 +132,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         && deferredTargets.transparentHistB
         && deferredTargets.transparentMomentsA
         && deferredTargets.transparentMomentsB
-        && m_rayTracingState.m_sceneBvhNodeBuffer
-        && m_rayTracingState.m_sceneInstanceBuffer
-        && m_rayTracingState.m_shadowInstanceMaterialBuffer
-        && m_rayTracingState.m_shadowMaterialTypedBuffer
-        && m_rayTracingState.m_shadowInstanceBuffer
         && materialContextSlots.valid()
         && softwareTraceGeometryResourceCount != 0u
     ;
@@ -143,44 +139,21 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     // The adaptive fallback remains in the monolithic callback, but its raw buffer primitives and acceptance-time
     // diagnostic lifecycle are deterministic from this frozen route.  A frame with no clear/copy work still owns
     // its tick through the semantic task's accepted hook without gaining empty graph nodes.
-    GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan;
-    const bool graphOwnedAdaptiveCandidate =
-        !splitSoftTransparentFold
-        && m_rayTracingState.m_swShadowAdaptiveEnabled
-        && !m_raytracingSystem.softTransparentShadowReady()
-        && (
-            hardwareShadowSupported
-                ? m_raytracingSystem.hybridTransparentShadowReady()
-                : m_raytracingSystem.shadowVisibilitySoftwareResourcesPreflighted()
-        )
-        && m_rayTracingState.m_swShadowEdgeStatsBuffer
-        && m_rayTracingState.m_swShadowEdgeStatsReadback
-        && m_rayTracingState.m_swShadowEdgeCounterBuffer
+    const bool graphOwnedAdaptiveCandidate = !splitSoftTransparentFold && rayTracingPlan.adaptivePlan.enabled;
+    GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan = graphOwnedAdaptiveCandidate
+        ? rayTracingPlan.adaptivePlan
+        : GraphOwnedAdaptiveShadowPlan{}
     ;
-    if(graphOwnedAdaptiveCandidate){
-        graphOwnedAdaptivePlan.enabled = true;
-        graphOwnedAdaptivePlan.compact = m_rayTracingState.m_swShadowCompactEnabled;
-        graphOwnedAdaptivePlan.statsTick = m_rayTracingState.m_swShadowEdgeStatsTick;
-        graphOwnedAdaptivePlan.captureStatsSnapshot =
-            m_rayTracingState.m_swShadowEdgeStatsEnabled
-            && !m_rayTracingState.m_swShadowEdgeStatsPending
-            && (graphOwnedAdaptivePlan.statsTick % s_SwShadowEdgeStatsPeriod == 0u)
-        ;
-    }
     // The merge pipeline is ready before its retained history has an accepted frame. Bootstrap still publishes the
     // selected output pair, but only a usable history may be sampled with previous geometry.
-    const bool softShadowHistoryReadable =
-        m_rayTracingState.m_softShadowTemporalReady
-        && m_rayTracingState.m_prevWorldToClipValid
-        && m_rayTracingState.m_softShadowTemporalSeeded
-    ;
+    const bool softShadowHistoryReadable = rayTracingPlan.softShadowHistoryReadable;
     // The opaque temporal merge runs before the transparent tail and shares its history selector. Freeze its exact
     // input/output pair while the compiled packet owns the prepared temporal route.
     const bool graphOwnsOpaqueTemporalMergeEntryStates =
         splitSoftTransparentFold
-        && m_rayTracingState.m_softShadowTemporalReady
+        && rayTracingPlan.opaqueTemporalMergeReady
     ;
-    const bool opaqueHistoryFrontIsA = m_rayTracingState.m_softShadowHistoryFrontIsA != 0u;
+    const bool opaqueHistoryFrontIsA = rayTracingPlan.historyFrontIsA;
 
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
@@ -242,7 +215,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 if(softShadowHistoryReadable)
                     resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
             }
-            else if(m_rayTracingState.m_softShadowTemporalReady)
+            else if(rayTracingPlan.opaqueTemporalMergeReady)
                 resourceUses.push_back(WriteUse(resource, Core::ResourceStates::UnorderedAccess));
         }
         else
@@ -267,7 +240,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         const Core::GpuGraphResourceId resource = importTexture(texture, identity, label);
         if(!resource.valid())
             return false;
-        if(m_rayTracingState.m_softTransparentTemporalReady){
+        if(rayTracingPlan.transparentTemporalMergeReady){
             if(isInput){
                 if(softShadowHistoryReadable)
                     resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
@@ -383,64 +356,64 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             !opaqueHistoryFrontIsA
         )
         && appendOptionalReadBuffer(
-            m_rayTracingState.m_sceneBvhNodeBuffer,
+            rayTracingResources.sceneBvhNodeBuffer,
             Name("render.shadow_visibility.scene_bvh_nodes"),
             "Scene BVH Nodes",
             Core::ResourceStates::ShaderResource
         )
         && appendOptionalReadBuffer(
-            m_rayTracingState.m_sceneInstanceBuffer,
+            rayTracingResources.sceneInstanceBuffer,
             Name("render.shadow_visibility.scene_instances"),
             "Scene Instances",
             Core::ResourceStates::ShaderResource
         )
         && appendOptionalReadBuffer(
-            m_rayTracingState.m_shadowInstanceMaterialBuffer,
+            rayTracingResources.shadowInstanceMaterialBuffer,
             Name("render.deferred_effects.instance_material"),
             "Shadow Instance Materials",
             Core::ResourceStates::ShaderResource
         )
         && appendOptionalReadBuffer(
-            m_rayTracingState.m_shadowMaterialTypedBuffer,
+            rayTracingResources.shadowMaterialTypedBuffer,
             Name("render.deferred_effects.material_typed"),
             "Shadow Typed Materials",
             Core::ResourceStates::ShaderResource
         )
         && appendOptionalReadBuffer(
-            m_rayTracingState.m_shadowInstanceBuffer,
+            rayTracingResources.shadowInstanceBuffer,
             Name("render.deferred_effects.shadow_instances"),
             "Shadow Instances",
             Core::ResourceStates::ShaderResource
         )
         && appendOptionalReadWriteBuffer(
-            m_rayTracingState.m_swShadowEdgeStatsBuffer,
+            rayTracingShadowResources.swShadowEdgeStatsBuffer,
             Name("render.shadow_visibility.edge_stats"),
             "Shadow Edge Statistics",
             Core::ResourceStates::UnorderedAccess
         )
         && appendOptionalReadWriteBuffer(
-            m_rayTracingState.m_swShadowEdgeCounterBuffer,
+            rayTracingShadowResources.swShadowEdgeCounterBuffer,
             Name("render.shadow_visibility.edge_counter"),
             "Shadow Edge Counter",
             Core::ResourceStates::UnorderedAccess
         )
         && appendOptionalReadWriteBuffer(
-            m_rayTracingState.m_swShadowEdgeListBuffer,
+            rayTracingShadowResources.swShadowEdgeListBuffer,
             Name("render.shadow_visibility.edge_list"),
             "Shadow Edge List",
             Core::ResourceStates::UnorderedAccess
         )
         && appendOptionalReadWriteBuffer(
-            m_rayTracingState.m_swShadowIndirectArgsBuffer,
+            rayTracingShadowResources.swShadowIndirectArgsBuffer,
             Name("render.shadow_visibility.indirect_args"),
             "Shadow Indirect Arguments",
             Core::ResourceStates::UnorderedAccess
         )
     ;
     Core::GpuGraphResourceId sceneTlas;
-    if(m_rayTracingState.m_tlas){
+    if(rayTracingShadowResources.sceneTlas){
         sceneTlas = m_deferredLightingTaskGraph.importAccelStruct(
-            m_rayTracingState.m_tlas,
+            rayTracingShadowResources.sceneTlas,
             AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
                 .setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())
         );
@@ -458,12 +431,12 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     Core::GpuGraphResourceId adaptiveEdgeCounter;
     if(graphOwnedAdaptivePlan.captureStatsSnapshot){
         adaptiveEdgeStats = importBuffer(
-            m_rayTracingState.m_swShadowEdgeStatsBuffer,
+            rayTracingShadowResources.swShadowEdgeStatsBuffer,
             Name("render.shadow_visibility.edge_stats"),
             "Shadow Edge Statistics"
         );
         adaptiveEdgeStatsReadback = importBuffer(
-            m_rayTracingState.m_swShadowEdgeStatsReadback,
+            rayTracingShadowResources.swShadowEdgeStatsReadback,
             Name("render.shadow_visibility.edge_stats_readback"),
             "Shadow Edge Statistics Readback"
         );
@@ -474,7 +447,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     }
     if(graphOwnedAdaptivePlan.compact){
         adaptiveEdgeCounter = importBuffer(
-            m_rayTracingState.m_swShadowEdgeCounterBuffer,
+            rayTracingShadowResources.swShadowEdgeCounterBuffer,
             Name("render.shadow_visibility.edge_counter"),
             "Shadow Edge Counter"
         );
@@ -593,27 +566,27 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             "Transparent Shadow Moments B"
         );
         const Core::GpuGraphResourceId sceneBvhNodes = importBuffer(
-            m_rayTracingState.m_sceneBvhNodeBuffer,
+            rayTracingResources.sceneBvhNodeBuffer,
             Name("render.shadow_visibility.scene_bvh_nodes"),
             "Scene BVH Nodes"
         );
         const Core::GpuGraphResourceId sceneInstances = importBuffer(
-            m_rayTracingState.m_sceneInstanceBuffer,
+            rayTracingResources.sceneInstanceBuffer,
             Name("render.shadow_visibility.scene_instances"),
             "Scene Instances"
         );
         const Core::GpuGraphResourceId shadowInstanceMaterials = importBuffer(
-            m_rayTracingState.m_shadowInstanceMaterialBuffer,
+            rayTracingResources.shadowInstanceMaterialBuffer,
             Name("render.deferred_effects.instance_material"),
             "Shadow Instance Materials"
         );
         const Core::GpuGraphResourceId shadowTypedMaterials = importBuffer(
-            m_rayTracingState.m_shadowMaterialTypedBuffer,
+            rayTracingResources.shadowMaterialTypedBuffer,
             Name("render.deferred_effects.material_typed"),
             "Shadow Typed Materials"
         );
         const Core::GpuGraphResourceId shadowInstances = importBuffer(
-            m_rayTracingState.m_shadowInstanceBuffer,
+            rayTracingResources.shadowInstanceBuffer,
             Name("render.deferred_effects.shadow_instances"),
             "Shadow Instances"
         );
@@ -737,8 +710,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 transparentTraceResourceUses.push_back(ReadUse(softwareTraceGeometryResources[resourceIndex], Core::ResourceStates::ShaderResource));
         }
 
-        graphOwnsTransparentTemporalMergeEntryStates = m_rayTracingState.m_softTransparentTemporalReady;
-        const bool transparentHistoryFrontIsA = m_rayTracingState.m_softShadowHistoryFrontIsA != 0u;
+        graphOwnsTransparentTemporalMergeEntryStates = rayTracingPlan.transparentTemporalMergeReady;
+        const bool transparentHistoryFrontIsA = rayTracingPlan.historyFrontIsA;
         const Core::GpuGraphResourceId transparentHistoryIn = transparentHistoryFrontIsA
             ? transparentHistoryA
             : transparentHistoryB

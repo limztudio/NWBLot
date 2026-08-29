@@ -33,6 +33,8 @@ NWB_IMPL_BEGIN
 
 bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     DeferredFrameTargets& deferredTargets,
+    const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
+    const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
     const Core::GpuGraphResourceId currentBindlessSlots,
     const Core::GpuGraphResourceId materialContextSlots,
     const Core::GpuGraphResourceId* const shadowTraceGeometryResources,
@@ -167,15 +169,15 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             ? Name("render.hardware_caustics.emission_targets")
             : Name("render.software_caustics.emission_targets")
     ;
-    const Core::GpuGraphResourceId causticEmissionTargets = m_rayTracingState.m_causticEmissionTargetBuffer
+    const Core::GpuGraphResourceId causticEmissionTargets = rayTracingResources.causticEmissionTargetBuffer
         ? importBuffer(
-            m_rayTracingState.m_causticEmissionTargetBuffer,
+            rayTracingResources.causticEmissionTargetBuffer,
             causticEmissionTargetsIdentity,
             "Caustic Emission Targets"
         )
         : Core::GpuGraphResourceId{}
     ;
-    if(m_rayTracingState.m_causticEmissionTargetBuffer && !causticEmissionTargets.valid()){
+    if(rayTracingResources.causticEmissionTargetBuffer && !causticEmissionTargets.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted caustic emission targets"));
         return false;
     }
@@ -226,15 +228,15 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         shadowPrepareDependency = m_causticEmissionTargetsUploadTask;
     }
 
-    const Core::GpuGraphResourceId surfelFrameConstants = m_rayTracingState.m_surfelConstants
+    const Core::GpuGraphResourceId surfelFrameConstants = rayTracingResources.surfelFrameConstantsBuffer
         ? importBuffer(
-            m_rayTracingState.m_surfelConstants,
+            rayTracingResources.surfelFrameConstantsBuffer,
             Name("render.surfel_gi.constants"),
             "Surfel Constants"
         )
         : Core::GpuGraphResourceId{}
     ;
-    if(m_rayTracingState.m_surfelConstants && !surfelFrameConstants.valid()){
+    if(rayTracingResources.surfelFrameConstantsBuffer && !surfelFrameConstants.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted surfel constants"));
         return false;
     }
@@ -284,34 +286,34 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         shadowPrepareDependency = m_surfelFrameConstantsUploadTask;
     }
 
-    const Core::GpuGraphResourceId shadowInstanceMaterials = m_rayTracingState.m_shadowInstanceMaterialBuffer
+    const Core::GpuGraphResourceId shadowInstanceMaterials = rayTracingResources.shadowInstanceMaterialBuffer
         ? importBuffer(
-            m_rayTracingState.m_shadowInstanceMaterialBuffer,
+            rayTracingResources.shadowInstanceMaterialBuffer,
             Name("render.deferred_effects.instance_material"),
             "Shadow Instance Materials"
         )
         : Core::GpuGraphResourceId{}
     ;
-    const Core::GpuGraphResourceId shadowInstances = m_rayTracingState.m_shadowInstanceBuffer
+    const Core::GpuGraphResourceId shadowInstances = rayTracingResources.shadowInstanceBuffer
         ? importBuffer(
-            m_rayTracingState.m_shadowInstanceBuffer,
+            rayTracingResources.shadowInstanceBuffer,
             Name("render.deferred_effects.shadow_instances"),
             "Shadow Instances"
         )
         : Core::GpuGraphResourceId{}
     ;
-    const Core::GpuGraphResourceId shadowMaterialTyped = m_rayTracingState.m_shadowMaterialTypedBuffer
+    const Core::GpuGraphResourceId shadowMaterialTyped = rayTracingResources.shadowMaterialTypedBuffer
         ? importBuffer(
-            m_rayTracingState.m_shadowMaterialTypedBuffer,
+            rayTracingResources.shadowMaterialTypedBuffer,
             Name("render.deferred_effects.material_typed"),
             "Shadow Typed Materials"
         )
         : Core::GpuGraphResourceId{}
     ;
     if(
-        (m_rayTracingState.m_shadowInstanceMaterialBuffer && !shadowInstanceMaterials.valid())
-        || (m_rayTracingState.m_shadowInstanceBuffer && !shadowInstances.valid())
-        || (m_rayTracingState.m_shadowMaterialTypedBuffer && !shadowMaterialTyped.valid())
+        (rayTracingResources.shadowInstanceMaterialBuffer && !shadowInstanceMaterials.valid())
+        || (rayTracingResources.shadowInstanceBuffer && !shadowInstances.valid())
+        || (rayTracingResources.shadowMaterialTypedBuffer && !shadowMaterialTyped.valid())
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted shadow material-context buffers"));
         return false;
@@ -414,25 +416,25 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         shadowPrepareDependency = m_shadowMaterialTypedUploadTask;
     }
 
-    const Core::GpuGraphResourceId sceneBvhNodes = m_rayTracingState.m_sceneBvhNodeBuffer
+    const Core::GpuGraphResourceId sceneBvhNodes = rayTracingResources.sceneBvhNodeBuffer
         ? importBuffer(
-            m_rayTracingState.m_sceneBvhNodeBuffer,
+            rayTracingResources.sceneBvhNodeBuffer,
             Name("render.shadow_visibility.scene_bvh_nodes"),
             "Scene BVH Nodes"
         )
         : Core::GpuGraphResourceId{}
     ;
-    const Core::GpuGraphResourceId sceneBvhInstances = m_rayTracingState.m_sceneInstanceBuffer
+    const Core::GpuGraphResourceId sceneBvhInstances = rayTracingResources.sceneInstanceBuffer
         ? importBuffer(
-            m_rayTracingState.m_sceneInstanceBuffer,
+            rayTracingResources.sceneInstanceBuffer,
             Name("render.shadow_visibility.scene_instances"),
             "Scene Instances"
         )
         : Core::GpuGraphResourceId{}
     ;
     if(
-        (m_rayTracingState.m_sceneBvhNodeBuffer && !sceneBvhNodes.valid())
-        || (m_rayTracingState.m_sceneInstanceBuffer && !sceneBvhInstances.valid())
+        (rayTracingResources.sceneBvhNodeBuffer && !sceneBvhNodes.valid())
+        || (rayTracingResources.sceneInstanceBuffer && !sceneBvhInstances.valid())
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted software scene-BVH buffers"));
         return false;
@@ -516,7 +518,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     // Preparation itself. They do not add an upload packet: the existing first Graphics packet owns the native
     // build and its acceptance cache.
     const bool sceneTlasBuildGraphOwned = m_raytracingSystem.preparedSceneTlasBuildReady();
-    if(sceneTlasBuildGraphOwned && !m_rayTracingState.m_tlas){
+    if(sceneTlasBuildGraphOwned && !rayTracingShadowResources.sceneTlas){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build has no imported acceleration structure"));
         return false;
     }
@@ -526,7 +528,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build plan has no operations"));
         return false;
     }
-    if(meshBlasBuildsGraphOwned && !m_rayTracingState.m_tlas){
+    if(meshBlasBuildsGraphOwned && !rayTracingShadowResources.sceneTlas){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build plan has no scene TLAS"));
         return false;
     }
@@ -883,12 +885,12 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         resourceSetUses.push_back(softwareBvhBuildStateSetUse);
 
     Core::GpuGraphResourceId sceneTlas;
-    if(m_rayTracingState.m_tlas){
+    if(rayTracingShadowResources.sceneTlas){
         // Every import observes the current backing generation. Fresh direct and frozen paths know native Common;
         // retained storage remains Unknown until the accepted packet-state binding supplies its final native state.
         const Core::ResourceStates::Mask sceneTlasInitialState = m_raytracingSystem.sceneTlasBackingInitialState();
         sceneTlas = m_deferredLightingTaskGraph.importAccelStruct(
-            m_rayTracingState.m_tlas,
+            rayTracingShadowResources.sceneTlas,
             AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS").setInitialState(sceneTlasInitialState)
         );
         resourcesImported = resourcesImported && sceneTlas.valid();

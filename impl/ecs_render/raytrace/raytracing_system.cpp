@@ -143,21 +143,34 @@ RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotSh
 }
 
 RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferredGraphResources()const{
+    const auto& state = m_rayTracingState;
     return RayTracingDeferredGraphResourceSnapshot{
-        .materialContextSlotsBuffer = m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer,
-        .shadowInstanceMaterialBuffer = m_rayTracingState.m_shadowInstanceMaterialBuffer,
-        .shadowMaterialTypedBuffer = m_rayTracingState.m_shadowMaterialTypedBuffer,
-        .shadowInstanceBuffer = m_rayTracingState.m_shadowInstanceBuffer,
-        .causticEmissionTargetBuffer = m_rayTracingState.m_causticEmissionTargetBuffer,
-        .sceneTlas = m_rayTracingState.m_tlas,
-        .causticTemporalDecay = m_rayTracingState.m_causticTemporalDecay,
-        .causticAccumulatorInitialized = m_rayTracingState.m_causticAccumulatorInitialized,
-        .surfelUsesHardwareTrace = m_rayTracingState.m_surfelUseHwTrace,
+        .materialContextSlotsBuffer = state.m_rayTraceMaterialContextSlotsBuffer,
+        .shadowInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer,
+        .shadowMaterialTypedBuffer = state.m_shadowMaterialTypedBuffer,
+        .shadowInstanceBuffer = state.m_shadowInstanceBuffer,
+        .causticEmissionTargetBuffer = state.m_causticEmissionTargetBuffer,
+        .surfelFrameConstantsBuffer = state.m_surfelConstants,
+        .sceneBvhNodeBuffer = state.m_sceneBvhNodeBuffer,
+        .sceneInstanceBuffer = state.m_sceneInstanceBuffer,
+        .sceneTlas = state.m_tlas,
+        .causticTemporalDecay = state.m_causticTemporalDecay,
+        .causticAccumulatorInitialized = state.m_causticAccumulatorInitialized,
+        .surfelUsesHardwareTrace = state.m_surfelUseHwTrace,
+        .surfelSplitGraphPipelinesReady =
+            state.m_surfelAgeFreePipeline
+            && state.m_surfelHashBuildPipeline
+            && state.m_surfelSpawnPipeline
+            && (state.m_surfelUseHwTrace ? state.m_surfelTraceHwPipeline : state.m_surfelTracePipeline)
+            && state.m_surfelResolvePipeline
+            && state.m_surfelUpsamplePipeline
+            && state.m_surfelTraceBuildArgsPipeline,
     };
 }
 
 RayTracingSurfelPersistentResourceSnapshot RendererRayTracingSystem::snapshotSurfelPersistentResources()const{
     return RayTracingSurfelPersistentResourceSnapshot{
+        .constantsBuffer = m_rayTracingState.m_surfelConstants,
         .poolBuffer = m_rayTracingState.m_surfelPoolBuffer,
         .cellHeadBuffer = m_rayTracingState.m_surfelCellHeadBuffer,
         .counterBuffer = m_rayTracingState.m_surfelCounterBuffer,
@@ -167,6 +180,56 @@ RayTracingSurfelPersistentResourceSnapshot RendererRayTracingSystem::snapshotSur
         .cellHeadSnapshotBuffer = m_rayTracingState.m_surfelCellHeadSnapshotBuffer,
         .counterReadbackBuffer = m_rayTracingState.m_surfelCounterReadback,
         .countReadbackSubmissionToken = m_rayTracingState.m_surfelCountReadbackSubmissionToken,
+    };
+}
+
+RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotShadowVisibilityGraphPlan(
+    const bool hardwareShadowSupported
+)const noexcept{
+    const auto& state = m_rayTracingState;
+    const bool softTransparentFoldReady =
+        state.m_softShadowReady
+        && state.m_softShadowSlotMask != 0u
+        && softTransparentShadowReady()
+        && state.m_sceneBvhNodeBuffer
+        && state.m_sceneInstanceBuffer
+        && state.m_shadowInstanceMaterialBuffer
+        && state.m_shadowMaterialTypedBuffer
+        && state.m_shadowInstanceBuffer
+    ;
+    GraphOwnedAdaptiveShadowPlan adaptivePlan;
+    if(
+        state.m_swShadowAdaptiveEnabled
+        && !softTransparentShadowReady()
+        && (
+            hardwareShadowSupported
+                ? hybridTransparentShadowReady()
+                : shadowVisibilitySoftwareResourcesPreflighted()
+        )
+        && state.m_swShadowEdgeStatsBuffer
+        && state.m_swShadowEdgeStatsReadback
+        && state.m_swShadowEdgeCounterBuffer
+    ){
+        adaptivePlan.enabled = true;
+        adaptivePlan.compact = state.m_swShadowCompactEnabled;
+        adaptivePlan.statsTick = state.m_swShadowEdgeStatsTick;
+        adaptivePlan.captureStatsSnapshot =
+            state.m_swShadowEdgeStatsEnabled
+            && !state.m_swShadowEdgeStatsPending
+            && (adaptivePlan.statsTick % s_SwShadowEdgeStatsPeriod == 0u)
+        ;
+    }
+
+    return RayTracingShadowVisibilityGraphPlanSnapshot{
+        .adaptivePlan = adaptivePlan,
+        .softTransparentFoldReady = softTransparentFoldReady,
+        .softShadowHistoryReadable =
+            state.m_softShadowTemporalReady
+            && state.m_prevWorldToClipValid
+            && state.m_softShadowTemporalSeeded,
+        .opaqueTemporalMergeReady = state.m_softShadowTemporalReady,
+        .transparentTemporalMergeReady = state.m_softTransparentTemporalReady,
+        .historyFrontIsA = state.m_softShadowHistoryFrontIsA != 0u,
     };
 }
 
@@ -181,6 +244,13 @@ bool RendererRayTracingSystem::surfelCountReadbackSubmissionMatches(
         && accepted.value == submissionToken.value
         && accepted.matchesPhysicalQueue(submissionToken.physicalQueueIndex, submissionToken.deviceGeneration)
     ;
+}
+
+void RendererRayTracingSystem::confirmSurfelCountReadbackSubmission(
+    const Core::QueueSubmissionToken& submissionToken
+)noexcept{
+    NWB_ASSERT(submissionToken.valid());
+    m_rayTracingState.m_surfelCountReadbackSubmissionToken = submissionToken;
 }
 
 void RendererRayTracingSystem::retireCompletedAdaptiveShadowStatisticsReadback(){

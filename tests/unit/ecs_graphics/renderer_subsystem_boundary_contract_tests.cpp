@@ -178,6 +178,25 @@ TEST(EcsGraphics, FramePipelineDoesNotPrivilegeNarrowShaderOrMeshSystems){
 }
 
 
+TEST(EcsGraphics, RootFrameGraphUsesRayTracingContractsInsteadOfDomainState){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+    AString shadowPrepareSource;
+    AString shadowVisibilitySource;
+    AString causticsSource;
+    AString surfelGiSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_prepare.cpp", shadowPrepareSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", shadowVisibilitySource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_caustics.cpp", causticsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_surfel_gi.cpp", surfelGiSource));
+
+    EXPECT_FALSE(ContainsText(AStringView(shadowPrepareSource.data(), shadowPrepareSource.size()), "m_rayTracingState"));
+    EXPECT_FALSE(ContainsText(AStringView(shadowVisibilitySource.data(), shadowVisibilitySource.size()), "m_rayTracingState"));
+    EXPECT_FALSE(ContainsText(AStringView(causticsSource.data(), causticsSource.size()), "m_rayTracingState"));
+    EXPECT_FALSE(ContainsText(AStringView(surfelGiSource.data(), surfelGiSource.size()), "m_rayTracingState"));
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

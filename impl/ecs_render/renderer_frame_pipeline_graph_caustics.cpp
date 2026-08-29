@@ -31,6 +31,7 @@ NWB_IMPL_BEGIN
 bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     const bool hardwareCaustics,
     DeferredFrameTargets& deferredTargets,
+    const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
     const Core::GpuGraphResourceId worldPosition,
     const Core::GpuGraphResourceId depth,
     const Core::GpuGraphResourceId causticIrradiance,
@@ -381,7 +382,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     const ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot = m_meshSystem.meshViewBufferSnapshot();
     const bool optionalResourcesImported =
         appendOptionalReadBuffer(
-            m_rayTracingState.m_causticEmissionTargetBuffer,
+            rayTracingResources.causticEmissionTargetBuffer,
             Name("render.software_caustics.emission_targets"),
             "Caustic Emission Targets",
             Core::ResourceStates::ShaderResource
@@ -393,31 +394,31 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
             Core::ResourceStates::ConstantBuffer
         )
         && appendOptionalReadBuffer(
-            m_rayTracingState.m_sceneBvhNodeBuffer,
+            rayTracingResources.sceneBvhNodeBuffer,
             Name("render.shadow_visibility.scene_bvh_nodes"),
             "Scene BVH Nodes",
             Core::ResourceStates::ShaderResource
         )
         && appendOptionalReadBuffer(
-            m_rayTracingState.m_sceneInstanceBuffer,
+            rayTracingResources.sceneInstanceBuffer,
             Name("render.shadow_visibility.scene_instances"),
             "Scene Instances",
             Core::ResourceStates::ShaderResource
         )
         && appendOptionalReadBuffer(
-            m_rayTracingState.m_shadowInstanceMaterialBuffer,
+            rayTracingResources.shadowInstanceMaterialBuffer,
             Name("render.deferred_effects.instance_material"),
             "Shadow Instance Materials",
             Core::ResourceStates::ShaderResource
         )
         && appendOptionalReadBuffer(
-            m_rayTracingState.m_shadowMaterialTypedBuffer,
+            rayTracingResources.shadowMaterialTypedBuffer,
             Name("render.deferred_effects.material_typed"),
             "Shadow Typed Materials",
             Core::ResourceStates::ShaderResource
         )
         && appendOptionalReadBuffer(
-            m_rayTracingState.m_shadowInstanceBuffer,
+            rayTracingResources.shadowInstanceBuffer,
             Name("render.deferred_effects.shadow_instances"),
             "Shadow Instances",
             Core::ResourceStates::ShaderResource
@@ -523,7 +524,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     m_deferredCausticIrradianceClearTask = irradianceClearTask;
 
     Core::GpuTaskId causticsDependency = irradianceClearTask;
-    const bool graphOwnsNonTemporalAccumulatorClear = m_rayTracingState.m_causticTemporalDecay <= 0.f;
+    const bool graphOwnsNonTemporalAccumulatorClear = rayTracingResources.causticTemporalDecay <= 0.f;
     if(graphOwnsNonTemporalAccumulatorClear){
         Core::GpuTaskSchedulingHint accumulatorNonTemporalClearScheduling = irradianceClearScheduling;
         accumulatorNonTemporalClearScheduling.mergeWithPrevious = true;
@@ -556,8 +557,8 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         causticsDependency = accumulatorNonTemporalClearTask;
     }
     const bool graphOwnsAccumulatorBootstrapClear =
-        !m_rayTracingState.m_causticAccumulatorInitialized
-        && m_rayTracingState.m_causticTemporalDecay > 0.f
+        !rayTracingResources.causticAccumulatorInitialized
+        && rayTracingResources.causticTemporalDecay > 0.f
     ;
     if(graphOwnsAccumulatorBootstrapClear){
         Core::GpuTaskSchedulingHint accumulatorBootstrapClearScheduling;
@@ -595,8 +596,8 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     }
 
     const bool graphOwnsAccumulatorDecay =
-        m_rayTracingState.m_causticAccumulatorInitialized
-        && m_rayTracingState.m_causticTemporalDecay > 0.f
+        rayTracingResources.causticAccumulatorInitialized
+        && rayTracingResources.causticTemporalDecay > 0.f
     ;
     if(graphOwnsAccumulatorDecay){
         Core::GpuTaskSchedulingHint accumulatorDecayScheduling;
@@ -629,7 +630,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
             accumulatorDecayDesc,
             deferredTargets,
             &m_shadowPreparationOutcome.ready,
-            m_rayTracingState.m_causticTemporalDecay,
+            rayTracingResources.causticTemporalDecay,
             false,
             timingTicket,
             &causticPhotonTiming,

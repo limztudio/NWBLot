@@ -2781,6 +2781,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 context->acceptedStateReady = context->renderer->m_surfelGiCounterPersistentState.commit(
                     *context->candidate
                 );
+                if(context->acceptedStateReady)
+                    context->renderer->m_raytracingSystem.confirmSurfelCountReadbackSubmission(token);
                 return context->acceptedStateReady;
             };
             const Core::GpuTaskGraphTaskAcceptedCallback readbackAcceptedCallback{
@@ -2818,8 +2820,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 return;
             }
             else{
-                // addCopyBufferTask publishes only on accepted submission, keeping CPU polling tied to the
-                // selected physical transport rather than the preceding Surfel-GI packet.
+                // The accepted callback publishes only after retained state commits, keeping CPU polling tied to
+                // the selected physical transport rather than the preceding Surfel-GI packet.
                 NWB_ASSERT(m_raytracingSystem.surfelCountReadbackSubmissionMatches(readbackSubmissionToken));
             }
         }

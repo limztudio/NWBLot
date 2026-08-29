@@ -168,6 +168,8 @@ private:
     void resetLaggedLightingHistoryTracking()noexcept;
     [[nodiscard]] bool declareDeferredShadowPrepareTask(
         DeferredFrameTargets& deferredTargets,
+        const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
+        const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
         Core::GpuGraphResourceId currentBindlessSlots,
         Core::GpuGraphResourceId materialContextSlots,
         const Core::GpuGraphResourceId* shadowTraceGeometryResources,
@@ -225,6 +227,9 @@ private:
     );
     [[nodiscard]] bool declareDeferredShadowVisibilityTask(
         DeferredFrameTargets& deferredTargets,
+        const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
+        const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
+        const RayTracingShadowVisibilityGraphPlanSnapshot& rayTracingPlan,
         bool hardwareShadowSupported,
         Core::GpuGraphResourceId worldPosition,
         Core::GpuGraphResourceId normal,
@@ -252,6 +257,7 @@ private:
     [[nodiscard]] bool declareDeferredSoftwareCausticsTask(
         bool hardwareCaustics,
         DeferredFrameTargets& deferredTargets,
+        const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
         Core::GpuGraphResourceId worldPosition,
         Core::GpuGraphResourceId depth,
         Core::GpuGraphResourceId causticIrradiance,
@@ -269,6 +275,8 @@ private:
     );
     [[nodiscard]] bool declareDeferredSurfelGiTask(
         DeferredFrameTargets& deferredTargets,
+        const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
+        const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources,
         Core::GpuGraphResourceId worldPosition,
         Core::GpuGraphResourceId normal,
         Core::GpuGraphResourceId surfelIrradiance,
@@ -285,7 +293,9 @@ private:
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming
     );
-    void declareDeferredSurfelCountReadbackTask();
+    void declareDeferredSurfelCountReadbackTask(
+        const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources
+    );
     void buildDeferredLightingTaskGraph(
         const ECSRenderDetail::RendererFrameGraphFeatures& features,
         DeferredFrameTargets& deferredTargets,

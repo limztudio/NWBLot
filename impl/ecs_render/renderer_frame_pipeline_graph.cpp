@@ -309,6 +309,9 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         && features.laggedLightingHistoryReadReady
     ;
     const bool declaresHardwareCaustics = features.hardwareCaustics;
+    const RayTracingShadowVisibilityGraphPlanSnapshot rayTracingShadowVisibilityPlan =
+        m_raytracingSystem.snapshotShadowVisibilityGraphPlan(declaresHardwareCaustics)
+    ;
     const bool capturesLaggedLightingHistory = includeLaggedLightingHistoryCapture
         && dedicatedAsyncCompute
         && features.frameLaggedAsyncLightingEnabled
@@ -948,6 +951,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     if(!declareDeferredShadowPrepareTask(
         deferredTargets,
+        rayTracingShadowResources,
+        rayTracingGraphResources,
         currentBindlessSlots,
         materialContextSlots,
         traceGeometryResources.data(),
@@ -1073,6 +1078,9 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     // Shadow/Software are declared first so their queue assignments are stable before Surf, AVBOIT, and Lighting.
     if(!declareDeferredShadowVisibilityTask(
         deferredTargets,
+        rayTracingShadowResources,
+        rayTracingGraphResources,
+        rayTracingShadowVisibilityPlan,
         declaresHardwareCaustics,
         worldPosition,
         normal,
@@ -1103,6 +1111,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     if(!declaresHardwareCaustics && !declareDeferredSoftwareCausticsTask(
         declaresHardwareCaustics,
         deferredTargets,
+        rayTracingGraphResources,
         worldPosition,
         depth,
         currentCausticIrradiance,
@@ -1127,6 +1136,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     // effects -> surfel -> suffix order without renderer-side completion stitching.
     if(!declareDeferredSurfelGiTask(
         deferredTargets,
+        rayTracingGraphResources,
+        rayTracingSurfelResources,
         worldPosition,
         normal,
         currentSurfelIrradiance,
@@ -5985,7 +5996,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     // Keep this diagnostic behind the terminal presentation endpoint so whole-normal execution cannot absorb its
     // independent Transfer-preferred tail and it cannot delay lighting or presentation.
-    declareDeferredSurfelCountReadbackTask();
+    declareDeferredSurfelCountReadbackTask(rayTracingSurfelResources);
 
     if(capturesLaggedLightingHistory){
         // The core built-in derives whole-resource CopySource/CopyDest declarations for these regions and retains

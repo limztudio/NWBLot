@@ -62,6 +62,44 @@ static void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const Arena
 }
 
 
+[[nodiscard]] static Graphics::Texture* NewMetadataOnlyTexture(
+    Graphics::Alloc::GlobalArena& arena,
+    Graphics::GraphicsBackend::VulkanContext& context,
+    Graphics::GraphicsBackend::VulkanAllocator& allocator,
+    const Graphics::TextureDesc& description
+){
+    return NewArenaObject<Graphics::Texture>(
+        arena,
+        context,
+        allocator,
+        description,
+        VkImageCreateInfo{},
+        false
+    );
+}
+
+
+[[nodiscard]] static Graphics::Buffer* NewMetadataOnlyBuffer(
+    Graphics::Alloc::GlobalArena& arena,
+    Graphics::GraphicsBackend::VulkanContext& context,
+    Graphics::GraphicsBackend::VulkanAllocator& allocator,
+    const Graphics::BufferDesc& description,
+    const bool initialStateKnown = false,
+    const VkSharingMode sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    const u32 queueFamilyIndexCount = 0u,
+    const u32* const queueFamilyIndices = nullptr
+){
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = Max<u64>(description.byteSize, 1u);
+    bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    bufferInfo.sharingMode = sharingMode;
+    bufferInfo.queueFamilyIndexCount = queueFamilyIndexCount;
+    bufferInfo.pQueueFamilyIndices = queueFamilyIndices;
+    return NewArenaObject<Graphics::Buffer>(arena, context, allocator, description, bufferInfo, initialStateKnown);
+}
+
+
 struct ImportedTexturePair{
     Graphics::GpuGraphResourceId source;
     Graphics::GpuGraphResourceId destination;
@@ -76,7 +114,7 @@ struct ImportedTexturePair{
     const Graphics::TextureDesc& sourceDescription,
     const Graphics::TextureDesc& destinationDescription
 ){
-    Graphics::Texture* const sourceObject = NewArenaObject<Graphics::Texture>(
+    Graphics::Texture* const sourceObject = NewMetadataOnlyTexture(
         testArena.arena,
         context,
         allocator,
@@ -90,7 +128,7 @@ struct ImportedTexturePair{
         AdoptRef
     );
 
-    Graphics::Texture* const destinationObject = NewArenaObject<Graphics::Texture>(
+    Graphics::Texture* const destinationObject = NewMetadataOnlyTexture(
         testArena.arena,
         context,
         allocator,
@@ -168,7 +206,7 @@ struct ImportedTexturePair{
     const Graphics::ResourceStates::Mask externalFinalState = Graphics::ResourceStates::Present,
     const Graphics::GpuPhysicalQueueId externalFinalReleaseDestinationQueue = {}
 ){
-    Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+    Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
         testArena.arena,
         context,
         allocator,
@@ -1570,51 +1608,6 @@ TEST(VulkanStateTracking, DetectsExactActiveAttachmentBarrierOverlap){
     ));
 }
 
-TEST(VulkanDevice, SelectsAnExactComputeCapableQueueForGpuFaultInjection){
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(
-            0u,
-            QueueCapabilities(Graphics::GpuQueueCapability::Graphics, Graphics::GpuQueueCapability::Transfer)
-        ),
-        DedicatedComputeQueue(1u),
-        GraphicsQueue(
-            2u,
-            QueueCapabilities(
-                Graphics::GpuQueueCapability::Graphics,
-                Graphics::GpuQueueCapability::Compute,
-                Graphics::GpuQueueCapability::Transfer
-            )
-        ),
-    };
-    const Graphics::GpuPhysicalQueueInfo* selected =
-        Graphics::GraphicsBackend::VulkanDetail::SelectComputeCapableQueue(
-            queues,
-            LengthOf(queues),
-            queues[2u].id
-        )
-    ;
-    ASSERT_NE(selected, nullptr);
-    EXPECT_EQ(selected->id, queues[2u].id);
-
-    selected = Graphics::GraphicsBackend::VulkanDetail::SelectComputeCapableQueue(
-        queues,
-        LengthOf(queues),
-        queues[0u].id
-    );
-    ASSERT_NE(selected, nullptr);
-    EXPECT_EQ(selected->id, queues[1u].id);
-
-    const Graphics::GpuPhysicalQueueInfo graphicsOnly[] = { queues[0u] };
-    EXPECT_EQ(
-        Graphics::GraphicsBackend::VulkanDetail::SelectComputeCapableQueue(
-            graphicsOnly,
-            LengthOf(graphicsOnly),
-            graphicsOnly[0u].id
-        ),
-        nullptr
-    );
-}
-
 TEST(VulkanDevice, DeviceGenerationAllocationFailsClosedAtExhaustion){
     Graphics::GraphicsBackend::VulkanDetail::DeviceGenerationAllocator allocator;
     for(u32 expectedGeneration = 1u; expectedGeneration <= static_cast<u32>(Limit<u16>::s_Max); ++expectedGeneration)
@@ -2666,11 +2659,12 @@ TEST(GpuStateTracker, DistinguishesRetainedDescriptorFallbackFromExplicitState){
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
 
-    Graphics::Buffer* const bufferObject = NewArenaObject<Graphics::Buffer>(
+    Graphics::Buffer* const bufferObject = NewMetadataOnlyBuffer(
         testArena.arena,
         context,
         allocator,
-        Graphics::BufferDesc().enableAutomaticStateTracking(Graphics::ResourceStates::ShaderResource)
+        Graphics::BufferDesc().enableAutomaticStateTracking(Graphics::ResourceStates::ShaderResource),
+        true
     );
     ASSERT_NE(bufferObject, nullptr);
     Graphics::BufferHandle buffer(
@@ -2678,7 +2672,7 @@ TEST(GpuStateTracker, DistinguishesRetainedDescriptorFallbackFromExplicitState){
         Graphics::BufferHandle::deleter_type(&testArena.arena),
         AdoptRef
     );
-    Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+    Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
         testArena.arena,
         context,
         allocator,
@@ -2731,19 +2725,19 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
 
-    Graphics::Buffer* const readWriteBufferObject = NewArenaObject<Graphics::Buffer>(
+    Graphics::Buffer* const readWriteBufferObject = NewMetadataOnlyBuffer(
         testArena.arena,
         context,
         allocator,
         Graphics::BufferDesc().setInitialState(Graphics::ResourceStates::Unknown)
     );
-    Graphics::Buffer* const writeBufferObject = NewArenaObject<Graphics::Buffer>(
+    Graphics::Buffer* const writeBufferObject = NewMetadataOnlyBuffer(
         testArena.arena,
         context,
         allocator,
         Graphics::BufferDesc().setInitialState(Graphics::ResourceStates::Unknown)
     );
-    Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+    Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
         testArena.arena,
         context,
         allocator,
@@ -2753,7 +2747,7 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
             .setDimension(Graphics::TextureDimension::Texture2DArray)
             .setInitialState(Graphics::ResourceStates::Common)
     );
-    Graphics::Texture* const writeTextureObject = NewArenaObject<Graphics::Texture>(
+    Graphics::Texture* const writeTextureObject = NewMetadataOnlyTexture(
         testArena.arena,
         context,
         allocator,
@@ -3100,19 +3094,19 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
 
-    Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+    Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
         testArena.arena,
         context,
         allocator,
         Graphics::TextureDesc().setQueueSharing(s_NativeQueueSharing)
     );
-    Graphics::Buffer* const bufferObject = NewArenaObject<Graphics::Buffer>(
+    Graphics::Buffer* const bufferObject = NewMetadataOnlyBuffer(
         testArena.arena,
         context,
         allocator,
         Graphics::BufferDesc().setQueueSharing(s_NativeQueueSharing)
     );
-    Graphics::Buffer* const mismatchedAccelStructBackingObject = NewArenaObject<Graphics::Buffer>(
+    Graphics::Buffer* const mismatchedAccelStructBackingObject = NewMetadataOnlyBuffer(
         testArena.arena,
         context,
         allocator,
@@ -3250,7 +3244,14 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
                     .setInitialState(Graphics::ResourceStates::Common)
             );
             ASSERT_TRUE(resource.valid());
-            EXPECT_EQ(graph.resourceAt(resource.index).queueSharing, s_NativeQueueSharing);
+            const Graphics::GpuTaskGraphResourceView resourceView = graph.resourceAt(resource.index);
+            EXPECT_EQ(resourceView.queueSharing, s_NativeQueueSharing);
+            ASSERT_TRUE(resourceView.hasQueueAdmission);
+            ASSERT_TRUE(resourceView.queueAdmission.valid());
+            EXPECT_EQ(resourceView.queueAdmission.admittedQueueClasses, s_NativeQueueSharing);
+            EXPECT_FALSE(resourceView.queueAdmission.usesConcurrentSharing);
+            EXPECT_EQ(resourceView.queueAdmission.queueFamilyIndexCount, 0u);
+            EXPECT_EQ(resourceView.queueAdmission.queueFamilyIndices, nullptr);
         }
 
         {
@@ -3310,6 +3311,360 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
 }
 
 
+TEST(GpuTaskGraph, AccelStructImportsInheritBackingBufferStateKnowledge){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+
+    const Graphics::BufferDesc managedBackingDesc = Graphics::BufferDesc()
+        .setInitialState(Graphics::ResourceStates::AccelStructRead)
+    ;
+    const Graphics::BufferDesc unknownRetainedBackingDesc = Graphics::BufferDesc()
+        .setInitialState(Graphics::ResourceStates::AccelStructRead)
+        .setKeepInitialState(true)
+    ;
+    Graphics::Buffer* const managedBackingObject = NewMetadataOnlyBuffer(
+        testArena.arena,
+        context,
+        allocator,
+        managedBackingDesc
+    );
+    Graphics::Buffer* const unknownRetainedBackingObject = NewMetadataOnlyBuffer(
+        testArena.arena,
+        context,
+        allocator,
+        unknownRetainedBackingDesc
+    );
+    Graphics::RayTracingAccelStruct* const managedAccelStructObject =
+        NewArenaObject<Graphics::RayTracingAccelStruct>(testArena.arena, context);
+    Graphics::RayTracingAccelStruct* const unknownAccelStructObject =
+        NewArenaObject<Graphics::RayTracingAccelStruct>(testArena.arena, context);
+    ASSERT_NE(managedBackingObject, nullptr);
+    ASSERT_NE(unknownRetainedBackingObject, nullptr);
+    ASSERT_NE(managedAccelStructObject, nullptr);
+    ASSERT_NE(unknownAccelStructObject, nullptr);
+
+    Graphics::BufferHandle managedBacking(
+        managedBackingObject,
+        Graphics::BufferHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::BufferHandle unknownRetainedBacking(
+        unknownRetainedBackingObject,
+        Graphics::BufferHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::RayTracingAccelStructHandle managedAccelStruct(
+        managedAccelStructObject,
+        Graphics::RayTracingAccelStructHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::RayTracingAccelStructHandle unknownAccelStruct(
+        unknownAccelStructObject,
+        Graphics::RayTracingAccelStructHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::BufferHandle& managedAccelStructBacking = const_cast<Graphics::BufferHandle&>(
+        managedAccelStruct->getBackingBufferHandle()
+    );
+    Graphics::BufferHandle& unknownAccelStructBacking = const_cast<Graphics::BufferHandle&>(
+        unknownAccelStruct->getBackingBufferHandle()
+    );
+    managedAccelStructBacking = managedBacking;
+    unknownAccelStructBacking = unknownRetainedBacking;
+
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId managedResource = graph.importAccelStruct(
+        managedAccelStruct,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/managed_accel_struct_initial_state"))
+            .setMarkerLabel("Managed Accel Struct Initial State")
+            .setType(Graphics::GpuGraphResourceType::AccelStruct)
+    );
+    const Graphics::GpuGraphResourceId unknownResource = graph.importAccelStruct(
+        unknownAccelStruct,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/unknown_accel_struct_initial_state"))
+            .setMarkerLabel("Unknown Accel Struct Initial State")
+            .setType(Graphics::GpuGraphResourceType::AccelStruct)
+    );
+    ASSERT_TRUE(managedResource.valid());
+    ASSERT_TRUE(unknownResource.valid());
+    EXPECT_EQ(
+        graph.resourceAt(managedResource.index).initialState,
+        Graphics::ResourceStates::AccelStructRead
+    );
+    EXPECT_EQ(graph.resourceAt(unknownResource.index).initialState, Graphics::ResourceStates::Unknown);
+}
+
+
+TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwnership){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    const u32 queueFamilyIndices[] = {
+        queues[0u].familyIndex,
+        queues[1u].familyIndex,
+    };
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+    imageInfo.queueFamilyIndexCount = static_cast<u32>(LengthOf(queueFamilyIndices));
+    imageInfo.pQueueFamilyIndices = queueFamilyIndices;
+
+    const Graphics::TextureDesc textureDesc = Graphics::TextureDesc()
+        .setInitialState(Graphics::ResourceStates::Common)
+        .setQueueSharing(Graphics::ResourceQueueSharing::Graphics)
+    ;
+    Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+        testArena.arena,
+        context,
+        allocator,
+        textureDesc,
+        imageInfo,
+        false
+    );
+    ASSERT_NE(textureObject, nullptr);
+    Graphics::TextureHandle texture(
+        textureObject,
+        Graphics::TextureHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    const Graphics::BufferDesc bufferDesc = Graphics::BufferDesc()
+        .setInitialState(Graphics::ResourceStates::Common)
+        .setQueueSharing(Graphics::ResourceQueueSharing::Graphics)
+    ;
+    Graphics::Buffer* const bufferObject = NewMetadataOnlyBuffer(
+        testArena.arena,
+        context,
+        allocator,
+        bufferDesc,
+        false,
+        VK_SHARING_MODE_CONCURRENT,
+        static_cast<u32>(LengthOf(queueFamilyIndices)),
+        queueFamilyIndices
+    );
+    Graphics::RayTracingAccelStruct* const accelStructObject = NewArenaObject<Graphics::RayTracingAccelStruct>(
+        testArena.arena,
+        context,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    ASSERT_NE(bufferObject, nullptr);
+    ASSERT_NE(accelStructObject, nullptr);
+    Graphics::BufferHandle buffer(
+        bufferObject,
+        Graphics::BufferHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::RayTracingAccelStructHandle accelStruct(
+        accelStructObject,
+        Graphics::RayTracingAccelStructHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::BufferHandle& accelStructBacking = const_cast<Graphics::BufferHandle&>(
+        accelStruct->getBackingBufferHandle()
+    );
+    accelStructBacking = buffer;
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId resource = graph.importTexture(
+            texture,
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/typed_concurrent_admission"))
+                .setMarkerLabel("Typed Concurrent Admission")
+                .setType(Graphics::GpuGraphResourceType::Texture)
+                .setInitialState(Graphics::ResourceStates::Common)
+        );
+        ASSERT_TRUE(resource.valid());
+        const Graphics::GpuTaskGraphResourceView resourceView = graph.resourceAt(resource.index);
+        const Graphics::ResourceQueueAdmissionSnapshot textureAdmission = texture->getQueueAdmissionSnapshot();
+        ASSERT_TRUE(resourceView.hasQueueAdmission);
+        ASSERT_TRUE(resourceView.queueAdmission.valid());
+        EXPECT_TRUE(resourceView.queueAdmission.usesConcurrentSharing);
+        EXPECT_EQ(
+            resourceView.queueAdmission.admittedQueueClasses,
+            Graphics::ResourceQueueSharing::Graphics
+        );
+        ASSERT_EQ(resourceView.queueAdmission.queueFamilyIndexCount, LengthOf(queueFamilyIndices));
+        EXPECT_NE(resourceView.queueAdmission.queueFamilyIndices, textureAdmission.queueFamilyIndices);
+        EXPECT_EQ(resourceView.queueAdmission.queueFamilyIndices[0u], queues[0u].familyIndex);
+        EXPECT_EQ(resourceView.queueAdmission.queueFamilyIndices[1u], queues[1u].familyIndex);
+
+        const Graphics::GpuTaskResourceUse use{
+            .resource = resource,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        };
+        Graphics::GpuTaskDesc taskDesc;
+        taskDesc
+            .setIdentity(Name("tests/task_graph/typed_concurrent_unadmitted_compute"))
+            .setMarkerLabel("Typed Concurrent Unadmitted Compute")
+            .setQueue(Graphics::GpuQueueRequest{
+                Graphics::GpuQueueCapability::Compute,
+                Graphics::GpuQueuePreference::Compute,
+                false,
+                false,
+            })
+            .setResourceUses(&use, 1u)
+        ;
+        const Graphics::GpuTaskId task = graph.addTask(taskDesc);
+        ASSERT_TRUE(task.valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        ASSERT_TRUE(Analyze(graph, analysis));
+        EXPECT_FALSE(Assign(graph, analysis, topology, assignments));
+        EXPECT_EQ(
+            assignments.diagnostic().status,
+            Graphics::GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue
+        );
+        EXPECT_EQ(assignments.diagnostic().task, task);
+    }
+
+    const auto expectUnadmittedComputeRejected = [&](
+        const auto& import,
+        const Graphics::GpuGraphResourceType::Enum type,
+        const Graphics::ResourceStates::Mask requiredState,
+        const Graphics::ResourceQueueAdmissionSnapshot& sourceAdmission,
+        const Name& resourceIdentity,
+        const AStringView resourceMarkerLabel,
+        const Name& taskIdentity,
+        const AStringView taskMarkerLabel
+    ){
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId resource = import(
+            graph,
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(resourceIdentity)
+                .setMarkerLabel(resourceMarkerLabel)
+                .setType(type)
+                .setInitialState(Graphics::ResourceStates::Common)
+        );
+        ASSERT_TRUE(resource.valid());
+        const Graphics::GpuTaskGraphResourceView resourceView = graph.resourceAt(resource.index);
+        ASSERT_TRUE(resourceView.hasQueueAdmission);
+        ASSERT_TRUE(resourceView.queueAdmission.valid());
+        EXPECT_TRUE(resourceView.queueAdmission.usesConcurrentSharing);
+        EXPECT_EQ(resourceView.queueAdmission.admittedQueueClasses, Graphics::ResourceQueueSharing::Graphics);
+        ASSERT_EQ(resourceView.queueAdmission.queueFamilyIndexCount, LengthOf(queueFamilyIndices));
+        EXPECT_NE(resourceView.queueAdmission.queueFamilyIndices, sourceAdmission.queueFamilyIndices);
+        EXPECT_EQ(resourceView.queueAdmission.queueFamilyIndices[0u], queues[0u].familyIndex);
+        EXPECT_EQ(resourceView.queueAdmission.queueFamilyIndices[1u], queues[1u].familyIndex);
+
+        const Graphics::GpuTaskResourceUse use{
+            .resource = resource,
+            .range = {},
+            .requiredState = requiredState,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        };
+        Graphics::GpuTaskDesc taskDesc;
+        taskDesc
+            .setIdentity(taskIdentity)
+            .setMarkerLabel(taskMarkerLabel)
+            .setQueue(Graphics::GpuQueueRequest{
+                Graphics::GpuQueueCapability::Compute,
+                Graphics::GpuQueuePreference::Compute,
+                false,
+                false,
+            })
+            .setResourceUses(&use, 1u)
+        ;
+        const Graphics::GpuTaskId task = graph.addTask(taskDesc);
+        ASSERT_TRUE(task.valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        ASSERT_TRUE(Analyze(graph, analysis));
+        EXPECT_FALSE(Assign(graph, analysis, topology, assignments));
+        EXPECT_EQ(
+            assignments.diagnostic().status,
+            Graphics::GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue
+        );
+        EXPECT_EQ(assignments.diagnostic().task, task);
+    };
+
+    expectUnadmittedComputeRejected(
+        [&](Graphics::GpuTaskGraph& graph, const Graphics::GpuGraphResourceDesc& desc){
+            return graph.importBuffer(buffer, desc);
+        },
+        Graphics::GpuGraphResourceType::Buffer,
+        Graphics::ResourceStates::ShaderResource,
+        buffer->getQueueAdmissionSnapshot(),
+        Name("tests/task_graph/typed_concurrent_buffer_admission"),
+        "Typed Concurrent Buffer Admission",
+        Name("tests/task_graph/typed_concurrent_buffer_unadmitted_compute"),
+        "Typed Concurrent Buffer Unadmitted Compute"
+    );
+    expectUnadmittedComputeRejected(
+        [&](Graphics::GpuTaskGraph& graph, const Graphics::GpuGraphResourceDesc& desc){
+            return graph.importAccelStruct(accelStruct, desc);
+        },
+        Graphics::GpuGraphResourceType::AccelStruct,
+        Graphics::ResourceStates::AccelStructRead,
+        buffer->getQueueAdmissionSnapshot(),
+        Name("tests/task_graph/typed_concurrent_accel_struct_admission"),
+        "Typed Concurrent Accel Struct Admission",
+        Name("tests/task_graph/typed_concurrent_accel_struct_unadmitted_compute"),
+        "Typed Concurrent Accel Struct Unadmitted Compute"
+    );
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId resource = graph.importTexture(
+            texture,
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/typed_concurrent_initial_owner"))
+                .setMarkerLabel("Typed Concurrent Initial Owner")
+                .setType(Graphics::GpuGraphResourceType::Texture)
+                .setInitialState(Graphics::ResourceStates::Common)
+                .setInitialOwnerQueue(queues[0u].id)
+        );
+        ASSERT_TRUE(resource.valid());
+        const Graphics::GpuTaskResourceUse use{
+            .resource = resource,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        };
+        Graphics::GpuTaskDesc taskDesc;
+        taskDesc
+            .setIdentity(Name("tests/task_graph/typed_concurrent_owned_graphics"))
+            .setMarkerLabel("Typed Concurrent Owned Graphics")
+            .setQueue(Graphics::GpuQueueRequest{
+                Graphics::GpuQueueCapability::Graphics,
+                Graphics::GpuQueuePreference::Graphics,
+                false,
+                false,
+            })
+            .setResourceUses(&use, 1u)
+        ;
+        ASSERT_TRUE(graph.addTask(taskDesc).valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(compiledGraph.valid());
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
+    }
+}
+
+
 TEST(GpuTaskGraph, TypedImportsRejectMalformedInheritedNativeQueueSharing){
     constexpr u8 s_UnknownQueueSharingBit = 1u << 7u;
     constexpr Graphics::ResourceQueueSharing::Mask s_InvalidQueueSharingMasks[] = {
@@ -3327,13 +3682,13 @@ TEST(GpuTaskGraph, TypedImportsRejectMalformedInheritedNativeQueueSharing){
 
     for(const Graphics::ResourceQueueSharing::Mask queueSharing : s_InvalidQueueSharingMasks){
         SCOPED_TRACE(static_cast<u32>(queueSharing));
-        Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+        Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
             testArena.arena,
             context,
             allocator,
             Graphics::TextureDesc().setQueueSharing(queueSharing)
         );
-        Graphics::Buffer* const bufferObject = NewArenaObject<Graphics::Buffer>(
+        Graphics::Buffer* const bufferObject = NewMetadataOnlyBuffer(
             testArena.arena,
             context,
             allocator,
@@ -3431,37 +3786,37 @@ TEST(GpuTaskGraph, TypedImportsValidateRetainedExternalFinalState){
         .setInitialState(s_NativeInitialState)
         .setKeepInitialState(false)
     ;
-    Graphics::Texture* const retainedTextureObject = NewArenaObject<Graphics::Texture>(
+    Graphics::Texture* const retainedTextureObject = NewMetadataOnlyTexture(
         testArena.arena,
         context,
         allocator,
         retainedTextureDesc
     );
-    Graphics::Texture* const nonRetainedTextureObject = NewArenaObject<Graphics::Texture>(
+    Graphics::Texture* const nonRetainedTextureObject = NewMetadataOnlyTexture(
         testArena.arena,
         context,
         allocator,
         nonRetainedTextureDesc
     );
-    Graphics::Buffer* const retainedBufferObject = NewArenaObject<Graphics::Buffer>(
+    Graphics::Buffer* const retainedBufferObject = NewMetadataOnlyBuffer(
         testArena.arena,
         context,
         allocator,
         retainedBufferDesc
     );
-    Graphics::Buffer* const nonRetainedBufferObject = NewArenaObject<Graphics::Buffer>(
+    Graphics::Buffer* const nonRetainedBufferObject = NewMetadataOnlyBuffer(
         testArena.arena,
         context,
         allocator,
         nonRetainedBufferDesc
     );
-    Graphics::Buffer* const retainedAccelStructBackingObject = NewArenaObject<Graphics::Buffer>(
+    Graphics::Buffer* const retainedAccelStructBackingObject = NewMetadataOnlyBuffer(
         testArena.arena,
         context,
         allocator,
         retainedBufferDesc
     );
-    Graphics::Buffer* const nonRetainedAccelStructBackingObject = NewArenaObject<Graphics::Buffer>(
+    Graphics::Buffer* const nonRetainedAccelStructBackingObject = NewMetadataOnlyBuffer(
         testArena.arena,
         context,
         allocator,
@@ -3666,7 +4021,7 @@ TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
     );
     Graphics::GraphicsBackend::VulkanAllocator sourceAllocator(sourceContext);
 
-    Graphics::Buffer* const bufferObject = NewArenaObject<Graphics::Buffer>(
+    Graphics::Buffer* const bufferObject = NewMetadataOnlyBuffer(
         testArena.arena,
         sourceContext,
         sourceAllocator,
@@ -3679,7 +4034,7 @@ TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
         AdoptRef
     );
 
-    Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+    Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
         testArena.arena,
         sourceContext,
         sourceAllocator,
@@ -4571,7 +4926,7 @@ TEST(GpuTaskGraph, UploadBufferTaskPreflightsNativeAlignmentContract){
         .setByteSize(8u)
         .setInitialState(Graphics::ResourceStates::Common)
     ;
-    Graphics::Buffer* const destinationObject = NewArenaObject<Graphics::Buffer>(
+    Graphics::Buffer* const destinationObject = NewMetadataOnlyBuffer(
         testArena.arena,
         context,
         allocator,
@@ -4684,7 +5039,7 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const auto createBuffer = [&](const Graphics::BufferDesc& sourceDescription){
-        Graphics::Buffer* const bufferObject = NewArenaObject<Graphics::Buffer>(
+        Graphics::Buffer* const bufferObject = NewMetadataOnlyBuffer(
             testArena.arena,
             context,
             allocator,
@@ -4965,7 +5320,7 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForTexturePrimitives){
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const auto createTexture = [&](const Graphics::TextureDesc& sourceDescription){
-        Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+        Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
             testArena.arena,
             context,
             allocator,
@@ -5417,7 +5772,7 @@ TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPubli
     Core::Alloc::ThreadPool threadPool(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
-    Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+    Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
         testArena.arena,
         context,
         allocator,
@@ -5541,7 +5896,7 @@ TEST(GpuTaskGraph, AllowsExplicitUnknownRetainedTextureFirstWriteDestinations){
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const auto createTexture = [&](const Graphics::TextureDesc& sourceDescription){
-        Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+        Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
             testArena.arena,
             context,
             allocator,
@@ -5558,7 +5913,7 @@ TEST(GpuTaskGraph, AllowsExplicitUnknownRetainedTextureFirstWriteDestinations){
         return texture;
     };
     const auto createBuffer = [&](const Graphics::BufferDesc& sourceDescription){
-        Graphics::Buffer* const bufferObject = NewArenaObject<Graphics::Buffer>(
+        Graphics::Buffer* const bufferObject = NewMetadataOnlyBuffer(
             testArena.arena,
             context,
             allocator,
@@ -5865,7 +6220,7 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const auto createTexture = [&](const Graphics::TextureDesc& sourceDescription){
-        Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+        Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
             testArena.arena,
             context,
             allocator,
@@ -6224,7 +6579,7 @@ TEST(GpuCommandIrReplay, AcceptsOnlyFullUncompressedMultisampleTextureClears){
     Core::Alloc::ThreadPool threadPool(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
-    Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+    Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
         testArena.arena,
         context,
         allocator,
@@ -6315,7 +6670,7 @@ TEST(GpuCommandIrReplay, AcceptsOnlyFullUncompressedMultisampleTextureClears){
         .setSampleCount(4u)
         .setInitialState(Graphics::ResourceStates::CopyDest)
     ;
-    Graphics::Texture* const compressedTextureObject = NewArenaObject<Graphics::Texture>(
+    Graphics::Texture* const compressedTextureObject = NewMetadataOnlyTexture(
         testArena.arena,
         context,
         allocator,
@@ -6394,7 +6749,7 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const auto createTexture = [&](const Graphics::TextureDesc& sourceDescription){
-        Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+        Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
             testArena.arena,
             context,
             allocator,
@@ -6661,7 +7016,7 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const auto createTexture = [&](const Graphics::TextureDesc& sourceDescription){
-        Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+        Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
             testArena.arena,
             context,
             allocator,
@@ -41911,7 +42266,7 @@ TEST(GpuTaskGraph, ClampsTypedTextureFragmentsToPhysicalSubresources){
     Core::Alloc::ThreadPool threadPool(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
-    Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+    Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
         testArena.arena,
         context,
         allocator,

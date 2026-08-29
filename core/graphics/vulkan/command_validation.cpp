@@ -78,8 +78,8 @@ bool CommandList::validateFramebufferForRendering(
         const Format::Enum expectedFormat
     ) -> bool{
         Texture* const texture = attachment.texture;
-        if(!m_device.isTextureReadyForGpuUse(texture)){
-            rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment is not ready for GPU access"));
+        if(!isTextureReadyForCommandQueue(texture)){
+            rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment is not ready for this exact command queue"));
             return false;
         }
         if(requireRenderTargetUsage && !texture->m_creationDesc.isRenderTarget){
@@ -330,8 +330,8 @@ bool CommandList::validateTextureForGpuState(
     const VkImageUsageFlags requiredUsage = explicitRequiredUsage
         | VulkanTextureDetail::RequiredImageUsageForResourceStates(requiredState)
     ;
-    if(!m_device.isTextureReadyForGpuUse(texture, requiredUsage)){
-        rejectCommandRecording(operationName, NWB_TEXT("texture is not ready for GPU access"));
+    if(!isTextureReadyForCommandQueue(texture, requiredUsage)){
+        rejectCommandRecording(operationName, NWB_TEXT("texture is not ready for this exact command queue"));
         return false;
     }
 
@@ -368,8 +368,8 @@ bool CommandList::validateBufferForGpuState(
             ? VulkanBufferDetail::RequiredBufferUsageForResourceStates(buffer->m_creationDesc, requiredState)
             : 0u)
     ;
-    if(!m_device.isBufferReadyForGpuUse(buffer, requiredUsage)){
-        rejectCommandRecording(operationName, NWB_TEXT("buffer is not ready for GPU access"));
+    if(!isBufferReadyForCommandQueue(buffer, requiredUsage)){
+        rejectCommandRecording(operationName, NWB_TEXT("buffer is not ready for this exact command queue"));
         return false;
     }
 

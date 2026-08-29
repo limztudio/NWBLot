@@ -5,6 +5,8 @@
 #include "backend.h"
 #include "texture_resource_detail.h"
 
+#include <core/graphics/rhi/queue_sharing.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -15,27 +17,157 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_texture_device{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static bool TextureQueueFamilyListContains(
+    const u32* const familyIndices,
+    const u32 familyIndexCount,
+    const u32 expectedFamilyIndex
+)noexcept{
+    for(u32 familyIndex = 0u; familyIndex < familyIndexCount; ++familyIndex){
+        if(familyIndices[familyIndex] == expectedFamilyIndex)
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] static bool ValidateNativeTextureSharing(
+    const Device& device,
+    const VkPhysicalDevice physicalDevice,
+    const TextureDesc& desc,
+    const NativeTextureProvenance& provenance
+){
+    if(provenance.sharingMode == VK_SHARING_MODE_EXCLUSIVE){
+        if(provenance.queueFamilyIndexCount != 0u || provenance.queueFamilyIndices != nullptr){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create texture handle for native texture: exclusive sharing must not carry queue-family indices")
+            );
+            return false;
+        }
+        if(device.usesConcurrentQueueSharing(desc.queueSharing)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create texture handle for native texture: exclusive native sharing contradicts concurrent logical sharing")
+            );
+            return false;
+        }
+        return true;
+    }
+    if(provenance.sharingMode != VK_SHARING_MODE_CONCURRENT){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native sharing mode is invalid")
+        );
+        return false;
+    }
+    if(provenance.queueFamilyIndexCount < 2u || !provenance.queueFamilyIndices){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to create texture handle for native texture: concurrent sharing requires at least two queue-family indices")
+        );
+        return false;
+    }
+    if(desc.queueSharing == ResourceQueueSharing::Exclusive){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to create texture handle for native texture: concurrent native sharing requires explicit logical queue classes")
+        );
+        return false;
+    }
+
+    u32 physicalQueueFamilyCount = 0u;
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &physicalQueueFamilyCount, nullptr);
+    if(
+        physicalQueueFamilyCount == 0u
+        || provenance.queueFamilyIndexCount > physicalQueueFamilyCount
+    ){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native queue-family count is invalid")
+        );
+        return false;
+    }
+    for(u32 familyIndex = 0u; familyIndex < provenance.queueFamilyIndexCount; ++familyIndex){
+        const u32 nativeFamilyIndex = provenance.queueFamilyIndices[familyIndex];
+        if(nativeFamilyIndex >= physicalQueueFamilyCount){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native queue-family index is out of range")
+            );
+            return false;
+        }
+        for(u32 earlierIndex = 0u; earlierIndex < familyIndex; ++earlierIndex){
+            if(provenance.queueFamilyIndices[earlierIndex] == nativeFamilyIndex){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native queue-family indices are not unique")
+                );
+                return false;
+            }
+        }
+    }
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    bool hasLogicalQueue = false;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
+        if(!ResourceQueueSharing::IncludesQueueClass(desc.queueSharing, queue.queueClass))
+            continue;
+        hasLogicalQueue = true;
+        if(!TextureQueueFamilyListContains(
+            provenance.queueFamilyIndices,
+            provenance.queueFamilyIndexCount,
+            queue.familyIndex
+        )){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native sharing omits a logically admitted queue family")
+            );
+            return false;
+        }
+    }
+    if(!hasLogicalQueue){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to create texture handle for native texture: logical sharing admits no device queue")
+        );
+        return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TextureHandle Device::createTexture(const TextureDesc& d){
     VulkanTextureDetail::TextureCreateMetadata metadata;
     if(!VulkanTextureDetail::ValidateTextureCreateDesc(d, NWB_TEXT("create texture"), true, metadata))
         return nullptr;
 
-    auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator, d);
+    VkImageCreateInfo imageInfo = VulkanTextureDetail::BuildTextureImageCreateInfo(d, metadata);
+    const QueueFamilySharingInfo sharingInfo = ResolveQueueFamilySharing(d.queueSharing, m_context);
+    imageInfo.sharingMode = sharingInfo.mode;
+    imageInfo.queueFamilyIndexCount = sharingInfo.familyIndexCount;
+    imageInfo.pQueueFamilyIndices = sharingInfo.data();
+
+    auto* texture = NewArenaObject<Texture>(
+        m_context.objectArena,
+        m_context,
+        m_allocator,
+        d,
+        imageInfo,
+        false
+    );
     texture->m_formatLayout = metadata.formatLayout;
     texture->m_aspectMask = metadata.aspectMask;
-    texture->initializeRetainedSubresourceStates(false);
-
-    texture->m_imageInfo = VulkanTextureDetail::BuildTextureImageCreateInfo(d, metadata);
-    const QueueFamilySharingInfo sharingInfo = ResolveQueueFamilySharing(d.queueSharing, m_context);
-    texture->m_imageInfo.sharingMode = sharingInfo.mode;
-    texture->m_imageInfo.queueFamilyIndexCount = sharingInfo.familyIndexCount;
-    texture->m_imageInfo.pQueueFamilyIndices = sharingInfo.data();
 
     VkResult res;
     if(d.isVirtual)
-        res = vkCreateImage(m_context.device, &texture->m_imageInfo, m_context.allocationCallbacks, &texture->m_image);
+        res = vkCreateImage(m_context.device, &imageInfo, m_context.allocationCallbacks, &texture->m_image);
     else
-        res = m_allocator.createTexture(*texture, texture->m_imageInfo);
+        res = m_allocator.createTexture(*texture, imageInfo);
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image: {}"), ResultToString(res));
@@ -48,11 +180,6 @@ TextureHandle Device::createTexture(const TextureDesc& d){
         DestroyArenaObject(m_context.objectArena, texture);
         return nullptr;
     }
-
-    // Vulkan consumed the queue-family pointer during creation. Clear the transient pointer so the retained
-    // image metadata cannot dangle into this stack frame.
-    texture->m_imageInfo.queueFamilyIndexCount = 0u;
-    texture->m_imageInfo.pQueueFamilyIndices = nullptr;
 
     return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
@@ -207,7 +334,12 @@ bool Device::isTextureReadyForGpuUse(Texture* textureResource, const VkImageUsag
     ;
 }
 
-TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object nativeTextureHandle, const TextureDesc& desc){
+TextureHandle Device::createHandleForNativeTexture(
+    const ObjectType objectType,
+    const Object nativeTextureHandle,
+    const TextureDesc& desc,
+    const NativeTextureProvenance& nativeProvenance
+){
     if(objectType != ObjectTypes::VK_Image){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: object type is not VK_Image"));
         return nullptr;
@@ -221,23 +353,43 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
     VulkanTextureDetail::TextureCreateMetadata metadata;
     if(!VulkanTextureDetail::ValidateTextureCreateDesc(desc, NWB_TEXT("create texture handle for native texture"), false, metadata))
         return nullptr;
+    if(nativeProvenance.usage == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native usage is zero"));
+        return nullptr;
+    }
+    if(!__hidden_texture_device::ValidateNativeTextureSharing(
+        *this,
+        m_context.physicalDevice,
+        desc,
+        nativeProvenance
+    ))
+        return nullptr;
 
-    auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator, desc);
+    VkImageCreateInfo imageInfo = VulkanTextureDetail::BuildTextureImageCreateInfo(desc, metadata);
+    imageInfo.usage = nativeProvenance.usage;
+    imageInfo.flags = nativeProvenance.flags;
+    imageInfo.sharingMode = nativeProvenance.sharingMode;
+    imageInfo.queueFamilyIndexCount = nativeProvenance.queueFamilyIndexCount;
+    imageInfo.pQueueFamilyIndices = nativeProvenance.queueFamilyIndices;
+    if(!VulkanTextureDetail::IsTextureImageInfoConsistent(desc, imageInfo)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native provenance contradicts the logical description or declared initial state")
+        );
+        return nullptr;
+    }
+
+    auto* texture = NewArenaObject<Texture>(
+        m_context.objectArena,
+        m_context,
+        m_allocator,
+        desc,
+        imageInfo,
+        nativeProvenance.initialStateKnown
+    );
     texture->m_formatLayout = metadata.formatLayout;
     texture->m_aspectMask = metadata.aspectMask;
     texture->m_image = nativeImage;
     texture->m_managed = false;
-    texture->initializeRetainedSubresourceStates(desc.keepInitialState);
-
-    texture->m_imageInfo = VulkanTextureDetail::BuildTextureImageCreateInfo(desc, metadata);
-    texture->m_imageInfo.usage &= ~(VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
-    if(!VulkanTextureDetail::IsTextureImageInfoConsistent(desc, texture->m_imageInfo)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to create texture handle for native texture: declared initial state is unsupported")
-        );
-        DestroyArenaObject(m_context.objectArena, texture);
-        return nullptr;
-    }
 
     if(!m_allocator.tryRegisterTextureNativeIdentity(*texture)){
         NWB_LOGGER_WARNING(

@@ -53,6 +53,7 @@ void GpuTaskGraph::reset(){
         m_resourceUses.clear();
         m_resources.clear();
         m_initialOwnerHandoffSources.clear();
+        m_queueFamilyIndices.clear();
         m_resourceSets.clear();
         m_resourceSetMembers.clear();
         m_pipelines.clear();
@@ -285,6 +286,15 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
             : nullptr,
         .initialOwnerHandoffSourceCount = resource.initialOwnerHandoffSourceCount,
         .queueSharing = resource.queueSharing,
+        .queueAdmission = ResourceQueueAdmissionSnapshot{
+            .admittedQueueClasses = resource.queueSharing,
+            .queueFamilyIndices = resource.queueFamilyIndexCount != 0u
+                ? m_queueFamilyIndices.data() + resource.queueFamilyIndexOffset
+                : nullptr,
+            .queueFamilyIndexCount = resource.queueFamilyIndexCount,
+            .usesConcurrentSharing = resource.usesConcurrentSharing,
+        },
+        .hasQueueAdmission = resource.hasQueueAdmission,
         .hasBackendResource = resource.texture != nullptr || resource.buffer != nullptr || resource.accelStruct != nullptr,
     };
 }

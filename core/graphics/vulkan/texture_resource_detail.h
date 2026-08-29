@@ -290,6 +290,18 @@ inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, co
         & ~(VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
     ) | RequiredImageUsageForResourceStates(desc.initialState);
     const VkImageCreateFlags requiredFlags = PickImageFlags(desc);
+    const bool sharingInfoConsistent =
+        (
+            imageInfo.sharingMode == VK_SHARING_MODE_EXCLUSIVE
+            && imageInfo.queueFamilyIndexCount == 0u
+            && imageInfo.pQueueFamilyIndices == nullptr
+        )
+        || (
+            imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT
+            && imageInfo.queueFamilyIndexCount >= 2u
+            && imageInfo.pQueueFamilyIndices != nullptr
+        )
+    ;
     return
         imageInfo.sType == VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO
         && imageInfo.imageType == expectedImageType
@@ -303,7 +315,8 @@ inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, co
         && imageInfo.tiling == VK_IMAGE_TILING_OPTIMAL
         && (imageInfo.usage & (descriptionUsage | requiredUsage)) == (descriptionUsage | requiredUsage)
         && (imageInfo.flags & requiredFlags) == requiredFlags
-        && (imageInfo.flags & VK_IMAGE_CREATE_SUBSAMPLED_BIT_EXT) == 0u
+        && (imageInfo.flags & (VK_IMAGE_CREATE_SUBSAMPLED_BIT_EXT | VK_IMAGE_CREATE_PROTECTED_BIT)) == 0u
+        && sharingInfoConsistent
         && imageInfo.initialLayout == VK_IMAGE_LAYOUT_UNDEFINED
     ;
 }

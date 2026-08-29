@@ -8,6 +8,7 @@
 #include "task_graph/compiler.h"
 
 #include <core/common/log.h>
+#include <core/graphics/rhi/queue_sharing.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -122,7 +123,7 @@ constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
 )noexcept{
     const auto canUse = [&](const CommandQueue::Enum queue){
         return queue == CommandQueue::Graphics
-            || (device.getQueue(queue) && GraphicsModuleDetail::QueueSharingIncludesQueue(textureDesc.queueSharing, queue))
+            || (device.getQueue(queue) && ResourceQueueSharing::IncludesQueueClass(textureDesc.queueSharing, queue))
         ;
     };
     const auto transferPreferred = [&](){
@@ -266,7 +267,7 @@ bool Graphics::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
     // retains ordinary exclusive sharing.
     if(
         sameClassRouting.crossesQueueFamily
-        && !GraphicsModuleDetail::QueueSharingIncludesQueue(textureDesc.queueSharing, uploadQueue)
+        && !ResourceQueueSharing::IncludesQueueClass(textureDesc.queueSharing, uploadQueue)
     )
         sameClassRouting = {};
     QueueSubmissionToken uploadToken;

@@ -144,10 +144,10 @@ namespace GpuTaskGraphCompilerDetail{
     if(sourceQueueInfo->familyIndex == destinationQueueInfo->familyIndex)
         return true;
 
-    const bool usesConcurrentSharing = ResourceUsesConcurrentQueueSharing(resource.queueSharing, plan.topology);
+    const bool usesConcurrentSharing = ResourceUsesConcurrentQueueSharing(resource, plan.topology);
     if(usesConcurrentSharing){
         if(!ResourceSharesQueuePairConcurrently(
-            resource.queueSharing,
+            resource,
             plan.topology,
             *sourceQueueInfo,
             *destinationQueueInfo
@@ -338,7 +338,7 @@ bool GpuTaskGraphCompiler::compile(
             hasExternalFinalRelease
             && (
                 resource.externalFinalState == ResourceStates::Unknown
-                || ResourceUsesConcurrentQueueSharing(resource.queueSharing, topology)
+                || ResourceUsesConcurrentQueueSharing(resource, topology)
                 || !FindCompiledQueueInfo(compiledPlan, resource.externalFinalReleaseDestinationQueue)
             )
         ){
@@ -350,7 +350,7 @@ bool GpuTaskGraphCompiler::compile(
             if(
                 resource.type != GpuGraphResourceType::Texture
                 || !resource.initialOwnerHandoffSources
-                || ResourceUsesConcurrentQueueSharing(resource.queueSharing, topology)
+                || ResourceUsesConcurrentQueueSharing(resource, topology)
             ){
                 outCompiledGraph.reset();
                 return false;
@@ -396,7 +396,7 @@ bool GpuTaskGraphCompiler::compile(
             resource.initialOwnerQueue
         );
         if(
-            ResourceUsesConcurrentQueueSharing(resource.queueSharing, topology)
+            ResourceUsesConcurrentQueueSharing(resource, topology)
             || !initialOwnerQueueInfo
             || (
                 hasInitialOwnerHandoff

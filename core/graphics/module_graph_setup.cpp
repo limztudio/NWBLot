@@ -8,6 +8,8 @@
 #include "task_graph/compiler.h"
 #include "task_graph/packet_runtime.h"
 
+#include <core/graphics/rhi/queue_sharing.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -29,19 +31,6 @@ namespace __hidden_graphics_graph_setup{
 // CommandQueue::Transfer explicitly.
 constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
 
-
-[[nodiscard]] static ResourceQueueSharing::Mask QueueSharingBitForQueue(const CommandQueue::Enum queue)noexcept{
-    switch(queue){
-    case CommandQueue::Graphics:
-        return ResourceQueueSharing::Graphics;
-    case CommandQueue::Compute:
-        return ResourceQueueSharing::AsyncCompute;
-    case CommandQueue::Transfer:
-        return ResourceQueueSharing::Transfer;
-    default:
-        return ResourceQueueSharing::Exclusive;
-    }
-}
 
 [[nodiscard]] static CommandQueue::Enum ResolveTransferPreferredQueue(GraphicsBackend::Device& device)noexcept{
     if(device.getQueue(CommandQueue::Transfer))
@@ -155,7 +144,7 @@ struct StandaloneTaskGraphRecoveryTask{
     for(const CommandQueue::Enum consumerQueue : consumerQueues){
         if(
             consumerQueue == uploadQueue
-            || !GraphicsModuleDetail::QueueSharingIncludesQueue(queueSharing, consumerQueue)
+            || !ResourceQueueSharing::IncludesQueueClass(queueSharing, consumerQueue)
             || !device.getQueue(consumerQueue)
         )
             continue;
@@ -283,14 +272,6 @@ namespace GraphicsModuleDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool QueueSharingIncludesQueue(
-    const ResourceQueueSharing::Mask sharing,
-    const CommandQueue::Enum queue
-)noexcept{
-    const u8 queueBit = static_cast<u8>(__hidden_graphics_graph_setup::QueueSharingBitForQueue(queue));
-    return queueBit != 0u && (static_cast<u8>(sharing) & queueBit) != 0u;
-}
-
 SetupUploadSameClassRouting ResolveSetupUploadSameClassRouting(
     GraphicsBackend::Device& device,
     const CommandQueue::Enum uploadQueue,
@@ -334,11 +315,11 @@ ResourceQueueSharing::Mask ResolveSetupUploadQueueSharing(
 )noexcept{
     if(crossFamilySameClassRouting){
         const ResourceQueueSharing::Mask baseSharing = requestedSharing == ResourceQueueSharing::Exclusive
-            ? __hidden_graphics_graph_setup::QueueSharingBitForQueue(uploadQueue)
+            ? ResourceQueueSharing::ForQueueClass(uploadQueue)
             : requestedSharing
         ;
         return static_cast<ResourceQueueSharing::Mask>(
-            static_cast<u8>(baseSharing) | static_cast<u8>(__hidden_graphics_graph_setup::QueueSharingBitForQueue(uploadQueue))
+            static_cast<u8>(baseSharing) | static_cast<u8>(ResourceQueueSharing::ForQueueClass(uploadQueue))
         );
     }
 
@@ -350,7 +331,7 @@ ResourceQueueSharing::Mask ResolveSetupUploadQueueSharing(
         : requestedSharing
     ;
     return static_cast<ResourceQueueSharing::Mask>(
-        static_cast<u8>(baseSharing) | static_cast<u8>(__hidden_graphics_graph_setup::QueueSharingBitForQueue(uploadQueue))
+        static_cast<u8>(baseSharing) | static_cast<u8>(ResourceQueueSharing::ForQueueClass(uploadQueue))
     );
 }
 

@@ -34,6 +34,21 @@ using namespace Core;
 using PermanentStateTestArena = ::NWB::Tests::TestArena<struct PermanentStateTestArenaTag>;
 
 
+[[nodiscard]] static Buffer* NewMetadataOnlyBuffer(
+    Core::Alloc::GlobalArena& arena,
+    GraphicsBackend::VulkanContext& context,
+    GraphicsBackend::VulkanAllocator& allocator,
+    const BufferDesc& description
+){
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = Max<u64>(description.byteSize, 1u);
+    bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    return NewArenaObject<Buffer>(arena, context, allocator, description, bufferInfo, false);
+}
+
+
 class PermanentStateLifetimeTest : public ::testing::Test{
 protected:
     static void SetUpTestSuite(){
@@ -90,19 +105,23 @@ TEST(PermanentStateOwnership, StateTrackerValuesOwnSnapshotsTransactionally){
     GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
     GraphicsBackend::VulkanAllocator allocator(context);
 
-    Buffer* const baselineBufferObject = NewArenaObject<Buffer>(testArena.arena, context, allocator, BufferDesc{});
+    Buffer* const baselineBufferObject = NewMetadataOnlyBuffer(testArena.arena, context, allocator, BufferDesc{});
     Texture* const baselineTextureObject = NewArenaObject<Texture>(
         testArena.arena,
         context,
         allocator,
-        TextureDesc{}
+        TextureDesc{},
+        VkImageCreateInfo{},
+        false
     );
-    Buffer* const provisionalBufferObject = NewArenaObject<Buffer>(testArena.arena, context, allocator, BufferDesc{});
+    Buffer* const provisionalBufferObject = NewMetadataOnlyBuffer(testArena.arena, context, allocator, BufferDesc{});
     Texture* const provisionalTextureObject = NewArenaObject<Texture>(
         testArena.arena,
         context,
         allocator,
-        TextureDesc{}
+        TextureDesc{},
+        VkImageCreateInfo{},
+        false
     );
     ASSERT_NE(baselineBufferObject, nullptr);
     ASSERT_NE(baselineTextureObject, nullptr);
@@ -200,7 +219,7 @@ TEST(PermanentStateOwnership, StateTrackerUsesEachResourceArenaForLastOwnerDelet
     const u64 resourceUsedBytesBefore = resourceArena.arena.memoryStats().usedBytes;
 
     {
-        Buffer* const bufferObject = NewArenaObject<Buffer>(
+        Buffer* const bufferObject = NewMetadataOnlyBuffer(
             resourceArena.arena,
             resourceContext,
             resourceAllocator,
@@ -210,7 +229,9 @@ TEST(PermanentStateOwnership, StateTrackerUsesEachResourceArenaForLastOwnerDelet
             resourceArena.arena,
             resourceContext,
             resourceAllocator,
-            TextureDesc{}
+            TextureDesc{},
+            VkImageCreateInfo{},
+            false
         );
         ASSERT_NE(bufferObject, nullptr);
         ASSERT_NE(textureObject, nullptr);

@@ -7,6 +7,7 @@
 #include "task_graph.h"
 
 #include <core/graphics/backend_selection.h>
+#include <core/graphics/rhi/queue_sharing.h>
 #include <core/graphics/vulkan/buffer_resource_detail.h>
 #include <core/graphics/vulkan/texture_resource_detail.h>
 
@@ -102,9 +103,11 @@ bool GpuNativePacketRecorder::preflightPacketResources(
 
     const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
     const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
+    const GpuPhysicalQueueInfo* const packetQueueInfo = compiledGraph.queueInfo(packet.queue);
     if(
         !tasks
         || packet.taskCount == 0u
+        || !packetQueueInfo
         || !m_device.matchesPhysicalQueueIdentity(packet.queue)
         || (initialStates && !initialStates->validForDeviceGeneration(compiledGraph.deviceGeneration()))
     )
@@ -112,11 +115,12 @@ bool GpuNativePacketRecorder::preflightPacketResources(
 
     const auto validateOwnership = [&](const ResourceQueueSharing::Mask sharing,
                                        const ResourceQueueSharing::Mask resourceSharing,
+                                       const bool usesConcurrentSharing,
                                        const GpuPhysicalQueueId ownerQueue,
                                        const GpuPhysicalQueueId releaseDestinationQueue){
         if(sharing != resourceSharing)
             return false;
-        if(m_device.usesConcurrentQueueSharing(sharing))
+        if(usesConcurrentSharing)
             return !ownerQueue.valid() && !releaseDestinationQueue.valid();
         if(
             (ownerQueue.valid() && !m_device.matchesPhysicalQueueIdentity(ownerQueue))
@@ -174,8 +178,25 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         }
         return true;
     };
+    const auto validateTextureForState = [&](Texture* const texture, const ResourceStates::Mask state){
+        if(
+            !texture
+            || !ResourceQueueAdmissionAdmitsQueue(texture->getQueueAdmissionSnapshot(), *packetQueueInfo)
+        )
+            return false;
+        if(state == ResourceStates::Unknown)
+            return m_device.isTextureReadyForGpuUse(texture);
+        if(!GraphicsBackend::VulkanTextureDetail::IsTextureResourceStateMaskValid(state))
+            return false;
+        return m_device.isTextureReadyForGpuUse(
+            texture,
+            GraphicsBackend::VulkanTextureDetail::RequiredImageUsageForResourceStates(state)
+        );
+    };
     const auto validateBufferForState = [&](Buffer* const buffer, const ResourceStates::Mask state){
         if(!buffer)
+            return false;
+        if(!ResourceQueueAdmissionAdmitsQueue(buffer->getQueueAdmissionSnapshot(), *packetQueueInfo))
             return false;
         const BufferDesc& description = buffer->getCreationDescription();
         if(
@@ -199,16 +220,13 @@ bool GpuNativePacketRecorder::preflightPacketResources(
                 continue;
             const TextureDesc& description = state.texture->getCreationDescription();
             if(
-                !GraphicsBackend::VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state)
-                || !m_device.isTextureReadyForGpuUse(
-                    state.texture,
-                    GraphicsBackend::VulkanTextureDetail::RequiredImageUsageForResourceStates(state.state)
-                )
+                !validateTextureForState(state.texture, state.state)
                 || state.mipLevel >= description.mipLevels
                 || state.arraySlice >= description.arraySize
                 || !validateOwnership(
                     state.queueSharing,
                     description.queueSharing,
+                    state.texture->getQueueAdmissionSnapshot().usesConcurrentSharing,
                     state.ownerQueue,
                     state.releaseDestinationQueue
                 )
@@ -238,14 +256,11 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             if(
                 state.texture
                 && (
-                    !GraphicsBackend::VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state)
-                    || !m_device.isTextureReadyForGpuUse(
-                        state.texture,
-                        GraphicsBackend::VulkanTextureDetail::RequiredImageUsageForResourceStates(state.state)
-                    )
+                    !validateTextureForState(state.texture, state.state)
                     || !validateOwnership(
                         state.queueSharing,
                         state.texture->getCreationDescription().queueSharing,
+                        state.texture->getQueueAdmissionSnapshot().usesConcurrentSharing,
                         state.ownerQueue,
                         state.releaseDestinationQueue
                     )
@@ -266,6 +281,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
                 || !validateOwnership(
                     state.queueSharing,
                     description.queueSharing,
+                    state.buffer->getQueueAdmissionSnapshot().usesConcurrentSharing,
                     state.ownerQueue,
                     state.releaseDestinationQueue
                 )
@@ -294,6 +310,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
                     || !validateOwnership(
                         state.queueSharing,
                         state.buffer->getCreationDescription().queueSharing,
+                        state.buffer->getQueueAdmissionSnapshot().usesConcurrentSharing,
                         state.ownerQueue,
                         state.releaseDestinationQueue
                     )
@@ -346,16 +363,9 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         case GpuGraphResourceType::Texture:{
             Texture* const texture = graph.textureForResource(resourceID);
             return texture
-                && (
-                    requiredState == ResourceStates::Unknown
-                    || GraphicsBackend::VulkanTextureDetail::IsTextureResourceStateMaskValid(requiredState)
-                )
                 && texture->getDeviceGeneration() == compiledGraph.deviceGeneration()
                 && texture->getCreationDescription().queueSharing == resource.queueSharing
-                && m_device.isTextureReadyForGpuUse(
-                    texture,
-                    GraphicsBackend::VulkanTextureDetail::RequiredImageUsageForResourceStates(requiredState)
-                )
+                && validateTextureForState(texture, requiredState)
                 && permanentTextureState(texture, outPermanentState)
             ;
         }
@@ -364,6 +374,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             return buffer
                 && buffer->getDeviceGeneration() == compiledGraph.deviceGeneration()
                 && buffer->getCreationDescription().queueSharing == resource.queueSharing
+                && ResourceQueueAdmissionAdmitsQueue(buffer->getQueueAdmissionSnapshot(), *packetQueueInfo)
                 && (
                     requiredState == ResourceStates::Unknown
                     ? m_device.isBufferReadyForGpuUse(buffer)
@@ -387,6 +398,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
                 && backingBuffer->descriptionMatchesCreation()
                 && backingBuffer->getCreationDescription().queueSharing == creationQueueSharing
                 && m_device.isAccelStructReadyForGpuUse(accelStruct)
+                && ResourceQueueAdmissionAdmitsQueue(backingBuffer->getQueueAdmissionSnapshot(), *packetQueueInfo)
                 && (
                     requiredState == ResourceStates::Unknown
                     ? m_device.isBufferReadyForGpuUse(backingBuffer)

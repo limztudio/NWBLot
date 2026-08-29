@@ -886,8 +886,8 @@ void CommandList::releaseTextureOwnership(
         return;
 
     Texture& texture = *textureResource;
-    if(!m_device.isTextureReadyForGpuUse(&texture)){
-        rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("texture is not ready for GPU access"));
+    if(!isTextureReadyForCommandQueue(&texture)){
+        rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("texture is not ready for this exact command queue"));
         return;
     }
     if(m_stateTracker.isPermanentTexture(texture)){
@@ -897,7 +897,7 @@ void CommandList::releaseTextureOwnership(
         );
         return;
     }
-    if(m_device.usesConcurrentQueueSharing(texture.m_creationDesc.queueSharing)){
+    if(texture.m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
         rejectCommandRecording(
             NWB_TEXT("release texture ownership"),
             NWB_TEXT("concurrently shared textures do not have exclusive ownership")
@@ -977,8 +977,8 @@ void CommandList::releaseBufferOwnership(
         return;
 
     Buffer& buffer = *bufferResource;
-    if(!m_device.isBufferReadyForGpuUse(&buffer)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("buffer is not ready for GPU access"));
+    if(!isBufferReadyForCommandQueue(&buffer)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("buffer is not ready for this exact command queue"));
         return;
     }
     if(m_stateTracker.isPermanentBuffer(buffer)){
@@ -988,7 +988,7 @@ void CommandList::releaseBufferOwnership(
         );
         return;
     }
-    if(m_device.usesConcurrentQueueSharing(buffer.m_creationDesc.queueSharing)){
+    if(buffer.m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
         rejectCommandRecording(
             s_OperationName,
             NWB_TEXT("concurrently shared buffers do not have exclusive ownership")
@@ -1010,10 +1010,11 @@ void CommandList::releaseBufferOwnership(
         return;
     }
 
-    // Exports need concrete buffer state; tracked state takes precedence over descriptor initial state.
+    // Releases require an established state. Managed creation and explicitly known native provenance may provide
+    // one, but a native descriptor alone is not evidence of current ownership state.
     ResourceStates::Mask state = m_stateTracker.getBufferState(&buffer);
     if(state == ResourceStates::Unknown)
-        state = buffer.m_creationDesc.initialState;
+        state = buffer.resolveTaskGraphImportInitialState();
     if(state == ResourceStates::Unknown){
         rejectCommandRecording(s_OperationName, NWB_TEXT("final resource state is unknown"));
         return;
@@ -1035,8 +1036,8 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
         rejectCommandRecording(NWB_TEXT("set permanent texture state"), NWB_TEXT("permanent state cannot be unknown"));
         return;
     }
-    if(!m_device.isTextureReadyForGpuUse(texture)){
-        rejectCommandRecording(NWB_TEXT("set permanent texture state"), NWB_TEXT("texture is not ready for GPU access"));
+    if(!isTextureReadyForCommandQueue(texture)){
+        rejectCommandRecording(NWB_TEXT("set permanent texture state"), NWB_TEXT("texture is not ready for this exact command queue"));
         return;
     }
     if(texture->m_creationDesc.keepInitialState && texture->m_creationDesc.initialState != stateBits){

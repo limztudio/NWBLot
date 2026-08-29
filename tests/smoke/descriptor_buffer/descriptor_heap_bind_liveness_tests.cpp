@@ -8,6 +8,7 @@
 #include <global/unique_ptr.h>
 #include <core/common/module.h>
 #include <core/graphics/api.h>
+#include <core/graphics/rhi/queue_sharing.h>
 #include <core/graphics/vulkan/backend.h>
 #include <impl/assets/graphics/bindless/runtime_abi.h>
 #include <tests/common/capturing_logger.h>
@@ -308,6 +309,45 @@ TEST_F(DescriptorHeapBindLivenessTest, RetainedBufferAndTextureMustRemainReadyAt
     }
     ExpectLivenessHeapStatisticsEqual(populated, heap.lifecycleStatistics());
 
+    {
+        CommandListHandle commandList = localDevice.createCommandList();
+        ASSERT_TRUE(commandList);
+        commandList->open();
+        commandList->setComputeState(ComputeState().setPipeline(pipeline.get()));
+        heap.bindCompute(*commandList, *pipeline);
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+        TextureDesc& mutableDesc = const_cast<TextureDesc&>(texture->getDescription());
+        mutableDesc.isVirtual = true;
+        commandList->close();
+        mutableDesc.isVirtual = false;
+        EXPECT_TRUE(commandList->commandRecordingFailed());
+    }
+    heap.collectRetired();
+    ExpectLivenessHeapStatisticsEqual(populated, heap.lifecycleStatistics());
+
+    {
+        CommandListHandle commandList = localDevice.createCommandList();
+        ASSERT_TRUE(commandList);
+        commandList->open();
+        commandList->setComputeState(ComputeState().setPipeline(pipeline.get()));
+        heap.bindCompute(*commandList, *pipeline);
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+        commandList->close();
+        TextureDesc& mutableDesc = const_cast<TextureDesc&>(texture->getDescription());
+        mutableDesc.isVirtual = true;
+        CommandList* commandLists[] = { commandList.get() };
+        const QueueSubmissionToken token = localDevice.executeCommandLists(
+            commandLists,
+            LengthOf(commandLists),
+            CommandQueue::Graphics,
+            QueueSubmissionDesc{}
+        );
+        mutableDesc.isVirtual = false;
+        EXPECT_FALSE(token.valid());
+    }
+    heap.collectRetired();
+    ExpectLivenessHeapStatisticsEqual(populated, heap.lifecycleStatistics());
+
     CommandListHandle commandList = localDevice.createCommandList();
     ASSERT_TRUE(commandList);
     commandList->open();
@@ -330,6 +370,184 @@ TEST_F(DescriptorHeapBindLivenessTest, RetainedBufferAndTextureMustRemainReadyAt
     heap.collectRetired();
     EXPECT_EQ(buffer->getReferenceCount(), 1u);
     EXPECT_EQ(texture->getReferenceCount(), 1u);
+    ExpectLivenessHeapStatisticsEqual(baseline, heap.lifecycleStatistics());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(DescriptorHeapBindLivenessTest, PostBindTextureWritesJoinCloseAndSubmissionRevalidation){
+    auto& localDevice = device();
+    auto& heap = localDevice.getDescriptorHeap();
+    const BindingLayoutHandle layouts[] = { heap.getResourceLayout(), heap.getSamplerLayout() };
+    ComputePipelineHandle pipeline = CreateLivenessComputePipeline(localDevice, arena(), layouts, LengthOf(layouts));
+    ASSERT_TRUE(pipeline);
+    const GpuDescriptorHeapLifecycleStatistics baseline = heap.lifecycleStatistics();
+
+    TextureHandle closeTexture = localDevice.createTexture(
+        TextureDesc()
+            .setWidth(8u)
+            .setHeight(8u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(closeTexture);
+    const GpuDescriptorHandle closeHandle = heap.allocate(GpuDescriptorClass::SampledImage);
+    ASSERT_TRUE(closeHandle.valid());
+    {
+        CommandListHandle commandList = localDevice.createCommandList();
+        ASSERT_TRUE(commandList);
+        commandList->open();
+        commandList->setComputeState(ComputeState().setPipeline(pipeline.get()));
+        heap.bindCompute(*commandList, *pipeline);
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+        ASSERT_TRUE(heap.write(closeHandle, DescriptorWriteItem::Texture_SRV(0u, closeTexture.get())));
+
+        TextureDesc& mutableDesc = const_cast<TextureDesc&>(closeTexture->getDescription());
+        mutableDesc.isVirtual = true;
+        commandList->close();
+        mutableDesc.isVirtual = false;
+        EXPECT_TRUE(commandList->commandRecordingFailed());
+    }
+    heap.collectRetired();
+    heap.free(closeHandle);
+    heap.collectRetired();
+    EXPECT_EQ(closeTexture->getReferenceCount(), 1u);
+
+    TextureHandle submissionTexture = localDevice.createTexture(
+        TextureDesc()
+            .setWidth(8u)
+            .setHeight(8u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(submissionTexture);
+    const GpuDescriptorHandle submissionHandle = heap.allocate(GpuDescriptorClass::SampledImage);
+    ASSERT_TRUE(submissionHandle.valid());
+    {
+        CommandListHandle commandList = localDevice.createCommandList();
+        ASSERT_TRUE(commandList);
+        commandList->open();
+        commandList->setComputeState(ComputeState().setPipeline(pipeline.get()));
+        heap.bindCompute(*commandList, *pipeline);
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+        ASSERT_TRUE(heap.write(
+            submissionHandle,
+            DescriptorWriteItem::Texture_SRV(0u, submissionTexture.get())
+        ));
+        commandList->close();
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+
+        TextureDesc& mutableDesc = const_cast<TextureDesc&>(submissionTexture->getDescription());
+        mutableDesc.isVirtual = true;
+        CommandList* commandLists[] = { commandList.get() };
+        const QueueSubmissionToken token = localDevice.executeCommandLists(
+            commandLists,
+            LengthOf(commandLists),
+            CommandQueue::Graphics,
+            QueueSubmissionDesc{}
+        );
+        mutableDesc.isVirtual = false;
+        EXPECT_FALSE(token.valid());
+    }
+    heap.collectRetired();
+    heap.free(submissionHandle);
+    heap.collectRetired();
+    EXPECT_EQ(submissionTexture->getReferenceCount(), 1u);
+    ExpectLivenessHeapStatisticsEqual(baseline, heap.lifecycleStatistics());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(DescriptorHeapBindLivenessTest, PostBindWritesRejectResourcesOutsideEveryActiveExactQueue){
+    auto& localDevice = device();
+    auto& heap = localDevice.getDescriptorHeap();
+    const BindingLayoutHandle layouts[] = { heap.getResourceLayout(), heap.getSamplerLayout() };
+    ComputePipelineHandle pipeline = CreateLivenessComputePipeline(localDevice, arena(), layouts, LengthOf(layouts));
+    ASSERT_TRUE(pipeline);
+    const GpuDescriptorHeapLifecycleStatistics baseline = heap.lifecycleStatistics();
+
+    TextureHandle texture = localDevice.createTexture(
+        TextureDesc()
+            .setWidth(8u)
+            .setHeight(8u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::AsyncComputeAndTransfer)
+    );
+    BufferHandle buffer = localDevice.createBuffer(
+        BufferDesc()
+            .setByteSize(4096u)
+            .setStructStride(16u)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::AsyncComputeAndTransfer)
+    );
+    ASSERT_TRUE(texture);
+    ASSERT_TRUE(buffer);
+    const ResourceQueueAdmissionSnapshot textureAdmission = texture->getQueueAdmissionSnapshot();
+    const ResourceQueueAdmissionSnapshot bufferAdmission = buffer->getQueueAdmissionSnapshot();
+    ASSERT_TRUE(textureAdmission.valid());
+    ASSERT_TRUE(bufferAdmission.valid());
+    if(!textureAdmission.usesConcurrentSharing || !bufferAdmission.usesConcurrentSharing)
+        GTEST_SKIP() << "Post-bind exact queue: Compute and Transfer do not resolve to distinct families.";
+
+    const GpuPhysicalQueueId graphicsQueue = localDevice.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueInfo* const graphicsQueueInfo = localDevice.getPhysicalQueueInfo(graphicsQueue);
+    ASSERT_NE(graphicsQueueInfo, nullptr);
+    ASSERT_FALSE(ResourceQueueAdmissionAdmitsQueue(textureAdmission, *graphicsQueueInfo));
+    ASSERT_FALSE(ResourceQueueAdmissionAdmitsQueue(bufferAdmission, *graphicsQueueInfo));
+
+    const GpuDescriptorHandle textureHandle = heap.allocate(GpuDescriptorClass::SampledImage);
+    const GpuDescriptorHandle bufferHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(textureHandle.valid());
+    ASSERT_TRUE(bufferHandle.valid());
+    {
+        CommandListHandle commandList = localDevice.createCommandList();
+        ASSERT_TRUE(commandList);
+        commandList->open();
+        commandList->setComputeState(ComputeState().setPipeline(pipeline.get()));
+        heap.bindCompute(*commandList, *pipeline);
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+        EXPECT_DEATH_IF_SUPPORTED({
+            EXPECT_FALSE(heap.write(textureHandle, DescriptorWriteItem::Texture_SRV(0u, texture.get())));
+        }, "");
+#else
+        EXPECT_FALSE(heap.write(textureHandle, DescriptorWriteItem::Texture_SRV(0u, texture.get())));
+#endif
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+        EXPECT_DEATH_IF_SUPPORTED({
+            EXPECT_FALSE(heap.write(bufferHandle, DescriptorWriteItem::StructuredBuffer_UAV(0u, buffer.get())));
+        }, "");
+#else
+        EXPECT_FALSE(heap.write(bufferHandle, DescriptorWriteItem::StructuredBuffer_UAV(0u, buffer.get())));
+#endif
+        EXPECT_FALSE(commandList->commandRecordingFailed());
+        commandList->close();
+        EXPECT_FALSE(commandList->commandRecordingFailed());
+
+        CommandList* const commandLists[] = { commandList.get() };
+        const QueueSubmissionToken token = localDevice.executeCommandLists(
+            commandLists,
+            LengthOf(commandLists),
+            graphicsQueue,
+            QueueSubmissionDesc{}
+        );
+        ASSERT_TRUE(token.valid());
+        ASSERT_TRUE(localDevice.waitForIdle());
+    }
+    heap.collectRetired();
+    heap.free(textureHandle);
+    heap.free(bufferHandle);
+    heap.collectRetired();
+    EXPECT_EQ(texture->getReferenceCount(), 1u);
+    EXPECT_EQ(buffer->getReferenceCount(), 1u);
     ExpectLivenessHeapStatisticsEqual(baseline, heap.lifecycleStatistics());
 }
 

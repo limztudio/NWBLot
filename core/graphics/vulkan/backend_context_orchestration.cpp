@@ -215,13 +215,6 @@ bool BackendContext::createDevice(){
         return false;
     }
 
-#if defined(NWB_GPU_FAULT_INJECTION)
-    // Test-only device fault injection after creation.
-    u64 faultDeviceAddress = 0u;
-    if(VulkanDetail::ReadGpuFaultInjectionValue(faultDeviceAddress))
-        m_rhiDevice->debugTriggerGpuFault(faultDeviceAddress);
-#endif
-
     return true;
 }
 

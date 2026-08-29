@@ -8,6 +8,8 @@
 #include "module.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
+#include "native_buffer_provenance.h"
+#include "native_texture_provenance.h"
 
 #include <core/common/log.h>
 
@@ -149,10 +151,6 @@ VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo);
 bool GetTextureFormatBlockLayout(const FormatInfo& formatInfo, TextureFormatBlockLayout& outLayout);
 bool TryComputeCommonAlignment(u32 firstAlignment, u32 secondAlignment, u32& outAlignment)noexcept;
 bool TryComputeUploadSuballocationAlignment(u32 requiredAlignment, u32& outAlignment)noexcept;
-bool StagingTextureSharingIncludesQueueClass(
-    ResourceQueueSharing::Mask sharing,
-    CommandQueue::Enum queueClass
-)noexcept;
 bool IsBufferImageCopyAspectMaskSupported(VkImageAspectFlags aspectMask)noexcept;
 bool ValidateBufferImageCopyAspectMask(VkImageAspectFlags aspectMask, const tchar* operationName);
 VkExtent3D GetTextureMipExtent(const TextureDesc& desc, MipLevel mipLevel);
@@ -781,6 +779,10 @@ inline bool UsesConcurrentQueueSharing(
 // Command buffer with resource tracking
 
 
+struct RetainedBufferStateCommit{
+    Buffer* buffer = nullptr;
+};
+
 struct RetainedTextureStateCommit{
     Texture* texture = nullptr;
     MipLevel mipLevel = 0;
@@ -849,6 +851,9 @@ private:
     void retainResource(GraphicsResource& resource);
     void retainBuffer(Buffer& buffer);
     void trackRetainedBuffer(Buffer& buffer);
+    void appendRetainedBufferStateCommit(Buffer& buffer);
+    void commitRetainedBufferStateCommits();
+    void discardRetainedBufferStateCommits();
     void retainTexture(Texture& texture);
     void trackRetainedTexture(Texture& texture);
     void appendRetainedTextureStateCommit(Texture& texture, MipLevel mipLevel, ArraySlice arraySlice);
@@ -888,6 +893,7 @@ private:
     Vector<Texture*, Alloc::GlobalArena> m_referencedTextures;
     Vector<BufferHandle, Alloc::GlobalArena> m_referencedStagingBuffers;
     Vector<GpuDescriptorHeap*, Alloc::GlobalArena> m_referencedDescriptorHeaps;
+    Vector<RetainedBufferStateCommit, Alloc::GlobalArena> m_retainedBufferStateCommits;
     Vector<RetainedTextureStateCommit, Alloc::GlobalArena> m_retainedTextureStateCommits;
     Vector<PendingAccelStructBuildCommit, Alloc::GlobalArena> m_pendingAccelStructBuildCommits;
     Vector<AccelStructGeometryBuildSignature, Alloc::GlobalArena> m_pendingAccelStructBuildSignatures;
@@ -1295,6 +1301,7 @@ class Buffer final : public RefCounter<GraphicsResource>, NoCopy{
     friend class CommandList;
     friend class DescriptorBufferManager;
     friend class StateTracker;
+    friend class TrackedCommandBuffer;
     friend class VulkanAllocator;
     friend class UploadManager;
     friend class ShaderTable;
@@ -1325,7 +1332,8 @@ public:
         const VulkanContext& context,
         VulkanAllocator& allocator,
         const BufferDesc& creationDesc,
-        VkBufferUsageFlags usage = 0u
+        const VkBufferCreateInfo& bufferInfo,
+        bool initialStateKnown
     );
     ~Buffer();
 
@@ -1336,24 +1344,40 @@ public:
     [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
     [[nodiscard]] GpuVirtualAddress getGpuVirtualAddress()const{ return m_deviceAddress; }
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
+    // Task-graph declarations copy this production admission snapshot while retaining the Buffer itself.
+    [[nodiscard]] ResourceQueueAdmissionSnapshot getQueueAdmissionSnapshot()const noexcept{
+        return ResourceQueueAdmissionSnapshot{
+            .admittedQueueClasses = m_creationDesc.queueSharing,
+            .queueFamilyIndices = m_bufferQueueFamilyIndices.empty() ? nullptr : m_bufferQueueFamilyIndices.data(),
+            .queueFamilyIndexCount = static_cast<u32>(m_bufferQueueFamilyIndices.size()),
+            .usesConcurrentSharing = m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT,
+        };
+    }
+    // Resolves the state a typed task-graph import may inherit from live retained/native provenance.
+    [[nodiscard]] ResourceStates::Mask resolveTaskGraphImportInitialState()const noexcept;
     virtual Object getNativeHandle(ObjectType objectType) override;
 
 
 private:
     [[nodiscard]] VkBufferView getView(Format::Enum format, u64 byteOffset, u64 byteSize);
+    [[nodiscard]] bool isRetainedStateKnown()const noexcept;
+    void setRetainedStateKnown(bool known)noexcept;
 
 private:
     BufferDesc m_desc;
     const BufferDesc m_creationDesc;
+    const bool m_creationInitialStateKnown;
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;
-    const VkBufferUsageFlags m_usage;
+    const Vector<u32, Alloc::GlobalArena> m_bufferQueueFamilyIndices;
+    const VkBufferCreateInfo m_bufferInfo{};
     u64 m_deviceAddress = 0;
     void* m_mappedMemory = nullptr;
     HeapHandle m_boundHeap;
     VulkanDetail::HeapBindingRange m_heapBindingRange;
     Futex m_memoryBindingMutex;
+    Atomic<bool> m_retainedStateKnown = false;
 
     Vector<u64, Alloc::GlobalArena> m_versionTracking;
     Vector<BufferViewEntry, Alloc::GlobalArena> m_bufferViews;
@@ -1441,7 +1465,13 @@ class Texture final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 public:
-    Texture(const VulkanContext& context, VulkanAllocator& allocator, const TextureDesc& creationDesc);
+    Texture(
+        const VulkanContext& context,
+        VulkanAllocator& allocator,
+        const TextureDesc& creationDesc,
+        const VkImageCreateInfo& imageInfo,
+        bool initialStateKnown
+    );
     ~Texture();
 
 
@@ -1450,8 +1480,17 @@ public:
     [[nodiscard]] const TextureDesc& getCreationDescription()const noexcept{ return m_creationDesc; }
     [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
-    // True when accepted retained-state publication covers only a strict subset of this texture's subresources.
-    [[nodiscard]] bool hasPartiallyKnownRetainedSubresourceState()const;
+    // Task-graph declarations copy this production admission snapshot while retaining the Texture itself.
+    [[nodiscard]] ResourceQueueAdmissionSnapshot getQueueAdmissionSnapshot()const noexcept{
+        return ResourceQueueAdmissionSnapshot{
+            .admittedQueueClasses = m_creationDesc.queueSharing,
+            .queueFamilyIndices = m_imageQueueFamilyIndices.empty() ? nullptr : m_imageQueueFamilyIndices.data(),
+            .queueFamilyIndexCount = static_cast<u32>(m_imageQueueFamilyIndices.size()),
+            .usesConcurrentSharing = m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT,
+        };
+    }
+    // Resolves the state a typed task-graph import may inherit from live retained/native provenance.
+    [[nodiscard]] ResourceStates::Mask resolveTaskGraphImportInitialState()const;
     Object getNativeHandle(ObjectType objectType);
     Object getNativeView(
         ObjectType objectType,
@@ -1471,7 +1510,6 @@ public:
 private:
     [[nodiscard]] bool revokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
     void releaseRevokedNativeImageIdentity(VkImage expectedNativeImage)noexcept;
-    void initializeRetainedSubresourceStates(bool known);
     [[nodiscard]] bool isRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel);
     void setRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel, bool known);
 
@@ -1479,12 +1517,14 @@ private:
 private:
     TextureDesc m_desc;
     const TextureDesc m_creationDesc;
+    const bool m_creationInitialStateKnown;
     VulkanDetail::TextureFormatBlockLayout m_formatLayout;
     VkImageAspectFlags m_aspectMask = 0;
 
     VkImage m_image = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;
-    VkImageCreateInfo m_imageInfo{};
+    const Vector<u32, Alloc::GlobalArena> m_imageQueueFamilyIndices;
+    const VkImageCreateInfo m_imageInfo{};
     HeapHandle m_boundHeap;
     VulkanDetail::HeapBindingRange m_heapBindingRange;
     Futex m_memoryBindingMutex;
@@ -2001,6 +2041,7 @@ private:
     struct HeapUse{
         TrackedCommandBuffer* commandBuffer = nullptr;
         QueueSubmissionToken submissionToken;
+        GpuPhysicalQueueId physicalQueue;
         u64 id = 0u;
     };
 
@@ -2071,7 +2112,13 @@ private:
     [[nodiscard]] SlotAllocator& allocatorForClass(GpuDescriptorClass::Enum descriptorClass);
     void releaseAccelStructDescriptorBlock(u32 slot);
     void releaseRetainedDescriptorResource(GpuDescriptorHandle handle);
-    [[nodiscard]] bool trackCommandBufferUseLocked(TrackedCommandBuffer& commandBuffer);
+    [[nodiscard]] bool isResourceAdmittedToActiveUsesLocked(const ResourceQueueAdmissionSnapshot& admission)const noexcept;
+    [[nodiscard]] bool retainedResourcesReadyForQueueLocked(const GpuPhysicalQueueInfo& queue)const noexcept;
+    [[nodiscard]] bool retainedResourcesReadyForQueue(const GpuPhysicalQueueId& queue)const noexcept;
+    [[nodiscard]] bool trackCommandBufferUseLocked(
+        TrackedCommandBuffer& commandBuffer,
+        const GpuPhysicalQueueId& physicalQueue
+    );
     void submitCommandBufferUse(TrackedCommandBuffer& commandBuffer, QueueSubmissionToken submissionToken);
     void discardCommandBufferUse(TrackedCommandBuffer& commandBuffer);
     void shutdownForDeviceTeardown();
@@ -2881,6 +2928,16 @@ private:
         const tchar* operationName
     )noexcept;
     void setResourceStatesForGraphicsBuffers(const GraphicsState& state);
+    [[nodiscard]] bool isTextureAdmittedToCommandQueue(const Texture& texture)const noexcept;
+    [[nodiscard]] bool isTextureReadyForCommandQueue(
+        Texture* texture,
+        VkImageUsageFlags requiredUsage = 0u
+    )const noexcept;
+    [[nodiscard]] bool isBufferAdmittedToCommandQueue(const Buffer& buffer)const noexcept;
+    [[nodiscard]] bool isBufferReadyForCommandQueue(
+        Buffer* buffer,
+        VkBufferUsageFlags requiredUsage = 0u
+    )const noexcept;
     [[nodiscard]] bool validateTrackedTexturesReadyForClose()noexcept;
     [[nodiscard]] bool validateTrackedBuffersReadyForClose()noexcept;
     [[nodiscard]] bool validateTrackedResourcesReadyForSubmission()const noexcept;
@@ -3155,8 +3212,14 @@ public:
         Texture* texture,
         VkImageUsageFlags requiredUsage = 0u
     )const noexcept;
-    // The caller owns native binding and lifetime. Only one live Texture wrapper may name a VkImage per Device.
-    [[nodiscard]] TextureHandle createHandleForNativeTexture(ObjectType objectType, Object texture, const TextureDesc& desc);
+    // The caller owns native binding and lifetime and must provide exact immutable creation provenance.
+    // Only one live Texture wrapper may name a VkImage per Device.
+    [[nodiscard]] TextureHandle createHandleForNativeTexture(
+        ObjectType objectType,
+        Object texture,
+        const TextureDesc& desc,
+        const NativeTextureProvenance& nativeProvenance
+    );
     [[nodiscard]] StagingTextureHandle createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess);
     void* mapStagingTexture(StagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch);
     void unmapStagingTexture(StagingTexture* tex);
@@ -3169,13 +3232,13 @@ public:
     // Native wrappers trust caller-managed binding. Managed ordinary buffers require their VMA allocation, while
     // managed virtual buffers require a retained, device-owned bound Heap allocation. CPU mapping is irrelevant.
     [[nodiscard]] bool isBufferReadyForGpuUse(Buffer* buffer, VkBufferUsageFlags requiredUsage = 0u)const noexcept;
-    // The caller owns native binding and lifetime and must provide the exact immutable VkBufferCreateInfo::usage.
+    // The caller owns native binding and lifetime and must provide the exact immutable creation provenance.
     // Only one live Buffer wrapper may name a VkBuffer per Device.
     [[nodiscard]] BufferHandle createHandleForNativeBuffer(
         ObjectType objectType,
         Object buffer,
         const BufferDesc& desc,
-        VkBufferUsageFlags nativeUsage
+        const NativeBufferProvenance& nativeProvenance
     );
     [[nodiscard]] ShaderHandle createShader(const ShaderDesc& d, const void* binary, usize binarySize);
     [[nodiscard]] ShaderHandle createShaderSpecialization(Shader* baseShader, const ShaderSpecialization* constants, u32 numConstants);
@@ -3288,10 +3351,6 @@ public:
     bool isAnyGpuMarkerEnabled(){ return isGpuCrashDiagnosticsEnabled() || isAmdBreadcrumbEnabled(); }
     [[nodiscard]] GpuCrashTracker& getGpuCrashTracker(){ return m_gpuCrashTracker; }
     void captureGpuCrash(AStringView context)noexcept;
-#if defined(NWB_GPU_FAULT_INJECTION)
-    // Test-only device-loss fault injection.
-    void debugTriggerGpuFault(u64 faultDeviceAddress);
-#endif
 
     [[nodiscard]] AmdBreadcrumbWrite reserveAmdBreadcrumb(
         const GpuPhysicalQueueId& queue,

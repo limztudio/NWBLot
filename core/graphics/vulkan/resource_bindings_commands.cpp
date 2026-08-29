@@ -227,6 +227,7 @@ void CommandList::bindDescriptorBufferHeapNative(
 
     DescriptorBufferManager* const manager = m_context.descriptorBufferManager;
     Queue* const expectedQueue = m_device.getQueue(m_creationDesc.physicalQueue);
+    const GpuPhysicalQueueInfo* const exactQueueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     TrackedCommandBuffer* const activeCommandBuffer = m_currentCmdBuf.get();
     if(
         !m_isRecording
@@ -236,6 +237,7 @@ void CommandList::bindDescriptorBufferHeapNative(
         || activeCommandBuffer->m_arenaState != TrackedCommandBufferArenaState::Leased
         || &activeCommandBuffer->m_context != &m_context
         || !expectedQueue
+        || !exactQueueInfo
         || &activeCommandBuffer->m_queue != expectedQueue
         || m_recordingLeaseSerial == 0u
         || &heap.m_device != &m_device
@@ -321,17 +323,9 @@ void CommandList::bindDescriptorBufferHeapNative(
         return;
     }
 
-    for(const BufferHandle& retainedBuffer : heap.m_resourceDescriptorBuffers){
-        if(retainedBuffer && !m_device.isBufferReadyForGpuUse(retainedBuffer.get())){
-            rejectCommandRecording(operationName, NWB_TEXT("heap retains a foreign or unready buffer"));
-            return;
-        }
-    }
-    for(const TextureHandle& retainedTexture : heap.m_resourceDescriptorTextures){
-        if(retainedTexture && !m_device.isTextureReadyForGpuUse(retainedTexture.get())){
-            rejectCommandRecording(operationName, NWB_TEXT("heap retains a foreign or unready texture"));
-            return;
-        }
+    if(!heap.retainedResourcesReadyForQueueLocked(*exactQueueInfo)){
+        rejectCommandRecording(operationName, NWB_TEXT("heap retains a resource unavailable to this exact command queue"));
+        return;
     }
     for(const SamplerHandle& retainedSampler : heap.m_samplerDescriptorResources){
         Sampler* const sampler = retainedSampler.get();
@@ -393,6 +387,7 @@ void CommandList::bindDescriptorBufferHeapNative(
 
         accelStructBlock = heap.m_accelStructBufferBlocks[slot];
         AccelStruct* const accelStruct = heap.m_accelStructResources[slot].get();
+        Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
         if(
             !manager->isLiveSegmentLocked(
                 manager->m_resourceSegment,
@@ -402,6 +397,8 @@ void CommandList::bindDescriptorBufferHeapNative(
             || accelStructBlock.storageIdentity != managerSnapshot.resourceStorageIdentity
             || accelStructBlock.sizeBytes != accelStructLayout->m_descriptorBufferSetSizeBytes
             || !m_device.isAccelStructReadyForGpuUse(accelStruct)
+            || !backingBuffer
+            || !isBufferAdmittedToCommandQueue(*backingBuffer)
             || !accelStruct->m_isTopLevelAtCreation
             || accelStruct->m_deviceAddress == 0u
         ){
@@ -437,13 +434,17 @@ void CommandList::bindDescriptorBufferHeapNative(
         rejectCommandRecording(operationName, NWB_TEXT("command buffer already references another descriptor generation"));
         return;
     }
-    if(!heap.trackCommandBufferUseLocked(trackedCommandBuffer)){
+    if(!heap.trackCommandBufferUseLocked(trackedCommandBuffer, m_creationDesc.physicalQueue)){
         rejectCommandRecording(operationName, NWB_TEXT("descriptor-heap command-buffer use identity is exhausted"));
         return;
     }
     for(const BufferHandle& retainedBuffer : heap.m_resourceDescriptorBuffers){
         if(retainedBuffer)
             trackedCommandBuffer.trackRetainedBuffer(*retainedBuffer);
+    }
+    for(const TextureHandle& retainedTexture : heap.m_resourceDescriptorTextures){
+        if(retainedTexture)
+            trackedCommandBuffer.trackRetainedTexture(*retainedTexture);
     }
 
     ensureDescriptorBuffersBound(*manager, managerSnapshot);

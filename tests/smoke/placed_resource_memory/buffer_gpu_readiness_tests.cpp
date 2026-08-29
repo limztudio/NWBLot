@@ -1,7 +1,6 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
 // Buffer GPU-readiness, state-ingress atomicity, retention, close defense, and handoff defense coverage.
 
 
@@ -9,6 +8,8 @@
 
 #include <global/global.h>
 #include <global/unique_ptr.h>
+#include <core/graphics/rhi/queue_sharing.h>
+#include <core/graphics/task_graph/task_graph.h>
 #include <core/graphics/vulkan/backend.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
@@ -34,6 +35,57 @@ using namespace Core;
 
 
 namespace __hidden_buffer_gpu_readiness{
+
+
+struct NativeQueueFamilySet{
+    Vector<u32, Alloc::ScratchArena> familyIndices;
+
+
+    explicit NativeQueueFamilySet(Alloc::ScratchArena& scratchArena)
+        : familyIndices(scratchArena)
+    {}
+
+
+    void append(const u32 familyIndex){
+        for(const u32 existingFamilyIndex : familyIndices){
+            if(existingFamilyIndex == familyIndex)
+                return;
+        }
+        familyIndices.push_back(familyIndex);
+    }
+    [[nodiscard]] bool contains(const u32 familyIndex)const noexcept{
+        for(const u32 existingFamilyIndex : familyIndices){
+            if(existingFamilyIndex == familyIndex)
+                return true;
+        }
+        return false;
+    }
+    [[nodiscard]] VkSharingMode sharingMode()const noexcept{
+        return familyIndices.size() >= 2u ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
+    }
+    [[nodiscard]] u32 size()const noexcept{
+        NWB_ASSERT(familyIndices.size() <= Limit<u32>::s_Max);
+        return static_cast<u32>(familyIndices.size());
+    }
+    [[nodiscard]] const u32* data()const noexcept{
+        return familyIndices.empty() ? nullptr : familyIndices.data();
+    }
+};
+
+
+static void GatherQueueFamilies(
+    GraphicsBackend::Device& device,
+    const ResourceQueueSharing::Mask sharing,
+    NativeQueueFamilySet& result
+){
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    result.familyIndices.reserve(topology.queueCount);
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
+        if(ResourceQueueSharing::IncludesQueueClass(sharing, queue.queueClass))
+            result.append(queue.familyIndex);
+    }
+}
 
 
 class CallerOwnedVulkanBuffer final : NoCopy{
@@ -391,7 +443,7 @@ TEST_F(BufferGpuReadinessTest, ExplicitTransferOnlyNativeUsageDoesNotInferOtherC
         GraphicsBackend::ObjectTypes::VK_Buffer,
         Object(static_cast<u64>(0x22d0000au)),
         desc,
-        nativeUsage
+        GraphicsBackend::NativeBufferProvenance{ .usage = nativeUsage }
     );
     ASSERT_TRUE(unmanaged);
     EXPECT_TRUE(device.isBufferReadyForGpuUse(unmanaged.get()));
@@ -446,7 +498,7 @@ TEST_F(BufferGpuReadinessTest, CreationRejectsUnknownQueueSharingBeforeAllocatio
             GraphicsBackend::ObjectTypes::VK_Buffer,
             nativeBuffer,
             invalidNativeDesc,
-            s_NativeUsage
+            GraphicsBackend::NativeBufferProvenance{ .usage = s_NativeUsage }
         ).get() != nullptr;
     });
 
@@ -455,11 +507,24 @@ TEST_F(BufferGpuReadinessTest, CreationRejectsUnknownQueueSharingBeforeAllocatio
         .setInitialState(ResourceStates::Common)
         .setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
     ;
+    Alloc::ScratchArena scratchArena(Name("tests/buffer_gpu_readiness/native_queue_sharing_retry"));
+    __hidden_buffer_gpu_readiness::NativeQueueFamilySet nativeQueueFamilies(scratchArena);
+    __hidden_buffer_gpu_readiness::GatherQueueFamilies(
+        device,
+        validNativeDesc.queueSharing,
+        nativeQueueFamilies
+    );
+    const bool usesConcurrentSharing = nativeQueueFamilies.sharingMode() == VK_SHARING_MODE_CONCURRENT;
     BufferHandle retry = device.createHandleForNativeBuffer(
         GraphicsBackend::ObjectTypes::VK_Buffer,
         nativeBuffer,
         validNativeDesc,
-        s_NativeUsage
+        GraphicsBackend::NativeBufferProvenance{
+            .usage = s_NativeUsage,
+            .sharingMode = nativeQueueFamilies.sharingMode(),
+            .queueFamilyIndexCount = usesConcurrentSharing ? nativeQueueFamilies.size() : 0u,
+            .queueFamilyIndices = usesConcurrentSharing ? nativeQueueFamilies.data() : nullptr,
+        }
     );
     ASSERT_TRUE(retry);
     EXPECT_EQ(
@@ -467,6 +532,369 @@ TEST_F(BufferGpuReadinessTest, CreationRejectsUnknownQueueSharingBeforeAllocatio
         ResourceQueueSharing::GraphicsAsyncComputeAndTransfer
     );
     EXPECT_TRUE(retry->descriptionMatchesCreation());
+}
+
+
+TEST_F(BufferGpuReadinessTest, NativeProvenanceRejectsMalformedSharingAndProtectedFlagsBeforeIdentityPublication){
+    auto& device = BufferGpuReadinessTest::device();
+    constexpr VkBufferUsageFlags s_NativeUsage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    const BufferDesc exclusiveDesc = BufferDesc()
+        .setByteSize(256u)
+        .setInitialState(ResourceStates::Common)
+    ;
+    BufferDesc graphicsDesc = exclusiveDesc;
+    graphicsDesc.setQueueSharing(ResourceQueueSharing::Graphics);
+    const Object nativeBuffer(static_cast<u64>(0x22d00110u));
+    const u32 queueFamilyIndex = 0u;
+    const Array<u32, 2u> queueFamilies = { 0u, 1u };
+    const Array<u32, 2u> duplicateQueueFamilies = { 0u, 0u };
+    const Array<u32, 2u> outOfRangeQueueFamilies = { 0u, VK_QUEUE_FAMILY_IGNORED };
+    const auto expectDiagnosticRejection = [](const auto& operation){
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+        EXPECT_DEATH_IF_SUPPORTED({ EXPECT_FALSE(operation()); }, "");
+#else
+        EXPECT_FALSE(operation());
+#endif
+    };
+
+    expectDiagnosticRejection([&](){
+        return device.createHandleForNativeBuffer(
+            GraphicsBackend::ObjectTypes::VK_Buffer,
+            nativeBuffer,
+            exclusiveDesc,
+            GraphicsBackend::NativeBufferProvenance{}
+        ).get() != nullptr;
+    });
+    expectDiagnosticRejection([&](){
+        return device.createHandleForNativeBuffer(
+            GraphicsBackend::ObjectTypes::VK_Buffer,
+            nativeBuffer,
+            exclusiveDesc,
+            GraphicsBackend::NativeBufferProvenance{
+                .usage = s_NativeUsage,
+                .flags = VK_BUFFER_CREATE_PROTECTED_BIT,
+            }
+        ).get() != nullptr;
+    });
+    expectDiagnosticRejection([&](){
+        return device.createHandleForNativeBuffer(
+            GraphicsBackend::ObjectTypes::VK_Buffer,
+            nativeBuffer,
+            graphicsDesc,
+            GraphicsBackend::NativeBufferProvenance{
+                .usage = s_NativeUsage,
+                .sharingMode = static_cast<VkSharingMode>(VK_SHARING_MODE_MAX_ENUM),
+            }
+        ).get() != nullptr;
+    });
+    expectDiagnosticRejection([&](){
+        return device.createHandleForNativeBuffer(
+            GraphicsBackend::ObjectTypes::VK_Buffer,
+            nativeBuffer,
+            exclusiveDesc,
+            GraphicsBackend::NativeBufferProvenance{
+                .usage = s_NativeUsage,
+                .queueFamilyIndexCount = 1u,
+                .queueFamilyIndices = &queueFamilyIndex,
+            }
+        ).get() != nullptr;
+    });
+    expectDiagnosticRejection([&](){
+        return device.createHandleForNativeBuffer(
+            GraphicsBackend::ObjectTypes::VK_Buffer,
+            nativeBuffer,
+            graphicsDesc,
+            GraphicsBackend::NativeBufferProvenance{
+                .usage = s_NativeUsage,
+                .sharingMode = VK_SHARING_MODE_CONCURRENT,
+                .queueFamilyIndexCount = 1u,
+                .queueFamilyIndices = &queueFamilyIndex,
+            }
+        ).get() != nullptr;
+    });
+    expectDiagnosticRejection([&](){
+        return device.createHandleForNativeBuffer(
+            GraphicsBackend::ObjectTypes::VK_Buffer,
+            nativeBuffer,
+            graphicsDesc,
+            GraphicsBackend::NativeBufferProvenance{
+                .usage = s_NativeUsage,
+                .sharingMode = VK_SHARING_MODE_CONCURRENT,
+                .queueFamilyIndexCount = 2u,
+                .queueFamilyIndices = nullptr,
+            }
+        ).get() != nullptr;
+    });
+    expectDiagnosticRejection([&](){
+        return device.createHandleForNativeBuffer(
+            GraphicsBackend::ObjectTypes::VK_Buffer,
+            nativeBuffer,
+            exclusiveDesc,
+            GraphicsBackend::NativeBufferProvenance{
+                .usage = s_NativeUsage,
+                .sharingMode = VK_SHARING_MODE_CONCURRENT,
+                .queueFamilyIndexCount = static_cast<u32>(queueFamilies.size()),
+                .queueFamilyIndices = queueFamilies.data(),
+            }
+        ).get() != nullptr;
+    });
+    expectDiagnosticRejection([&](){
+        return device.createHandleForNativeBuffer(
+            GraphicsBackend::ObjectTypes::VK_Buffer,
+            nativeBuffer,
+            graphicsDesc,
+            GraphicsBackend::NativeBufferProvenance{
+                .usage = s_NativeUsage,
+                .sharingMode = VK_SHARING_MODE_CONCURRENT,
+                .queueFamilyIndexCount = static_cast<u32>(duplicateQueueFamilies.size()),
+                .queueFamilyIndices = duplicateQueueFamilies.data(),
+            }
+        ).get() != nullptr;
+    });
+    expectDiagnosticRejection([&](){
+        return device.createHandleForNativeBuffer(
+            GraphicsBackend::ObjectTypes::VK_Buffer,
+            nativeBuffer,
+            graphicsDesc,
+            GraphicsBackend::NativeBufferProvenance{
+                .usage = s_NativeUsage,
+                .sharingMode = VK_SHARING_MODE_CONCURRENT,
+                .queueFamilyIndexCount = static_cast<u32>(outOfRangeQueueFamilies.size()),
+                .queueFamilyIndices = outOfRangeQueueFamilies.data(),
+            }
+        ).get() != nullptr;
+    });
+
+    BufferHandle retry = device.createHandleForNativeBuffer(
+        GraphicsBackend::ObjectTypes::VK_Buffer,
+        nativeBuffer,
+        exclusiveDesc,
+        GraphicsBackend::NativeBufferProvenance{ .usage = s_NativeUsage }
+    );
+    ASSERT_TRUE(retry);
+    EXPECT_TRUE(device.isBufferReadyForGpuUse(retry.get(), s_NativeUsage));
+}
+
+
+TEST_F(BufferGpuReadinessTest, NativeInitialStateKnowledgeSurvivesTypedTaskGraphImport){
+    auto& device = BufferGpuReadinessTest::device();
+    constexpr VkBufferUsageFlags s_NativeUsage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    const BufferDesc desc = BufferDesc()
+        .setByteSize(256u)
+        .setInitialState(ResourceStates::CopySource)
+        .setKeepInitialState(true)
+    ;
+    BufferHandle unknownState = device.createHandleForNativeBuffer(
+        GraphicsBackend::ObjectTypes::VK_Buffer,
+        Object(static_cast<u64>(0x22d00111u)),
+        desc,
+        GraphicsBackend::NativeBufferProvenance{
+            .usage = s_NativeUsage,
+            .initialStateKnown = false,
+        }
+    );
+    BufferHandle knownState = device.createHandleForNativeBuffer(
+        GraphicsBackend::ObjectTypes::VK_Buffer,
+        Object(static_cast<u64>(0x22d00112u)),
+        desc,
+        GraphicsBackend::NativeBufferProvenance{
+            .usage = s_NativeUsage,
+            .initialStateKnown = true,
+        }
+    );
+    ASSERT_TRUE(unknownState);
+    ASSERT_TRUE(knownState);
+
+    GpuTaskGraph graph(BufferGpuReadinessTest::arena());
+    const GpuGraphResourceId unknownResource = graph.importBuffer(
+        unknownState,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/buffer_native_provenance/unknown_initial_state"))
+            .setMarkerLabel("Unknown Native Buffer Initial State")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId knownResource = graph.importBuffer(
+        knownState,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/buffer_native_provenance/known_initial_state"))
+            .setMarkerLabel("Known Native Buffer Initial State")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    ASSERT_TRUE(unknownResource.valid());
+    ASSERT_TRUE(knownResource.valid());
+    EXPECT_EQ(graph.resourceAt(unknownResource.index).initialState, ResourceStates::Unknown);
+    EXPECT_EQ(graph.resourceAt(knownResource.index).initialState, ResourceStates::CopySource);
+}
+
+
+TEST_F(BufferGpuReadinessTest, UnknownNativeStateOwnershipReleaseDoesNotUseDescriptorFallback){
+    auto& device = BufferGpuReadinessTest::device();
+    constexpr VkBufferUsageFlags s_NativeUsage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    const BufferDesc desc = BufferDesc()
+        .setByteSize(256u)
+        .setInitialState(ResourceStates::CopySource)
+        .setKeepInitialState(true)
+    ;
+    __hidden_buffer_gpu_readiness::CallerOwnedVulkanBuffer nativeOwner(device, desc.byteSize, s_NativeUsage);
+    ASSERT_TRUE(nativeOwner.valid());
+    BufferHandle buffer = device.createHandleForNativeBuffer(
+        GraphicsBackend::ObjectTypes::VK_Buffer,
+        nativeOwner.nativeHandle(),
+        desc,
+        GraphicsBackend::NativeBufferProvenance{
+            .usage = s_NativeUsage,
+            .initialStateKnown = false,
+        }
+    );
+    ASSERT_TRUE(buffer);
+    ASSERT_EQ(buffer->resolveTaskGraphImportInitialState(), ResourceStates::Unknown);
+
+    const u32 referencesBefore = buffer->getReferenceCount();
+    CommandListHandle commandList = device.createCommandList();
+    ASSERT_TRUE(commandList);
+    commandList->open();
+    commandList->releaseBufferOwnership(
+        buffer.get(),
+        device.getPrimaryPhysicalQueue(CommandQueue::Graphics)
+    );
+    EXPECT_TRUE(commandList->commandRecordingFailed());
+    EXPECT_FALSE(commandList->hasExplicitBufferState(buffer.get()));
+    EXPECT_EQ(buffer->getReferenceCount(), referencesBefore);
+    commandList->close();
+    EXPECT_FALSE(commandList->hasCommandBuffer());
+}
+
+
+TEST_F(BufferGpuReadinessTest, ConcurrentNativeSharingCopiesFamiliesAndEnforcesExactLogicalAdmission){
+    auto& device = BufferGpuReadinessTest::device();
+    Alloc::ScratchArena scratchArena(Name("tests/buffer_native_provenance/queue_families"));
+    __hidden_buffer_gpu_readiness::NativeQueueFamilySet nativeQueueFamilies(scratchArena);
+    __hidden_buffer_gpu_readiness::GatherQueueFamilies(
+        device,
+        ResourceQueueSharing::Graphics,
+        nativeQueueFamilies
+    );
+    ASSERT_GT(nativeQueueFamilies.size(), 0u);
+    const BufferDesc desc = BufferDesc()
+        .setByteSize(256u)
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::Graphics)
+    ;
+    const Object nativeBuffer(static_cast<u64>(0x22d00113u));
+    const auto expectDiagnosticRejection = [](const auto& operation){
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+        EXPECT_DEATH_IF_SUPPORTED({ EXPECT_FALSE(operation()); }, "");
+#else
+        EXPECT_FALSE(operation());
+#endif
+    };
+
+    __hidden_buffer_gpu_readiness::NativeQueueFamilySet mixedQueueFamilies(scratchArena);
+    __hidden_buffer_gpu_readiness::GatherQueueFamilies(
+        device,
+        ResourceQueueSharing::GraphicsAndTransfer,
+        mixedQueueFamilies
+    );
+    if(mixedQueueFamilies.sharingMode() == VK_SHARING_MODE_CONCURRENT){
+        const BufferDesc mixedDesc = BufferDesc()
+            .setByteSize(256u)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+        ;
+        expectDiagnosticRejection([&](){
+            return device.createHandleForNativeBuffer(
+                GraphicsBackend::ObjectTypes::VK_Buffer,
+                nativeBuffer,
+                mixedDesc,
+                GraphicsBackend::NativeBufferProvenance{ .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT }
+            ).get() != nullptr;
+        });
+    }
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    __hidden_buffer_gpu_readiness::NativeQueueFamilySet allQueueFamilies(scratchArena);
+    allQueueFamilies.familyIndices.reserve(topology.queueCount);
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex)
+        allQueueFamilies.append(topology.queues[queueIndex].familyIndex);
+    if(allQueueFamilies.size() >= 3u){
+        __hidden_buffer_gpu_readiness::NativeQueueFamilySet omittedQueueFamilies(scratchArena);
+        omittedQueueFamilies.familyIndices.reserve(2u);
+        const u32 omittedLogicalFamily = nativeQueueFamilies.familyIndices[0u];
+        for(const u32 familyIndex : allQueueFamilies.familyIndices){
+            if(familyIndex == omittedLogicalFamily)
+                continue;
+            omittedQueueFamilies.append(familyIndex);
+            if(omittedQueueFamilies.size() == 2u)
+                break;
+        }
+        ASSERT_EQ(omittedQueueFamilies.size(), 2u);
+        expectDiagnosticRejection([&](){
+            return device.createHandleForNativeBuffer(
+                GraphicsBackend::ObjectTypes::VK_Buffer,
+                nativeBuffer,
+                desc,
+                GraphicsBackend::NativeBufferProvenance{
+                    .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                    .sharingMode = VK_SHARING_MODE_CONCURRENT,
+                    .queueFamilyIndexCount = omittedQueueFamilies.size(),
+                    .queueFamilyIndices = omittedQueueFamilies.data(),
+                }
+            ).get() != nullptr;
+        });
+    }
+
+    const GpuPhysicalQueueInfo* unadmittedQueue = nullptr;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+        if(candidate.queueClass == CommandQueue::Graphics)
+            continue;
+        if(!unadmittedQueue)
+            unadmittedQueue = &candidate;
+        if(nativeQueueFamilies.size() >= 2u || !nativeQueueFamilies.contains(candidate.familyIndex)){
+            unadmittedQueue = &candidate;
+            nativeQueueFamilies.append(candidate.familyIndex);
+            break;
+        }
+    }
+    if(nativeQueueFamilies.sharingMode() != VK_SHARING_MODE_CONCURRENT)
+        GTEST_SKIP() << "Buffer native provenance: no second queue family is available for concurrent import.";
+
+    BufferHandle buffer = device.createHandleForNativeBuffer(
+        GraphicsBackend::ObjectTypes::VK_Buffer,
+        nativeBuffer,
+        desc,
+        GraphicsBackend::NativeBufferProvenance{
+            .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            .sharingMode = VK_SHARING_MODE_CONCURRENT,
+            .queueFamilyIndexCount = nativeQueueFamilies.size(),
+            .queueFamilyIndices = nativeQueueFamilies.data(),
+        }
+    );
+    ASSERT_TRUE(buffer);
+
+    for(u32& familyIndex : nativeQueueFamilies.familyIndices)
+        familyIndex = VK_QUEUE_FAMILY_IGNORED;
+    CommandListHandle admittedList = device.createCommandList();
+    ASSERT_TRUE(admittedList);
+    admittedList->open();
+    admittedList->setEnableUavBarriersForBuffer(buffer.get(), false);
+    EXPECT_FALSE(admittedList->commandRecordingFailed());
+    admittedList->close();
+
+    if(!unadmittedQueue)
+        return;
+
+    CommandListParameters policyParameters;
+    policyParameters.setPhysicalQueue(unadmittedQueue->id);
+    CommandListHandle policyList = device.createCommandList(policyParameters);
+    ASSERT_TRUE(policyList);
+    const u32 bufferReferences = buffer->getReferenceCount();
+    policyList->open();
+    policyList->setEnableUavBarriersForBuffer(buffer.get(), false);
+    EXPECT_TRUE(policyList->commandRecordingFailed());
+    EXPECT_EQ(buffer->getReferenceCount(), bufferReferences);
+    policyList->close();
+    EXPECT_FALSE(policyList->hasCommandBuffer());
 }
 
 
@@ -490,14 +918,14 @@ TEST_F(BufferGpuReadinessTest, NativeUsageMismatchRejectionDoesNotRetainIdentity
             GraphicsBackend::ObjectTypes::VK_Buffer,
             logicalMismatchNativeBuffer,
             vertexDesc,
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+            GraphicsBackend::NativeBufferProvenance{ .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT }
         ).get() != nullptr;
     });
     BufferHandle logicalRetry = device.createHandleForNativeBuffer(
         GraphicsBackend::ObjectTypes::VK_Buffer,
         logicalMismatchNativeBuffer,
         vertexDesc,
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+        GraphicsBackend::NativeBufferProvenance{ .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT }
     );
     ASSERT_TRUE(logicalRetry);
 
@@ -511,14 +939,14 @@ TEST_F(BufferGpuReadinessTest, NativeUsageMismatchRejectionDoesNotRetainIdentity
             GraphicsBackend::ObjectTypes::VK_Buffer,
             stateMismatchNativeBuffer,
             copyDestDesc,
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+            GraphicsBackend::NativeBufferProvenance{ .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT }
         ).get() != nullptr;
     });
     BufferHandle stateRetry = device.createHandleForNativeBuffer(
         GraphicsBackend::ObjectTypes::VK_Buffer,
         stateMismatchNativeBuffer,
         copyDestDesc,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        GraphicsBackend::NativeBufferProvenance{ .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT }
     );
     ASSERT_TRUE(stateRetry);
 
@@ -529,14 +957,16 @@ TEST_F(BufferGpuReadinessTest, NativeUsageMismatchRejectionDoesNotRetainIdentity
                 GraphicsBackend::ObjectTypes::VK_Buffer,
                 featureMismatchNativeBuffer,
                 BufferDesc().setByteSize(256u).setInitialState(ResourceStates::Common),
-                VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                GraphicsBackend::NativeBufferProvenance{
+                    .usage = VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                }
             ).get() != nullptr;
         });
         BufferHandle featureRetry = device.createHandleForNativeBuffer(
             GraphicsBackend::ObjectTypes::VK_Buffer,
             featureMismatchNativeBuffer,
             BufferDesc().setByteSize(256u).setInitialState(ResourceStates::Common),
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+            GraphicsBackend::NativeBufferProvenance{ .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT }
         );
         ASSERT_TRUE(featureRetry);
     }
@@ -582,7 +1012,7 @@ TEST_F(BufferGpuReadinessTest, CallerOwnedNativeBufferRetainsExactUsageAddressAn
         GraphicsBackend::ObjectTypes::VK_Buffer,
         nativeBuffer,
         desc,
-        nativeUsage
+        GraphicsBackend::NativeBufferProvenance{ .usage = nativeUsage }
     );
     ASSERT_TRUE(imported);
     EXPECT_TRUE(device.isBufferReadyForGpuUse(imported.get(), nativeUsage));
@@ -593,7 +1023,7 @@ TEST_F(BufferGpuReadinessTest, CallerOwnedNativeBufferRetainsExactUsageAddressAn
         GraphicsBackend::ObjectTypes::VK_Buffer,
         nativeBuffer,
         desc,
-        nativeUsage
+        GraphicsBackend::NativeBufferProvenance{ .usage = nativeUsage }
     ));
 
     imported.reset();
@@ -601,7 +1031,7 @@ TEST_F(BufferGpuReadinessTest, CallerOwnedNativeBufferRetainsExactUsageAddressAn
         GraphicsBackend::ObjectTypes::VK_Buffer,
         nativeBuffer,
         desc,
-        nativeUsage
+        GraphicsBackend::NativeBufferProvenance{ .usage = nativeUsage }
     );
     ASSERT_TRUE(reimported);
     EXPECT_TRUE(device.isBufferReadyForGpuUse(reimported.get(), nativeUsage));
@@ -1042,7 +1472,7 @@ TEST_F(BufferGpuReadinessTest, DuplicateNativeBufferWrapperIsRejectedWithoutDist
         GraphicsBackend::ObjectTypes::VK_Buffer,
         nativeBuffer,
         desc,
-        nativeUsage
+        GraphicsBackend::NativeBufferProvenance{ .usage = nativeUsage }
     );
     EXPECT_FALSE(duplicate);
     EXPECT_EQ(original->getReferenceCount(), originalReferences);
@@ -1052,7 +1482,7 @@ TEST_F(BufferGpuReadinessTest, DuplicateNativeBufferWrapperIsRejectedWithoutDist
         GraphicsBackend::ObjectTypes::VK_Buffer,
         nativeBuffer,
         desc,
-        nativeUsage
+        GraphicsBackend::NativeBufferProvenance{ .usage = nativeUsage }
     );
     EXPECT_FALSE(retryDuplicate);
     EXPECT_EQ(original->getReferenceCount(), originalReferences);

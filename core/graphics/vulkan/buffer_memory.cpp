@@ -389,7 +389,7 @@ bool Device::isBufferReadyForGpuUse(
         m_context,
         buffer.m_creationDesc,
         buffer.m_managed,
-        buffer.m_usage,
+        buffer.m_bufferInfo.usage,
         requiredUsage
     ))
         return false;

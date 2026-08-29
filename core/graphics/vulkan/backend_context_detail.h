@@ -11,8 +11,6 @@
 #include "swapchain_presentation.h"
 
 #include <core/common/log.h>
-#include <global/environment.h>
-#include <global/text_utils.h>
 
 #include <sstream>
 
@@ -41,7 +39,6 @@ using ScratchStringStream = AStringStream<Alloc::ScratchArena>;
 using ScratchStringSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, Alloc::ScratchArena>;
 
 static constexpr u64 s_BytesPerMiB = 1024ull * 1024ull;
-static constexpr usize s_SwapChainQueueFamilyIndexCount = 2u;
 // HDR10 metadata mirrors the Rec.2020/ST.2084 presentation transform. Keep the mastering display values named so
 // a presentation-policy adjustment cannot silently leave Vulkan's advertised metadata behind.
 static constexpr VkXYColorEXT s_Hdr10DisplayPrimaryRed = { 0.708f, 0.292f };
@@ -80,31 +77,6 @@ inline ScratchStringStream MakeScratchStringStream(Alloc::ScratchArena& arena){
 inline ScratchString MakeScratchString(Alloc::ScratchArena& arena, const AStringView text){
     return ScratchString(text, arena);
 }
-
-#if defined(NWB_GPU_FAULT_INJECTION)
-static constexpr usize s_GpuFaultInjectionScratchBytes = 1024u;
-
-inline bool ReadGpuFaultInjectionValue(u64& outFaultDeviceAddress){
-    outFaultDeviceAddress = 0u;
-
-    Alloc::ScratchArena arena(VulkanArenaScope::s_DeviceExtensionSetupArena, s_GpuFaultInjectionScratchBytes);
-    ScratchString value(arena);
-    if(!ReadEnvironmentVariable("NWB_DEBUG_GPU_FAULT_INJECTION", value))
-        return false;
-
-    u64 parsedValue = 0u;
-    if(!ParseU64(AStringView(value.data(), value.size()), parsedValue)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: [debug] ignoring invalid NWB_DEBUG_GPU_FAULT_INJECTION value; expected an unsigned integer, with 0 disabling fault injection."));
-        return false;
-    }
-
-    if(parsedValue == 0u)
-        return false;
-
-    outFaultDeviceAddress = parsedValue;
-    return true;
-}
-#endif
 
 template<typename Set>
 static Vector<const char*, Alloc::ScratchArena> StringSetToVector(const Set& set, Alloc::ScratchArena& arena){

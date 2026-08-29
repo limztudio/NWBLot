@@ -267,13 +267,24 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
-    uint32_t queueFamilyIndices[VulkanDetail::s_SwapChainQueueFamilyIndexCount] = { static_cast<uint32_t>(m_graphicsQueueFamily), static_cast<uint32_t>(m_presentQueueFamily) };
-    uint32_t queueFamilyIndexCount = 1;
-    if(m_presentQueueFamily != m_graphicsQueueFamily){
-        queueFamilyIndices[queueFamilyIndexCount] = static_cast<uint32_t>(m_presentQueueFamily);
-        ++queueFamilyIndexCount;
+    const GpuPhysicalQueueTopology topology = m_rhiDevice->getPhysicalQueueTopology();
+    Vector<u32, Alloc::ScratchArena> queueFamilyIndices(scratchArena);
+    queueFamilyIndices.reserve(topology.queueCount + 1u);
+    const auto appendQueueFamily = [&queueFamilyIndices](const u32 familyIndex){
+        for(const u32 existingFamilyIndex : queueFamilyIndices){
+            if(existingFamilyIndex == familyIndex)
+                return;
+        }
+        queueFamilyIndices.push_back(familyIndex);
+    };
+    appendQueueFamily(static_cast<u32>(m_graphicsQueueFamily));
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
+        if(queue.queueClass == CommandQueue::Graphics)
+            appendQueueFamily(queue.familyIndex);
     }
-    const bool enableSwapChainSharing = queueFamilyIndexCount > 1;
+    appendQueueFamily(static_cast<u32>(m_presentQueueFamily));
+    const bool enableSwapChainSharing = queueFamilyIndices.size() > 1u;
 
     VkSwapchainCreateInfoKHR desc = {};
     desc.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -285,8 +296,9 @@ bool BackendContext::createVulkanSwapChain(){
     desc.imageArrayLayers = 1;
     desc.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     desc.imageSharingMode = enableSwapChainSharing ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
-    desc.queueFamilyIndexCount = enableSwapChainSharing ? queueFamilyIndexCount : 0;
-    desc.pQueueFamilyIndices = enableSwapChainSharing ? queueFamilyIndices : nullptr;
+    NWB_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
+    desc.queueFamilyIndexCount = enableSwapChainSharing ? static_cast<u32>(queueFamilyIndices.size()) : 0u;
+    desc.pQueueFamilyIndices = enableSwapChainSharing ? queueFamilyIndices.data() : nullptr;
     desc.preTransform = selectedPreTransform;
     desc.compositeAlpha = selectedCompositeAlpha;
     desc.presentMode = selectedPresentMode;
@@ -348,6 +360,10 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
+    const VkImageCreateFlags swapChainImageFlags = (desc.flags & VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR) != 0u
+        ? VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT | VK_IMAGE_CREATE_EXTENDED_USAGE_BIT
+        : 0u
+    ;
     m_swapChainImages.reserve(imageCount);
     for(uint32_t imageIndex = 0; imageIndex < imageCount; ++imageIndex){
         const VkImage image = images[imageIndex];
@@ -361,20 +377,27 @@ bool BackendContext::createVulkanSwapChain(){
         textureDesc.initialState = ResourceStates::Present;
         textureDesc.keepInitialState = true;
         textureDesc.isRenderTarget = true;
+        textureDesc.queueSharing = ResourceQueueSharing::Graphics;
+        const NativeTextureProvenance nativeProvenance{
+            .usage = desc.imageUsage,
+            .flags = swapChainImageFlags,
+            .sharingMode = desc.imageSharingMode,
+            .queueFamilyIndexCount = desc.queueFamilyIndexCount,
+            .queueFamilyIndices = desc.pQueueFamilyIndices,
+            .initialStateKnown = false,
+        };
 
-        sci.rhiHandle = m_rhiDevice->createHandleForNativeTexture(ObjectTypes::VK_Image, Object(sci.image), textureDesc);
+        sci.rhiHandle = m_rhiDevice->createHandleForNativeTexture(
+            ObjectTypes::VK_Image,
+            Object(sci.image),
+            textureDesc,
+            nativeProvenance
+        );
         if(!sci.rhiHandle){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create RHI handle for a swap chain image."));
             destroySwapChain();
             return false;
         }
-        sci.rhiHandle->m_imageInfo.usage = desc.imageUsage;
-        sci.rhiHandle->m_imageInfo.sharingMode = desc.imageSharingMode;
-        sci.rhiHandle->m_imageInfo.flags = (desc.flags & VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR) != 0u
-            ? VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT
-            : 0u
-        ;
-        sci.rhiHandle->initializeRetainedSubresourceStates(false);
         m_swapChainImages.push_back(Move(sci));
     }
 

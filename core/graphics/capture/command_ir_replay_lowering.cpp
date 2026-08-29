@@ -5,6 +5,7 @@
 #include "command_ir_internal.h"
 
 #include <core/graphics/backend_selection.h>
+#include <core/graphics/rhi/queue_sharing.h>
 #include <core/graphics/task_graph/compiled_graph.h>
 #include <core/graphics/task_graph/task_graph.h>
 
@@ -68,11 +69,15 @@ namespace __hidden_gpu_command_ir_replay_lowering{
     Buffer* const buffer,
     const ResourceStates::Mask requiredState,
     const VkBufferUsageFlags requiredUsage,
-    CommandList& commandList
+    CommandList& commandList,
+    const GpuPhysicalQueueInfo& commandQueue
 )noexcept{
     if(!buffer)
         return GpuCommandIrReplayError::StreamChangedDuringReplay;
-    if(!commandList.getDevice().isBufferReadyForGpuUse(buffer, requiredUsage))
+    if(
+        !commandList.getDevice().isBufferReadyForGpuUse(buffer, requiredUsage)
+        || !ResourceQueueAdmissionAdmitsQueue(buffer->getQueueAdmissionSnapshot(), commandQueue)
+    )
         return GpuCommandIrReplayError::BackendResourceNotReady;
 
     const ResourceStates::Mask permanentState = commandList.getPermanentBufferState(buffer);
@@ -85,11 +90,15 @@ namespace __hidden_gpu_command_ir_replay_lowering{
     Texture* const texture,
     const ResourceStates::Mask requiredState,
     const VkImageUsageFlags requiredUsage,
-    CommandList& commandList
+    CommandList& commandList,
+    const GpuPhysicalQueueInfo& commandQueue
 )noexcept{
     if(!texture)
         return GpuCommandIrReplayError::StreamChangedDuringReplay;
-    if(!commandList.getDevice().isTextureReadyForGpuUse(texture, requiredUsage))
+    if(
+        !commandList.getDevice().isTextureReadyForGpuUse(texture, requiredUsage)
+        || !ResourceQueueAdmissionAdmitsQueue(texture->getQueueAdmissionSnapshot(), commandQueue)
+    )
         return GpuCommandIrReplayError::BackendResourceNotReady;
 
     const ResourceStates::Mask permanentState = commandList.getPermanentTextureState(texture);
@@ -101,7 +110,8 @@ namespace __hidden_gpu_command_ir_replay_lowering{
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBackendOperands(
     const GpuCommandIrBuiltinTaskRecord& record,
     const GpuTaskGraph& graph,
-    CommandList& commandList
+    CommandList& commandList,
+    const GpuPhysicalQueueInfo& commandQueue
 )noexcept{
     switch(record.opcode){
     case GpuCommandIrOpcode::CopyBuffer:{
@@ -112,7 +122,8 @@ namespace __hidden_gpu_command_ir_replay_lowering{
                 source,
                 ResourceStates::CopySource | ResourceStates::CopyDest,
                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                commandList
+                commandList,
+                commandQueue
             );
         }
 
@@ -120,7 +131,8 @@ namespace __hidden_gpu_command_ir_replay_lowering{
             source,
             ResourceStates::CopySource,
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-            commandList
+            commandList,
+            commandQueue
         );
         if(sourceError != GpuCommandIrReplayError::None)
             return sourceError;
@@ -128,7 +140,8 @@ namespace __hidden_gpu_command_ir_replay_lowering{
             destination,
             ResourceStates::CopyDest,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-            commandList
+            commandList,
+            commandQueue
         );
     }
     case GpuCommandIrOpcode::CopyTexture:{
@@ -136,7 +149,8 @@ namespace __hidden_gpu_command_ir_replay_lowering{
             graph.textureForResource(record.source),
             ResourceStates::CopySource,
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-            commandList
+            commandList,
+            commandQueue
         );
         if(sourceError != GpuCommandIrReplayError::None)
             return sourceError;
@@ -144,7 +158,8 @@ namespace __hidden_gpu_command_ir_replay_lowering{
             graph.textureForResource(record.destination),
             ResourceStates::CopyDest,
             VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-            commandList
+            commandList,
+            commandQueue
         );
     }
     case GpuCommandIrOpcode::ClearBuffer:
@@ -152,7 +167,8 @@ namespace __hidden_gpu_command_ir_replay_lowering{
             graph.bufferForResource(record.destination),
             ResourceStates::CopyDest,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-            commandList
+            commandList,
+            commandQueue
         );
     case GpuCommandIrOpcode::ClearTexture:
     case GpuCommandIrOpcode::ClearTextureRectUInt:
@@ -160,7 +176,8 @@ namespace __hidden_gpu_command_ir_replay_lowering{
             graph.textureForResource(record.destination),
             ResourceStates::CopyDest,
             VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-            commandList
+            commandList,
+            commandQueue
         );
     default:
         return GpuCommandIrReplayError::StreamChangedDuringReplay;
@@ -176,6 +193,13 @@ namespace __hidden_gpu_command_ir_replay_lowering{
     CommandList& commandList,
     const GpuCommandIrStreamValidationResult& expectedStreamValidation
 )noexcept{
+    const CommandListParameters commandListDescription = commandList.getResolvedDescription();
+    const GpuPhysicalQueueInfo* const commandQueue = commandList.getDevice().getPhysicalQueueInfo(
+        commandListDescription.physicalQueue
+    );
+    if(!commandQueue)
+        return ReplayFailure(GpuCommandIrReplayError::BackendResourceNotReady, expectedStreamValidation);
+
     GpuCommandIrStreamReader reader(bytes);
     if(reader.validation().failed()){
         return ReplayFailure(
@@ -204,7 +228,12 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         }
 
         if(record.packet == packet){
-            const GpuCommandIrReplayError::Enum operandError = ValidateBackendOperands(record, graph, commandList);
+            const GpuCommandIrReplayError::Enum operandError = ValidateBackendOperands(
+                record,
+                graph,
+                commandList,
+                *commandQueue
+            );
             if(operandError != GpuCommandIrReplayError::None)
                 return ReplayFailure(operandError, expectedStreamValidation, recordIndex);
         }

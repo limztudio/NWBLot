@@ -372,15 +372,79 @@ bool BuildTextureImageViewCreateInfo(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator, const TextureDesc& creationDesc)
+namespace __hidden_texture{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using ImageQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
+
+
+[[nodiscard]] static ImageQueueFamilyVector CopyImageQueueFamilyIndices(
+    const VulkanContext& context,
+    const VkImageCreateInfo& imageInfo
+){
+    ImageQueueFamilyVector result(context.objectArena);
+    if(imageInfo.queueFamilyIndexCount == 0u)
+        return result;
+
+    NWB_ASSERT(imageInfo.pQueueFamilyIndices != nullptr);
+    if(!imageInfo.pQueueFamilyIndices)
+        return result;
+    result.assign(
+        imageInfo.pQueueFamilyIndices,
+        imageInfo.pQueueFamilyIndices + imageInfo.queueFamilyIndexCount
+    );
+    return result;
+}
+
+[[nodiscard]] static VkImageCreateInfo RetainImageCreateInfo(
+    const VkImageCreateInfo& imageInfo,
+    const ImageQueueFamilyVector& queueFamilyIndices
+){
+    NWB_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
+    VkImageCreateInfo result = imageInfo;
+    result.pNext = nullptr;
+    result.queueFamilyIndexCount = static_cast<u32>(queueFamilyIndices.size());
+    result.pQueueFamilyIndices = queueFamilyIndices.empty() ? nullptr : queueFamilyIndices.data();
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Texture::Texture(
+    const VulkanContext& context,
+    VulkanAllocator& allocator,
+    const TextureDesc& creationDesc,
+    const VkImageCreateInfo& imageInfo,
+    const bool initialStateKnown
+)
     : RefCounter<GraphicsResource>(context.threadPool)
     , m_desc(creationDesc)
     , m_creationDesc(creationDesc)
+    , m_creationInitialStateKnown(initialStateKnown)
+    , m_imageQueueFamilyIndices(__hidden_texture::CopyImageQueueFamilyIndices(context, imageInfo))
+    , m_imageInfo(__hidden_texture::RetainImageCreateInfo(imageInfo, m_imageQueueFamilyIndices))
     , m_views(0, TextureViewKeyHasher(), EqualTo<TextureViewKey>(), context.objectArena)
     , m_retainedSubresourceStates(context.objectArena)
     , m_context(context)
     , m_allocator(allocator)
-{}
+{
+    const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels)
+        * static_cast<usize>(m_creationDesc.arraySize)
+    ;
+    const bool retainedInitialStateKnown = m_creationDesc.keepInitialState && initialStateKnown;
+    m_retainedSubresourceStates.assign(subresourceCount, retainedInitialStateKnown ? 1u : 0u);
+}
 Texture::~Texture(){
     const VkImage registeredNativeImage = m_image;
 
@@ -423,15 +487,19 @@ bool Texture::descriptionMatchesCreation()const noexcept{
     return VulkanTextureDetail::TextureDescriptionsEqual(m_desc, m_creationDesc);
 }
 
-bool Texture::hasPartiallyKnownRetainedSubresourceState()const{
-    if(!m_creationDesc.keepInitialState)
-        return false;
+ResourceStates::Mask Texture::resolveTaskGraphImportInitialState()const{
+    if(!m_creationDesc.keepInitialState){
+        return m_managed || m_creationInitialStateKnown
+            ? m_creationDesc.initialState
+            : ResourceStates::Unknown
+        ;
+    }
 
     const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels)
         * static_cast<usize>(m_creationDesc.arraySize)
     ;
     if(subresourceCount == 0u)
-        return false;
+        return ResourceStates::Unknown;
 
     ScopedLock lock(m_retainedSubresourceStatesMutex);
     const usize trackedSubresourceCount = Min(subresourceCount, m_retainedSubresourceStates.size());
@@ -443,10 +511,11 @@ bool Texture::hasPartiallyKnownRetainedSubresourceState()const{
         else
             hasUnknownState = true;
 
-        if(hasKnownState && hasUnknownState)
-            return true;
     }
-    return false;
+    return !hasUnknownState || (!hasKnownState && m_managed)
+        ? m_creationDesc.initialState
+        : ResourceStates::Unknown
+    ;
 }
 
 Object Texture::getNativeHandle(ObjectType objectType){
@@ -551,14 +620,6 @@ void Texture::releaseRevokedNativeImageIdentity(const VkImage expectedNativeImag
         }
     }
     m_allocator.unregisterTextureNativeIdentity(expectedNativeImage, *this);
-}
-
-void Texture::initializeRetainedSubresourceStates(const bool known){
-    const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels)
-        * static_cast<usize>(m_creationDesc.arraySize)
-    ;
-    ScopedLock lock(m_retainedSubresourceStatesMutex);
-    m_retainedSubresourceStates.assign(subresourceCount, known ? 1u : 0u);
 }
 
 bool Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel){

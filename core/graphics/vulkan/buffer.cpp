@@ -48,16 +48,67 @@ bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOff
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_buffer{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using BufferQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
+
+[[nodiscard]] static BufferQueueFamilyVector CopyBufferQueueFamilyIndices(
+    const VulkanContext& context,
+    const VkBufferCreateInfo& bufferInfo
+){
+    BufferQueueFamilyVector result(context.objectArena);
+    if(bufferInfo.queueFamilyIndexCount == 0u)
+        return result;
+
+    NWB_ASSERT(bufferInfo.pQueueFamilyIndices != nullptr);
+    if(!bufferInfo.pQueueFamilyIndices)
+        return result;
+    result.assign(
+        bufferInfo.pQueueFamilyIndices,
+        bufferInfo.pQueueFamilyIndices + bufferInfo.queueFamilyIndexCount
+    );
+    return result;
+}
+
+[[nodiscard]] static VkBufferCreateInfo RetainBufferCreateInfo(
+    const VkBufferCreateInfo& bufferInfo,
+    const BufferQueueFamilyVector& queueFamilyIndices
+){
+    NWB_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
+    VkBufferCreateInfo result = bufferInfo;
+    result.pNext = nullptr;
+    result.queueFamilyIndexCount = static_cast<u32>(queueFamilyIndices.size());
+    result.pQueueFamilyIndices = queueFamilyIndices.empty() ? nullptr : queueFamilyIndices.data();
+    return result;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Buffer::Buffer(
     const VulkanContext& context,
     VulkanAllocator& allocator,
     const BufferDesc& creationDesc,
-    const VkBufferUsageFlags usage
+    const VkBufferCreateInfo& bufferInfo,
+    const bool initialStateKnown
 )
     : RefCounter<GraphicsResource>(context.threadPool)
     , m_desc(creationDesc)
     , m_creationDesc(creationDesc)
-    , m_usage(usage)
+    , m_creationInitialStateKnown(initialStateKnown)
+    , m_bufferQueueFamilyIndices(__hidden_buffer::CopyBufferQueueFamilyIndices(context, bufferInfo))
+    , m_bufferInfo(__hidden_buffer::RetainBufferCreateInfo(bufferInfo, m_bufferQueueFamilyIndices))
+    , m_retainedStateKnown(creationDesc.keepInitialState && initialStateKnown)
     , m_versionTracking(context.objectArena)
     , m_bufferViews(context.objectArena)
     , m_context(context)
@@ -111,11 +162,30 @@ bool Buffer::descriptionMatchesCreation()const noexcept{
     return VulkanBufferDetail::BufferDescriptionsEqual(m_desc, m_creationDesc);
 }
 
+ResourceStates::Mask Buffer::resolveTaskGraphImportInitialState()const noexcept{
+    if(!m_creationDesc.keepInitialState){
+        return m_managed || m_creationInitialStateKnown
+            ? m_creationDesc.initialState
+            : ResourceStates::Unknown
+        ;
+    }
+    return isRetainedStateKnown() ? m_creationDesc.initialState : ResourceStates::Unknown;
+}
+
 Object Buffer::getNativeHandle(ObjectType objectType){
     if(objectType != ObjectTypes::VK_Buffer)
         return nullptr;
 
     return Object(m_buffer);
+}
+
+bool Buffer::isRetainedStateKnown()const noexcept{
+    return m_retainedStateKnown.load(MemoryOrder::acquire);
+}
+
+void Buffer::setRetainedStateKnown(const bool known)noexcept{
+    if(m_creationDesc.keepInitialState)
+        m_retainedStateKnown.store(known, MemoryOrder::release);
 }
 
 
@@ -246,8 +316,6 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
 
     }
 
-    auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator, d, usageFlags);
-
     u64 size = d.byteSize;
 
     if(d.isVolatile){
@@ -255,17 +323,13 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         u64 alignedSize = 0;
         if(!AlignUpU64Checked(size, alignment, alignedSize)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: aligned size overflows"));
-            DestroyArenaObject(m_context.objectArena, buffer);
             return nullptr;
         }
         if(alignedSize > Limit<u64>::s_Max / d.maxVersions){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: versioned size overflows"));
-            DestroyArenaObject(m_context.objectArena, buffer);
             return nullptr;
         }
         size = alignedSize * d.maxVersions;
-
-        buffer->m_versionTracking.resize(d.maxVersions);
     }
 
     VkBufferCreateInfo bufferInfo{};
@@ -276,6 +340,10 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     bufferInfo.sharingMode = sharingInfo.mode;
     bufferInfo.queueFamilyIndexCount = sharingInfo.familyIndexCount;
     bufferInfo.pQueueFamilyIndices = sharingInfo.data();
+
+    auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator, d, bufferInfo, true);
+    if(d.isVolatile)
+        buffer->m_versionTracking.resize(d.maxVersions);
 
     if(d.isVirtual)
         res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer->m_buffer);
@@ -305,82 +373,6 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
 
     return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
-
-BufferHandle Device::createHandleForNativeBuffer(
-    const ObjectType objectType,
-    const Object nativeBufferHandle,
-    const BufferDesc& desc,
-    const VkBufferUsageFlags nativeUsage
-){
-    if(!ResourceQueueSharing::IsValid(desc.queueSharing)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: queue sharing contains unknown bits")
-        );
-        return nullptr;
-    }
-    if(objectType != ObjectTypes::VK_Buffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: object type is not VK_Buffer"));
-        return nullptr;
-    }
-
-    auto* nativeBuffer = static_cast<VkBuffer_T*>(nativeBufferHandle);
-    if(nativeBuffer == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: buffer handle is null"));
-        return nullptr;
-    }
-    if(desc.byteSize == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: byte size is zero"));
-        return nullptr;
-    }
-    if(!VulkanBufferDetail::IsBufferCreationStateMaskValid(desc.initialState)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: initial state is invalid for a buffer"));
-        return nullptr;
-    }
-
-    if(!VulkanBufferDetail::IsBufferUsageCompatibleWithDescription(desc, nativeUsage)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: native usage contradicts the logical description"));
-        return nullptr;
-    }
-    if(!VulkanBufferDetail::IsBufferUsageCompatibleWithResourceStates(desc, nativeUsage, desc.initialState)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: native usage contradicts the declared initial state"));
-        return nullptr;
-    }
-    if(!VulkanBufferDetail::IsBufferUsageSupportedByDevice(m_context, nativeUsage)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: native usage is unsupported by the device"));
-        return nullptr;
-    }
-
-    u64 deviceAddress = 0u;
-    if(nativeUsage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT){
-        VkBufferDeviceAddressInfo addressInfo{};
-        addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        addressInfo.buffer = nativeBuffer;
-        deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
-        if(deviceAddress == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: device address is zero"));
-            return nullptr;
-        }
-    }
-
-    auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator, desc, nativeUsage);
-    buffer->m_buffer = nativeBuffer;
-    buffer->m_deviceAddress = deviceAddress;
-    buffer->m_managed = false;
-
-    if(!m_allocator.tryRegisterBufferNativeIdentity(*buffer)){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: a live wrapper already exists")
-        );
-        DestroyArenaObject(m_context.objectArena, buffer);
-        return nullptr;
-    }
-
-    return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool CommandList::prepareUploadStaging(
     const usize dataSize,

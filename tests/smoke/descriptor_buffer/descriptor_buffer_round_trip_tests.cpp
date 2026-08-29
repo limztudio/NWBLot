@@ -156,6 +156,111 @@ private:
 };
 
 
+class CallerOwnedRetainedStateBuffer final : NoCopy{
+private:
+    [[nodiscard]] static Object encode(const VkBuffer buffer)noexcept{
+#if VK_USE_64_BIT_PTR_DEFINES
+        return Object(static_cast<void*>(buffer));
+#else
+        return Object(static_cast<u64>(buffer));
+#endif
+    }
+
+
+public:
+    CallerOwnedRetainedStateBuffer(
+        GraphicsBackend::Device& device,
+        const u64 byteSize,
+        const VkBufferUsageFlags usage
+    )
+        : m_context(VulkanTestDeviceProbe::capture(device))
+    {
+        if(
+            !m_context.valid()
+            || byteSize == 0u
+            || usage == 0u
+            || !vkCreateBuffer
+            || !vkDestroyBuffer
+            || !vkGetBufferMemoryRequirements
+            || !vkAllocateMemory
+            || !vkFreeMemory
+            || !vkBindBufferMemory
+        )
+            return;
+
+        const VkBufferCreateInfo bufferInfo{
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0u,
+            .size = byteSize,
+            .usage = usage,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .queueFamilyIndexCount = 0u,
+            .pQueueFamilyIndices = nullptr,
+        };
+        if(vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &m_buffer) != VK_SUCCESS){
+            m_buffer = VK_NULL_HANDLE;
+            return;
+        }
+
+        VkMemoryRequirements memoryRequirements{};
+        vkGetBufferMemoryRequirements(m_context.device, m_buffer, &memoryRequirements);
+        u32 memoryTypeIndex = VK_MAX_MEMORY_TYPES;
+        for(u32 candidateIndex = 0u; candidateIndex < VK_MAX_MEMORY_TYPES; ++candidateIndex){
+            if((memoryRequirements.memoryTypeBits & (1u << candidateIndex)) != 0u){
+                memoryTypeIndex = candidateIndex;
+                break;
+            }
+        }
+        if(memoryTypeIndex == VK_MAX_MEMORY_TYPES)
+            return;
+
+        const VkMemoryAllocateInfo allocationInfo{
+            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .pNext = nullptr,
+            .allocationSize = memoryRequirements.size,
+            .memoryTypeIndex = memoryTypeIndex,
+        };
+        if(vkAllocateMemory(
+            m_context.device,
+            &allocationInfo,
+            m_context.allocationCallbacks,
+            &m_memory
+        ) != VK_SUCCESS){
+            m_memory = VK_NULL_HANDLE;
+            return;
+        }
+        if(vkBindBufferMemory(m_context.device, m_buffer, m_memory, 0u) != VK_SUCCESS)
+            return;
+        m_bound = true;
+    }
+    ~CallerOwnedRetainedStateBuffer(){
+        if(m_buffer != VK_NULL_HANDLE){
+            vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
+            m_buffer = VK_NULL_HANDLE;
+        }
+        if(m_memory != VK_NULL_HANDLE){
+            vkFreeMemory(m_context.device, m_memory, m_context.allocationCallbacks);
+            m_memory = VK_NULL_HANDLE;
+        }
+    }
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{ return m_bound; }
+    [[nodiscard]] Object nativeHandle()const noexcept{
+        return valid() ? encode(m_buffer) : Object(u64{0u});
+    }
+
+
+private:
+    VulkanTestDeviceContext m_context;
+    VkBuffer m_buffer = VK_NULL_HANDLE;
+    VkDeviceMemory m_memory = VK_NULL_HANDLE;
+    bool m_bound = false;
+};
+
+
 static void ExpectNativeTimelineDependency(
     const VulkanTestQueueSubmit2Capture& producerCapture,
     const VkQueue expectedProducerQueue,
@@ -6711,10 +6816,17 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
 
     const Object sourceNativeImage = source->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Image);
     ASSERT_NE(sourceNativeImage.integer, 0u);
+    constexpr VkImageUsageFlags s_SourceNativeUsage =
+        VK_IMAGE_USAGE_SAMPLED_BIT
+        | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+        | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+        | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    ;
     const TextureHandle duplicateSourceWrapper = device.createHandleForNativeTexture(
         GraphicsBackend::ObjectTypes::VK_Image,
         sourceNativeImage,
-        textureDesc
+        textureDesc,
+        GraphicsBackend::NativeTextureProvenance{ .usage = s_SourceNativeUsage }
     );
     EXPECT_FALSE(duplicateSourceWrapper);
     EXPECT_TRUE(device.isTextureReadyForGpuUse(source.get()));
@@ -6748,14 +6860,16 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
             EXPECT_FALSE(device.createHandleForNativeTexture(
                 GraphicsBackend::ObjectTypes::VK_Image,
                 sourceNativeImage,
-                invalidNativeDescs[invalidIndex]
+                invalidNativeDescs[invalidIndex],
+                GraphicsBackend::NativeTextureProvenance{ .usage = s_SourceNativeUsage }
             ));
         }, "");
 #else
         EXPECT_FALSE(device.createHandleForNativeTexture(
             GraphicsBackend::ObjectTypes::VK_Image,
             sourceNativeImage,
-            invalidNativeDescs[invalidIndex]
+            invalidNativeDescs[invalidIndex],
+            GraphicsBackend::NativeTextureProvenance{ .usage = s_SourceNativeUsage }
         ));
 #endif
     }
@@ -8458,6 +8572,99 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentStateRecordingAttemptsCommitOnlyO
     commandList->close();
     EXPECT_TRUE(submit().valid());
     EXPECT_TRUE(device.waitForIdle());
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, NativeBufferRetainedInitialStatePublishesOnlyAfterAcceptedRestoration){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    constexpr u64 s_ByteSize = 256u;
+    constexpr VkBufferUsageFlags s_NativeUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    __hidden_descriptor_buffer_round_trip_tests::CallerOwnedRetainedStateBuffer nativeOwner(
+        device,
+        s_ByteSize,
+        s_NativeUsage
+    );
+    ASSERT_TRUE(nativeOwner.valid());
+
+    const BufferDesc desc = BufferDesc()
+        .setByteSize(s_ByteSize)
+        .setInitialState(ResourceStates::Common)
+        .setKeepInitialState(true)
+    ;
+    BufferHandle buffer = device.createHandleForNativeBuffer(
+        GraphicsBackend::ObjectTypes::VK_Buffer,
+        nativeOwner.nativeHandle(),
+        desc,
+        GraphicsBackend::NativeBufferProvenance{
+            .usage = s_NativeUsage,
+            .initialStateKnown = false,
+        }
+    );
+    ASSERT_TRUE(buffer);
+    EXPECT_EQ(buffer->resolveTaskGraphImportInitialState(), ResourceStates::Unknown);
+
+    CommandListHandle commandList = device.createCommandList();
+    ASSERT_TRUE(commandList);
+    commandList->open();
+    commandList->setBufferState(buffer.get(), ResourceStates::CopyDest);
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+    commandList->close();
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+    EXPECT_EQ(buffer->resolveTaskGraphImportInitialState(), ResourceStates::Unknown);
+
+    commandList->open();
+    EXPECT_EQ(buffer->resolveTaskGraphImportInitialState(), ResourceStates::Unknown);
+    commandList->setBufferState(buffer.get(), ResourceStates::CopyDest);
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+    commandList->close();
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+
+    const GpuPhysicalQueueId rejectedQueue = commandList->getDescription().physicalQueue;
+    ASSERT_TRUE(rejectedQueue.valid());
+    const VkQueue nativeRejectedQueue = static_cast<VkQueue>(
+        device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, rejectedQueue).pointer
+    );
+    ASSERT_NE(nativeRejectedQueue, VK_NULL_HANDLE);
+    {
+        VulkanTestQueueSubmit2Observer submissionObserver;
+        ASSERT_TRUE(submissionObserver.valid());
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeRejectedQueue));
+        CommandList* const rejectedLists[] = { commandList.get() };
+        EXPECT_FALSE(device.executeCommandLists(
+            rejectedLists,
+            LengthOf(rejectedLists),
+            rejectedQueue,
+            QueueSubmissionDesc{}
+        ).valid());
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
+        EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+    }
+    EXPECT_FALSE(commandList->hasCommandBuffer());
+    EXPECT_EQ(buffer->resolveTaskGraphImportInitialState(), ResourceStates::Unknown);
+
+    commandList->open();
+    commandList->setBufferState(buffer.get(), ResourceStates::CopyDest);
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+    commandList->close();
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+    EXPECT_EQ(buffer->resolveTaskGraphImportInitialState(), ResourceStates::Unknown);
+
+    CommandList* const acceptedLists[] = { commandList.get() };
+    const QueueSubmissionToken acceptedToken = device.executeCommandLists(
+        acceptedLists,
+        LengthOf(acceptedLists),
+        commandList->getDescription().physicalQueue,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(acceptedToken.valid());
+    EXPECT_EQ(buffer->resolveTaskGraphImportInitialState(), ResourceStates::Common);
+    ASSERT_TRUE(device.waitForIdle());
+
+    commandList.reset();
+    buffer.reset();
 }
 
 
@@ -63719,7 +63926,8 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedResourceBindingInputsAreRejectedWith
     TextureHandle nativeTexture = device.createHandleForNativeTexture(
         GraphicsBackend::ObjectTypes::VK_Image,
         unmanagedNativeImage,
-        virtualNativeTextureDesc
+        virtualNativeTextureDesc,
+        GraphicsBackend::NativeTextureProvenance{ .usage = VK_IMAGE_USAGE_SAMPLED_BIT }
     );
     ASSERT_TRUE(nativeTexture);
     expectDiagnosticRejection([&](){

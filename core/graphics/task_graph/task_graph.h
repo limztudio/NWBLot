@@ -83,6 +83,10 @@ struct GpuTaskGraphResourceView{
     const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSources = nullptr;
     usize initialOwnerHandoffSourceCount = 0u;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+    // Typed resource imports own an exact copy of the backend's immutable physical admission facts. Metadata-only
+    // resources have no snapshot and retain the logical queue-sharing resolver.
+    ResourceQueueAdmissionSnapshot queueAdmission;
+    bool hasQueueAdmission = false;
     bool hasBackendResource = false;
 };
 
@@ -288,11 +292,15 @@ private:
         u32 markerLabelSize = 0u;
         u32 initialOwnerHandoffSourceOffset = 0u;
         u32 initialOwnerHandoffSourceCount = 0u;
+        u32 queueFamilyIndexOffset = 0u;
+        u32 queueFamilyIndexCount = 0u;
         GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
         GpuPhysicalQueueId initialOwnerQueue;
         GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
         GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
         ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+        bool usesConcurrentSharing = false;
+        bool hasQueueAdmission = false;
     };
 
     struct GpuGraphResourceSetNode{
@@ -671,6 +679,10 @@ private:
         GpuTaskDiscardedThunk discardPayload,
         GpuTaskPayloadDestroyThunk destroyPayload
     )noexcept;
+    void retainResourceQueueAdmission(
+        GpuGraphResourceNode& resource,
+        const ResourceQueueAdmissionSnapshot& admission
+    );
     [[nodiscard]] GpuGraphResourceId appendResource(const GpuGraphResourceDesc& desc);
     [[nodiscard]] GpuGraphResourceSetId appendResourceSet(const GpuGraphResourceSetDesc& desc);
     [[nodiscard]] GpuGraphPipelineId appendPipeline(const GpuGraphPipelineDesc& desc);
@@ -694,6 +706,7 @@ private:
     GraphicsVector<GpuTaskResourceUse> m_resourceUses;
     GraphicsVector<GpuGraphResourceNode> m_resources;
     GraphicsVector<GpuTaskGraphInitialOwnerHandoffSourceView> m_initialOwnerHandoffSources;
+    GraphicsVector<u32> m_queueFamilyIndices;
     GraphicsVector<GpuGraphResourceSetNode> m_resourceSets;
     GraphicsVector<GpuGraphResourceId> m_resourceSetMembers;
     GraphicsVector<GpuGraphPipelineNode> m_pipelines;

@@ -62,6 +62,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/timing_feedback.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/allocator.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/buffer.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/buffer_native.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/buffer_memory.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/command_validation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/commandlist.cpp"
@@ -114,12 +115,12 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context_orchestration.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context_surface.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/aftermath.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/vulkan/debug_gpu_fault.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/resource_base.h"
     "${CMAKE_CURRENT_LIST_DIR}/backend_contract.h"
     "${CMAKE_CURRENT_LIST_DIR}/backend_selection.h"
     "${CMAKE_CURRENT_LIST_DIR}/api.h"
     "${CMAKE_CURRENT_LIST_DIR}/rhi/presentation.h"
+    "${CMAKE_CURRENT_LIST_DIR}/rhi/queue_sharing.h"
     "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir.h"
     "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir_internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing.h"
@@ -153,6 +154,8 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/device_detail.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/heap_binding_contract.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/host_readback_sync.h"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/native_buffer_provenance.h"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/native_texture_provenance.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/resource_bindings_detail.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/state_tracking_detail.h"
@@ -171,10 +174,6 @@ target_link_libraries(nwb_graphics PUBLIC nwb::volk)
 target_link_libraries(nwb_graphics PRIVATE nwb::vma_headers)
 target_link_libraries(nwb_graphics PRIVATE nwb_filesystem)
 target_link_libraries(nwb_graphics PRIVATE nwb::aftermath_headers)
-
-if(NWB_ENABLE_GPU_FAULT_INJECTION)
-    target_compile_definitions(nwb_graphics PRIVATE NWB_GPU_FAULT_INJECTION=1)
-endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(nwb_graphics PRIVATE nwb::x11)

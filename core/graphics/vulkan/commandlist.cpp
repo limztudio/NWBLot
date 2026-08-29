@@ -5,6 +5,7 @@
 #include "backend.h"
 
 #include <core/common/log.h>
+#include <core/graphics/rhi/queue_sharing.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,6 +38,7 @@ CommandList::~CommandList(){
     m_stateTracker.rollbackRecordingAttempt();
     resetMarkerState();
     if(m_currentCmdBuf){
+        m_currentCmdBuf->discardRetainedBufferStateCommits();
         m_currentCmdBuf->discardRetainedTextureStateCommits();
         m_currentCmdBuf->discardPendingAccelStructBuildCommits();
         m_currentCmdBuf->discardPendingOpacityMicromapBuildCommits();
@@ -88,6 +90,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     clearStateInternal();
     m_hostReadbackBarrierTracker.clear();
     if(m_currentCmdBuf){
+        m_currentCmdBuf->discardRetainedBufferStateCommits();
         m_currentCmdBuf->discardRetainedTextureStateCommits();
         m_currentCmdBuf->discardPendingAccelStructBuildCommits();
         m_currentCmdBuf->discardPendingOpacityMicromapBuildCommits();
@@ -343,17 +346,45 @@ bool CommandList::matchesSubmissionLease(
     ;
 }
 
+bool CommandList::isTextureAdmittedToCommandQueue(const Texture& texture)const noexcept{
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    return queueInfo && ResourceQueueAdmissionAdmitsQueue(texture.getQueueAdmissionSnapshot(), *queueInfo);
+}
+
+bool CommandList::isTextureReadyForCommandQueue(
+    Texture* const texture,
+    const VkImageUsageFlags requiredUsage
+)const noexcept{
+    return m_device.isTextureReadyForGpuUse(texture, requiredUsage)
+        && isTextureAdmittedToCommandQueue(*texture)
+    ;
+}
+
+bool CommandList::isBufferAdmittedToCommandQueue(const Buffer& buffer)const noexcept{
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    return queueInfo && ResourceQueueAdmissionAdmitsQueue(buffer.getQueueAdmissionSnapshot(), *queueInfo);
+}
+
+bool CommandList::isBufferReadyForCommandQueue(
+    Buffer* const buffer,
+    const VkBufferUsageFlags requiredUsage
+)const noexcept{
+    return m_device.isBufferReadyForGpuUse(buffer, requiredUsage)
+        && isBufferAdmittedToCommandQueue(*buffer)
+    ;
+}
+
 bool CommandList::validateTrackedTexturesReadyForClose()noexcept{
     for(Texture* const texture : m_currentCmdBuf->m_referencedTextures){
-        if(!m_device.isTextureReadyForGpuUse(texture)){
-            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("referenced texture is not ready for GPU access"));
+        if(!isTextureReadyForCommandQueue(texture)){
+            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("referenced texture is not ready for this exact command queue"));
             return false;
         }
     }
     for(auto it = m_stateTracker.m_textureStates.begin(); it != m_stateTracker.m_textureStates.end(); ++it){
         Texture* const texture = it->first.texture;
-        if(!m_device.isTextureReadyForGpuUse(texture)){
-            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("tracked texture is not ready for GPU access"));
+        if(!isTextureReadyForCommandQueue(texture)){
+            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("tracked texture is not ready for this exact command queue"));
             return false;
         }
     }
@@ -363,8 +394,8 @@ bool CommandList::validateTrackedTexturesReadyForClose()noexcept{
         ++it
     ){
         Texture* const texture = it.value().texture.get();
-        if(!m_device.isTextureReadyForGpuUse(texture)){
-            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("permanent texture is not ready for GPU access"));
+        if(!isTextureReadyForCommandQueue(texture)){
+            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("permanent texture is not ready for this exact command queue"));
             return false;
         }
     }
@@ -374,8 +405,17 @@ bool CommandList::validateTrackedTexturesReadyForClose()noexcept{
         ++it
     ){
         Texture* const texture = it->first.texture;
-        if(!m_device.isTextureReadyForGpuUse(texture)){
-            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("released texture is not ready for GPU access"));
+        if(!isTextureReadyForCommandQueue(texture)){
+            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("released texture is not ready for this exact command queue"));
+            return false;
+        }
+    }
+    for(GpuDescriptorHeap* const heap : m_currentCmdBuf->m_referencedDescriptorHeaps){
+        if(!heap || !heap->retainedResourcesReadyForQueue(m_creationDesc.physicalQueue)){
+            rejectCommandRecording(
+                NWB_TEXT("close command list"),
+                NWB_TEXT("descriptor heap contains a resource unavailable to this exact command queue")
+            );
             return false;
         }
     }
@@ -385,15 +425,15 @@ bool CommandList::validateTrackedTexturesReadyForClose()noexcept{
 
 bool CommandList::validateTrackedBuffersReadyForClose()noexcept{
     for(Buffer* const buffer : m_currentCmdBuf->m_referencedBuffers){
-        if(!m_device.isBufferReadyForGpuUse(buffer)){
-            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("referenced buffer is not ready for GPU access"));
+        if(!isBufferReadyForCommandQueue(buffer)){
+            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("referenced buffer is not ready for this exact command queue"));
             return false;
         }
     }
     for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
         Buffer* const buffer = it->first;
-        if(!m_device.isBufferReadyForGpuUse(buffer)){
-            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("tracked buffer is not ready for GPU access"));
+        if(!isBufferReadyForCommandQueue(buffer)){
+            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("tracked buffer is not ready for this exact command queue"));
             return false;
         }
     }
@@ -403,8 +443,8 @@ bool CommandList::validateTrackedBuffersReadyForClose()noexcept{
         ++it
     ){
         Buffer* const buffer = it.value().buffer.get();
-        if(!m_device.isBufferReadyForGpuUse(buffer)){
-            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("permanent buffer is not ready for GPU access"));
+        if(!isBufferReadyForCommandQueue(buffer)){
+            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("permanent buffer is not ready for this exact command queue"));
             return false;
         }
     }
@@ -414,8 +454,8 @@ bool CommandList::validateTrackedBuffersReadyForClose()noexcept{
         ++it
     ){
         Buffer* const buffer = it->first;
-        if(!m_device.isBufferReadyForGpuUse(buffer)){
-            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("released buffer is not ready for GPU access"));
+        if(!isBufferReadyForCommandQueue(buffer)){
+            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("released buffer is not ready for this exact command queue"));
             return false;
         }
     }
@@ -432,9 +472,9 @@ bool CommandList::validateTrackedResourcesReadyForSubmission()const noexcept{
     }
 
     for(Texture* const texture : m_currentCmdBuf->m_referencedTextures){
-        if(!m_device.isTextureReadyForGpuUse(texture)){
+        if(!isTextureReadyForCommandQueue(texture)){
             NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Vulkan: Failed to submit command list: referenced texture is not ready for GPU access")
+                NWB_TEXT("Vulkan: Failed to submit command list: referenced texture is not ready for this exact command queue")
             );
             return false;
         }
@@ -444,17 +484,26 @@ bool CommandList::validateTrackedResourcesReadyForSubmission()const noexcept{
         it != m_stateTracker.m_permanentTextureStates.end();
         ++it
     ){
-        if(!m_device.isTextureReadyForGpuUse(it.value().texture.get())){
+        Texture* const texture = it.value().texture.get();
+        if(!isTextureReadyForCommandQueue(texture)){
             NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Vulkan: Failed to submit command list: permanent texture is not ready for GPU access")
+                NWB_TEXT("Vulkan: Failed to submit command list: permanent texture is not ready for this exact command queue")
+            );
+            return false;
+        }
+    }
+    for(GpuDescriptorHeap* const heap : m_currentCmdBuf->m_referencedDescriptorHeaps){
+        if(!heap || !heap->retainedResourcesReadyForQueue(m_creationDesc.physicalQueue)){
+            NWB_LOGGER_CRITICAL_WARNING(
+                NWB_TEXT("Vulkan: Failed to submit command list: descriptor heap contains a resource unavailable to this exact command queue")
             );
             return false;
         }
     }
     for(Buffer* const buffer : m_currentCmdBuf->m_referencedBuffers){
-        if(!m_device.isBufferReadyForGpuUse(buffer)){
+        if(!isBufferReadyForCommandQueue(buffer)){
             NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Vulkan: Failed to submit command list: referenced buffer is not ready for GPU access")
+                NWB_TEXT("Vulkan: Failed to submit command list: referenced buffer is not ready for this exact command queue")
             );
             return false;
         }
@@ -464,9 +513,9 @@ bool CommandList::validateTrackedResourcesReadyForSubmission()const noexcept{
         it != m_stateTracker.m_permanentBufferStates.end();
         ++it
     ){
-        if(!m_device.isBufferReadyForGpuUse(it.value().buffer.get())){
+        if(!isBufferReadyForCommandQueue(it.value().buffer.get())){
             NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Vulkan: Failed to submit command list: permanent buffer is not ready for GPU access")
+                NWB_TEXT("Vulkan: Failed to submit command list: permanent buffer is not ready for this exact command queue")
             );
             return false;
         }
@@ -699,6 +748,7 @@ void CommandList::discardInvalidCommandBuffer()noexcept{
         }
     }
 
+    m_currentCmdBuf->discardRetainedBufferStateCommits();
     m_currentCmdBuf->discardRetainedTextureStateCommits();
     m_currentCmdBuf->discardPendingAccelStructBuildCommits();
     m_currentCmdBuf->discardPendingOpacityMicromapBuildCommits();

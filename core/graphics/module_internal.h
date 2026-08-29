@@ -19,7 +19,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Private cross-translation-unit contract for the Graphics module.  Public callers continue to include module.h.
 namespace GraphicsModuleDetail{
 
 
@@ -36,7 +35,6 @@ struct SetupUploadSameClassRouting{
 using GraphTaskDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
 
 
-[[nodiscard]] bool QueueSharingIncludesQueue(ResourceQueueSharing::Mask sharing, CommandQueue::Enum queue)noexcept;
 [[nodiscard]] SetupUploadSameClassRouting ResolveSetupUploadSameClassRouting(
     GraphicsBackend::Device& device,
     CommandQueue::Enum uploadQueue,

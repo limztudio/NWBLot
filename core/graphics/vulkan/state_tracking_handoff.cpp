@@ -84,7 +84,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             state.texture
             && (
                 !VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state)
-                || !m_device.isTextureReadyForGpuUse(
+                || !isTextureReadyForCommandQueue(
                     state.texture,
                     VulkanTextureDetail::RequiredImageUsageForResourceStates(state.state)
                 )
@@ -97,7 +97,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             state.texture
             && (
                 !VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state)
-                || !m_device.isTextureReadyForGpuUse(
+                || !isTextureReadyForCommandQueue(
                     state.texture,
                     VulkanTextureDetail::RequiredImageUsageForResourceStates(state.state)
                 )
@@ -112,7 +112,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             && (
                 !VulkanBufferDetail::IsBufferResourceStateMaskValid(state.state)
                 || !VulkanBufferDetail::IsBufferDescriptionCompatibleWithResourceStates(*description, state.state)
-                || !m_device.isBufferReadyForGpuUse(
+                || !isBufferReadyForCommandQueue(
                     state.buffer,
                     VulkanBufferDetail::RequiredBufferUsageForResourceStates(*description, state.state)
                 )
@@ -127,7 +127,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             && (
                 !VulkanBufferDetail::IsBufferResourceStateMaskValid(state.state)
                 || !VulkanBufferDetail::IsBufferDescriptionCompatibleWithResourceStates(*description, state.state)
-                || !m_device.isBufferReadyForGpuUse(
+                || !isBufferReadyForCommandQueue(
                     state.buffer,
                     VulkanBufferDetail::RequiredBufferUsageForResourceStates(*description, state.state)
                 )
@@ -146,7 +146,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             return false;
         }
 
-        if(m_device.usesConcurrentQueueSharing(sharing)){
+        if(texture.m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
             if(ownerQueue.valid() || releaseDestinationQueue.valid()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Concurrent texture state handoff unexpectedly carries exclusive ownership"));
                 return false;
@@ -217,7 +217,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             return false;
         }
 
-        if(m_device.usesConcurrentQueueSharing(sharing)){
+        if(buffer.m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
             if(ownerQueue.valid() || releaseDestinationQueue.valid()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Concurrent buffer state handoff unexpectedly carries exclusive ownership"));
                 return false;
@@ -441,10 +441,10 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
 
 void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& states)const{
     states.reset();
-    const auto getTextureOwnership = [&](const TextureSubresourceStateKey& key, const ResourceQueueSharing::Mask sharing, GpuPhysicalQueueId& outOwner, GpuPhysicalQueueId& outReleaseDestination){
+    const auto getTextureOwnership = [&](const TextureSubresourceStateKey& key, GpuPhysicalQueueId& outOwner, GpuPhysicalQueueId& outReleaseDestination){
         outOwner = {};
         outReleaseDestination = {};
-        if(m_device.usesConcurrentQueueSharing(sharing))
+        if(key.texture->m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT)
             return;
 
         outOwner = m_creationDesc.physicalQueue;
@@ -452,10 +452,10 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         if(releaseIt != m_textureOwnershipReleaseDestinations.end())
             outReleaseDestination = releaseIt.value();
     };
-    const auto getBufferOwnership = [&](Buffer* buffer, const ResourceQueueSharing::Mask sharing, GpuPhysicalQueueId& outOwner, GpuPhysicalQueueId& outReleaseDestination){
+    const auto getBufferOwnership = [&](Buffer* buffer, GpuPhysicalQueueId& outOwner, GpuPhysicalQueueId& outReleaseDestination){
         outOwner = {};
         outReleaseDestination = {};
-        if(m_device.usesConcurrentQueueSharing(sharing))
+        if(!buffer || buffer->m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT)
             return;
 
         outOwner = m_creationDesc.physicalQueue;
@@ -472,7 +472,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
 
         GpuPhysicalQueueId ownerQueue;
         GpuPhysicalQueueId releaseDestinationQueue;
-        getTextureOwnership(key, key.texture->m_creationDesc.queueSharing, ownerQueue, releaseDestinationQueue);
+        getTextureOwnership(key, ownerQueue, releaseDestinationQueue);
         states.m_textureStates.push_back(CommandListResourceStateHandoff::TextureState{
             key.texture,
             key.mipLevel,
@@ -491,7 +491,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
 
         GpuPhysicalQueueId ownerQueue;
         GpuPhysicalQueueId releaseDestinationQueue;
-        getBufferOwnership(it->first, it->first->m_creationDesc.queueSharing, ownerQueue, releaseDestinationQueue);
+        getBufferOwnership(it->first, ownerQueue, releaseDestinationQueue);
         states.m_bufferStates.push_back(CommandListResourceStateHandoff::BufferState{
             it->first,
             it.value(),
@@ -510,7 +510,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         GpuPhysicalQueueId ownerQueue;
         GpuPhysicalQueueId releaseDestinationQueue;
         const TextureSubresourceStateKey key{ texture, 0u, 0u };
-        getTextureOwnership(key, texture->m_creationDesc.queueSharing, ownerQueue, releaseDestinationQueue);
+        getTextureOwnership(key, ownerQueue, releaseDestinationQueue);
         states.m_permanentTextureStates.push_back(CommandListResourceStateHandoff::PermanentTextureState{
             texture,
             it.value().state,
@@ -528,7 +528,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
 
         GpuPhysicalQueueId ownerQueue;
         GpuPhysicalQueueId releaseDestinationQueue;
-        getBufferOwnership(buffer, buffer->m_creationDesc.queueSharing, ownerQueue, releaseDestinationQueue);
+        getBufferOwnership(buffer, ownerQueue, releaseDestinationQueue);
         states.m_permanentBufferStates.push_back(CommandListResourceStateHandoff::BufferState{
             buffer,
             it.value().state,
@@ -566,7 +566,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
             return;
         }
         const BufferDesc& description = buffer->getCreationDescription();
-        if(m_device.usesConcurrentQueueSharing(description.queueSharing)){
+        if(buffer->m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
             rejectCommandRecording(
                 NWB_TEXT("append ownership-release barriers"),
                 NWB_TEXT("concurrent buffer has a pending exclusive release")
@@ -596,7 +596,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
         if(
             !VulkanBufferDetail::IsBufferResourceStateMaskValid(state)
             || !VulkanBufferDetail::IsBufferDescriptionCompatibleWithResourceStates(description, state)
-            || !m_device.isBufferReadyForGpuUse(
+            || !isBufferReadyForCommandQueue(
                 buffer,
                 VulkanBufferDetail::RequiredBufferUsageForResourceStates(description, state)
             )
@@ -619,7 +619,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
             );
             return;
         }
-        if(m_device.usesConcurrentQueueSharing(texture->m_creationDesc.queueSharing)){
+        if(texture->m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
             rejectCommandRecording(
                 NWB_TEXT("append ownership-release barriers"),
                 NWB_TEXT("concurrent texture has a pending exclusive release")
@@ -673,7 +673,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
             );
             return;
         }
-        if(m_device.usesConcurrentQueueSharing(buffer->m_creationDesc.queueSharing)){
+        if(buffer->m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
             rejectCommandRecording(
                 NWB_TEXT("append ownership-release barriers"),
                 NWB_TEXT("concurrent buffer has a pending exclusive release")

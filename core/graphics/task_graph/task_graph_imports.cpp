@@ -61,6 +61,22 @@ namespace __hidden_gpu_task_graph_imports{
     return !keepInitialState || externalFinalState == ResourceStates::Unknown || externalFinalState == nativeInitialState;
 }
 
+[[nodiscard]] static bool CompatibleQueueAdmission(
+    const ResourceQueueAdmissionSnapshot& admission,
+    const ResourceQueueSharing::Mask logicalSharing,
+    const usize retainedQueueFamilyIndexCount
+)noexcept{
+    if(
+        !admission.valid()
+        || admission.admittedQueueClasses != logicalSharing
+        || retainedQueueFamilyIndexCount > static_cast<usize>(Limit<u32>::s_Max)
+    )
+        return false;
+    return admission.queueFamilyIndexCount
+        <= static_cast<usize>(Limit<u32>::s_Max) - retainedQueueFamilyIndexCount
+    ;
+}
+
 [[nodiscard]] static bool CompatiblePipelineMetadata(
     const GpuTaskGraphPipelineView& pipeline,
     const GpuGraphPipelineDesc& desc
@@ -126,6 +142,13 @@ GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, con
         return {};
 
     const TextureDesc& textureDesc = texture->getCreationDescription();
+    const ResourceQueueAdmissionSnapshot queueAdmission = texture->getQueueAdmissionSnapshot();
+    if(!__hidden_gpu_task_graph_imports::CompatibleQueueAdmission(
+        queueAdmission,
+        textureDesc.queueSharing,
+        m_queueFamilyIndices.size()
+    ))
+        return {};
     if(!__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(
         textureDesc.keepInitialState,
         textureDesc.initialState,
@@ -135,14 +158,9 @@ GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, con
 
     GpuGraphResourceDesc resolvedDesc = desc;
     if(!resolvedDesc.hasExplicitInitialState && resolvedDesc.initialState == ResourceStates::Unknown){
-        // A mixed retained texture has no single physical layout: an accepted partial upload restored only part of
-        // it, while its remaining subresources are still Undefined. Preserve the legacy descriptor fallback for
-        // all-unknown fresh textures and all-known native imports, but force this ambiguous typed import to name
-        // Unknown until the caller supplies an explicit per-resource state source.
-        resolvedDesc.initialState = textureDesc.keepInitialState && texture->hasPartiallyKnownRetainedSubresourceState()
-            ? ResourceStates::Unknown
-            : textureDesc.initialState
-        ;
+        // The backend preserves managed-fresh descriptor semantics while retaining Unknown for native or partially
+        // published textures whose current state is not established by their creation description.
+        resolvedDesc.initialState = texture->resolveTaskGraphImportInitialState();
     }
     if(resolvedDesc.queueSharing != ResourceQueueSharing::Exclusive && resolvedDesc.queueSharing != textureDesc.queueSharing)
         return {};
@@ -166,6 +184,7 @@ GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, con
     const GpuGraphResourceId resource = appendResource(resolvedDesc);
     if(resource.valid()){
         GpuGraphResourceNode& importedResource = m_resources[resource.index];
+        retainResourceQueueAdmission(importedResource, queueAdmission);
         importedResource.texture = texture;
         importedResource.deviceGeneration = texture->getDeviceGeneration();
     }
@@ -183,6 +202,13 @@ GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const 
         return {};
 
     const BufferDesc& bufferDesc = buffer->getCreationDescription();
+    const ResourceQueueAdmissionSnapshot queueAdmission = buffer->getQueueAdmissionSnapshot();
+    if(!__hidden_gpu_task_graph_imports::CompatibleQueueAdmission(
+        queueAdmission,
+        bufferDesc.queueSharing,
+        m_queueFamilyIndices.size()
+    ))
+        return {};
     if(!__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(
         bufferDesc.keepInitialState,
         bufferDesc.initialState,
@@ -192,7 +218,7 @@ GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const 
 
     GpuGraphResourceDesc resolvedDesc = desc;
     if(!resolvedDesc.hasExplicitInitialState && resolvedDesc.initialState == ResourceStates::Unknown)
-        resolvedDesc.initialState = bufferDesc.initialState;
+        resolvedDesc.initialState = buffer->resolveTaskGraphImportInitialState();
     if(resolvedDesc.queueSharing != ResourceQueueSharing::Exclusive && resolvedDesc.queueSharing != bufferDesc.queueSharing)
         return {};
     resolvedDesc.queueSharing = bufferDesc.queueSharing;
@@ -215,6 +241,7 @@ GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const 
     const GpuGraphResourceId resource = appendResource(resolvedDesc);
     if(resource.valid()){
         GpuGraphResourceNode& importedResource = m_resources[resource.index];
+        retainResourceQueueAdmission(importedResource, queueAdmission);
         importedResource.buffer = buffer;
         importedResource.deviceGeneration = buffer->getDeviceGeneration();
     }
@@ -255,11 +282,19 @@ GpuGraphResourceId GpuTaskGraph::importAccelStruct(
     const ResourceQueueSharing::Mask creationQueueSharing = accelStruct->getCreationQueueSharing();
     if(!accelStruct->queueSharingMatchesCreation())
         return {};
-    if(const Buffer* const backingBuffer = accelStruct->getBackingBuffer()){
+    const Buffer* const backingBuffer = accelStruct->getBackingBuffer();
+    ResourceQueueAdmissionSnapshot queueAdmission;
+    if(backingBuffer){
         const BufferDesc& backingBufferDesc = backingBuffer->getCreationDescription();
+        queueAdmission = backingBuffer->getQueueAdmissionSnapshot();
         if(
             !backingBuffer->descriptionMatchesCreation()
             || backingBufferDesc.queueSharing != creationQueueSharing
+            || !__hidden_gpu_task_graph_imports::CompatibleQueueAdmission(
+                queueAdmission,
+                creationQueueSharing,
+                m_queueFamilyIndices.size()
+            )
             || !__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(
                 backingBufferDesc.keepInitialState,
                 backingBufferDesc.initialState,
@@ -270,6 +305,12 @@ GpuGraphResourceId GpuTaskGraph::importAccelStruct(
     }
 
     GpuGraphResourceDesc resolvedDesc = desc;
+    if(
+        backingBuffer
+        && !resolvedDesc.hasExplicitInitialState
+        && resolvedDesc.initialState == ResourceStates::Unknown
+    )
+        resolvedDesc.initialState = backingBuffer->resolveTaskGraphImportInitialState();
     if(
         resolvedDesc.queueSharing != ResourceQueueSharing::Exclusive
         && resolvedDesc.queueSharing != creationQueueSharing
@@ -295,6 +336,8 @@ GpuGraphResourceId GpuTaskGraph::importAccelStruct(
     const GpuGraphResourceId resource = appendResource(resolvedDesc);
     if(resource.valid()){
         GpuGraphResourceNode& importedResource = m_resources[resource.index];
+        if(backingBuffer)
+            retainResourceQueueAdmission(importedResource, queueAdmission);
         importedResource.accelStruct = accelStruct;
         importedResource.deviceGeneration = accelStruct->getDeviceGeneration();
     }

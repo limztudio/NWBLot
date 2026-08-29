@@ -1,7 +1,6 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
 // Placed host-visible resource-memory coverage.
 //
 // Stand up a validation-backed headless Vulkan device and exercise virtual Upload and Readback buffer slices,
@@ -489,7 +488,7 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBufferRejectionsAreAtomicAndRe
         GraphicsBackend::ObjectTypes::VK_Buffer,
         managedNativeBuffer,
         managedOwnerDesc,
-        managedNativeUsage
+        GraphicsBackend::NativeBufferProvenance{ .usage = managedNativeUsage }
     );
     EXPECT_FALSE(duplicateWrapper);
     EXPECT_EQ(managedOwner->getReferenceCount(), managedOwnerReferences);

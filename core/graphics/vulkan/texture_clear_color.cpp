@@ -186,8 +186,8 @@ void CommandList::clearColorTexture(
         ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
         : VK_IMAGE_USAGE_TRANSFER_DST_BIT
     ;
-    if(!m_device.isTextureReadyForGpuUse(textureResource, requiredUsage)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear"));
+    if(!isTextureReadyForCommandQueue(textureResource, requiredUsage)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
         return;
     }
     const TextureDesc& desc = texture.m_creationDesc;
@@ -347,8 +347,8 @@ void CommandList::clearColorTextureBox(
         ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
         : VK_IMAGE_USAGE_TRANSFER_DST_BIT
     ;
-    if(!m_device.isTextureReadyForGpuUse(textureResource, requiredUsage)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear"));
+    if(!isTextureReadyForCommandQueue(textureResource, requiredUsage)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
         return;
     }
     if(blockCompressed && desc.sampleCount != 1u){

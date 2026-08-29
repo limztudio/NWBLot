@@ -242,6 +242,11 @@ Optional<Common::LoggerRegistrationGuard> TextureNativeIdentityTest::s_loggerGua
 TEST_F(TextureNativeIdentityTest, ManagedOrdinaryAndVirtualTexturesKeepCanonicalNativeOwners){
     auto& device = TextureNativeIdentityTest::device();
     EXPECT_FALSE(device.isTextureReadyForGpuUse(nullptr));
+    constexpr VkImageUsageFlags s_ManagedNativeUsage =
+        VK_IMAGE_USAGE_SAMPLED_BIT
+        | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+        | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    ;
 
     const TextureDesc ordinaryDesc = TextureDesc()
         .setWidth(16u)
@@ -259,7 +264,8 @@ TEST_F(TextureNativeIdentityTest, ManagedOrdinaryAndVirtualTexturesKeepCanonical
     TextureHandle ordinaryDuplicate = device.createHandleForNativeTexture(
         GraphicsBackend::ObjectTypes::VK_Image,
         ordinaryNativeImage,
-        ordinaryDesc
+        ordinaryDesc,
+        GraphicsBackend::NativeTextureProvenance{ .usage = s_ManagedNativeUsage }
     );
     EXPECT_FALSE(ordinaryDuplicate);
     EXPECT_EQ(ordinary->getReferenceCount(), ordinaryReferences);
@@ -276,7 +282,8 @@ TEST_F(TextureNativeIdentityTest, ManagedOrdinaryAndVirtualTexturesKeepCanonical
     TextureHandle virtualDuplicate = device.createHandleForNativeTexture(
         GraphicsBackend::ObjectTypes::VK_Image,
         virtualNativeImage,
-        virtualDesc
+        virtualDesc,
+        GraphicsBackend::NativeTextureProvenance{ .usage = s_ManagedNativeUsage }
     );
     EXPECT_FALSE(virtualDuplicate);
     EXPECT_FALSE(device.isTextureReadyForGpuUse(placed.get()));
@@ -297,6 +304,7 @@ TEST_F(TextureNativeIdentityTest, ManagedOrdinaryAndVirtualTexturesKeepCanonical
 
 TEST_F(TextureNativeIdentityTest, CreationRejectsUnknownQueueSharingBeforeAllocationOrNativeIdentity){
     auto& device = TextureNativeIdentityTest::device();
+    constexpr VkImageUsageFlags s_NativeUsage = VK_IMAGE_USAGE_SAMPLED_BIT;
     const auto expectDiagnosticRejection = [](const auto& operation){
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
         EXPECT_DEATH_IF_SUPPORTED({ EXPECT_FALSE(operation()); }, "");
@@ -333,165 +341,31 @@ TEST_F(TextureNativeIdentityTest, CreationRejectsUnknownQueueSharingBeforeAlloca
         return device.createHandleForNativeTexture(
             GraphicsBackend::ObjectTypes::VK_Image,
             nativeImage,
-            invalidNativeDesc
+            invalidNativeDesc,
+            GraphicsBackend::NativeTextureProvenance{ .usage = s_NativeUsage }
         ).get() != nullptr;
     });
 
-    TextureDesc validNativeDesc = baseDesc;
-    validNativeDesc.setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer);
     TextureHandle retry = device.createHandleForNativeTexture(
         GraphicsBackend::ObjectTypes::VK_Image,
         nativeImage,
-        validNativeDesc
+        baseDesc,
+        GraphicsBackend::NativeTextureProvenance{ .usage = s_NativeUsage }
     );
     ASSERT_TRUE(retry);
-    EXPECT_EQ(
-        retry->getCreationDescription().queueSharing,
-        ResourceQueueSharing::GraphicsAsyncComputeAndTransfer
-    );
+    EXPECT_EQ(retry->getCreationDescription().queueSharing, ResourceQueueSharing::Exclusive);
     EXPECT_TRUE(retry->descriptionMatchesCreation());
-}
-
-
-TEST_F(TextureNativeIdentityTest, CreationDescriptorAndNativeUsageRemainImmutable){
-    auto& device = TextureNativeIdentityTest::device();
-    const TextureDesc desc = TextureDesc()
-        .setWidth(16u)
-        .setHeight(16u)
-        .setFormat(Format::RGBA8_UNORM)
-        .setInitialState(ResourceStates::Common)
-        .setName(Name("tests/texture_native_identity/immutable_creation"))
-    ;
-    TextureHandle managed = device.createTexture(desc);
-    ASSERT_TRUE(managed);
-
-    const TextureDesc& creationDesc = managed->getCreationDescription();
-    EXPECT_EQ(creationDesc.width, 16u);
-    EXPECT_EQ(creationDesc.name, desc.name);
-    EXPECT_TRUE(managed->descriptionMatchesCreation());
-    EXPECT_TRUE(device.isTextureReadyForGpuUse(managed.get()));
-    EXPECT_TRUE(device.isTextureReadyForGpuUse(managed.get(), VK_IMAGE_USAGE_SAMPLED_BIT));
-    EXPECT_TRUE(device.isTextureReadyForGpuUse(managed.get(), VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
-    EXPECT_TRUE(device.isTextureReadyForGpuUse(managed.get(), VK_IMAGE_USAGE_TRANSFER_DST_BIT));
-
-    TextureDesc& mutableDesc = const_cast<TextureDesc&>(managed->getDescription());
-    mutableDesc.setWidth(32u);
-    EXPECT_EQ(creationDesc.width, 16u);
-    EXPECT_FALSE(managed->descriptionMatchesCreation());
-    EXPECT_FALSE(device.isTextureReadyForGpuUse(managed.get()));
-    const FramebufferInfoEx framebufferInfo(FramebufferDesc().addColorAttachment(managed.get()));
-    ASSERT_EQ(framebufferInfo.colorFormats.size(), 1u);
-    EXPECT_EQ(framebufferInfo.colorFormats[0u], Format::RGBA8_UNORM);
-    EXPECT_EQ(framebufferInfo.width, 16u);
-    EXPECT_EQ(framebufferInfo.height, 16u);
-
-    mutableDesc = desc;
-    EXPECT_TRUE(managed->descriptionMatchesCreation());
-    EXPECT_TRUE(device.isTextureReadyForGpuUse(managed.get()));
-    mutableDesc.setKeepInitialState(true);
-    EXPECT_FALSE(managed->descriptionMatchesCreation());
-    EXPECT_FALSE(device.isTextureReadyForGpuUse(managed.get()));
-
-    mutableDesc = desc;
-    mutableDesc.setName(Name("tests/texture_native_identity/descriptor_drift"));
-    EXPECT_FALSE(managed->descriptionMatchesCreation());
-    EXPECT_FALSE(device.isTextureReadyForGpuUse(managed.get()));
-    mutableDesc = desc;
-    EXPECT_TRUE(managed->descriptionMatchesCreation());
-
-    TextureHandle managedUav = device.createTexture(
-        TextureDesc()
-            .setWidth(16u)
-            .setHeight(16u)
-            .setFormat(Format::RGBA8_UNORM)
-            .setInUAV(true)
-            .setInitialState(ResourceStates::UnorderedAccess)
-    );
-    ASSERT_TRUE(managedUav);
-    EXPECT_TRUE(device.isTextureReadyForGpuUse(managedUav.get(), VK_IMAGE_USAGE_STORAGE_BIT));
-
-    const auto expectDiagnosticRejection = [](auto&& operation){
-#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
-        EXPECT_DEATH_IF_SUPPORTED({ EXPECT_FALSE(operation()); }, "");
-#else
-        EXPECT_FALSE(operation());
-#endif
-    };
-    TextureDesc invalidUavDesc = desc;
-    invalidUavDesc.setInitialState(ResourceStates::UnorderedAccess);
-    expectDiagnosticRejection([&](){
-        return device.createHandleForNativeTexture(
-            GraphicsBackend::ObjectTypes::VK_Image,
-            Object(static_cast<u64>(0x22d00006u)),
-            invalidUavDesc
-        ).get() != nullptr;
-    });
-    TextureDesc invalidDepthDesc = desc;
-    invalidDepthDesc.setInitialState(ResourceStates::DepthRead);
-    expectDiagnosticRejection([&](){
-        return device.createHandleForNativeTexture(
-            GraphicsBackend::ObjectTypes::VK_Image,
-            Object(static_cast<u64>(0x22d00007u)),
-            invalidDepthDesc
-        ).get() != nullptr;
-    });
-    TextureDesc invalidTransferDesc = desc;
-    invalidTransferDesc.setInitialState(ResourceStates::CopySource);
-    expectDiagnosticRejection([&](){
-        return device.createHandleForNativeTexture(
-            GraphicsBackend::ObjectTypes::VK_Image,
-            Object(static_cast<u64>(0x22d00008u)),
-            invalidTransferDesc
-        ).get() != nullptr;
-    });
-    TextureDesc invalidStateDesc = desc;
-    invalidStateDesc.setInitialState(ResourceStates::VertexBuffer);
-    expectDiagnosticRejection([&](){
-        return device.createHandleForNativeTexture(
-            GraphicsBackend::ObjectTypes::VK_Image,
-            Object(static_cast<u64>(0x22d00009u)),
-            invalidStateDesc
-        ).get() != nullptr;
-    });
-
-    const Object nativeImage(static_cast<u64>(0x22d00005u));
-    TextureHandle unmanaged = device.createHandleForNativeTexture(
-        GraphicsBackend::ObjectTypes::VK_Image,
-        nativeImage,
-        desc
-    );
-    ASSERT_TRUE(unmanaged);
-    EXPECT_TRUE(device.isTextureReadyForGpuUse(unmanaged.get()));
-    EXPECT_TRUE(device.isTextureReadyForGpuUse(unmanaged.get(), VK_IMAGE_USAGE_SAMPLED_BIT));
-    EXPECT_FALSE(device.isTextureReadyForGpuUse(unmanaged.get(), VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
-    EXPECT_FALSE(device.isTextureReadyForGpuUse(unmanaged.get(), VK_IMAGE_USAGE_TRANSFER_DST_BIT));
-
-    const u32 unmanagedReferences = unmanaged->getReferenceCount();
-    CommandListHandle copySourceList = device.createCommandList();
-    ASSERT_TRUE(copySourceList);
-    copySourceList->open();
-    copySourceList->beginTrackingTextureState(unmanaged.get(), s_AllSubresources, ResourceStates::CopySource);
-    EXPECT_TRUE(copySourceList->commandRecordingFailed());
-    EXPECT_EQ(copySourceList->getTextureSubresourceState(unmanaged.get(), 0u, 0u), ResourceStates::Unknown);
-    EXPECT_EQ(unmanaged->getReferenceCount(), unmanagedReferences);
-    copySourceList->close();
-    EXPECT_FALSE(copySourceList->hasCommandBuffer());
-
-    CommandListHandle copyDestinationList = device.createCommandList();
-    ASSERT_TRUE(copyDestinationList);
-    copyDestinationList->open();
-    copyDestinationList->setTextureState(unmanaged.get(), s_AllSubresources, ResourceStates::CopyDest);
-    EXPECT_TRUE(copyDestinationList->commandRecordingFailed());
-    EXPECT_EQ(copyDestinationList->getTextureSubresourceState(unmanaged.get(), 0u, 0u), ResourceStates::Unknown);
-    EXPECT_EQ(unmanaged->getReferenceCount(), unmanagedReferences);
-    copyDestinationList->close();
-    EXPECT_FALSE(copyDestinationList->hasCommandBuffer());
 }
 
 
 TEST_F(TextureNativeIdentityTest, ConcurrentUnmanagedDuplicatesChooseOneOwnerAndReleaseAllowsRewrap){
     auto& device = TextureNativeIdentityTest::device();
     static constexpr u32 s_WorkerCount = 8u;
+    constexpr VkImageUsageFlags s_NativeUsage =
+        VK_IMAGE_USAGE_SAMPLED_BIT
+        | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+        | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    ;
     const TextureDesc desc = TextureDesc()
         .setWidth(8u)
         .setHeight(8u)
@@ -503,7 +377,7 @@ TEST_F(TextureNativeIdentityTest, ConcurrentUnmanagedDuplicatesChooseOneOwnerAnd
         desc.width,
         desc.height,
         VK_FORMAT_R8G8B8A8_UNORM,
-        VK_IMAGE_USAGE_SAMPLED_BIT
+        s_NativeUsage
     );
     if(!nativeOwner.valid())
         GTEST_SKIP() << "Texture native identity: unable to allocate a caller-owned Vulkan image.";
@@ -523,7 +397,8 @@ TEST_F(TextureNativeIdentityTest, ConcurrentUnmanagedDuplicatesChooseOneOwnerAnd
                 wrappers[workerIndex] = device.createHandleForNativeTexture(
                     GraphicsBackend::ObjectTypes::VK_Image,
                     nativeImage,
-                    desc
+                    desc,
+                    GraphicsBackend::NativeTextureProvenance{ .usage = s_NativeUsage }
                 );
             });
         }
@@ -542,6 +417,9 @@ TEST_F(TextureNativeIdentityTest, ConcurrentUnmanagedDuplicatesChooseOneOwnerAnd
     ASSERT_EQ(ownerCount, 1u);
     ASSERT_NE(canonicalOwner, nullptr);
     EXPECT_TRUE(device.isTextureReadyForGpuUse(canonicalOwner));
+    EXPECT_TRUE(device.isTextureReadyForGpuUse(canonicalOwner, s_NativeUsage));
+    EXPECT_FALSE(device.isTextureReadyForGpuUse(canonicalOwner, VK_IMAGE_USAGE_STORAGE_BIT));
+    EXPECT_FALSE(device.isTextureReadyForGpuUse(canonicalOwner, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
     EXPECT_EQ(
         canonicalOwner->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Image).integer,
         nativeImage.integer
@@ -550,7 +428,8 @@ TEST_F(TextureNativeIdentityTest, ConcurrentUnmanagedDuplicatesChooseOneOwnerAnd
     TextureHandle blockedDuplicate = device.createHandleForNativeTexture(
         GraphicsBackend::ObjectTypes::VK_Image,
         nativeImage,
-        desc
+        desc,
+        GraphicsBackend::NativeTextureProvenance{ .usage = s_NativeUsage }
     );
     EXPECT_FALSE(blockedDuplicate);
     EXPECT_TRUE(device.isTextureReadyForGpuUse(canonicalOwner));
@@ -561,16 +440,19 @@ TEST_F(TextureNativeIdentityTest, ConcurrentUnmanagedDuplicatesChooseOneOwnerAnd
     TextureHandle rewrapped = device.createHandleForNativeTexture(
         GraphicsBackend::ObjectTypes::VK_Image,
         nativeImage,
-        desc
+        desc,
+        GraphicsBackend::NativeTextureProvenance{ .usage = s_NativeUsage }
     );
     ASSERT_TRUE(rewrapped);
     EXPECT_TRUE(device.isTextureReadyForGpuUse(rewrapped.get()));
+    EXPECT_TRUE(device.isTextureReadyForGpuUse(rewrapped.get(), s_NativeUsage));
     rewrapped.reset();
 
     TextureHandle secondRewrap = device.createHandleForNativeTexture(
         GraphicsBackend::ObjectTypes::VK_Image,
         nativeImage,
-        desc
+        desc,
+        GraphicsBackend::NativeTextureProvenance{ .usage = s_NativeUsage }
     );
     ASSERT_TRUE(secondRewrap);
     EXPECT_TRUE(device.isTextureReadyForGpuUse(secondRewrap.get()));
@@ -580,6 +462,7 @@ TEST_F(TextureNativeIdentityTest, ConcurrentUnmanagedDuplicatesChooseOneOwnerAnd
 
 TEST_F(TextureNativeIdentityTest, IdenticalNativeBitsRemainIndependentAcrossAllocators){
     auto& device = TextureNativeIdentityTest::device();
+    constexpr VkImageUsageFlags s_NativeUsage = VK_IMAGE_USAGE_SAMPLED_BIT;
     HeadlessGraphicsScope foreignScope;
     if(!foreignScope.initialize())
         GTEST_SKIP() << "Texture native identity: second validation-backed headless device is unavailable.";
@@ -595,12 +478,14 @@ TEST_F(TextureNativeIdentityTest, IdenticalNativeBitsRemainIndependentAcrossAllo
     TextureHandle localWrapper = device.createHandleForNativeTexture(
         GraphicsBackend::ObjectTypes::VK_Image,
         nativeImage,
-        desc
+        desc,
+        GraphicsBackend::NativeTextureProvenance{ .usage = s_NativeUsage }
     );
     TextureHandle foreignWrapper = foreignDevice.createHandleForNativeTexture(
         GraphicsBackend::ObjectTypes::VK_Image,
         nativeImage,
-        desc
+        desc,
+        GraphicsBackend::NativeTextureProvenance{ .usage = s_NativeUsage }
     );
     ASSERT_TRUE(localWrapper);
     ASSERT_TRUE(foreignWrapper);

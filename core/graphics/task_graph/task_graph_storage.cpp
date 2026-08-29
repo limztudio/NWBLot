@@ -230,6 +230,31 @@ void GpuTaskGraph::discardAndDestroyUnappendedPayload(
         destroyPayload(m_arena, payload);
 }
 
+void GpuTaskGraph::retainResourceQueueAdmission(
+    GpuGraphResourceNode& resource,
+    const ResourceQueueAdmissionSnapshot& admission
+){
+    NWB_ASSERT(admission.valid());
+    NWB_ASSERT(admission.admittedQueueClasses == resource.queueSharing);
+    NWB_ASSERT(m_queueFamilyIndices.size() <= static_cast<usize>(Limit<u32>::s_Max));
+    NWB_ASSERT(
+        admission.queueFamilyIndexCount
+        <= static_cast<usize>(Limit<u32>::s_Max) - m_queueFamilyIndices.size()
+    );
+
+    resource.queueFamilyIndexOffset = static_cast<u32>(m_queueFamilyIndices.size());
+    resource.queueFamilyIndexCount = admission.queueFamilyIndexCount;
+    resource.usesConcurrentSharing = admission.usesConcurrentSharing;
+    resource.hasQueueAdmission = true;
+    if(admission.queueFamilyIndexCount != 0u){
+        m_queueFamilyIndices.insert(
+            m_queueFamilyIndices.end(),
+            admission.queueFamilyIndices,
+            admission.queueFamilyIndices + admission.queueFamilyIndexCount
+        );
+    }
+}
+
 GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc){
     const bool hasInitialOwnerHandoff =
         desc.initialOwnerReleaseDestinationQueue.valid()

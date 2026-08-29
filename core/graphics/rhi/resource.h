@@ -88,6 +88,33 @@ namespace ResourceQueueSharing{
     }
 };
 
+// Immutable physical admission facts for one resource. The backend owns the pointed-to family list; consumers that
+// retain this snapshot beyond the resource call boundary must copy it into their own storage.
+struct ResourceQueueAdmissionSnapshot{
+    ResourceQueueSharing::Mask admittedQueueClasses = ResourceQueueSharing::Exclusive;
+    const u32* queueFamilyIndices = nullptr;
+    u32 queueFamilyIndexCount = 0u;
+    bool usesConcurrentSharing = false;
+
+    [[nodiscard]] constexpr bool valid()const noexcept{
+        return ResourceQueueSharing::IsValid(admittedQueueClasses)
+            && (
+                (
+                    !usesConcurrentSharing
+                    && queueFamilyIndexCount == 0u
+                    && !queueFamilyIndices
+                )
+                || (
+                    usesConcurrentSharing
+                    && admittedQueueClasses != ResourceQueueSharing::Exclusive
+                    && queueFamilyIndexCount >= 2u
+                    && queueFamilyIndices
+                )
+            )
+        ;
+    }
+};
+
 namespace ResourceStates{
     enum Mask : u32{
         Unknown = 0,

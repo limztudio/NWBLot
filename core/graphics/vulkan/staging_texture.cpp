@@ -5,6 +5,7 @@
 #include "backend.h"
 
 #include <core/common/log.h>
+#include <core/graphics/rhi/queue_sharing.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -129,7 +130,7 @@ inline bool BuildStagingTextureQueueFamilies(
         const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
         if(
             queue.familyIndex == VK_QUEUE_FAMILY_IGNORED
-            || !VulkanDetail::StagingTextureSharingIncludesQueueClass(sharing, queue.queueClass)
+            || !ResourceQueueSharing::IncludesQueueClass(sharing, queue.queueClass)
         )
             continue;
 
@@ -168,22 +169,6 @@ namespace VulkanDetail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-bool StagingTextureSharingIncludesQueueClass(
-    const ResourceQueueSharing::Mask sharing,
-    const CommandQueue::Enum queueClass
-)noexcept{
-    switch(queueClass){
-    case CommandQueue::Graphics:
-        return (sharing & ResourceQueueSharing::Graphics) != ResourceQueueSharing::Exclusive;
-    case CommandQueue::Compute:
-        return (sharing & ResourceQueueSharing::AsyncCompute) != ResourceQueueSharing::Exclusive;
-    case CommandQueue::Transfer:
-        return (sharing & ResourceQueueSharing::Transfer) != ResourceQueueSharing::Exclusive;
-    default:
-        return false;
-    }
-}
 
 bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout, TextureSlice* outResolved){
     if(desc.mipLevels == 0 || slice.mipLevel >= desc.mipLevels)

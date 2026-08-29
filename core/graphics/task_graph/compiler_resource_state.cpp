@@ -175,12 +175,11 @@ namespace GpuTaskGraphCompilerDetail{
                     || resource.type == GpuGraphResourceType::Buffer
                     || resource.type == GpuGraphResourceType::AccelStruct
                 )
-                && ResourceUsesConcurrentQueueSharing(resource.queueSharing, topology)
-                && !ResourceSharingIncludesQueueFamily(resource.queueSharing, topology, taskQueue->familyIndex)
+                && ResourceUsesConcurrentQueueSharing(resource, topology)
+                && !ResourceSharingAdmitsQueue(resource, topology, *taskQueue)
             ){
-                // Vulkan concurrent sharing admits native families, not graph queue-class labels. A Transfer queue
-                // may therefore use a family already admitted through AsyncCompute, while an omitted family remains
-                // illegal because concurrent resources cannot gain it through an ownership transfer.
+                // Typed resources preserve their exact native family and logical-class admission. Metadata resources
+                // retain the logical family resolver. Neither can gain an omitted family through ownership transfer.
                 return false;
             }
 
@@ -403,11 +402,11 @@ namespace GpuTaskGraphCompilerDetail{
                                 return false;
                             const bool differentQueueFamilies = sourceQueue->familyIndex != destinationQueue->familyIndex;
                             const bool resourceUsesConcurrentSharing = ResourceUsesConcurrentQueueSharing(
-                                resource.queueSharing,
+                                resource,
                                 topology
                             );
                             const bool concurrentQueuePair = ResourceSharesQueuePairConcurrently(
-                                resource.queueSharing,
+                                resource,
                                 topology,
                                 *sourceQueue,
                                 *destinationQueue
@@ -679,11 +678,11 @@ namespace GpuTaskGraphCompilerDetail{
                         return false;
                     const bool differentQueueFamilies = sourceQueue->familyIndex != destinationQueue->familyIndex;
                     const bool resourceUsesConcurrentSharing = ResourceUsesConcurrentQueueSharing(
-                        resource.queueSharing,
+                        resource,
                         topology
                     );
                     const bool concurrentQueuePair = ResourceSharesQueuePairConcurrently(
-                        resource.queueSharing,
+                        resource,
                         topology,
                         *sourceQueue,
                         *destinationQueue

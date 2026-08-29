@@ -56,7 +56,9 @@ struct TextureClearTestContext{
             testArena.arena,
             context,
             allocator,
-            description
+            description,
+            VkImageCreateInfo{},
+            false
         );
         if(!textureObject)
             return {};

@@ -170,7 +170,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
             || (required && regionSnapshot.recordCount != 1u)
             || &buffer->m_context != &m_context
             || buffer->getDeviceGeneration() != m_context.deviceGeneration
-            || !m_device.isBufferReadyForGpuUse(
+            || !isBufferReadyForCommandQueue(
                 buffer,
                 VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
             )
@@ -185,8 +185,8 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
             !creationDesc.isShaderBindingTable
             || creationDesc.cpuAccess != CpuAccessMode::Write
             || (static_cast<u8>(creationDesc.queueSharing) & s_RequiredQueueSharing) != s_RequiredQueueSharing
-            || (buffer->m_usage & VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR) == 0u
-            || (buffer->m_usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) == 0u
+            || (buffer->m_bufferInfo.usage & VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR) == 0u
+            || (buffer->m_bufferInfo.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) == 0u
             || static_cast<u64>(regionSnapshot.recordCount) > Limit<u64>::s_Max / handleSizeAligned
         )
             return false;

@@ -111,8 +111,8 @@ bool IsLegalQueueAssignmentCandidate(
         if(resource.type == GpuGraphResourceType::HazardDomain)
             continue;
         if(
-            ResourceUsesConcurrentQueueSharing(resource.queueSharing, topology)
-            && !ResourceSharingIncludesQueueFamily(resource.queueSharing, topology, candidate.familyIndex)
+            ResourceUsesConcurrentQueueSharing(resource, topology)
+            && !ResourceSharingAdmitsQueue(resource, topology, candidate)
         )
             return false;
     }
@@ -286,10 +286,12 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
         if(resource.type == GpuGraphResourceType::HazardDomain)
             continue;
 
-        const bool concurrentQueuePair = ResourceUsesConcurrentQueueSharing(resource.queueSharing, topology)
-            && ResourceSharingIncludesQueueFamily(resource.queueSharing, topology, producerQueue->familyIndex)
-            && ResourceSharingIncludesQueueFamily(resource.queueSharing, topology, consumerQueue->familyIndex)
-        ;
+        const bool concurrentQueuePair = ResourceSharesQueuePairConcurrently(
+            resource,
+            topology,
+            *producerQueue,
+            *consumerQueue
+        );
         if(!concurrentQueuePair)
             ++ownershipTransfers;
     }

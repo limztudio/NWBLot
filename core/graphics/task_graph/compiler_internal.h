@@ -88,24 +88,19 @@ struct GpuTaskGraphResourceStatePlan{
     GpuQueueCapability::Mask required
 )noexcept;
 
-[[nodiscard]] bool ResourceSharingIncludesQueueClass(
-    ResourceQueueSharing::Mask sharing,
-    CommandQueue::Enum queueClass
-)noexcept;
-
-[[nodiscard]] bool ResourceSharingIncludesQueueFamily(
-    ResourceQueueSharing::Mask sharing,
+[[nodiscard]] bool ResourceSharingAdmitsQueue(
+    const GpuTaskGraphResourceView& resource,
     const GpuTaskGraphQueueTopology& topology,
-    u32 familyIndex
+    const GpuPhysicalQueueInfo& queue
 )noexcept;
 
 [[nodiscard]] bool ResourceUsesConcurrentQueueSharing(
-    ResourceQueueSharing::Mask sharing,
+    const GpuTaskGraphResourceView& resource,
     const GpuTaskGraphQueueTopology& topology
 )noexcept;
 
 [[nodiscard]] bool ResourceSharesQueuePairConcurrently(
-    ResourceQueueSharing::Mask sharing,
+    const GpuTaskGraphResourceView& resource,
     const GpuTaskGraphQueueTopology& topology,
     const GpuPhysicalQueueInfo& sourceQueue,
     const GpuPhysicalQueueInfo& destinationQueue

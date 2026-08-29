@@ -5,6 +5,8 @@
 #include "backend.h"
 #include "texture_resource_detail.h"
 
+#include <core/graphics/rhi/queue_sharing.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -354,7 +356,7 @@ bool CommandList::validateStagingTextureCopyResources(
     }
     if(
         stagingTexture.m_creationSharingMode == VK_SHARING_MODE_CONCURRENT
-        && !VulkanDetail::StagingTextureSharingIncludesQueueClass(
+        && !ResourceQueueSharing::IncludesQueueClass(
             stagingTexture.m_creationQueueSharing,
             exactQueue->queueClass
         )

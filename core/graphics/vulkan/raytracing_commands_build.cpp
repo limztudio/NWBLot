@@ -210,7 +210,7 @@ bool CommandList::suballocateBuildScratchAddress(
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch-buffer suballocation failed"), operationName);
         return false;
     }
-    if(!m_device.isBufferReadyForGpuUse(
+    if(!isBufferReadyForCommandQueue(
         scratchBuffer,
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
     )){
@@ -331,7 +331,12 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     const VkBuildAccelerationStructureFlagsKHR vkBuildFlags,
     const tchar* operationName
 ){
-    if(!m_device.isAccelStructReadyForGpuUse(&as)){
+    Buffer* const backingBuffer = as.getBackingBuffer();
+    if(
+        !m_device.isAccelStructReadyForGpuUse(&as)
+        || !backingBuffer
+        || !isBufferAdmittedToCommandQueue(*backingBuffer)
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: acceleration structure storage is not ready"), operationName);
         return false;
     }
@@ -477,7 +482,12 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is not bottom-level"));
         return;
     }
-    if(!m_device.isAccelStructReadyForGpuUse(as)){
+    Buffer* const backingBuffer = as->getBackingBuffer();
+    if(
+        !m_device.isAccelStructReadyForGpuUse(as)
+        || !backingBuffer
+        || !isBufferAdmittedToCommandQueue(*backingBuffer)
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is not ready"));
         return;
     }
@@ -556,7 +566,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     const auto validateBuildInput = [&](Buffer* const buffer, const tchar* const resourceName) -> bool{
         if(!buffer)
             return true;
-        if(m_device.isBufferReadyForGpuUse(buffer, s_BuildInputUsage))
+        if(isBufferReadyForCommandQueue(buffer, s_BuildInputUsage))
             return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: {} buffer is foreign or not ready"), resourceName);
@@ -631,7 +641,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
                 VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
             ;
             Buffer* const micromapStorage = opacityMicromap->m_dataBuffer.get();
-            if(!m_device.isBufferReadyForGpuUse(micromapStorage, s_MicromapStorageUsage)){
+            if(!isBufferReadyForCommandQueue(micromapStorage, s_MicromapStorageUsage)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle opacity micromap storage is not ready"));
                 return;
             }
@@ -819,7 +829,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate BLAS transform buffer"));
             return;
         }
-        if(!m_device.isBufferReadyForGpuUse(transformBuffer.get(), s_BuildInputUsage)){
+        if(!isBufferReadyForCommandQueue(transformBuffer.get(), s_BuildInputUsage)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: BLAS transform buffer is not ready for device-address access"));
             return;
         }
@@ -1062,7 +1072,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(
     constexpr VkBufferUsageFlags s_BuildInputUsage =
         VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
     ;
-    if(!m_device.isBufferReadyForGpuUse(instanceBufferImpl, s_BuildInputUsage)){
+    if(!isBufferReadyForCommandQueue(instanceBufferImpl, s_BuildInputUsage)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer is foreign or not ready"));
         return;
     }
@@ -1131,7 +1141,13 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: instance {} has a null bottom-level acceleration structure"), i);
             return;
         }
-        if(blas->m_isTopLevelAtCreation || !m_device.isAccelStructReadyForGpuUse(blas)){
+        Buffer* const backingBuffer = blas->getBackingBuffer();
+        if(
+            blas->m_isTopLevelAtCreation
+            || !m_device.isAccelStructReadyForGpuUse(blas)
+            || !backingBuffer
+            || !isBufferAdmittedToCommandQueue(*backingBuffer)
+        ){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: instance {} references an invalid bottom-level acceleration structure"), i);
             return;
         }
@@ -1163,7 +1179,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate TLAS instance buffer"));
         return;
     }
-    if(!m_device.isBufferReadyForGpuUse(
+    if(!isBufferReadyForCommandQueue(
         instanceBuffer.get(),
         VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
     )){

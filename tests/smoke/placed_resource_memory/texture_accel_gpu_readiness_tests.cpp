@@ -7,6 +7,8 @@
 
 #include <gtest/gtest.h>
 
+#include <global/filesystem/operations.h>
+#include <global/filesystem/path.h>
 #include <global/global.h>
 #include <global/unique_ptr.h>
 #include <core/graphics/capture/command_ir.h>
@@ -16,6 +18,7 @@
 #include <core/graphics/vulkan/backend.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
+#include <tests/common/test_context.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,6 +37,25 @@ namespace Tests{
 
 
 using namespace Core;
+using GpuResourceReadinessSourcePath = ::Path<Core::Alloc::GlobalArena>;
+
+struct GpuResourceReadinessSourceContractArenaTag{};
+using GpuResourceReadinessSourceContractArena =
+    ::NWB::Tests::TestArena<GpuResourceReadinessSourceContractArenaTag>
+;
+
+
+static GpuResourceReadinessSourcePath GpuResourceReadinessRepoRoot(
+    GpuResourceReadinessSourceContractArena& testArena
+){
+    return GpuResourceReadinessSourcePath(testArena.arena, __FILE__)
+        .parent_path()
+        .parent_path()
+        .parent_path()
+        .parent_path()
+        .lexically_normal()
+    ;
+}
 
 
 struct PacketPreflightProbeTask{
@@ -105,6 +127,95 @@ bool GpuResourceReadinessTest::s_validationBackedDeviceInitialized = false;
 UniquePtr<HeadlessGraphicsScope> GpuResourceReadinessTest::s_scope;
 Optional<CapturingLogger> GpuResourceReadinessTest::s_logger;
 Optional<Common::LoggerRegistrationGuard> GpuResourceReadinessTest::s_loggerGuard;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(GpuResourceReadinessSourceContract, PacketRuntimePreflightUsesExactTextureAdmission){
+    GpuResourceReadinessSourceContractArena testArena;
+    const GpuResourceReadinessSourcePath repoRoot = GpuResourceReadinessRepoRoot(testArena);
+
+    TestAString source;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "task_graph" / "packet_runtime_preflight.cpp",
+        source
+    ));
+    const AStringView fullSource(source.data(), source.size());
+    const usize functionBegin = fullSource.find(
+        "bool GpuNativePacketRecorder::preflightPacketResources("
+    );
+    const usize functionEnd = fullSource.find("NWB_CORE_END", functionBegin);
+    ASSERT_NE(functionBegin, AStringView::npos);
+    ASSERT_NE(functionEnd, AStringView::npos);
+    ASSERT_LT(functionBegin, functionEnd);
+    const AStringView function = fullSource.substr(functionBegin, functionEnd - functionBegin);
+
+    const usize textureValidatorOffset = function.find("const auto validateTextureForState =");
+    const usize bufferValidatorOffset = function.find(
+        "const auto validateBufferForState =",
+        textureValidatorOffset
+    );
+    ASSERT_NE(textureValidatorOffset, AStringView::npos);
+    ASSERT_NE(bufferValidatorOffset, AStringView::npos);
+    ASSERT_LT(textureValidatorOffset, bufferValidatorOffset);
+    const AStringView textureValidator = function.substr(
+        textureValidatorOffset,
+        bufferValidatorOffset - textureValidatorOffset
+    );
+    EXPECT_NE(
+        textureValidator.find(
+            "ResourceQueueAdmissionAdmitsQueue(texture->getQueueAdmissionSnapshot(), *packetQueueInfo)"
+        ),
+        AStringView::npos
+    );
+
+    const usize transientTextureStatesOffset = function.find(
+        "initialStates->m_textureStates.size()",
+        bufferValidatorOffset
+    );
+    const usize permanentTextureStatesOffset = function.find(
+        "initialStates->m_permanentTextureStates",
+        transientTextureStatesOffset
+    );
+    const usize bufferStatesOffset = function.find(
+        "initialStates->m_bufferStates.size()",
+        permanentTextureStatesOffset
+    );
+    ASSERT_NE(transientTextureStatesOffset, AStringView::npos);
+    ASSERT_NE(permanentTextureStatesOffset, AStringView::npos);
+    ASSERT_NE(bufferStatesOffset, AStringView::npos);
+    EXPECT_NE(
+        function.substr(
+            transientTextureStatesOffset,
+            permanentTextureStatesOffset - transientTextureStatesOffset
+        ).find("validateTextureForState(state.texture, state.state)"),
+        AStringView::npos
+    );
+    EXPECT_NE(
+        function.substr(
+            permanentTextureStatesOffset,
+            bufferStatesOffset - permanentTextureStatesOffset
+        ).find("validateTextureForState(state.texture, state.state)"),
+        AStringView::npos
+    );
+
+    const usize textureResourceCaseOffset = function.find("case GpuGraphResourceType::Texture:{");
+    const usize bufferResourceCaseOffset = function.find(
+        "case GpuGraphResourceType::Buffer:{",
+        textureResourceCaseOffset
+    );
+    ASSERT_NE(textureResourceCaseOffset, AStringView::npos);
+    ASSERT_NE(bufferResourceCaseOffset, AStringView::npos);
+    ASSERT_LT(textureResourceCaseOffset, bufferResourceCaseOffset);
+    EXPECT_NE(
+        function.substr(
+            textureResourceCaseOffset,
+            bufferResourceCaseOffset - textureResourceCaseOffset
+        ).find("validateTextureForState(texture, requiredState)"),
+        AStringView::npos
+    );
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -281,7 +392,8 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsInvalidGraphInitialTextur
     TextureHandle texture = device.createHandleForNativeTexture(
         GraphicsBackend::ObjectTypes::VK_Image,
         Object(static_cast<u64>(0x71a00001u)),
-        desc
+        desc,
+        GraphicsBackend::NativeTextureProvenance{ .usage = VK_IMAGE_USAGE_SAMPLED_BIT }
     );
     ASSERT_TRUE(texture);
     ASSERT_TRUE(device.isTextureReadyForGpuUse(texture.get(), VK_IMAGE_USAGE_SAMPLED_BIT));

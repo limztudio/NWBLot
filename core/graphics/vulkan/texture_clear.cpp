@@ -32,8 +32,8 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
         ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
         : VK_IMAGE_USAGE_TRANSFER_DST_BIT
     ;
-    if(!m_device.isTextureReadyForGpuUse(textureResource, requiredUsage)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear"));
+    if(!isTextureReadyForCommandQueue(textureResource, requiredUsage)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
         return;
     }
     if(!VulkanTextureDetail::TextureDepthStencilClearAspectsAreValid(texture.m_aspectMask, clearDepth, clearStencil)){
@@ -278,8 +278,8 @@ void CommandList::clearDepthStencilTextureBox(
         ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
         : VK_IMAGE_USAGE_TRANSFER_DST_BIT
     ;
-    if(!m_device.isTextureReadyForGpuUse(textureResource, requiredUsage)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear"));
+    if(!isTextureReadyForCommandQueue(textureResource, requiredUsage)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
         return;
     }
     const f32 clearDepthValue = clearDepth

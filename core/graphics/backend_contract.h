@@ -104,7 +104,8 @@ concept DeviceApi = requires(
     { device.createTexture(textureDesc) }->SameAs<TextureHandle>;
     { device.getTextureMemoryRequirements(texture) }->SameAs<MemoryRequirements>;
     { device.bindTextureMemory(texture, heap, u64{}) }->SameAs<bool>;
-    { device.createHandleForNativeTexture(ObjectType{}, nativeObject, textureDesc) }->SameAs<TextureHandle>;
+    { device.createHandleForNativeTexture(ObjectType{}, nativeObject, textureDesc, {}) }->SameAs<TextureHandle>;
+    requires (!requires{ device.createHandleForNativeTexture(ObjectType{}, nativeObject, textureDesc); });
     { device.createStagingTexture(textureDesc, CpuAccessMode::Read) }->SameAs<StagingTextureHandle>;
     { device.mapStagingTexture(stagingTexture, textureSlice, CpuAccessMode::Read, rowPitch) }->SameAs<void*>;
     device.unmapStagingTexture(stagingTexture);
@@ -114,7 +115,8 @@ concept DeviceApi = requires(
     device.unmapBuffer(buffer);
     { device.getBufferMemoryRequirements(buffer) }->SameAs<MemoryRequirements>;
     { device.bindBufferMemory(buffer, heap, u64{}) }->SameAs<bool>;
-    { device.createHandleForNativeBuffer(ObjectType{}, nativeObject, bufferDesc, u32{}) }->SameAs<BufferHandle>;
+    { device.createHandleForNativeBuffer(ObjectType{}, nativeObject, bufferDesc, {}) }->SameAs<BufferHandle>;
+    requires (!requires{ device.createHandleForNativeBuffer(ObjectType{}, nativeObject, bufferDesc, u32{}); });
 
     { device.createShader(shaderDesc, binary, usize{}) }->SameAs<ShaderHandle>;
     { device.createShaderSpecialization(shader, specializationConstants, u32{}) }->SameAs<ShaderHandle>;

@@ -636,7 +636,7 @@ bool DescriptorBufferManager::writeDescriptor(
             return false;
         }
         const BufferDesc& bufferDesc = buffer->getCreationDescription();
-        if((buffer->m_usage & requiredUsage) != requiredUsage){
+        if((buffer->m_bufferInfo.usage & requiredUsage) != requiredUsage){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: Buffer lacks native descriptor usage."));
             return false;
         }
@@ -710,7 +710,7 @@ bool DescriptorBufferManager::writeDescriptor(
             if(
                 !bufferDesc.canHaveTypedViews
                 || (item.type == ResourceType::TypedBuffer_UAV && !bufferDesc.canHaveUAVs)
-                || (buffer->m_usage & requiredUsage) != requiredUsage
+                || (buffer->m_bufferInfo.usage & requiredUsage) != requiredUsage
             ){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: Buffer lacks typed-view capability."));
                 return false;

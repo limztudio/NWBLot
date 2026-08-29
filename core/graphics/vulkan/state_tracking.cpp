@@ -213,9 +213,8 @@ bool StateTracker::getTransientBufferState(Buffer& buffer, ResourceStates::Mask&
         return true;
     }
 
-    const BufferDesc& desc = buffer.getCreationDescription();
-    if(desc.keepInitialState)
-        outState = desc.initialState;
+    if(buffer.isRetainedStateKnown())
+        outState = buffer.m_creationDesc.initialState;
 
     return true;
 }
@@ -280,10 +279,15 @@ void StateTracker::appendKeepInitialStateBarriers(
 
         const BufferDesc& desc = bufferResource->getCreationDescription();
         const ResourceStates::Mask currentState = it.value();
-        if(!desc.keepInitialState || currentState == desc.initialState)
+        if(!desc.keepInitialState)
             continue;
 
         auto* buffer = bufferResource;
+        if(currentState == desc.initialState){
+            commandBuffer.appendRetainedBufferStateCommit(*buffer);
+            continue;
+        }
+
         auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
         barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(currentState != ResourceStates::Unknown ? currentState : ResourceStates::Common, m_context.extensions.KHR_ray_tracing_pipeline);
         barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(currentState != ResourceStates::Unknown ? currentState : ResourceStates::Common);
@@ -295,8 +299,8 @@ void StateTracker::appendKeepInitialStateBarriers(
         barrier.offset = 0;
         barrier.size = VK_WHOLE_SIZE;
         bufferBarriers.push_back(barrier);
-        commandBuffer.retainBuffer(*buffer);
         it.value() = desc.initialState;
+        commandBuffer.appendRetainedBufferStateCommit(*buffer);
     }
 }
 
@@ -382,8 +386,8 @@ void CommandList::setEnableUavBarriersForTexture(Texture* texture, bool enableBa
     constexpr const tchar* s_OperationName = NWB_TEXT("set texture UAV-barrier policy");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
-    if(!m_device.isTextureReadyForGpuUse(texture)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for GPU access"));
+    if(!isTextureReadyForCommandQueue(texture)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for this exact command queue"));
         return;
     }
     m_stateTracker.setEnableUavBarriersForTexture(*texture, enableBarriers);
@@ -395,8 +399,8 @@ void CommandList::setEnableUavBarriersForBuffer(Buffer* buffer, bool enableBarri
     constexpr const tchar* s_OperationName = NWB_TEXT("set buffer UAV-barrier policy");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
-    if(!m_device.isBufferReadyForGpuUse(buffer)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("buffer is not ready for GPU access"));
+    if(!isBufferReadyForCommandQueue(buffer)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("buffer is not ready for this exact command queue"));
         return;
     }
     m_stateTracker.setEnableUavBarriersForBuffer(*buffer, enableBarriers);

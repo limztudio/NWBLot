@@ -6,6 +6,7 @@
 #include "arena_names.h"
 
 #include <core/common/log.h>
+#include <core/graphics/rhi/queue_sharing.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -179,19 +180,90 @@ void GpuDescriptorHeap::releaseRetainedDescriptorResource(const GpuDescriptorHan
         m_resourceDescriptorTextures[handle.slot()].reset();
 }
 
-bool GpuDescriptorHeap::trackCommandBufferUseLocked(TrackedCommandBuffer& commandBuffer){
-    if(!m_initialized)
+bool GpuDescriptorHeap::isResourceAdmittedToActiveUsesLocked(const ResourceQueueAdmissionSnapshot& admission)const noexcept{
+    for(const HeapUse& heapUse : m_heapUses){
+        if(!heapUse.commandBuffer)
+            continue;
+
+        const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(heapUse.physicalQueue);
+        if(!queueInfo || !ResourceQueueAdmissionAdmitsQueue(admission, *queueInfo))
+            return false;
+    }
+    return true;
+}
+
+bool GpuDescriptorHeap::retainedResourcesReadyForQueueLocked(const GpuPhysicalQueueInfo& queue)const noexcept{
+    for(const BufferHandle& retainedBuffer : m_resourceDescriptorBuffers){
+        if(
+            retainedBuffer
+            && (
+                !m_device.isBufferReadyForGpuUse(retainedBuffer.get())
+                || !ResourceQueueAdmissionAdmitsQueue(retainedBuffer->getQueueAdmissionSnapshot(), queue)
+            )
+        )
+            return false;
+    }
+    for(const TextureHandle& retainedTexture : m_resourceDescriptorTextures){
+        if(
+            retainedTexture
+            && (
+                !m_device.isTextureReadyForGpuUse(retainedTexture.get())
+                || !ResourceQueueAdmissionAdmitsQueue(retainedTexture->getQueueAdmissionSnapshot(), queue)
+            )
+        )
+            return false;
+    }
+    for(const RayTracingAccelStructHandle& retainedAccelStruct : m_accelStructResources){
+        if(!retainedAccelStruct)
+            continue;
+
+        Buffer* const backingBuffer = retainedAccelStruct->getBackingBuffer();
+        if(
+            !m_device.isAccelStructReadyForGpuUse(retainedAccelStruct.get())
+            || !backingBuffer
+            || !ResourceQueueAdmissionAdmitsQueue(backingBuffer->getQueueAdmissionSnapshot(), queue)
+        )
+            return false;
+    }
+    return true;
+}
+
+bool GpuDescriptorHeap::retainedResourcesReadyForQueue(const GpuPhysicalQueueId& queue)const noexcept{
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(queue);
+    if(!queueInfo)
+        return false;
+
+    ScopedLock lock(m_mutex);
+    return m_initialized && retainedResourcesReadyForQueueLocked(*queueInfo);
+}
+
+bool GpuDescriptorHeap::trackCommandBufferUseLocked(
+    TrackedCommandBuffer& commandBuffer,
+    const GpuPhysicalQueueId& physicalQueue
+){
+    if(!m_initialized || !m_device.getPhysicalQueueInfo(physicalQueue))
         return false;
 
     for(GpuDescriptorHeap* trackedHeap : commandBuffer.m_referencedDescriptorHeaps){
-        if(trackedHeap == this)
-            return true;
+        if(trackedHeap != this)
+            continue;
+
+        for(const HeapUse& heapUse : m_heapUses){
+            if(heapUse.commandBuffer == &commandBuffer)
+                return heapUse.physicalQueue == physicalQueue;
+        }
+        return false;
     }
     if(m_lastHeapUseID == UINT64_MAX)
         return false;
 
     commandBuffer.m_referencedDescriptorHeaps.push_back(this);
-    m_heapUses.push_back(HeapUse{ &commandBuffer, {}, ++m_lastHeapUseID });
+    m_heapUses.push_back(HeapUse{
+        .commandBuffer = &commandBuffer,
+        .submissionToken = {},
+        .physicalQueue = physicalQueue,
+        .id = ++m_lastHeapUseID,
+    });
     return true;
 }
 
@@ -214,6 +286,15 @@ void GpuDescriptorHeap::submitCommandBufferUse(
     for(HeapUse& heapUse : m_heapUses){
         if(heapUse.commandBuffer != &commandBuffer || heapUse.submissionToken.valid())
             continue;
+        if(!submissionToken.matchesPhysicalQueue(
+            heapUse.physicalQueue.index,
+            heapUse.physicalQueue.deviceGeneration
+        )){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: GpuDescriptorHeap command-buffer submission changed its exact physical queue.")
+            );
+            return;
+        }
 
         heapUse.submissionToken = submissionToken;
         return;

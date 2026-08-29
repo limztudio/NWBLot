@@ -5,6 +5,7 @@
 #include "backend.h"
 
 #include <core/common/log.h>
+#include <core/graphics/rhi/queue_sharing.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -177,6 +178,13 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a foreign or unready AccelStruct."));
             return false;
         }
+        Buffer* const backingBuffer = accelStruct->getBackingBuffer();
+        if(!backingBuffer || !isResourceAdmittedToActiveUsesLocked(backingBuffer->getQueueAdmissionSnapshot())){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected an AccelStruct unavailable to an active exact queue.")
+            );
+            return false;
+        }
         if(!accelStruct->m_isTopLevelAtCreation){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a bottom-level AccelStruct."));
             return false;
@@ -244,6 +252,12 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
         auto* const texture = static_cast<Texture*>(writeItem.resourceHandle);
         if(!m_device.isTextureReadyForGpuUse(texture)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a foreign or unready Texture."));
+            return false;
+        }
+        if(!isResourceAdmittedToActiveUsesLocked(texture->getQueueAdmissionSnapshot())){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a Texture unavailable to an active exact queue.")
+            );
             return false;
         }
 
@@ -354,6 +368,12 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
     }
     if(!m_device.isBufferReadyForGpuUse(buffer, requiredUsage)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a foreign or unready Buffer."));
+        return false;
+    }
+    if(!isResourceAdmittedToActiveUsesLocked(buffer->getQueueAdmissionSnapshot())){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a Buffer unavailable to an active exact queue.")
+        );
         return false;
     }
     if(descriptorClass == GpuDescriptorClass::SampledBuffer){

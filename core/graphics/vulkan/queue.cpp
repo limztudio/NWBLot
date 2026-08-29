@@ -35,6 +35,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(
     , m_referencedTextures(context.objectArena)
     , m_referencedStagingBuffers(context.objectArena)
     , m_referencedDescriptorHeaps(context.objectArena)
+    , m_retainedBufferStateCommits(context.objectArena)
     , m_retainedTextureStateCommits(context.objectArena)
     , m_pendingAccelStructBuildCommits(context.objectArena)
     , m_pendingAccelStructBuildSignatures(context.objectArena)
@@ -123,6 +124,27 @@ void TrackedCommandBuffer::trackRetainedBuffer(Buffer& buffer){
     }
 
     m_referencedBuffers.push_back(&buffer);
+}
+
+void TrackedCommandBuffer::appendRetainedBufferStateCommit(Buffer& buffer){
+    retainBuffer(buffer);
+    for(const RetainedBufferStateCommit& commit : m_retainedBufferStateCommits){
+        if(commit.buffer == &buffer)
+            return;
+    }
+    m_retainedBufferStateCommits.push_back(RetainedBufferStateCommit{ .buffer = &buffer });
+}
+
+void TrackedCommandBuffer::commitRetainedBufferStateCommits(){
+    for(const RetainedBufferStateCommit& commit : m_retainedBufferStateCommits){
+        if(commit.buffer)
+            commit.buffer->setRetainedStateKnown(true);
+    }
+    m_retainedBufferStateCommits.clear();
+}
+
+void TrackedCommandBuffer::discardRetainedBufferStateCommits(){
+    m_retainedBufferStateCommits.clear();
 }
 
 void TrackedCommandBuffer::retainTexture(Texture& texture){
@@ -292,6 +314,7 @@ void TrackedCommandBuffer::discardPendingOpacityMicromapBuildCommits(){
 }
 
 void TrackedCommandBuffer::clearTrackedReferences(){
+    discardRetainedBufferStateCommits();
     discardRetainedTextureStateCommits();
     discardPendingAccelStructBuildCommits();
     discardPendingOpacityMicromapBuildCommits();
@@ -932,8 +955,6 @@ u64 Queue::submit(
     ScopedLock lock(m_mutex);
     DescriptorBufferManager* const descriptorBufferManager = m_context.descriptorBufferManager;
     UniqueLock<Futex> descriptorBufferLifecycleLock;
-    if(descriptorBufferManager)
-        descriptorBufferLifecycleLock = UniqueLock<Futex>(descriptorBufferManager->m_lifecycleMutex);
     if(outSubmissionAccepted)
         *outSubmissionAccepted = false;
 
@@ -1034,6 +1055,15 @@ u64 Queue::submit(
             }
             if(!cmdList->validateTrackedResourcesReadyForSubmission())
                 return m_lastSubmittedID;
+        }
+    }
+
+    if(descriptorBufferManager)
+        descriptorBufferLifecycleLock = UniqueLock<Futex>(descriptorBufferManager->m_lifecycleMutex);
+
+    if(hasCommands){
+        for(usize i = 0; i < numCmd; ++i){
+            CommandList* const cmdList = ppCmd[i];
             TrackedCommandBuffer* const tracked = cmdList->m_currentCmdBuf.get();
             if(
                 (cmdList->m_descriptorBuffersBound && !tracked->m_descriptorBufferManager)
@@ -1214,6 +1244,7 @@ u64 Queue::submit(
         .deviceGeneration = m_physicalQueue.deviceGeneration,
     };
     for(auto& tracked : trackedBuffers){
+        tracked->commitRetainedBufferStateCommits();
         tracked->commitRetainedTextureStateCommits();
         tracked->commitPendingAccelStructBuildCommits();
         tracked->commitPendingOpacityMicromapBuildCommits();

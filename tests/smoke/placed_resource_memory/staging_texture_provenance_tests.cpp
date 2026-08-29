@@ -9,6 +9,7 @@
 
 #include <global/global.h>
 #include <global/unique_ptr.h>
+#include <core/graphics/rhi/queue_sharing.h>
 #include <core/graphics/vulkan/backend.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
@@ -133,18 +134,22 @@ TEST(StagingTextureProvenanceCpuTest, CheckedAlignmentAndRangeArithmeticRejectWi
     EXPECT_FALSE(TryComputeCommonAlignment(4u, Limit<u32>::s_Max, alignment));
     EXPECT_EQ(alignment, 0u);
 
-    EXPECT_TRUE(StagingTextureSharingIncludesQueueClass(
+    EXPECT_TRUE(ResourceQueueSharing::IncludesQueueClass(
         ResourceQueueSharing::GraphicsAndTransfer,
         CommandQueue::Graphics
     ));
-    EXPECT_FALSE(StagingTextureSharingIncludesQueueClass(
+    EXPECT_FALSE(ResourceQueueSharing::IncludesQueueClass(
         ResourceQueueSharing::GraphicsAndTransfer,
         CommandQueue::Compute
     ));
-    EXPECT_TRUE(StagingTextureSharingIncludesQueueClass(
+    EXPECT_TRUE(ResourceQueueSharing::IncludesQueueClass(
         ResourceQueueSharing::GraphicsAndTransfer,
         CommandQueue::Transfer
     ));
+    EXPECT_EQ(ResourceQueueSharing::ForQueueClass(CommandQueue::Graphics), ResourceQueueSharing::Graphics);
+    EXPECT_EQ(ResourceQueueSharing::ForQueueClass(CommandQueue::Compute), ResourceQueueSharing::AsyncCompute);
+    EXPECT_EQ(ResourceQueueSharing::ForQueueClass(CommandQueue::Transfer), ResourceQueueSharing::Transfer);
+    EXPECT_EQ(ResourceQueueSharing::ForQueueClass(CommandQueue::kCount), ResourceQueueSharing::Exclusive);
 
     const TextureFormatBlockLayout sixByteFormat{ 1u, 1u, 6u };
     const StagingTextureMipLayout validMip{ 0u, 24u, 48u, 4u, 2u };
@@ -626,14 +631,14 @@ TEST_F(StagingTextureProvenanceTest, ConcurrentSharingRequiresImmutableQueueClas
         usize uniqueFamilyCount = 0u;
         for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
             const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
-            if(!GraphicsBackend::VulkanDetail::StagingTextureSharingIncludesQueueClass(mask, queue.queueClass))
+            if(!ResourceQueueSharing::IncludesQueueClass(mask, queue.queueClass))
                 continue;
             bool firstInFamily = true;
             for(usize earlier = 0u; earlier < queueIndex; ++earlier){
                 const GpuPhysicalQueueInfo& previous = topology.queues[earlier];
                 if(
                     previous.familyIndex == queue.familyIndex
-                    && GraphicsBackend::VulkanDetail::StagingTextureSharingIncludesQueueClass(
+                    && ResourceQueueSharing::IncludesQueueClass(
                         mask,
                         previous.queueClass
                     )
@@ -650,13 +655,13 @@ TEST_F(StagingTextureProvenanceTest, ConcurrentSharingRequiresImmutableQueueClas
 
         for(usize candidateIndex = 0u; candidateIndex < topology.queueCount; ++candidateIndex){
             const GpuPhysicalQueueInfo& candidate = topology.queues[candidateIndex];
-            if(GraphicsBackend::VulkanDetail::StagingTextureSharingIncludesQueueClass(mask, candidate.queueClass))
+            if(ResourceQueueSharing::IncludesQueueClass(mask, candidate.queueClass))
                 continue;
             for(usize admittedIndex = 0u; admittedIndex < topology.queueCount; ++admittedIndex){
                 const GpuPhysicalQueueInfo& admitted = topology.queues[admittedIndex];
                 if(
                     admitted.familyIndex == candidate.familyIndex
-                    && GraphicsBackend::VulkanDetail::StagingTextureSharingIncludesQueueClass(
+                    && ResourceQueueSharing::IncludesQueueClass(
                         mask,
                         admitted.queueClass
                     )

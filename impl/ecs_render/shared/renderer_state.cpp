@@ -68,6 +68,7 @@ RendererMaterialState::RendererMaterialState(Core::Alloc::GlobalArena& arena)
 
 void RendererMaterialState::invalidateResources(){
     m_pipelines.clear();
+    m_materialPassBindingLayout.reset();
     m_instanceMutableCache.clear();
     m_loggedMaterialPaths.clear();
     m_instanceMutableCacheComponentMutationVersion = 0u;
@@ -152,7 +153,6 @@ void RendererDeferredState::invalidateResources(){
 
 
 void RendererAvboitState::invalidateResources(){
-    m_emptyBindingLayout.reset();
     m_linearSampler.reset();
     m_depthWarpComputeShader.reset();
     m_integrateComputeShader.reset();

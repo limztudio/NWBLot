@@ -44,12 +44,6 @@ static_assert(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_RendererAvboitTransparentDrawPushConstantSize = NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] Core::Format::Enum SelectRendererAvboitAccumColorFormat(Core::Device& device);
 [[nodiscard]] Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::Device& device);
 [[nodiscard]] Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::Device& device);

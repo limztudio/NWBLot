@@ -29,6 +29,27 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool RendererMaterialSystem::prepareMaterialPassBindingLayout(Core::BindingLayoutHandle& outBindingLayout){
+    outBindingLayout.reset();
+    if(!m_materialState.m_materialPassBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
+        bindingLayoutDesc
+            .setVisibility(Core::ShaderType::All)
+            // Every material graphics pass uses this push-only set 0. Transparent passes consume the full combined
+            // mesh/AVBOIT payload; opaque and AVBOIT compute paths use smaller payloads within the same byte range.
+            .addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)))
+        ;
+        m_materialState.m_materialPassBindingLayout = m_graphics.getDevice().createBindingLayout(bindingLayoutDesc);
+        if(!m_materialState.m_materialPassBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create the shared material-pass push-constant layout"));
+            return false;
+        }
+    }
+    outBindingLayout = m_materialState.m_materialPassBindingLayout;
+    return true;
+}
+
+
 bool RendererMaterialSystem::createComputeEmulationResources(){
     if(!m_drawState.m_computeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);

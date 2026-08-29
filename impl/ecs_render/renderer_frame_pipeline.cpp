@@ -74,7 +74,6 @@ RendererFramePipeline::RendererFramePipeline(
         m_csgShapeRegistry,
         m_materialState,
         m_drawState,
-        m_avboitState,
         m_shaderSystem,
         m_meshSystem,
         m_csgSystem

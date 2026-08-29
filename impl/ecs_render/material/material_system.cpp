@@ -22,7 +22,6 @@ RendererMaterialSystem::RendererMaterialSystem(
     CsgShapeRegistry& csgShapeRegistry,
     RendererMaterialState& materialState,
     RendererDrawState& drawState,
-    RendererAvboitState& avboitState,
     RendererShaderSystem& shaderSystem,
     RendererMeshSystem& meshSystem,
     RendererCsgSystem& csgSystem
@@ -34,7 +33,6 @@ RendererMaterialSystem::RendererMaterialSystem(
     , m_csgShapeRegistry(csgShapeRegistry)
     , m_materialState(materialState)
     , m_drawState(drawState)
-    , m_avboitState(avboitState)
     , m_shaderSystem(shaderSystem)
     , m_meshSystem(meshSystem)
     , m_csgSystem(csgSystem)

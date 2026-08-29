@@ -81,7 +81,6 @@ struct MaterialInstanceOverrideField{
 class CsgShapeRegistry;
 class RendererMaterialState;
 class RendererDrawState;
-class RendererAvboitState;
 class RendererShaderSystem;
 class RendererMeshSystem;
 class RendererCsgSystem;
@@ -100,7 +99,6 @@ public:
         CsgShapeRegistry& csgShapeRegistry,
         RendererMaterialState& materialState,
         RendererDrawState& drawState,
-        RendererAvboitState& avboitState,
         RendererShaderSystem& shaderSystem,
         RendererMeshSystem& meshSystem,
         RendererCsgSystem& csgSystem
@@ -120,6 +118,7 @@ public:
     void releaseMaterialResourceReferences();
     [[nodiscard]] bool prepareVisibleMaterialSurfaceInfos();
     void prepareVisibleMaterialInstanceMutableCache();
+    [[nodiscard]] bool prepareMaterialPassBindingLayout(Core::BindingLayoutHandle& outBindingLayout);
     [[nodiscard]] bool createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer* framebuffer, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool findRendererPipeline(const MaterialPipelineKey& pipelineKey, MaterialPipelineResources*& outResources);
     void invalidateRendererPipelines();
@@ -327,7 +326,6 @@ private:
     CsgShapeRegistry& m_csgShapeRegistry;
     RendererMaterialState& m_materialState;
     RendererDrawState& m_drawState;
-    RendererAvboitState& m_avboitState;
     RendererShaderSystem& m_shaderSystem;
     RendererMeshSystem& m_meshSystem;
     RendererCsgSystem& m_csgSystem;

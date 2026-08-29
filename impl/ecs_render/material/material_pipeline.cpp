@@ -310,10 +310,9 @@ bool RendererMaterialSystem::createRendererPipeline(
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material geometry pipeline requires the global descriptor heap"));
         return failMaterialPipeline();
     }
-    if(!m_avboitState.m_emptyBindingLayout){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material pipelines require the shared empty set-0 layout"));
+    Core::BindingLayoutHandle materialPassBindingLayout;
+    if(!prepareMaterialPassBindingLayout(materialPassBindingLayout))
         return failMaterialPipeline();
-    }
 
     auto loadPassPixelShader = [&]() -> bool{
         if(pass == MaterialPipelinePass::Opaque){
@@ -369,7 +368,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         pipelineDesc.setPixelShader(resources.pixelShader);
         pipelineDesc.setRenderState(renderState);
         // Set 0 is the shared push-only range; all CSG and AVBOIT resources are selected through the global heap.
-        pipelineDesc.addBindingLayout(m_avboitState.m_emptyBindingLayout);
+        pipelineDesc.addBindingLayout(materialPassBindingLayout);
         // The mesh stage resolves every immutable geometry stream through the global StorageBuffer heap. Keep both
         // fixed heap layouts in every mesh pipeline. The sampler layout is part of that frozen heap surface even though geometry uses
         // only the resource table today.
@@ -424,7 +423,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         emulationDesc.setVertexShader(m_drawState.m_emulationVertexShader);
         emulationDesc.setPixelShader(resources.pixelShader);
         emulationDesc.setRenderState(renderState);
-        emulationDesc.addBindingLayout(m_avboitState.m_emptyBindingLayout);
+        emulationDesc.addBindingLayout(materialPassBindingLayout);
         emulationDesc
             .addBindingLayout(heap.getResourceLayout())
             .addBindingLayout(heap.getSamplerLayout())

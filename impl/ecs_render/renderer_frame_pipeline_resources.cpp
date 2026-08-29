@@ -228,6 +228,9 @@ void RendererFramePipeline::invalidateResources(){
     if(DeferredFrameTargets* const deferredTargets = m_deferredSystem.tryFrameTargets())
         m_avboitSystem.resetAvboitFrameTargets(deferredTargets->avboit);
     m_deferredSystem.resetDeferredFrameTargets();
+    // AVBOIT pipelines also consume Material's shared push layout, so release those pipelines before Material
+    // clears the layout owner.
+    m_avboitSystem.invalidateResources();
     m_shaderSystem.invalidateResources();
     m_meshSystem.releaseAllMeshGeometryHeapHandles();
     m_meshSystem.releaseMeshFrameHeapHandles();
@@ -238,7 +241,6 @@ void RendererFramePipeline::invalidateResources(){
     m_csgSystem.releaseCsgClipContextHeapHandles();
     m_csgState.invalidateResources();
     m_deferredSystem.invalidateResources();
-    m_avboitSystem.invalidateResources();
 }
 
 void RendererFramePipeline::update(Core::ECS::World& world, f32 delta){

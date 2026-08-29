@@ -188,6 +188,42 @@ TEST(EcsGraphics, MaterialSystemUsesMeshDomainLookupWithoutMeshStatePrivilege){
 }
 
 
+TEST(EcsGraphics, MaterialDomainOwnsTheSharedMaterialPassLayout){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+    AString materialHeaderSource;
+    AString materialPipelineSource;
+    AString materialResourcesSource;
+    AString avboitResourcesSource;
+    AString rendererStateSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_system.h", materialHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pipeline.cpp", materialPipelineSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass_resources.cpp", materialResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_resources.cpp", avboitResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+
+    const AStringView materialHeader(materialHeaderSource.data(), materialHeaderSource.size());
+    const AStringView materialPipeline(materialPipelineSource.data(), materialPipelineSource.size());
+    const AStringView materialResources(materialResourcesSource.data(), materialResourcesSource.size());
+    const AStringView avboitResources(avboitResourcesSource.data(), avboitResourcesSource.size());
+    const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
+    const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
+    const usize avboitStateBegin = compactRendererState.find("classRendererAvboitStatefinal:NoCopy{");
+    ASSERT_NE(avboitStateBegin, AStringView::npos);
+    const usize avboitStateEnd = compactRendererState.find("};", avboitStateBegin);
+    ASSERT_NE(avboitStateEnd, AStringView::npos);
+    const AStringView avboitState = compactRendererState.substr(avboitStateBegin, avboitStateEnd - avboitStateBegin);
+
+    EXPECT_FALSE(ContainsText(materialHeader, "RendererAvboitState"));
+    EXPECT_FALSE(ContainsText(materialPipeline, "m_avboitState"));
+    EXPECT_TRUE(ContainsText(materialResources, "m_materialState.m_materialPassBindingLayout"));
+    EXPECT_TRUE(ContainsText(avboitResources, "m_materialSystem.prepareMaterialPassBindingLayout(materialPassBindingLayout)"));
+    EXPECT_FALSE(ContainsText(avboitResources, "m_avboitState.m_emptyBindingLayout"));
+    EXPECT_FALSE(ContainsText(avboitState, "friendclassRendererMaterialSystem;"));
+    EXPECT_FALSE(ContainsText(avboitState, "m_emptyBindingLayout"));
+}
+
+
 TEST(EcsGraphics, FramePipelineDoesNotPrivilegeNarrowShaderOrMeshSystems){
     TestArena testArena;
     AString headerSource;

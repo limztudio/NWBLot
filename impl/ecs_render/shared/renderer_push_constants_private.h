@@ -96,7 +96,7 @@ static_assert(offsetof(ShaderDrivenPushConstants, instanceIndex) == sizeof(u32) 
 static_assert(offsetof(ShaderDrivenPushConstants, materialConstantByteOffset) == sizeof(u32) * NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET, "ShaderDrivenPushConstants dispatch.z must be material constant byte offset");
 static_assert(offsetof(ShaderDrivenPushConstants, dispatchFlags) == sizeof(u32) * NWB_MESH_PUSH_DISPATCH_FLAGS, "ShaderDrivenPushConstants dispatch.w must be dispatch flags");
 static_assert(offsetof(ShaderDrivenPushConstants, frameHeapSlots) == sizeof(u32) * NWB_MESH_PUSH_FRAME_HEAP_SLOT_WORD_OFFSET, "ShaderDrivenPushConstants frame heap slots must follow the viewport lanes");
-static_assert(sizeof(TransparentDrawPushConstants) == s_RendererAvboitTransparentDrawPushConstantSize, "TransparentDrawPushConstants layout must stay stable");
+static_assert(sizeof(TransparentDrawPushConstants) == NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE, "TransparentDrawPushConstants layout must stay stable");
 static_assert(sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize, "Transparent draw push constants must fit the portable push constant budget");
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
 static_assert(

@@ -118,6 +118,7 @@ public:
 
 
 private:
+    Core::BindingLayoutHandle m_materialPassBindingLayout;
     HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_surfaceInfos;
     RendererMaterialResourceState m_resourceState;
     HashMap<MaterialPipelineKey, MaterialPipelineResources, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo, Core::Alloc::GlobalArena> m_pipelines;
@@ -236,7 +237,6 @@ private:
 };
 
 class RendererAvboitState final : NoCopy{
-    friend class RendererMaterialSystem;
     friend class RendererAvboitSystem;
 
 public:
@@ -248,8 +248,6 @@ public:
 
 
 private:
-    // AVBOIT layout is push-only; resources use the global heap.
-    Core::BindingLayoutHandle m_emptyBindingLayout;
     Core::SamplerHandle m_linearSampler;
     Core::ShaderHandle m_depthWarpComputeShader;
     Core::ShaderHandle m_integrateComputeShader;

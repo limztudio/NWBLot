@@ -81,9 +81,9 @@ public:
     );
 
 public:
+    void invalidateResources();
     [[nodiscard]] CsgFrameState buildFrameState(Core::Alloc::ScratchArena& scratchArena, IMaterialSurfaceLookup& materialSurfaceLookup);
     [[nodiscard]] bool createCsgClipResources();
-    void releaseCsgClipContextHeapHandles();
     [[nodiscard]] bool createCsgPeelTargets(DeferredFrameTargets& targets);
     [[nodiscard]] bool createCsgIntervalPeelResources(DeferredFrameTargets& targets, bool capFillRequired);
     [[nodiscard]] bool createCsgIntervalSampleResources(DeferredFrameTargets& targets);
@@ -160,6 +160,9 @@ public:
         CsgReceiverRangeGpuData& outRange,
         const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState = nullptr
     )const;
+
+private:
+    void releaseCsgClipContextHeapHandles();
 
 private:
     Core::Alloc::GlobalArena& m_arena;

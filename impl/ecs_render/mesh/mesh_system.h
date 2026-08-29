@@ -140,6 +140,7 @@ public:
     );
 
 public:
+    void invalidateResources();
     [[nodiscard]] bool createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
     [[nodiscard]] bool findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
     // Graph declaration resolves already-prepared draw-item keys without touching assets or mutating mesh state.
@@ -169,7 +170,6 @@ public:
     void populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const;
     [[nodiscard]] bool ensureMeshSwBvhInputHeapHandles(MeshResources& mesh);
     void releaseMeshGeometryHeapHandles(MeshResources& mesh);
-    void releaseAllMeshGeometryHeapHandles();
 
 private:
     // Persistent mesh descriptors are established while the resource is created.  Material preparation and draw
@@ -178,6 +178,9 @@ private:
     [[nodiscard]] bool meshRenderBindingsReady(const MeshResources& mesh)const;
     [[nodiscard]] bool createComputeEmulationHeapHandle(MeshResources& mesh);
     [[nodiscard]] bool createMeshGeometryHeapHandles(MeshResources& mesh);
+
+private:
+    void releaseAllMeshGeometryHeapHandles();
 
 private:
     Core::Alloc::GlobalArena& m_arena;

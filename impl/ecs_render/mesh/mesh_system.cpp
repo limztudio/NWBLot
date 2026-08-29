@@ -4,6 +4,8 @@
 
 #include "mesh_system.h"
 
+#include <impl/ecs_render/shared/renderer_state.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -29,6 +31,13 @@ RendererMeshSystem::RendererMeshSystem(
     , m_meshState(meshState)
     , m_drawState(drawState)
 {}
+
+
+void RendererMeshSystem::invalidateResources(){
+    releaseAllMeshGeometryHeapHandles();
+    releaseMeshFrameHeapHandles();
+    m_meshState.invalidateResources();
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

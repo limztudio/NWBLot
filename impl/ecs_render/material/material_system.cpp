@@ -4,6 +4,8 @@
 
 #include "material_system.h"
 
+#include <impl/ecs_render/shared/renderer_state.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -37,6 +39,12 @@ RendererMaterialSystem::RendererMaterialSystem(
     , m_meshSystem(meshSystem)
     , m_csgSystem(csgSystem)
 {}
+
+
+void RendererMaterialSystem::invalidateResources(){
+    releaseMaterialResourceReferences();
+    m_materialState.invalidateResources();
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

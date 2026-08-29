@@ -232,14 +232,10 @@ void RendererFramePipeline::invalidateResources(){
     // clears the layout owner.
     m_avboitSystem.invalidateResources();
     m_shaderSystem.invalidateResources();
-    m_meshSystem.releaseAllMeshGeometryHeapHandles();
-    m_meshSystem.releaseMeshFrameHeapHandles();
-    m_meshState.invalidateResources();
-    m_materialSystem.releaseMaterialResourceReferences();
-    m_materialState.invalidateResources();
+    m_meshSystem.invalidateResources();
+    m_materialSystem.invalidateResources();
     m_drawState.invalidateResources();
-    m_csgSystem.releaseCsgClipContextHeapHandles();
-    m_csgState.invalidateResources();
+    m_csgSystem.invalidateResources();
     m_deferredSystem.invalidateResources();
 }
 

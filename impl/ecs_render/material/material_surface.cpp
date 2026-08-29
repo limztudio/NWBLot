@@ -250,15 +250,6 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
     return true;
 }
 
-void RendererMaterialSystem::releaseMaterialResourceReferences(){
-    __hidden_material_surface::ReleaseMaterialResourceState(m_graphics, m_materialState.m_resourceState);
-    for(auto it = m_materialState.m_surfaceInfos.begin(); it != m_materialState.m_surfaceInfos.end(); ++it){
-        MaterialSurfaceInfo& materialInfo = it.value();
-        materialInfo.constantTypedBytes = materialInfo.unpatchedConstantTypedBytes;
-        materialInfo.resourceReferencesResolved = false;
-    }
-}
-
 bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
     const Material& material,
     const Name& materialPath,
@@ -596,6 +587,16 @@ bool RendererMaterialSystem::hasTransparentRenderers(const RendererResourceLooku
             return true;
     }
     return false;
+}
+
+
+void RendererMaterialSystem::releaseMaterialResourceReferences(){
+    __hidden_material_surface::ReleaseMaterialResourceState(m_graphics, m_materialState.m_resourceState);
+    for(auto it = m_materialState.m_surfaceInfos.begin(); it != m_materialState.m_surfaceInfos.end(); ++it){
+        MaterialSurfaceInfo& materialInfo = it.value();
+        materialInfo.constantTypedBytes = materialInfo.unpatchedConstantTypedBytes;
+        materialInfo.resourceReferencesResolved = false;
+    }
 }
 
 

@@ -361,6 +361,142 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
 }
 
 
+TEST(EcsGraphics, RootInvalidatesFeatureResourcesThroughDomainSystems){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+    AString meshHeaderSource;
+    AString meshSystemSource;
+    AString materialHeaderSource;
+    AString materialSystemSource;
+    AString csgHeaderSource;
+    AString csgSystemSource;
+    AString rendererStateSource;
+    AString rootResourcesSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.h", meshHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.cpp", meshSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_system.h", materialHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_system.cpp", materialSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_system.h", csgHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_system.cpp", csgSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_resources.cpp", rootResourcesSource));
+
+    const AString compactMeshHeaderStorage = CompactSource(AStringView(meshHeaderSource.data(), meshHeaderSource.size()));
+    const AStringView compactMeshHeader(compactMeshHeaderStorage.data(), compactMeshHeaderStorage.size());
+    const AString compactMeshSystemStorage = CompactSource(AStringView(meshSystemSource.data(), meshSystemSource.size()));
+    const AStringView compactMeshSystem(compactMeshSystemStorage.data(), compactMeshSystemStorage.size());
+    const AString compactMaterialHeaderStorage = CompactSource(AStringView(materialHeaderSource.data(), materialHeaderSource.size()));
+    const AStringView compactMaterialHeader(compactMaterialHeaderStorage.data(), compactMaterialHeaderStorage.size());
+    const AString compactMaterialSystemStorage = CompactSource(AStringView(materialSystemSource.data(), materialSystemSource.size()));
+    const AStringView compactMaterialSystem(compactMaterialSystemStorage.data(), compactMaterialSystemStorage.size());
+    const AString compactCsgHeaderStorage = CompactSource(AStringView(csgHeaderSource.data(), csgHeaderSource.size()));
+    const AStringView compactCsgHeader(compactCsgHeaderStorage.data(), compactCsgHeaderStorage.size());
+    const AString compactCsgSystemStorage = CompactSource(AStringView(csgSystemSource.data(), csgSystemSource.size()));
+    const AStringView compactCsgSystem(compactCsgSystemStorage.data(), compactCsgSystemStorage.size());
+    const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
+    const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
+    const AString compactRootResourcesStorage = CompactSource(AStringView(rootResourcesSource.data(), rootResourcesSource.size()));
+    const AStringView compactRootResources(compactRootResourcesStorage.data(), compactRootResourcesStorage.size());
+
+    EXPECT_TRUE(ContainsText(compactMeshHeader, "public:voidinvalidateResources();"));
+    EXPECT_TRUE(ContainsText(compactMaterialHeader, "public:voidinvalidateResources();"));
+    EXPECT_TRUE(ContainsText(compactCsgHeader, "public:voidinvalidateResources();"));
+    EXPECT_TRUE(ContainsText(compactMeshHeader, "private:voidreleaseAllMeshGeometryHeapHandles();private:"));
+    EXPECT_TRUE(ContainsText(compactMaterialHeader, "private:voidreleaseMaterialResourceReferences();private:"));
+    EXPECT_TRUE(ContainsText(compactCsgHeader, "private:voidreleaseCsgClipContextHeapHandles();private:"));
+    EXPECT_FALSE(ContainsText(compactMaterialHeader, "public:voidreleaseMaterialResourceReferences();"));
+    EXPECT_FALSE(ContainsText(compactCsgHeader, "public:voidreleaseCsgClipContextHeapHandles();"));
+
+    const usize meshStateBegin = compactRendererState.find("classRendererMeshStatefinal:NoCopy{");
+    const usize meshStateEnd = compactRendererState.find("classRendererMaterialStatefinal:NoCopy{", meshStateBegin);
+    const usize materialStateBegin = meshStateEnd;
+    const usize materialStateEnd = compactRendererState.find("classRendererDrawStatefinal:NoCopy{", materialStateBegin);
+    const usize csgStateBegin = compactRendererState.find("classRendererCsgStatefinal:NoCopy{", materialStateEnd);
+    const usize csgStateEnd = compactRendererState.find("classRendererDeferredStatefinal:NoCopy{", csgStateBegin);
+    ASSERT_NE(meshStateBegin, AStringView::npos);
+    ASSERT_NE(meshStateEnd, AStringView::npos);
+    ASSERT_NE(materialStateEnd, AStringView::npos);
+    ASSERT_NE(csgStateBegin, AStringView::npos);
+    ASSERT_NE(csgStateEnd, AStringView::npos);
+    const AStringView meshState = compactRendererState.substr(meshStateBegin, meshStateEnd - meshStateBegin);
+    const AStringView materialState = compactRendererState.substr(materialStateBegin, materialStateEnd - materialStateBegin);
+    const AStringView csgState = compactRendererState.substr(csgStateBegin, csgStateEnd - csgStateBegin);
+    EXPECT_TRUE(ContainsText(meshState, "private:voidinvalidateResources();"));
+    EXPECT_TRUE(ContainsText(materialState, "private:voidinvalidateResources();"));
+    EXPECT_TRUE(ContainsText(csgState, "private:voidinvalidateResources();"));
+    EXPECT_FALSE(ContainsText(meshState, "public:voidinvalidateResources();"));
+    EXPECT_FALSE(ContainsText(materialState, "public:voidinvalidateResources();"));
+    EXPECT_FALSE(ContainsText(csgState, "public:voidinvalidateResources();"));
+
+    const usize meshDomainInvalidationBegin = compactMeshSystem.find("RendererMeshSystem::invalidateResources(){");
+    const usize meshDomainInvalidationEnd = compactMeshSystem.find('}', meshDomainInvalidationBegin);
+    const usize materialDomainInvalidationBegin = compactMaterialSystem.find("RendererMaterialSystem::invalidateResources(){");
+    const usize materialDomainInvalidationEnd = compactMaterialSystem.find('}', materialDomainInvalidationBegin);
+    const usize csgDomainInvalidationBegin = compactCsgSystem.find("RendererCsgSystem::invalidateResources(){");
+    const usize csgDomainInvalidationEnd = compactCsgSystem.find('}', csgDomainInvalidationBegin);
+    ASSERT_NE(meshDomainInvalidationBegin, AStringView::npos);
+    ASSERT_NE(meshDomainInvalidationEnd, AStringView::npos);
+    ASSERT_NE(materialDomainInvalidationBegin, AStringView::npos);
+    ASSERT_NE(materialDomainInvalidationEnd, AStringView::npos);
+    ASSERT_NE(csgDomainInvalidationBegin, AStringView::npos);
+    ASSERT_NE(csgDomainInvalidationEnd, AStringView::npos);
+    const AStringView meshDomainInvalidation = compactMeshSystem.substr(
+        meshDomainInvalidationBegin,
+        meshDomainInvalidationEnd - meshDomainInvalidationBegin
+    );
+    const AStringView materialDomainInvalidation = compactMaterialSystem.substr(
+        materialDomainInvalidationBegin,
+        materialDomainInvalidationEnd - materialDomainInvalidationBegin
+    );
+    const AStringView csgDomainInvalidation = compactCsgSystem.substr(
+        csgDomainInvalidationBegin,
+        csgDomainInvalidationEnd - csgDomainInvalidationBegin
+    );
+    const usize meshGeometryRelease = meshDomainInvalidation.find("releaseAllMeshGeometryHeapHandles()");
+    const usize meshFrameRelease = meshDomainInvalidation.find("releaseMeshFrameHeapHandles()");
+    const usize meshStateInvalidation = meshDomainInvalidation.find("m_meshState.invalidateResources()");
+    const usize materialReferenceRelease = materialDomainInvalidation.find("releaseMaterialResourceReferences()");
+    const usize materialStateInvalidation = materialDomainInvalidation.find("m_materialState.invalidateResources()");
+    const usize csgHeapRelease = csgDomainInvalidation.find("releaseCsgClipContextHeapHandles()");
+    const usize csgStateInvalidation = csgDomainInvalidation.find("m_csgState.invalidateResources()");
+    ASSERT_NE(meshGeometryRelease, AStringView::npos);
+    ASSERT_NE(meshFrameRelease, AStringView::npos);
+    ASSERT_NE(meshStateInvalidation, AStringView::npos);
+    ASSERT_NE(materialReferenceRelease, AStringView::npos);
+    ASSERT_NE(materialStateInvalidation, AStringView::npos);
+    ASSERT_NE(csgHeapRelease, AStringView::npos);
+    ASSERT_NE(csgStateInvalidation, AStringView::npos);
+    EXPECT_LT(meshGeometryRelease, meshFrameRelease);
+    EXPECT_LT(meshFrameRelease, meshStateInvalidation);
+    EXPECT_LT(materialReferenceRelease, materialStateInvalidation);
+    EXPECT_LT(csgHeapRelease, csgStateInvalidation);
+    EXPECT_FALSE(ContainsText(compactRootResources, "m_meshState.invalidateResources()"));
+    EXPECT_FALSE(ContainsText(compactRootResources, "m_materialState.invalidateResources()"));
+    EXPECT_FALSE(ContainsText(compactRootResources, "m_csgState.invalidateResources()"));
+
+    const usize rayTracingInvalidation = compactRootResources.find("m_raytracingSystem.invalidateResources()");
+    const usize avboitInvalidation = compactRootResources.find("m_avboitSystem.invalidateResources()");
+    const usize shaderInvalidation = compactRootResources.find("m_shaderSystem.invalidateResources()");
+    const usize meshInvalidation = compactRootResources.find("m_meshSystem.invalidateResources()");
+    const usize materialInvalidation = compactRootResources.find("m_materialSystem.invalidateResources()");
+    const usize drawInvalidation = compactRootResources.find("m_drawState.invalidateResources()");
+    const usize csgInvalidation = compactRootResources.find("m_csgSystem.invalidateResources()");
+    const usize deferredInvalidation = compactRootResources.find("m_deferredSystem.invalidateResources()");
+    ASSERT_NE(rayTracingInvalidation, AStringView::npos);
+    ASSERT_NE(avboitInvalidation, AStringView::npos);
+    ASSERT_NE(shaderInvalidation, AStringView::npos);
+    ASSERT_NE(meshInvalidation, AStringView::npos);
+    ASSERT_NE(materialInvalidation, AStringView::npos);
+    ASSERT_NE(drawInvalidation, AStringView::npos);
+    ASSERT_NE(csgInvalidation, AStringView::npos);
+    ASSERT_NE(deferredInvalidation, AStringView::npos);
+    EXPECT_LT(rayTracingInvalidation, meshInvalidation);
+    EXPECT_LT(avboitInvalidation, materialInvalidation);
+    EXPECT_LT(meshInvalidation, drawInvalidation);
+    EXPECT_LT(materialInvalidation, drawInvalidation);
+}
+
+
 TEST(EcsGraphics, FramePipelineDoesNotPrivilegeNarrowShaderOrMeshSystems){
     TestArena testArena;
     AString headerSource;

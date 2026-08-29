@@ -530,21 +530,6 @@ bool RendererCsgSystem::createCsgClipResources(){
     return true;
 }
 
-void RendererCsgSystem::releaseCsgClipContextHeapHandles(){
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(heap.isInitialized()){
-        heap.free(m_csgState.m_receiverRangeBufferHeapHandle);
-        heap.free(m_csgState.m_cutterBufferHeapHandle);
-        heap.free(m_csgState.m_clipContextSlotsHeapHandle);
-        heap.free(m_csgState.m_intervalSampleStateHeapHandle);
-    }
-    m_csgState.m_receiverRangeBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_csgState.m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_csgState.m_clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_csgState.m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::invalid();
-}
-
 bool RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeCount){
     const usize oldCapacity = m_csgState.m_receiverRangeBufferCapacity;
     if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(
@@ -882,6 +867,22 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
     );
 
     return appended && outRange.cutterCount > 0u;
+}
+
+
+void RendererCsgSystem::releaseCsgClipContextHeapHandles(){
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(heap.isInitialized()){
+        heap.free(m_csgState.m_receiverRangeBufferHeapHandle);
+        heap.free(m_csgState.m_cutterBufferHeapHandle);
+        heap.free(m_csgState.m_clipContextSlotsHeapHandle);
+        heap.free(m_csgState.m_intervalSampleStateHeapHandle);
+    }
+    m_csgState.m_receiverRangeBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_csgState.m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_csgState.m_clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_csgState.m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::invalid();
 }
 
 

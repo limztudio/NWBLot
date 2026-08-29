@@ -98,7 +98,7 @@ public:
     explicit RendererMeshState(Core::Alloc::GlobalArena& arena);
 
 
-public:
+private:
     void invalidateResources();
 
 
@@ -113,7 +113,7 @@ public:
     explicit RendererMaterialState(Core::Alloc::GlobalArena& arena);
 
 
-public:
+private:
     void invalidateResources();
 
 
@@ -166,7 +166,7 @@ public:
     RendererCsgState() = default;
 
 
-public:
+private:
     void invalidateResources();
 
 

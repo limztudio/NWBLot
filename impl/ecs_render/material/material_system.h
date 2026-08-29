@@ -111,11 +111,13 @@ public:
         MaterialTypedByteVector& outConstantTypedBytes,
         MaterialTypedByteVector& outMutableDefaultTypedBytes
     );
+
+public:
+    void invalidateResources();
     [[nodiscard]] bool createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
     // Prepared-only lookup: creation and descriptor-backed resource resolution belong to preparation.
     [[nodiscard]] virtual bool findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo)override;
     [[nodiscard]] bool resolveMaterialResourceReferences(MaterialSurfaceInfo& materialInfo);
-    void releaseMaterialResourceReferences();
     [[nodiscard]] bool prepareVisibleMaterialSurfaceInfos();
     void prepareVisibleMaterialInstanceMutableCache();
     [[nodiscard]] bool prepareMaterialPassBindingLayout(Core::BindingLayoutHandle& outBindingLayout);
@@ -318,6 +320,9 @@ public:
             handler(drawItem, *mesh, *pipelineResources);
         }
     }
+
+private:
+    void releaseMaterialResourceReferences();
 
 private:
     Core::Alloc::GlobalArena& m_arena;

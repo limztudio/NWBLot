@@ -5744,6 +5744,46 @@ TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRe
 }
 
 
+// The split software-BVH task records only compute commands after graph-owned clears. The compatibility Shadow
+// Preparation endpoint can still record both transfer clears and compute dispatches, while preferring Graphics.
+TEST(EcsGraphics, ShadowPreparationQueueCapabilitiesMatchNativeCommands){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_prepare.cpp",
+        taskGraphSource
+    ));
+
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const usize softwareBuildOffset = taskGraph.find(".setMarkerLabel(\"Shadow Prepare SW-BVH Build\")");
+    const usize softwareBuildEndOffset = taskGraph.find("m_deferredLightingTaskGraph.addTask<", softwareBuildOffset);
+    ASSERT_NE(softwareBuildOffset, AStringView::npos);
+    ASSERT_NE(softwareBuildEndOffset, AStringView::npos);
+    const AStringView softwareBuild = taskGraph.substr(
+        softwareBuildOffset,
+        softwareBuildEndOffset - softwareBuildOffset
+    );
+    EXPECT_TRUE(ContainsText(softwareBuild, ".setQueue(GraphicsPreferredComputeQueueRequest())"));
+    EXPECT_FALSE(ContainsText(softwareBuild, ".setQueue(GraphicsComputeQueueRequest())"));
+
+    const usize shadowPrepareOffset = taskGraph.find(".setMarkerLabel(\"Shadow Preparation\")", softwareBuildEndOffset);
+    const usize shadowPrepareEndOffset = taskGraph.find(
+        "m_deferredLightingTaskGraph.addTask<ECSRenderDetail::ShadowPrepareGraphTask>",
+        shadowPrepareOffset
+    );
+    ASSERT_NE(shadowPrepareOffset, AStringView::npos);
+    ASSERT_NE(shadowPrepareEndOffset, AStringView::npos);
+    const AStringView shadowPrepare = taskGraph.substr(
+        shadowPrepareOffset,
+        shadowPrepareEndOffset - shadowPrepareOffset
+    );
+    EXPECT_TRUE(ContainsText(shadowPrepare, ".setQueue(GraphicsComputeUploadQueueRequest())"));
+    EXPECT_FALSE(ContainsText(shadowPrepare, ".setQueue(GraphicsPreferredComputeQueueRequest())"));
+}
+
+
 // Opaque hardware shadows never prepare the optional software traversal resources. Keep the direct compatibility
 // builder behind the frozen hybrid-resource gate without removing the real pure-software fallback.
 TEST(EcsGraphics, HardwareOpaqueShadowPreparationDoesNotEagerlyBuildSoftwareBvhs){

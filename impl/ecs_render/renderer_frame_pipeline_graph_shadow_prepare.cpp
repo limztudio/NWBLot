@@ -1064,7 +1064,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             buildDesc
                 .setIdentity(DeriveName(build.meshName, AStringView(":shadow_prepare_sw_bvh_build")))
                 .setMarkerLabel("Shadow Prepare SW-BVH Build")
-                .setQueue(GraphicsComputeQueueRequest())
+                .setQueue(GraphicsPreferredComputeQueueRequest())
                 .setScheduling(buildScheduling)
                 .setDependencies(&buildDependency, 1u)
                 .setResourceUses(buildResourceUses, LengthOf(buildResourceUses))
@@ -1113,7 +1113,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     desc
         .setIdentity(Name("render.shadow_prepare"))
         .setMarkerLabel("Shadow Preparation")
-        .setQueue(GraphicsPreferredComputeQueueRequest())
+        .setQueue(GraphicsComputeUploadQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(dependencies, dependencyCount)
         .setExternalStateSources(

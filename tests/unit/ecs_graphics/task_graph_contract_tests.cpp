@@ -4063,6 +4063,44 @@ TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
 }
 
 
+// Both software-shadow recording routes publish the same production-owned one-shot diagnostic. The split
+// transparent trace reports only after recording its dispatch, while the retained monolithic path shares it.
+TEST(EcsGraphics, SoftwareShadowTraversalDiagnosticCoversSplitAndMonolithicRoutes){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString shadowSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", shadowSource));
+    const AStringView shadow(shadowSource.data(), shadowSource.size());
+
+    const usize splitTraceOffset = shadow.find("bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(");
+    const usize reportOffset = shadow.find("void RendererRayTracingSystem::reportSoftwareShadowTraversal(", splitTraceOffset);
+    const usize temporalMergeOffset = shadow.find("bool RendererRayTracingSystem::renderSoftTransparentShadowTemporalMerge(", reportOffset);
+    const usize monolithicOffset = shadow.find("bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(", temporalMergeOffset);
+    const usize opaqueOffset = shadow.find("bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(", monolithicOffset);
+    ASSERT_NE(splitTraceOffset, AStringView::npos);
+    ASSERT_NE(reportOffset, AStringView::npos);
+    ASSERT_NE(temporalMergeOffset, AStringView::npos);
+    ASSERT_NE(monolithicOffset, AStringView::npos);
+    ASSERT_NE(opaqueOffset, AStringView::npos);
+    ASSERT_LT(splitTraceOffset, reportOffset);
+    ASSERT_LT(reportOffset, temporalMergeOffset);
+    ASSERT_LT(temporalMergeOffset, monolithicOffset);
+    ASSERT_LT(monolithicOffset, opaqueOffset);
+
+    const AStringView splitTrace = shadow.substr(splitTraceOffset, reportOffset - splitTraceOffset);
+    const AStringView report = shadow.substr(reportOffset, temporalMergeOffset - reportOffset);
+    const AStringView monolithic = shadow.substr(monolithicOffset, opaqueOffset - monolithicOffset);
+    EXPECT_TRUE(ContainsText(splitTrace, "dispatchSoftShadowDenoiseAndTransparentFold("));
+    EXPECT_TRUE(ContainsText(splitTrace, "reportSoftwareShadowTraversal(targets);\n    return true;"));
+    EXPECT_TRUE(ContainsText(report, "if(m_rayTracingState.m_swShadowDispatchLogged)"));
+    EXPECT_TRUE(ContainsText(report, "m_rayTracingState.m_swShadowDispatchLogged = true;"));
+    EXPECT_TRUE(ContainsText(report, "RendererSystem: dispatched software shadow traversal"));
+    EXPECT_EQ(CountText(monolithic, "reportSoftwareShadowTraversal(targets);"), 2u);
+    EXPECT_FALSE(ContainsText(monolithic, "const auto logSoftwareShadowTraversal"));
+}
+
+
 // The retained monolithic callback owns later native scratch transitions, but its graph entry must still reflect
 // each fresh target's first write. Only an accepted temporal history may enter as a sampled input.
 TEST(EcsGraphics, MonolithicShadowVisibilityKeepsFreshScratchAsFirstWrites){

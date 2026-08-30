@@ -1606,7 +1606,20 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
         false,
         false
     );
+    reportSoftwareShadowTraversal(targets);
     return true;
+}
+
+void RendererRayTracingSystem::reportSoftwareShadowTraversal(const DeferredFrameTargets& targets){
+    if(m_rayTracingState.m_swShadowDispatchLogged)
+        return;
+
+    m_rayTracingState.m_swShadowDispatchLogged = true;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched software shadow traversal ({}x{}, {} instances)")
+        , static_cast<u64>(targets.width)
+        , static_cast<u64>(targets.height)
+        , static_cast<u64>(m_rayTracingState.m_sceneBvhInstanceCount)
+    );
 }
 
 bool RendererRayTracingSystem::renderSoftTransparentShadowTemporalMerge(
@@ -1998,18 +2011,6 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     const u32 coarseGroupsX = DivideUp(coarseWidth, groupSize);
     const u32 coarseGroupsY = DivideUp(coarseHeight, groupSize);
 
-    const auto logSoftwareShadowTraversal = [&]{
-        if(m_rayTracingState.m_swShadowDispatchLogged)
-            return;
-
-        m_rayTracingState.m_swShadowDispatchLogged = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched software shadow traversal ({}x{}, {} instances)")
-            , static_cast<u64>(targets.width)
-            , static_cast<u64>(targets.height)
-            , static_cast<u64>(m_rayTracingState.m_sceneBvhInstanceCount)
-        );
-    };
-
     // Skip the fallback after a soft transparent fold.
     bool softTransparentRan = false;
 
@@ -2111,7 +2112,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                     *opaqueFrameIndex = frameIndex;
                 // The graph-owned transparent tail records in a later callback, so preserve the normal route's
                 // one-shot traversal diagnostic before this opaque producer returns.
-                logSoftwareShadowTraversal();
+                reportSoftwareShadowTraversal(targets);
                 return true;
             }
             softTransparentRan = m_rayTracingState.m_softTransparentReady;
@@ -2243,7 +2244,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         commandList.dispatch(coarseGroupsX, coarseGroupsY, 1u);
     }
 
-    logSoftwareShadowTraversal();
+    reportSoftwareShadowTraversal(targets);
     return true;
 }
 

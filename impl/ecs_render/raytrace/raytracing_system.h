@@ -1384,6 +1384,7 @@ private:
         bool graphEntryStatesOwned,
         bool graphOwnsOpaqueToTransparentBoundary
     );
+    void reportSoftwareShadowTraversal(const DeferredFrameTargets& targets);
     [[nodiscard]] bool renderSoftTransparentShadowTemporalMerge(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,

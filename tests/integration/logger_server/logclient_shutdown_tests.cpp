@@ -114,7 +114,21 @@ bool ShutdownCaptureServer::start(){
     if(m_daemon)
         return false;
 
-    m_daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD, 0u, nullptr, nullptr, &ShutdownCaptureServer::requestCallback, this, MHD_OPTION_END);
+    sockaddr_in listenAddress = {};
+    listenAddress.sin_family = AF_INET;
+    listenAddress.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    m_daemon = MHD_start_daemon(
+        MHD_USE_INTERNAL_POLLING_THREAD,
+        0u,
+        nullptr,
+        nullptr,
+        &ShutdownCaptureServer::requestCallback,
+        this,
+        MHD_OPTION_SOCK_ADDR_LEN,
+        static_cast<socklen_t>(sizeof(listenAddress)),
+        &listenAddress,
+        MHD_OPTION_END
+    );
     if(!m_daemon)
         return false;
 

@@ -808,6 +808,19 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         )
         add_dependencies(nwb_stress_test_smoke nwb_skinning_culling_benchmark_assets)
 
+        nwb_add_window_capture_smoke(
+            nwb_stress_test_capture_smoke
+            stress_test_capture.bmp
+            "$<TARGET_FILE:nwb_stress_test_smoke>"
+            "${_nwb_skinning_culling_runtime_root}"
+            "NWB Stress Test Smoke"
+            "--expect-log-message" "StressTestSmokeProject: spawned 10 spinning characters (5 transparent + 5 opaque) over ground, directional + point light"
+            "--expect-log-message" "StressTestSmokeProject: shutdown"
+        )
+        set_tests_properties(nwb_stress_test_capture_smoke PROPERTIES
+            ENVIRONMENT "NWB_STRESS_TEST_SPIN_ANGLE=0.6"
+        )
+
         # Target-hardware benchmark for the natural hybrid HW -> SW transparent-shadow boundary. The test-owned A/B
         # harness launches this same binary twice, selecting an opaque-only scene for its hardware baseline arm.
         nwb_declare_executable(nwb_hybrid_shadow_boundary_healthy_benchmark)
@@ -976,6 +989,19 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         )
         add_dependencies(nwb_flicker_test_smoke nwb_skinning_culling_benchmark_assets)
 
+        nwb_add_window_capture_smoke(
+            nwb_flicker_test_capture_smoke
+            flicker_test_capture.bmp
+            "$<TARGET_FILE:nwb_flicker_test_smoke>"
+            "${_nwb_skinning_culling_runtime_root}"
+            "NWB Flicker Test"
+            "--expect-log-message" "FlickerTestSmokeProject: spawned one opaque + one transparent character over an opaque ground plane, directional + point light"
+            "--expect-log-message" "FlickerTestSmokeProject: shutdown"
+        )
+        set_tests_properties(nwb_flicker_test_capture_smoke PROPERTIES
+            ENVIRONMENT "NWB_FLICKER_TEST_SPIN_ANGLE=0.6"
+        )
+
         # Dedicated SOFT-SHADOW scene: opaque and glass `body` characters on an opaque ground plane under directional,
         # point, and spot lights with physical source sizes. It exercises their tinted penumbras, with arrow-key yaw
         # control for a crawl check. Reuses the benchmark's cooked assets (body model + ground material).
@@ -991,6 +1017,19 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         )
         add_dependencies(nwb_soft_shadow_test_smoke nwb_skinning_culling_benchmark_assets)
 
+        nwb_add_window_capture_smoke(
+            nwb_soft_shadow_test_capture_smoke
+            soft_shadow_test_capture.bmp
+            "$<TARGET_FILE:nwb_soft_shadow_test_smoke>"
+            "${_nwb_skinning_culling_runtime_root}"
+            "NWB Soft Shadow Test"
+            "--expect-log-message" "SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights"
+            "--expect-log-message" "SoftShadowTestSmokeProject: shutdown"
+        )
+        set_tests_properties(nwb_soft_shadow_test_capture_smoke PROPERTIES
+            ENVIRONMENT "NWB_SOFT_SHADOW_TEST_SPIN_ANGLE=0.6"
+        )
+
         # Dedicated surfel-GI scene: an open-top box with saturated-red and saturated-blue walls, plus a directional light
         # aimed to leave the floor in direct shadow. The red-to-blue indirect bleed on that floor is the surfel-GI pass signal.
         # Reuses the benchmark's cooked assets (ground material).
@@ -1003,6 +1042,16 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "${_nwb_skinning_culling_runtime_root}"
         )
         add_dependencies(nwb_gi_test_smoke nwb_skinning_culling_benchmark_assets)
+
+        nwb_add_window_capture_smoke(
+            nwb_gi_test_capture_smoke
+            gi_test_capture.bmp
+            "$<TARGET_FILE:nwb_gi_test_smoke>"
+            "${_nwb_skinning_culling_runtime_root}"
+            "NWB GI Test"
+            "--expect-log-message" "GiTestSmokeProject: open-top box + red/blue opposite walls, directional light -> indirect red+blue bleed on shadowed floor"
+            "--expect-log-message" "GiTestSmokeProject: shutdown"
+        )
 
         unset(_nwb_skinning_culling_asset_stamp)
         unset(_nwb_skinning_culling_model_nwb)

@@ -15,5 +15,6 @@ macro(nwb_configure_project)
             "NWBLot now requires Clang on every platform. Use the clang presets from CMakePresets.json."
         )
     endif()
+    nwb_configure_optimization()
     nwb_configure_general_output()
 endmacro()

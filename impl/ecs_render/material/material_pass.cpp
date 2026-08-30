@@ -271,7 +271,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         materialGeometryStatesGraphOwned,
         emulationOutputEntryStateGraphOwned,
         nullptr,
-        &frameBindings
+        frameBindings
     };
     // CSG may opt in only through its own frozen alias-free producer. This remains separate from the regular flag
     // so mixed streams cannot suppress the local interleaving required by an unowned CSG output.
@@ -289,7 +289,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         materialGeometryStatesGraphOwned,
         csgEmulationOutputEntryStateGraphOwned,
         &csgResources,
-        &frameBindings
+        frameBindings
     };
     const auto recordPreparedDraws = [&](){
         if(regularDrawResourcesReady)

@@ -93,7 +93,7 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
         payload.materialGeometryStatesGraphOwned,
         true,
         nullptr,
-        &payload.frameBindings
+        payload.frameBindings
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
@@ -180,7 +180,7 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::record(
         payload.materialGeometryStatesGraphOwned,
         true,
         nullptr,
-        &payload.frameBindings
+        payload.frameBindings
     };
     if(payload.phase == Phase::Generate)
         materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);

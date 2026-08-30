@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
+#include <impl/ecs_render/shared/renderer_frame_bindings.h>
 
 #include <core/graphics/api.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
@@ -24,7 +25,6 @@ struct DeferredFrameTargets;
 
 namespace ECSRenderDetail{
     struct CsgGraphResourceSnapshot;
-    struct MeshFrameBindingSnapshot;
 };
 
 struct AvboitFrameTargets{
@@ -123,12 +123,11 @@ struct MaterialPassDrawContext{
     // entry state from the graph (UAV for the producer and VertexBuffer for the raster consumer). Compatibility
     // callers leave this false and retain the per-item native UAV-to-VertexBuffer handoff.
     bool emulationOutputEntryStateGraphOwned = false;
-    // Prepared CSG draws consume the root-captured descriptor/buffer tuple. Regular and compatibility paths leave
-    // this null because no CSG heap binding is part of their draw contract.
+    // Prepared CSG draws consume the root-captured descriptor/buffer tuple. Regular paths leave this null because
+    // no CSG heap binding is part of their draw contract.
     const ECSRenderDetail::CsgGraphResourceSnapshot* csgResources = nullptr;
-    // Graph-owned material recording consumes the root-captured frame buffers and descriptor generation. Native
-    // compatibility callers leave this null and explicitly retain the live Mesh-owned binding path.
-    const ECSRenderDetail::MeshFrameBindingSnapshot* frameBindings = nullptr;
+    // Every material recording path consumes one immutable Mesh-published frame binding generation.
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
 };
 
 

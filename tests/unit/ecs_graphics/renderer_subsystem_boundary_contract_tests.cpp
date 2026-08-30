@@ -161,7 +161,6 @@ TEST(EcsGraphics, MeshSystemOwnsOnlyItsNarrowConstructionBoundary){
             "Core::Graphics&",
             "Core::Assets::AssetManager&",
             "RendererMeshState&",
-            "RendererDrawState&",
         }
     ));
 }
@@ -172,8 +171,6 @@ TEST(EcsGraphics, MeshOwnsItsPrivateRendererState){
     const TestPath repoRoot = RepoRoot(testArena);
     AString stateHeaderSource;
     AString stateSystemSource;
-    AString sharedHeaderSource;
-    AString sharedSystemSource;
     AString meshHeaderSource;
     AString meshSystemSource;
     AString meshResourcesSource;
@@ -183,8 +180,6 @@ TEST(EcsGraphics, MeshOwnsItsPrivateRendererState){
     AString rendererCmakeSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "renderer_mesh_state.h", stateHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "renderer_mesh_state.cpp", stateSystemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", sharedHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.cpp", sharedSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.h", meshHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.cpp", meshSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_resources.cpp", meshResourcesSource));
@@ -197,8 +192,10 @@ TEST(EcsGraphics, MeshOwnsItsPrivateRendererState){
     const AStringView compactStateHeader(compactStateHeaderStorage.data(), compactStateHeaderStorage.size());
     const AString compactStateSystemStorage = CompactSource(AStringView(stateSystemSource.data(), stateSystemSource.size()));
     const AStringView compactStateSystem(compactStateSystemStorage.data(), compactStateSystemStorage.size());
-    const AString compactSharedHeaderStorage = CompactSource(AStringView(sharedHeaderSource.data(), sharedHeaderSource.size()));
-    const AStringView compactSharedHeader(compactSharedHeaderStorage.data(), compactSharedHeaderStorage.size());
+    const AString compactMeshHeaderStorage = CompactSource(
+        AStringView(meshHeaderSource.data(), meshHeaderSource.size())
+    );
+    const AStringView compactMeshHeader(compactMeshHeaderStorage.data(), compactMeshHeaderStorage.size());
 
     EXPECT_TRUE(ContainsText(compactStateHeader, "classRendererMeshStatefinal:NoCopy{friendclassRendererMeshSystem;"));
     EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererFramePipeline;"));
@@ -214,36 +211,38 @@ TEST(EcsGraphics, MeshOwnsItsPrivateRendererState){
         compactStateHeader,
         "HashMap<Name,MeshResources,Hasher<Name>,EqualTo<Name>,Core::Alloc::GlobalArena>m_meshes;"
     ));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::BufferHandlem_meshViewBuffer;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "ECSRenderDetail::MeshFrameBindingSnapshotm_frameBindings;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "boolm_meshViewGpuDataValid=false;"));
     EXPECT_TRUE(ContainsText(
         compactStateSystem,
         "RendererMeshState::RendererMeshState(Core::Alloc::GlobalArena&arena):m_meshes(0,Hasher<Name>(),EqualTo<Name>(),arena){}"
     ));
-    EXPECT_TRUE(ContainsText(compactStateSystem, "voidRendererMeshState::invalidateResources(){m_meshes.clear();}"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "voidRendererMeshState::invalidateResources(){m_meshes.clear();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_meshViewBuffer.reset();m_frameBindings={};m_meshViewGpuDataValid=false;"));
     EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <impl/ecs_render/mesh/renderer_mesh_types.h>"));
+    EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <impl/ecs_render/shared/renderer_frame_bindings.h>"));
     EXPECT_FALSE(ContainsText(stateHeaderSource, "shared/renderer_state.h"));
     EXPECT_FALSE(ContainsText(stateHeaderSource, "mesh/mesh_system.h"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "RendererMeshState"));
-    EXPECT_FALSE(ContainsText(sharedSystemSource, "RendererMeshState"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "mesh/renderer_mesh_types.h"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "mesh/renderer_mesh_state.h"));
-    EXPECT_TRUE(ContainsText(
-        compactSharedHeader,
-        "classRendererDrawStatefinal:NoCopy{friendclassRendererMeshSystem;friendclassRendererMaterialSystem;"
-    ));
     EXPECT_TRUE(ContainsText(meshHeaderSource, "class RendererMeshState;"));
     EXPECT_FALSE(ContainsText(meshHeaderSource, "renderer_mesh_state.h"));
+    EXPECT_FALSE(ContainsText(compactMeshHeader, "structMeshFrameHeapSlots;"));
+    EXPECT_EQ(CountText(compactMeshHeader, "releaseMeshFrameHeapHandles();"), 1u);
+    EXPECT_TRUE(ContainsText(compactMeshHeader, "private:voidreleaseMeshFrameHeapHandles();"));
     EXPECT_TRUE(ContainsText(meshSystemSource, "#include <impl/ecs_render/mesh/renderer_mesh_state.h>"));
     EXPECT_FALSE(ContainsText(meshSystemSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
     EXPECT_TRUE(ContainsText(meshResourcesSource, "#include <impl/ecs_render/mesh/renderer_mesh_state.h>"));
     EXPECT_FALSE(ContainsText(meshResourcesSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
     EXPECT_TRUE(ContainsText(meshBindingsSource, "#include <impl/ecs_render/mesh/renderer_mesh_state.h>"));
-    EXPECT_TRUE(ContainsText(meshBindingsSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
-    EXPECT_FALSE(ContainsText(meshViewSource, "renderer_mesh_state.h"));
-    EXPECT_TRUE(ContainsText(meshViewSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_FALSE(ContainsText(meshBindingsSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_TRUE(ContainsText(meshViewSource, "#include <impl/ecs_render/mesh/renderer_mesh_state.h>"));
+    EXPECT_FALSE(ContainsText(meshViewSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
     EXPECT_TRUE(ContainsText(pipelineHeaderSource, "#include <impl/ecs_render/mesh/renderer_mesh_state.h>"));
     EXPECT_TRUE(ContainsText(pipelineHeaderSource, "RendererMeshState m_meshState;"));
     EXPECT_TRUE(ContainsText(rendererCmakeSource, "${CMAKE_CURRENT_LIST_DIR}/mesh/renderer_mesh_state.cpp"));
     EXPECT_TRUE(ContainsText(rendererCmakeSource, "${CMAKE_CURRENT_LIST_DIR}/mesh/renderer_mesh_state.h"));
+    EXPECT_TRUE(ContainsText(rendererCmakeSource, "${CMAKE_CURRENT_LIST_DIR}/shared/renderer_frame_bindings.h"));
+    EXPECT_FALSE(ContainsText(rendererCmakeSource, "shared/renderer_state"));
 }
 
 
@@ -261,7 +260,7 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     AString rayTracingSoftShadowSource;
     AString rayTracingSwBvhSource;
     AString meshStateSource;
-    AString rendererStateSource;
+    AString frameBindingsSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.h", meshHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_resources.cpp", meshResourcesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_view.cpp", meshViewSource));
@@ -273,7 +272,7 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow.cpp", rayTracingSoftShadowSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", rayTracingSwBvhSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "renderer_mesh_state.h", meshStateSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_frame_bindings.h", frameBindingsSource));
 
     const AStringView meshHeader(meshHeaderSource.data(), meshHeaderSource.size());
     const AStringView meshResources(meshResourcesSource.data(), meshResourcesSource.size());
@@ -287,8 +286,10 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     const AStringView rayTracingSwBvh(rayTracingSwBvhSource.data(), rayTracingSwBvhSource.size());
     const AString compactMeshStateStorage = CompactSource(AStringView(meshStateSource.data(), meshStateSource.size()));
     const AStringView compactMeshState(compactMeshStateStorage.data(), compactMeshStateStorage.size());
-    const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
-    const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
+    const AString compactFrameBindingsStorage = CompactSource(
+        AStringView(frameBindingsSource.data(), frameBindingsSource.size())
+    );
+    const AStringView compactFrameBindings(compactFrameBindingsStorage.data(), compactFrameBindingsStorage.size());
 
     EXPECT_FALSE(ContainsText(rayTracingHeader, "RendererMeshState"));
     EXPECT_FALSE(ContainsText(rayTracingHeader, "RendererDrawState"));
@@ -305,11 +306,11 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     EXPECT_TRUE(ContainsText(meshHeader, "commitRayTracingResourceSnapshot("));
     EXPECT_TRUE(ContainsText(meshHeader, "confirmAcceptedRayTracingStateHandoffs()noexcept;"));
     EXPECT_TRUE(ContainsText(meshHeader, "discardRayTracingBuildState()noexcept;"));
-    EXPECT_TRUE(ContainsText(meshHeader, "Core::GpuDescriptorHandle heapHandle"));
-    EXPECT_TRUE(ContainsText(meshHeader, "bool bindingValid()const noexcept"));
+    EXPECT_TRUE(ContainsText(compactFrameBindings, "Core::GpuDescriptorHandleheapHandle"));
+    EXPECT_TRUE(ContainsText(compactFrameBindings, "boolbindingValid()constnoexcept"));
     EXPECT_TRUE(ContainsText(meshHeader, "snapshotAcceptedMeshViewWorldToClip(Float44& outWorldToClip)const noexcept;"));
-    EXPECT_TRUE(ContainsText(meshView, "snapshot.heapHandle = m_drawState.m_meshViewBufferHeapHandle;"));
-    EXPECT_TRUE(ContainsText(meshView, "if(!m_drawState.m_meshViewGpuDataValid)"));
+    EXPECT_TRUE(ContainsText(meshView, "snapshot.heapHandle = m_meshState.m_frameBindings.meshView.heapHandle;"));
+    EXPECT_TRUE(ContainsText(meshView, "if(!m_meshState.m_meshViewGpuDataValid)"));
     EXPECT_TRUE(ContainsText(meshView, "ECSRenderDetail::MeshViewGpuData acceptedView;"));
     EXPECT_TRUE(ContainsText(meshView, "outWorldToClip = acceptedView.worldToClip;"));
     EXPECT_TRUE(ContainsText(meshResources, "RayTracingResourceSnapshotMatches(found.value(), expected)"));
@@ -325,13 +326,6 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     EXPECT_FALSE(ContainsText(rayTracingSoftShadow, "reinterpret_cast<const ECSRenderDetail::MeshViewGpuData*>"));
 
     EXPECT_FALSE(ContainsText(compactMeshState, "friendclassRendererRayTracingSystem;"));
-
-    const usize drawStateBegin = compactRendererState.find("classRendererDrawStatefinal:NoCopy{");
-    const usize drawStateEnd = compactRendererState.find("static_assert(sizeof(RendererDrawState)==368u", drawStateBegin);
-    ASSERT_NE(drawStateBegin, AStringView::npos);
-    ASSERT_NE(drawStateEnd, AStringView::npos);
-    const AStringView drawState = compactRendererState.substr(drawStateBegin, drawStateEnd - drawStateBegin);
-    EXPECT_FALSE(ContainsText(drawState, "friendclassRendererRayTracingSystem;"));
 }
 
 
@@ -340,8 +334,6 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     const TestPath repoRoot = RepoRoot(testArena);
     AString stateHeaderSource;
     AString stateSystemSource;
-    AString sharedHeaderSource;
-    AString sharedSystemSource;
     AString rayTracingHeaderSource;
     AString rayTracingSystemSource;
     AString rayTracingDetailSource;
@@ -355,8 +347,6 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     AString rendererCmakeSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "renderer_raytracing_state.h", stateHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "renderer_raytracing_state.cpp", stateSystemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", sharedHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.cpp", sharedSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_detail.cpp", rayTracingDetailSource));
@@ -412,9 +402,6 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_surfelAgeFreePipelineFailed=false;"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_surfelResourcesNeedClear=false;m_surfelResourcesClearPending=false;"));
     EXPECT_FALSE(ContainsText(stateHeaderSource, "shared/renderer_state.h"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "RtSceneBvhState"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "RendererRayTracingState"));
-    EXPECT_FALSE(ContainsText(sharedSystemSource, "RendererRayTracingState"));
     EXPECT_TRUE(ContainsText(rayTracingHeaderSource, "class RendererRayTracingState;"));
     EXPECT_FALSE(ContainsText(rayTracingHeaderSource, "shared/renderer_state.h"));
     EXPECT_FALSE(ContainsText(rayTracingHeaderSource, "renderer_raytracing_state.h"));
@@ -439,8 +426,6 @@ TEST(EcsGraphics, MaterialOwnsItsPrivateRendererState){
     AString stateHeaderSource;
     AString stateSystemSource;
     AString pipelineTypesSystemSource;
-    AString sharedHeaderSource;
-    AString sharedSystemSource;
     AString materialHeaderSource;
     AString materialSystemSource;
     AString materialInstanceSource;
@@ -454,8 +439,6 @@ TEST(EcsGraphics, MaterialOwnsItsPrivateRendererState){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "renderer_material_state.h", stateHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "renderer_material_state.cpp", stateSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "renderer_pipeline_types.cpp", pipelineTypesSystemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", sharedHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.cpp", sharedSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_system.h", materialHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_system.cpp", materialSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_instance.cpp", materialInstanceSource));
@@ -497,6 +480,13 @@ TEST(EcsGraphics, MaterialOwnsItsPrivateRendererState){
     EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererMeshSystem;"));
     EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererRayTracingSystem;"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "Core::BindingLayoutHandlem_materialPassBindingLayout;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::BindingLayoutHandlem_computeBindingLayout;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::BufferHandlem_instanceBuffer;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::BufferHandlem_materialTypedBuffer;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::ShaderHandlem_emulationVertexShader;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::InputLayoutHandlem_emulationInputLayout;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "usizem_instanceBufferCapacity=0u;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "usizem_materialTypedBufferCapacity=0u;"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "HashMap<Name,MaterialSurfaceInfo,Hasher<Name>,EqualTo<Name>,Core::Alloc::GlobalArena>m_surfaceInfos;"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "RendererMaterialResourceStatem_resourceState;"));
     EXPECT_TRUE(ContainsText(
@@ -515,8 +505,15 @@ TEST(EcsGraphics, MaterialOwnsItsPrivateRendererState){
     ));
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_pipelines.clear();"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_materialPassBindingLayout.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_computeBindingLayout.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_instanceBuffer.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_materialTypedBuffer.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_emulationVertexShader.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_emulationInputLayout.reset();"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_instanceMutableCache.clear();"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_loggedMaterialPaths.clear();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_instanceBufferCapacity=0u;"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_materialTypedBufferCapacity=0u;"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_instanceMutableCacheComponentMutationVersion=0u;"));
     EXPECT_TRUE(ContainsText(compactPipelineTypesSystem, "usizeMaterialPipelineKeyHasher::operator()(constMaterialPipelineKey&key)const{"));
     EXPECT_TRUE(ContainsText(compactPipelineTypesSystem, "boolMaterialPipelineKeyEqualTo::operator()(constMaterialPipelineKey&lhs,constMaterialPipelineKey&rhs)const{"));
@@ -528,17 +525,6 @@ TEST(EcsGraphics, MaterialOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <impl/assets_texture/loader.h>"));
     EXPECT_FALSE(ContainsText(stateHeaderSource, "shared/renderer_state.h"));
     EXPECT_FALSE(ContainsText(stateSystemSource, "shared/renderer_state.h"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "RendererMaterialResourceState"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "RendererMaterialState"));
-    EXPECT_FALSE(ContainsText(sharedSystemSource, "RendererMaterialState"));
-    EXPECT_FALSE(ContainsText(sharedSystemSource, "MaterialPipelineKeyHasher"));
-    EXPECT_FALSE(ContainsText(sharedSystemSource, "MaterialPipelineKeyEqualTo"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "material/renderer_material_state.h"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "material/renderer_draw_types.h"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "material/renderer_pipeline_types.h"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "core/ecs/entity_id.h"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "assets_sampler/loader.h"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "assets_texture/loader.h"));
     EXPECT_TRUE(ContainsText(materialHeaderSource, "class RendererMaterialState;"));
     EXPECT_FALSE(ContainsText(materialHeaderSource, "renderer_material_state.h"));
     EXPECT_TRUE(ContainsText(materialSystemSource, "#include <impl/ecs_render/material/renderer_material_state.h>"));
@@ -548,11 +534,11 @@ TEST(EcsGraphics, MaterialOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(materialSurfaceSource, "#include <impl/ecs_render/material/renderer_material_state.h>"));
     EXPECT_FALSE(ContainsText(materialSurfaceSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
     EXPECT_TRUE(ContainsText(materialPassResourcesSource, "#include <impl/ecs_render/material/renderer_material_state.h>"));
-    EXPECT_TRUE(ContainsText(materialPassResourcesSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_FALSE(ContainsText(materialPassResourcesSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
     EXPECT_TRUE(ContainsText(materialPipelineSource, "#include <impl/ecs_render/material/renderer_material_state.h>"));
-    EXPECT_TRUE(ContainsText(materialPipelineSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_FALSE(ContainsText(materialPipelineSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
     EXPECT_FALSE(ContainsText(materialPassDrawSource, "renderer_material_state.h"));
-    EXPECT_TRUE(ContainsText(materialPassDrawSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_FALSE(ContainsText(materialPassDrawSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
     EXPECT_FALSE(ContainsText(materialPassSource, "renderer_material_state.h"));
     EXPECT_FALSE(ContainsText(materialPassSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
     EXPECT_TRUE(ContainsText(pipelineHeaderSource, "#include <impl/ecs_render/material/renderer_material_state.h>"));
@@ -647,10 +633,8 @@ TEST(EcsGraphics, AvboitOwnsItsPrivateRendererState){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
     AString avboitStateHeaderSource;
-    AString rendererStateSource;
     AString avboitPrivateSource;
     AString avboitSystemSource;
-    AString rendererStateHeaderSource;
     AString avboitStateSource;
     AString pipelineHeaderSource;
     AString rendererCmakeSource;
@@ -658,8 +642,6 @@ TEST(EcsGraphics, AvboitOwnsItsPrivateRendererState){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "renderer_avboit_state.cpp", avboitStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_private.h", avboitPrivateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_system.cpp", avboitSystemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.cpp", rendererStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.h", pipelineHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "CMakeLists.txt", rendererCmakeSource));
 
@@ -671,8 +653,6 @@ TEST(EcsGraphics, AvboitOwnsItsPrivateRendererState){
     const AStringView avboitState(avboitStateSource.data(), avboitStateSource.size());
     const AStringView avboitPrivate(avboitPrivateSource.data(), avboitPrivateSource.size());
     const AStringView avboitSystem(avboitSystemSource.data(), avboitSystemSource.size());
-    const AStringView rendererStateHeader(rendererStateHeaderSource.data(), rendererStateHeaderSource.size());
-    const AStringView rendererState(rendererStateSource.data(), rendererStateSource.size());
     const AStringView pipelineHeader(pipelineHeaderSource.data(), pipelineHeaderSource.size());
     const AStringView rendererCmake(rendererCmakeSource.data(), rendererCmakeSource.size());
 
@@ -697,9 +677,6 @@ TEST(EcsGraphics, AvboitOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(avboitState, "m_integratePipeline.reset();"));
     EXPECT_TRUE(ContainsText(avboitState, "m_targetsNeedClear = true;"));
     EXPECT_FALSE(ContainsText(avboitStateHeader, "#include <impl/ecs_render/shared/renderer_state.h>"));
-    EXPECT_FALSE(ContainsText(rendererStateHeader, "RendererAvboitState"));
-    EXPECT_FALSE(ContainsText(rendererState, "RendererAvboitState"));
-    EXPECT_FALSE(ContainsText(rendererStateHeader, "#include <impl/ecs_render/avboit/renderer_avboit_state.h>"));
     EXPECT_TRUE(ContainsText(pipelineHeader, "#include <impl/ecs_render/avboit/renderer_avboit_state.h>"));
     EXPECT_TRUE(ContainsText(pipelineHeader, "RendererAvboitState m_avboitState;"));
     EXPECT_TRUE(ContainsText(avboitPrivate, "#include <impl/ecs_render/avboit/renderer_avboit_state.h>"));
@@ -716,8 +693,6 @@ TEST(EcsGraphics, DeferredOwnsItsPrivateRendererState){
     const TestPath repoRoot = RepoRoot(testArena);
     AString stateHeaderSource;
     AString stateSystemSource;
-    AString sharedHeaderSource;
-    AString sharedSystemSource;
     AString deferredSystemSource;
     AString deferredLightingSource;
     AString deferredCompositeSource;
@@ -726,8 +701,6 @@ TEST(EcsGraphics, DeferredOwnsItsPrivateRendererState){
     AString rendererCmakeSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "renderer_deferred_state.h", stateHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "renderer_deferred_state.cpp", stateSystemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", sharedHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.cpp", sharedSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.cpp", deferredSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_lighting.cpp", deferredLightingSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_composite.cpp", deferredCompositeSource));
@@ -779,9 +752,6 @@ TEST(EcsGraphics, DeferredOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_lightGpuDataCount=0u;"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_lightGpuDataValid=false;"));
     EXPECT_FALSE(ContainsText(stateHeaderSource, "shared/renderer_state.h"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "RendererDeferredState"));
-    EXPECT_FALSE(ContainsText(sharedSystemSource, "RendererDeferredState"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "deferred/renderer_deferred_state.h"));
     EXPECT_TRUE(ContainsText(pipelineHeaderSource, "#include <impl/ecs_render/deferred/renderer_deferred_state.h>"));
     EXPECT_TRUE(ContainsText(pipelineHeaderSource, "RendererDeferredState m_deferredState;"));
     EXPECT_TRUE(ContainsText(deferredSystemSource, "#include <impl/ecs_render/deferred/renderer_deferred_state.h>"));
@@ -802,8 +772,6 @@ TEST(EcsGraphics, CsgOwnsItsPrivateRendererState){
     const TestPath repoRoot = RepoRoot(testArena);
     AString stateHeaderSource;
     AString stateSystemSource;
-    AString sharedHeaderSource;
-    AString sharedSystemSource;
     AString csgFrameStateSource;
     AString csgIntervalPeelSource;
     AString csgIntervalResourcesSource;
@@ -813,8 +781,6 @@ TEST(EcsGraphics, CsgOwnsItsPrivateRendererState){
     AString rendererCmakeSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "renderer_csg_state.h", stateHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "renderer_csg_state.cpp", stateSystemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", sharedHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.cpp", sharedSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_frame_state.cpp", csgFrameStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_interval_peel.cpp", csgIntervalPeelSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_interval_resources.cpp", csgIntervalResourcesSource));
@@ -891,15 +857,11 @@ TEST(EcsGraphics, CsgOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_frameStateCacheValid=false;"));
     EXPECT_FALSE(ContainsText(stateHeaderSource, "shared/renderer_state.h"));
     EXPECT_FALSE(ContainsText(stateSystemSource, "shared/renderer_state.h"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "CsgFrameStateCacheSignature"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "RendererCsgState"));
-    EXPECT_FALSE(ContainsText(sharedSystemSource, "RendererCsgState"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "csg/renderer_csg_state.h"));
-    EXPECT_FALSE(ContainsText(sharedHeaderSource, "csg/renderer_csg_types.h"));
     EXPECT_TRUE(ContainsText(pipelineHeaderSource, "#include <impl/ecs_render/csg/renderer_csg_state.h>"));
     EXPECT_TRUE(ContainsText(pipelineHeaderSource, "RendererCsgState m_csgState;"));
     EXPECT_TRUE(ContainsText(csgFrameStateSource, "#include <impl/ecs_render/csg/renderer_csg_state.h>"));
     EXPECT_TRUE(ContainsText(csgIntervalPeelSource, "#include <impl/ecs_render/csg/renderer_csg_state.h>"));
+    EXPECT_FALSE(ContainsText(csgIntervalPeelSource, "#include <impl/ecs_render/mesh/mesh_system.h>"));
     EXPECT_TRUE(ContainsText(csgIntervalResourcesSource, "#include <impl/ecs_render/csg/renderer_csg_state.h>"));
     EXPECT_TRUE(ContainsText(csgResourcesSource, "#include <impl/ecs_render/csg/renderer_csg_state.h>"));
     EXPECT_TRUE(ContainsText(csgSystemSource, "#include <impl/ecs_render/csg/renderer_csg_state.h>"));
@@ -977,7 +939,7 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
     AString csgResourcesSource;
     AString csgIntervalPeelSource;
     AString meshHeaderSource;
-    AString rendererStateSource;
+    AString frameBindingsSource;
     AString deferredStateSource;
     AString frameTypesSource;
     AString materialDrawSource;
@@ -992,7 +954,7 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_resources.cpp", csgResourcesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_interval_peel.cpp", csgIntervalPeelSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.h", meshHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_frame_bindings.h", frameBindingsSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "renderer_deferred_state.h", deferredStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_frame_types.h", frameTypesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass_draw.cpp", materialDrawSource));
@@ -1015,8 +977,10 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
     const AStringView compactCsgIntervalPeel(compactCsgIntervalPeelStorage.data(), compactCsgIntervalPeelStorage.size());
     const AString compactMeshHeaderStorage = CompactSource(AStringView(meshHeaderSource.data(), meshHeaderSource.size()));
     const AStringView compactMeshHeader(compactMeshHeaderStorage.data(), compactMeshHeaderStorage.size());
-    const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
-    const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
+    const AString compactFrameBindingsStorage = CompactSource(
+        AStringView(frameBindingsSource.data(), frameBindingsSource.size())
+    );
+    const AStringView compactFrameBindings(compactFrameBindingsStorage.data(), compactFrameBindingsStorage.size());
     const AString compactDeferredStateStorage = CompactSource(AStringView(deferredStateSource.data(), deferredStateSource.size()));
     const AStringView compactDeferredState(compactDeferredStateStorage.data(), compactDeferredStateStorage.size());
     const AString compactFrameTypesStorage = CompactSource(AStringView(frameTypesSource.data(), frameTypesSource.size()));
@@ -1079,24 +1043,20 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
     EXPECT_TRUE(ContainsText(compactCsgSnapshotHeader, "frameReady(constCsgFrameGpuData&csgFrameData)constnoexcept;"));
     EXPECT_TRUE(ContainsText(compactCsgSnapshotHeader, "findClipContextHeapSlot(u32&outHeapSlot)constnoexcept;"));
     EXPECT_TRUE(ContainsText(compactCsgHeader, "csgGraphResourceSnapshot()const;"));
-    EXPECT_TRUE(ContainsText(compactMeshHeader, "structMeshFrameBindingSnapshot{"));
+    EXPECT_TRUE(ContainsText(compactFrameBindings, "structMeshFrameBindingSnapshot{"));
     EXPECT_TRUE(ContainsText(compactMeshHeader, "meshFrameBindingSnapshot()const;"));
     EXPECT_TRUE(ContainsText(compactCsgHeader, "constECSRenderDetail::MeshFrameBindingSnapshot&frameBindings"));
     EXPECT_TRUE(ContainsText(compactCsgHeader, "prepareCsgClipContextSlotData(constDeferredFrameTargets&targets,"));
     EXPECT_TRUE(ContainsText(compactCsgHeader, "setCsgReceiverSurfaceImageStates(Core::CommandList&commandList,constDeferredFrameTargets&targets);"));
     EXPECT_TRUE(ContainsText(compactCsgHeader, "setCsgIntervalSampleImageStates(Core::CommandList&commandList,constDeferredFrameTargets&targets);"));
     EXPECT_TRUE(ContainsText(compactCsgResources, "targets.bindless.slotsBufferDescriptor.slot()"));
+    EXPECT_FALSE(ContainsText(compactCsgResources, "createMeshFrameHeapHandles()"));
+    EXPECT_FALSE(ContainsText(compactCsgResources, "meshFrameHeapHandlesReady()"));
 
     EXPECT_FALSE(ContainsText(compactDeferredState, "friendclassRendererCsgSystem;"));
 
-    const usize drawStateBegin = compactRendererState.find("classRendererDrawStatefinal:NoCopy{");
-    ASSERT_NE(drawStateBegin, AStringView::npos);
-    const usize drawStateEnd = compactRendererState.find("static_assert(sizeof(RendererDrawState)==368u", drawStateBegin);
-    ASSERT_NE(drawStateEnd, AStringView::npos);
-    const AStringView drawState = compactRendererState.substr(drawStateBegin, drawStateEnd - drawStateBegin);
-    EXPECT_FALSE(ContainsText(drawState, "friendclassRendererCsgSystem;"));
-
     EXPECT_TRUE(ContainsText(compactFrameTypes, "structMaterialPassDrawContext{Core::CommandList&commandList;constDeferredFrameTargets&deferredTargets;"));
+    EXPECT_TRUE(ContainsText(compactFrameTypes, "constECSRenderDetail::MeshFrameBindingSnapshot&frameBindings;"));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "context.deferredTargets"));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "setCsgReceiverSurfaceImageStates(commandList,deferredTargets)"));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "setCsgIntervalSampleImageStates(commandList,deferredTargets)"));
@@ -1148,20 +1108,29 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
     const TestPath repoRoot = RepoRoot(testArena);
     AString meshHeaderSource;
     AString meshBindingsSource;
+    AString frameBindingsSource;
     AString frameTypesSource;
+    AString materialResourcesSource;
     AString materialPassSource;
     AString materialDrawSource;
     AString avboitHeaderSource;
     AString avboitPassSource;
+    AString rootResourcesSource;
     AString prefixSource;
     AString rootGraphSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.h", meshHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_bindings.cpp", meshBindingsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_frame_bindings.h", frameBindingsSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_frame_types.h", frameTypesSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "material" / "material_pass_resources.cpp",
+        materialResourcesSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass.cpp", materialPassSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass_draw.cpp", materialDrawSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_system.h", avboitHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_pass.cpp", avboitPassSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_resources.cpp", rootResourcesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graphics_prefix.cpp", prefixSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", rootGraphSource));
 
@@ -1169,8 +1138,16 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
     const AStringView compactMeshHeader(compactMeshHeaderStorage.data(), compactMeshHeaderStorage.size());
     const AString compactMeshBindingsStorage = CompactSource(AStringView(meshBindingsSource.data(), meshBindingsSource.size()));
     const AStringView compactMeshBindings(compactMeshBindingsStorage.data(), compactMeshBindingsStorage.size());
+    const AString compactFrameBindingsStorage = CompactSource(
+        AStringView(frameBindingsSource.data(), frameBindingsSource.size())
+    );
+    const AStringView compactFrameBindings(compactFrameBindingsStorage.data(), compactFrameBindingsStorage.size());
     const AString compactFrameTypesStorage = CompactSource(AStringView(frameTypesSource.data(), frameTypesSource.size()));
     const AStringView compactFrameTypes(compactFrameTypesStorage.data(), compactFrameTypesStorage.size());
+    const AString compactMaterialResourcesStorage = CompactSource(
+        AStringView(materialResourcesSource.data(), materialResourcesSource.size())
+    );
+    const AStringView compactMaterialResources(compactMaterialResourcesStorage.data(), compactMaterialResourcesStorage.size());
     const AString compactMaterialPassStorage = CompactSource(AStringView(materialPassSource.data(), materialPassSource.size()));
     const AStringView compactMaterialPass(compactMaterialPassStorage.data(), compactMaterialPassStorage.size());
     const AString compactMaterialDrawStorage = CompactSource(AStringView(materialDrawSource.data(), materialDrawSource.size()));
@@ -1179,71 +1156,120 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
     const AStringView compactAvboitHeader(compactAvboitHeaderStorage.data(), compactAvboitHeaderStorage.size());
     const AString compactAvboitPassStorage = CompactSource(AStringView(avboitPassSource.data(), avboitPassSource.size()));
     const AStringView compactAvboitPass(compactAvboitPassStorage.data(), compactAvboitPassStorage.size());
+    const AString compactRootResourcesStorage = CompactSource(
+        AStringView(rootResourcesSource.data(), rootResourcesSource.size())
+    );
+    const AStringView compactRootResources(compactRootResourcesStorage.data(), compactRootResourcesStorage.size());
     const AString compactPrefixStorage = CompactSource(AStringView(prefixSource.data(), prefixSource.size()));
     const AStringView compactPrefix(compactPrefixStorage.data(), compactPrefixStorage.size());
     const AString compactRootGraphStorage = CompactSource(AStringView(rootGraphSource.data(), rootGraphSource.size()));
     const AStringView compactRootGraph(compactRootGraphStorage.data(), compactRootGraphStorage.size());
 
-    EXPECT_TRUE(ContainsText(compactMeshHeader, "usizeinstanceBufferCapacity=0u;"));
-    EXPECT_TRUE(ContainsText(compactMeshHeader, "usizematerialTypedBufferCapacity=0u;"));
+    EXPECT_TRUE(ContainsText(compactFrameBindings, "usizeinstanceBufferCapacity=0u;"));
+    EXPECT_TRUE(ContainsText(compactFrameBindings, "usizematerialTypedBufferCapacity=0u;"));
     EXPECT_TRUE(ContainsText(
-        compactMeshHeader,
+        compactFrameBindings,
         "frameReady(constusizeinstanceCount,constusizematerialTypedByteCount)constnoexcept{"
     ));
-    EXPECT_TRUE(ContainsText(compactMeshHeader, "instanceBufferCapacity>=instanceCount"));
+    EXPECT_TRUE(ContainsText(compactFrameBindings, "instanceBufferCapacity>=instanceCount"));
     EXPECT_TRUE(ContainsText(
-        compactMeshHeader,
+        compactFrameBindings,
         "materialTypedBufferCapacity>=Max<usize>(materialTypedByteCount,sizeof(u32))"
     ));
+    EXPECT_TRUE(ContainsText(compactFrameBindings, "boolmatches(constMaterialPassBufferSnapshot&materialBuffers,"));
+    EXPECT_TRUE(ContainsText(compactFrameBindings, "instanceBuffer==materialBuffers.instanceBuffer"));
+    EXPECT_TRUE(ContainsText(compactFrameBindings, "materialTypedBuffer==materialBuffers.materialTypedBuffer"));
+    EXPECT_TRUE(ContainsText(compactFrameBindings, "instanceBufferCapacity==materialBuffers.instanceBufferCapacity"));
+    EXPECT_TRUE(ContainsText(compactFrameBindings, "materialTypedBufferCapacity==materialBuffers.materialTypedBufferCapacity"));
     EXPECT_TRUE(ContainsText(
-        compactMeshBindings,
-        ".instanceBufferCapacity=m_drawState.m_instanceBufferCapacity,"
+        compactMeshHeader,
+        "prepareMeshFrameBindings(constECSRenderDetail::MaterialPassBufferSnapshot&materialBuffers);"
     ));
     EXPECT_TRUE(ContainsText(
         compactMeshBindings,
-        ".materialTypedBufferCapacity=m_drawState.m_materialTypedBufferCapacity,"
+        ".instanceBufferCapacity=materialBuffers.instanceBufferCapacity,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compactMeshBindings,
+        ".materialTypedBufferCapacity=materialBuffers.materialTypedBufferCapacity,"
     ));
     EXPECT_TRUE(ContainsText(
         compactFrameTypes,
-        "constECSRenderDetail::MeshFrameBindingSnapshot*frameBindings=nullptr;"
+        "constECSRenderDetail::MeshFrameBindingSnapshot&frameBindings;"
     ));
+    EXPECT_FALSE(ContainsText(compactFrameTypes, "MeshFrameBindingSnapshot*frameBindings"));
+
+    const usize failedRegistration = compactMeshBindings.find("if(!registered){");
+    const usize retainedGeneration = compactMeshBindings.find(
+        "MeshFrameBindingSnapshotretired=Move(m_meshState.m_frameBindings);"
+    );
+    const usize publishedGeneration = compactMeshBindings.find("m_meshState.m_frameBindings=Move(replacement);");
+    const usize retiredInstanceRelease = compactMeshBindings.find("heap.free(retired.instanceHeapHandle)", publishedGeneration);
+    ASSERT_NE(failedRegistration, AStringView::npos);
+    ASSERT_NE(retainedGeneration, AStringView::npos);
+    ASSERT_NE(publishedGeneration, AStringView::npos);
+    ASSERT_NE(retiredInstanceRelease, AStringView::npos);
+    EXPECT_LT(failedRegistration, retainedGeneration);
+    EXPECT_LT(retainedGeneration, publishedGeneration);
+    EXPECT_LT(publishedGeneration, retiredInstanceRelease);
+    EXPECT_TRUE(ContainsText(
+        compactMeshBindings,
+        "if(m_meshState.m_frameBindings.matches(materialBuffers,m_meshState.m_meshViewBuffer))returntrue;"
+    ));
+    EXPECT_TRUE(ContainsText(compactMeshBindings, "snapshot.meshView=meshViewBufferSnapshot();returnsnapshot;"));
 
     EXPECT_TRUE(ContainsText(compactMaterialPass, "frameBindings.frameReady(instanceCount,materialTypedByteCount)"));
     EXPECT_TRUE(ContainsText(
         compactMaterialPass,
         "materialPassDrawResourcesReady(drawItems.regular,frameBindings)"
     ));
-    EXPECT_TRUE(ContainsText(compactMaterialPass, "nullptr,&frameBindings"));
-    EXPECT_TRUE(ContainsText(compactMaterialPass, "&csgResources,&frameBindings"));
-    EXPECT_TRUE(ContainsText(compactMaterialDraw, "if(context.frameBindings){"));
+    EXPECT_TRUE(ContainsText(compactMaterialPass, "nullptr,frameBindings"));
+    EXPECT_TRUE(ContainsText(compactMaterialPass, "&csgResources,frameBindings"));
+    EXPECT_TRUE(ContainsText(compactMaterialDraw, "if(!context.frameBindings.bindingValid())returnfalse;"));
     EXPECT_TRUE(ContainsText(
         compactMaterialDraw,
-        "outSlots.instance=context.frameBindings->instanceHeapHandle.slot();"
+        "outSlots.instance=context.frameBindings.instanceHeapHandle.slot();"
     ));
     EXPECT_TRUE(ContainsText(
         compactMaterialDraw,
-        "outSlots.materialTyped=context.frameBindings->materialTypedHeapHandle.slot();"
+        "outSlots.materialTyped=context.frameBindings.materialTypedHeapHandle.slot();"
     ));
     EXPECT_TRUE(ContainsText(
         compactMaterialDraw,
-        "outSlots.view=context.frameBindings->meshView.heapHandle.slot();"
+        "outSlots.view=context.frameBindings.meshView.heapHandle.slot();"
+    ));
+    EXPECT_FALSE(ContainsText(compactMaterialDraw, "meshFrameHeapHandlesReady"));
+    EXPECT_FALSE(ContainsText(compactMaterialDraw, "context.frameBindings->"));
+    EXPECT_FALSE(ContainsText(compactMaterialDraw, "m_drawState"));
+    EXPECT_TRUE(ContainsText(
+        compactMaterialDraw,
+        "setBufferState(context.frameBindings.instanceBuffer.get(),Core::ResourceStates::ShaderResource)"
     ));
     EXPECT_TRUE(ContainsText(
         compactMaterialDraw,
-        "if(context.materialFrameStatesGraphOwned||!meshSystem.meshFrameHeapHandlesReady())returnfalse;"
+        "setBufferState(context.frameBindings.meshView.buffer.get(),Core::ResourceStates::ConstantBuffer)"
     ));
     EXPECT_TRUE(ContainsText(
         compactMaterialDraw,
-        "setBufferState(context.frameBindings->instanceBuffer.get(),Core::ResourceStates::ShaderResource)"
+        "setBufferState(context.frameBindings.materialTypedBuffer.get(),Core::ResourceStates::ShaderResource)"
     ));
-    EXPECT_TRUE(ContainsText(
-        compactMaterialDraw,
-        "setBufferState(context.frameBindings->meshView.buffer.get(),Core::ResourceStates::ConstantBuffer)"
-    ));
-    EXPECT_TRUE(ContainsText(
-        compactMaterialDraw,
-        "setBufferState(context.frameBindings->materialTypedBuffer.get(),Core::ResourceStates::ShaderResource)"
-    ));
+    EXPECT_FALSE(ContainsText(compactMaterialResources, "createMeshFrameHeapHandles"));
+    EXPECT_FALSE(ContainsText(compactMaterialResources, "releaseMeshFrameHeapHandles"));
+    EXPECT_EQ(CountText(compactRootResources, "m_materialSystem.materialPassBufferSnapshot()"), 1u);
+    EXPECT_EQ(CountText(compactRootResources, "m_meshSystem.prepareMeshFrameBindings(materialBuffers)"), 1u);
+    const usize transparentPreparation = compactRootResources.find("m_avboitSystem.prepareAvboitPassResources(");
+    const usize materialSnapshot = compactRootResources.find("m_materialSystem.materialPassBufferSnapshot()");
+    const usize meshPublication = compactRootResources.find("m_meshSystem.prepareMeshFrameBindings(materialBuffers)");
+    const usize csgPreparation = compactRootResources.find("m_csgSystem.prepareCsgFrameResources(");
+    ASSERT_NE(transparentPreparation, AStringView::npos);
+    ASSERT_NE(materialSnapshot, AStringView::npos);
+    ASSERT_NE(meshPublication, AStringView::npos);
+    ASSERT_NE(csgPreparation, AStringView::npos);
+    EXPECT_LT(transparentPreparation, materialSnapshot);
+    EXPECT_LT(materialSnapshot, meshPublication);
+    EXPECT_LT(meshPublication, csgPreparation);
+    EXPECT_TRUE(ContainsText(compactRootGraph, "!meshViewBufferSnapshot.valid()"));
+    EXPECT_TRUE(ContainsText(compactRootGraph, "(!csgFrameState.empty()&&!frameBindings.bindingValid())"));
 
     EXPECT_TRUE(ContainsText(
         compactAvboitHeader,
@@ -1260,6 +1286,8 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
     EXPECT_TRUE(ContainsText(compactAvboitPass, "NWB_ASSERT(preparedOccupancyFrameBindings);"));
     EXPECT_TRUE(ContainsText(compactAvboitPass, "NWB_ASSERT(preparedExtinctionFrameBindings);"));
     EXPECT_TRUE(ContainsText(compactAvboitPass, "NWB_ASSERT(preparedAccumulationFrameBindings);"));
+    EXPECT_TRUE(ContainsText(avboitPassSource, "#include <impl/ecs_render/shared/renderer_frame_bindings.h>"));
+    EXPECT_FALSE(ContainsText(avboitPassSource, "#include <impl/ecs_render/mesh/mesh_system.h>"));
     EXPECT_EQ(CountText(compactAvboitPass, "*preparedOccupancyFrameBindings,"), 1u);
     EXPECT_EQ(CountText(compactAvboitPass, "*preparedExtinctionFrameBindings,"), 1u);
     EXPECT_EQ(CountText(compactAvboitPass, "*preparedAccumulationFrameBindings,"), 1u);
@@ -1278,10 +1306,13 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
     for(const TestPath& taskHeaderPath : taskHeaderPaths){
         AString taskHeaderSource;
         ASSERT_TRUE(ReadTextFile(taskHeaderPath, taskHeaderSource));
+        const AStringView taskHeader(taskHeaderSource.data(), taskHeaderSource.size());
         const AString compactTaskHeaderStorage = CompactSource(
             AStringView(taskHeaderSource.data(), taskHeaderSource.size())
         );
         const AStringView compactTaskHeader(compactTaskHeaderStorage.data(), compactTaskHeaderStorage.size());
+        EXPECT_TRUE(ContainsText(taskHeader, "#include <impl/ecs_render/shared/renderer_frame_bindings.h>"));
+        EXPECT_FALSE(ContainsText(taskHeader, "#include <impl/ecs_render/mesh/mesh_system.h>"));
         payloadFrameBindingCount += CountText(compactTaskHeader, "MeshFrameBindingSnapshotframeBindings;");
     }
     EXPECT_EQ(payloadFrameBindingCount, 20u);
@@ -1306,11 +1337,11 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
         const AStringView compactTaskSource(compactTaskSourceStorage.data(), compactTaskSourceStorage.size());
         capturedReadinessCount += CountText(compactTaskSource, "frameBindings.frameReady(");
         liveReadinessCount += CountText(compactTaskSource, "materialPassDrawBuffersReady(");
-        capturedContextCount += CountText(AStringView(taskSource.data(), taskSource.size()), "&payload.frameBindings");
+        capturedContextCount += CountText(compactTaskSource, "payload.frameBindings};");
     }
     EXPECT_EQ(capturedReadinessCount, 16u);
     EXPECT_EQ(liveReadinessCount, 0u);
-    EXPECT_EQ(capturedContextCount, 17u);
+    EXPECT_EQ(capturedContextCount, 13u);
 
     EXPECT_EQ(CountText(compactPrefix, ".frameBindings=frameBindings;"), 8u);
     EXPECT_EQ(CountText(compactRootGraph, ".frameBindings=frameBindings;"), 12u);
@@ -1433,7 +1464,6 @@ TEST(EcsGraphics, RootInvalidatesFeatureResourcesThroughDomainSystems){
     const usize shaderInvalidation = compactRootResources.find("m_shaderSystem.invalidateResources()");
     const usize meshInvalidation = compactRootResources.find("m_meshSystem.invalidateResources()");
     const usize materialInvalidation = compactRootResources.find("m_materialSystem.invalidateResources()");
-    const usize drawInvalidation = compactRootResources.find("m_drawState.invalidateResources()");
     const usize csgInvalidation = compactRootResources.find("m_csgSystem.invalidateResources()");
     const usize deferredInvalidation = compactRootResources.find("m_deferredSystem.invalidateResources()");
     ASSERT_NE(rayTracingInvalidation, AStringView::npos);
@@ -1441,13 +1471,12 @@ TEST(EcsGraphics, RootInvalidatesFeatureResourcesThroughDomainSystems){
     ASSERT_NE(shaderInvalidation, AStringView::npos);
     ASSERT_NE(meshInvalidation, AStringView::npos);
     ASSERT_NE(materialInvalidation, AStringView::npos);
-    ASSERT_NE(drawInvalidation, AStringView::npos);
     ASSERT_NE(csgInvalidation, AStringView::npos);
     ASSERT_NE(deferredInvalidation, AStringView::npos);
     EXPECT_LT(rayTracingInvalidation, meshInvalidation);
     EXPECT_LT(avboitInvalidation, materialInvalidation);
-    EXPECT_LT(meshInvalidation, drawInvalidation);
-    EXPECT_LT(materialInvalidation, drawInvalidation);
+    EXPECT_LT(meshInvalidation, materialInvalidation);
+    EXPECT_FALSE(ContainsText(compactRootResources, "m_drawState"));
 }
 
 

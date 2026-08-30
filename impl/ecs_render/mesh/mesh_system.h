@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
+#include <impl/ecs_render/shared/renderer_frame_bindings.h>
 
 #include <core/assets/ref.h>
 #include <core/ecs/entity_id.h>
@@ -41,58 +42,7 @@ NWB_IMPL_BEGIN
 
 
 namespace ECSRenderDetail{
-    struct MeshFrameHeapSlots;
     struct MeshViewGpuData;
-
-    struct MeshViewBufferSnapshot{
-        Core::BufferHandle buffer;
-        Core::GpuDescriptorHandle heapHandle = Core::GpuDescriptorHandle::invalid();
-
-        [[nodiscard]] bool valid()const noexcept{ return static_cast<bool>(buffer); }
-        [[nodiscard]] bool bindingValid()const noexcept{
-            return
-                buffer
-                && heapHandle.valid()
-                && heapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
-            ;
-        }
-    };
-    // Mesh owns the descriptor-registration transaction for all three frame bindings.  This retained snapshot keeps
-    // each buffer paired with the exact heap handle published in that transaction while a graph packet is pending.
-    struct MeshFrameBindingSnapshot{
-        Core::BufferHandle instanceBuffer;
-        Core::BufferHandle materialTypedBuffer;
-        MeshViewBufferSnapshot meshView;
-        Core::GpuDescriptorHandle instanceHeapHandle = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle materialTypedHeapHandle = Core::GpuDescriptorHandle::invalid();
-        usize instanceBufferCapacity = 0u;
-        usize materialTypedBufferCapacity = 0u;
-
-        [[nodiscard]] bool bindingValid()const noexcept{
-            return
-                instanceBuffer
-                && materialTypedBuffer
-                && meshView.bindingValid()
-                && instanceHeapHandle.valid()
-                && instanceHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-                && materialTypedHeapHandle.valid()
-                && materialTypedHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-            ;
-        }
-        [[nodiscard]] bool frameReady(const usize instanceCount, const usize materialTypedByteCount)const noexcept{
-            if(
-                materialTypedByteCount == 0u
-                || (materialTypedByteCount & (sizeof(u32) - 1u)) != 0u
-            )
-                return false;
-
-            return
-                bindingValid()
-                && instanceBufferCapacity >= instanceCount
-                && materialTypedBufferCapacity >= Max<usize>(materialTypedByteCount, sizeof(u32))
-            ;
-        }
-    };
     struct MeshSoftwareBvhParentBuildState{
         Core::BufferHandle buffer;
         Name identity = NAME_NONE;
@@ -140,7 +90,6 @@ namespace ECSRenderDetail{
 
 
 class RendererMeshState;
-class RendererDrawState;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -206,8 +155,7 @@ public:
         Core::ECS::World& world,
         Core::Graphics& graphics,
         Core::Assets::AssetManager& assetManager,
-        RendererMeshState& meshState,
-        RendererDrawState& drawState
+        RendererMeshState& meshState
     );
 
 public:
@@ -253,14 +201,14 @@ public:
     )const;
     void confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState);
     void invalidateMeshViewBufferUploadMirror();
-    [[nodiscard]] bool createMeshFrameHeapHandles();
-    [[nodiscard]] bool meshFrameHeapHandlesReady()const;
+    [[nodiscard]] bool prepareMeshFrameBindings(const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers);
     [[nodiscard]] ECSRenderDetail::MeshFrameBindingSnapshot meshFrameBindingSnapshot()const;
-    void populateMeshFrameHeapSlots(ECSRenderDetail::MeshFrameHeapSlots& outSlots)const;
-    void releaseMeshFrameHeapHandles();
     [[nodiscard]] bool meshGeometryHeapHandlesReady(const MeshResources& mesh)const;
     void populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const;
     void releaseMeshGeometryHeapHandles(MeshResources& mesh);
+
+private:
+    void releaseMeshFrameHeapHandles();
 
 private:
     // Persistent mesh descriptors are established while the resource is created.  Material preparation and draw
@@ -280,7 +228,6 @@ private:
     Core::Graphics& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
     RendererMeshState& m_meshState;
-    RendererDrawState& m_drawState;
 };
 
 

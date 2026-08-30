@@ -7,10 +7,8 @@
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/material/material_pass_csg_private.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
-#include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
-#include <impl/ecs_render/shared/renderer_state.h>
 
 #include <impl/assets/graphics/mesh/names.h>
 
@@ -52,7 +50,7 @@ bool RendererMaterialSystem::prepareMaterialPassBindingLayout(Core::BindingLayou
 
 
 bool RendererMaterialSystem::createComputeEmulationResources(){
-    if(!m_drawState.m_computeBindingLayout){
+    if(!m_materialState.m_computeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
         // The per-mesh generated-vertex UAV is a global StorageBuffer heap entry selected through the fourth mesh
@@ -60,16 +58,16 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
         auto& device = m_graphics.getDevice();
-        m_drawState.m_computeBindingLayout = device.createBindingLayout(bindingLayoutDesc);
-        if(!m_drawState.m_computeBindingLayout){
+        m_materialState.m_computeBindingLayout = device.createBindingLayout(bindingLayoutDesc);
+        if(!m_materialState.m_computeBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding layout"));
             return false;
         }
     }
 
-    if(!m_drawState.m_emulationVertexShader){
+    if(!m_materialState.m_emulationVertexShader){
         if(!m_shaderSystem.loadShader(
-            m_drawState.m_emulationVertexShader,
+            m_materialState.m_emulationVertexShader,
             AssetsGraphicsMesh::s_EmulationVertexShaderName,
             Core::ShaderArchive::s_DefaultVariant,
             Core::ShaderType::Vertex,
@@ -78,7 +76,7 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
             return false;
     }
 
-    if(!m_drawState.m_emulationInputLayout){
+    if(!m_materialState.m_emulationInputLayout){
         Core::VertexAttributeDesc attributes[NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT];
         ECSRenderDetail::SetEmulatedVertexAttribute(
             attributes[NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION],
@@ -118,12 +116,12 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
         );
 
         auto& device = m_graphics.getDevice();
-        m_drawState.m_emulationInputLayout = device.createInputLayout(
+        m_materialState.m_emulationInputLayout = device.createInputLayout(
             attributes,
             NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT,
-            m_drawState.m_emulationVertexShader.get()
+            m_materialState.m_emulationVertexShader.get()
         );
-        if(!m_drawState.m_emulationInputLayout){
+        if(!m_materialState.m_emulationInputLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation input layout"));
             return false;
         }
@@ -152,8 +150,6 @@ bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(
 ){
     if(drawItems.empty())
         return true;
-    if(!m_meshSystem.createMeshFrameHeapHandles())
-        return false;
 
     bool ready = true;
     for(const MaterialPassDrawItem& drawItem : drawItems){
@@ -185,10 +181,10 @@ bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceC
     if(instanceCount == 0)
         return true;
     NWB_ASSERT(instanceCount <= static_cast<usize>(Limit<u32>::s_Max));
-    if(m_drawState.m_instanceBuffer && m_drawState.m_instanceBufferCapacity >= instanceCount)
+    if(m_materialState.m_instanceBuffer && m_materialState.m_instanceBufferCapacity >= instanceCount)
         return true;
 
-    const usize capacity = ::NextGrowingCapacity(m_drawState.m_instanceBufferCapacity, instanceCount);
+    const usize capacity = ::NextGrowingCapacity(m_materialState.m_instanceBufferCapacity, instanceCount);
 #if defined(NWB_DEBUG)
     if(capacity > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance buffer capacity overflows addressable memory"));
@@ -209,9 +205,8 @@ bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceC
         return false;
     }
 
-    m_meshSystem.releaseMeshFrameHeapHandles();
-    m_drawState.m_instanceBuffer = Move(instanceBuffer);
-    m_drawState.m_instanceBufferCapacity = capacity;
+    m_materialState.m_instanceBuffer = Move(instanceBuffer);
+    m_materialState.m_instanceBufferCapacity = capacity;
     return true;
 }
 
@@ -229,10 +224,10 @@ bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byte
 #else
     requiredByteCount = AlignUp(requiredByteCount, sizeof(u32));
 #endif
-    if(m_drawState.m_materialTypedBuffer && m_drawState.m_materialTypedBufferCapacity >= requiredByteCount)
+    if(m_materialState.m_materialTypedBuffer && m_materialState.m_materialTypedBufferCapacity >= requiredByteCount)
         return true;
 
-    const usize capacity = ::NextGrowingCapacity(m_drawState.m_materialTypedBufferCapacity, requiredByteCount);
+    const usize capacity = ::NextGrowingCapacity(m_materialState.m_materialTypedBufferCapacity, requiredByteCount);
     Core::BufferDesc materialTypedBufferDesc;
     materialTypedBufferDesc
         .setByteSize(static_cast<u64>(capacity))
@@ -246,9 +241,8 @@ bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byte
         return false;
     }
 
-    m_meshSystem.releaseMeshFrameHeapHandles();
-    m_drawState.m_materialTypedBuffer = Move(materialTypedBuffer);
-    m_drawState.m_materialTypedBufferCapacity = capacity;
+    m_materialState.m_materialTypedBuffer = Move(materialTypedBuffer);
+    m_materialState.m_materialTypedBufferCapacity = capacity;
     return true;
 }
 
@@ -288,16 +282,18 @@ bool RendererMaterialSystem::materialPassDrawBuffersReady(
     NWB_ASSERT((requiredMaterialTypedBytes & (sizeof(u32) - 1u)) == 0u);
 
     return
-        (instanceCount == 0u || (m_drawState.m_instanceBuffer && m_drawState.m_instanceBufferCapacity >= instanceCount))
-        && m_drawState.m_materialTypedBuffer
-        && m_drawState.m_materialTypedBufferCapacity >= requiredMaterialTypedBytes
+        (instanceCount == 0u || (m_materialState.m_instanceBuffer && m_materialState.m_instanceBufferCapacity >= instanceCount))
+        && m_materialState.m_materialTypedBuffer
+        && m_materialState.m_materialTypedBufferCapacity >= requiredMaterialTypedBytes
     ;
 }
 
 ECSRenderDetail::MaterialPassBufferSnapshot RendererMaterialSystem::materialPassBufferSnapshot()const{
     return {
-        .instanceBuffer = m_drawState.m_instanceBuffer,
-        .typedBuffer = m_drawState.m_materialTypedBuffer,
+        .instanceBuffer = m_materialState.m_instanceBuffer,
+        .materialTypedBuffer = m_materialState.m_materialTypedBuffer,
+        .instanceBufferCapacity = m_materialState.m_instanceBufferCapacity,
+        .materialTypedBufferCapacity = m_materialState.m_materialTypedBufferCapacity,
     };
 }
 

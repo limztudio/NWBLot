@@ -108,7 +108,7 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
         payload.materialGeometryStatesGraphOwned,
         true,
         &payload.csgResources,
-        &payload.frameBindings
+        payload.frameBindings
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
@@ -215,7 +215,7 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
         payload.materialGeometryStatesGraphOwned,
         true,
         &payload.csgResources,
-        &payload.frameBindings
+        payload.frameBindings
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;

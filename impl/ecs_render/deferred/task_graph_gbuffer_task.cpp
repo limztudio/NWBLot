@@ -135,7 +135,7 @@ namespace ECSRenderDetail{
             payload.materialGeometryStatesGraphOwned,
             payload.regularComputeEmulationOutputStatesGraphOwned,
             nullptr,
-            &payload.frameBindings
+            payload.frameBindings
         };
         if(
             regularDrawResourcesReady
@@ -199,7 +199,7 @@ namespace ECSRenderDetail{
             payload.materialGeometryStatesGraphOwned,
             payload.csgReceiverComputeEmulationOutputStatesGraphOwned,
             &payload.csgResources,
-            &payload.frameBindings
+            payload.frameBindings
         };
         if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
             Core::GpuTimingMeasure timing(

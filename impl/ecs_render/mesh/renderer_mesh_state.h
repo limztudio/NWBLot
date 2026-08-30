@@ -8,6 +8,9 @@
 #include <impl/global.h>
 
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
+#include <impl/ecs_render/shared/renderer_frame_bindings.h>
+
+#include <impl/assets/graphics/mesh/runtime_constants.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,6 +41,10 @@ private:
 
 private:
     HashMap<Name, MeshResources, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_meshes;
+    Core::BufferHandle m_meshViewBuffer;
+    ECSRenderDetail::MeshFrameBindingSnapshot m_frameBindings;
+    u8 m_meshViewGpuData[sizeof(f32) * NWB_MESH_VIEW_FLOAT_COUNT] = {};
+    bool m_meshViewGpuDataValid = false;
 };
 
 

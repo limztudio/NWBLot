@@ -631,8 +631,6 @@ bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount,
         || !reserveCsgCutterBufferCapacity(cutterCount)
     )
         return false;
-    if(!m_meshSystem.createMeshFrameHeapHandles())
-        return false;
     if(!createCsgIntervalSampleStateBuffer())
         return false;
     if(!m_csgState.m_clipContextSlotsBuffer){
@@ -688,7 +686,6 @@ bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount,
     NWB_ASSERT(m_csgState.m_cutterBufferHeapHandle.valid());
     NWB_ASSERT(m_csgState.m_clipContextSlotsHeapHandle.valid());
     NWB_ASSERT(m_csgState.m_intervalSampleStateHeapHandle.valid());
-    NWB_ASSERT(m_meshSystem.meshFrameHeapHandlesReady());
     return true;
 }
 

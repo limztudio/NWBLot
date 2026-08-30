@@ -23,7 +23,6 @@ RendererMaterialSystem::RendererMaterialSystem(
     Core::Assets::AssetManager& assetManager,
     CsgShapeRegistry& csgShapeRegistry,
     RendererMaterialState& materialState,
-    RendererDrawState& drawState,
     RendererShaderSystem& shaderSystem,
     RendererMeshSystem& meshSystem,
     RendererCsgSystem& csgSystem
@@ -34,7 +33,6 @@ RendererMaterialSystem::RendererMaterialSystem(
     , m_assetManager(assetManager)
     , m_csgShapeRegistry(csgShapeRegistry)
     , m_materialState(materialState)
-    , m_drawState(drawState)
     , m_shaderSystem(shaderSystem)
     , m_meshSystem(meshSystem)
     , m_csgSystem(csgSystem)

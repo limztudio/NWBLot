@@ -67,13 +67,7 @@ namespace RendererResourceLookupMode{
 
 namespace ECSRenderDetail{
     struct CsgGraphResourceSnapshot;
-    struct MeshFrameBindingSnapshot;
     struct MeshViewGpuData;
-
-    struct MaterialPassBufferSnapshot{
-        Core::BufferHandle instanceBuffer;
-        Core::BufferHandle typedBuffer;
-    };
 };
 
 struct MaterialInstanceOverrideField{
@@ -84,7 +78,6 @@ struct MaterialInstanceOverrideField{
 
 class CsgShapeRegistry;
 class RendererMaterialState;
-class RendererDrawState;
 class RendererShaderSystem;
 class RendererMeshSystem;
 class RendererCsgSystem;
@@ -102,7 +95,6 @@ public:
         Core::Assets::AssetManager& assetManager,
         CsgShapeRegistry& csgShapeRegistry,
         RendererMaterialState& materialState,
-        RendererDrawState& drawState,
         RendererShaderSystem& shaderSystem,
         RendererMeshSystem& meshSystem,
         RendererCsgSystem& csgSystem
@@ -233,22 +225,18 @@ public:
         u32& outConstantByteOffset
     );
     void pruneMaterialInstanceMutableCache();
-    [[nodiscard]] bool materialPassDrawResourcesReady(const MaterialPassMeshResourceSnapshot& mesh)const;
     [[nodiscard]] bool materialPassDrawResourcesReady(
         const MaterialPassMeshResourceSnapshot& mesh,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
     )const;
-    [[nodiscard]] bool materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems);
     [[nodiscard]] bool materialPassDrawResourcesReady(
         const MaterialPassDrawItems& drawItems,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
     );
-    [[nodiscard]] bool meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool meshMaterialPassDrawResourcesReady(
         const MaterialPassDrawItemVector& drawItems,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
     );
-    [[nodiscard]] bool computeMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool computeMaterialPassDrawResourcesReady(
         const MaterialPassDrawItemVector& drawItems,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
@@ -335,7 +323,6 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     CsgShapeRegistry& m_csgShapeRegistry;
     RendererMaterialState& m_materialState;
-    RendererDrawState& m_drawState;
     RendererShaderSystem& m_shaderSystem;
     RendererMeshSystem& m_meshSystem;
     RendererCsgSystem& m_csgSystem;

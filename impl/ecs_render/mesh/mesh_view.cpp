@@ -5,7 +5,7 @@
 #include "mesh_system.h"
 #include "mesh_view_private.h"
 
-#include <impl/ecs_render/shared/renderer_state.h>
+#include <impl/ecs_render/mesh/renderer_mesh_state.h>
 
 #include <core/common/log.h>
 #include <core/graphics/module.h>
@@ -21,7 +21,7 @@ NWB_IMPL_BEGIN
 
 
 bool RendererMeshSystem::createMeshViewBuffer(){
-    if(m_drawState.m_meshViewBuffer)
+    if(m_meshState.m_meshViewBuffer)
         return true;
 
     Core::BufferDesc meshViewBufferDesc;
@@ -42,23 +42,24 @@ bool RendererMeshSystem::createMeshViewBuffer(){
     }
 
     releaseMeshFrameHeapHandles();
-    m_drawState.m_meshViewBuffer = Move(meshViewBuffer);
+    m_meshState.m_meshViewBuffer = Move(meshViewBuffer);
     return true;
 }
 
 ECSRenderDetail::MeshViewBufferSnapshot RendererMeshSystem::meshViewBufferSnapshot()const{
     ECSRenderDetail::MeshViewBufferSnapshot snapshot;
-    snapshot.buffer = m_drawState.m_meshViewBuffer;
-    snapshot.heapHandle = m_drawState.m_meshViewBufferHeapHandle;
+    snapshot.buffer = m_meshState.m_meshViewBuffer;
+    if(m_meshState.m_frameBindings.meshView.buffer == m_meshState.m_meshViewBuffer)
+        snapshot.heapHandle = m_meshState.m_frameBindings.meshView.heapHandle;
     return snapshot;
 }
 
 bool RendererMeshSystem::snapshotAcceptedMeshViewWorldToClip(Float44& outWorldToClip)const noexcept{
-    if(!m_drawState.m_meshViewGpuDataValid)
+    if(!m_meshState.m_meshViewGpuDataValid)
         return false;
 
     ECSRenderDetail::MeshViewGpuData acceptedView;
-    NWB_MEMCPY(&acceptedView, sizeof(acceptedView), m_drawState.m_meshViewGpuData, sizeof(m_drawState.m_meshViewGpuData));
+    NWB_MEMCPY(&acceptedView, sizeof(acceptedView), m_meshState.m_meshViewGpuData, sizeof(m_meshState.m_meshViewGpuData));
     outWorldToClip = acceptedView.worldToClip;
     return true;
 }
@@ -68,23 +69,23 @@ bool RendererMeshSystem::prepareMeshViewBufferUpload(
     ECSRenderDetail::MeshViewGpuData& outViewState,
     bool& outUploadRequired
 )const{
-    NWB_ASSERT(m_drawState.m_meshViewBuffer);
+    NWB_ASSERT(m_meshState.m_meshViewBuffer);
 
     outViewState = ECSRenderDetail::ResolveMeshViewState(m_world, fallbackAspectRatio);
     outUploadRequired = !(
-        m_drawState.m_meshViewGpuDataValid
-        && NWB_MEMCMP(m_drawState.m_meshViewGpuData, &outViewState, sizeof(outViewState)) == 0
+        m_meshState.m_meshViewGpuDataValid
+        && NWB_MEMCMP(m_meshState.m_meshViewGpuData, &outViewState, sizeof(outViewState)) == 0
     );
     return true;
 }
 
 void RendererMeshSystem::confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState){
-    NWB_MEMCPY(m_drawState.m_meshViewGpuData, sizeof(m_drawState.m_meshViewGpuData), &viewState, sizeof(viewState));
-    m_drawState.m_meshViewGpuDataValid = true;
+    NWB_MEMCPY(m_meshState.m_meshViewGpuData, sizeof(m_meshState.m_meshViewGpuData), &viewState, sizeof(viewState));
+    m_meshState.m_meshViewGpuDataValid = true;
 }
 
 void RendererMeshSystem::invalidateMeshViewBufferUploadMirror(){
-    m_drawState.m_meshViewGpuDataValid = false;
+    m_meshState.m_meshViewGpuDataValid = false;
 }
 
 

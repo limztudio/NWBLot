@@ -53,7 +53,7 @@ RendererFramePipeline::RendererFramePipeline(
     , m_surfelGiCounterPersistentState(arena)
     , m_surfelIrradianceReturnState(arena)
     , m_shaderSystem(graphics, assetManager, m_shaderPathResolver)
-    , m_meshSystem(arena, world, graphics, assetManager, m_meshState, m_drawState)
+    , m_meshSystem(arena, world, graphics, assetManager, m_meshState)
     , m_csgSystem(
         arena,
         world,
@@ -70,7 +70,6 @@ RendererFramePipeline::RendererFramePipeline(
         assetManager,
         m_csgShapeRegistry,
         m_materialState,
-        m_drawState,
         m_shaderSystem,
         m_meshSystem,
         m_csgSystem

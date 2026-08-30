@@ -21,7 +21,6 @@
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
-#include <impl/ecs_render/shared/renderer_state.h>
 #include <impl/ecs_render/shared/task_graph_stage.h>
 
 #include <core/ecs/system.h>
@@ -562,7 +561,6 @@ private:
 private:
     RendererMeshState m_meshState;
     RendererMaterialState m_materialState;
-    RendererDrawState m_drawState;
     RendererCsgState m_csgState;
     RendererDeferredState m_deferredState;
     RendererAvboitState m_avboitState;

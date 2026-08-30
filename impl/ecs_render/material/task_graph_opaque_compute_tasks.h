@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/shared/renderer_frame_bindings.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
 

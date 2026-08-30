@@ -61,11 +61,18 @@ private:
 
 private:
     Core::BindingLayoutHandle m_materialPassBindingLayout;
+    Core::BindingLayoutHandle m_computeBindingLayout;
+    Core::BufferHandle m_instanceBuffer;
+    Core::BufferHandle m_materialTypedBuffer;
+    Core::ShaderHandle m_emulationVertexShader;
+    Core::InputLayoutHandle m_emulationInputLayout;
     HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_surfaceInfos;
     RendererMaterialResourceState m_resourceState;
     HashMap<MaterialPipelineKey, MaterialPipelineResources, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo, Core::Alloc::GlobalArena> m_pipelines;
     HashMap<Core::ECS::EntityID, MaterialInstanceMutableCacheEntry, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>, Core::Alloc::GlobalArena> m_instanceMutableCache;
     HashMap<Name, RenderPath::Enum, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_loggedMaterialPaths;
+    usize m_instanceBufferCapacity = 0u;
+    usize m_materialTypedBufferCapacity = 0u;
     u64 m_instanceMutableCacheComponentMutationVersion = 0u;
 };
 

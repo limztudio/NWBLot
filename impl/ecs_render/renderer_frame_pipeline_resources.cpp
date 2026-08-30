@@ -230,7 +230,6 @@ void RendererFramePipeline::invalidateResources(){
     m_shaderSystem.invalidateResources();
     m_meshSystem.invalidateResources();
     m_materialSystem.invalidateResources();
-    m_drawState.invalidateResources();
     m_csgSystem.invalidateResources();
     m_deferredSystem.invalidateResources();
 }
@@ -416,20 +415,15 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     )
         return false;
 
-    // Refresh mesh descriptors after transparent preparation can grow shared buffers.
-    if(
-        m_preparedHasTransparentRenderers
-        && !m_materialSystem.prepareMaterialPassResources(
-            deferredTargets.framebuffer.get(),
-            MaterialPipelinePass::Opaque,
-            false,
-            m_preparedCsgFrameState,
-            nullptr
-        )
-    )
+    // Material owns capacity growth. Once every material domain pass is prepared, publish exactly one matching
+    // Mesh-owned descriptor generation for the frame and retain the prior generation on any failed refresh.
+    const ECSRenderDetail::MaterialPassBufferSnapshot materialBuffers = m_materialSystem.materialPassBufferSnapshot();
+    if(materialBuffers.valid() && !m_meshSystem.prepareMeshFrameBindings(materialBuffers))
+        return false;
+    if(hasCsgFrameWork && !materialBuffers.valid())
         return false;
 
-    // All material passes have now established their shared frame buffers.  Create CSG resources once from this
+    // All material passes have now established their frame buffers. Create CSG resources once from this
     // renderer-owned prepass so draw paths only consume the prepared layouts and handles.
     if(
         hasCsgFrameWork

@@ -6,7 +6,7 @@
 
 #include <impl/ecs_render/deferred/csg_interval_target_clear.h>
 
-#include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/shared/renderer_frame_bindings.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
 
@@ -328,7 +328,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         materialGeometryStatesGraphOwned,
         false,
         &csgResources,
-        &frameBindings
+        frameBindings
     };
     m_materialSystem.renderMaterialPassDrawItems(
         csgReceiverSurfaceDrawContext,

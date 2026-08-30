@@ -293,7 +293,7 @@ bool CsgIntervalSampleGraphTask::record(
             payload.materialGeometryStatesGraphOwned,
             payload.csgComputeEmulationOutputStatesGraphOwned,
             &payload.csgResources,
-            &payload.frameBindings
+            payload.frameBindings
         };
         if(!opaqueDrawItems.csg.empty()){
             if(payload.csgComputeEmulationOutputStatesGraphOwned){

@@ -21,6 +21,9 @@ RendererMeshState::RendererMeshState(Core::Alloc::GlobalArena& arena)
 
 void RendererMeshState::invalidateResources(){
     m_meshes.clear();
+    m_meshViewBuffer.reset();
+    m_frameBindings = {};
+    m_meshViewGpuDataValid = false;
 }
 
 

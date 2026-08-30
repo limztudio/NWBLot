@@ -7,7 +7,7 @@
 
 #include <impl/global.h>
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
-#include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/shared/renderer_frame_bindings.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 
 #include <core/graphics/gpu_timing.h>

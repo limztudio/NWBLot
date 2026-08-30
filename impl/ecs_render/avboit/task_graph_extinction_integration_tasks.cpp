@@ -122,7 +122,7 @@ void AvboitExtinctionComputeEmulationGraphTask::discardTiming(Optional<Core::Gpu
         payload.materialGeometryStatesGraphOwned,
         true,
         csgComputeEmulation ? &payload.csgResources : nullptr,
-        &payload.frameBindings
+        payload.frameBindings
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
@@ -213,7 +213,7 @@ void AvboitExtinctionSharedComputeEmulationGraphTask::discardTiming(Optional<Cor
         payload.materialGeometryStatesGraphOwned,
         true,
         nullptr,
-        &payload.frameBindings
+        payload.frameBindings
     };
     if(payload.phase == Phase::Generate){
         materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);

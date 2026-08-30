@@ -8,7 +8,6 @@
 #include <impl/ecs_render/material/material_shader_variants_private.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/shader/shader_system.h>
-#include <impl/ecs_render/shared/renderer_state.h>
 
 #include <impl/assets/graphics/csg/names.h>
 #include <impl/assets_material/shader_stage_names.h>
@@ -389,9 +388,9 @@ bool RendererMaterialSystem::createRendererPipeline(
     };
 
     auto tryBuildComputePipeline = [&]() -> bool{
-        NWB_ASSERT(m_drawState.m_computeBindingLayout);
-        NWB_ASSERT(m_drawState.m_emulationVertexShader);
-        NWB_ASSERT(m_drawState.m_emulationInputLayout);
+        NWB_ASSERT(m_materialState.m_computeBindingLayout);
+        NWB_ASSERT(m_materialState.m_emulationVertexShader);
+        NWB_ASSERT(m_materialState.m_emulationInputLayout);
         const Name& meshComputeArchiveStageName = MaterialShaderStageNames::s_MeshComputeArchiveStageName;
         if(!m_shaderSystem.loadShader(
             resources.computeShader,
@@ -406,7 +405,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             return false;
         Core::ComputePipelineDesc computeDesc;
         computeDesc.setComputeShader(resources.computeShader);
-        computeDesc.addBindingLayout(m_drawState.m_computeBindingLayout);
+        computeDesc.addBindingLayout(m_materialState.m_computeBindingLayout);
         // The compute-emulation mesh stage shares the same heap-backed source-stream runtime as the mesh-shader
         // path, so it needs the persistent tables before its dispatch as well.
         computeDesc
@@ -420,8 +419,8 @@ bool RendererMaterialSystem::createRendererPipeline(
         }
 
         Core::GraphicsPipelineDesc emulationDesc;
-        emulationDesc.setInputLayout(m_drawState.m_emulationInputLayout);
-        emulationDesc.setVertexShader(m_drawState.m_emulationVertexShader);
+        emulationDesc.setInputLayout(m_materialState.m_emulationInputLayout);
+        emulationDesc.setVertexShader(m_materialState.m_emulationVertexShader);
         emulationDesc.setPixelShader(resources.pixelShader);
         emulationDesc.setRenderState(renderState);
         emulationDesc.addBindingLayout(materialPassBindingLayout);

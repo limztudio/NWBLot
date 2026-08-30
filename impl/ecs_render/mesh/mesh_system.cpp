@@ -21,15 +21,13 @@ RendererMeshSystem::RendererMeshSystem(
     Core::ECS::World& world,
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,
-    RendererMeshState& meshState,
-    RendererDrawState& drawState
+    RendererMeshState& meshState
 )
     : m_arena(arena)
     , m_world(world)
     , m_graphics(graphics)
     , m_assetManager(assetManager)
     , m_meshState(meshState)
-    , m_drawState(drawState)
 {}
 
 

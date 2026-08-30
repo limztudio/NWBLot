@@ -48908,6 +48908,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
     ASSERT_TRUE(graphicsQueue.valid());
     const GpuPhysicalQueueInfo* const graphicsQueueInfo = device.getPhysicalQueueInfo(graphicsQueue);
     ASSERT_NE(graphicsQueueInfo, nullptr);
+    const bool comparableTimestamps = device.supportsComparableGpuTimestamps(graphicsQueue);
     if(graphicsQueueInfo->timestampValidBits == 0u)
         GTEST_SKIP() << "Graph-owned automatic timing: primary Graphics queue exposes no timestamp bits.";
 
@@ -49335,23 +49336,32 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
     ASSERT_TRUE(taskPacketStatistics.valid());
     ASSERT_TRUE(taskStatistics.valid());
     ASSERT_TRUE(companionTimingStatistics.valid());
-    ASSERT_TRUE(envelopeOverlapStatistics.valid());
-    ASSERT_TRUE(envelopeInternalIdleStatistics.valid());
-    ASSERT_TRUE(packetPairOverlapStatistics.valid());
     EXPECT_EQ(envelopeOnlyPacketStatistics.sampleCount, 1u);
     EXPECT_EQ(packetOnlyPacketStatistics.sampleCount, 1u);
     EXPECT_EQ(taskPacketStatistics.sampleCount, 1u);
     EXPECT_EQ(taskStatistics.sampleCount, 1u);
     EXPECT_EQ(companionTimingStatistics.sampleCount, 1u);
-    EXPECT_EQ(envelopeOverlapStatistics.sampleCount, 1u);
-    EXPECT_EQ(envelopeInternalIdleStatistics.sampleCount, 1u);
-    EXPECT_EQ(packetPairOverlapStatistics.sampleCount, 1u);
-    EXPECT_DOUBLE_EQ(envelopeOverlapStatistics.seconds, 0.0);
-    EXPECT_GE(envelopeInternalIdleStatistics.seconds, 0.0);
-    EXPECT_GE(packetPairOverlapStatistics.seconds, 0.0);
-    EXPECT_EQ(envelopeOverlapStatistics.firstSampleFrameIndex, 260u);
-    EXPECT_EQ(envelopeInternalIdleStatistics.firstSampleFrameIndex, 260u);
-    EXPECT_EQ(packetPairOverlapStatistics.firstSampleFrameIndex, 260u);
+    // Partial-width Vulkan timestamps retain queue-local durations but cannot safely correlate absolute endpoints
+    // across submissions. Only the derived metrics depend on that stronger calibrated 64-bit timestamp contract.
+    if(comparableTimestamps){
+        ASSERT_TRUE(envelopeOverlapStatistics.valid());
+        ASSERT_TRUE(envelopeInternalIdleStatistics.valid());
+        ASSERT_TRUE(packetPairOverlapStatistics.valid());
+        EXPECT_EQ(envelopeOverlapStatistics.sampleCount, 1u);
+        EXPECT_EQ(envelopeInternalIdleStatistics.sampleCount, 1u);
+        EXPECT_EQ(packetPairOverlapStatistics.sampleCount, 1u);
+        EXPECT_DOUBLE_EQ(envelopeOverlapStatistics.seconds, 0.0);
+        EXPECT_GE(envelopeInternalIdleStatistics.seconds, 0.0);
+        EXPECT_GE(packetPairOverlapStatistics.seconds, 0.0);
+        EXPECT_EQ(envelopeOverlapStatistics.firstSampleFrameIndex, 260u);
+        EXPECT_EQ(envelopeInternalIdleStatistics.firstSampleFrameIndex, 260u);
+        EXPECT_EQ(packetPairOverlapStatistics.firstSampleFrameIndex, 260u);
+    }
+    else{
+        EXPECT_FALSE(envelopeOverlapStatistics.valid());
+        EXPECT_FALSE(envelopeInternalIdleStatistics.valid());
+        EXPECT_FALSE(packetPairOverlapStatistics.valid());
+    }
     EXPECT_FALSE(timingSink.stats(outsidePrefixPacketScope).valid());
     EXPECT_FALSE(timingSink.stats(outsidePrefixIdentity).valid());
     EXPECT_FALSE(timingSink.stats(envelopeOnlyIdentity).valid());

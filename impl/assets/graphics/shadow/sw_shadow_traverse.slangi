@@ -78,8 +78,10 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     //
     // Crossing integration is order-independent; never narrow tMax for transparent occluders.
     uint stack[NWB_SW_SHADOW_MESH_STACK_SIZE];
-    uint stackPointer = 0u;
-    uint nodeIndex = 0u; // per-mesh root
+    stack[0u] = 0u;
+    uint stackPointer = 1u;
+    --stackPointer;
+    uint nodeIndex = stack[stackPointer]; // per-mesh root
 
     // Child nodes are prevalidated by parent ranking; test only the root at loop entry.
     {
@@ -130,7 +132,8 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
             }
             if(stackPointer == 0u)
                 return;
-            nodeIndex = stack[--stackPointer];
+            --stackPointer;
+            nodeIndex = stack[stackPointer];
         }
         else{
             const uint left = node.leftChild;
@@ -145,7 +148,8 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
             if(leftMiss && rightMiss){
                 if(stackPointer == 0u)
                     return;
-                nodeIndex = stack[--stackPointer];
+                --stackPointer;
+                nodeIndex = stack[stackPointer];
                 continue;
             }
             const uint nearChild = (tLeft <= tRight) ? left : right;
@@ -162,7 +166,8 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
                 acc.transmittance = half3(0.0h, 0.0h, 0.0h);
                 return;
             }
-            stack[stackPointer++] = farChild; // defer; descend the near child inline next iteration
+            stack[stackPointer] = farChild; // defer; descend the near child inline next iteration
+            ++stackPointer;
             nodeIndex = nearChild;
         }
     }
@@ -177,8 +182,10 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
 
     // Near-first scene traversal preserves early exits.
     uint stack[NWB_SW_SHADOW_SCENE_STACK_SIZE];
-    uint stackPointer = 0u;
-    uint nodeIndex = 0u; // root
+    stack[0u] = 0u;
+    uint stackPointer = 1u;
+    --stackPointer;
+    uint nodeIndex = stack[stackPointer]; // root
 
     {
         const NwbBvhNode root = NwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[nodeIndex];
@@ -199,7 +206,8 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
                 return;
             if(stackPointer == 0u)
                 return;
-            nodeIndex = stack[--stackPointer];
+            --stackPointer;
+            nodeIndex = stack[stackPointer];
         }
         else{
             const uint left = node.leftChild;
@@ -235,7 +243,8 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
             if(leftMiss && rightMiss){
                 if(stackPointer == 0u)
                     return;
-                nodeIndex = stack[--stackPointer];
+                --stackPointer;
+                nodeIndex = stack[stackPointer];
                 continue;
             }
             const uint nearChild = (tLeft <= tRight) ? left : right;
@@ -252,7 +261,8 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
                 acc.transmittance = half3(0.0h, 0.0h, 0.0h);
                 return;
             }
-            stack[stackPointer++] = farChild;
+            stack[stackPointer] = farChild;
+            ++stackPointer;
             nodeIndex = nearChild;
         }
     }

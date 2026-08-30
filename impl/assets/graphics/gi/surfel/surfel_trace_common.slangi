@@ -84,22 +84,22 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     s_surfelShG[rayIndex] = float4(0.0, 0.0, 0.0, 0.0);
     s_surfelShB[rayIndex] = float4(0.0, 0.0, 0.0, 0.0);
 
-    bool active = surfelIndex < poolCapacity;
-    NwbSurfel surfel;
-    if(active){
-        surfel = g_NwbSurfelPool[surfelIndex];
-        active = surfel.alive != 0u;
-    }
+    if(surfelIndex >= poolCapacity)
+        return;
+
+    NwbSurfel surfel = g_NwbSurfelPool[surfelIndex];
+    if(surfel.alive == 0u)
+        return;
 
     // Preserve the full current-frame estimate while a surfel seeds. Once it has a stable temporal SH history, trace
     // only half as many fresh rays: the prior estimates remain in the running mean, while every selected surfel still
     // updates on the existing round-robin cadence. Ray count is group-uniform because sampleCount belongs to the one
     // surfel selected by this workgroup.
     uint rayCount = maximumRayCount;
-    if(active && surfel.sampleCount >= NWB_SURFEL_CONVERGED_SAMPLE_COUNT)
+    if(surfel.sampleCount >= NWB_SURFEL_CONVERGED_SAMPLE_COUNT)
         rayCount = min(rayCount, NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL);
 
-    if(active && rayIndex < rayCount){
+    if(rayIndex < rayCount){
         const float normalBias = g_NwbSurfelConstants.coverageRadiusBiasHyst.z;
         const float2 rotation = nwbGiFrameRotation(frameIndex);
 
@@ -135,8 +135,8 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
 #if NWB_SURFEL_USE_WAVE_REDUCE
     // Wave-intrinsic reduction: the workgroup == the wave on this device (subgroup 64 == NWB_SURFEL_RAYS_PER_SURFEL),
     // so the entire barriered groupshared tree reduce collapses to one subgroup op with no barriers and no shared
-    // memory. `active` and rayCount are uniform across the wave (per-group, not per-lane), so inactive rays sum zeros
-    // and the lane-0 broadcast below yields the correct per-surfel SH sum.
+    // memory. rayCount is uniform across the wave (per-group, not per-lane), so inactive rays sum zeros and the lane-0
+    // broadcast below yields the correct per-surfel SH sum.
     const float4 waveR = WaveActiveSum(s_surfelShR[rayIndex]);
     const float4 waveG = WaveActiveSum(s_surfelShG[rayIndex]);
     const float4 waveB = WaveActiveSum(s_surfelShB[rayIndex]);
@@ -161,7 +161,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     const float4 sumB = s_surfelShB[0];
 #endif
 
-    if(rayIndex == 0u && active){
+    if(rayIndex == 0u){
         const float projectionScale = nwbSurfelShProjectionScale(rayCount);
         const float4 frameShR = sumR * projectionScale;
         const float4 frameShG = sumG * projectionScale;

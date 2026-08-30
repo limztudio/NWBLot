@@ -25,6 +25,11 @@
   - full debug build/test: `cmake --build --preset windows-clang-arm64-dbg`, then `ctest --preset windows-clang-arm64-dbg`
 
 - Windows requirements
+  - Install Visual Studio 2022 Build Tools (or Visual Studio 2022) with these native build components:
+    - `Microsoft.VisualStudio.Workload.VCTools` (`Desktop development with C++`).
+    - `Microsoft.VisualStudio.Component.VC.Tools.ARM64` (MSVC v143 ARM64 tools and libraries).
+    - `Microsoft.VisualStudio.Component.VC.CMake.Project` (CMake tools for Windows and the Visual Studio Ninja build).
+    - A Windows 11 SDK. `Microsoft.VisualStudio.Component.Windows11SDK.26100` / SDK `10.0.26100.0` is verified.
   - Ninja must be available, or discoverable through `NWB_NINJA` / `NWB_NINJA_ROOT`.
   - Clang/LLVM must be available, or discoverable through `NWB_LLVM_ROOT` / `LLVM_ROOT`.
   - `VULKAN_SDK` must be set.

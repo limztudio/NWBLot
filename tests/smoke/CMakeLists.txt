@@ -33,10 +33,17 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
     set(_nwb_skinning_culling_benchmark_ctest_timeout_seconds 300)
 
     function(nwb_add_window_capture_smoke TEST_NAME OUTPUT_NAME EXECUTABLE_PATH WORKING_DIRECTORY WINDOW_TITLE)
+        cmake_parse_arguments(PARSE_ARGV 5 _nwb_smoke "" "" "CONFIGURATIONS")
+
         if(TARGET nwb_logserver)
             set(_nwb_smoke_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
         else()
             set(_nwb_smoke_logserver_args "--no-logserver")
+        endif()
+        if(_nwb_smoke_CONFIGURATIONS)
+            set(_nwb_smoke_configuration_args CONFIGURATIONS ${_nwb_smoke_CONFIGURATIONS})
+        else()
+            set(_nwb_smoke_configuration_args)
         endif()
         add_test(
             NAME "${TEST_NAME}"
@@ -48,7 +55,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
                 "--output" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/${OUTPUT_NAME}"
                 "--window-title" "${WINDOW_TITLE}"
                 ${_nwb_smoke_logserver_args}
-                ${ARGN}
+                ${_nwb_smoke_UNPARSED_ARGUMENTS}
+            ${_nwb_smoke_configuration_args}
         )
         set_tests_properties("${TEST_NAME}" PROPERTIES
             RESOURCE_LOCK nwb_display
@@ -839,11 +847,11 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "--reject-log-message" "VUID-"
             "--reject-log-message" "Validation Error"
             "--reject-log-message" "failed to resolve shader"
+            CONFIGURATIONS dbg opt
         )
         set_tests_properties(nwb_hybrid_shadow_boundary_healthy_capture_smoke PROPERTIES
             ENVIRONMENT "NWB_HYBRID_SHADOW_BOUNDARY_OPAQUE_BASELINE=0;NWB_STRESS_TEST_SPIN_ANGLE=0.6"
         )
-        set_property(TEST nwb_hybrid_shadow_boundary_healthy_capture_smoke PROPERTY CONFIGURATIONS "dbg;opt")
 
         nwb_add_window_capture_smoke(
             nwb_hybrid_shadow_boundary_opaque_capture_smoke
@@ -890,11 +898,11 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "--reject-log-message" "VUID-"
             "--reject-log-message" "Validation Error"
             "--reject-log-message" "failed to resolve shader"
+            CONFIGURATIONS dbg opt
         )
         set_tests_properties(nwb_hybrid_shadow_boundary_opaque_capture_smoke PROPERTIES
             ENVIRONMENT "NWB_HYBRID_SHADOW_BOUNDARY_OPAQUE_BASELINE=1;NWB_STRESS_TEST_SPIN_ANGLE=0.6"
         )
-        set_property(TEST nwb_hybrid_shadow_boundary_opaque_capture_smoke PROPERTY CONFIGURATIONS "dbg;opt")
 
         # M4 target-hardware A/B pair. Both binaries use the same fixed-friendly stress scene and cooked runtime
         # assets; the synchronous baseline explicitly disables the default async-lane request. The runner under

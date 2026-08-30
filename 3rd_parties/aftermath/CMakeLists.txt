@@ -11,9 +11,9 @@
 
 set(_nwb_aftermath_include "${CMAKE_CURRENT_LIST_DIR}/include")
 
-if(WIN32)
+if(WIN32 AND NWB_OUTPUT_ARCH STREQUAL "x64")
     set(_nwb_aftermath_runtime "${CMAKE_CURRENT_LIST_DIR}/lib/windows/x64/GFSDK_Aftermath_Lib.x64.dll")
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NWB_OUTPUT_ARCH STREQUAL "x64")
     set(_nwb_aftermath_runtime "${CMAKE_CURRENT_LIST_DIR}/lib/linux/x64/libGFSDK_Aftermath_Lib.x64.so")
 else()
     set(_nwb_aftermath_runtime "")

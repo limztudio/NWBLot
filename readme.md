@@ -1,4 +1,4 @@
-- Targets are x64 only; 32-bit targets are intentionally unsupported.
+- Targets support x64 and Windows ARM64; 32-bit targets are intentionally unsupported.
 
 - Supported build configurations are `dbg`, `opt`, and `fin`.
   - `dbg`: no optimization and no inlining.
@@ -15,6 +15,14 @@
   - testbed build: `cmake --build --preset windows-clang-testbed-dbg --target testbed`
   - full configure/test preset: `cmake --preset windows-clang-x64`
   - Visual Studio can open the repository root as a CMake project; builds use Ninja + `clang`/`clang++`.
+
+- Windows ARM64 quick start
+  - engine-only configure: `cmake --preset windows-clang-engine-arm64`
+  - engine-only build: `cmake --build --preset windows-clang-engine-arm64-dbg --target nwb_resource_cooker`
+  - testbed configure: `cmake --preset windows-clang-testbed-arm64`
+  - testbed build: `cmake --build --preset windows-clang-testbed-arm64-dbg --target testbed`
+  - full configure: `cmake --preset windows-clang-arm64`
+  - full debug build/test: `cmake --build --preset windows-clang-arm64-dbg`, then `ctest --preset windows-clang-arm64-dbg`
 
 - Windows requirements
   - Ninja must be available, or discoverable through `NWB_NINJA` / `NWB_NINJA_ROOT`.

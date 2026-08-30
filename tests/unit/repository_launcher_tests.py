@@ -19,6 +19,12 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertEqual("linux", launcher.host_platform_name("Linux"))
         self.assertEqual("darwin", launcher.host_platform_name("Darwin"))
 
+    def test_host_architecture_names_match_cmake_output_names(self):
+        self.assertEqual("x64", launcher.host_arch_name("AMD64"))
+        self.assertEqual("x64", launcher.host_arch_name("x86_64"))
+        self.assertEqual("arm64", launcher.host_arch_name("ARM64"))
+        self.assertEqual("arm64", launcher.host_arch_name("aarch64"))
+
     def test_default_build_dirs_follow_platform_domain_and_arch(self):
         root = Path(os.sep) / "repo"
         self.assertEqual(
@@ -29,10 +35,19 @@ class LauncherPlatformTests(unittest.TestCase):
             root / "__cmake" / "build" / "linux-clang-x64",
             launcher.default_build_dir(root, "linux", "full", "x64"),
         )
+        self.assertEqual(
+            root / "__cmake" / "build" / "windows-clang-arm64",
+            launcher.default_build_dir(root, "windows", "full", "arm64"),
+        )
 
     def test_default_build_presets_follow_platform_domain_and_config(self):
         self.assertEqual("linux-clang-dbg", launcher.default_build_preset_name("linux", "full", "dbg"))
         self.assertEqual("linux-clang-engine-fin", launcher.default_build_preset_name("linux", "engine", "fin"))
+        self.assertEqual("windows-clang-arm64-dbg", launcher.default_build_preset_name("windows", "full", "dbg", "arm64"))
+        self.assertEqual(
+            "windows-clang-engine-arm64-fin",
+            launcher.default_build_preset_name("windows", "engine", "fin", "arm64"),
+        )
 
     def test_explicit_configure_preset_selects_matching_build_directory(self):
         root = Path(os.sep) / "repo"
@@ -40,7 +55,7 @@ class LauncherPlatformTests(unittest.TestCase):
         args = argparse.Namespace(
             repo_root=root,
             platform="linux",
-            arch="x64",
+            arch=None,
             domain=None,
             configure_preset="linux-clang-engine-x64",
             build_dir=None,
@@ -50,6 +65,21 @@ class LauncherPlatformTests(unittest.TestCase):
         settings = launcher.resolve_launch_settings(args, "full")
         self.assertEqual(resolved_root / "__cmake" / "build" / "linux-clang-engine-x64", settings.build_dir)
         self.assertEqual("engine", settings.domain)
+        self.assertEqual("x64", settings.arch)
+
+    def test_explicit_architecture_must_match_configure_preset(self):
+        args = argparse.Namespace(
+            repo_root=Path(os.sep) / "repo",
+            platform="windows",
+            arch="arm64",
+            domain=None,
+            configure_preset="windows-clang-x64",
+            build_dir=None,
+            config="dbg",
+            cmake=None,
+        )
+        with self.assertRaisesRegex(SystemExit, "conflicts with configure preset"):
+            launcher.resolve_launch_settings(args, "full")
 
     def test_output_root_matches_engine_and_domain_layouts(self):
         root = Path(os.sep) / "repo"

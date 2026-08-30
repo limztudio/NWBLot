@@ -44,11 +44,13 @@ if(WIN32)
     target_compile_definitions(nwb_vendor_tbb PRIVATE
         __TBB_BUILD
         __TBB_SKIP_DEPENDENCY_SIGNATURE_VERIFICATION=1
-        __TBB_USE_ITT_NOTIFY
         _CRT_SECURE_NO_WARNINGS
     )
-    if(NWB_COMPILER_IS_CLANG)
-        target_compile_options(nwb_vendor_tbb PRIVATE -mrtm -mwaitpkg)
+    if(NWB_OUTPUT_ARCH STREQUAL "x64")
+        target_compile_definitions(nwb_vendor_tbb PRIVATE __TBB_USE_ITT_NOTIFY)
+        if(NWB_COMPILER_IS_CLANG)
+            target_compile_options(nwb_vendor_tbb PRIVATE -mrtm -mwaitpkg)
+        endif()
     endif()
     if(NWB_COMPILER_FRONTEND_MSVC)
         target_compile_options(nwb_vendor_tbb PRIVATE /wd4324)
@@ -78,11 +80,13 @@ if(WIN32)
     target_include_directories(nwb_vendor_tbbmalloc SYSTEM PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
     target_compile_definitions(nwb_vendor_tbbmalloc PRIVATE
         __TBBMALLOC_BUILD
-        __TBB_USE_ITT_NOTIFY
         _CRT_SECURE_NO_WARNINGS
     )
-    if(NWB_COMPILER_IS_CLANG)
-        target_compile_options(nwb_vendor_tbbmalloc PRIVATE -mrtm -mwaitpkg)
+    if(NWB_OUTPUT_ARCH STREQUAL "x64")
+        target_compile_definitions(nwb_vendor_tbbmalloc PRIVATE __TBB_USE_ITT_NOTIFY)
+        if(NWB_COMPILER_IS_CLANG)
+            target_compile_options(nwb_vendor_tbbmalloc PRIVATE -mrtm -mwaitpkg)
+        endif()
     endif()
     if(NWB_COMPILER_FRONTEND_MSVC)
         target_compile_options(nwb_vendor_tbbmalloc PRIVATE /wd4324 /wd4267 /wd4244 /wd4245 /wd4458)

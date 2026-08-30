@@ -7,7 +7,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/CodeGen.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/GeneralOutput.cmake")
 
 macro(nwb_configure_project)
-    nwb_require_x64()
+    nwb_require_supported_architecture()
     nwb_configure_build_configs()
     nwb_configure_compiler_frontend()
     if(NOT NWB_COMPILER_IS_CLANG)

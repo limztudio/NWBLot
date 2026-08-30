@@ -2,9 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "mesh_system.h"
-
-#include <impl/ecs_render/mesh/renderer_mesh_state.h>
+#include "renderer_mesh_state.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,27 +14,13 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererMeshSystem::RendererMeshSystem(
-    Core::Alloc::GlobalArena& arena,
-    Core::ECS::World& world,
-    Core::Graphics& graphics,
-    Core::Assets::AssetManager& assetManager,
-    RendererMeshState& meshState,
-    RendererDrawState& drawState
-)
-    : m_arena(arena)
-    , m_world(world)
-    , m_graphics(graphics)
-    , m_assetManager(assetManager)
-    , m_meshState(meshState)
-    , m_drawState(drawState)
+RendererMeshState::RendererMeshState(Core::Alloc::GlobalArena& arena)
+    : m_meshes(0, Hasher<Name>(), EqualTo<Name>(), arena)
 {}
 
 
-void RendererMeshSystem::invalidateResources(){
-    releaseAllMeshGeometryHeapHandles();
-    releaseMeshFrameHeapHandles();
-    m_meshState.invalidateResources();
+void RendererMeshState::invalidateResources(){
+    m_meshes.clear();
 }
 
 

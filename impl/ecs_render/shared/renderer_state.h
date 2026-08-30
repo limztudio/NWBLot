@@ -10,7 +10,6 @@
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/ecs_render/material/renderer_draw_types.h>
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
-#include <impl/ecs_render/mesh/renderer_mesh_types.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 
 #include <core/ecs/entity_id.h>
@@ -76,21 +75,6 @@ using RtMeshHeapHandleCache = HashMap<
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-class RendererMeshState final : NoCopy{
-    friend class RendererMeshSystem;
-
-public:
-    explicit RendererMeshState(Core::Alloc::GlobalArena& arena);
-
-
-private:
-    void invalidateResources();
-
-
-private:
-    HashMap<Name, MeshResources, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_meshes;
-};
 
 class RendererMaterialState final : NoCopy{
     friend class RendererMaterialSystem;

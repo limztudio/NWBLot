@@ -167,6 +167,86 @@ TEST(EcsGraphics, MeshSystemOwnsOnlyItsNarrowConstructionBoundary){
 }
 
 
+TEST(EcsGraphics, MeshOwnsItsPrivateRendererState){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+    AString stateHeaderSource;
+    AString stateSystemSource;
+    AString sharedHeaderSource;
+    AString sharedSystemSource;
+    AString meshHeaderSource;
+    AString meshSystemSource;
+    AString meshResourcesSource;
+    AString meshBindingsSource;
+    AString meshViewSource;
+    AString pipelineHeaderSource;
+    AString rendererCmakeSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "renderer_mesh_state.h", stateHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "renderer_mesh_state.cpp", stateSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", sharedHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.cpp", sharedSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.h", meshHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.cpp", meshSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_resources.cpp", meshResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_bindings.cpp", meshBindingsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_view.cpp", meshViewSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.h", pipelineHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "CMakeLists.txt", rendererCmakeSource));
+
+    const AString compactStateHeaderStorage = CompactSource(AStringView(stateHeaderSource.data(), stateHeaderSource.size()));
+    const AStringView compactStateHeader(compactStateHeaderStorage.data(), compactStateHeaderStorage.size());
+    const AString compactStateSystemStorage = CompactSource(AStringView(stateSystemSource.data(), stateSystemSource.size()));
+    const AStringView compactStateSystem(compactStateSystemStorage.data(), compactStateSystemStorage.size());
+    const AString compactSharedHeaderStorage = CompactSource(AStringView(sharedHeaderSource.data(), sharedHeaderSource.size()));
+    const AStringView compactSharedHeader(compactSharedHeaderStorage.data(), compactSharedHeaderStorage.size());
+
+    EXPECT_TRUE(ContainsText(compactStateHeader, "classRendererMeshStatefinal:NoCopy{friendclassRendererMeshSystem;"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererFramePipeline;"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererAvboitSystem;"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererCsgSystem;"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererDeferredSystem;"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererMaterialSystem;"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererRayTracingSystem;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "explicitRendererMeshState(Core::Alloc::GlobalArena&arena);"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "private:voidinvalidateResources();"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "public:voidinvalidateResources();"));
+    EXPECT_TRUE(ContainsText(
+        compactStateHeader,
+        "HashMap<Name,MeshResources,Hasher<Name>,EqualTo<Name>,Core::Alloc::GlobalArena>m_meshes;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compactStateSystem,
+        "RendererMeshState::RendererMeshState(Core::Alloc::GlobalArena&arena):m_meshes(0,Hasher<Name>(),EqualTo<Name>(),arena){}"
+    ));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "voidRendererMeshState::invalidateResources(){m_meshes.clear();}"));
+    EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <impl/ecs_render/mesh/renderer_mesh_types.h>"));
+    EXPECT_FALSE(ContainsText(stateHeaderSource, "shared/renderer_state.h"));
+    EXPECT_FALSE(ContainsText(stateHeaderSource, "mesh/mesh_system.h"));
+    EXPECT_FALSE(ContainsText(sharedHeaderSource, "RendererMeshState"));
+    EXPECT_FALSE(ContainsText(sharedSystemSource, "RendererMeshState"));
+    EXPECT_FALSE(ContainsText(sharedHeaderSource, "mesh/renderer_mesh_types.h"));
+    EXPECT_FALSE(ContainsText(sharedHeaderSource, "mesh/renderer_mesh_state.h"));
+    EXPECT_TRUE(ContainsText(
+        compactSharedHeader,
+        "classRendererDrawStatefinal:NoCopy{friendclassRendererMeshSystem;friendclassRendererMaterialSystem;"
+    ));
+    EXPECT_TRUE(ContainsText(meshHeaderSource, "class RendererMeshState;"));
+    EXPECT_FALSE(ContainsText(meshHeaderSource, "renderer_mesh_state.h"));
+    EXPECT_TRUE(ContainsText(meshSystemSource, "#include <impl/ecs_render/mesh/renderer_mesh_state.h>"));
+    EXPECT_FALSE(ContainsText(meshSystemSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_TRUE(ContainsText(meshResourcesSource, "#include <impl/ecs_render/mesh/renderer_mesh_state.h>"));
+    EXPECT_FALSE(ContainsText(meshResourcesSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_TRUE(ContainsText(meshBindingsSource, "#include <impl/ecs_render/mesh/renderer_mesh_state.h>"));
+    EXPECT_TRUE(ContainsText(meshBindingsSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_FALSE(ContainsText(meshViewSource, "renderer_mesh_state.h"));
+    EXPECT_TRUE(ContainsText(meshViewSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_TRUE(ContainsText(pipelineHeaderSource, "#include <impl/ecs_render/mesh/renderer_mesh_state.h>"));
+    EXPECT_TRUE(ContainsText(pipelineHeaderSource, "RendererMeshState m_meshState;"));
+    EXPECT_TRUE(ContainsText(rendererCmakeSource, "${CMAKE_CURRENT_LIST_DIR}/mesh/renderer_mesh_state.cpp"));
+    EXPECT_TRUE(ContainsText(rendererCmakeSource, "${CMAKE_CURRENT_LIST_DIR}/mesh/renderer_mesh_state.h"));
+}
+
+
 TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -180,6 +260,7 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     AString rayTracingDetailSource;
     AString rayTracingSoftShadowSource;
     AString rayTracingSwBvhSource;
+    AString meshStateSource;
     AString rendererStateSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.h", meshHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_resources.cpp", meshResourcesSource));
@@ -191,6 +272,7 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_detail.cpp", rayTracingDetailSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow.cpp", rayTracingSoftShadowSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", rayTracingSwBvhSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "renderer_mesh_state.h", meshStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
 
     const AStringView meshHeader(meshHeaderSource.data(), meshHeaderSource.size());
@@ -203,6 +285,8 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     const AStringView rayTracingDetail(rayTracingDetailSource.data(), rayTracingDetailSource.size());
     const AStringView rayTracingSoftShadow(rayTracingSoftShadowSource.data(), rayTracingSoftShadowSource.size());
     const AStringView rayTracingSwBvh(rayTracingSwBvhSource.data(), rayTracingSwBvhSource.size());
+    const AString compactMeshStateStorage = CompactSource(AStringView(meshStateSource.data(), meshStateSource.size()));
+    const AStringView compactMeshState(compactMeshStateStorage.data(), compactMeshStateStorage.size());
     const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
     const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
 
@@ -240,12 +324,7 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     EXPECT_FALSE(ContainsText(rayTracingPrivate, "mesh_view_private.h"));
     EXPECT_FALSE(ContainsText(rayTracingSoftShadow, "reinterpret_cast<const ECSRenderDetail::MeshViewGpuData*>"));
 
-    const usize meshStateBegin = compactRendererState.find("classRendererMeshStatefinal:NoCopy{");
-    const usize meshStateEnd = compactRendererState.find("classRendererMaterialStatefinal:NoCopy{", meshStateBegin);
-    ASSERT_NE(meshStateBegin, AStringView::npos);
-    ASSERT_NE(meshStateEnd, AStringView::npos);
-    const AStringView meshState = compactRendererState.substr(meshStateBegin, meshStateEnd - meshStateBegin);
-    EXPECT_FALSE(ContainsText(meshState, "friendclassRendererRayTracingSystem;"));
+    EXPECT_FALSE(ContainsText(compactMeshState, "friendclassRendererRayTracingSystem;"));
 
     const usize drawStateBegin = compactRendererState.find("classRendererDrawStatefinal:NoCopy{");
     const usize drawStateEnd = compactRendererState.find("structRtSceneBvhState{", drawStateBegin);
@@ -1024,6 +1103,7 @@ TEST(EcsGraphics, RootInvalidatesFeatureResourcesThroughDomainSystems){
     AString csgHeaderSource;
     AString csgSystemSource;
     AString csgStateSource;
+    AString meshStateSource;
     AString rendererStateSource;
     AString rootResourcesSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.h", meshHeaderSource));
@@ -1033,6 +1113,7 @@ TEST(EcsGraphics, RootInvalidatesFeatureResourcesThroughDomainSystems){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_system.h", csgHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_system.cpp", csgSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "renderer_csg_state.h", csgStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "renderer_mesh_state.h", meshStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_resources.cpp", rootResourcesSource));
 
@@ -1050,6 +1131,8 @@ TEST(EcsGraphics, RootInvalidatesFeatureResourcesThroughDomainSystems){
     const AStringView compactCsgSystem(compactCsgSystemStorage.data(), compactCsgSystemStorage.size());
     const AString compactCsgStateStorage = CompactSource(AStringView(csgStateSource.data(), csgStateSource.size()));
     const AStringView compactCsgState(compactCsgStateStorage.data(), compactCsgStateStorage.size());
+    const AString compactMeshStateStorage = CompactSource(AStringView(meshStateSource.data(), meshStateSource.size()));
+    const AStringView compactMeshState(compactMeshStateStorage.data(), compactMeshStateStorage.size());
     const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
     const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
     const AString compactRootResourcesStorage = CompactSource(AStringView(rootResourcesSource.data(), rootResourcesSource.size()));
@@ -1064,19 +1147,15 @@ TEST(EcsGraphics, RootInvalidatesFeatureResourcesThroughDomainSystems){
     EXPECT_FALSE(ContainsText(compactMaterialHeader, "public:voidreleaseMaterialResourceReferences();"));
     EXPECT_FALSE(ContainsText(compactCsgHeader, "public:voidreleaseCsgClipContextHeapHandles();"));
 
-    const usize meshStateBegin = compactRendererState.find("classRendererMeshStatefinal:NoCopy{");
-    const usize meshStateEnd = compactRendererState.find("classRendererMaterialStatefinal:NoCopy{", meshStateBegin);
-    const usize materialStateBegin = meshStateEnd;
+    const usize materialStateBegin = compactRendererState.find("classRendererMaterialStatefinal:NoCopy{");
     const usize materialStateEnd = compactRendererState.find("classRendererDrawStatefinal:NoCopy{", materialStateBegin);
-    ASSERT_NE(meshStateBegin, AStringView::npos);
-    ASSERT_NE(meshStateEnd, AStringView::npos);
+    ASSERT_NE(materialStateBegin, AStringView::npos);
     ASSERT_NE(materialStateEnd, AStringView::npos);
-    const AStringView meshState = compactRendererState.substr(meshStateBegin, meshStateEnd - meshStateBegin);
     const AStringView materialState = compactRendererState.substr(materialStateBegin, materialStateEnd - materialStateBegin);
-    EXPECT_TRUE(ContainsText(meshState, "private:voidinvalidateResources();"));
+    EXPECT_TRUE(ContainsText(compactMeshState, "private:voidinvalidateResources();"));
     EXPECT_TRUE(ContainsText(materialState, "private:voidinvalidateResources();"));
     EXPECT_TRUE(ContainsText(compactCsgState, "private:voidinvalidateResources();"));
-    EXPECT_FALSE(ContainsText(meshState, "public:voidinvalidateResources();"));
+    EXPECT_FALSE(ContainsText(compactMeshState, "public:voidinvalidateResources();"));
     EXPECT_FALSE(ContainsText(materialState, "public:voidinvalidateResources();"));
     EXPECT_FALSE(ContainsText(compactCsgState, "public:voidinvalidateResources();"));
 

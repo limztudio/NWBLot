@@ -5,7 +5,7 @@
 #include "mesh_system.h"
 
 #include <impl/ecs_render/kernel/arena_names.h>
-#include <impl/ecs_render/shared/renderer_state.h>
+#include <impl/ecs_render/mesh/renderer_mesh_state.h>
 
 #include <core/alloc/scratch.h>
 #include <core/assets/manager.h>

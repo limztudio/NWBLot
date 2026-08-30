@@ -16,6 +16,7 @@
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/mesh/renderer_mesh_state.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/renderer_state.h>

@@ -4,6 +4,7 @@
 
 #include "mesh_system.h"
 
+#include <impl/ecs_render/mesh/renderer_mesh_state.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 #include <impl/ecs_render/shared/renderer_state.h>
 

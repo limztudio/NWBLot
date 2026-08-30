@@ -44,19 +44,6 @@ bool MaterialPipelineKeyEqualTo::operator()(const MaterialPipelineKey& lhs, cons
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererMeshState::RendererMeshState(Core::Alloc::GlobalArena& arena)
-    : m_meshes(0, Hasher<Name>(), EqualTo<Name>(), arena)
-{}
-
-
-void RendererMeshState::invalidateResources(){
-    m_meshes.clear();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 RendererMaterialState::RendererMaterialState(Core::Alloc::GlobalArena& arena)
     : m_surfaceInfos(0, Hasher<Name>(), EqualTo<Name>(), arena)
     , m_resourceState(arena)

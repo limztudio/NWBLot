@@ -2,9 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "mesh_system.h"
+#pragma once
 
-#include <impl/ecs_render/mesh/renderer_mesh_state.h>
+
+#include <impl/global.h>
+
+#include <impl/ecs_render/mesh/renderer_mesh_types.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,28 +19,26 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererMeshSystem::RendererMeshSystem(
-    Core::Alloc::GlobalArena& arena,
-    Core::ECS::World& world,
-    Core::Graphics& graphics,
-    Core::Assets::AssetManager& assetManager,
-    RendererMeshState& meshState,
-    RendererDrawState& drawState
-)
-    : m_arena(arena)
-    , m_world(world)
-    , m_graphics(graphics)
-    , m_assetManager(assetManager)
-    , m_meshState(meshState)
-    , m_drawState(drawState)
-{}
+class RendererMeshSystem;
 
 
-void RendererMeshSystem::invalidateResources(){
-    releaseAllMeshGeometryHeapHandles();
-    releaseMeshFrameHeapHandles();
-    m_meshState.invalidateResources();
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererMeshState final : NoCopy{
+    friend class RendererMeshSystem;
+
+public:
+    explicit RendererMeshState(Core::Alloc::GlobalArena& arena);
+
+
+private:
+    void invalidateResources();
+
+
+private:
+    HashMap<Name, MeshResources, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_meshes;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

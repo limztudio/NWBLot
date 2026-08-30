@@ -94,15 +94,49 @@ class TextureSmokeAnalysisTests(unittest.TestCase):
         self.assertEqual(analysis.blue_pixels, 2)
 
     def test_texture_smoke_analysis_isolates_red_bounce_on_the_white_receiver(self):
-        rows = [[(210, 210, 210) for _ in range(100)] for _ in range(100)]
-        for y in range(68, 76):
-            for x in range(54, 62):
+        rows = [[(210, 210, 210) for _ in range(200)] for _ in range(200)]
+        for y in range(40, 45):
+            for x in range(97, 100):
+                rows[y][x] = (104, 70, 68)
+        for y in range(126, 131):
+            for x in range(97, 100):
                 rows[y][x] = (104, 70, 68)
 
         analysis = window_capture_smoke.analyze_texture_smoke_rows(rows)
 
-        self.assertEqual(analysis.receiver_pixel_count, 15 * 14)
-        self.assertEqual(analysis.receiver_red_pixels, 8 * 8)
+        self.assertEqual(analysis.red_pixels, 2 * 3 * 5)
+        self.assertEqual(analysis.receiver_pixel_count, 5 * 7)
+        self.assertEqual(analysis.receiver_red_pixels, 3 * 5)
+
+    def test_texture_smoke_validation_requires_dense_receiver_only_red_coverage(self):
+        result = SimpleNamespace(
+            width=1280,
+            height=900,
+            texture_smoke=window_capture_smoke.TextureSmokeAnalysis(300, 300, 300, 256, 1024),
+        )
+
+        window_capture_smoke.validate_texture_smoke_result(result)
+
+        result.texture_smoke = window_capture_smoke.TextureSmokeAnalysis(300, 300, 300, 255, 1024)
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "receiver_red=255"):
+            window_capture_smoke.validate_texture_smoke_result(result)
+
+
+class TransparentCsgAnalysisTests(unittest.TestCase):
+    def test_transparent_csg_analysis_finds_sky_void_and_retained_lower_half_in_client_pixels(self):
+        background = (75, 85, 101)
+        rows = [[background for _ in range(100)] for _ in range(100)]
+        for y in range(52, 68):
+            for x in range(40, 56):
+                rows[y][x] = (83, 115, 123)
+        for y in range(75, 100):
+            for x in range(100):
+                rows[y][x] = (140, 144, 150)
+
+        analysis = window_capture_smoke.analyze_transparent_csg_rows(rows)
+
+        self.assertEqual(analysis.cut_void_pixels, analysis.cut_region_pixels)
+        self.assertEqual(analysis.remaining_center_pixels, analysis.remaining_region_pixels)
 
 
 class RuntimeLogValidationTests(unittest.TestCase):
@@ -255,7 +289,7 @@ class ShutdownLogValidationTests(unittest.TestCase):
 
 
 class WindowsCaptureOrderingTests(unittest.TestCase):
-    def test_capture_window_prepares_before_querying_the_screen_rect(self):
+    def test_capture_window_prepares_before_querying_the_client_screen_rect(self):
         hwnd = 0x4A
         output_path = Path("capture.bmp")
         calls = []
@@ -265,9 +299,9 @@ class WindowsCaptureOrderingTests(unittest.TestCase):
         def prepare(window):
             calls.append(("prepare", window))
 
-        def window_rect(window):
+        def client_rect(window):
             self.assertEqual(calls, [("prepare", hwnd)])
-            calls.append(("post-prepare-rect", window))
+            calls.append(("post-prepare-client-rect", window))
             return expected_rect
 
         def screen_bitblt(window, rect, path):
@@ -275,7 +309,7 @@ class WindowsCaptureOrderingTests(unittest.TestCase):
             return "capture"
 
         capture._prepare_capture_window = prepare
-        capture._window_rect = window_rect
+        capture._client_rect = client_rect
         capture._capture_screen_rect = screen_bitblt
 
         self.assertEqual(capture.capture_window(hwnd, output_path), "capture")
@@ -283,7 +317,7 @@ class WindowsCaptureOrderingTests(unittest.TestCase):
             calls,
             [
                 ("prepare", hwnd),
-                ("post-prepare-rect", hwnd),
+                ("post-prepare-client-rect", hwnd),
                 ("BitBlt", hwnd, expected_rect, output_path),
             ],
         )

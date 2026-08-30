@@ -25,10 +25,10 @@ STRICT_LOG_FAILURE_MESSAGES = (
     "failed to resolve shader",
 )
 
-# The textured-GI smoke has a fixed camera and a white receiver plane.  This rectangle lies below the sphere
-# silhouette, inside its foreground opaque direct shadow.  Because the light is white and the receiver has no texture
-# or tint, a red value here can only come from the textured sphere's indirect diffuse bounce.
-TEXTURE_SMOKE_RECEIVER_REGION = (0.500, 0.660, 0.650, 0.800)
+# The textured-GI smoke has a fixed camera and a white receiver plane.  This client-relative rectangle has a clear gap
+# below the sphere silhouette and covers the nearby root of its foreground opaque direct shadow.  Because the light is
+# white and the receiver has no texture or tint, a red value here can only come from the textured sphere's indirect bounce.
+TEXTURE_SMOKE_RECEIVER_REGION = (0.480, 0.625, 0.505, 0.660)
 TEXTURE_SMOKE_RECEIVER_MIN_RED = 36
 TEXTURE_SMOKE_RECEIVER_RED_CHROMA = 6
 
@@ -1634,10 +1634,12 @@ class WindowsCapture:
                 self.user32.ReleaseDC(None, screen_dc)
 
     def capture_window(self, hwnd, output_path):
+        # Capture renderer-owned client pixels on every platform. The DWM frame contains unrelated active-window
+        # chrome and makes normalized scene regions differ from the X11 drawable contract.
         self._prepare_capture_window(hwnd)
-        rect = self._window_rect(hwnd)
+        rect = self._client_rect(hwnd)
         if not rect:
-            raise SmokeFailure(f"HWND 0x{hwnd:x} rect is unavailable")
+            raise SmokeFailure(f"HWND 0x{hwnd:x} client rect is unavailable")
 
         return self._capture_screen_rect(hwnd, rect, output_path)
 
@@ -1790,7 +1792,9 @@ def validate_transparent_csg_result(result):
 def validate_texture_smoke_result(result):
     analysis = result.texture_smoke
     min_pixels = max(220, (result.width * result.height) // 4000)
-    min_receiver_red_pixels = max(512, analysis.receiver_pixel_count // 20)
+    # The receiver-only region is deliberately tight enough to exclude authored sphere texels. Require substantial
+    # coverage within that region while retaining a fixed floor that rejects isolated red noise.
+    min_receiver_red_pixels = max(256, analysis.receiver_pixel_count // 4)
     missing = []
     if analysis.red_pixels < min_pixels:
         missing.append(f"red={analysis.red_pixels}")

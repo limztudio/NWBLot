@@ -84,11 +84,10 @@ can receive an unconditional final sign-off.
   buffer task, and committed to its CPU mirror only when the matching packet is accepted. These automatic-state
   buffers return to `Common` at packet close; their first declared consumer owns the transition to
   `ConstantBuffer` or `ShaderResource`.
-- The deferred G-buffer clear is now an explicit serial bundle of five built-in Graphics clear tasks (albedo,
-  normal, world position, depth, and terminal opaque color). The first and terminal task bracket the existing
-  deferred-clear timing scope inside their native clear commands, and recording rejects a compiled route unless
-  both endpoints share the same Graphics packet; the opaque-color task therefore remains the final owner of the
-  later asynchronous handoff.
+- The albedo, normal, world-position, and depth clears are attachment load operations in the first G-buffer render
+  pass. Their first-write ownership and timing stay with that Graphics task, so a tile renderer does not materialize
+  attachment contents solely for transfer clears. Opaque color remains one standalone graph-owned UAV clear before
+  its Compute handoff, and its before/after hooks now own the complete deferred-clear timing interval.
 - A target generation's current deferred bindless selector now follows the same acceptance-safe graph path. Its
   immutable slot payload is retained before declaration and, when not yet resident, a tiny Graphics-routed built-in
   upload precedes and merges into the first Shadow Preparation packet. Its automatic retained state is

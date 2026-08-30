@@ -29,8 +29,10 @@ from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
 
 REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / "tests" / "ab"))
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
+from name_symbols import debug_name_hash_token, known_name_symbols  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE,
     STRICT_LOG_FAILURE_MESSAGES,
@@ -69,6 +71,7 @@ OPTIONAL_COMPARISON_SCOPES = (
     TRANSPARENT_RESOLVE_SCOPE,
     "render.sw_bvh_sort",
 )
+KNOWN_TIMING_SCOPES = (FRAME_SCOPE, *OPTIONAL_COMPARISON_SCOPES)
 CAPABILITY_SKIP_LOG = "StressTestSmokeProject: hybrid shadow boundary skipped because RayQuery-capable hardware is unavailable"
 DEFAULT_FORBIDDEN_LOGS = (
     *STRICT_LOG_FAILURE_MESSAGES,
@@ -152,12 +155,12 @@ class RunResult:
 
 
 def load_name_symbols(path: Optional[Path]) -> Dict[str, str]:
+    decoded = known_name_symbols(KNOWN_TIMING_SCOPES)
     if not path:
-        return {}
+        return decoded
     if not path.is_file():
         raise SmokeFailure(f"name-symbol sidecar does not exist: {path}")
 
-    decoded: Dict[str, str] = {}
     for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         fields = raw_line.split("\t")
         if len(fields) >= 3 and fields[2]:
@@ -778,29 +781,36 @@ def run_self_test() -> int:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         timing = root / "timing.txt"
+        timing_symbols = load_name_symbols(None)
+        frame_token = debug_name_hash_token(FRAME_SCOPE)
+        visibility_token = debug_name_hash_token("render.shadow_visibility")
+        opaque_token = debug_name_hash_token(OPAQUE_TRACE_SCOPE)
+        transparent_trace_token = debug_name_hash_token(TRANSPARENT_TRACE_SCOPE)
+        transparent_resolve_token = debug_name_hash_token(TRANSPARENT_RESOLVE_SCOPE)
+        assert timing_symbols[frame_token] == FRAME_SCOPE
         warmup_timing = (
             "=== interval: 20 frames / 0.5s ===\n"
-            "  render.frame: avg=4.0000 min=3.0 max=5.0 samples=20\n"
-            "  render.shadow_visibility: avg=1.2500 min=1.0 max=1.5 samples=20\n"
-            "  render.shadow_opaque_trace: avg=0.5000 min=0.4 max=0.6 samples=20\n"
-            "  render.shadow_transparent_trace: avg=0.3000 min=0.2 max=0.4 samples=20\n"
-            "  render.shadow_transparent_resolve: avg=0.2000 min=0.1 max=0.3 samples=20\n"
+            f"  {frame_token}: avg=4.0000 min=3.0 max=5.0 samples=20\n"
+            f"  {visibility_token}: avg=1.2500 min=1.0 max=1.5 samples=20\n"
+            f"  {opaque_token}: avg=0.5000 min=0.4 max=0.6 samples=20\n"
+            f"  {transparent_trace_token}: avg=0.3000 min=0.2 max=0.4 samples=20\n"
+            f"  {transparent_resolve_token}: avg=0.2000 min=0.1 max=0.3 samples=20\n"
         )
         measurement_timing = (
             "=== interval: 20 frames / 0.5s ===\n"
-            "  render.frame: avg=5.0000 min=4.0 max=6.0 samples=20\n"
-            "  render.shadow_visibility: avg=1.7500 min=1.0 max=2.0 samples=20\n"
-            "  render.shadow_opaque_trace: avg=0.6000 min=0.5 max=0.7 samples=20\n"
-            "  render.shadow_transparent_trace: avg=0.4000 min=0.3 max=0.5 samples=20\n"
-            "  render.shadow_transparent_resolve: avg=0.3000 min=0.2 max=0.4 samples=20\n"
+            f"  {frame_token}: avg=5.0000 min=4.0 max=6.0 samples=20\n"
+            f"  {visibility_token}: avg=1.7500 min=1.0 max=2.0 samples=20\n"
+            f"  {opaque_token}: avg=0.6000 min=0.5 max=0.7 samples=20\n"
+            f"  {transparent_trace_token}: avg=0.4000 min=0.3 max=0.5 samples=20\n"
+            f"  {transparent_resolve_token}: avg=0.3000 min=0.2 max=0.4 samples=20\n"
         )
         timing.write_text(warmup_timing + measurement_timing, encoding="utf-8")
-        scopes = summarize_scopes(parse_timing_file(timing, {}))
+        scopes = summarize_scopes(parse_timing_file(timing, timing_symbols))
         assert scopes[FRAME_SCOPE].median_ms == 4.5
         assert scopes["render.shadow_visibility"].positive_sample_count == 2
         assert scopes[TRANSPARENT_RESOLVE_SCOPE].positive_sample_count == 2
         measurement_offset = len(warmup_timing.encode("utf-8"))
-        measurement_scopes = summarize_scopes(parse_timing_file(timing, {}, measurement_offset))
+        measurement_scopes = summarize_scopes(parse_timing_file(timing, timing_symbols, measurement_offset))
         assert measurement_scopes[FRAME_SCOPE].median_ms == 5.0
         assert measurement_scopes[FRAME_SCOPE].sample_count == 1
 

@@ -34,8 +34,10 @@ from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 
 REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / "tests" / "ab"))
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
+from name_symbols import debug_name_hash_token, known_name_symbols  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE,
     STRICT_LOG_FAILURE_MESSAGES,
@@ -198,12 +200,12 @@ def wait_for_log_message(
 
 
 def load_name_symbols(path: Optional[Path]) -> Dict[str, str]:
+    decoded = known_name_symbols(REQUIRED_ASYNC_SCOPES)
     if not path:
-        return {}
+        return decoded
     if not path.is_file():
         raise SmokeFailure(f"Name-symbol sidecar does not exist: {path}")
 
-    decoded: Dict[str, str] = {}
     for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         fields = raw_line.split("\t")
         if len(fields) >= 3 and fields[2]:
@@ -1077,16 +1079,19 @@ def run_self_test() -> int:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         timing = root / "timing.txt"
+        frame_token = debug_name_hash_token("render.frame")
+        shadow_token = debug_name_hash_token("render.async_shadow")
+        assert frame_token == "40b0e96fbc71842a_8b1f334a9e5209dd_e341401cb88c31da_09af79e15cfb43b2_f6b5516d15dbcf7a_05406d8b5a24bcb8_9a3ecd4d8684c68f_371acbda0ef43b35"
         timing.write_text(
             "=== interval: 20 frames / 0.5s ===\n"
-            "  render.frame: avg=4.0000 min=3.0000 max=5.0000 samples=20\n"
-            "  render.async_shadow: avg=1.2500 min=0.0 max=2.0 samples=20\n"
+            f"  {frame_token}: avg=4.0000 min=3.0000 max=5.0000 samples=20\n"
+            f"  {shadow_token}: avg=1.2500 min=0.0 max=2.0 samples=20\n"
             "=== interval: 20 frames / 0.5s ===\n"
-            "  render.frame: avg=5.0000 min=4.0000 max=6.0000 samples=20\n"
-            "  render.async_shadow: avg=1.7500 min=0.0 max=2.0 samples=20\n",
+            f"  {frame_token}: avg=5.0000 min=4.0000 max=6.0000 samples=20\n"
+            f"  {shadow_token}: avg=1.7500 min=0.0 max=2.0 samples=20\n",
             encoding="utf-8",
         )
-        summaries = summarize_scopes(parse_timing_file(timing, {}))
+        summaries = summarize_scopes(parse_timing_file(timing, load_name_symbols(None)))
         assert summaries["render.frame"].median_ms == 4.5
         assert summaries["render.async_shadow"].positive_sample_count == 2
 

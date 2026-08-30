@@ -65,7 +65,18 @@ protected:
             return;
 
         s_runtimeInitialized = true;
-        s_ready = s_scope->graphics().getDevice().getDescriptorBufferManager().isEnabled();
+        auto& localDevice = s_scope->graphics().getDevice();
+        auto& localManager = localDevice.getDescriptorBufferManager();
+        if(!localManager.isEnabled())
+            return;
+
+        // Descriptor-manager ingress tests own the manager's segments. The renderer heap is a separate client that may
+        // consume an entire device-limited range, so release it before direct manager allocation tests.
+        auto& heap = localDevice.getDescriptorHeap();
+        heap.shutdown();
+        ASSERT_FALSE(heap.isInitialized());
+        ASSERT_TRUE(localManager.isEnabled());
+        s_ready = true;
     }
 
     static void TearDownTestSuite(){
@@ -120,6 +131,9 @@ TEST_F(DescriptorBufferManagerIngressTest, RejectsForeignRetaggedAndStaleStorage
     auto& foreignManager = foreignDevice.getDescriptorBufferManager();
     if(!foreignManager.isEnabled())
         GTEST_SKIP() << "Second device has no descriptor-buffer manager.";
+    auto& foreignHeap = foreignDevice.getDescriptorHeap();
+    foreignHeap.shutdown();
+    ASSERT_FALSE(foreignHeap.isInitialized());
 
     const u32 storageSize = localManager.getDescriptorSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
     ASSERT_EQ(storageSize, foreignManager.getDescriptorSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER));
@@ -251,7 +265,6 @@ TEST_F(DescriptorBufferManagerIngressTest, RejectsForeignRetaggedAndStaleStorage
 
     const u64 foreignStorageIdentity = foreignBlock.storageIdentity;
     const u64 foreignAllocationSerial = foreignBlock.allocationSerial;
-    foreignDevice.getDescriptorHeap().shutdown();
     foreignManager.shutdown();
     ASSERT_TRUE(foreignManager.initialize());
     const auto reinitializedBlock = foreignManager.allocate(

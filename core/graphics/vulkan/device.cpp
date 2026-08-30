@@ -5,6 +5,7 @@
 #include "backend.h"
 #include "arena_names.h"
 #include "device_detail.h"
+#include "resource_bindings_detail.h"
 
 #include <core/common/log.h>
 
@@ -153,6 +154,9 @@ Device::Device(const DeviceDesc& desc)
     m_pipelineCacheVolumeName.assign(VulkanDetail::s_PipelineCacheVolumeName);
 
     m_context.extensions.buffer_device_address = desc.bufferDeviceAddressSupported;
+    m_context.textureCompressionBcFeatureEnabled = desc.textureCompressionBcFeatureEnabled;
+    m_context.textureCompressionAstcLdrFeatureEnabled = desc.textureCompressionAstcLdrFeatureEnabled;
+    m_context.textureCompressionAstcHdrFeatureEnabled = desc.textureCompressionAstcHdrFeatureEnabled;
     m_context.extensions.KHR_dynamic_rendering = desc.dynamicRenderingSupported;
     m_context.extensions.KHR_synchronization2 = desc.synchronization2Supported;
     m_context.independentBlendFeatureEnabled = desc.independentBlendFeatureEnabled;
@@ -417,15 +421,16 @@ Device::Device(const DeviceDesc& desc)
     // cache, so it can select ASTC, BC, or an uncompressed fallback before allocating data.
     probeCompressedTextureFormats();
 
-    // Descriptor-buffer entry points are mandatory for this device.
-    if(
-        !m_context.extensions.EXT_descriptor_buffer
-        || !vkGetDescriptorEXT
-        || !vkGetDescriptorSetLayoutBindingOffsetEXT
-        || !vkCmdBindDescriptorBuffersEXT
-        || !vkCmdSetDescriptorBufferOffsetsEXT
-    ){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Required descriptor-buffer entry points are unavailable."));
+    const VulkanDetail::DescriptorBufferStartupPrerequisites descriptorBufferPrerequisites =
+        VulkanDetail::QueryDescriptorBufferStartupPrerequisites(m_context)
+    ;
+    const bool descriptorBufferStartupReady =
+        VulkanDetail::HasDescriptorBufferStartupPrerequisites(descriptorBufferPrerequisites)
+    ;
+
+    // Descriptor-buffer startup prerequisites are mandatory for this device.
+    if(!descriptorBufferStartupReady){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Required descriptor-buffer startup prerequisites are unavailable."));
     }
 
     if(!m_allocator.initialize())
@@ -490,19 +495,13 @@ Device::Device(const DeviceDesc& desc)
 
 
     // Initialize required global descriptor-buffer segments.
-    if(
-        m_context.extensions.EXT_descriptor_buffer
-        && vkGetDescriptorEXT
-        && vkGetDescriptorSetLayoutBindingOffsetEXT
-        && vkCmdBindDescriptorBuffersEXT
-        && vkCmdSetDescriptorBufferOffsetsEXT
-    ){
+    if(descriptorBufferStartupReady){
         if(!m_descriptorBufferManager.initialize()){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Required descriptor-buffer manager initialization failed."));
         }
     }
 
-    if(m_context.extensions.EXT_descriptor_buffer && m_descriptorBufferManager.isEnabled()){
+    if(VulkanDetail::IsDescriptorBufferBackendReady(m_context)){
         GpuDescriptorHeapDesc heapDesc;
         heapDesc.setBindlessHeapAbi(desc.bindlessHeapAbi);
         if(!m_gpuDescriptorHeap.initialize(heapDesc))

@@ -15,14 +15,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Mesh colors, normals, and tangents are already stored as 16-bit mesh attributes. Keep the non-positional
-// raster payload at that precision to reduce varying bandwidth on mobile GPUs; the pixel/AVBOIT paths explicitly
-// promote directions back to float before normalization, frame construction, or material evaluation. UVs, world
-// positions, clip positions, and depth deliberately remain float for derivative, transform, and CSG precision.
+// Mesh colors, normals, and tangents remain 16-bit in mesh storage, and material arithmetic can retain half where
+// precision permits. Raster stage interfaces use float so Vulkan devices without storageInputOutput16 can
+// run both native mesh and emulation paths; assignment conversion promotes attributes at the stage boundary. UVs,
+// world positions, clip positions, and depth remain float for derivative, transform, and CSG precision.
 #define NWB_MESH_RASTER_PAYLOAD_FIELDS \
-    [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] half4 color : COLOR0; \
-    [[vk::location(NWB_MESH_RASTER_NORMAL_LOCATION)]] half3 normal : NORMAL0; \
-    [[vk::location(NWB_MESH_RASTER_TANGENT_LOCATION)]] half4 tangent : TANGENT0; \
+    [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] float4 color : COLOR0; \
+    [[vk::location(NWB_MESH_RASTER_NORMAL_LOCATION)]] float3 normal : NORMAL0; \
+    [[vk::location(NWB_MESH_RASTER_TANGENT_LOCATION)]] float4 tangent : TANGENT0; \
     [[vk::location(NWB_MESH_RASTER_UV0_LOCATION)]] float2 uv0 : TEXCOORD0; \
     [[vk::location(NWB_MESH_RASTER_WORLD_POSITION_LOCATION)]] float4 worldPosition : TEXCOORD1;
 

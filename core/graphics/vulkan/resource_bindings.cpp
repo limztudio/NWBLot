@@ -227,8 +227,7 @@ constexpr DescriptorBufferSegmentKind::Enum GetDescriptorBufferSegmentKind(Resou
 }
 
 bool IsDescriptorBufferBackendReady(const VulkanContext& context){
-    return context.extensions.EXT_descriptor_buffer
-        && context.descriptorBufferManager
+    return context.descriptorBufferManager
         && context.descriptorBufferManager->isEnabled()
     ;
 }

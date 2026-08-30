@@ -39,7 +39,7 @@ struct NwbMeshGeneratedVertex{
     uint2 normal;
     uint2 tangent;
 #else
-    // The mesh path keeps the same payload native-half in registers before emitting its half raster varyings.
+    // The mesh path keeps the same payload native-half in registers before promoting it to the float raster ABI.
     half4 normal;
     half4 tangent;
 #endif

@@ -68,7 +68,7 @@ struct NwbAvboitAccumulatePixelInput{
 };
 
 struct NwbAvboitAccumulatePixelOutput{
-    [[vk::location(NWB_AVBOIT_ACCUM_COLOR_LOCATION)]] half4 accumColor : SV_Target0;
+    [[vk::location(NWB_AVBOIT_ACCUM_COLOR_LOCATION)]] float4 accumColor : SV_Target0;
     [[vk::location(NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION)]] float4 accumExtinction : SV_Target1;
 };
 
@@ -84,7 +84,7 @@ struct NwbAvboitAccumulatePixelOutput{
 
 NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     NwbMeshSurfaceInputs surfaceInputs;
-    surfaceInputs.color = input.color;
+    surfaceInputs.color = half4(input.color);
     surfaceInputs.normal = float3(input.normal);
     surfaceInputs.tangent = float4(input.tangent);
     surfaceInputs.uv0 = input.uv0;

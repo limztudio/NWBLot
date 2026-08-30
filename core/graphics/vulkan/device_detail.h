@@ -43,6 +43,41 @@ namespace PipelineCacheDataValidation{
     const VkPhysicalDeviceProperties& properties
 )noexcept;
 
+struct AstcHdrFeatureNegotiation{
+    bool apiSupportsVulkan13 = false;
+    bool vulkan13FeatureSupported = false;
+    bool extensionEnabled = false;
+    bool extensionFeatureSupported = false;
+};
+
+[[nodiscard]] inline constexpr bool ShouldEnableAstcHdrFeature(
+    const AstcHdrFeatureNegotiation& negotiation
+)noexcept{
+    return negotiation.apiSupportsVulkan13
+        ? negotiation.vulkan13FeatureSupported
+        : negotiation.extensionEnabled && negotiation.extensionFeatureSupported
+    ;
+}
+
+struct CompressedTextureFeatureState{
+    bool bcEnabled = false;
+    bool astcLdrEnabled = false;
+    bool astcHdrEnabled = false;
+};
+
+[[nodiscard]] inline constexpr bool IsCompressedTextureFormatFeatureEnabled(
+    const Format::Enum format,
+    const CompressedTextureFeatureState& featureState
+)noexcept{
+    if(Format::IsBCCompressedFormat(format))
+        return featureState.bcEnabled;
+    if(Format::IsASTCHdrFormat(format))
+        return featureState.astcHdrEnabled;
+    if(Format::IsASTCCompressedFormat(format))
+        return featureState.astcLdrEnabled;
+    return true;
+}
+
 
 class DeviceGenerationAllocator final : NoCopy{
 public:

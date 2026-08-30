@@ -56,9 +56,9 @@ struct NwbCsgIntervalCapFillPixelInput{
 };
 
 struct NwbCsgIntervalCapFillPixelOutput{
-    [[vk::location(NWB_MESH_GBUFFER_BASE_COLOR_LOCATION)]] half4 baseColor : SV_Target0;
-    [[vk::location(NWB_MESH_GBUFFER_NORMAL_LOCATION)]] half4 normal : SV_Target1;
-    [[vk::location(NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION)]] half4 worldPosition : SV_Target2;
+    [[vk::location(NWB_MESH_GBUFFER_BASE_COLOR_LOCATION)]] float4 baseColor : SV_Target0;
+    [[vk::location(NWB_MESH_GBUFFER_NORMAL_LOCATION)]] float4 normal : SV_Target1;
+    [[vk::location(NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION)]] float4 worldPosition : SV_Target2;
     float depth : SV_Depth;
 };
 

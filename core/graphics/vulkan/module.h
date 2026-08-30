@@ -75,6 +75,10 @@ struct DeviceDesc{
 
     // Indicates if VkPhysicalDeviceVulkan12Features::bufferDeviceAddress was set to 'true' at device creation time
     bool bufferDeviceAddressSupported = false;
+    // Retains the texture-compression features enabled through vkCreateDevice.
+    bool textureCompressionBcFeatureEnabled = false;
+    bool textureCompressionAstcLdrFeatureEnabled = false;
+    bool textureCompressionAstcHdrFeatureEnabled = false;
     // Indicates if dynamic rendering was enabled at device creation time (via Vulkan 1.3 core or KHR extension)
     bool dynamicRenderingSupported = false;
     // Indicates if synchronization2 was enabled at device creation time (via Vulkan 1.3 core or KHR extension)

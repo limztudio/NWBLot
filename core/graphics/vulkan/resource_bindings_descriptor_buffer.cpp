@@ -162,8 +162,12 @@ bool DescriptorBufferManager::initialize(){
         return false;
     };
 
-    if(!m_context.extensions.EXT_descriptor_buffer)
+    if(!VulkanDetail::HasDescriptorBufferStartupPrerequisites(
+        VulkanDetail::QueryDescriptorBufferStartupPrerequisites(m_context)
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer startup prerequisites are unavailable."));
         return failInitialization();
+    }
     if(m_resourceSegment.storageIdentity == 0u || m_samplerSegment.storageIdentity == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer storage identity space is exhausted."));
         return failInitialization();

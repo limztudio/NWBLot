@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <core/graphics/vulkan/heap_binding_contract.h>
+#include <core/graphics/vulkan/resource_bindings_detail.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,6 +31,8 @@ namespace __hidden_heap_binding_contract_tests{
 
 using namespace Core;
 namespace Binding = Core::GraphicsBackend::VulkanDetail;
+using DescriptorBufferStartupPrerequisites = Binding::DescriptorBufferStartupPrerequisites;
+using DescriptorPrerequisiteMember = bool DescriptorBufferStartupPrerequisites::*;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,6 +58,36 @@ TEST(HeapBindingContract, BuildsCheckedAbsoluteRanges){
         1u,
         range
     ));
+}
+
+TEST(DescriptorBufferStartupPrerequisites, RequiresBdaAndEveryRuntimeEntryPoint){
+    const DescriptorBufferStartupPrerequisites prerequisites{
+        .descriptorBufferExtensionEnabled = true,
+        .bufferDeviceAddressFeatureEnabled = true,
+        .getBufferDeviceAddressAvailable = true,
+        .getDescriptorAvailable = true,
+        .getDescriptorSetLayoutSizeAvailable = true,
+        .getDescriptorSetLayoutBindingOffsetAvailable = true,
+        .cmdBindDescriptorBuffersAvailable = true,
+        .cmdSetDescriptorBufferOffsetsAvailable = true,
+    };
+    EXPECT_TRUE(Binding::HasDescriptorBufferStartupPrerequisites(prerequisites));
+
+    static constexpr DescriptorPrerequisiteMember s_PrerequisiteMembers[] = {
+        &DescriptorBufferStartupPrerequisites::descriptorBufferExtensionEnabled,
+        &DescriptorBufferStartupPrerequisites::bufferDeviceAddressFeatureEnabled,
+        &DescriptorBufferStartupPrerequisites::getBufferDeviceAddressAvailable,
+        &DescriptorBufferStartupPrerequisites::getDescriptorAvailable,
+        &DescriptorBufferStartupPrerequisites::getDescriptorSetLayoutSizeAvailable,
+        &DescriptorBufferStartupPrerequisites::getDescriptorSetLayoutBindingOffsetAvailable,
+        &DescriptorBufferStartupPrerequisites::cmdBindDescriptorBuffersAvailable,
+        &DescriptorBufferStartupPrerequisites::cmdSetDescriptorBufferOffsetsAvailable,
+    };
+    for(usize prerequisiteIndex = 0u; prerequisiteIndex < LengthOf(s_PrerequisiteMembers); ++prerequisiteIndex){
+        DescriptorBufferStartupPrerequisites missingPrerequisite = prerequisites;
+        missingPrerequisite.*s_PrerequisiteMembers[prerequisiteIndex] = false;
+        EXPECT_FALSE(Binding::HasDescriptorBufferStartupPrerequisites(missingPrerequisite)) << prerequisiteIndex;
+    }
 }
 
 TEST(HeapBindingContract, RejectsRawOverlapAndCrossClassGranularityPages){

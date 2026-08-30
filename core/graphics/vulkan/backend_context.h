@@ -293,6 +293,9 @@ private:
     bool m_swapChainMutableFormatSupported = false;
     bool m_hdr10ColorSpaceExtensionEnabled = false;
     bool m_bufferDeviceAddressSupported = false;
+    bool m_textureCompressionBcFeatureEnabled = false;
+    bool m_textureCompressionAstcLdrFeatureEnabled = false;
+    bool m_textureCompressionAstcHdrFeatureEnabled = false;
     bool m_dynamicRenderingSupported = false;
     bool m_synchronization2Supported = false;
     bool m_independentBlendFeatureEnabled = false;

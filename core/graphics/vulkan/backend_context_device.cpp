@@ -4,6 +4,7 @@
 
 #include "backend_context.h"
 #include "backend_context_detail.h"
+#include "device_detail.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,6 +21,9 @@ bool BackendContext::createVulkanDevice(){
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DeviceCreateArena, s_DeviceSetupScratchArenaBytes);
     m_bufferDeviceAddressSupported = false;
+    m_textureCompressionBcFeatureEnabled = false;
+    m_textureCompressionAstcLdrFeatureEnabled = false;
+    m_textureCompressionAstcHdrFeatureEnabled = false;
     m_dynamicRenderingSupported = false;
     m_synchronization2Supported = false;
     m_independentBlendFeatureEnabled = false;
@@ -131,19 +135,24 @@ bool BackendContext::createVulkanDevice(){
     VkPhysicalDeviceVulkan12Features supportedVulkan12Features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan12Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
     VulkanDetail::AppendFeatureStruct(pNext, &supportedVulkan12Features);
 
-    VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceBufferDeviceAddressFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES);
-    VulkanDetail::AppendFeatureStruct(pNext, &bufferDeviceAddressFeatures);
+    VkPhysicalDeviceVulkan13Features supportedVulkan13Features = VulkanDetail::MakeVkFeatureStruct<
+        VkPhysicalDeviceVulkan13Features
+    >(
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES
+    );
+    if(apiSupportsVulkan13)
+        VulkanDetail::AppendFeatureStruct(pNext, &supportedVulkan13Features);
 
     VkPhysicalDeviceSynchronization2Features synchronization2Features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceSynchronization2Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES);
-    if(apiSupportsVulkan13 || synchronization2ExtensionEnabled)
+    if(!apiSupportsVulkan13 && synchronization2ExtensionEnabled)
         VulkanDetail::AppendFeatureStruct(pNext, &synchronization2Features);
 
     VkPhysicalDeviceMaintenance4Features maintenance4Features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceMaintenance4Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES);
-    if(apiSupportsVulkan13 || maintenance4ExtensionEnabled)
+    if(!apiSupportsVulkan13 && maintenance4ExtensionEnabled)
         VulkanDetail::AppendFeatureStruct(pNext, &maintenance4Features);
 
     VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceDynamicRenderingFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES);
-    if(apiSupportsVulkan13 || dynamicRenderingExtensionEnabled)
+    if(!apiSupportsVulkan13 && dynamicRenderingExtensionEnabled)
         VulkanDetail::AppendFeatureStruct(pNext, &dynamicRenderingFeatures);
 
     VkPhysicalDeviceCooperativeVectorFeaturesNV cooperativeVectorFeatures = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceCooperativeVectorFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV);
@@ -151,16 +160,31 @@ bool BackendContext::createVulkanDevice(){
         VulkanDetail::AppendFeatureStruct(pNext, &cooperativeVectorFeatures);
 
     bool queriedOptionalFeatures[kOptionalDeviceFeatureCount] = {};
-    for(const auto& [_, feature] : m_enabledExtensions.device)
+    for(const auto& [_, feature] : m_enabledExtensions.device){
+        if(apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr)
+            continue;
         VulkanDetail::AppendOptionalDeviceFeature(pNext, supportedOptionalFeatures, feature, queriedOptionalFeatures);
+    }
 
     physicalDeviceFeatures2.pNext = pNext;
     vkGetPhysicalDeviceFeatures2(m_vulkanPhysicalDevice, &physicalDeviceFeatures2);
+
+    if(apiSupportsVulkan13){
+        synchronization2Features.synchronization2 = supportedVulkan13Features.synchronization2;
+        maintenance4Features.maintenance4 = supportedVulkan13Features.maintenance4;
+        dynamicRenderingFeatures.dynamicRendering = supportedVulkan13Features.dynamicRendering;
+    }
 
     GraphicsVector<GraphicsString> unsupportedFeatureExtensions{ m_arena };
     unsupportedFeatureExtensions.reserve(m_enabledExtensions.device.size());
     for(const auto& [name, feature] : m_enabledExtensions.device){
         if(feature == DeviceExtensionFeature::None)
+            continue;
+        if(
+            apiSupportsVulkan13
+            && feature == DeviceExtensionFeature::TextureCompressionAstcHdr
+            && supportedVulkan13Features.textureCompressionASTC_HDR == VK_TRUE
+        )
             continue;
         if(VulkanDetail::SupportsRequestedOptionalDeviceFeature(requestedOptionalFeatures, supportedOptionalFeatures, feature))
             continue;
@@ -204,6 +228,12 @@ bool BackendContext::createVulkanDevice(){
     const bool synchronization2Enabled = apiSupportsVulkan13 || isDeviceExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
     const bool maintenance4Enabled = apiSupportsVulkan13 || isDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
     const bool dynamicRenderingEnabled = apiSupportsVulkan13 || isDeviceExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+    const bool textureCompressionAstcHdrFeatureEnabled = VulkanDetail::ShouldEnableAstcHdrFeature({
+        .apiSupportsVulkan13 = apiSupportsVulkan13,
+        .vulkan13FeatureSupported = supportedVulkan13Features.textureCompressionASTC_HDR == VK_TRUE,
+        .extensionEnabled = isDeviceExtensionEnabled(VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME),
+        .extensionFeatureSupported = supportedOptionalFeatures.textureCompressionAstcHdr.textureCompressionASTC_HDR == VK_TRUE,
+    });
 
     {
         auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
@@ -226,7 +256,6 @@ bool BackendContext::createVulkanDevice(){
         !requireFeature(supportedCoreFeatures.shaderImageGatherExtended, "shaderImageGatherExtended")
         || !requireFeature(supportedCoreFeatures.samplerAnisotropy, "samplerAnisotropy")
         || !requireFeature(supportedCoreFeatures.tessellationShader, "tessellationShader")
-        || !requireFeature(supportedCoreFeatures.textureCompressionBC, "textureCompressionBC")
         || !requireFeature(supportedCoreFeatures.geometryShader, "geometryShader")
         || !requireFeature(supportedCoreFeatures.imageCubeArray, "imageCubeArray")
         || !requireFeature(supportedCoreFeatures.shaderInt16, "shaderInt16")
@@ -243,8 +272,8 @@ bool BackendContext::createVulkanDevice(){
         || !requireFeature(supportedCoreFeatures.multiDrawIndirect, "multiDrawIndirect")
         || !requireFeature(supportedCoreFeatures.drawIndirectFirstInstance, "drawIndirectFirstInstance")
         || !requireFeature(supportedVulkan11Features.storageBuffer16BitAccess, "storageBuffer16BitAccess")
-        || !requireFeature(supportedVulkan11Features.storageInputOutput16, "storageInputOutput16")
         || !requireFeature(supportedVulkan11Features.shaderDrawParameters, "shaderDrawParameters")
+        || !requireFeature(supportedVulkan12Features.bufferDeviceAddress, "bufferDeviceAddress")
         || !requireFeature(supportedVulkan12Features.descriptorIndexing, "descriptorIndexing")
         || !requireFeature(supportedVulkan12Features.runtimeDescriptorArray, "runtimeDescriptorArray")
         || !requireFeature(supportedVulkan12Features.timelineSemaphore, "timelineSemaphore")
@@ -500,11 +529,16 @@ bool BackendContext::createVulkanDevice(){
     vulkan13features.synchronization2 = synchronization2Features.synchronization2;
     vulkan13features.maintenance4 = maintenance4Features.maintenance4;
     vulkan13features.dynamicRendering = dynamicRenderingFeatures.dynamicRendering;
+    vulkan13features.textureCompressionASTC_HDR = textureCompressionAstcHdrFeatureEnabled ? VK_TRUE : VK_FALSE;
 
     pNext = nullptr;
     bool enabledOptionalFeatures[kOptionalDeviceFeatureCount] = {};
-    for(const auto& [_, feature] : m_enabledExtensions.device)
+    for(const auto& [_, feature] : m_enabledExtensions.device){
+        // ASTC HDR is owned by VkPhysicalDeviceVulkan13Features after promotion into Vulkan 1.3.
+        if(apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr)
+            continue;
         VulkanDetail::AppendOptionalDeviceFeature(pNext, requestedOptionalFeatures, feature, enabledOptionalFeatures);
+    }
 
     if(!apiSupportsVulkan13 && dynamicRenderingEnabled)
         VulkanDetail::AppendFeatureStruct(pNext, &dynamicRenderingFeatures);
@@ -547,6 +581,7 @@ bool BackendContext::createVulkanDevice(){
     coreDeviceFeatures.samplerAnisotropy = supportedCoreFeatures.samplerAnisotropy;
     coreDeviceFeatures.tessellationShader = supportedCoreFeatures.tessellationShader;
     coreDeviceFeatures.textureCompressionBC = supportedCoreFeatures.textureCompressionBC;
+    coreDeviceFeatures.textureCompressionASTC_LDR = supportedCoreFeatures.textureCompressionASTC_LDR;
     coreDeviceFeatures.geometryShader = supportedCoreFeatures.geometryShader;
     coreDeviceFeatures.imageCubeArray = supportedCoreFeatures.imageCubeArray;
     coreDeviceFeatures.shaderInt16 = supportedCoreFeatures.shaderInt16;
@@ -565,7 +600,6 @@ bool BackendContext::createVulkanDevice(){
 
     VkPhysicalDeviceVulkan11Features vulkan11features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan11Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
     vulkan11features.storageBuffer16BitAccess = supportedVulkan11Features.storageBuffer16BitAccess;
-    vulkan11features.storageInputOutput16 = supportedVulkan11Features.storageInputOutput16;
     vulkan11features.shaderDrawParameters = supportedVulkan11Features.shaderDrawParameters;
     vulkan11features.pNext = pNext;
 
@@ -576,7 +610,7 @@ bool BackendContext::createVulkanDevice(){
     vulkan12features.shaderFloat16 = supportedVulkan12Features.shaderFloat16;
     vulkan12features.shaderSampledImageArrayNonUniformIndexing = supportedVulkan12Features.shaderSampledImageArrayNonUniformIndexing;
     vulkan12features.shaderStorageBufferArrayNonUniformIndexing = supportedVulkan12Features.shaderStorageBufferArrayNonUniformIndexing;
-    vulkan12features.bufferDeviceAddress = bufferDeviceAddressFeatures.bufferDeviceAddress;
+    vulkan12features.bufferDeviceAddress = supportedVulkan12Features.bufferDeviceAddress;
     vulkan12features.shaderSubgroupExtendedTypes = supportedVulkan12Features.shaderSubgroupExtendedTypes;
     vulkan12features.scalarBlockLayout = supportedVulkan12Features.scalarBlockLayout;
     // Host-side timer-query resets require hostQueryReset.
@@ -699,6 +733,9 @@ bool BackendContext::createVulkanDevice(){
         vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_presentQueueFamily), s_PresentQueueIndex, &m_presentQueue);
 
     m_bufferDeviceAddressSupported = vulkan12features.bufferDeviceAddress == VK_TRUE;
+    m_textureCompressionBcFeatureEnabled = coreDeviceFeatures.textureCompressionBC == VK_TRUE;
+    m_textureCompressionAstcLdrFeatureEnabled = coreDeviceFeatures.textureCompressionASTC_LDR == VK_TRUE;
+    m_textureCompressionAstcHdrFeatureEnabled = textureCompressionAstcHdrFeatureEnabled;
 
     logVulkanDeviceConfiguration(
         scratchArena,

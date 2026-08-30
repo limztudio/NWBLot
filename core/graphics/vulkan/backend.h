@@ -630,6 +630,9 @@ struct VulkanContext{
     // True only after an enabled calibrated-timestamp extension exposes the DEVICE domain and its dispatch pair
     // completes a device-domain probe. It is immutable after Device construction.
     bool comparableGpuTimestamps = false;
+    bool textureCompressionBcFeatureEnabled = false;
+    bool textureCompressionAstcLdrFeatureEnabled = false;
+    bool textureCompressionAstcHdrFeatureEnabled = false;
     bool independentBlendFeatureEnabled = false;
     bool fullDrawIndexUint32FeatureEnabled = false;
     bool multiDrawIndirectFeatureEnabled = false;

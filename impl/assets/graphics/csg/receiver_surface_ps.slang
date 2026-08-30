@@ -24,7 +24,7 @@ struct NwbCsgReceiverSurfacePixelInput{
 };
 
 struct NwbCsgReceiverSurfacePixelOutput{
-    [[vk::location(0)]] half4 color : SV_Target0;
+    [[vk::location(0)]] float4 color : SV_Target0;
 };
 
 

@@ -179,6 +179,9 @@ bool BackendContext::createDevice(){
     deviceDesc.deviceExtensions = vecDeviceExt.data();
     deviceDesc.numDeviceExtensions = vecDeviceExt.size();
     deviceDesc.bufferDeviceAddressSupported = m_bufferDeviceAddressSupported;
+    deviceDesc.textureCompressionBcFeatureEnabled = m_textureCompressionBcFeatureEnabled;
+    deviceDesc.textureCompressionAstcLdrFeatureEnabled = m_textureCompressionAstcLdrFeatureEnabled;
+    deviceDesc.textureCompressionAstcHdrFeatureEnabled = m_textureCompressionAstcHdrFeatureEnabled;
     deviceDesc.dynamicRenderingSupported = m_dynamicRenderingSupported;
     deviceDesc.synchronization2Supported = m_synchronization2Supported;
     deviceDesc.independentBlendFeatureEnabled = m_independentBlendFeatureEnabled;

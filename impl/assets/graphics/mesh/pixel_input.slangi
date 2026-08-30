@@ -82,8 +82,9 @@ void nwbLoadMeshSurfaceInputs(NwbMeshSurfaceInputs inputs){
 
 void nwbLoadMeshPixelInput(NwbMeshPixelInput input, const float3 incidentDirection){
     NwbMeshSurfaceInputs inputs;
-    inputs.color = input.color;
-    // Normals/tangents cross the rasterizer as half varyings; restore float before any material or geometry math.
+    // Raster interfaces use float for Vulkan portability. Narrow color back to the material's FP16 representation;
+    // normals and tangents remain float for material and geometry math.
+    inputs.color = half4(input.color);
     inputs.normal = float3(input.normal);
     inputs.tangent = float4(input.tangent);
     inputs.uv0 = input.uv0;

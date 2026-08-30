@@ -274,11 +274,6 @@ bool BackendContext::pickPhysicalDevice(){
             errorStream << "\n  - does not support samplerAnisotropy";
             deviceIsGood = false;
         }
-        if(!deviceFeatures.textureCompressionBC){
-            errorStream << "\n  - does not support textureCompressionBC";
-            deviceIsGood = false;
-        }
-
         if(!findQueueFamilies(dev)){
             errorStream << "\n  - does not support the necessary queue types";
             deviceIsGood = false;

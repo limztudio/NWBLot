@@ -4,6 +4,7 @@
 
 #include "backend.h"
 #include "arena_names.h"
+#include "device_detail.h"
 #include "raytracing_internal.h"
 
 #include <core/common/log.h>
@@ -176,7 +177,12 @@ bool Device::canCreateSampledTextureFormat(const Format::Enum format)const{
 }
 
 FormatSupport::Mask Device::queryFormatSupportUncached(const Format::Enum format)const{
-    if(Format::IsASTCHdrFormat(format) && !m_context.extensions.EXT_texture_compression_astc_hdr)
+    const VulkanDetail::CompressedTextureFeatureState compressedTextureFeatures{
+        .bcEnabled = m_context.textureCompressionBcFeatureEnabled,
+        .astcLdrEnabled = m_context.textureCompressionAstcLdrFeatureEnabled,
+        .astcHdrEnabled = m_context.textureCompressionAstcHdrFeatureEnabled,
+    };
+    if(!VulkanDetail::IsCompressedTextureFormatFeatureEnabled(format, compressedTextureFeatures))
         return FormatSupport::None;
 
     const VkFormat vkFormat = ConvertFormat(format);

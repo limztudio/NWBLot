@@ -556,11 +556,6 @@ Device::~Device(){
     if(m_amdBreadcrumb.allocation)
         m_allocator.destroyHostMappedBuffer(m_amdBreadcrumb.buffer, m_amdBreadcrumb.allocation, m_amdBreadcrumb.mappedMemory);
 
-    if(m_context.emptyDescriptorBufferSetLayout){
-        vkDestroyDescriptorSetLayout(m_context.device, m_context.emptyDescriptorBufferSetLayout, m_context.allocationCallbacks);
-        m_context.emptyDescriptorBufferSetLayout = VK_NULL_HANDLE;
-    }
-
     if(m_context.pipelineCache){
         savePipelineCacheData();
         vkDestroyPipelineCache(m_context.device, m_context.pipelineCache, m_context.allocationCallbacks);

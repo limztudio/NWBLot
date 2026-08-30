@@ -35,10 +35,7 @@ namespace __hidden_vulkan_descriptor_heap{
         if(!abi.valid())
             return false;
         if(
-            abi.resourceSetIndex < s_MaxBindingLayouts
-            || abi.samplerSetIndex < s_MaxBindingLayouts
-            || abi.accelStructSetIndex < s_MaxBindingLayouts
-            || abi.resourceSetIndex > UINT32_MAX - 2u
+            abi.resourceSetIndex != 0u
             || abi.samplerSetIndex != abi.resourceSetIndex + 1u
             || abi.accelStructSetIndex != abi.samplerSetIndex + 1u
         )
@@ -157,7 +154,7 @@ u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptor
 }
 
 GpuDescriptorHeap::SlotAllocator& GpuDescriptorHeap::allocatorForClass(const GpuDescriptorClass::Enum descriptorClass){
-    // Ordinary resources share slots; TLAS selects immutable set-10 blocks.
+    // Ordinary resources share slots; TLAS selects immutable set-2 blocks.
     if(descriptorClass == GpuDescriptorClass::Sampler)
         return m_samplerSlots;
     if(descriptorClass == GpuDescriptorClass::AccelStruct)
@@ -535,7 +532,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         return false;
     };
     if(!IsBindlessHeapAbiValid(m_desc.bindlessHeapAbi)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap requires a complete, distinct high-set bindless ABI with ascending resource bindings."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap requires dense sets 0/1/2 and ascending resource bindings."));
         return failInitialization();
     }
 
@@ -652,7 +649,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap sampler layout is not descriptor-buffer-compatible despite descriptor-buffer initialization."));
         return failInitialization();
     }
-    // TLAS uses immutable one-descriptor generation blocks at set 10.
+    // TLAS uses immutable one-descriptor generation blocks at set 2.
     if(m_context.extensions.KHR_acceleration_structure){
         BindlessLayoutDesc accelStructLayoutDesc;
         accelStructLayoutDesc

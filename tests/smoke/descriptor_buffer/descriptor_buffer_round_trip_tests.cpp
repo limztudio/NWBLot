@@ -1559,14 +1559,15 @@ struct DescriptorHeapStorageBufferDispatchPushConstants{
     u32 pad1 = 0u;
 };
 static_assert(sizeof(DescriptorHeapStorageBufferDispatchPushConstants) == sizeof(u32) * 4u);
-static_assert(NWB_BINDLESS_HEAP_RESOURCE_SET == 8u);
-static_assert(NWB_BINDLESS_HEAP_SAMPLER_SET == 9u);
+static_assert(NWB_BINDLESS_HEAP_RESOURCE_SET == 0u);
+static_assert(NWB_BINDLESS_HEAP_SAMPLER_SET == 1u);
+static_assert(NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET == 2u);
 static_assert(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER == 3u);
 
 
 // Test-only embedded Vulkan 1.3 compute module. Generated in a temporary file with glslc
 // --target-env=vulkan1.3 -fshader-stage=compute -O and validated by spirv-val --target-env vulkan1.3.
-// It deliberately resolves the production runtime StorageBuffer table at set 8 / binding 3.
+// It deliberately resolves the production runtime StorageBuffer table at set 0 / binding 3.
 static constexpr u32 s_DescriptorHeapStorageBufferDispatchSpirv[] = {
     0x07230203u, 0x00010600u, 0x000d000bu, 0x00000026u, 0x00000000u,
     0x00020011u, 0x00000001u, 0x00020011u, 0x000014b5u, 0x00020011u, 0x000014b6u, 0x00020011u, 0x000014bcu,
@@ -1579,7 +1580,7 @@ static constexpr u32 s_DescriptorHeapStorageBufferDispatchSpirv[] = {
     0x00030047u, 0x00000011u, 0x00000002u,
     0x00050048u, 0x00000011u, 0x00000000u, 0x00000023u, 0x00000000u,
     0x00040047u, 0x00000014u, 0x00000021u, 0x00000003u,
-    0x00040047u, 0x00000014u, 0x00000022u, 0x00000008u,
+    0x00040047u, 0x00000014u, 0x00000022u, 0x00000000u,
     0x00030047u, 0x00000015u, 0x00000002u,
     0x00050048u, 0x00000015u, 0x00000000u, 0x00000023u, 0x00000000u,
     0x00050048u, 0x00000015u, 0x00000001u, 0x00000023u, 0x00000004u,
@@ -1626,7 +1627,7 @@ static constexpr u32 s_DescriptorHeapStorageBufferDispatchSpirv[] = {
 
 
 // Minimal Vulkan 1.3 compute shader: `void main(){}`. The retirement test needs a real pipeline layout containing
-// the heap's explicit set-8/9 layouts so CommandList::bindDescriptorBufferHeap records an actual heap use.
+// the heap's explicit set-0/1 layouts so CommandList::bindDescriptorBufferHeap records an actual heap use.
 static constexpr u32 s_DescriptorHeapRetirementComputeSpirv[] = {
     0x07230203u, 0x00010600u, 0x00070000u, 0x00000005u, 0x00000000u,
     0x00020011u, 0x00000001u,
@@ -61183,7 +61184,7 @@ TEST_F(DescriptorBufferRoundTripTest, MixedDescriptorBufferLayoutIsRejected){
     layoutDesc
         .setLayoutType(BindlessLayoutType::Immutable)
         .setMaxCapacity(1u)
-        .setDescriptorSetIndex(s_MaxBindingLayouts)
+        .setDescriptorSetIndex(NWB_BINDLESS_HEAP_RESOURCE_SET)
         .setVisibility(ShaderType::Compute)
         .addRegisterSpace(BindingLayoutItem::Texture_SRV(0u, 1u))
         .addRegisterSpace(BindingLayoutItem::Sampler(1u, 1u))
@@ -61195,6 +61196,60 @@ TEST_F(DescriptorBufferRoundTripTest, MixedDescriptorBufferLayoutIsRejected){
 #else
     auto layout = device.createBindlessLayout(layoutDesc);
     EXPECT_FALSE(layout);
+#endif
+}
+
+
+// Explicit resource layouts must cover every set from zero through the highest set. Vulkan pipeline layouts cannot
+// express a hole without manufacturing an unrelated placeholder layout, so sparse ABI composition fails closed.
+TEST_F(DescriptorBufferRoundTripTest, SparseExplicitDescriptorSetLayoutsAreRejected){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    BindlessLayoutDesc resourceDesc;
+    resourceDesc
+        .setLayoutType(BindlessLayoutType::Immutable)
+        .setMaxCapacity(1u)
+        .setDescriptorSetIndex(0u)
+        .setVisibility(ShaderType::Compute)
+        .addRegisterSpace(BindingLayoutItem::StructuredBuffer_UAV(0u, 1u))
+    ;
+    BindlessLayoutDesc samplerDesc;
+    samplerDesc
+        .setLayoutType(BindlessLayoutType::MutableSampler)
+        .setMaxCapacity(1u)
+        .setDescriptorSetIndex(2u)
+        .setVisibility(ShaderType::Compute)
+        .addRegisterSpace(BindingLayoutItem::Sampler(0u, 1u))
+    ;
+    const BindingLayoutHandle resourceLayout = device.createBindlessLayout(resourceDesc);
+    const BindingLayoutHandle samplerLayout = device.createBindlessLayout(samplerDesc);
+    ASSERT_TRUE(resourceLayout);
+    ASSERT_TRUE(samplerLayout);
+
+    ShaderDesc shaderDesc(DescriptorBufferRoundTripTest::arena());
+    shaderDesc
+        .setShaderType(ShaderType::Compute)
+        .setDebugName(Name{"tests/descriptor_buffer/sparse_explicit_sets"})
+    ;
+    const ShaderHandle shader = device.createShader(
+        shaderDesc,
+        s_DescriptorHeapRetirementComputeSpirv,
+        sizeof(s_DescriptorHeapRetirementComputeSpirv)
+    );
+    ASSERT_TRUE(shader);
+
+    ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(shader)
+        .addBindingLayout(resourceLayout)
+        .addBindingLayout(samplerLayout)
+    ;
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        EXPECT_FALSE(device.createComputePipeline(pipelineDesc));
+    }, "");
+#else
+    EXPECT_FALSE(device.createComputePipeline(pipelineDesc));
 #endif
 }
 
@@ -62226,7 +62281,7 @@ TEST_F(DescriptorBufferRoundTripTest, CsgMaterialTailShapesBuildAsDescriptorBuff
 
     // The CSG shader aliases its uint/float Texture2DArray views onto the existing StorageImage heap binding. Prove
     // the live heap accepts a typed array UAV descriptor there; the graphics cook verifies each Slang alias emitted
-    // against this same set-8 binding.
+    // against this same set-0 binding.
     auto& heap = device.getDescriptorHeap();
     ASSERT_TRUE(heap.isInitialized());
     const auto registerCsgUniformBuffer = [&](Core::Buffer* buffer) {
@@ -62300,7 +62355,7 @@ TEST_F(DescriptorBufferRoundTripTest, CsgMaterialTailShapesBuildAsDescriptorBuff
 }
 
 
-// Caustic resolve selects every sampled input and its writable output from the global descriptor heap. Its set 0 ABI
+// Caustic resolve selects every sampled input and its writable output from the global descriptor heap. Its local ABI
 // is therefore only the 14-word selector push block; a future local image or buffer must make this proof fail.
 TEST_F(DescriptorBufferRoundTripTest, CausticResolveShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
@@ -62318,7 +62373,7 @@ TEST_F(DescriptorBufferRoundTripTest, CausticResolveShapeBuildsAsDescriptorBuffe
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "caustic resolve push-only shape did not route to the descriptor-buffer path";
+        << "caustic resolve push-only shape is not compatible with descriptor-buffer pipelines";
     EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
     EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
@@ -62342,7 +62397,7 @@ TEST_F(DescriptorBufferRoundTripTest, CausticGeometryDownsampleShapeBuildsAsDesc
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "caustic geometry downsample push-only shape did not route to the descriptor-buffer path";
+        << "caustic geometry downsample push-only shape is not compatible with descriptor-buffer pipelines";
     EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
     EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
@@ -62369,7 +62424,7 @@ TEST_F(DescriptorBufferRoundTripTest, CausticAccumulatorDecayShapeBuildsAsDescri
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "caustic accumulator decay push-only shape did not route to the descriptor-buffer path";
+        << "caustic accumulator decay push-only shape is not compatible with descriptor-buffer pipelines";
     EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
     EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
@@ -62380,8 +62435,7 @@ TEST_F(DescriptorBufferRoundTripTest, CausticAccumulatorDecayShapeBuildsAsDescri
 
 
 // Both caustic photon producers fetch every selector, input, and accumulator output from the global descriptor heap.
-// Their identical local set ABI is only the shared 15-word photon push block; the fixed global-heap TLAS remains
-// outside set 0.
+// Their identical local ABI is only the shared 15-word photon push block; the fixed TLAS remains in the global heap.
 TEST_F(DescriptorBufferRoundTripTest, CausticPhotonProducerShapesBuildAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
@@ -62396,7 +62450,7 @@ TEST_F(DescriptorBufferRoundTripTest, CausticPhotonProducerShapesBuildAsDescript
     auto swLayout = device.createBindingLayout(swLayoutDesc);
     ASSERT_NE(swLayout.get(), nullptr);
     ASSERT_TRUE(swLayout->isDescriptorBufferCompatible())
-        << "caustic SW photon push-only shape did not route to the descriptor-buffer path";
+        << "caustic SW photon push-only shape is not compatible with descriptor-buffer pipelines";
     EXPECT_EQ(swLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
     EXPECT_EQ(swLayout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_TRUE(swLayout->getDescriptorBufferBindingOffsets().empty());
@@ -62410,7 +62464,7 @@ TEST_F(DescriptorBufferRoundTripTest, CausticPhotonProducerShapesBuildAsDescript
     auto hwLayout = device.createBindingLayout(hwLayoutDesc);
     ASSERT_NE(hwLayout.get(), nullptr);
     ASSERT_TRUE(hwLayout->isDescriptorBufferCompatible())
-        << "caustic HW photon push-only shape did not route to the descriptor-buffer path";
+        << "caustic HW photon push-only shape is not compatible with descriptor-buffer pipelines";
     EXPECT_EQ(hwLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
     EXPECT_EQ(hwLayout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_TRUE(hwLayout->getDescriptorBufferBindingOffsets().empty());
@@ -62476,7 +62530,7 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelTraceShapesBuildAsDescriptorBuffer){
     auto swLayout = device.createBindingLayout(swLayoutDesc);
     ASSERT_NE(swLayout.get(), nullptr);
     ASSERT_TRUE(swLayout->isDescriptorBufferCompatible())
-        << "surfel SW trace shape did not route to the descriptor-buffer path";
+        << "surfel SW trace shape is not compatible with descriptor-buffer pipelines";
     EXPECT_TRUE(swLayout->getDescriptorBufferBindingOffsets().empty());
 
     // HW trace differs only by its global TLAS heap layout; its local leaf is identical.
@@ -62487,7 +62541,7 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelTraceShapesBuildAsDescriptorBuffer){
     auto hwLayout = device.createBindingLayout(hwLayoutDesc);
     ASSERT_NE(hwLayout.get(), nullptr);
     ASSERT_TRUE(hwLayout->isDescriptorBufferCompatible())
-        << "surfel HW trace shape did not route to the descriptor-buffer path";
+        << "surfel HW trace shape is not compatible with descriptor-buffer pipelines";
     EXPECT_TRUE(hwLayout->getDescriptorBufferBindingOffsets().empty());
 }
 
@@ -62526,7 +62580,7 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelUpsampleShapeBuildsAsDescriptorBuffe
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "surfel upsample shape did not route to the descriptor-buffer path";
+        << "surfel upsample shape is not compatible with descriptor-buffer pipelines";
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
@@ -62572,7 +62626,7 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelHashBuildShapeBuildsAsDescriptorBuff
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "surfel hash-build shape did not route to the descriptor-buffer path";
+        << "surfel hash-build shape is not compatible with descriptor-buffer pipelines";
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
@@ -62621,7 +62675,7 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelAgeFreeShapeBuildsAsDescriptorBuffer
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "surfel age-free shape did not route to the descriptor-buffer path";
+        << "surfel age-free shape is not compatible with descriptor-buffer pipelines";
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
@@ -62669,7 +62723,7 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelTraceBuildArgsShapeBuildsAsDescripto
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "surfel trace build-args shape did not route to the descriptor-buffer path";
+        << "surfel trace build-args shape is not compatible with descriptor-buffer pipelines";
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
@@ -62717,7 +62771,7 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelSpawnShapeBuildsAsDescriptorBuffer){
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "surfel spawn shape did not route to the descriptor-buffer path";
+        << "surfel spawn shape is not compatible with descriptor-buffer pipelines";
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
@@ -62775,7 +62829,7 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelResolveShapeBuildsAsDescriptorBuffer
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "surfel resolve shape did not route to the descriptor-buffer path";
+        << "surfel resolve shape is not compatible with descriptor-buffer pipelines";
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
@@ -62799,7 +62853,7 @@ TEST_F(DescriptorBufferRoundTripTest, BvhSortPushOnlyHeapLayoutBuildsAsDescripto
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "bvh sort push-only layout did not route to the descriptor-buffer path";
+        << "bvh sort push-only layout is not compatible with descriptor-buffer pipelines";
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
     EXPECT_TRUE(heap.getResourceLayout()->isDescriptorBufferCompatible());
     EXPECT_TRUE(heap.getSamplerLayout()->isDescriptorBufferCompatible());
@@ -62842,7 +62896,7 @@ TEST_F(DescriptorBufferRoundTripTest, BvhBuildPushOnlyHeapLayoutRegistersScratch
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "bvh build push-only layout did not route to the descriptor-buffer path";
+        << "bvh build push-only layout is not compatible with descriptor-buffer pipelines";
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 
     Core::Buffer* buffers[] = {
@@ -62881,7 +62935,7 @@ TEST_F(DescriptorBufferRoundTripTest, ShadowGeometryDownsampleShapeBuildsAsDescr
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "shadow geometry downsample push-only shape did not route to the descriptor-buffer path";
+        << "shadow geometry downsample push-only shape is not compatible with descriptor-buffer pipelines";
     EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
     EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
@@ -62904,7 +62958,7 @@ TEST_F(DescriptorBufferRoundTripTest, ShadowResolveShapeBuildsAsDescriptorBuffer
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "shadow resolve push-only shape did not route to the descriptor-buffer path";
+        << "shadow resolve push-only shape is not compatible with descriptor-buffer pipelines";
     EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
     EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
@@ -62927,7 +62981,7 @@ TEST_F(DescriptorBufferRoundTripTest, ShadowReprojectMergeShapeBuildsAsDescripto
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "shadow reproject-merge push-only shape did not route to the descriptor-buffer path";
+        << "shadow reproject-merge push-only shape is not compatible with descriptor-buffer pipelines";
     EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
     EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
@@ -62959,7 +63013,7 @@ TEST_F(DescriptorBufferRoundTripTest, ShadowRtTraceShapeBuildsAsDescriptorBuffer
         auto layout = device.createBindingLayout(layoutDesc);
         ASSERT_NE(layout.get(), nullptr);
         ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-            << "shadow RT " << shape.name << " push-only shape did not route to the descriptor-buffer path";
+            << "shadow RT " << shape.name << " push-only shape is not compatible with descriptor-buffer pipelines";
         EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
         EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
         EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
@@ -62982,7 +63036,7 @@ TEST_F(DescriptorBufferRoundTripTest, SwShadowTraceShapeBuildsAsDescriptorBuffer
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "SW shadow push-only shape did not route to the descriptor-buffer path";
+        << "SW shadow push-only shape is not compatible with descriptor-buffer pipelines";
     EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
     EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
@@ -63022,7 +63076,7 @@ TEST_F(DescriptorBufferRoundTripTest, SkinnedMeshComputeShapesBuildAsDescriptorB
         auto layout = device.createBindingLayout(layoutDesc);
         ASSERT_NE(layout.get(), nullptr);
         ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-            << shape.name << " push-only layout did not route to the descriptor-buffer path";
+            << shape.name << " push-only layout is not compatible with descriptor-buffer pipelines";
         EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
         EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
         EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
@@ -63593,7 +63647,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsForeignResourcesAndDo
 // Global-heap proof: the GpuDescriptorHeap requires the descriptor-buffer backend where the device advertises
 // VK_EXT_descriptor_buffer. Unlike the per-pass shape tests above (which exercise push-only pipeline layouts), this proves
 // the heap itself -- a persistent, per-slot-writable structure -- (1) selected the required backend, (2) built descriptor-buffer-
-// compatible bindless layouts at sets 8/9, (3) carved two persistent blocks from its segments, and (4)
+// compatible bindless layouts at sets 0/1, (3) carved two persistent blocks from its segments, and (4)
 // routes write() through the descriptor-buffer path. This is the prerequisite the five heap-coupled tail pipelines
 // (surfel SW/HW trace, caustic SW/HW, SW shadow) embed, so their opt-in is only valid when these hold.
 TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRequiresDescriptorBuffer){
@@ -63603,7 +63657,7 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRequiresDescriptorBuff
 
     // Initialization proves the required descriptor-buffer path: no ordinary descriptor-set heap implementation exists.
 
-    // The heap's two bindless layouts must be descriptor-buffer-compatible so a pipeline that embeds them at sets 8/9
+    // The heap's two bindless layouts must be descriptor-buffer-compatible so a pipeline that embeds them at sets 0/1
     // passes the all-compatible wholesale-conversion gate. Each is pure-class by construction (resource / sampler).
     const auto* resourceLayout = heap.getResourceLayout().get();
     const auto* samplerLayout = heap.getSamplerLayout().get();
@@ -63622,7 +63676,7 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRequiresDescriptorBuff
     EXPECT_EQ(samplerLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Sampler);
 
     // The two persistent heap blocks were carved once at init and live for the heap's lifetime; their offsets are what
-    // vkCmdSetDescriptorBufferOffsetsEXT binds at sets 8/9. A zero/invalid block would mean no carve happened.
+    // vkCmdSetDescriptorBufferOffsetsEXT binds at sets 0/1. A zero/invalid block would mean no carve happened.
     const auto& resourceBlock = heap.getResourceBufferBlock();
     const auto& samplerBlock = heap.getSamplerBufferBlock();
     EXPECT_TRUE(resourceBlock.valid())
@@ -63812,7 +63866,7 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRequiresDescriptorBuff
 
 
 // A ray-tracing-capable device must expose the global TLAS through the required immutable descriptor-heap layout.
-// The renderer no longer has a supported local TLAS path, so a device that exposes RT but fails to create set 10
+// The renderer no longer has a supported local TLAS path, so a device that exposes RT but fails to create set 2
 // is a contract failure rather than a reason to skip the HW trace paths.
 TEST_F(DescriptorBufferRoundTripTest, RayTracingHeapRequiresDescriptorBufferTlasLayout){
     auto& device = DescriptorBufferRoundTripTest::device();
@@ -63946,15 +64000,15 @@ TEST_F(DescriptorBufferRoundTripTest, ImguiHeapTextureAndSamplerLayoutBuildsAsDe
     static constexpr u32 kImguiPushConstantBytes = sizeof(f32) * 4u + sizeof(u32) * 4u;
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    // The production leaf has no descriptors at set 0. A zero-binding layout is the descriptor-buffer-compatible
-    // gap form; the persistent pure resource/sampler heap tables occupy sets 8/9.
+    // The production leaf carries push constants only and consumes no descriptor set. The persistent pure
+    // resource/sampler heap tables occupy sets 0/1.
     BindingLayoutDesc leafDesc(descArena);
     leafDesc.setVisibility(ShaderType::AllGraphics);
     leafDesc.addItem(BindingLayoutItem::PushConstants(0u, kImguiPushConstantBytes));
     auto leafLayout = device.createBindingLayout(leafDesc);
     ASSERT_NE(leafLayout.get(), nullptr);
     EXPECT_TRUE(leafLayout->isDescriptorBufferCompatible())
-        << "ImGui push-only leaf layout did not route to the descriptor-buffer path";
+        << "ImGui push-only leaf layout is not compatible with descriptor-buffer pipelines";
     EXPECT_TRUE(heap.getResourceLayout()->isDescriptorBufferCompatible());
     EXPECT_TRUE(heap.getSamplerLayout()->isDescriptorBufferCompatible());
 

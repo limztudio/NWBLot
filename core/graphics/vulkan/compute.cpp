@@ -150,8 +150,6 @@ void CommandList::setComputeState(const ComputeState& state){
     auto* pipeline = state.pipeline;
     vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipeline);
     retainResource(pipeline);
-
-    bindDescriptorBufferEmptySet(VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipelineLayout);
 }
 
 void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){

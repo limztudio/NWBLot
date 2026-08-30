@@ -415,7 +415,7 @@ void GpuDescriptorHeap::bindCompute(
     const ComputePipeline& pipeline,
     const GpuDescriptorHandle accelStructHandle
 ){
-    // Bind persistent resource/sampler blocks at 8/9 and optional TLAS at 10.
+    // Bind persistent resource/sampler blocks at 0/1 and optional TLAS at 2.
     commandList.bindDescriptorBufferHeap(*this, pipeline, accelStructHandle);
 }
 

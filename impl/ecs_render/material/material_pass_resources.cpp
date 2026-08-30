@@ -34,8 +34,8 @@ bool RendererMaterialSystem::prepareMaterialPassBindingLayout(Core::BindingLayou
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::All)
-            // Every material graphics pass uses this push-only set 0. Transparent passes consume the full combined
-            // mesh/AVBOIT payload; opaque and AVBOIT compute paths use smaller payloads within the same byte range.
+            // Every material graphics pass uses this push-only layout without consuming a descriptor set. Transparent
+            // passes consume the full combined mesh/AVBOIT payload; opaque and AVBOIT compute paths use smaller payloads.
             .addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)))
         ;
         m_materialState.m_materialPassBindingLayout = m_graphics.getDevice().createBindingLayout(bindingLayoutDesc);

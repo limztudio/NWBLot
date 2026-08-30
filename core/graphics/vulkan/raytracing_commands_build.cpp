@@ -167,8 +167,6 @@ void CommandList::setRayTracingState(const RayTracingState& state){
     retainResource(shaderTable);
 
     vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipeline);
-
-    bindDescriptorBufferEmptySet(VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipelineLayout);
 }
 
 

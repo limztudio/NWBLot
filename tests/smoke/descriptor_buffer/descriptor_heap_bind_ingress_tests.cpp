@@ -291,6 +291,27 @@ TEST_F(DescriptorHeapBindIngressTest, ImmutablePipelineSnapshotBindsAndPublicShu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST_F(DescriptorHeapBindIngressTest, ShiftedDescriptorSetAbiIsRejectedBeforeHeapInitialization){
+    GpuDescriptorHeapDesc shiftedDesc = MakeSmallHeapDesc();
+    shiftedDesc.bindlessHeapAbi.resourceSetIndex = 1u;
+    shiftedDesc.bindlessHeapAbi.samplerSetIndex = 2u;
+    shiftedDesc.bindlessHeapAbi.accelStructSetIndex = 3u;
+
+    GraphicsBackend::GpuDescriptorHeap shiftedHeap(device());
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        EXPECT_FALSE(shiftedHeap.initialize(shiftedDesc));
+    }, "");
+#else
+    EXPECT_FALSE(shiftedHeap.initialize(shiftedDesc));
+#endif
+    EXPECT_FALSE(shiftedHeap.isInitialized());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TEST_F(DescriptorHeapBindIngressTest, RejectsCustomHybridAndWrongCurrentPipelineWithoutHeapMutation){
     auto& localDevice = device();
     auto& heap = localDevice.getDescriptorHeap();
@@ -471,11 +492,20 @@ TEST_F(DescriptorHeapBindIngressTest, ManagerRolloverRejectsStaleHeapAndRecordin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(DescriptorHeapBindIngressTest, EmptySetOnlyRecordingRejectsManagerRollover){
+TEST_F(DescriptorHeapBindIngressTest, PushOnlyRecordingSurvivesManagerRollover){
     auto& localDevice = device();
     auto& manager = localDevice.getDescriptorBufferManager();
     auto& heap = localDevice.getDescriptorHeap();
-    ComputePipelineHandle pipeline = CreateComputePipeline(localDevice, arena(), nullptr, 0u);
+
+    BindingLayoutDesc pushLayoutDesc(arena());
+    pushLayoutDesc
+        .setVisibility(ShaderType::Compute)
+        .addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32)))
+    ;
+    const BindingLayoutHandle pushLayout = localDevice.createBindingLayout(pushLayoutDesc);
+    ASSERT_TRUE(pushLayout);
+    const BindingLayoutHandle layouts[] = { pushLayout };
+    ComputePipelineHandle pipeline = CreateComputePipeline(localDevice, arena(), layouts, LengthOf(layouts));
     ASSERT_TRUE(pipeline);
 
     CommandListHandle commandList = localDevice.createCommandList();
@@ -487,20 +517,18 @@ TEST_F(DescriptorHeapBindIngressTest, EmptySetOnlyRecordingRejectsManagerRollove
 
     manager.shutdown();
     if(!manager.initialize()){
-        ADD_FAILURE() << "descriptor-buffer manager did not recover after empty-set rollover";
+        ADD_FAILURE() << "descriptor-buffer manager did not recover after push-only recording rollover";
         return;
     }
     CommandList* commandLists[] = { commandList.get() };
-    ExpectSubmissionRejection([&](){
-        return localDevice.executeCommandLists(
-            commandLists,
-            LengthOf(commandLists),
-            CommandQueue::Graphics,
-            QueueSubmissionDesc{}
-        );
-    });
-    commandList->open();
-    commandList->close();
+    const QueueSubmissionToken token = localDevice.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    EXPECT_TRUE(token.valid());
+    EXPECT_TRUE(localDevice.waitForIdle());
     EXPECT_TRUE(heap.initialize(MakeDefaultHeapDesc()));
 }
 

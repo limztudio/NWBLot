@@ -471,8 +471,6 @@ BindingLayout::~BindingLayout(){
 
 
 BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
-    VkResult res = VK_SUCCESS;
-
     if(desc.bindings.size() > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor set layout: binding count exceeds Vulkan limit"));
         return nullptr;
@@ -504,26 +502,11 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     const u32 pushConstantByteSize = VulkanDetail::GetPushConstantByteSize(desc);
     layout->m_pushConstantByteSize = pushConstantByteSize;
 
-    auto layoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
-    layoutInfo.bindingCount = 0u;
-    layoutInfo.pBindings = nullptr;
-
-    layoutInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-
-    VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
-    res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor set layout: {}"), ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, layout);
-        return nullptr;
-    }
-    layout->m_descriptorSetLayouts.push_back(setLayout);
-
     if(
         !VulkanDetail::CreatePipelineLayout(
             m_context,
-            layout->m_descriptorSetLayouts.data(),
-            static_cast<u32>(layout->m_descriptorSetLayouts.size()),
+            nullptr,
+            0u,
             pushConstantByteSize,
             layout->m_pipelineLayout,
             NWB_TEXT("create binding layout")
@@ -533,7 +516,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
         return nullptr;
     }
 
-    // Local push-only layouts have no descriptor bytes.
+    // Push constants are pipeline-layout state, not descriptor-set state.
     layout->m_descriptorBufferCompatible = true;
 
     return BindingLayoutHandle(layout, BindingLayoutHandle::deleter_type(&m_context.objectArena), AdoptRef);
@@ -542,11 +525,8 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
 BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc){
     VkResult res = VK_SUCCESS;
 
-    if(
-        desc.descriptorSetIndex < s_MaxBindingLayouts
-        || desc.descriptorSetIndex == Limit<u32>::s_Max
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: a global-heap descriptor set at or above {} is required."), s_MaxBindingLayouts);
+    if(desc.descriptorSetIndex == Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: an explicit descriptor-set index is required."));
         return nullptr;
     }
 
@@ -625,50 +605,37 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 
     NWB_ASSERT(descriptorBufferSegmentKind != DescriptorBufferSegmentKind::None);
 
-        const VkDescriptorSetLayout descriptorSetLayout = layout->m_descriptorSetLayouts[0];
-        VkDeviceSize setSizeBytes = 0;
-        vkGetDescriptorSetLayoutSizeEXT(m_context.device, descriptorSetLayout, &setSizeBytes);
-        if(setSizeBytes == 0u || setSizeBytes > UINT32_MAX){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: descriptor-buffer set size is invalid."));
-            DestroyArenaObject(m_context.objectArena, layout);
-            return nullptr;
-        }
-
-        layout->m_descriptorBufferBindingOffsets.reserve(desc.registerSpaces.size());
-        for(const auto& item : desc.registerSpaces){
-            VkDeviceSize bindingOffsetBytes = 0;
-            vkGetDescriptorSetLayoutBindingOffsetEXT(m_context.device, descriptorSetLayout, item.slot, &bindingOffsetBytes);
-            if(!VulkanDetail::ValidateDescriptorBufferBindingFootprint(
-                *m_context.descriptorBufferManager,
-                VulkanDetail::ConvertDescriptorType(item.type),
-                maxCapacity,
-                setSizeBytes,
-                bindingOffsetBytes,
-                item.slot,
-                NWB_TEXT("bindless layout")
-            )){
-                DestroyArenaObject(m_context.objectArena, layout);
-                return nullptr;
-            }
-            layout->m_descriptorBufferBindingOffsets.insert_or_assign(item.slot, static_cast<u32>(bindingOffsetBytes));
-        }
-        layout->m_descriptorBufferSetSizeBytes = static_cast<u32>(setSizeBytes);
-        layout->m_descriptorBufferSegmentKind = descriptorBufferSegmentKind;
-    layout->m_descriptorBufferCompatible = true;
-
-    if(
-        !VulkanDetail::CreatePipelineLayout(
-            m_context,
-            layout->m_descriptorSetLayouts.data(),
-            static_cast<u32>(layout->m_descriptorSetLayouts.size()),
-            0,
-            layout->m_pipelineLayout,
-            NWB_TEXT("create bindless layout")
-        )
-    ){
+    const VkDescriptorSetLayout descriptorSetLayout = layout->m_descriptorSetLayouts[0];
+    VkDeviceSize setSizeBytes = 0;
+    vkGetDescriptorSetLayoutSizeEXT(m_context.device, descriptorSetLayout, &setSizeBytes);
+    if(setSizeBytes == 0u || setSizeBytes > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: descriptor-buffer set size is invalid."));
         DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
     }
+
+    layout->m_descriptorBufferBindingOffsets.reserve(desc.registerSpaces.size());
+    for(const auto& item : desc.registerSpaces){
+        VkDeviceSize bindingOffsetBytes = 0;
+        vkGetDescriptorSetLayoutBindingOffsetEXT(m_context.device, descriptorSetLayout, item.slot, &bindingOffsetBytes);
+        if(!VulkanDetail::ValidateDescriptorBufferBindingFootprint(
+            *m_context.descriptorBufferManager,
+            VulkanDetail::ConvertDescriptorType(item.type),
+            maxCapacity,
+            setSizeBytes,
+            bindingOffsetBytes,
+            item.slot,
+            NWB_TEXT("bindless layout")
+        )){
+            DestroyArenaObject(m_context.objectArena, layout);
+            return nullptr;
+        }
+        layout->m_descriptorBufferBindingOffsets.insert_or_assign(item.slot, static_cast<u32>(bindingOffsetBytes));
+    }
+    layout->m_descriptorBufferSetSizeBytes = static_cast<u32>(setSizeBytes);
+    layout->m_descriptorBufferSegmentKind = descriptorBufferSegmentKind;
+    layout->m_descriptorBufferCompatible = true;
+
     return BindingLayoutHandle(layout, BindingLayoutHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 

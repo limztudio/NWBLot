@@ -261,14 +261,17 @@ void CommandList::bindDescriptorBufferHeapNative(
     const u32 maxBoundDescriptorSets = m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets;
     if(
         !abi.valid()
-        || abi.resourceSetIndex > UINT32_MAX - 2u
+        || abi.resourceSetIndex != 0u
         || abi.samplerSetIndex != abi.resourceSetIndex + 1u
         || abi.accelStructSetIndex != abi.samplerSetIndex + 1u
         || abi.resourceSetIndex >= maxBoundDescriptorSets
         || abi.samplerSetIndex >= maxBoundDescriptorSets
         || abi.accelStructSetIndex >= maxBoundDescriptorSets
     ){
-        rejectCommandRecording(operationName, NWB_TEXT("heap descriptor-set ABI is not contiguous or exceeds device limits"));
+        rejectCommandRecording(
+            operationName,
+            NWB_TEXT("heap descriptor-set ABI is not the dense set-0/1/2 contract or exceeds device limits")
+        );
         return;
     }
 
@@ -456,7 +459,7 @@ void CommandList::bindDescriptorBufferHeapNative(
 
     ensureDescriptorBuffersBound(*manager, managerSnapshot);
 
-    // Resource, sampler, and TLAS heap sets are contiguous at 8/9/10.
+    // Resource, sampler, and TLAS heap sets are contiguous at 0/1/2.
     const u32 bufferIndices[DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct] = {
         DescriptorBufferManager::s_ResourceDescriptorBufferIndex,
         DescriptorBufferManager::s_SamplerDescriptorBufferIndex,
@@ -497,109 +500,6 @@ void CommandList::ensureDescriptorBuffersBound(
     m_currentCmdBuf->m_descriptorBufferGeneration = snapshot.generation;
     m_descriptorBuffersBound = true;
 }
-
-void CommandList::bindDescriptorBufferEmptySet(const VkPipelineBindPoint bindPoint, const VkPipelineLayout pipelineLayout){
-    constexpr const tchar* s_OperationName = NWB_TEXT("bind empty descriptor-buffer set");
-    if(!validateCommandRecordingScope(s_OperationName))
-        return;
-
-    Queue* const expectedQueue = m_device.getQueue(m_creationDesc.physicalQueue);
-    TrackedCommandBuffer* const activeCommandBuffer = m_currentCmdBuf.get();
-    if(
-        !m_isRecording
-        || m_commandRecordingFailed
-        || !activeCommandBuffer
-        || activeCommandBuffer->m_cmdBuf == VK_NULL_HANDLE
-        || activeCommandBuffer->m_arenaState != TrackedCommandBufferArenaState::Leased
-        || &activeCommandBuffer->m_context != &m_context
-        || !expectedQueue
-        || &activeCommandBuffer->m_queue != expectedQueue
-        || m_recordingLeaseSerial == 0u
-        || pipelineLayout == VK_NULL_HANDLE
-    ){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("command buffer or pipeline layout is unavailable"));
-        return;
-    }
-
-    bool typedStateMatches = false;
-    switch(bindPoint){
-    case VK_PIPELINE_BIND_POINT_COMPUTE:
-        typedStateMatches = m_currentComputeState.pipeline
-            && m_currentComputeState.pipeline->m_pipelineLayout == pipelineLayout
-        ;
-        break;
-    case VK_PIPELINE_BIND_POINT_GRAPHICS:
-        typedStateMatches = (m_currentGraphicsState.pipeline
-                && m_currentGraphicsState.pipeline->m_pipelineLayout == pipelineLayout)
-            || (m_currentMeshletState.pipeline
-                && m_currentMeshletState.pipeline->m_pipelineLayout == pipelineLayout)
-        ;
-        break;
-    case VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR:{
-        ShaderTable* const shaderTable = m_currentRayTracingState.shaderTable;
-        RayTracingPipeline* const pipeline = shaderTable ? shaderTable->m_pipeline.get() : nullptr;
-        typedStateMatches = pipeline && pipeline->m_pipelineLayout == pipelineLayout;
-        break;
-    }
-    default:
-        break;
-    }
-    if(!typedStateMatches){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("raw pipeline layout does not match the typed current state"));
-        return;
-    }
-
-    DescriptorBufferManager* const manager = m_context.descriptorBufferManager;
-    if(
-        !manager
-        || manager != &m_device.m_descriptorBufferManager
-        || !vkCmdBindDescriptorBuffersEXT
-        || !vkCmdSetDescriptorBufferOffsetsEXT
-    ){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("descriptor-buffer manager is unavailable or foreign"));
-        return;
-    }
-
-    ScopedLock lifecycleLock(manager->m_lifecycleMutex);
-    ScopedLock resourceStorageLock(manager->m_resourceSegment.mutex);
-    ScopedLock samplerStorageLock(manager->m_samplerSegment.mutex);
-    DescriptorBufferManager::BindingSnapshot managerSnapshot;
-    if(!manager->captureBindingSnapshotLocked(managerSnapshot)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("descriptor-buffer binding generation is unavailable"));
-        return;
-    }
-    TrackedCommandBuffer& trackedCommandBuffer = *m_currentCmdBuf;
-    if(
-        (trackedCommandBuffer.m_descriptorBufferManager
-            && trackedCommandBuffer.m_descriptorBufferManager != manager)
-        || (trackedCommandBuffer.m_descriptorBufferGeneration != 0u
-            && trackedCommandBuffer.m_descriptorBufferGeneration != managerSnapshot.generation)
-        || (m_descriptorBuffersBound
-            && (
-                trackedCommandBuffer.m_descriptorBufferManager != manager
-                || trackedCommandBuffer.m_descriptorBufferGeneration != managerSnapshot.generation
-            ))
-    ){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("command buffer already references another descriptor generation"));
-        return;
-    }
-
-    // Select empty set 0 to establish descriptor-buffer state for push-only layouts.
-    ensureDescriptorBuffersBound(*manager, managerSnapshot);
-
-    constexpr u32 s_ResourceBufferIndex = DescriptorBufferManager::s_ResourceDescriptorBufferIndex;
-    constexpr VkDeviceSize s_EmptySetOffsetBytes = 0u;
-    vkCmdSetDescriptorBufferOffsetsEXT(
-        m_currentCmdBuf->m_cmdBuf,
-        bindPoint,
-        pipelineLayout,
-        0u,
-        1u,
-        &s_ResourceBufferIndex,
-        &s_EmptySetOffsetBytes
-    );
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

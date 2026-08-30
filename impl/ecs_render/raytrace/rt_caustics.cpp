@@ -2584,7 +2584,7 @@ bool RendererRayTracingSystem::renderHwCaustics(
         Core::RayTracingState rayTracingPassState;
         rayTracingPassState.setShaderTable(m_rayTracingState.m_hwCausticShaderTable.get());
         commandList.setRayTracingState(rayTracingPassState);
-        // Bind heap blocks after RayTracingState; set 10 selects the TLAS generation.
+        // Bind heap blocks after RayTracingState; set 2 selects the TLAS generation.
         Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
         heap.bindRayTracing(commandList, *m_rayTracingState.m_hwCausticPipeline.get(), m_rayTracingState.m_tlasHeapHandle);
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));

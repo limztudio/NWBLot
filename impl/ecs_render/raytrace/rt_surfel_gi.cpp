@@ -1947,7 +1947,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         state.setPipeline(tracePipeline);
         state.setIndirectParams(m_rayTracingState.m_surfelTraceIndirectArgsBuffer.get());
         commandList.setComputeState(state);
-        // Hardware trace additionally selects the TLAS generation at set 10.
+        // Hardware trace additionally selects the TLAS generation at set 2.
         if(m_rayTracingState.m_surfelUseHwTrace && !m_rayTracingState.m_tlasHeapHandle.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch surfel HW GI without the descriptor-heap TLAS handle"));
             return false;

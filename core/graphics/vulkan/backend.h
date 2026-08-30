@@ -617,9 +617,6 @@ struct VulkanContext{
     VkPhysicalDeviceMemoryProperties memoryProperties{};
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties{};
 
-    // Lazily created descriptor-buffer gap-set layout for explicit heap sets.
-    VkDescriptorSetLayout emptyDescriptorBufferSetLayout = VK_NULL_HANDLE;
-
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};
     // These are the feature bits actually enabled through vkCreateDevice's pNext chain.  Extension names alone
     // are not capability answers because an enabled extension may have had its feature bit disabled.
@@ -2009,7 +2006,7 @@ private:
 // Global Descriptor Heap
 
 
-// Descriptor-buffer-only bindless heap at sets 8/9; required at device creation.
+// Descriptor-buffer-only bindless heap at sets 0/1; required at device creation.
 class GpuDescriptorHeap final : NoCopy{
     friend class Device;
     friend class CommandList;
@@ -2107,7 +2104,7 @@ public:
     // Caller must not overwrite a slot read by in-flight work.
     bool write(GpuDescriptorHandle handle, const DescriptorWriteItem& item);
 
-    // Bind after state setup; optionally includes a per-generation TLAS block at set 10.
+    // Bind after state setup; optionally includes a per-generation TLAS block at set 2.
     void bindCompute(
         CommandList& commandList,
         const ComputePipeline& pipeline,
@@ -2118,7 +2115,7 @@ public:
     void bindGraphics(CommandList& commandList, const GraphicsPipeline& pipeline);
     void bindGraphics(CommandList& commandList, const MeshletPipeline& pipeline);
 
-    // Ray-tracing equivalent of bindCompute; optionally binds a TLAS block at set 10.
+    // Ray-tracing equivalent of bindCompute; optionally binds a TLAS block at set 2.
     void bindRayTracing(
         CommandList& commandList,
         const RayTracingPipeline& pipeline,
@@ -2130,10 +2127,10 @@ public:
     [[nodiscard]] u32 getResourceSetIndex()const{ return m_desc.bindlessHeapAbi.resourceSetIndex; }
     [[nodiscard]] u32 getSamplerSetIndex()const{ return m_desc.bindlessHeapAbi.samplerSetIndex; }
     [[nodiscard]] u32 getAccelStructSetIndex()const{ return m_desc.bindlessHeapAbi.accelStructSetIndex; }
-    // Resource and sampler layouts at sets 8 and 9.
+    // Resource and sampler layouts at sets 0 and 1.
     [[nodiscard]] const BindingLayoutHandle& getResourceLayout()const{ return m_resourceLayout; }
     [[nodiscard]] const BindingLayoutHandle& getSamplerLayout()const{ return m_samplerLayout; }
-    // Per-generation one-descriptor TLAS layout at set 10.
+    // Per-generation one-descriptor TLAS layout at set 2.
     [[nodiscard]] const BindingLayoutHandle& getAccelStructLayout()const{ return m_accelStructLayout; }
     [[nodiscard]] bool hasAccelStructLayout()const{ return m_accelStructLayout != nullptr; }
     // SPIR-V binding number for a descriptor class.
@@ -2487,7 +2484,6 @@ public:
 public:
     [[nodiscard]] const BindingLayoutDesc* getDescription()const{ return m_isBindless ? nullptr : &m_desc; }
     [[nodiscard]] const BindlessLayoutDesc* getBindlessDesc()const{ return m_isBindless ? &m_bindlessDesc : nullptr; }
-    Object getNativeHandle(ObjectType){ return Object(m_pipelineLayout); }
 
 public:
     [[nodiscard]] const BindingLayoutDesc& getBindingLayoutDesc()const{ return m_desc; }
@@ -2501,6 +2497,7 @@ public:
 private:
     BindingLayoutDesc m_desc;
     BindlessLayoutDesc m_bindlessDesc;
+    // Only push-only layouts own a reusable zero-set pipeline layout. Bindless layouts are composed by concrete pipelines.
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     Vector<VkDescriptorSetLayout, Alloc::GlobalArena> m_descriptorSetLayouts;
     // Driver-created set size, segment, and binding offsets.
@@ -3015,8 +3012,6 @@ private:
         DescriptorBufferManager& manager,
         const DescriptorBufferManager::BindingSnapshot& snapshot
     );
-    // Bind empty set 0 before global heap sets; no local descriptor transport.
-    void bindDescriptorBufferEmptySet(VkPipelineBindPoint bindPoint, VkPipelineLayout pipelineLayout);
     void setViewportState(const ViewportState& viewport);
 
     bool beginDynamicRendering(Framebuffer* framebuffer, const RenderPassParameters& params);
@@ -3427,8 +3422,6 @@ private:
         bool& outOwnsPipelineLayout,
         Alloc::ScratchArena& scratchArena
     )const;
-    // Lazily creates the descriptor-buffer gap-set layout for explicit heap sets.
-    [[nodiscard]] VkDescriptorSetLayout getOrCreateEmptyDescriptorBufferSetLayout()const;
     [[nodiscard]] bool validateHeapMemoryBinding(
         const Heap& heap,
         const VkMemoryRequirements& memoryRequirements,

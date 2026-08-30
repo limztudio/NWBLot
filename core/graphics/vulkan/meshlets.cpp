@@ -237,9 +237,6 @@ void CommandList::setMeshletState(const MeshletState& state){
         );
     }
 
-    if(pipeline)
-        bindDescriptorBufferEmptySet(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipelineLayout);
-
     setViewportState(state.viewport);
     retainResource(state.indirectParams);
 }

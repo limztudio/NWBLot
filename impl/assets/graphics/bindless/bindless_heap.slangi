@@ -208,7 +208,7 @@ SamplerState NwbHeapSamplerNonUniform(const uint slot){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// The active TLAS descriptor is selected by the host when it binds the heap's set-10 descriptor-buffer block.
+// The active TLAS descriptor is selected by the host when it binds the heap's set-2 descriptor-buffer block.
 // It is not an array subscript in shader code: a freshly allocated block per TLAS generation keeps older command buffers pointing at their original AS descriptor until the heap's deferred-free quarantine retires it.
 
 

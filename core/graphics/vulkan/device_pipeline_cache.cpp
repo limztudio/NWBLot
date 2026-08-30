@@ -212,29 +212,6 @@ bool Device::loadPipelineCacheData(GraphicsBytes& outData){
     return true;
 }
 
-VkDescriptorSetLayout Device::getOrCreateEmptyDescriptorBufferSetLayout()const{
-    // Lazily create immutable empty layouts under the cache mutex.
-    if(m_context.emptyDescriptorBufferSetLayout != VK_NULL_HANDLE)
-        return m_context.emptyDescriptorBufferSetLayout;
-
-    if(!m_context.extensions.EXT_descriptor_buffer)
-        return VK_NULL_HANDLE;
-
-    auto layoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
-    layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    layoutInfo.bindingCount = 0;
-    layoutInfo.pBindings = nullptr;
-
-    VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
-    const VkResult res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create empty descriptor-buffer set layout. {}"), ResultToString(res));
-        return VK_NULL_HANDLE;
-    }
-    const_cast<VkDescriptorSetLayout&>(m_context.emptyDescriptorBufferSetLayout) = setLayout;
-    return setLayout;
-}
-
 void Device::savePipelineCacheData(){
     if(m_pipelineCacheDirectory.empty() || m_pipelineCacheVolumeName.empty() || !m_context.pipelineCache)
         return;

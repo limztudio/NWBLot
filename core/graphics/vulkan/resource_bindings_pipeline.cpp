@@ -35,12 +35,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
     }
 
     if(bindingLayouts.empty()){
-        const VkDescriptorSetLayout emptyLayout = getOrCreateEmptyDescriptorBufferSetLayout();
-        if(emptyLayout == VK_NULL_HANDLE){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: the required empty descriptor-buffer layout is unavailable."), operationName);
-            return false;
-        }
-        if(!VulkanDetail::CreatePipelineLayout(m_context, &emptyLayout, 1u, 0u, outPipelineLayout, operationName))
+        if(!VulkanDetail::CreatePipelineLayout(m_context, nullptr, 0u, 0u, outPipelineLayout, operationName))
             return false;
 
         outOwnsPipelineLayout = true;
@@ -66,10 +61,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
             return false;
         }
 
-        pushConstantByteSize = Max<u32>(
-            pushConstantByteSize,
-            VulkanDetail::GetPushConstantByteSize(layout->getBindingLayoutDesc())
-        );
+        pushConstantByteSize = Max<u32>(pushConstantByteSize, layout->m_pushConstantByteSize);
         if(layout->m_descriptorSetLayouts.size() > static_cast<usize>(Limit<u32>::s_Max) - descriptorSetLayoutCount){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor set layout count exceeds u32 limits")
                 , operationName
@@ -79,39 +71,34 @@ bool Device::createPipelineLayoutForBindingLayouts(
         descriptorSetLayoutCount += layout->m_descriptorSetLayouts.size();
     }
 
-    // Global heaps pin to reserved sets 8/9/10; local push-only layouts remain positional.
-    const auto layoutSetIndex = [](const BindingLayout& layout, const u32 positional, bool& outExplicit) -> u32{
-        if(const BindlessLayoutDesc* bindlessDesc = layout.getBindlessDesc()){
-            outExplicit = true;
-            return bindlessDesc->descriptorSetIndex;
-        }
-        outExplicit = false;
-        return positional;
-    };
-
-    bool anyExplicitSet = false;
-    for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()) && !anyExplicitSet; ++i){
-        const BindingLayout* const layout = bindingLayouts[i].get();
-        NWB_ASSERT(layout != nullptr);
-        anyExplicitSet = layout->getBindlessDesc() != nullptr;
-    }
-
-
     for(const auto& bindingLayout : bindingLayouts){
         const auto* layout = bindingLayout.get();
         if(!layout || !layout->isDescriptorBufferCompatible()){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: every binding layout must be descriptor-buffer-compatible."), operationName);
             return false;
         }
-        if(const BindlessLayoutDesc* bindlessDesc = layout->getBindlessDesc()){
-            if(bindlessDesc->descriptorSetIndex < s_MaxBindingLayouts){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: resource-bearing bindless layouts must use an explicit global-heap set at or above {}."), operationName, s_MaxBindingLayouts);
-                return false;
-            }
+        const BindlessLayoutDesc* const bindlessDesc = layout->getBindlessDesc();
+        if(!layout->m_descriptorSetLayouts.empty() && !bindlessDesc){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {} needs explicit set metadata for every descriptor layout.")
+                , operationName
+            );
+            return false;
+        }
+        if(bindlessDesc && layout->m_descriptorSetLayouts.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: a bindless layout owns no descriptor-set layout.")
+                , operationName
+            );
+            return false;
+        }
+        if(bindlessDesc && bindlessDesc->descriptorSetIndex == Limit<u32>::s_Max){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {} bindless resource layouts require an explicit set index.")
+                , operationName
+            );
+            return false;
         }
     }
 
-    if(bindingLayouts.size() == 1 && !anyExplicitSet){
+    if(bindingLayouts.size() == 1 && descriptorSetLayoutCount == 0u){
         auto* layout = bindingLayouts[0].get();
         NWB_ASSERT(layout != nullptr);
         outPipelineLayout = layout->m_pipelineLayout;
@@ -119,66 +106,73 @@ bool Device::createPipelineLayoutForBindingLayouts(
         return true;
     }
 
-    if(!anyExplicitSet){
-        descriptorSetLayouts.reserve(descriptorSetLayoutCount);
-        for(const auto& bindingLayout : bindingLayouts){
-            auto* layout = bindingLayout.get();
-            NWB_ASSERT(layout != nullptr);
-            for(const auto& descriptorSetLayout : layout->m_descriptorSetLayouts)
-                descriptorSetLayouts.push_back(descriptorSetLayout);
-        }
-        NWB_ASSERT(descriptorSetLayouts.size() == descriptorSetLayoutCount);
+    if(descriptorSetLayoutCount == 0u){
+        if(!VulkanDetail::CreatePipelineLayout(m_context, nullptr, 0u, pushConstantByteSize, outPipelineLayout, operationName))
+            return false;
+
+        outPushConstantByteSize = pushConstantByteSize;
+        outOwnsPipelineLayout = true;
+        return true;
     }
-    else{
-        // Fill unused sets with empty descriptor-buffer layouts; Vulkan permits no gaps.
-        const VkDescriptorSetLayout fillSetLayout = getOrCreateEmptyDescriptorBufferSetLayout();
-        if(fillSetLayout == VK_NULL_HANDLE){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor-buffer explicit-set placement needs the empty descriptor-buffer gap-set layout, which is unavailable"), operationName);
+
+    u32 maxSetIndex = 0;
+    for(const auto& bindingLayout : bindingLayouts){
+        const BindingLayout& layout = *bindingLayout.get();
+        const usize setCount = layout.m_descriptorSetLayouts.size();
+        if(setCount == 0u)
+            continue;
+        const BindlessLayoutDesc* const bindlessDesc = layout.getBindlessDesc();
+        NWB_ASSERT(bindlessDesc != nullptr);
+        const u32 base = bindlessDesc->descriptorSetIndex;
+        if(base > Limit<u32>::s_Max - static_cast<u32>(setCount - 1u)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor set index overflow"), operationName);
             return false;
         }
+        maxSetIndex = Max<u32>(maxSetIndex, base + static_cast<u32>(setCount) - 1u);
+    }
 
-        u32 maxSetIndex = 0;
-        for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()); ++i){
-            const BindingLayout& layout = *bindingLayouts[i].get();
-            const usize setCount = layout.m_descriptorSetLayouts.size();
-            if(setCount == 0)
-                continue;
-            bool isExplicit = false;
-            const u32 base = layoutSetIndex(layout, i, isExplicit);
-            if(base > Limit<u32>::s_Max - static_cast<u32>(setCount - 1)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor set index overflow"), operationName);
+    if(maxSetIndex >= m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to create {}: descriptor set {} exceeds maxBoundDescriptorSets {}")
+            , operationName
+            , maxSetIndex
+            , m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets
+        );
+        return false;
+    }
+
+    const u32 totalSets = maxSetIndex + 1u;
+    descriptorSetLayouts.reserve(totalSets);
+    for(u32 setIndex = 0; setIndex < totalSets; ++setIndex)
+        descriptorSetLayouts.push_back(VK_NULL_HANDLE);
+
+    for(const auto& bindingLayout : bindingLayouts){
+        const BindingLayout& layout = *bindingLayout.get();
+        if(layout.m_descriptorSetLayouts.empty())
+            continue;
+        const BindlessLayoutDesc* const bindlessDesc = layout.getBindlessDesc();
+        NWB_ASSERT(bindlessDesc != nullptr);
+        const u32 base = bindlessDesc->descriptorSetIndex;
+        for(usize localSetIndex = 0; localSetIndex < layout.m_descriptorSetLayouts.size(); ++localSetIndex){
+            const u32 setIndex = base + static_cast<u32>(localSetIndex);
+            if(descriptorSetLayouts[setIndex] != VK_NULL_HANDLE){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: two binding layouts map to descriptor set {}")
+                    , operationName
+                    , setIndex
+                );
                 return false;
             }
-            maxSetIndex = Max<u32>(maxSetIndex, base + static_cast<u32>(setCount) - 1u);
+            descriptorSetLayouts[setIndex] = layout.m_descriptorSetLayouts[localSetIndex];
         }
+    }
 
-        if(maxSetIndex >= m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create {}: descriptor set {} exceeds maxBoundDescriptorSets {}")
+    for(u32 setIndex = 0; setIndex < totalSets; ++setIndex){
+        if(descriptorSetLayouts[setIndex] == VK_NULL_HANDLE){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {} descriptor layouts must be dense from set 0; set {} is missing")
                 , operationName
-                , maxSetIndex
-                , m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets
+                , setIndex
             );
             return false;
-        }
-
-        const u32 totalSets = maxSetIndex + 1u;
-        descriptorSetLayouts.reserve(totalSets);
-        for(u32 s = 0; s < totalSets; ++s)
-            descriptorSetLayouts.push_back(fillSetLayout);
-
-        for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()); ++i){
-            const BindingLayout& layout = *bindingLayouts[i].get();
-            bool isExplicit = false;
-            const u32 base = layoutSetIndex(layout, i, isExplicit);
-            for(usize s = 0; s < layout.m_descriptorSetLayouts.size(); ++s){
-                const u32 slot = base + static_cast<u32>(s);
-                if(descriptorSetLayouts[slot] != fillSetLayout){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: two binding layouts map to descriptor set {}"), operationName, slot);
-                    return false;
-                }
-                descriptorSetLayouts[slot] = layout.m_descriptorSetLayouts[s];
-            }
         }
     }
 
@@ -231,7 +225,7 @@ bool Device::configurePipelineBindings(
         const BindlessLayoutDesc* const bindlessDesc = layout->getBindlessDesc();
         outBindings.m_bindingLayoutSetIndicesAtCreation[layoutIndex] = bindlessDesc
             ? bindlessDesc->descriptorSetIndex
-            : layoutIndex
+            : Limit<u32>::s_Max
         ;
     }
     return true;

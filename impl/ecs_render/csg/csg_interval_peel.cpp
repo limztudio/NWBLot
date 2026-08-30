@@ -145,7 +145,7 @@ static void DispatchCsgIntervalCompute(
     // This CSG layout owns only the dispatch push range.  Images, view data, and CSG context are selected from the
     // global descriptor heap, so no pipeline-local resource descriptor is installed.
     commandList.setComputeState(computeState);
-    // The CSG pipeline carries the persistent heap layouts at sets 8/9; bind after setComputeState installs that
+    // The CSG pipeline carries the persistent heap layouts at sets 0/1; bind after setComputeState installs that
     // pipeline layout so its StorageImage table resolves the target-generation slots.
     heap.bindCompute(commandList, *pipeline);
 

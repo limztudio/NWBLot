@@ -580,9 +580,6 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         VulkanDetail::SetGraphicsDynamicState(m_currentCmdBuf->m_cmdBuf, pipeline->m_desc, state);
     }
 
-    if(pipeline)
-        bindDescriptorBufferEmptySet(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipelineLayout);
-
     setViewportState(state.viewport);
 
     for(const VertexBufferBinding& binding : state.vertexBuffers){

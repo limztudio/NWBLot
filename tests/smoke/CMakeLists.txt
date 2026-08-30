@@ -106,6 +106,17 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "$<TARGET_FILE:testbed>"
             "${NWB_OUTPUT_ROOT}"
             "NWB Testbed"
+            "--reject-log-message" "software BVH build failed"
+            "--reject-log-message" "software BVH update failed"
+            "--reject-log-message" "Gpu task graph: rejecting task 'Shadow Preparation'"
+            "--reject-log-message" "[WARNING]"
+            "--reject-log-message" "[CRITICAL WARNING]"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "[CRITICAL]"
+            "--reject-log-message" "[FATAL]"
+            "--reject-log-message" "VUID-"
+            "--reject-log-message" "Validation Error"
+            "--reject-log-message" "failed to resolve shader"
         )
     endif()
 

@@ -2248,7 +2248,11 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
         outBackendReady = m_shadowVisibilityBackendPipelinePreflighted;
         if(deferHybridSoftwareTail)
             return true;
-        const bool directMeshSwBvhBuildReady = meshSwBvhBuildsGraphOwned
+        // Opaque hardware frames intentionally do not prepare the optional software traversal resources. Only enter
+        // the direct compatibility builder after preflight selected that hybrid tail; otherwise its missing buffers
+        // would produce false per-mesh build failures even though no software consumer can run.
+        const bool directMeshSwBvhBuildReady = !m_shadowVisibilityHybridResourcesPreflighted
+            || meshSwBvhBuildsGraphOwned
             || buildPendingMeshSwBvh(commandList, scratchArena)
         ;
         return recordPreflightHybridSoftwareTail(

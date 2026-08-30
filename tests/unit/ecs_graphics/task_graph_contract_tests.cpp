@@ -5744,6 +5744,56 @@ TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRe
 }
 
 
+// Opaque hardware shadows never prepare the optional software traversal resources. Keep the direct compatibility
+// builder behind the frozen hybrid-resource gate without removing the real pure-software fallback.
+TEST(EcsGraphics, HardwareOpaqueShadowPreparationDoesNotEagerlyBuildSoftwareBvhs){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString rayTracingSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
+
+    const AStringView rayTracing(rayTracingSource.data(), rayTracingSource.size());
+    const usize recordOffset = rayTracing.find(
+        "bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources("
+    );
+    const usize recordEndOffset = rayTracing.find(
+        "bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(",
+        recordOffset
+    );
+    ASSERT_NE(recordOffset, AStringView::npos);
+    ASSERT_NE(recordEndOffset, AStringView::npos);
+    const AStringView record = rayTracing.substr(recordOffset, recordEndOffset - recordOffset);
+
+    const usize hardwareBranchOffset = record.find("if(m_shadowVisibilityHardwareSupported){");
+    const usize softwareBranchOffset = record.find("const bool meshSwBvhReady =", hardwareBranchOffset);
+    ASSERT_NE(hardwareBranchOffset, AStringView::npos);
+    ASSERT_NE(softwareBranchOffset, AStringView::npos);
+    const AStringView hardwareBranch = record.substr(
+        hardwareBranchOffset,
+        softwareBranchOffset - hardwareBranchOffset
+    );
+    const usize directBuildAssignmentOffset = hardwareBranch.find("const bool directMeshSwBvhBuildReady =");
+    const usize hybridTailCallOffset = hardwareBranch.find("return recordPreflightHybridSoftwareTail(");
+    const usize directBuildCallOffset = hardwareBranch.find("buildPendingMeshSwBvh(commandList, scratchArena)");
+    ASSERT_NE(directBuildAssignmentOffset, AStringView::npos);
+    ASSERT_NE(hybridTailCallOffset, AStringView::npos);
+    ASSERT_NE(directBuildCallOffset, AStringView::npos);
+    EXPECT_TRUE(ContainsText(
+        hardwareBranch,
+        "const bool directMeshSwBvhBuildReady = !m_shadowVisibilityHybridResourcesPreflighted\n"
+        "            || meshSwBvhBuildsGraphOwned\n"
+        "            || buildPendingMeshSwBvh(commandList, scratchArena)"
+    ));
+    EXPECT_EQ(CountText(hardwareBranch, "buildPendingMeshSwBvh(commandList, scratchArena)"), 1u);
+    EXPECT_LT(directBuildAssignmentOffset, directBuildCallOffset);
+    EXPECT_LT(directBuildCallOffset, hybridTailCallOffset);
+
+    const AStringView softwareBranch = record.substr(softwareBranchOffset);
+    EXPECT_TRUE(ContainsText(softwareBranch, ": buildPendingMeshSwBvh(commandList, scratchArena)"));
+}
+
+
 // A healthy hybrid tail requires both a fresh software triple and a complete frozen hardware restore triple. A tail
 // miss restores only declared blobs; invalid snapshots reject the merged packet for a fresh preflight.
 TEST(EcsGraphics, HybridHardwareFallbackRequiresCompleteGraphOwnedBlobs){

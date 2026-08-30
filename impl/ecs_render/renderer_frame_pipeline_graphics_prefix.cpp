@@ -1176,16 +1176,20 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     if(hasOpaqueCsgFrameWork){
         csgReceiverSpanResourceUses.reserve(4u + (hasCsgFrameGpuWork ? 2u : 0u));
         csgIntervalCombineResourceUses.reserve(9u + (hasCsgFrameGpuWork ? 2u : 0u));
+        // Peel payloads and receiver-event entries never load their prior values. Their paired interval ID and
+        // event count preserve the sparse-write validity contract after the preceding explicit clears, so only those
+        // two resources require ReadWrite access. Keeping the payloads write-only also permits their first graph
+        // use to begin at a fresh texture's native Unknown state.
         gbufferResourceUses.push_back(
-            ReadWriteTextureUse(csgCapBackNormal, csgPeelSubresources, Core::ResourceStates::UnorderedAccess)
+            WriteTextureUse(csgCapBackNormal, csgPeelSubresources, Core::ResourceStates::UnorderedAccess)
         );
         gbufferResourceUses.push_back(
-            ReadWriteTextureUse(csgIntervalDepth, csgPeelSubresources, Core::ResourceStates::UnorderedAccess)
+            WriteTextureUse(csgIntervalDepth, csgPeelSubresources, Core::ResourceStates::UnorderedAccess)
         );
         gbufferResourceUses.push_back(
             ReadWriteTextureUse(csgIntervalId, csgPeelSubresources, Core::ResourceStates::UnorderedAccess)
         );
-        gbufferResourceUses.push_back(ReadWriteTextureUse(
+        gbufferResourceUses.push_back(WriteTextureUse(
             csgReceiverEventData,
             csgReceiverEventDataSubresources,
             Core::ResourceStates::UnorderedAccess

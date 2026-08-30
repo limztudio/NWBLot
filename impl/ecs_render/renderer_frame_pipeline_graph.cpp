@@ -2485,16 +2485,19 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitIntervalResourceUses.push_back(ReadUse(csgCutters, Core::ResourceStates::ShaderResource));
         avboitIntervalResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
         avboitIntervalResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
+        // The sparse peel and event payloads are never loaded by this producer. Interval ID preserves its preceding
+        // zero clear for unwritten layers, while event count is atomically incremented from its clear, so those two
+        // validity resources remain ReadWrite. The payloads are write-only and may start from native Unknown.
         avboitIntervalResourceUses.push_back(
-            ReadWriteTextureUse(csgCapBackNormal, csgPeelSubresources, Core::ResourceStates::UnorderedAccess)
+            WriteTextureUse(csgCapBackNormal, csgPeelSubresources, Core::ResourceStates::UnorderedAccess)
         );
         avboitIntervalResourceUses.push_back(
-            ReadWriteTextureUse(csgIntervalDepth, csgPeelSubresources, Core::ResourceStates::UnorderedAccess)
+            WriteTextureUse(csgIntervalDepth, csgPeelSubresources, Core::ResourceStates::UnorderedAccess)
         );
         avboitIntervalResourceUses.push_back(
             ReadWriteTextureUse(csgIntervalId, csgPeelSubresources, Core::ResourceStates::UnorderedAccess)
         );
-        avboitIntervalResourceUses.push_back(ReadWriteTextureUse(
+        avboitIntervalResourceUses.push_back(WriteTextureUse(
             csgReceiverEventData,
             csgReceiverEventDataSubresources,
             Core::ResourceStates::UnorderedAccess

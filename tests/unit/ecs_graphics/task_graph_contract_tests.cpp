@@ -5027,6 +5027,69 @@ TEST(EcsGraphics, AvboitMaterialUploadsHaveNoNativeCompatibilityDispatcher){
 }
 
 
+// CSG's peel/event payload images carry no validity by themselves: interval ID and receiver-event count gate every
+// later load. Keep those payload declarations write-only so a transparent-only frame can begin from fresh native
+// textures without inventing a prior state, while the cleared validity images retain their ReadWrite contracts.
+TEST(EcsGraphics, CsgIntervalProducerPayloadsDoNotRequirePriorNativeState){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString graphicsPrefixSource;
+    AString deferredGraphSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graphics_prefix.cpp",
+        graphicsPrefixSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp",
+        deferredGraphSource
+    ));
+    const AStringView graphicsPrefix(graphicsPrefixSource.data(), graphicsPrefixSource.size());
+    const AStringView deferredGraph(deferredGraphSource.data(), deferredGraphSource.size());
+
+    const auto expectWriteOnlyPayloads = [](
+        const AStringView source,
+        const AStringView beginMarker,
+        const AStringView endMarker
+    ){
+        const usize begin = source.find(beginMarker);
+        ASSERT_NE(begin, AStringView::npos);
+        const usize end = source.find(endMarker, begin);
+        ASSERT_NE(end, AStringView::npos);
+        ASSERT_LT(begin, end);
+        const AStringView producerUses = source.substr(begin, end - begin);
+
+        EXPECT_TRUE(ContainsText(producerUses, "            WriteTextureUse(csgCapBackNormal,"));
+        EXPECT_TRUE(ContainsText(producerUses, "            WriteTextureUse(csgIntervalDepth,"));
+        EXPECT_TRUE(ContainsText(
+            producerUses,
+            ".push_back(WriteTextureUse(\n            csgReceiverEventData,"
+        ));
+        EXPECT_FALSE(ContainsText(producerUses, "            ReadWriteTextureUse(csgCapBackNormal,"));
+        EXPECT_FALSE(ContainsText(producerUses, "            ReadWriteTextureUse(csgIntervalDepth,"));
+        EXPECT_FALSE(ContainsText(
+            producerUses,
+            ".push_back(ReadWriteTextureUse(\n            csgReceiverEventData,"
+        ));
+        EXPECT_TRUE(ContainsText(producerUses, "            ReadWriteTextureUse(csgIntervalId,"));
+        EXPECT_TRUE(ContainsText(
+            producerUses,
+            ".push_back(ReadWriteTextureUse(\n            csgReceiverEventCount,"
+        ));
+    };
+    expectWriteOnlyPayloads(
+        graphicsPrefix,
+        "csgReceiverSpanResourceUses.reserve(4u + (hasCsgFrameGpuWork ? 2u : 0u));",
+        "csgReceiverSpanResourceUses.push_back(ReadTextureUse("
+    );
+    expectWriteOnlyPayloads(
+        deferredGraph,
+        "avboitIntervalResourceUses.reserve(16u);",
+        "const Core::GpuTaskResourceSetUse transparentCsgMaterialGeometrySetUse"
+    );
+}
+
+
 // Shadow Prepare consumes the immutable material-context selector uploaded before graph recording. Do not retain
 // a native writer that can re-read descriptor slots after that declaration boundary.
 TEST(EcsGraphics, RayTraceMaterialContextSelectorHasNoNativeCompatibilityDispatcher){

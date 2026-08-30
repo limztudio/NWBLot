@@ -7300,11 +7300,12 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
 
     EXPECT_TRUE(ContainsText(
         smoke,
-        "TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapPendingRecordingLeaseProtectsCapturedSlots)"
+        "TEST_F(DescriptorBufferAllocationTest, DescriptorHeapPendingRecordingLeaseProtectsCapturedSlots)"
     ));
     EXPECT_TRUE(ContainsText(
         smoke,
-        "TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapPendingRecordingLeaseRejectsReinitializeAndRecyclesWithoutRecording)"
+        "TEST_F(DescriptorBufferAllocationTest, "
+        "DescriptorHeapPendingRecordingLeaseRejectsReinitializeAndRecyclesWithoutRecording)"
     ));
     EXPECT_TRUE(ContainsText(
         smoke,

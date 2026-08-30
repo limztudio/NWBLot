@@ -703,8 +703,8 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Fixture: one headless device shared across the suite. The descriptor-buffer segments are HOST-mapped and persist
-// for device life, so per-case carve/free is exercised against the real global segments (resource + sampler).
+// Fixture: one headless device shared across the suite. The renderer's global heap stays live so ordinary round-trip
+// tests exercise production descriptor-buffer ownership and binding paths.
 class DescriptorBufferRoundTripTest : public ::testing::Test{
 protected:
     static void SetUpTestSuite(){
@@ -774,6 +774,27 @@ bool DescriptorBufferRoundTripTest::s_validationBackedDeviceInitialized = false;
 UniquePtr<HeadlessGraphicsScope> DescriptorBufferRoundTripTest::s_scope;
 Optional<CapturingLogger> DescriptorBufferRoundTripTest::s_logger;
 Optional<Common::LoggerRegistrationGuard> DescriptorBufferRoundTripTest::s_loggerGuard;
+
+
+// Direct manager and alternate-heap clients need exclusive ownership of device-bounded ranges. A separate fixture
+// lifetime keeps the renderer heap live for ordinary round-trip and binding coverage.
+class DescriptorBufferAllocationTest : public DescriptorBufferRoundTripTest{
+protected:
+    static void SetUpTestSuite(){
+        DescriptorBufferRoundTripTest::SetUpTestSuite();
+        if(!s_validationBackedDeviceInitialized)
+            return;
+        if(!manager().isEnabled())
+            return;
+
+        auto& heap = device().getDescriptorHeap();
+        heap.shutdown();
+        ASSERT_FALSE(heap.isInitialized());
+        ASSERT_TRUE(manager().isEnabled());
+    }
+
+    static void TearDownTestSuite(){ DescriptorBufferRoundTripTest::TearDownTestSuite(); }
+};
 
 
 struct FrameCpuTimingCallbackState{
@@ -61062,7 +61083,7 @@ TEST_F(DescriptorBufferRoundTripTest, ThreadPoolDomainsIsolateCollidingWorkersAn
 // Carve one storage-buffer descriptor out of the resource segment and confirm writeDescriptor succeeds via the
 // vkGetDescriptorEXT path. Free returns the range to the free list. Storage buffer is the descriptor class every
 // raytrace pass binds, so it is the most representative round trip.
-TEST_F(DescriptorBufferRoundTripTest, RoundTripsStorageBufferDescriptor){
+TEST_F(DescriptorBufferAllocationTest, RoundTripsStorageBufferDescriptor){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& mgr = manager();
 
@@ -61096,7 +61117,7 @@ TEST_F(DescriptorBufferRoundTripTest, RoundTripsStorageBufferDescriptor){
 
 // Uniform (constant) buffer descriptor: same carve/write/free shape, different VkDescriptorType arm. Ensures the
 // manager routes UNIFORM_BUFFER through VkDescriptorAddressInfoEXT (the non-texel buffer-info path).
-TEST_F(DescriptorBufferRoundTripTest, RoundTripsUniformBufferDescriptor){
+TEST_F(DescriptorBufferAllocationTest, RoundTripsUniformBufferDescriptor){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& mgr = manager();
 
@@ -61125,7 +61146,7 @@ TEST_F(DescriptorBufferRoundTripTest, RoundTripsUniformBufferDescriptor){
 
 // Sampled-image descriptor: the Texture_SRV path, which routes through VkDescriptorImageInfo (image view + layout).
 // Together with storage/uniform buffers, this covers the descriptor classes the shadow/GI/caustics passes bind.
-TEST_F(DescriptorBufferRoundTripTest, RoundTripsSampledImageDescriptor){
+TEST_F(DescriptorBufferAllocationTest, RoundTripsSampledImageDescriptor){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& mgr = manager();
 
@@ -61155,7 +61176,7 @@ TEST_F(DescriptorBufferRoundTripTest, RoundTripsSampledImageDescriptor){
 
 // Sampler descriptor: the one class that lives in the separate SAMPLER segment (RADV requires samplers in their own
 // descriptor buffer binding). Verifies the kind routing places the carve in the sampler segment, not the resource one.
-TEST_F(DescriptorBufferRoundTripTest, RoundTripsSamplerDescriptor){
+TEST_F(DescriptorBufferAllocationTest, RoundTripsSamplerDescriptor){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& mgr = manager();
 
@@ -61179,7 +61200,7 @@ TEST_F(DescriptorBufferRoundTripTest, RoundTripsSamplerDescriptor){
 
 // Free-list reuse: allocate a range, free it, allocate the same size again — the second carve must be satisfied from
 // the free list and succeed. This proves the sub-allocator remains safe under live allocate/free churn across frames.
-TEST_F(DescriptorBufferRoundTripTest, FreeListReusesFreedRange){
+TEST_F(DescriptorBufferAllocationTest, FreeListReusesFreedRange){
     auto& mgr = manager();
 
     const u32 descriptorSize = mgr.getDescriptorSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
@@ -61223,7 +61244,7 @@ TEST_F(DescriptorBufferRoundTripTest, EveryDescriptorTypeReportsNonZeroSize){
 
 // Alignment: carve two adjacent ranges and confirm each block offset is descriptorBufferOffsetAlignment-aligned, and
 // the second does not overlap the first. That is the invariant vkCmdSetDescriptorBufferOffsetsEXT must honor.
-TEST_F(DescriptorBufferRoundTripTest, AllocationsAreDescriptorBufferOffsetAligned){
+TEST_F(DescriptorBufferAllocationTest, AllocationsAreDescriptorBufferOffsetAligned){
     auto& mgr = manager();
 
     const u32 descriptorSize = mgr.getDescriptorSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
@@ -61247,7 +61268,7 @@ TEST_F(DescriptorBufferRoundTripTest, AllocationsAreDescriptorBufferOffsetAligne
 
 // The manager's public byte-write entry point must not reinterpret a resource payload through the wrong
 // VkDescriptorDataEXT union arm, and allocation/free inputs must preserve the block-ownership invariant.
-TEST_F(DescriptorBufferRoundTripTest, ManagerRejectsMismatchedWritesAndInvalidBlocks){
+TEST_F(DescriptorBufferAllocationTest, ManagerRejectsMismatchedWritesAndInvalidBlocks){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& mgr = manager();
 
@@ -61425,7 +61446,7 @@ TEST_F(DescriptorBufferRoundTripTest, SparseExplicitDescriptorSetLayoutsAreRejec
 
 // Heap slots are raw ABI values, so lifecycle bookkeeping must prevent a duplicate free from recycling the same raw
 // slot twice and must reject a write through a handle that is already in its deferred-free quarantine.
-TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetiredAndDoubleFreedHandles){
+TEST_F(DescriptorBufferAllocationTest, DescriptorHeapRejectsRetiredAndDoubleFreedHandles){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     GraphicsBackend::GpuDescriptorHeap heap(device);
@@ -61499,7 +61520,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetiredAndDoubleFreed
 
 // CPU graph snapshots can outlive the registry generation they captured until native recording consumes their raw
 // descriptor slots. Overlapping leases therefore keep every freed slot quarantined until the final lease releases.
-TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapPendingRecordingLeaseProtectsCapturedSlots){
+TEST_F(DescriptorBufferAllocationTest, DescriptorHeapPendingRecordingLeaseProtectsCapturedSlots){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     GraphicsBackend::GpuDescriptorHeap heap(device);
@@ -61580,7 +61601,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapPendingRecordingLeaseProtect
 
 // A pending snapshot with no native recording has no GPU boundary to await. Reinitialization must preserve its heap
 // generation, and final lease release must make the quarantined capacity available immediately.
-TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapPendingRecordingLeaseRejectsReinitializeAndRecyclesWithoutRecording){
+TEST_F(DescriptorBufferAllocationTest, DescriptorHeapPendingRecordingLeaseRejectsReinitializeAndRecyclesWithoutRecording){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     GraphicsBackend::GpuDescriptorHeap heap(device);
@@ -63279,7 +63300,7 @@ void ExpectDescriptorHeapWriteRejection(Operation&& operation){
 }
 
 
-TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetaggedAndIncompatibleWritesBeforeMutation){
+TEST_F(DescriptorBufferAllocationTest, DescriptorHeapRejectsRetaggedAndIncompatibleWritesBeforeMutation){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     GraphicsBackend::GpuDescriptorHeap heap(device);
@@ -63391,7 +63412,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetaggedAndIncompatib
 }
 
 
-TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapValidatesSampledAndStorageImageAbiBeforeRetention){
+TEST_F(DescriptorBufferAllocationTest, DescriptorHeapValidatesSampledAndStorageImageAbiBeforeRetention){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     GraphicsBackend::GpuDescriptorHeap heap(device);
@@ -63619,7 +63640,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapValidatesSampledAndStorageIm
 }
 
 
-TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapTypedRetentionOutlivesExternalHandles){
+TEST_F(DescriptorBufferAllocationTest, DescriptorHeapTypedRetentionOutlivesExternalHandles){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     GraphicsBackend::GpuDescriptorHeap heap(device);
@@ -63685,7 +63706,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapTypedRetentionOutlivesExtern
 }
 
 
-TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsForeignResourcesAndDoesNotExposeFailedTlasBlocks){
+TEST_F(DescriptorBufferAllocationTest, DescriptorHeapRejectsForeignResourcesAndDoesNotExposeFailedTlasBlocks){
     auto& device = DescriptorBufferRoundTripTest::device();
     HeadlessGraphicsScope foreignScope;
     ASSERT_TRUE(foreignScope.initialize());

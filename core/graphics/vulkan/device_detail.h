@@ -28,6 +28,20 @@ namespace VulkanDetail{
 inline constexpr AStringView s_PipelineCacheVirtualPath = "vulkan/pipeline_cache.bin";
 // Pipeline-cache validation rejects data from different GPUs or drivers.
 inline constexpr AStringView s_PipelineCacheVolumeName = "runtime_pipeline_cache";
+inline constexpr usize s_PipelineCacheHeaderVersionOneSize = 32u;
+
+namespace PipelineCacheDataValidation{
+    enum Enum : u8{
+        Usable,
+        Malformed,
+        Incompatible,
+    };
+};
+
+[[nodiscard]] PipelineCacheDataValidation::Enum ValidatePipelineCacheData(
+    BinaryByteView cacheData,
+    const VkPhysicalDeviceProperties& properties
+)noexcept;
 
 
 class DeviceGenerationAllocator final : NoCopy{

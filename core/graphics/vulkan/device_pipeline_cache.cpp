@@ -31,6 +31,15 @@ static constexpr u64 s_PipelineCacheVolumeSegmentSize = 16ull * 1024ull * 1024ul
 static constexpr u64 s_PipelineCacheVolumeMetadataSize = 4ull * 1024ull;
 static constexpr usize s_PipelineCacheDataMaxAttempts = 4;
 
+[[nodiscard]] static u32 ReadPipelineCacheU32(const BinaryByteView cacheData, const usize offset)noexcept{
+    return
+        static_cast<u32>(cacheData[offset])
+        | (static_cast<u32>(cacheData[offset + 1u]) << 8u)
+        | (static_cast<u32>(cacheData[offset + 2u]) << 16u)
+        | (static_cast<u32>(cacheData[offset + 3u]) << 24u)
+    ;
+}
+
 static bool MountPipelineCacheVolume(
     const Path& directory,
     const AStringView volumeName,
@@ -50,30 +59,6 @@ static bool MountPipelineCacheVolume(
     }
 
     return outVolume.mount(mountDesc);
-}
-
-template<typename CacheDataVector>
-static bool ValidatePipelineCacheData(const CacheDataVector& cacheData, const VkPhysicalDeviceProperties& properties){
-    static_assert(IsSame_V<typename CacheDataVector::value_type, u8>, "pipeline cache data must be byte-addressable");
-
-    if(cacheData.size() < sizeof(VkPipelineCacheHeaderVersionOne))
-        return false;
-
-    VkPipelineCacheHeaderVersionOne header{};
-    NWB_MEMCPY(&header, sizeof(header), cacheData.data(), sizeof(header));
-
-    if(header.headerSize < sizeof(VkPipelineCacheHeaderVersionOne))
-        return false;
-    if(header.headerSize > cacheData.size())
-        return false;
-    if(header.headerVersion != VK_PIPELINE_CACHE_HEADER_VERSION_ONE)
-        return false;
-    if(header.vendorID != properties.vendorID || header.deviceID != properties.deviceID)
-        return false;
-    if(NWB_MEMCMP(header.pipelineCacheUUID, properties.pipelineCacheUUID, VK_UUID_SIZE) != 0)
-        return false;
-
-    return true;
 }
 
 template<typename CacheDataVector>
@@ -132,6 +117,45 @@ static bool RetrievePipelineCacheData(VkDevice device, VkPipelineCache pipelineC
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+namespace VulkanDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+PipelineCacheDataValidation::Enum ValidatePipelineCacheData(
+    const BinaryByteView cacheData,
+    const VkPhysicalDeviceProperties& properties
+)noexcept{
+    if(cacheData.data() == nullptr || cacheData.size() < s_PipelineCacheHeaderVersionOneSize)
+        return PipelineCacheDataValidation::Malformed;
+
+    const u32 headerSize = __hidden_vulkan_device_pipeline_cache::ReadPipelineCacheU32(cacheData, 0u);
+    if(headerSize != s_PipelineCacheHeaderVersionOneSize)
+        return PipelineCacheDataValidation::Malformed;
+
+    const u32 headerVersion = __hidden_vulkan_device_pipeline_cache::ReadPipelineCacheU32(cacheData, 4u);
+    if(headerVersion != static_cast<u32>(VK_PIPELINE_CACHE_HEADER_VERSION_ONE))
+        return PipelineCacheDataValidation::Incompatible;
+
+    const u32 vendorId = __hidden_vulkan_device_pipeline_cache::ReadPipelineCacheU32(cacheData, 8u);
+    const u32 deviceId = __hidden_vulkan_device_pipeline_cache::ReadPipelineCacheU32(cacheData, 12u);
+    if(vendorId != properties.vendorID || deviceId != properties.deviceID)
+        return PipelineCacheDataValidation::Incompatible;
+    if(NWB_MEMCMP(cacheData.data() + 16u, properties.pipelineCacheUUID, VK_UUID_SIZE) != 0)
+        return PipelineCacheDataValidation::Incompatible;
+
+    return PipelineCacheDataValidation::Usable;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 bool Device::loadPipelineCacheData(GraphicsBytes& outData){
     outData.clear();
     if(m_pipelineCacheDirectory.empty() || m_pipelineCacheVolumeName.empty())
@@ -164,9 +188,20 @@ bool Device::loadPipelineCacheData(GraphicsBytes& outData){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to read pipeline cache data from runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         return false;
     }
-    if(!__hidden_vulkan_device_pipeline_cache::ValidatePipelineCacheData(outData, m_context.physicalDeviceProperties)){
+    const VulkanDetail::PipelineCacheDataValidation::Enum validation = VulkanDetail::ValidatePipelineCacheData(
+        BinaryByteView{ outData.data(), outData.size() },
+        m_context.physicalDeviceProperties
+    );
+    if(validation != VulkanDetail::PipelineCacheDataValidation::Usable){
         outData.clear();
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring incompatible pipeline cache data in runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
+        if(validation == VulkanDetail::PipelineCacheDataValidation::Malformed)
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring malformed pipeline cache data in runtime volume '{}'.")
+                , StringConvert(m_pipelineCacheVolumeName)
+            );
+        else
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring incompatible pipeline cache data in runtime volume '{}'.")
+                , StringConvert(m_pipelineCacheVolumeName)
+            );
         return false;
     }
 
@@ -211,8 +246,15 @@ void Device::savePipelineCacheData(){
     if(cacheData.empty())
         return;
 
-    if(!__hidden_vulkan_device_pipeline_cache::ValidatePipelineCacheData(cacheData, m_context.physicalDeviceProperties)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Driver returned incompatible pipeline cache data; skipping runtime cache write."));
+    const VulkanDetail::PipelineCacheDataValidation::Enum validation = VulkanDetail::ValidatePipelineCacheData(
+        BinaryByteView{ cacheData.data(), cacheData.size() },
+        m_context.physicalDeviceProperties
+    );
+    if(validation != VulkanDetail::PipelineCacheDataValidation::Usable){
+        if(validation == VulkanDetail::PipelineCacheDataValidation::Malformed)
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Driver returned malformed pipeline cache data; skipping cache write."));
+        else
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Driver returned incompatible pipeline cache data; skipping cache write."));
         return;
     }
 

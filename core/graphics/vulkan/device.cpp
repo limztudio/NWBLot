@@ -289,7 +289,10 @@ Device::Device(const DeviceDesc& desc)
         && !m_context.extensions.AMD_buffer_marker
         && !m_context.extensions.EXT_device_fault
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: GPU crash diagnostics requested but no supported backend (device diagnostic checkpoints / buffer markers / device fault) is available; minimal text GPU crash reports remain enabled."));
+        NWB_LOGGER_ESSENTIAL_INFO(
+            NWB_TEXT("Vulkan: GPU crash diagnostics will use minimal text reports; device checkpoints, buffer markers, ")
+            NWB_TEXT("and device fault are unavailable.")
+        );
     }
 
     if(

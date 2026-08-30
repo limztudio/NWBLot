@@ -312,18 +312,27 @@ TEST_F(DescriptorHeapBindIngressTest, ShiftedDescriptorSetAbiIsRejectedBeforeHea
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(DescriptorHeapBindIngressTest, RejectsCustomHybridAndWrongCurrentPipelineWithoutHeapMutation){
+TEST_F(DescriptorHeapBindIngressTest, RejectsForeignHeapHybridLayoutAndWrongCurrentPipelineWithoutHeapMutation){
     auto& localDevice = device();
     auto& heap = localDevice.getDescriptorHeap();
-    GraphicsBackend::GpuDescriptorHeap customHeap(localDevice);
-    ASSERT_TRUE(customHeap.initialize(MakeSmallHeapDesc()));
+    const GpuDescriptorHeapAbi abi = Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi();
+    GraphicsBackend::GpuDescriptorHeap foreignHeap(localDevice);
+
+    // The renderer owns the device's persistent descriptor-buffer heap. A foreign heap exercises identity validation,
+    // while an independent layout exercises pipeline-layout validation without allocating another manager segment.
+    BindlessLayoutDesc foreignSamplerLayoutDesc;
+    foreignSamplerLayoutDesc
+        .setLayoutType(BindlessLayoutType::MutableSampler)
+        .setMaxCapacity(1u)
+        .setVisibility(ShaderType::Compute)
+        .setDescriptorSetIndex(abi.samplerSetIndex)
+        .addRegisterSpace(BindingLayoutItem::Sampler(abi.samplerBinding, 1u))
+    ;
+    const BindingLayoutHandle foreignSamplerLayout = localDevice.createBindlessLayout(foreignSamplerLayoutDesc);
+    ASSERT_TRUE(foreignSamplerLayout);
 
     const BindingLayoutHandle globalLayouts[] = { heap.getResourceLayout(), heap.getSamplerLayout() };
-    const BindingLayoutHandle customLayouts[] = {
-        customHeap.getResourceLayout(),
-        customHeap.getSamplerLayout(),
-    };
-    const BindingLayoutHandle hybridLayouts[] = { heap.getResourceLayout(), customHeap.getSamplerLayout() };
+    const BindingLayoutHandle hybridLayouts[] = { heap.getResourceLayout(), foreignSamplerLayout };
     ComputePipelineHandle globalPipeline = CreateComputePipeline(
         localDevice,
         arena(),
@@ -336,12 +345,6 @@ TEST_F(DescriptorHeapBindIngressTest, RejectsCustomHybridAndWrongCurrentPipeline
         globalLayouts,
         LengthOf(globalLayouts)
     );
-    ComputePipelineHandle customPipeline = CreateComputePipeline(
-        localDevice,
-        arena(),
-        customLayouts,
-        LengthOf(customLayouts)
-    );
     ComputePipelineHandle hybridPipeline = CreateComputePipeline(
         localDevice,
         arena(),
@@ -350,22 +353,21 @@ TEST_F(DescriptorHeapBindIngressTest, RejectsCustomHybridAndWrongCurrentPipeline
     );
     ASSERT_TRUE(globalPipeline);
     ASSERT_TRUE(secondGlobalPipeline);
-    ASSERT_TRUE(customPipeline);
     ASSERT_TRUE(hybridPipeline);
 
     const GpuDescriptorHeapLifecycleStatistics globalBaseline = heap.lifecycleStatistics();
-    const GpuDescriptorHeapLifecycleStatistics customBaseline = customHeap.lifecycleStatistics();
+    const GpuDescriptorHeapLifecycleStatistics foreignBaseline = foreignHeap.lifecycleStatistics();
     {
         CommandListHandle commandList = localDevice.createCommandList();
         ASSERT_TRUE(commandList);
         commandList->open();
-        commandList->setComputeState(ComputeState().setPipeline(customPipeline.get()));
-        ExpectBindRejection([&](){ customHeap.bindCompute(*commandList, *customPipeline); });
+        commandList->setComputeState(ComputeState().setPipeline(globalPipeline.get()));
+        ExpectBindRejection([&](){ foreignHeap.bindCompute(*commandList, *globalPipeline); });
         EXPECT_TRUE(commandList->commandRecordingFailed());
         commandList->close();
     }
     ExpectHeapStatisticsEqual(globalBaseline, heap.lifecycleStatistics());
-    ExpectHeapStatisticsEqual(customBaseline, customHeap.lifecycleStatistics());
+    ExpectHeapStatisticsEqual(foreignBaseline, foreignHeap.lifecycleStatistics());
 
     {
         CommandListHandle commandList = localDevice.createCommandList();

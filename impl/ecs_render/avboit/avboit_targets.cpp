@@ -37,6 +37,8 @@ static Core::TextureHandle CreateRenderTarget(
         .setInRenderTarget(true)
         .setName(debugName)
         .setClearValue(clearValue)
+        .setInitialState(Core::ResourceStates::Common)
+        .setKeepInitialState(true)
     ;
     if(shareWithAsyncCompute)
         desc.setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
@@ -67,6 +69,8 @@ static Core::TextureHandle CreateTransmittanceVolume(
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/avboit/transmittance_volume")
         .setClearValue(Core::Color(1.f, 1.f, 1.f, 1.f))
+        .setInitialState(Core::ResourceStates::Common)
+        .setKeepInitialState(true)
     ;
     Core::TextureHandle texture = graphics.createTexture(desc);
     if(texture)
@@ -88,6 +92,7 @@ static Core::BufferHandle CreateU32Buffer(
         // Occupancy/extinction raster passes and the interleaved compute kernels exchange these work buffers.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(debugName)
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     Core::BufferHandle buffer = graphics.createBuffer(desc);
     if(buffer)

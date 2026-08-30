@@ -381,6 +381,14 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         desc.setInitialState(Core::ResourceStates::Unknown);
         return m_deferredLightingTaskGraph.importTexture(texture, desc);
     };
+    // A clear owns the old AVBOIT contents and may begin from Undefined. A no-clear frame instead imports the
+    // retained Common state restored by the preceding accepted command lists.
+    const auto importAvboitTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
+        return clearAvboitTargets
+            ? importFirstWriteTexture(texture, identity, label)
+            : importTexture(texture, identity, label)
+        ;
+    };
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
@@ -814,22 +822,22 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 // AVBOIT shares the deferred graph's G-buffer and current bindless imports. Its private targets remain
     // distinct resources, while the compiler owns every producer/consumer state seed through Lighting and
     // Composite on both the live and active-lagged routes.
-    const Core::GpuGraphResourceId avboitLowRaster = importTexture(
+    const Core::GpuGraphResourceId avboitLowRaster = importAvboitTexture(
         deferredTargets.avboit.lowRasterTarget,
         Name("render.avboit.low_raster"),
         "AVBOIT Low Raster"
     );
-    const Core::GpuGraphResourceId avboitAccumColor = importTexture(
+    const Core::GpuGraphResourceId avboitAccumColor = importAvboitTexture(
         deferredTargets.avboit.accumColor,
         Name("render.avboit.accum_color"),
         "AVBOIT Accumulated Color"
     );
-    const Core::GpuGraphResourceId avboitAccumExtinction = importTexture(
+    const Core::GpuGraphResourceId avboitAccumExtinction = importAvboitTexture(
         deferredTargets.avboit.accumExtinction,
         Name("render.avboit.accum_extinction"),
         "AVBOIT Accumulated Extinction"
     );
-    const Core::GpuGraphResourceId avboitTransmittance = importTexture(
+    const Core::GpuGraphResourceId avboitTransmittance = importAvboitTexture(
         deferredTargets.avboit.transmittanceTexture,
         Name("render.avboit.transmittance"),
         "AVBOIT Transmittance"

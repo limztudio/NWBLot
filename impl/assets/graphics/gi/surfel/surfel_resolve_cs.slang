@@ -14,6 +14,7 @@
 
 
 #include "surfel_gather.slangi"
+#include "surfel_gbuffer.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,7 +51,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const half3 worldPositionSample = half3(NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.worldPositionSlot).Load(loadCoord).xyz);
     const float3 worldPosition = float3(worldPositionSample);
-    const float3 normal = normalize(rawNormal * 2.0 - 1.0);   // decode the packed G-buffer normal (matches the lighting)
+    const float3 normal = nwbSurfelDecodeGbufferNormal(rawNormal);
 
     float3 gi;
     if(nwbSurfelGather(worldPosition, normal, gi))

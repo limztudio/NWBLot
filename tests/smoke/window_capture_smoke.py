@@ -1722,23 +1722,32 @@ def launch_testbed(args, executable, env, log_port):
     )
 
 
-def ensure_process_running(process, stage):
+def ensure_process_running(process, stage, process_name="testbed"):
     if process is None or process.poll() is None:
         return
 
     tail = read_process_tail(process)
-    raise SmokeFailure(f"testbed exited {stage} (exit {process.returncode})\n{tail}")
+    raise SmokeFailure(f"{process_name} exited {stage} (exit {process.returncode})\n{tail}")
 
 
-def require_normal_testbed_exit(exit_code, tail):
+def require_normal_process_exit(exit_code, tail, process_name):
     if exit_code == 0:
         return
 
     if exit_code is None:
-        raise SmokeFailure("testbed did not exit during shutdown")
+        raise SmokeFailure(f"{process_name} did not exit during shutdown")
 
     detail = f"\n{tail}" if tail else ""
-    raise SmokeFailure(f"testbed exited during graceful shutdown (exit {exit_code}){detail}")
+    raise SmokeFailure(f"{process_name} exited during graceful shutdown (exit {exit_code}){detail}")
+
+
+def shutdown_logserver_and_collect(process, directory, baseline, pattern, shutdown_name="logserver"):
+    if process is not None:
+        ensure_process_running(process, "before log collection", "logserver")
+        exit_code, tail = terminate_process(process, shutdown_name)
+        require_normal_process_exit(exit_code, tail, "logserver")
+    wait_for_log_drain(directory, baseline, pattern)
+    return collect_log_delta(directory, baseline, pattern) if directory else ""
 
 
 def validate_capture_result(result):
@@ -1831,6 +1840,8 @@ def validate_expected_log_messages(
         raise SmokeFailure("cannot validate expected log messages without captured runtime logs")
 
     log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
+    if not log_text:
+        raise SmokeFailure("runtime log validation captured no output")
     for needle in skip_needles:
         if needle in log_text:
             for blocking_needle in skip_blocking_needles:
@@ -1889,13 +1900,16 @@ def launch_and_capture(args, backend):
             raise SmokeFailure("timed out waiting for a visible testbed window")
 
         time.sleep(args.settle_seconds)
-        ensure_process_running(testbed_process, "before capture")
-
         ensure_process_running(testbed_process, "before checked capture")
         result = capture_checked_window(args, backend, handle)
         testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, "testbed", handle)
         testbed_process = None
-        require_normal_testbed_exit(testbed_exit_code, testbed_exit_tail)
+        require_normal_process_exit(testbed_exit_code, testbed_exit_tail, "testbed")
+        if logserver_process is not None:
+            ensure_process_running(logserver_process, "before log collection", "logserver")
+            logserver_exit_code, logserver_exit_tail = terminate_process(logserver_process, "logserver")
+            logserver_process = None
+            require_normal_process_exit(logserver_exit_code, logserver_exit_tail, "logserver")
         wait_for_log_drain(log_directory, log_baseline, log_pattern)
         skip_reason = validate_expected_log_messages(
             log_directory,
@@ -1909,7 +1923,8 @@ def launch_and_capture(args, backend):
     finally:
         if testbed_process is not None:
             terminate_process(testbed_process, "testbed", handle)
-        terminate_process(logserver_process, "logserver")
+        if logserver_process is not None:
+            terminate_process(logserver_process, "logserver")
 
     if skip_reason:
         raise SmokeSkip(skip_reason)
@@ -2032,4 +2047,3 @@ def main(argv):
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
-

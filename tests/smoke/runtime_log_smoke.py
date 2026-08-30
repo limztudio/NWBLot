@@ -13,12 +13,12 @@ from window_capture_smoke import (  # noqa: E402
     SmokeFailure,
     SmokeSkip,
     build_launch_environment,
-    collect_log_delta,
     launch_logserver,
     launch_testbed,
     read_process_tail,
+    shutdown_logserver_and_collect,
     terminate_process,
-    wait_for_log_drain,
+    validate_expected_log_messages,
     write_status,
 )
 
@@ -71,25 +71,32 @@ def run(args):
         runtime_process = launch_testbed(args, executable, env, log_port)
         exit_code = wait_for_process_exit(runtime_process, args.timeout)
         tail = read_process_tail(runtime_process)
-        wait_for_log_drain(log_directory, log_baseline, log_pattern)
-        log_text = collect_log_delta(log_directory, log_baseline, log_pattern) if log_directory else tail
+        log_text = shutdown_logserver_and_collect(
+            logserver_process,
+            log_directory,
+            log_baseline,
+            log_pattern,
+        )
+        logserver_process = None
 
         if exit_code != 0:
             raise SmokeFailure(f"runtime exited with {exit_code}\n{tail}\n{log_text[-4000:]}")
 
-        for needle in args.expect_log_message:
-            if needle not in log_text:
-                raise SmokeFailure(f"missing log message '{needle}'\n{log_text[-4000:]}")
-        for needle in args.reject_log_message:
-            if needle in log_text:
-                raise SmokeFailure(f"rejected log message '{needle}' was found\n{log_text[-4000:]}")
+        validate_expected_log_messages(
+            log_directory,
+            log_baseline,
+            log_pattern,
+            args.expect_log_message,
+            args.reject_log_message,
+        )
 
         benchmark_lines = [line for line in log_text.splitlines() if "SkinningCullingBenchmark:" in line]
         write_status("\n".join(benchmark_lines[-32:]) if benchmark_lines else "runtime completed")
         return 0
     finally:
         terminate_process(runtime_process, "runtime")
-        terminate_process(logserver_process, "logserver")
+        if logserver_process is not None:
+            terminate_process(logserver_process, "logserver")
 
 
 def main(argv):

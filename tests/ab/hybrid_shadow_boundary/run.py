@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence
+from unittest import mock
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -44,10 +45,10 @@ from window_capture_smoke import (  # noqa: E402
     ensure_process_running,
     launch_logserver,
     launch_testbed,
-    require_normal_testbed_exit,
+    require_normal_process_exit,
+    shutdown_logserver_and_collect,
     terminate_process,
     validate_capture_result,
-    wait_for_log_drain,
 )
 
 
@@ -395,15 +396,21 @@ def run_single_arm(
             wait_while_running(app_process, args.measure_seconds, f"during {mode} measurement")
             capture_result = capture_backend.capture_window(window, capture_path)
             validate_capture_result(capture_result)
+        app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} benchmark", window)
+        app_process = None
+        log_text = shutdown_logserver_and_collect(
+            logserver_process,
+            log_directory,
+            log_baseline,
+            log_pattern,
+            "hybrid-shadow benchmark logserver",
+        )
+        logserver_process = None
     finally:
-        if app_process:
-            app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} benchmark", window)
-        if log_directory:
-            wait_for_log_drain(log_directory, log_baseline, log_pattern)
-            log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
+        terminate_process(app_process, f"{mode} benchmark", window)
         terminate_process(logserver_process, "hybrid-shadow benchmark logserver")
 
-    require_normal_testbed_exit(app_exit_code, app_exit_tail)
+    require_normal_process_exit(app_exit_code, app_exit_tail, "testbed")
     if not log_text:
         raise SmokeFailure(f"{mode} benchmark produced no captured logger output")
     runtime_forbidden = find_log_messages(log_text, tuple(DEFAULT_FORBIDDEN_LOGS) + tuple(args.reject_log))
@@ -780,6 +787,63 @@ def run_self_test() -> int:
 
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
+        module = sys.modules[__name__]
+        executable = root / "orchestration.exe"
+        executable.write_bytes(b"exe")
+        defaults.output_dir = root
+        defaults.runtime_dir = root
+        app = SimpleNamespace(pid=4321, poll=lambda: None)
+        logserver = object()
+        baseline = {root / "old.log": 7}
+        backend = mock.Mock()
+        backend.wait_for_window.return_value = 17
+        events = []
+
+        def terminate(process, name, window_handle=None):
+            if process is app:
+                events.append(("app-stop", name, window_handle))
+                return 7, "simulated abnormal exit"
+            assert process is None
+            events.append(("cleanup-none", name, window_handle))
+            return None, ""
+
+        def shutdown(process, log_directory, received_baseline, pattern, shutdown_name="logserver"):
+            assert process is logserver
+            assert log_directory == root
+            assert received_baseline == baseline
+            assert pattern == "logserver_*.log"
+            assert events == [("app-stop", "healthy benchmark", 17)]
+            events.append(("logserver-helper", shutdown_name))
+            return CAPABILITY_SKIP_LOG
+
+        with mock.patch.object(module, "build_launch_environment", return_value={}), \
+             mock.patch.object(module, "launch_logserver", return_value=(logserver, 49152, root, baseline, "logserver_*.log")), \
+             mock.patch.object(module, "launch_testbed", return_value=app), \
+             mock.patch.object(module, "wait_for_log_message", return_value=CAPABILITY_SKIP_LOG), \
+             mock.patch.object(module, "terminate_process", side_effect=terminate) as terminate_mock, \
+             mock.patch.object(module, "shutdown_logserver_and_collect", side_effect=shutdown) as shutdown_mock:
+            try:
+                run_single_arm(defaults, "healthy", executable, {}, ("ready",), (), backend)
+            except SmokeFailure as error:
+                assert "exit 7" in str(error)
+            else:
+                raise AssertionError("hybrid orchestration accepted an abnormal Testbed exit")
+
+        assert events == [
+            ("app-stop", "healthy benchmark", 17),
+            ("logserver-helper", "hybrid-shadow benchmark logserver"),
+            ("cleanup-none", "healthy benchmark", 17),
+            ("cleanup-none", "hybrid-shadow benchmark logserver", None),
+        ]
+        assert terminate_mock.mock_calls == [
+            mock.call(app, "healthy benchmark", 17),
+            mock.call(None, "healthy benchmark", 17),
+            mock.call(None, "hybrid-shadow benchmark logserver"),
+        ]
+        shutdown_mock.assert_called_once_with(
+            logserver, root, baseline, "logserver_*.log", "hybrid-shadow benchmark logserver"
+        )
+
         timing = root / "timing.txt"
         timing_symbols = load_name_symbols(None)
         frame_token = debug_name_hash_token(FRAME_SCOPE)

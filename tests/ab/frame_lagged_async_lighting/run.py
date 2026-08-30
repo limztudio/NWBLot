@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import argparse
 import sys
+import tempfile
 import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Mapping, Sequence
+from unittest import mock
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -31,9 +33,9 @@ from window_capture_smoke import (  # noqa: E402
     ensure_process_running,
     launch_logserver,
     launch_testbed,
-    require_normal_testbed_exit,
+    require_normal_process_exit,
+    shutdown_logserver_and_collect,
     terminate_process,
-    wait_for_log_drain,
 )
 
 
@@ -121,7 +123,7 @@ def reject_forbidden_messages(log_text: str) -> None:
 
 def require_final_run_verdict(log_text: str, app_exit_code: int | None, app_exit_tail: str) -> None:
     """Validate shutdown and complete diagnostics before classifying an unavailable async topology."""
-    require_normal_testbed_exit(app_exit_code, app_exit_tail)
+    require_normal_process_exit(app_exit_code, app_exit_tail, "testbed")
     reject_forbidden_messages(log_text)
     if NO_DEDICATED_ASYNC_COMPUTE in log_text:
         raise DedicatedComputeUnavailable(
@@ -291,12 +293,18 @@ def run(args: argparse.Namespace) -> int:
                 args.transition_timeout,
                 "while waiting for the second accepted history use",
             )
+        app_exit_code, app_exit_tail = terminate_process(app_process, "lagged-lighting smoke", window)
+        app_process = None
+        final_log = shutdown_logserver_and_collect(
+            logserver_process,
+            log_directory,
+            log_baseline,
+            log_pattern,
+            "lagged-lighting smoke logserver",
+        )
+        logserver_process = None
     finally:
-        if app_process:
-            app_exit_code, app_exit_tail = terminate_process(app_process, "lagged-lighting smoke", window)
-        if log_directory:
-            wait_for_log_drain(log_directory, log_baseline, log_pattern)
-            final_log = collect_log_delta(log_directory, log_baseline, log_pattern)
+        terminate_process(app_process, "lagged-lighting smoke", window)
         terminate_process(logserver_process, "lagged-lighting smoke logserver")
         if capture_backend:
             capture_backend.close()
@@ -381,6 +389,70 @@ def run_self_test() -> int:
         pass
     else:
         raise AssertionError("an abnormal exit after the Graphics queue route was incorrectly skipped")
+
+    module = sys.modules[__name__]
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        executable = root / "orchestration.exe"
+        executable.write_bytes(b"exe")
+        args = parse_args(["--self-test"])
+        args.executable = executable
+        args.runtime_dir = root
+        app = SimpleNamespace(pid=4321, poll=lambda: None)
+        logserver = object()
+        baseline = {root / "old.log": 7}
+        backend = mock.Mock()
+        backend.wait_for_window.return_value = 17
+        events = []
+
+        def terminate(process, name, window_handle=None):
+            if process is app:
+                events.append(("app-stop", name, window_handle))
+                return 7, "simulated abnormal exit"
+            assert process is None
+            events.append(("cleanup-none", name, window_handle))
+            return None, ""
+
+        def shutdown(process, log_directory, received_baseline, pattern, shutdown_name="logserver"):
+            assert process is logserver
+            assert log_directory == root
+            assert received_baseline == baseline
+            assert pattern == "logserver_*.log"
+            assert events == [("app-stop", "lagged-lighting smoke", 17)]
+            events.append(("logserver-helper", shutdown_name))
+            return NO_DEDICATED_ASYNC_COMPUTE
+
+        with mock.patch.object(module, "build_launch_environment", return_value={}), \
+             mock.patch.object(module, "create_capture_backend", return_value=backend), \
+             mock.patch.object(module, "launch_logserver", return_value=(logserver, 49152, root, baseline, "logserver_*.log")), \
+             mock.patch.object(module, "launch_testbed", return_value=app), \
+             mock.patch.object(module, "wait_for_lifecycle_stage", return_value=NO_DEDICATED_ASYNC_COMPUTE), \
+             mock.patch.object(module.time, "sleep"), \
+             mock.patch.object(module, "terminate_process", side_effect=terminate) as terminate_mock, \
+             mock.patch.object(module, "shutdown_logserver_and_collect", side_effect=shutdown) as shutdown_mock:
+            try:
+                run(args)
+            except SmokeFailure as error:
+                assert "exit 7" in str(error)
+            else:
+                raise AssertionError("lagged-lighting orchestration accepted an abnormal Testbed exit")
+
+        assert events == [
+            ("app-stop", "lagged-lighting smoke", 17),
+            ("logserver-helper", "lagged-lighting smoke logserver"),
+            ("cleanup-none", "lagged-lighting smoke", 17),
+            ("cleanup-none", "lagged-lighting smoke logserver", None),
+        ]
+        assert terminate_mock.mock_calls == [
+            mock.call(app, "lagged-lighting smoke", 17),
+            mock.call(None, "lagged-lighting smoke", 17),
+            mock.call(None, "lagged-lighting smoke logserver"),
+        ]
+        shutdown_mock.assert_called_once_with(
+            logserver, root, baseline, "logserver_*.log", "lagged-lighting smoke logserver"
+        )
+        backend.close.assert_called_once_with()
+
     print("frame-lagged async-lighting harness self-test passed")
     return 0
 
@@ -404,4 +476,3 @@ def main(argv: Sequence[str]) -> int:
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
-

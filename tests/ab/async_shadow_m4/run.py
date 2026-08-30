@@ -31,6 +31,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from unittest import mock
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -50,10 +51,10 @@ from window_capture_smoke import (  # noqa: E402
     ensure_process_running,
     launch_logserver,
     launch_testbed,
-    require_normal_testbed_exit,
+    require_normal_process_exit,
+    shutdown_logserver_and_collect,
     terminate_process,
     validate_capture_result,
-    wait_for_log_drain,
 )
 
 
@@ -546,16 +547,22 @@ def run_frame_locked_capture(
         wait_while_running(app_process, args.pixel_capture_settle_seconds, f"while settling {mode} frame-locked capture")
         capture_result = capture_m4_client_area(capture_backend, window, capture_path)
         validate_capture_result(capture_result)
+        app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} frame-locked capture", window)
+        app_process = None
+        log_text = shutdown_logserver_and_collect(
+            logserver_process,
+            log_directory,
+            log_baseline,
+            log_pattern,
+            "benchmark logserver",
+        )
+        logserver_process = None
+        capture_log_path.write_text(log_text, encoding="utf-8")
     finally:
-        if app_process:
-            app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} frame-locked capture", window)
-        if log_directory:
-            wait_for_log_drain(log_directory, log_baseline, log_pattern)
-            log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
-            capture_log_path.write_text(log_text, encoding="utf-8")
+        terminate_process(app_process, f"{mode} frame-locked capture", window)
         terminate_process(logserver_process, "benchmark logserver")
 
-    require_normal_testbed_exit(app_exit_code, app_exit_tail)
+    require_normal_process_exit(app_exit_code, app_exit_tail, "testbed")
     if not log_text:
         raise SmokeFailure(f"{mode} frame-locked capture produced no captured logger output")
 
@@ -627,15 +634,21 @@ def run_single_mode(
 
         wait_while_running(app_process, args.warmup_seconds, f"during {mode} warmup")
         wait_while_running(app_process, args.measure_seconds, f"during {mode} measurement")
+        app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} benchmark", window)
+        app_process = None
+        measurement_log_text = shutdown_logserver_and_collect(
+            logserver_process,
+            log_directory,
+            log_baseline,
+            log_pattern,
+            "benchmark logserver",
+        )
+        logserver_process = None
     finally:
-        if app_process:
-            app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} benchmark", window)
-        if log_directory:
-            wait_for_log_drain(log_directory, log_baseline, log_pattern)
-            measurement_log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
+        terminate_process(app_process, f"{mode} benchmark", window)
         terminate_process(logserver_process, "benchmark logserver")
 
-    require_normal_testbed_exit(app_exit_code, app_exit_tail)
+    require_normal_process_exit(app_exit_code, app_exit_tail, "testbed")
     if not measurement_log_text:
         raise SmokeFailure(f"{mode} benchmark produced no captured logger output")
 
@@ -1078,6 +1091,85 @@ def run_self_test() -> int:
 
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
+        module = sys.modules[__name__]
+        executable = root / "orchestration.exe"
+        executable.write_bytes(b"exe")
+        capture_args.output_dir = root
+        capture_args.runtime_dir = root
+        app = SimpleNamespace(pid=4321, poll=lambda: None)
+        logserver = object()
+        baseline = {root / "old.log": 7}
+        backend = mock.Mock()
+        backend.wait_for_window.return_value = 17
+        backend.capture_client_window.return_value = SimpleNamespace(
+            appears_blank=False,
+            has_pixel_variation=True,
+        )
+        orchestration_lane = LaneStatus(False, False, 0, 1)
+        events = []
+
+        def terminate(process, name, window_handle=None):
+            if process is app:
+                events.append(("app-stop", name, window_handle))
+                return 7, "simulated abnormal exit"
+            assert process is None
+            events.append(("cleanup-none", name, window_handle))
+            return None, ""
+
+        def shutdown(process, log_directory, received_baseline, pattern, shutdown_name="logserver"):
+            assert process is logserver
+            assert log_directory == root
+            assert received_baseline == baseline
+            assert pattern == "logserver_*.log"
+            assert events[-1][0] == "app-stop"
+            events.append(("logserver-helper", shutdown_name))
+            return "captured runtime evidence"
+
+        with mock.patch.object(module, "build_launch_environment", return_value={}), \
+             mock.patch.object(module, "launch_logserver", return_value=(logserver, 49152, root, baseline, "logserver_*.log")), \
+             mock.patch.object(module, "launch_testbed", return_value=app), \
+             mock.patch.object(module, "wait_for_lane_status", return_value=orchestration_lane), \
+             mock.patch.object(module, "wait_for_log_message"), \
+             mock.patch.object(module, "wait_while_running"), \
+             mock.patch.object(module, "terminate_process", side_effect=terminate) as terminate_mock, \
+             mock.patch.object(module, "shutdown_logserver_and_collect", side_effect=shutdown) as shutdown_mock:
+            try:
+                run_frame_locked_capture(capture_args, "sync", executable, backend)
+            except SmokeFailure as error:
+                assert "exit 7" in str(error)
+            else:
+                raise AssertionError("frame-locked orchestration accepted an abnormal Testbed exit")
+
+            try:
+                run_single_mode(capture_args, "sync", executable, {}, backend, None)
+            except SmokeFailure as error:
+                assert "exit 7" in str(error)
+            else:
+                raise AssertionError("timed orchestration accepted an abnormal Testbed exit")
+
+        assert events == [
+            ("app-stop", "sync frame-locked capture", 17),
+            ("logserver-helper", "benchmark logserver"),
+            ("cleanup-none", "sync frame-locked capture", 17),
+            ("cleanup-none", "benchmark logserver", None),
+            ("app-stop", "sync benchmark", 17),
+            ("logserver-helper", "benchmark logserver"),
+            ("cleanup-none", "sync benchmark", 17),
+            ("cleanup-none", "benchmark logserver", None),
+        ]
+        assert terminate_mock.mock_calls == [
+            mock.call(app, "sync frame-locked capture", 17),
+            mock.call(None, "sync frame-locked capture", 17),
+            mock.call(None, "benchmark logserver"),
+            mock.call(app, "sync benchmark", 17),
+            mock.call(None, "sync benchmark", 17),
+            mock.call(None, "benchmark logserver"),
+        ]
+        assert shutdown_mock.mock_calls == [
+            mock.call(logserver, root, baseline, "logserver_*.log", "benchmark logserver"),
+            mock.call(logserver, root, baseline, "logserver_*.log", "benchmark logserver"),
+        ]
+
         timing = root / "timing.txt"
         frame_token = debug_name_hash_token("render.frame")
         shadow_token = debug_name_hash_token("render.async_shadow")
@@ -1230,4 +1322,3 @@ def main(argv: Sequence[str]) -> int:
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
-

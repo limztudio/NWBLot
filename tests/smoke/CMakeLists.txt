@@ -268,6 +268,9 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
+        set_tests_properties(nwb_transparent_csg_capture_early_smoke PROPERTIES
+            ENVIRONMENT "NWB_TRANSPARENT_MULTI_SPIN_ANGLE=0.0"
+        )
 
         nwb_add_window_capture_smoke(
             nwb_transparent_csg_capture_mid_smoke
@@ -281,6 +284,9 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
+        set_tests_properties(nwb_transparent_csg_capture_mid_smoke PROPERTIES
+            ENVIRONMENT "NWB_TRANSPARENT_MULTI_SPIN_ANGLE=1.0"
+        )
 
         nwb_add_window_capture_smoke(
             nwb_transparent_csg_capture_late_smoke
@@ -293,6 +299,9 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
+        )
+        set_tests_properties(nwb_transparent_csg_capture_late_smoke PROPERTIES
+            ENVIRONMENT "NWB_TRANSPARENT_MULTI_SPIN_ANGLE=2.0"
         )
 
         nwb_declare_executable(nwb_caustic_sphere_smoke)

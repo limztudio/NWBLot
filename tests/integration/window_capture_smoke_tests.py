@@ -13,10 +13,13 @@ SMOKE_DIRECTORY = Path(__file__).resolve().parents[1] / "smoke"
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 
 import window_capture_smoke  # noqa: E402
+import runtime_log_smoke  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
+    ensure_process_running,
     launch_captured_process,
     read_process_tail,
-    require_normal_testbed_exit,
+    require_normal_process_exit,
+    shutdown_logserver_and_collect,
     terminate_process,
     validate_expected_log_messages,
 )
@@ -218,6 +221,118 @@ class RuntimeLogValidationTests(unittest.TestCase):
                     ["[ERROR]"],
                 )
 
+    def test_reject_only_validation_requires_runtime_log_evidence(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "captured no output"):
+                validate_expected_log_messages(
+                    Path(temp_dir),
+                    {},
+                    "*.log",
+                    [],
+                    ["[ERROR]"],
+                )
+
+
+class ProcessLivenessTests(unittest.TestCase):
+    def test_named_process_exit_before_validation_fails(self):
+        process = SimpleNamespace(poll=lambda: 7, returncode=7)
+
+        with self.assertRaisesRegex(
+            window_capture_smoke.SmokeFailure,
+            r"logserver exited before log validation \(exit 7\)",
+        ):
+            ensure_process_running(process, "before log validation", "logserver")
+
+    def test_named_process_abnormal_graceful_exit_fails(self):
+        with self.assertRaisesRegex(
+            window_capture_smoke.SmokeFailure,
+            r"logserver exited during graceful shutdown \(exit 7\)",
+        ):
+            require_normal_process_exit(7, "", "logserver")
+
+
+class LogserverCollectionTests(unittest.TestCase):
+    def test_shutdown_happens_before_drain_and_collection(self):
+        process = SimpleNamespace(poll=lambda: None)
+        events = []
+
+        def terminate(_process, _name):
+            events.append("shutdown")
+            return 0, ""
+
+        def drain(*_args):
+            events.append("drain")
+
+        def collect(*_args):
+            events.append("collect")
+            return "[WARNING] shutdown-only warning"
+
+        with mock.patch.object(window_capture_smoke, "terminate_process", side_effect=terminate), \
+             mock.patch.object(window_capture_smoke, "wait_for_log_drain", side_effect=drain), \
+             mock.patch.object(window_capture_smoke, "collect_log_delta", side_effect=collect):
+            log_text = shutdown_logserver_and_collect(process, Path("logs"), {}, "*.log")
+
+        self.assertEqual(events, ["shutdown", "drain", "collect"])
+        self.assertEqual(log_text, "[WARNING] shutdown-only warning")
+
+    def test_abnormal_logserver_exit_fails_before_collection(self):
+        process = SimpleNamespace(poll=lambda: None)
+        with mock.patch.object(window_capture_smoke, "terminate_process", return_value=(7, "logserver tail")), \
+             mock.patch.object(window_capture_smoke, "wait_for_log_drain") as drain, \
+             mock.patch.object(window_capture_smoke, "collect_log_delta") as collect:
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "logserver.*exit 7"):
+                shutdown_logserver_and_collect(process, Path("logs"), {}, "*.log")
+
+        drain.assert_not_called()
+        collect.assert_not_called()
+
+
+class RuntimeLogSmokeTests(unittest.TestCase):
+    def test_runtime_validation_follows_logserver_shutdown_collection(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_directory = Path(temp_dir)
+            runtime_process = SimpleNamespace(poll=lambda: 0)
+            logserver_process = SimpleNamespace(poll=lambda: None)
+            args = SimpleNamespace(
+                executable=sys.executable,
+                expect_log_message=["shutdown marker"],
+                reject_log_message=["[WARNING]"],
+                timeout=1.0,
+            )
+            events = []
+
+            def wait_for_exit(_process, _timeout):
+                events.append("runtime exit")
+                return 0
+
+            def shutdown_and_collect(*_args):
+                events.append("logserver shutdown and collect")
+                return "shutdown marker"
+
+            def validate(*_args):
+                events.append("validate")
+
+            with mock.patch.object(runtime_log_smoke, "build_launch_environment", return_value={}), \
+                 mock.patch.object(
+                     runtime_log_smoke,
+                     "launch_logserver",
+                     return_value=(logserver_process, 49152, log_directory, {}, "*.log"),
+                 ), \
+                 mock.patch.object(runtime_log_smoke, "launch_testbed", return_value=runtime_process), \
+                 mock.patch.object(runtime_log_smoke, "wait_for_process_exit", side_effect=wait_for_exit), \
+                 mock.patch.object(runtime_log_smoke, "read_process_tail", return_value=""), \
+                 mock.patch.object(
+                     runtime_log_smoke,
+                     "shutdown_logserver_and_collect",
+                     side_effect=shutdown_and_collect,
+                 ), \
+                 mock.patch.object(runtime_log_smoke, "validate_expected_log_messages", side_effect=validate), \
+                 mock.patch.object(runtime_log_smoke, "terminate_process", return_value=(0, "")), \
+                 mock.patch.object(runtime_log_smoke, "write_status"):
+                self.assertEqual(runtime_log_smoke.run(args), 0)
+
+            self.assertEqual(events, ["runtime exit", "logserver shutdown and collect", "validate"])
+
 
 class ShutdownLogValidationTests(unittest.TestCase):
     def run_capture_with_shutdown_log(self, shutdown_log, required=(), rejected=()):
@@ -246,16 +361,16 @@ class ShutdownLogValidationTests(unittest.TestCase):
             )
             backend = mock.Mock()
             backend.wait_for_window.return_value = 0x4A
-            testbed_process = SimpleNamespace(pid=4321)
-            logserver_process = object()
+            testbed_process = SimpleNamespace(pid=4321, poll=lambda: None)
+            logserver_process = SimpleNamespace(poll=lambda: None)
             events = []
 
             def terminate(process, name, _window_handle=None):
                 if process is testbed_process:
                     events.append("testbed shutdown")
-                    log_path.write_text(shutdown_log, encoding="utf-8")
                 else:
                     events.append("logserver shutdown")
+                    log_path.write_text(shutdown_log, encoding="utf-8")
                 return 0, ""
 
             def drain(*_args):
@@ -268,13 +383,12 @@ class ShutdownLogValidationTests(unittest.TestCase):
                      return_value=(logserver_process, 49152, log_directory, {}, "*.log"),
                  ), \
                  mock.patch.object(window_capture_smoke, "launch_testbed", return_value=testbed_process), \
-                 mock.patch.object(window_capture_smoke, "ensure_process_running"), \
                  mock.patch.object(window_capture_smoke, "capture_checked_window", return_value="capture"), \
                  mock.patch.object(window_capture_smoke, "terminate_process", side_effect=terminate), \
                  mock.patch.object(window_capture_smoke, "wait_for_log_drain", side_effect=drain):
                 result = window_capture_smoke.launch_and_capture(args, backend)
 
-            self.assertEqual(events, ["testbed shutdown", "log drain", "logserver shutdown"])
+            self.assertEqual(events, ["testbed shutdown", "logserver shutdown", "log drain"])
             return result
 
     def test_shutdown_marker_is_validated_after_graceful_exit(self):
@@ -464,13 +578,12 @@ class GracefulTerminationTests(unittest.TestCase):
         self.assertEqual(exit_code, -6)
         self.assertEqual(tail, "")
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "exit -6"):
-            require_normal_testbed_exit(exit_code, tail)
+            require_normal_process_exit(exit_code, tail, "testbed")
 
     def test_missing_shutdown_exit_code_is_reported_to_the_smoke_runner(self):
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "did not exit"):
-            require_normal_testbed_exit(None, "")
+            require_normal_process_exit(None, "", "testbed")
 
 
 if __name__ == "__main__":
     unittest.main()
-

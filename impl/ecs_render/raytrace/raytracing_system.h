@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/shared/renderer_state.h>
+#include <impl/ecs_render/shared/renderer_frame_types.h>
 
 #include <core/alloc/scratch.h>
 #include <core/graphics/gpu_timing.h>
@@ -46,6 +46,7 @@ NWB_IMPL_BEGIN
 class RendererShaderSystem;
 class RendererMeshSystem;
 class RendererMaterialSystem;
+class RendererRayTracingState;
 struct MaterialSurfaceInfo;
 namespace ECSRenderDetail{
     struct MeshRayTracingResourceSnapshot;

@@ -5432,8 +5432,8 @@ TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
             "raytrace/raytracing_system.h",
             "raytrace/raytracing_system.cpp",
             "raytrace/rt_shadow.cpp",
-            "shared/renderer_state.h",
-            "shared/renderer_state.cpp",
+            "raytrace/renderer_raytracing_state.h",
+            "raytrace/renderer_raytracing_state.cpp",
         },
         adaptiveLifecycleSource
     ));
@@ -6348,8 +6348,8 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_resources.cpp", meshResourcesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "renderer_mesh_types.h", meshTypesSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.cpp", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "renderer_raytracing_state.h", rendererStateHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "renderer_raytracing_state.cpp", rendererStateSource));
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
     const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());

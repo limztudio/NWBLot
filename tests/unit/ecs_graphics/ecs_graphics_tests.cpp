@@ -27,7 +27,6 @@
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
-#include <impl/ecs_render/shared/renderer_state.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skin_types.h>
@@ -67,16 +66,6 @@ TEST(EcsGraphics, DeprecatedFeatureSlotsKeepUnsupportedAbiGaps){
     EXPECT_EQ(static_cast<u32>(NWB::Core::Feature::VirtualResources), 19u);
     EXPECT_EQ(static_cast<u32>(NWB::Core::Feature::WaveLaneCountMinMax), 20u);
     EXPECT_EQ(static_cast<u32>(NWB::Core::Feature::kCount), 23u);
-}
-
-TEST(EcsGraphics, RayTracingStateInvalidationClearsSurfelAgeFreePipelineFailureLatch){
-    NWB::Tests::TestArena<> testArena;
-    NWB::Impl::RendererRayTracingState state(testArena.arena);
-    state.m_surfelAgeFreePipelineFailed = true;
-
-    state.invalidateResources();
-
-    EXPECT_FALSE(state.m_surfelAgeFreePipelineFailed);
 }
 
 TEST(EcsGraphics, RayTraceMaterialSnapshotOwnsClassificationAndDispatchMetadata){

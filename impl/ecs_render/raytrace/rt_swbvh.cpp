@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/raytrace/rt_private.h>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
 #include <global/algorithm.h>
 #include <global/hash_utils.h>

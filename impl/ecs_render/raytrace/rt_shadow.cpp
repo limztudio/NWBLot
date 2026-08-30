@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/raytrace/rt_private.h>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
 #include <core/graphics/task_graph/compiled_graph.h>
 

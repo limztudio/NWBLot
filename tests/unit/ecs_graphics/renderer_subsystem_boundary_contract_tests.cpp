@@ -327,11 +327,106 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     EXPECT_FALSE(ContainsText(compactMeshState, "friendclassRendererRayTracingSystem;"));
 
     const usize drawStateBegin = compactRendererState.find("classRendererDrawStatefinal:NoCopy{");
-    const usize drawStateEnd = compactRendererState.find("structRtSceneBvhState{", drawStateBegin);
+    const usize drawStateEnd = compactRendererState.find("static_assert(sizeof(RendererDrawState)==368u", drawStateBegin);
     ASSERT_NE(drawStateBegin, AStringView::npos);
     ASSERT_NE(drawStateEnd, AStringView::npos);
     const AStringView drawState = compactRendererState.substr(drawStateBegin, drawStateEnd - drawStateBegin);
     EXPECT_FALSE(ContainsText(drawState, "friendclassRendererRayTracingSystem;"));
+}
+
+
+TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+    AString stateHeaderSource;
+    AString stateSystemSource;
+    AString sharedHeaderSource;
+    AString sharedSystemSource;
+    AString rayTracingHeaderSource;
+    AString rayTracingSystemSource;
+    AString rayTracingDetailSource;
+    AString rayTracingSwBvhSource;
+    AString rayTracingShadowSource;
+    AString rayTracingSoftShadowSource;
+    AString rayTracingCausticsSource;
+    AString rayTracingSurfelSource;
+    AString pipelineHeaderSource;
+    AString rendererCmakeSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "renderer_raytracing_state.h", stateHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "renderer_raytracing_state.cpp", stateSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", sharedHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.cpp", sharedSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_detail.cpp", rayTracingDetailSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", rayTracingSwBvhSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", rayTracingShadowSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow.cpp", rayTracingSoftShadowSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_caustics.cpp", rayTracingCausticsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_surfel_gi.cpp", rayTracingSurfelSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.h", pipelineHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "CMakeLists.txt", rendererCmakeSource));
+
+    const AString compactStateHeaderStorage = CompactSource(AStringView(stateHeaderSource.data(), stateHeaderSource.size()));
+    const AStringView compactStateHeader(compactStateHeaderStorage.data(), compactStateHeaderStorage.size());
+    const AString compactStateSystemStorage = CompactSource(AStringView(stateSystemSource.data(), stateSystemSource.size()));
+    const AStringView compactStateSystem(compactStateSystemStorage.data(), compactStateSystemStorage.size());
+
+    EXPECT_TRUE(ContainsText(compactStateHeader, "structRtMeshHeapHandleCacheEntry{"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "usingRtMeshHeapHandleCache=HashMap<"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "structRtSceneBvhState{"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "structRtShadowState{"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "structRtSoftShadowState{"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "structRtCausticState{"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "structRtSurfelGiState{"));
+    EXPECT_TRUE(ContainsText(
+        compactStateHeader,
+        "classRendererRayTracingStatefinal:NoCopy,publicRtSceneBvhState,publicRtShadowState,publicRtSoftShadowState,publicRtCausticState,publicRtSurfelGiState{friendclassRendererRayTracingSystem;"
+    ));
+    EXPECT_EQ(CountText(compactStateHeader, "friendclassRenderer"), 1u);
+    EXPECT_TRUE(ContainsText(compactStateHeader, "explicitRtShadowState(Core::Alloc::GlobalArena&arena):m_shadowMeshIndexBuffers(arena)"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "explicitRendererRayTracingState(Core::Alloc::GlobalArena&arena):RtShadowState(arena){}"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "private:voidinvalidateResources();"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "public:voidinvalidateResources();"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::GpuDescriptorHandlem_tlasHeapHandle=Core::GpuDescriptorHandle::invalid();"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "f32m_swShadowEdgeThreshold=ECSRenderDetail::s_DefaultSwShadowEdgeThreshold;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "f32m_causticTemporalDecay=ECSRenderDetail::s_DefaultCausticTemporalDecay;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "u32m_surfelPoolCapacity=NWB_SURFEL_POOL_CAPACITY;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "u32m_surfelHashCellCount=NWB_SURFEL_HASH_CELL_COUNT;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "boolm_swShadowAdaptiveEnabled=true;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "boolm_swShadowCompactEnabled=true;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "u32m_softShadowHistoryFrontIsA=1u;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "boolm_surfelResourcesNeedClear=false;"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "voidRendererRayTracingState::invalidateResources(){"));
+    EXPECT_EQ(CountText(compactStateSystem, ".reset();"), 109u);
+    EXPECT_EQ(CountText(compactStateSystem, ".clear();"), 16u);
+    EXPECT_EQ(CountText(compactStateSystem, "Core::GpuDescriptorHandle::invalid();"), 25u);
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_tlasBackingFresh=false;m_tlasBackingStateHandoffPending=false;"));
+    EXPECT_FALSE(ContainsText(compactStateSystem, "m_swShadowEdgeThreshold="));
+    EXPECT_FALSE(ContainsText(compactStateSystem, "m_causticTemporalDecay="));
+    EXPECT_FALSE(ContainsText(compactStateSystem, "m_shadowMeshHeapHighWater="));
+    EXPECT_FALSE(ContainsText(compactStateSystem, "m_swShadowMeshHeapHighWater="));
+    EXPECT_FALSE(ContainsText(compactStateSystem, "m_capabilityLogged="));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_surfelAgeFreePipelineFailed=false;"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_surfelResourcesNeedClear=false;m_surfelResourcesClearPending=false;"));
+    EXPECT_FALSE(ContainsText(stateHeaderSource, "shared/renderer_state.h"));
+    EXPECT_FALSE(ContainsText(sharedHeaderSource, "RtSceneBvhState"));
+    EXPECT_FALSE(ContainsText(sharedHeaderSource, "RendererRayTracingState"));
+    EXPECT_FALSE(ContainsText(sharedSystemSource, "RendererRayTracingState"));
+    EXPECT_TRUE(ContainsText(rayTracingHeaderSource, "class RendererRayTracingState;"));
+    EXPECT_FALSE(ContainsText(rayTracingHeaderSource, "shared/renderer_state.h"));
+    EXPECT_FALSE(ContainsText(rayTracingHeaderSource, "renderer_raytracing_state.h"));
+    EXPECT_TRUE(ContainsText(rayTracingSystemSource, "#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>"));
+    EXPECT_TRUE(ContainsText(rayTracingDetailSource, "#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>"));
+    EXPECT_TRUE(ContainsText(rayTracingSwBvhSource, "#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>"));
+    EXPECT_TRUE(ContainsText(rayTracingShadowSource, "#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>"));
+    EXPECT_TRUE(ContainsText(rayTracingSoftShadowSource, "#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>"));
+    EXPECT_TRUE(ContainsText(rayTracingCausticsSource, "#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>"));
+    EXPECT_TRUE(ContainsText(rayTracingSurfelSource, "#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>"));
+    EXPECT_TRUE(ContainsText(pipelineHeaderSource, "#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>"));
+    EXPECT_TRUE(ContainsText(pipelineHeaderSource, "RendererRayTracingState m_rayTracingState;"));
+    EXPECT_TRUE(ContainsText(rendererCmakeSource, "${CMAKE_CURRENT_LIST_DIR}/raytrace/renderer_raytracing_state.cpp"));
+    EXPECT_TRUE(ContainsText(rendererCmakeSource, "${CMAKE_CURRENT_LIST_DIR}/raytrace/renderer_raytracing_state.h"));
 }
 
 
@@ -993,7 +1088,7 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
 
     const usize drawStateBegin = compactRendererState.find("classRendererDrawStatefinal:NoCopy{");
     ASSERT_NE(drawStateBegin, AStringView::npos);
-    const usize drawStateEnd = compactRendererState.find("structRtSceneBvhState{", drawStateBegin);
+    const usize drawStateEnd = compactRendererState.find("static_assert(sizeof(RendererDrawState)==368u", drawStateBegin);
     ASSERT_NE(drawStateEnd, AStringView::npos);
     const AStringView drawState = compactRendererState.substr(drawStateBegin, drawStateEnd - drawStateBegin);
     EXPECT_FALSE(ContainsText(drawState, "friendclassRendererCsgSystem;"));
@@ -1372,7 +1467,7 @@ TEST(EcsGraphics, RootMediatesDeferredRayTracingLightingClassification){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_lighting.cpp", deferredLightingSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "renderer_raytracing_state.h", rendererStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graphics_prefix.cpp", rootPrefixSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", rootGraphSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_execute.cpp", rootExecuteSource));

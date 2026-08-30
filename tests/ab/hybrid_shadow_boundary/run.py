@@ -33,6 +33,7 @@ sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
 from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE,
+    STRICT_LOG_FAILURE_MESSAGES,
     SmokeFailure,
     SmokeSkip,
     build_launch_environment,
@@ -44,6 +45,7 @@ from window_capture_smoke import (  # noqa: E402
     require_normal_testbed_exit,
     terminate_process,
     validate_capture_result,
+    wait_for_log_drain,
 )
 
 
@@ -69,9 +71,7 @@ OPTIONAL_COMPARISON_SCOPES = (
 )
 CAPABILITY_SKIP_LOG = "StressTestSmokeProject: hybrid shadow boundary skipped because RayQuery-capable hardware is unavailable"
 DEFAULT_FORBIDDEN_LOGS = (
-    "[ERROR]",
-    "VUID-",
-    "Validation Error",
+    *STRICT_LOG_FAILURE_MESSAGES,
     "cannot safely continue after an unresolved frame recovery submission",
 )
 HEALTHY_REQUIRED_LOGS = (
@@ -395,9 +395,8 @@ def run_single_arm(
     finally:
         if app_process:
             app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} benchmark", window)
-        # Let normal client shutdown messages reach the server before collecting this arm's final delta.
-        time.sleep(0.5)
         if log_directory:
+            wait_for_log_drain(log_directory, log_baseline, log_pattern)
             log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
         terminate_process(logserver_process, "hybrid-shadow benchmark logserver")
 
@@ -764,6 +763,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 def run_self_test() -> int:
     defaults = parse_args(["--self-test"])
+    assert DEFAULT_FORBIDDEN_LOGS[:len(STRICT_LOG_FAILURE_MESSAGES)] == STRICT_LOG_FAILURE_MESSAGES
     assert defaults.gpu_validation is False
     assert defaults.maximum_hybrid_frame_regression_percent is None
     assert find_missing_log_messages("healthy", ("healthy", "baseline")) == ["baseline"]

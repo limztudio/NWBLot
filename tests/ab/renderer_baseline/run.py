@@ -31,6 +31,7 @@ sys.path.insert(0, str(REPO / "tests" / "smoke"))
 from profiles import BaselineProfile, get_profile, profile_names  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE,
+    STRICT_LOG_FAILURE_MESSAGES,
     SmokeFailure,
     SmokeSkip,
     build_launch_environment,
@@ -42,6 +43,7 @@ from window_capture_smoke import (  # noqa: E402
     require_normal_testbed_exit,
     terminate_process,
     validate_capture_result,
+    wait_for_log_drain,
     wait_for_log_message,
 )
 
@@ -51,9 +53,7 @@ CORPUS_SCHEMA = "nwb.renderer-baseline-corpus.v1"
 CURRENT_CORPUS_ID = "current-renderer-v1"
 CURRENT_CORPUS_FILE = Path(__file__).with_name("current_renderer_corpus.json")
 FORBIDDEN_LOG_MESSAGES = (
-    "[ERROR]",
-    "VUID-",
-    "Validation Error",
+    *STRICT_LOG_FAILURE_MESSAGES,
     "cannot safely continue after an unresolved frame recovery submission",
 )
 
@@ -334,8 +334,8 @@ def capture_scene(
     finally:
         if app_process is not None:
             app_exit_code, app_exit_tail = terminate_process(app_process, "renderer baseline capture", window)
-        time.sleep(0.25)
         if log_directory:
+            wait_for_log_drain(log_directory, log_baseline, log_pattern)
             log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
         terminate_process(logserver_process, "renderer baseline logserver")
         if backend:
@@ -833,6 +833,7 @@ def validate_args(args: argparse.Namespace) -> None:
 
 
 def run_self_test() -> int:
+    assert FORBIDDEN_LOG_MESSAGES[:len(STRICT_LOG_FAILURE_MESSAGES)] == STRICT_LOG_FAILURE_MESSAGES
     with tempfile.TemporaryDirectory(prefix="nwb_renderer_baseline_") as temporary_directory:
         root = Path(temporary_directory)
         reference_directory = root / "opaque-texture" / "reference"

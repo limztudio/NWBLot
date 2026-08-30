@@ -22,6 +22,7 @@ sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
 from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE,
+    STRICT_LOG_FAILURE_MESSAGES,
     SmokeFailure,
     SmokeSkip,
     build_launch_environment,
@@ -32,6 +33,7 @@ from window_capture_smoke import (  # noqa: E402
     launch_testbed,
     require_normal_testbed_exit,
     terminate_process,
+    wait_for_log_drain,
 )
 
 
@@ -40,9 +42,7 @@ BOOTSTRAP_ACCEPTED = "RendererSystem: frame-lagged async lighting bootstrap acce
 ACTIVE_HISTORY_ACCEPTED = "RendererSystem: frame-lagged async lighting active history accepted"
 CURRENT_FRAME_ACCEPTED = "RendererSystem: frame-lagged async lighting current-frame path accepted"
 FORBIDDEN_LOG_MESSAGES = (
-    "[ERROR]",
-    "VUID-",
-    "Validation Error",
+    *STRICT_LOG_FAILURE_MESSAGES,
     "cannot safely continue after an unresolved frame recovery submission",
     "deferred graph build with optional lagged lighting-history capture failed",
     "deferred lagged lighting-history tail was unavailable",
@@ -294,9 +294,8 @@ def run(args: argparse.Namespace) -> int:
     finally:
         if app_process:
             app_exit_code, app_exit_tail = terminate_process(app_process, "lagged-lighting smoke", window)
-        # Let the graceful window close send its last logger records before observing the delta one final time.
-        time.sleep(0.25)
         if log_directory:
+            wait_for_log_drain(log_directory, log_baseline, log_pattern)
             final_log = collect_log_delta(log_directory, log_baseline, log_pattern)
         terminate_process(logserver_process, "lagged-lighting smoke logserver")
         if capture_backend:
@@ -308,6 +307,7 @@ def run(args: argparse.Namespace) -> int:
 
 
 def run_self_test() -> int:
+    assert FORBIDDEN_LOG_MESSAGES[:len(STRICT_LOG_FAILURE_MESSAGES)] == STRICT_LOG_FAILURE_MESSAGES
     log = "\n".join((
         f"{BOOTSTRAP_ACCEPTED} (target generation 7)",
         f"{ACTIVE_HISTORY_ACCEPTED} (target generation 7)",

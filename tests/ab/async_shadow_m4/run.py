@@ -38,6 +38,7 @@ sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
 from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE,
+    STRICT_LOG_FAILURE_MESSAGES,
     SmokeFailure,
     SmokeSkip,
     WindowsCapture,
@@ -50,6 +51,7 @@ from window_capture_smoke import (  # noqa: E402
     require_normal_testbed_exit,
     terminate_process,
     validate_capture_result,
+    wait_for_log_drain,
 )
 
 
@@ -73,9 +75,7 @@ REQUIRED_ASYNC_SCOPES = (
     "render.async_final",
 )
 DEFAULT_FORBIDDEN_LOGS = (
-    "[ERROR]",
-    "VUID-",
-    "Validation Error",
+    *STRICT_LOG_FAILURE_MESSAGES,
     "cannot safely continue after an unresolved frame recovery submission",
 )
 M4_PIXEL_CAPTURE_READY_LOG = "StressTestSmokeProject: M4 pixel capture ready after"
@@ -547,9 +547,8 @@ def run_frame_locked_capture(
     finally:
         if app_process:
             app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} frame-locked capture", window)
-        # Let client messages written during normal teardown land before stopping the server and reading its delta.
-        time.sleep(0.5)
         if log_directory:
+            wait_for_log_drain(log_directory, log_baseline, log_pattern)
             log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
             capture_log_path.write_text(log_text, encoding="utf-8")
         terminate_process(logserver_process, "benchmark logserver")
@@ -629,9 +628,8 @@ def run_single_mode(
     finally:
         if app_process:
             app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} benchmark", window)
-        # Let client messages written during normal teardown land before stopping the server and reading its delta.
-        time.sleep(0.5)
         if log_directory:
+            wait_for_log_drain(log_directory, log_baseline, log_pattern)
             measurement_log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
         terminate_process(logserver_process, "benchmark logserver")
 
@@ -892,6 +890,7 @@ def build_test_bmp(path: Path, pixels: Sequence[Tuple[int, int, int]]) -> None:
 
 def run_self_test() -> int:
     capture_args = parse_args(["--self-test"])
+    assert DEFAULT_FORBIDDEN_LOGS[:len(STRICT_LOG_FAILURE_MESSAGES)] == STRICT_LOG_FAILURE_MESSAGES
     assert capture_args.pixel_capture_frames == 96
     assert capture_args.pixel_capture_settle_seconds == 0.75
 

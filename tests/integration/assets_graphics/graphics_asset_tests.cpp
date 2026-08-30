@@ -1000,7 +1000,6 @@ NwbTestSurfaceMaterial surface;
 )NWB_BIND";
 #endif
 
-#if defined(NWB_FINAL)
 static constexpr AStringView s_DuplicateInstanceMaterialBindSource = R"NWB_BIND([material_constant]
 struct NwbTestSurfaceMaterial{
     [default("float(0.5)")]
@@ -1012,6 +1011,7 @@ NwbTestSurfaceMaterial surface;
 
 )NWB_BIND";
 
+#if defined(NWB_FINAL)
 static constexpr AStringView s_SurfaceOnlyMaterialBindSource = R"NWB_BIND([material_constant]
 struct NwbTestSurfaceMaterial{
     [default("float4(1.0, 1.0, 1.0, 1.0)")]
@@ -1024,6 +1024,7 @@ struct NwbTestSurfaceMaterial{
 NwbTestSurfaceMaterial surface;
 
 )NWB_BIND";
+#endif
 
 static constexpr AStringView s_InstanceOverrideMaterialBindSource = R"NWB_BIND(asset.instance_override = "unsupported";
 
@@ -1046,7 +1047,6 @@ struct NwbTestSurfaceMaterial{
 NwbTestSurfaceMaterial surface;
 
 )NWB_BIND";
-#endif
 
 static constexpr AStringView s_HalfMaterialBindSource = R"NWB_BIND([material_constant]
 struct NwbTestSurfaceMaterial{
@@ -1111,7 +1111,6 @@ NwbTestSurfaceMaterial surface;
 
 )NWB_BIND";
 
-#if defined(NWB_FINAL)
 static constexpr AStringView s_UnknownBlockClassMaterialBindSource = R"NWB_BIND([material_project]
 struct NwbTestSurfaceMaterial{
     float base_color;
@@ -1159,7 +1158,6 @@ struct NwbTestSurfaceMaterial{
 NwbTestSurfaceMaterial surface;
 
 )NWB_BIND";
-#endif
 
 #if defined(NWB_FINAL)
 static constexpr AStringView s_UnsupportedMeshFieldsMeta = R"(mesh asset;

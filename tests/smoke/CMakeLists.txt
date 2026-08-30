@@ -106,17 +106,29 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "$<TARGET_FILE:testbed>"
             "${NWB_OUTPUT_ROOT}"
             "NWB Testbed"
+            "--expect-log-message" "ProjectTestbed: startup scene created"
+            "--expect-log-message" "Loader: project startup complete"
+            "--expect-log-message" "ProjectTestbed: shutdown"
             "--reject-log-message" "software BVH build failed"
             "--reject-log-message" "software BVH update failed"
             "--reject-log-message" "Gpu task graph: rejecting task 'Shadow Preparation'"
-            "--reject-log-message" "[WARNING]"
-            "--reject-log-message" "[CRITICAL WARNING]"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "[CRITICAL]"
-            "--reject-log-message" "[FATAL]"
-            "--reject-log-message" "VUID-"
-            "--reject-log-message" "Validation Error"
-            "--reject-log-message" "failed to resolve shader"
+        )
+        nwb_add_window_capture_smoke(
+            nwb_testbed_gpudbg_window_capture_smoke
+            testbed_gpudbg_window_capture.bmp
+            "$<TARGET_FILE:testbed>"
+            "${NWB_OUTPUT_ROOT}"
+            "NWB Testbed"
+            "--application-arg=--gpudbg"
+            "--expect-log-message" "ProjectTestbed: startup scene created"
+            "--expect-log-message" "Loader: project startup complete"
+            "--expect-log-message" "Loader: GPU debug validation enabled"
+            "--expect-log-message" "Vulkan GPU debug: debug utils messenger installed."
+            "--expect-log-message" "ProjectTestbed: shutdown"
+            "--reject-log-message" "software BVH build failed"
+            "--reject-log-message" "software BVH update failed"
+            "--reject-log-message" "Gpu task graph: rejecting task 'Shadow Preparation'"
+            CONFIGURATIONS dbg
         )
     endif()
 

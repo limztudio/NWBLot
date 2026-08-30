@@ -14,6 +14,16 @@ import time
 
 
 SKIP_EXIT_CODE = 77
+STRICT_LOG_FAILURE_MESSAGES = (
+    "[WARNING]",
+    "[CRITICAL WARNING]",
+    "[ASSERT]",
+    "[ERROR]",
+    "[FATAL]",
+    "VUID-",
+    "Validation Error",
+    "failed to resolve shader",
+)
 
 # The textured-GI smoke has a fixed camera and a white receiver plane.  This rectangle lies below the sphere
 # silhouette, inside its foreground opaque direct shadow.  Because the light is white and the receiver has no texture
@@ -159,6 +169,24 @@ def wait_for_log_message(directory, baseline, pattern, needle, timeout_seconds):
         time.sleep(0.1)
 
     raise SmokeFailure(f"timed out waiting for log message '{needle}'\n{last_text}")
+
+
+def wait_for_log_drain(directory, baseline, pattern, timeout_seconds=2.0, quiet_seconds=0.25):
+    if not directory:
+        return
+
+    deadline = time.monotonic() + timeout_seconds
+    quiet_deadline = time.monotonic() + quiet_seconds
+    previous_text = collect_log_delta(directory, baseline, pattern)
+    while time.monotonic() < deadline:
+        time.sleep(0.05)
+        current_text = collect_log_delta(directory, baseline, pattern)
+        now = time.monotonic()
+        if current_text != previous_text:
+            previous_text = current_text
+            quiet_deadline = now + quiet_seconds
+        elif now >= quiet_deadline:
+            return
 
 
 def request_windows_graceful_exit(pid):
@@ -1861,6 +1889,10 @@ def launch_and_capture(args, backend):
 
         ensure_process_running(testbed_process, "before checked capture")
         result = capture_checked_window(args, backend, handle)
+        testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, "testbed", handle)
+        testbed_process = None
+        require_normal_testbed_exit(testbed_exit_code, testbed_exit_tail)
+        wait_for_log_drain(log_directory, log_baseline, log_pattern)
         skip_reason = validate_expected_log_messages(
             log_directory,
             log_baseline,
@@ -1871,10 +1903,10 @@ def launch_and_capture(args, backend):
             args.skip_blocking_log_message,
         )
     finally:
-        testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, "testbed", handle)
+        if testbed_process is not None:
+            terminate_process(testbed_process, "testbed", handle)
         terminate_process(logserver_process, "logserver")
 
-    require_normal_testbed_exit(testbed_exit_code, testbed_exit_tail)
     if skip_reason:
         raise SmokeSkip(skip_reason)
     return result
@@ -1893,7 +1925,12 @@ def parse_args(argv):
     parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver; launch with standalone log output.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an available localhost port.")
     parser.add_argument("--expect-log-message", action="append", default=[], help="Required substring in the logserver output.")
-    parser.add_argument("--reject-log-message", action="append", default=[], help="Forbidden substring in the logserver output.")
+    parser.add_argument(
+        "--reject-log-message",
+        action="append",
+        default=list(STRICT_LOG_FAILURE_MESSAGES),
+        help="Forbidden substring in the logserver output. Runtime warnings, assertions, errors, and validation failures are always rejected.",
+    )
     parser.add_argument(
         "--skip-log-message",
         action="append",
@@ -1903,8 +1940,8 @@ def parse_args(argv):
     parser.add_argument(
         "--skip-blocking-log-message",
         action="append",
-        default=[],
-        help="Log substring that remains a failure even when an explicit capability-skip marker is present.",
+        default=list(STRICT_LOG_FAILURE_MESSAGES),
+        help="Log substring that remains a failure even when an explicit capability-skip marker is present. Runtime warnings, assertions, errors, and validation failures always block skips.",
     )
     parser.add_argument(
         "--expect-transparent-multi",

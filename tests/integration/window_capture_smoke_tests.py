@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 
@@ -105,6 +106,12 @@ class TextureSmokeAnalysisTests(unittest.TestCase):
 
 
 class RuntimeLogValidationTests(unittest.TestCase):
+    def test_command_line_defaults_reject_every_strict_runtime_failure(self):
+        args = window_capture_smoke.parse_args(["--window-handle", "1", "--output", "capture.bmp"])
+
+        self.assertEqual(args.reject_log_message, list(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES))
+        self.assertEqual(args.skip_blocking_log_message, list(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES))
+
     def test_capability_marker_is_classified_before_required_log_validation(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_directory = Path(temp_dir)
@@ -176,6 +183,75 @@ class RuntimeLogValidationTests(unittest.TestCase):
                     [marker],
                     ["[ERROR]"],
                 )
+
+
+class ShutdownLogValidationTests(unittest.TestCase):
+    def run_capture_with_shutdown_log(self, shutdown_log, required=(), rejected=()):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_directory = Path(temp_dir)
+            log_path = log_directory / "test.log"
+            args = SimpleNamespace(
+                application_arg=[],
+                executable=sys.executable,
+                expect_log_message=list(required),
+                expect_texture_smoke=False,
+                expect_transparent_csg=False,
+                expect_transparent_multi=False,
+                log_port=0,
+                logserver_executable=None,
+                no_logserver=False,
+                output=log_directory / "capture.bmp",
+                reject_log_message=list(rejected),
+                settle_seconds=0.0,
+                skip_blocking_log_message=[],
+                skip_log_message=[],
+                software_vulkan="off",
+                timeout=1.0,
+                window_title="NWB Test",
+                working_directory=log_directory,
+            )
+            backend = mock.Mock()
+            backend.wait_for_window.return_value = 0x4A
+            testbed_process = SimpleNamespace(pid=4321)
+            logserver_process = object()
+            events = []
+
+            def terminate(process, name, _window_handle=None):
+                if process is testbed_process:
+                    events.append("testbed shutdown")
+                    log_path.write_text(shutdown_log, encoding="utf-8")
+                else:
+                    events.append("logserver shutdown")
+                return 0, ""
+
+            def drain(*_args):
+                events.append("log drain")
+
+            with mock.patch.object(window_capture_smoke, "build_launch_environment", return_value={}), \
+                 mock.patch.object(
+                     window_capture_smoke,
+                     "launch_logserver",
+                     return_value=(logserver_process, 49152, log_directory, {}, "*.log"),
+                 ), \
+                 mock.patch.object(window_capture_smoke, "launch_testbed", return_value=testbed_process), \
+                 mock.patch.object(window_capture_smoke, "ensure_process_running"), \
+                 mock.patch.object(window_capture_smoke, "capture_checked_window", return_value="capture"), \
+                 mock.patch.object(window_capture_smoke, "terminate_process", side_effect=terminate), \
+                 mock.patch.object(window_capture_smoke, "wait_for_log_drain", side_effect=drain):
+                result = window_capture_smoke.launch_and_capture(args, backend)
+
+            self.assertEqual(events, ["testbed shutdown", "log drain", "logserver shutdown"])
+            return result
+
+    def test_shutdown_marker_is_validated_after_graceful_exit(self):
+        self.assertEqual(
+            self.run_capture_with_shutdown_log("ProjectTestbed: shutdown", required=("ProjectTestbed: shutdown",)),
+            "capture",
+        )
+
+    def test_teardown_warning_fails_after_graceful_exit(self):
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "rejected log message"):
+            self.run_capture_with_shutdown_log("[WARNING] teardown failure", rejected=("[WARNING]",))
 
 
 class WindowsCaptureOrderingTests(unittest.TestCase):

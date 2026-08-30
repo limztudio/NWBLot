@@ -18,7 +18,7 @@ static int RunResourceCooker(const int argc, char** argv){
         NWB_CERR << "[resource_cooker] logger.init() failed\n";
         return -1;
     }
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
 
     const int ret = ResourceCookerMain(argc, argv);
     return ret;

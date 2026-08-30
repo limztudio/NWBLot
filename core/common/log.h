@@ -41,6 +41,15 @@ namespace LogType{
 };
 
 
+namespace LoggerBreakPolicy{
+    enum Enum : u8{
+        ReportOnly,
+        BreakOnFatal,
+        BreakOnErrorAndFatal,
+    };
+};
+
+
 class ILogger{
 public:
     virtual ~ILogger() = default;
@@ -62,11 +71,31 @@ namespace LoggerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-extern ILogger* g_logger;
+struct LoggerRegistration{
+    ILogger& logger;
+    const LoggerBreakPolicy::Enum breakPolicy;
+};
+
+extern LoggerRegistration* g_loggerRegistration;
 
 inline constexpr StringView s_DiagnosticEventCategoryAssert = "logger_Assert";
 inline constexpr StringView s_DiagnosticEventCategoryError = "logger_Error";
 inline constexpr StringView s_DiagnosticEventCategoryFatal = "logger_Fatal";
+
+[[nodiscard]] inline constexpr bool ShouldBreak(
+    const LoggerBreakPolicy::Enum breakPolicy,
+    const LogType::Enum type
+)noexcept{
+    switch(breakPolicy){
+    case LoggerBreakPolicy::ReportOnly:
+        return false;
+    case LoggerBreakPolicy::BreakOnFatal:
+        return type == LogType::Fatal;
+    case LoggerBreakPolicy::BreakOnErrorAndFatal:
+        return type == LogType::Error || type == LogType::Fatal;
+    }
+    return type == LogType::Error || type == LogType::Fatal;
+}
 
 template<typename... ARGS>
 constexpr void IgnoreMessage(ARGS&&...){}
@@ -239,20 +268,28 @@ inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, 
 class LoggerRegistrationGuard final : NoCopy{
 public:
     explicit LoggerRegistrationGuard(ILogger& logger)
-        : m_previous(LoggerDetail::g_logger)
+        : m_previous(LoggerDetail::g_loggerRegistration)
+        , m_registration{ logger, m_previous ? m_previous->breakPolicy : LoggerBreakPolicy::BreakOnErrorAndFatal }
     {
-        LoggerDetail::g_logger = &logger;
+        LoggerDetail::g_loggerRegistration = &m_registration;
+    }
+    LoggerRegistrationGuard(ILogger& logger, const LoggerBreakPolicy::Enum breakPolicy)
+        : m_previous(LoggerDetail::g_loggerRegistration)
+        , m_registration{ logger, breakPolicy }
+    {
+        LoggerDetail::g_loggerRegistration = &m_registration;
     }
     LoggerRegistrationGuard(LoggerRegistrationGuard&&) = delete;
     ~LoggerRegistrationGuard(){
-        LoggerDetail::g_logger = m_previous;
+        LoggerDetail::g_loggerRegistration = m_previous;
     }
 
-    [[nodiscard]] ILogger* previousLogger()const{ return m_previous; }
+    [[nodiscard]] ILogger* previousLogger()const{ return m_previous ? &m_previous->logger : nullptr; }
 
 
 private:
-    ILogger* m_previous = nullptr;
+    LoggerDetail::LoggerRegistration* m_previous = nullptr;
+    LoggerDetail::LoggerRegistration m_registration;
 };
 
 
@@ -274,15 +311,17 @@ NWB_COMMON_END
 
 #define NWB_LOGGER_ENQUEUE_MESSAGE(Type, ...)                                                                                  \
     do{                                                                                                                        \
-        NWB_FATAL_ASSERT(::NWB::Core::Common::LoggerDetail::g_logger != nullptr);                                              \
-        auto& logger = *::NWB::Core::Common::LoggerDetail::g_logger;                                                           \
+        NWB_FATAL_ASSERT(::NWB::Core::Common::LoggerDetail::g_loggerRegistration != nullptr);                                  \
+        auto& loggerRegistration = *::NWB::Core::Common::LoggerDetail::g_loggerRegistration;                                  \
+        auto& logger = loggerRegistration.logger;                                                                              \
         ::NWB::Core::Common::LoggerDetail::EnqueueMessage(logger, ::NWB::Core::Common::LogType::Type, __VA_ARGS__);            \
     }while(false)
 
 #define NWB_LOGGER_ENQUEUE_MESSAGE_AND_BREAK(Type, BreakMacro, ...)                                                            \
     do{                                                                                                                        \
-        NWB_FATAL_ASSERT(::NWB::Core::Common::LoggerDetail::g_logger != nullptr);                                              \
-        auto& logger = *::NWB::Core::Common::LoggerDetail::g_logger;                                                           \
+        NWB_FATAL_ASSERT(::NWB::Core::Common::LoggerDetail::g_loggerRegistration != nullptr);                                  \
+        auto& loggerRegistration = *::NWB::Core::Common::LoggerDetail::g_loggerRegistration;                                  \
+        auto& logger = loggerRegistration.logger;                                                                              \
         ::NWB::Core::Common::LoggerDetail::EnqueueMessageAndCapture(                                                           \
             logger,                                                                                                            \
             ::NWB::Core::Common::LogType::Type,                                                                                \
@@ -291,7 +330,12 @@ NWB_COMMON_END
             __LINE__,                                                                                                          \
             __VA_ARGS__                                                                                                        \
         );                                                                                                                     \
-        BreakMacro;                                                                                                            \
+        if(::NWB::Core::Common::LoggerDetail::ShouldBreak(                                                                     \
+            loggerRegistration.breakPolicy,                                                                                    \
+            ::NWB::Core::Common::LogType::Type                                                                                 \
+        )){                                                                                                                    \
+            BreakMacro;                                                                                                        \
+        }                                                                                                                      \
     }while(false)
 
 

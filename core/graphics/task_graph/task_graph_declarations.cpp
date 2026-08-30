@@ -34,7 +34,9 @@ GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
     , m_externalStateSources(arena)
     , m_externalStateSnapshots(arena)
     , m_resourceUses(arena)
+    , m_resourceVersionUses(arena)
     , m_resources(arena)
+    , m_resourceVersions(arena)
     , m_initialOwnerHandoffSources(arena)
     , m_queueFamilyIndices(arena)
     , m_resourceSets(arena)
@@ -61,6 +63,10 @@ GpuTaskGraph::~GpuTaskGraph(){
 
 GpuTaskId GpuTaskGraph::addTask(const GpuTaskDesc& desc){
     return appendTask(desc, nullptr, nullptr, nullptr, nullptr, nullptr, 0u);
+}
+
+GpuGraphResourceVersionId GpuTaskGraph::declareResourceVersion(const GpuGraphResourceVersionDesc& desc){
+    return appendResourceVersion(desc);
 }
 
 

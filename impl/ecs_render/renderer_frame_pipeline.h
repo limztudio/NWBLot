@@ -140,8 +140,6 @@ public:
     [[nodiscard]] bool prepareResources(Core::Framebuffer* framebuffer);
     void render(Core::Framebuffer* framebuffer);
     [[nodiscard]] bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder);
-    [[nodiscard]] CsgShapeRegistry& csgShapeRegistry(){ return m_csgShapeRegistry; }
-    [[nodiscard]] const CsgShapeRegistry& csgShapeRegistry()const{ return m_csgShapeRegistry; }
     // This explicitly trades one frame of shadow/caustic/surfel latency for overlap: Graphics lights the current G-buffer from
     // an accepted prior shadow/caustic/surfel snapshot while AsyncCompute produces the next one. It is off by default
     // and self-bootstraps through the normal current-frame path after every toggle or target recreation.

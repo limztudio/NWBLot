@@ -48,6 +48,8 @@ struct GpuTaskGraphTaskView{
     usize externalStateSourceCount = 0u;
     const GpuTaskResourceUse* resourceUses = nullptr;
     usize resourceUseCount = 0u;
+    const GpuTaskResourceVersionUse* resourceVersionUses = nullptr;
+    usize resourceVersionUseCount = 0u;
     bool hasPayload = false;
     bool hasRecordPayload = false;
 };
@@ -88,6 +90,13 @@ struct GpuTaskGraphResourceView{
     ResourceQueueAdmissionSnapshot queueAdmission;
     bool hasQueueAdmission = false;
     bool hasBackendResource = false;
+};
+
+struct GpuTaskGraphResourceVersionView{
+    GpuGraphResourceVersionId id;
+    GpuGraphResourceId resource;
+    GpuTaskResourceRange range;
+    GpuGraphResourceVersionOrigin::Enum origin = GpuGraphResourceVersionOrigin::kCount;
 };
 
 struct GpuTaskGraphResourceSetView{
@@ -254,6 +263,8 @@ private:
         u32 externalStateSourceCount = 0u;
         u32 resourceUseOffset = 0u;
         u32 resourceUseCount = 0u;
+        u32 resourceVersionUseOffset = 0u;
+        u32 resourceVersionUseCount = 0u;
         // Preserve declaration structure after resource-set uses expand into the materialized range above.
         u32 directResourceUseCount = 0u;
         u32 declaredResourceSetUseCount = 0u;
@@ -301,6 +312,12 @@ private:
         ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
         bool usesConcurrentSharing = false;
         bool hasQueueAdmission = false;
+    };
+
+    struct GpuGraphResourceVersionNode{
+        GpuGraphResourceId resource;
+        GpuTaskResourceRange range;
+        GpuGraphResourceVersionOrigin::Enum origin = GpuGraphResourceVersionOrigin::kCount;
     };
 
     struct GpuGraphResourceSetNode{
@@ -452,6 +469,9 @@ public:
         const GpuGraphResourceDesc& desc
     );
     [[nodiscard]] GpuGraphResourceId importHazardDomain(const GpuGraphResourceDesc& desc);
+    // Declares a distinct semantic value for one exact physical resource range. Repeating an identical descriptor
+    // intentionally produces a different version ID.
+    [[nodiscard]] GpuGraphResourceVersionId declareResourceVersion(const GpuGraphResourceVersionDesc& desc);
     // Stores an immutable dynamic resource collection. Task resource-set declarations expand to the set's concrete
     // members at task creation, so compilation and recording keep their existing resource-level contracts.
     [[nodiscard]] GpuGraphResourceSetId importResourceSet(const GpuGraphResourceSetDesc& desc);
@@ -511,18 +531,21 @@ public:
     [[nodiscard]] bool validForDeviceGeneration(u16 deviceGeneration)const noexcept;
     [[nodiscard]] bool validTask(const GpuTaskId& id)const noexcept;
     [[nodiscard]] bool validResource(const GpuGraphResourceId& id)const noexcept;
+    [[nodiscard]] bool validResourceVersion(const GpuGraphResourceVersionId& id)const noexcept;
     [[nodiscard]] bool validResourceSet(const GpuGraphResourceSetId& id)const noexcept;
     [[nodiscard]] bool validUploadBlob(const GpuUploadBlobId& id)const noexcept;
     [[nodiscard]] bool validPipeline(const GpuGraphPipelineId& id)const noexcept;
     [[nodiscard]] bool validExternalCompletion(const GpuExternalCompletionId& id)const noexcept;
     [[nodiscard]] usize taskCount()const noexcept{ return m_tasks.size(); }
     [[nodiscard]] usize resourceCount()const noexcept{ return m_resources.size(); }
+    [[nodiscard]] usize resourceVersionCount()const noexcept{ return m_resourceVersions.size(); }
     [[nodiscard]] usize resourceSetCount()const noexcept{ return m_resourceSets.size(); }
     [[nodiscard]] usize uploadBlobCount()const noexcept{ return m_uploadBlobs.size(); }
     [[nodiscard]] usize pipelineCount()const noexcept{ return m_pipelines.size(); }
     [[nodiscard]] usize externalCompletionCount()const noexcept{ return m_externalCompletions.size(); }
     [[nodiscard]] GpuTaskGraphTaskView taskAt(usize index)const;
     [[nodiscard]] GpuTaskGraphResourceView resourceAt(usize index)const;
+    [[nodiscard]] GpuTaskGraphResourceVersionView resourceVersionAt(usize index)const;
     [[nodiscard]] GpuTaskGraphResourceSetView resourceSetAt(usize index)const;
     [[nodiscard]] GpuTaskGraphPipelineView pipelineAt(usize index)const;
     [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const;
@@ -684,6 +707,7 @@ private:
         const ResourceQueueAdmissionSnapshot& admission
     );
     [[nodiscard]] GpuGraphResourceId appendResource(const GpuGraphResourceDesc& desc);
+    [[nodiscard]] GpuGraphResourceVersionId appendResourceVersion(const GpuGraphResourceVersionDesc& desc);
     [[nodiscard]] GpuGraphResourceSetId appendResourceSet(const GpuGraphResourceSetDesc& desc);
     [[nodiscard]] GpuGraphPipelineId appendPipeline(const GpuGraphPipelineDesc& desc);
     [[nodiscard]] GpuExternalCompletionId appendExternalCompletion(const GpuExternalCompletionDesc& desc);
@@ -704,7 +728,9 @@ private:
     GraphicsVector<GpuTaskExternalStateSource> m_externalStateSources;
     GraphicsVector<CommandListResourceStateHandoff*> m_externalStateSnapshots;
     GraphicsVector<GpuTaskResourceUse> m_resourceUses;
+    GraphicsVector<GpuTaskResourceVersionUse> m_resourceVersionUses;
     GraphicsVector<GpuGraphResourceNode> m_resources;
+    GraphicsVector<GpuGraphResourceVersionNode> m_resourceVersions;
     GraphicsVector<GpuTaskGraphInitialOwnerHandoffSourceView> m_initialOwnerHandoffSources;
     GraphicsVector<u32> m_queueFamilyIndices;
     GraphicsVector<GpuGraphResourceSetNode> m_resourceSets;

@@ -195,6 +195,13 @@ struct GpuTaskGraphResourceStatePlan{
     const GpuTaskResourceRange& inner
 )noexcept;
 
+[[nodiscard]] bool BuildResourceVersionDependencyEdges(
+    const GpuTaskGraph& graph,
+    Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& outEdges,
+    GpuTaskGraphAnalysisDiagnostic& outDiagnostic,
+    Alloc::ScratchArena& scratchArena
+);
+
 [[nodiscard]] bool CollectTextureFirstUseRangesWithinTask(
     const GpuTaskGraphTaskView& task,
     usize useIndex,

@@ -68,6 +68,8 @@ Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRun
         .compile = {
             .taskCount = static_cast<u64>(compileStatistics.taskCount),
             .resourceCount = static_cast<u64>(compileStatistics.resourceCount),
+            .resourceVersionCount = static_cast<u64>(compileStatistics.resourceVersionCount),
+            .resourceVersionEdgeCount = static_cast<u64>(compileStatistics.resourceVersionEdgeCount),
             .resourceUseCount = static_cast<u64>(compileStatistics.resourceUseCount),
             .explicitDependencyCount = static_cast<u64>(compileStatistics.explicitDependencyCount),
             .inferredDependencyCount = static_cast<u64>(compileStatistics.inferredDependencyCount),

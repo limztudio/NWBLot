@@ -97,6 +97,9 @@ struct PhysicalQueueRuntimeSnapshots{
     statistics.compile.planGeneration = 12u;
     statistics.compile.deviceGeneration = 7u;
     statistics.compile.taskCount = 1u;
+    statistics.compile.resourceCount = 1u;
+    statistics.compile.resourceVersionCount = 2u;
+    statistics.compile.resourceVersionEdgeCount = 1u;
     statistics.compile.packetCount = 1u;
 
     statistics.recording.graphGeneration = 11u;
@@ -373,7 +376,7 @@ TEST(EcsGraphics, FrameGraphRegistryRecordsExactPacketSubmissionStatistics){
     ));
     EXPECT_EQ(
         payload.wireVersion,
-        NWB::Core::Telemetry::s_FrameGraphPacketSubmissionStatisticsPayloadVersion
+        NWB::Core::Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion
     );
     EXPECT_TRUE(payload.packetSubmissionStatisticsPresent);
     ASSERT_EQ(payload.packetSubmissionStatistics.size(), 1u);
@@ -500,6 +503,8 @@ TEST(EcsGraphics, FrameGraphRuntimeStatisticsSelectsOnlyMatchingCoherentSnapshot
     EXPECT_EQ(matching.recordingAttemptGeneration, statistics.recording.recordingAttemptGeneration);
     EXPECT_EQ(matching.deviceGeneration, statistics.compile.deviceGeneration);
     EXPECT_EQ(matching.compile.taskCount, statistics.compile.taskCount);
+    EXPECT_EQ(matching.compile.resourceVersionCount, statistics.compile.resourceVersionCount);
+    EXPECT_EQ(matching.compile.resourceVersionEdgeCount, statistics.compile.resourceVersionEdgeCount);
     EXPECT_EQ(matching.recording.commandListCount, statistics.recording.commandListCount);
     EXPECT_EQ(matching.submission.nativeSubmissionCount, statistics.submission.nativeSubmissionCount);
     EXPECT_EQ(

@@ -425,14 +425,29 @@ void AppendFrameGraphCompiledTaskJson(
 
 void AppendFrameGraphCompileRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphCompileRuntimeStatistics& statistics
+    const Telemetry::FrameGraphCompileRuntimeStatistics& statistics,
+    const bool resourceVersionStatisticsPresent
 ){
     StringAppendFormat(
         out,
-        "{{\"taskCount\": {}, \"resourceCount\": {}, \"resourceUseCount\": {}, \"explicitDependencyCount\": {}, "
-        "\"inferredDependencyCount\": {}, \"packetCount\": {}, \"packetDependencyCount\": {}, \"mergedTaskCount\": {}",
+        "{{\"taskCount\": {}, \"resourceCount\": {}, \"resourceVersionCount\": ",
         statistics.taskCount,
-        statistics.resourceCount,
+        statistics.resourceCount
+    );
+    if(resourceVersionStatisticsPresent){
+        StringAppendFormat(
+            out,
+            "{}, \"resourceVersionEdgeCount\": {}",
+            statistics.resourceVersionCount,
+            statistics.resourceVersionEdgeCount
+        );
+    }
+    else
+        out += "null, \"resourceVersionEdgeCount\": null";
+    StringAppendFormat(
+        out,
+        ", \"resourceUseCount\": {}, \"explicitDependencyCount\": {}, "
+        "\"inferredDependencyCount\": {}, \"packetCount\": {}, \"packetDependencyCount\": {}, \"mergedTaskCount\": {}",
         statistics.resourceUseCount,
         statistics.explicitDependencyCount,
         statistics.inferredDependencyCount,
@@ -719,7 +734,8 @@ void AppendFrameGraphRuntimeStatisticsJson(
     const u32 ownerNodeIndex,
     const bool physicalQueueRuntimeStatisticsPresent,
     const bool packetSubmissionStatisticsPresent,
-    const bool recoverySubmissionCountPresent
+    const bool recoverySubmissionCountPresent,
+    const bool resourceVersionStatisticsPresent
 ){
     if(!statistics.present){
         out += "null";
@@ -735,7 +751,7 @@ void AppendFrameGraphRuntimeStatisticsJson(
         statistics.recordingAttemptGeneration,
         statistics.deviceGeneration
     );
-    AppendFrameGraphCompileRuntimeStatisticsJson(out, statistics.compile);
+    AppendFrameGraphCompileRuntimeStatisticsJson(out, statistics.compile, resourceVersionStatisticsPresent);
     out += ", \"recording\": ";
     AppendFrameGraphRecordingRuntimeStatisticsJson(out, statistics.recording);
     out += ", \"submission\": ";
@@ -1029,7 +1045,8 @@ void AppendFrameGraphJson(
             static_cast<u32>(nodeIndex),
             graph.physicalQueueRuntimeStatisticsPresent && physicalQueueRuntimeStatisticsCount != 0u,
             graph.packetSubmissionStatisticsPresent,
-            graph.wireVersion >= Telemetry::s_FrameGraphRecoverySubmissionCountPayloadVersion
+            graph.wireVersion >= Telemetry::s_FrameGraphRecoverySubmissionCountPayloadVersion,
+            graph.wireVersion >= Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion
         );
         StringAppendFormat(out, "}}{}\n", nodeIndex + 1u == graph.nodes.size() ? "" : ",");
     }

@@ -225,6 +225,9 @@ struct GpuTaskGraphCompileStatistics{
     usize taskCount = 0u;
     usize resourceCount = 0u;
     usize resourceUseCount = 0u;
+    usize resourceVersionCount = 0u;
+    // Counts both producer-to-consumer dependencies and consumer-to-overwriter lifetime edges.
+    usize resourceVersionEdgeCount = 0u;
     // These are analysis categories, not a disjoint scheduling-edge partition: one task pair can have both an
     // explicit declaration and inferred resource reason, so callers must not sum them as a final edge count.
     usize explicitDependencyCount = 0u;
@@ -270,7 +273,7 @@ struct GpuTaskGraphCompileStatistics{
     f64 validationSeconds = 0.0;
     f64 dependencyAnalysisSeconds = 0.0;
     f64 hazardAnalysisSeconds = 0.0;
-    // Includes cycle detection and stable ordering for both explicit-only and final inferred dependency graphs.
+    // Includes cycle detection and stable ordering for both semantic-only and final inferred dependency graphs.
     f64 topologicalOrderSeconds = 0.0;
     f64 queueAssignmentSeconds = 0.0;
     f64 planningSeconds = 0.0;

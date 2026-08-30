@@ -222,7 +222,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         StringAppendFormat(
             m_frameGraphRendererLabel,
             "Renderer Frame\n"
-            "Task graph: tasks={} packets={} deps={} transitions={}\n"
+            "Task graph: tasks={} resources={} resource versions={} version edges={} packets={} deps={} transitions={}\n"
             "Declarations: resource sets={} resource-set members={} direct uses={} declared set uses={} expanded set-member uses={} materialized uses={}\n"
             "Data: payload objects={} payload object bytes={} upload blobs={} upload blob bytes={}\n"
             "Raw barriers: transitions={} UAV={} ownership releases={} ownership acquires={} state exports={}\n"
@@ -236,6 +236,9 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             "CPU recording summed spans: packet={:.3f} ms command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task={:.3f} ms\n"
             "Ready-frontier recording: elapsed={:.3f} ms logical-worker busy={:.3f} ms logical-worker capacity={:.3f} ms utilization={:.1f}%",
             compileStatistics.taskCount,
+            compileStatistics.resourceCount,
+            compileStatistics.resourceVersionCount,
+            compileStatistics.resourceVersionEdgeCount,
             compileStatistics.packetCount,
             compileStatistics.packetDependencyCount,
             compileStatistics.transitionBarrierCount,

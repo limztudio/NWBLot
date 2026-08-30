@@ -443,7 +443,10 @@ TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){
     ));
     EXPECT_TRUE(ContainsText(frameGraph, "if(deferredRuntimeStatistics.valid()){"));
     EXPECT_TRUE(ContainsText(frameGraph, "StringAppendFormat(\n            m_frameGraphRendererLabel,"));
-    EXPECT_TRUE(ContainsText(frameGraph, "\"Task graph: tasks={} packets={} deps={} transitions={}\\n\""));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "\"Task graph: tasks={} resources={} resource versions={} version edges={} packets={} deps={} transitions={}\\n\""
+    ));
     EXPECT_TRUE(ContainsText(frameGraph, "\"Declarations: resource sets={} resource-set members={} direct uses={} declared set uses={} expanded set-member uses={} materialized uses={}\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"Data: payload objects={} payload object bytes={} upload blobs={} upload blob bytes={}\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"Recording: packets={} tasks={} command lists={} barriers={} worker-routed={} overlapped={}\\n\""));
@@ -466,6 +469,8 @@ TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.resourceStatePlanningSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.packetDependencyPlanningSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.resourceSetCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.resourceVersionCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.resourceVersionEdgeCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.resourceSetMemberCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.directResourceUseCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.declaredResourceSetUseCount,"));
@@ -536,6 +541,14 @@ TEST(EcsGraphics, DeferredGraphAttachesStructuredRuntimeStatisticsOnlyToRenderer
     EXPECT_TRUE(ContainsText(runtimeStatistics, ".deviceGeneration = compileStatistics.deviceGeneration,"));
     EXPECT_TRUE(ContainsText(runtimeStatistics, ".taskCount = static_cast<u64>(compileStatistics.taskCount),"));
     EXPECT_TRUE(ContainsText(runtimeStatistics, ".resourceCount = static_cast<u64>(compileStatistics.resourceCount),"));
+    EXPECT_TRUE(ContainsText(
+        runtimeStatistics,
+        ".resourceVersionCount = static_cast<u64>(compileStatistics.resourceVersionCount),"
+    ));
+    EXPECT_TRUE(ContainsText(
+        runtimeStatistics,
+        ".resourceVersionEdgeCount = static_cast<u64>(compileStatistics.resourceVersionEdgeCount),"
+    ));
     EXPECT_TRUE(ContainsText(
         runtimeStatistics,
         "compileStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::Internal]"

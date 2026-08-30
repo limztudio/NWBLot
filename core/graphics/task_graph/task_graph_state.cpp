@@ -51,7 +51,9 @@ void GpuTaskGraph::reset(){
         m_externalDependencies.clear();
         m_externalStateSources.clear();
         m_resourceUses.clear();
+        m_resourceVersionUses.clear();
         m_resources.clear();
+        m_resourceVersions.clear();
         m_initialOwnerHandoffSources.clear();
         m_queueFamilyIndices.clear();
         m_resourceSets.clear();
@@ -218,6 +220,10 @@ bool GpuTaskGraph::validResource(const GpuGraphResourceId& id)const noexcept{
     return id.valid() && id.generation == m_generation && id.index < m_resources.size();
 }
 
+bool GpuTaskGraph::validResourceVersion(const GpuGraphResourceVersionId& id)const noexcept{
+    return id.valid() && id.generation == m_generation && id.index < m_resourceVersions.size();
+}
+
 bool GpuTaskGraph::validResourceSet(const GpuGraphResourceSetId& id)const noexcept{
     return id.valid() && id.generation == m_generation && id.index < m_resourceSets.size();
 }
@@ -260,6 +266,10 @@ GpuTaskGraphTaskView GpuTaskGraph::taskAt(const usize index)const{
         .externalStateSourceCount = task.externalStateSourceCount,
         .resourceUses = task.resourceUseCount > 0u ? m_resourceUses.data() + task.resourceUseOffset : nullptr,
         .resourceUseCount = task.resourceUseCount,
+        .resourceVersionUses = task.resourceVersionUseCount > 0u
+            ? m_resourceVersionUses.data() + task.resourceVersionUseOffset
+            : nullptr,
+        .resourceVersionUseCount = task.resourceVersionUseCount,
         .hasPayload = task.payload != nullptr,
         .hasRecordPayload = task.recordPayload != nullptr,
     };
@@ -296,6 +306,17 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
         },
         .hasQueueAdmission = resource.hasQueueAdmission,
         .hasBackendResource = resource.texture != nullptr || resource.buffer != nullptr || resource.accelStruct != nullptr,
+    };
+}
+
+GpuTaskGraphResourceVersionView GpuTaskGraph::resourceVersionAt(const usize index)const{
+    NWB_ASSERT(index < m_resourceVersions.size());
+    const GpuGraphResourceVersionNode& version = m_resourceVersions[index];
+    return GpuTaskGraphResourceVersionView{
+        .id = GpuGraphResourceVersionId{ static_cast<u32>(index), m_generation },
+        .resource = version.resource,
+        .range = version.range,
+        .origin = version.origin,
     };
 }
 

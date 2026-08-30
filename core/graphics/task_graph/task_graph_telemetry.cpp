@@ -398,6 +398,14 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
             flags |= GpuTaskGraphTelemetryEdgeFlag::ExplicitDependency;
         if(analysis.hasInferredEdge(edge.producer, edge.consumer))
             flags |= GpuTaskGraphTelemetryEdgeFlag::InferredDependency;
+        for(const GpuTaskDependencyEdge& inferredEdge : analysis.inferredEdges()){
+            if(inferredEdge.producer != edge.producer || inferredEdge.consumer != edge.consumer)
+                continue;
+            if(inferredEdge.hazard == GpuTaskHazardType::VersionDependency)
+                flags |= GpuTaskGraphTelemetryEdgeFlag::VersionDependency;
+            else if(inferredEdge.hazard == GpuTaskHazardType::VersionLifetime)
+                flags |= GpuTaskGraphTelemetryEdgeFlag::VersionLifetime;
+        }
         builder.addEdge(
             taskNodes[edge.producer.index],
             taskNodes[edge.consumer.index],

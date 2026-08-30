@@ -65,6 +65,24 @@ namespace GpuTaskResourceAccess{
     };
 };
 
+namespace GpuGraphResourceVersionOrigin{
+    enum Enum : u8{
+        TaskProduced,
+        ImportedRoot,
+
+        kCount,
+    };
+};
+
+namespace GpuTaskResourceVersionRole{
+    enum Enum : u8{
+        Produce,
+        Consume,
+
+        kCount,
+    };
+};
+
 namespace GpuTaskHazardType{
     enum Enum : u8{
         Unknown,
@@ -72,6 +90,8 @@ namespace GpuTaskHazardType{
         ReadAfterWrite,
         WriteAfterRead,
         WriteAfterWrite,
+        VersionDependency,
+        VersionLifetime,
 
         kCount,
     };
@@ -84,6 +104,8 @@ namespace GpuTaskGraphTelemetryEdgeFlag{
         None = 0u,
         ExplicitDependency = 1u << 0u,
         InferredDependency = 1u << 1u,
+        VersionDependency = 1u << 2u,
+        VersionLifetime = 1u << 3u,
     };
 };
 
@@ -130,6 +152,19 @@ inline constexpr bool operator==(const GpuGraphResourceId& lhs, const GpuGraphRe
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
 inline constexpr bool operator!=(const GpuGraphResourceId& lhs, const GpuGraphResourceId& rhs)noexcept{ return !(lhs == rhs); }
+
+struct GpuGraphResourceVersionId{
+    u32 index = Limit<u32>::s_Max;
+    u64 generation = 0u;
+
+    [[nodiscard]] constexpr bool valid()const{ return index != Limit<u32>::s_Max && generation != 0u; }
+};
+inline constexpr bool operator==(const GpuGraphResourceVersionId& lhs, const GpuGraphResourceVersionId& rhs)noexcept{
+    return lhs.index == rhs.index && lhs.generation == rhs.generation;
+}
+inline constexpr bool operator!=(const GpuGraphResourceVersionId& lhs, const GpuGraphResourceVersionId& rhs)noexcept{
+    return !(lhs == rhs);
+}
 
 // A resource set is a graph-owned immutable collection of imported resources. Task declarations may apply one
 // uniform access contract to every member; the graph freezes that declaration into ordinary per-resource uses before
@@ -247,6 +282,13 @@ struct GpuTaskResourceUse{
     bool hasIndependentStateSource = false;
 };
 
+// Resource versions provide semantic producer/consumer ordering without changing the physical state/access contract
+// above. Every version declaration remains distinct even when multiple declarations name the same physical range.
+struct GpuTaskResourceVersionUse{
+    GpuGraphResourceVersionId version;
+    GpuTaskResourceVersionRole::Enum role = GpuTaskResourceVersionRole::kCount;
+};
+
 // The range/state/access contract applies to every member of `resourceSet`. Sets deliberately do not retain an
 // independent pseudo-resource: GpuTaskGraph expands them in declaration order into concrete GpuTaskResourceUse
 // records, preserving the normal exact-resource hazard and barrier machinery.
@@ -264,6 +306,8 @@ struct GpuTaskDependencyEdge{
     // Explicit edges intentionally carry no resource. Inferred edges preserve the first resource that established
     // the dependency; resource-use telemetry retains any additional overlapping uses.
     GpuGraphResourceId resource;
+    // Version-derived dependencies retain the semantic version that established the edge. Other types leave it empty.
+    GpuGraphResourceVersionId resourceVersion;
     GpuTaskHazardType::Enum hazard = GpuTaskHazardType::Unknown;
 };
 

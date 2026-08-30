@@ -31,6 +31,10 @@ namespace GpuTaskGraphAnalysisStatus{
         InvalidTaskDependency,
         InvalidExternalCompletionDependency,
         InvalidResourceUse,
+        InvalidResourceVersion,
+        InvalidResourceVersionUse,
+        MissingResourceVersionProducer,
+        DuplicateResourceVersionProducer,
         InvalidAcceptedQueueFrontierTask,
         Cycle,
         InvalidPresentationEndpoint,
@@ -42,6 +46,7 @@ struct GpuTaskGraphAnalysisDiagnostic{
     GpuTaskId task;
     GpuTaskId relatedTask;
     GpuGraphResourceId resource;
+    GpuGraphResourceVersionId resourceVersion;
 };
 
 namespace GpuTaskQueueAssignmentReason{
@@ -197,6 +202,7 @@ public:
     [[nodiscard]] bool hasInferredEdge(const GpuTaskId& producer, const GpuTaskId& consumer)const noexcept;
     [[nodiscard]] usize explicitEdgeCount()const noexcept{ return m_explicitEdgeCount; }
     [[nodiscard]] usize inferredEdgeCount()const noexcept{ return m_inferredEdgeCount; }
+    [[nodiscard]] usize resourceVersionEdgeCount()const noexcept{ return m_resourceVersionEdgeCount; }
 
 
 private:
@@ -216,9 +222,11 @@ private:
     u64 m_declarationRevision = 0u;
     usize m_taskCount = 0u;
     usize m_resourceCount = 0u;
+    usize m_resourceVersionCount = 0u;
     usize m_externalCompletionCount = 0u;
     usize m_explicitEdgeCount = 0u;
     usize m_inferredEdgeCount = 0u;
+    usize m_resourceVersionEdgeCount = 0u;
     bool m_valid = false;
 };
 

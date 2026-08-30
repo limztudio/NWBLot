@@ -249,7 +249,11 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     for(usize edgeIndex = 0u; edgeIndex < analysis.inferredEdges().size(); ++edgeIndex){
         const GpuTaskDependencyEdge& edge = analysis.inferredEdges()[edgeIndex];
         if(
-            (edge.producer != task.id && edge.consumer != task.id)
+            (
+                edge.hazard == GpuTaskHazardType::VersionDependency
+                || edge.hazard == GpuTaskHazardType::VersionLifetime
+            )
+            || (edge.producer != task.id && edge.consumer != task.id)
             || !edge.resource.valid()
         )
             continue;
@@ -258,7 +262,9 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
         for(usize previousIndex = 0u; previousIndex < edgeIndex; ++previousIndex){
             const GpuTaskDependencyEdge& previous = analysis.inferredEdges()[previousIndex];
             if(
-                previous.producer == edge.producer
+                previous.hazard != GpuTaskHazardType::VersionDependency
+                && previous.hazard != GpuTaskHazardType::VersionLifetime
+                && previous.producer == edge.producer
                 && previous.consumer == edge.consumer
                 && previous.resource == edge.resource
             ){

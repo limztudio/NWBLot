@@ -498,6 +498,7 @@ bool GpuTaskGraphCompiler::compile(
             .task = task,
             .relatedTask = relatedTask,
             .resource = resource,
+            .resourceVersion = {},
         };
         outAnalysis.m_valid = false;
         return false;
@@ -580,6 +581,8 @@ bool GpuTaskGraphCompiler::compile(
     statistics.deviceGeneration = outCompiledGraph.m_deviceGeneration;
     statistics.taskCount = graph.taskCount();
     statistics.resourceCount = graph.resourceCount();
+    statistics.resourceVersionCount = graph.resourceVersionCount();
+    statistics.resourceVersionEdgeCount = outAnalysis.resourceVersionEdgeCount();
     statistics.resourceSetCount = graph.m_resourceSets.size();
     statistics.resourceSetMemberCount = graph.m_resourceSetMembers.size();
     statistics.uploadBlobCount = graph.m_uploadBlobs.size();

@@ -213,6 +213,18 @@ struct GpuGraphResourceDesc{
     constexpr GpuGraphResourceDesc& setQueueSharing(const ResourceQueueSharing::Mask value){ queueSharing = value; return *this; }
 };
 
+// A version identifies one semantic value of one exact physical resource range. Imported roots enter the graph
+// without an in-graph producer; task-produced versions require a producer declaration during compilation.
+struct GpuGraphResourceVersionDesc{
+    GpuGraphResourceId resource;
+    GpuTaskResourceRange range;
+    GpuGraphResourceVersionOrigin::Enum origin = GpuGraphResourceVersionOrigin::kCount;
+
+    constexpr GpuGraphResourceVersionDesc& setResource(const GpuGraphResourceId value){ resource = value; return *this; }
+    constexpr GpuGraphResourceVersionDesc& setRange(const GpuTaskResourceRange& value){ range = value; return *this; }
+    constexpr GpuGraphResourceVersionDesc& setOrigin(const GpuGraphResourceVersionOrigin::Enum value){ origin = value; return *this; }
+};
+
 // Resource sets retain graph resource IDs, not backend pointers. Their member list is copied into graph-owned
 // storage, which makes dynamic enumerable bindless declarations immutable before compilation and native recording.
 struct GpuGraphResourceSetDesc{
@@ -273,6 +285,8 @@ struct GpuTaskDesc{
     usize resourceSetUseCount = 0u;
     // Appended so positional aggregate initializers retain their existing field layout.
     GpuTaskTimingMetadata timing;
+    const GpuTaskResourceVersionUse* resourceVersionUses = nullptr;
+    usize resourceVersionUseCount = 0u;
 
     constexpr GpuTaskDesc& setIdentity(const Name& value){ identity = value; return *this; }
     constexpr GpuTaskDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
@@ -300,6 +314,11 @@ struct GpuTaskDesc{
         return *this;
     }
     constexpr GpuTaskDesc& setTimingMetadata(const GpuTaskTimingMetadata& value){ timing = value; return *this; }
+    constexpr GpuTaskDesc& setResourceVersionUses(const GpuTaskResourceVersionUse* values, const usize count){
+        resourceVersionUses = values;
+        resourceVersionUseCount = count;
+        return *this;
+    }
 };
 
 // Primitive native copies remain task-level operations: they are scheduled, packetized, and synchronized by the

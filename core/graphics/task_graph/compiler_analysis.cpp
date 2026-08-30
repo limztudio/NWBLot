@@ -29,17 +29,24 @@ struct TrackedResourceAccess{
     bool active = true;
 };
 
+[[nodiscard]] static bool IsResourceVersionHazard(const GpuTaskHazardType::Enum hazard)noexcept{
+    return hazard == GpuTaskHazardType::VersionDependency || hazard == GpuTaskHazardType::VersionLifetime;
+}
+
 [[nodiscard]] static bool IncludesEdge(
     const GpuTaskDependencyEdge& edge,
-    const bool explicitOnly
+    const bool semanticOnly
 )noexcept{
-    return !explicitOnly || edge.hazard == GpuTaskHazardType::Explicit;
+    return !semanticOnly
+        || edge.hazard == GpuTaskHazardType::Explicit
+        || IsResourceVersionHazard(edge.hazard)
+    ;
 }
 
 static bool BuildTopologicalOrder(
     const GpuTaskGraph& graph,
     const GraphicsVector<GpuTaskDependencyEdge>& edges,
-    const bool explicitOnly,
+    const bool semanticOnly,
     GraphicsVector<GpuTaskId>& outOrder,
     GraphicsVector<GpuTaskId>& outCyclePath,
     GraphicsVector<GpuTaskDependencyEdge>& outCycleEdges,
@@ -53,7 +60,7 @@ static bool BuildTopologicalOrder(
         scheduled[taskIndex] = 0u;
     }
     for(const GpuTaskDependencyEdge& edge : edges){
-        if(IncludesEdge(edge, explicitOnly))
+        if(IncludesEdge(edge, semanticOnly))
             ++indegrees[edge.consumer.index];
     }
 
@@ -75,7 +82,7 @@ static bool BuildTopologicalOrder(
         scheduled[nextTask] = 1u;
         outOrder.push_back(graph.taskAt(nextTask).id);
         for(const GpuTaskDependencyEdge& edge : edges){
-            if(IncludesEdge(edge, explicitOnly) && edge.producer.index == nextTask){
+            if(IncludesEdge(edge, semanticOnly) && edge.producer.index == nextTask){
                 NWB_ASSERT(indegrees[edge.consumer.index] > 0u);
                 --indegrees[edge.consumer.index];
             }
@@ -92,7 +99,7 @@ static bool BuildTopologicalOrder(
     const auto appendCycleEdge = [&](const u32 producerIndex, const u32 consumerIndex){
         for(const GpuTaskDependencyEdge& edge : edges){
             if(
-                IncludesEdge(edge, explicitOnly)
+                IncludesEdge(edge, semanticOnly)
                 && edge.producer.index == producerIndex
                 && edge.consumer.index == consumerIndex
             ){
@@ -106,7 +113,7 @@ static bool BuildTopologicalOrder(
         visitState[taskIndex] = 1u;
         visitStack.push_back(taskIndex);
         for(const GpuTaskDependencyEdge& edge : edges){
-            if(!IncludesEdge(edge, explicitOnly) || edge.producer.index != taskIndex)
+            if(!IncludesEdge(edge, semanticOnly) || edge.producer.index != taskIndex)
                 continue;
 
             const u32 consumerIndex = edge.consumer.index;
@@ -188,6 +195,16 @@ static void BuildSchedulingEdges(
     }
 }
 
+[[nodiscard]] static const GpuTaskDependencyEdge* FindCycleDiagnosticEdge(
+    const GraphicsVector<GpuTaskDependencyEdge>& cycleEdges
+)noexcept{
+    for(const GpuTaskDependencyEdge& edge : cycleEdges){
+        if(IsResourceVersionHazard(edge.hazard))
+            return &edge;
+    }
+    return cycleEdges.empty() ? nullptr : &cycleEdges.front();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -215,9 +232,11 @@ void GpuTaskGraphAnalysis::reset(){
     m_declarationRevision = 0u;
     m_taskCount = 0u;
     m_resourceCount = 0u;
+    m_resourceVersionCount = 0u;
     m_externalCompletionCount = 0u;
     m_explicitEdgeCount = 0u;
     m_inferredEdgeCount = 0u;
+    m_resourceVersionEdgeCount = 0u;
     m_valid = false;
 }
 
@@ -227,6 +246,7 @@ bool GpuTaskGraphAnalysis::validFor(const GpuTaskGraph& graph)const noexcept{
         && m_declarationRevision == graph.declarationRevision()
         && m_taskCount == graph.taskCount()
         && m_resourceCount == graph.resourceCount()
+        && m_resourceVersionCount == graph.resourceVersionCount()
         && m_externalCompletionCount == graph.externalCompletionCount()
     ;
 }
@@ -267,14 +287,22 @@ bool GpuTaskGraphCompiler::analyze(
     outAnalysis.m_declarationRevision = graph.declarationRevision();
     outAnalysis.m_taskCount = graph.taskCount();
     outAnalysis.m_resourceCount = graph.resourceCount();
+    outAnalysis.m_resourceVersionCount = graph.resourceVersionCount();
     outAnalysis.m_externalCompletionCount = graph.externalCompletionCount();
 
     const Timer validationBegin = TimerNow();
-    const auto fail = [&](const GpuTaskGraphAnalysisStatus::Enum status, const GpuTaskId task = {}, const GpuTaskId relatedTask = {}, const GpuGraphResourceId resource = {}){
+    const auto fail = [&](
+        const GpuTaskGraphAnalysisStatus::Enum status,
+        const GpuTaskId task = {},
+        const GpuTaskId relatedTask = {},
+        const GpuGraphResourceId resource = {},
+        const GpuGraphResourceVersionId resourceVersion = {}
+    ){
         outAnalysis.m_diagnostic.status = status;
         outAnalysis.m_diagnostic.task = task;
         outAnalysis.m_diagnostic.relatedTask = relatedTask;
         outAnalysis.m_diagnostic.resource = resource;
+        outAnalysis.m_diagnostic.resourceVersion = resourceVersion;
         return false;
     };
     for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
@@ -348,6 +376,17 @@ bool GpuTaskGraphCompiler::analyze(
     f64 validationSeconds = DurationInSeconds<f64>(TimerNow(), validationBegin);
 
     const Timer dependencyAnalysisBegin = TimerNow();
+    Vector<GpuTaskDependencyEdge, Alloc::ScratchArena> resourceVersionDependencyEdges(scratchArena);
+    GpuTaskGraphAnalysisDiagnostic resourceVersionDiagnostic;
+    if(!BuildResourceVersionDependencyEdges(
+        graph,
+        resourceVersionDependencyEdges,
+        resourceVersionDiagnostic,
+        scratchArena
+    )){
+        outAnalysis.m_diagnostic = resourceVersionDiagnostic;
+        return false;
+    }
     const auto appendRawEdge = [&](const GpuTaskDependencyEdge& edge){
         for(GpuTaskDependencyEdge& existing : outAnalysis.m_edges){
             if(existing.producer != edge.producer || existing.consumer != edge.consumer)
@@ -373,12 +412,18 @@ bool GpuTaskGraphCompiler::analyze(
             if(existing.producer != edge.producer || existing.consumer != edge.consumer)
                 continue;
             hasTaskPair = true;
-            if(existing.resource == edge.resource && existing.hazard == edge.hazard)
+            if(
+                existing.resource == edge.resource
+                && existing.resourceVersion == edge.resourceVersion
+                && existing.hazard == edge.hazard
+            )
                 return;
         }
         outAnalysis.m_inferredEdges.push_back(edge);
         if(!hasTaskPair)
             ++outAnalysis.m_inferredEdgeCount;
+        if(IsResourceVersionHazard(edge.hazard))
+            ++outAnalysis.m_resourceVersionEdgeCount;
         appendRawEdge(edge);
     };
     const auto appendExternalDependency = [&](const GpuTaskExternalDependencyEdge& edge){
@@ -396,6 +441,7 @@ bool GpuTaskGraphCompiler::analyze(
                 .producer = task.dependencies[dependencyIndex],
                 .consumer = task.id,
                 .resource = {},
+                .resourceVersion = {},
                 .hazard = GpuTaskHazardType::Explicit,
             });
         }
@@ -406,9 +452,11 @@ bool GpuTaskGraphCompiler::analyze(
             });
         }
     }
+    for(const GpuTaskDependencyEdge& edge : resourceVersionDependencyEdges)
+        appendInferredEdge(edge);
     const f64 dependencyAnalysisSeconds = DurationInSeconds<f64>(TimerNow(), dependencyAnalysisBegin);
 
-    const Timer explicitTopologyBegin = TimerNow();
+    const Timer semanticTopologyBegin = TimerNow();
     if(!BuildTopologicalOrder(
         graph,
         outAnalysis.m_edges,
@@ -418,22 +466,20 @@ bool GpuTaskGraphCompiler::analyze(
         outAnalysis.m_cycleEdges,
         scratchArena
     )){
-        const GpuTaskDependencyEdge* const cycleEdge = outAnalysis.m_cycleEdges.empty()
-            ? nullptr
-            : &outAnalysis.m_cycleEdges.front()
-        ;
+        const GpuTaskDependencyEdge* const cycleEdge = FindCycleDiagnosticEdge(outAnalysis.m_cycleEdges);
         return fail(
             GpuTaskGraphAnalysisStatus::Cycle,
             cycleEdge ? cycleEdge->consumer : GpuTaskId{},
             cycleEdge ? cycleEdge->producer : GpuTaskId{},
-            cycleEdge ? cycleEdge->resource : GpuGraphResourceId{}
+            cycleEdge ? cycleEdge->resource : GpuGraphResourceId{},
+            cycleEdge ? cycleEdge->resourceVersion : GpuGraphResourceVersionId{}
         );
     }
-    const f64 explicitTopologySeconds = DurationInSeconds<f64>(TimerNow(), explicitTopologyBegin);
+    const f64 semanticTopologySeconds = DurationInSeconds<f64>(TimerNow(), semanticTopologyBegin);
 
     const Timer hazardAnalysisBegin = TimerNow();
-    // Process resource use in the explicit stable order. Explicit relationships therefore outrank declaration
-    // order, while per-resource writer/readers state emits only the nearest required RAW/WAR/WAW dependencies.
+    // Process physical resource use in the semantic stable order. Explicit and version relationships therefore
+    // outrank declaration order, while per-resource state emits only the nearest required RAW/WAR/WAW dependencies.
     usize potentialAccessCount = 0u;
     for(const GpuTaskId task : outAnalysis.m_topologicalOrder)
         potentialAccessCount += graph.taskAt(task.index).resourceUseCount;
@@ -463,6 +509,7 @@ bool GpuTaskGraphCompiler::analyze(
                         .producer = writer.task,
                         .consumer = task.id,
                         .resource = use.resource,
+                        .resourceVersion = {},
                         .hazard = GpuTaskHazardType::ReadAfterWrite,
                     });
                 }
@@ -475,6 +522,7 @@ bool GpuTaskGraphCompiler::analyze(
                         .producer = writer.task,
                         .consumer = task.id,
                         .resource = use.resource,
+                        .resourceVersion = {},
                         .hazard = GpuTaskHazardType::WriteAfterWrite,
                     });
                 }
@@ -485,6 +533,7 @@ bool GpuTaskGraphCompiler::analyze(
                         .producer = reader.task,
                         .consumer = task.id,
                         .resource = use.resource,
+                        .resourceVersion = {},
                         .hazard = GpuTaskHazardType::WriteAfterRead,
                     });
                 }
@@ -545,15 +594,13 @@ bool GpuTaskGraphCompiler::analyze(
         outAnalysis.m_cycleEdges,
         scratchArena
     )){
-        const GpuTaskDependencyEdge* const cycleEdge = outAnalysis.m_cycleEdges.empty()
-            ? nullptr
-            : &outAnalysis.m_cycleEdges.front()
-        ;
+        const GpuTaskDependencyEdge* const cycleEdge = FindCycleDiagnosticEdge(outAnalysis.m_cycleEdges);
         return fail(
             GpuTaskGraphAnalysisStatus::Cycle,
             cycleEdge ? cycleEdge->consumer : GpuTaskId{},
             cycleEdge ? cycleEdge->producer : GpuTaskId{},
-            cycleEdge ? cycleEdge->resource : GpuGraphResourceId{}
+            cycleEdge ? cycleEdge->resource : GpuGraphResourceId{},
+            cycleEdge ? cycleEdge->resourceVersion : GpuGraphResourceVersionId{}
         );
     }
     BuildSchedulingEdges(
@@ -562,7 +609,7 @@ bool GpuTaskGraphCompiler::analyze(
         outAnalysis.m_schedulingEdges,
         scratchArena
     );
-    const f64 topologicalOrderSeconds = explicitTopologySeconds
+    const f64 topologicalOrderSeconds = semanticTopologySeconds
         + DurationInSeconds<f64>(TimerNow(), finalTopologyBegin)
     ;
 

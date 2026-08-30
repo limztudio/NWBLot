@@ -89,11 +89,13 @@ GpuTaskId GpuTaskGraph::appendTask(
         || desc.externalStateSourceCount > Limit<u32>::s_Max - m_externalStateSources.size()
         || desc.resourceUseCount > Limit<u32>::s_Max
         || desc.resourceSetUseCount > Limit<u32>::s_Max
+        || desc.resourceVersionUseCount > Limit<u32>::s_Max - m_resourceVersionUses.size()
         || (desc.dependencyCount > 0u && !desc.dependencies)
         || (desc.externalDependencyCount > 0u && !desc.externalDependencies)
         || (desc.externalStateSourceCount > 0u && !desc.externalStateSources)
         || (desc.resourceUseCount > 0u && !desc.resourceUses)
         || (desc.resourceSetUseCount > 0u && !desc.resourceSetUses)
+        || (desc.resourceVersionUseCount > 0u && !desc.resourceVersionUses)
         || ((payload == nullptr) != (payloadObjectSize == 0u))
     )
         return {};
@@ -169,6 +171,8 @@ GpuTaskId GpuTaskGraph::appendTask(
     task.externalStateSourceCount = static_cast<u32>(desc.externalStateSourceCount);
     task.resourceUseOffset = static_cast<u32>(m_resourceUses.size());
     task.resourceUseCount = static_cast<u32>(expandedResourceUseCount);
+    task.resourceVersionUseOffset = static_cast<u32>(m_resourceVersionUses.size());
+    task.resourceVersionUseCount = static_cast<u32>(desc.resourceVersionUseCount);
     task.directResourceUseCount = static_cast<u32>(desc.resourceUseCount);
     task.declaredResourceSetUseCount = static_cast<u32>(desc.resourceSetUseCount);
     task.expandedResourceSetMemberUseCount = static_cast<u32>(expandedResourceUseCount - desc.resourceUseCount);
@@ -196,6 +200,8 @@ GpuTaskId GpuTaskGraph::appendTask(
     }
     for(usize useIndex = 0u; useIndex < desc.resourceUseCount; ++useIndex)
         m_resourceUses.push_back(desc.resourceUses[useIndex]);
+    for(usize useIndex = 0u; useIndex < desc.resourceVersionUseCount; ++useIndex)
+        m_resourceVersionUses.push_back(desc.resourceVersionUses[useIndex]);
     for(usize resourceSetUseIndex = 0u; resourceSetUseIndex < desc.resourceSetUseCount; ++resourceSetUseIndex){
         const GpuTaskResourceSetUse& resourceSetUse = desc.resourceSetUses[resourceSetUseIndex];
         const GpuGraphResourceSetNode& resourceSet = m_resourceSets[resourceSetUse.resourceSet.index];
@@ -447,6 +453,21 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
     m_resources.push_back(Move(resource));
     m_declarationRevision = allocateGeneration();
     return GpuGraphResourceId{ index, m_generation };
+}
+
+GpuGraphResourceVersionId GpuTaskGraph::appendResourceVersion(const GpuGraphResourceVersionDesc& desc){
+    if(m_resourceVersions.size() >= Limit<u32>::s_Max)
+        return {};
+
+    GpuGraphResourceVersionNode version;
+    version.resource = desc.resource;
+    version.range = desc.range;
+    version.origin = desc.origin;
+
+    const u32 index = static_cast<u32>(m_resourceVersions.size());
+    m_resourceVersions.push_back(version);
+    m_declarationRevision = allocateGeneration();
+    return GpuGraphResourceVersionId{ index, m_generation };
 }
 
 GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetDesc& desc){

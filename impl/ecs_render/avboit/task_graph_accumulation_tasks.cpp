@@ -43,7 +43,6 @@ void AvboitAccumulationComputeEmulationGraphTask::discardTiming(Optional<Core::G
     static_cast<void>(context);
     if(
         !payload.graphics
-        || !payload.meshSystem
         || !payload.materialSystem
         || !payload.targets
         || !payload.timingTicket
@@ -54,14 +53,13 @@ void AvboitAccumulationComputeEmulationGraphTask::discardTiming(Optional<Core::G
         return false;
 
     Core::Graphics& graphics = *payload.graphics;
-    RendererMeshSystem& meshSystem = *payload.meshSystem;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     const bool csgComputeEmulation = payload.csgPlan.captured;
     if(
         !(csgComputeEmulation
-            ? payload.csgPlan.matches(meshSystem)
-            : payload.plan.matches(meshSystem))
+            ? payload.csgPlan.matches()
+            : payload.plan.matches())
         || !payload.materialDrawBuffersUploaded
         || !payload.frameBindings.frameReady(
             payload.instanceCount,
@@ -145,7 +143,6 @@ void AvboitAccumulationSharedComputeEmulationGraphTask::discardTiming(Optional<C
     static_cast<void>(context);
     if(
         !payload.graphics
-        || !payload.meshSystem
         || !payload.materialSystem
         || !payload.targets
         || !payload.targets->avboit.accumulationFramebuffer
@@ -157,11 +154,10 @@ void AvboitAccumulationSharedComputeEmulationGraphTask::discardTiming(Optional<C
         return false;
 
     Core::Graphics& graphics = *payload.graphics;
-    RendererMeshSystem& meshSystem = *payload.meshSystem;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     if(
-        !payload.plan.matches(meshSystem, payload.drawIndex)
+        !payload.plan.matches(payload.drawIndex)
         || !payload.materialDrawBuffersUploaded
         || !payload.frameBindings.frameReady(
             payload.instanceCount,

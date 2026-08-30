@@ -6,7 +6,6 @@
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/material/material_system.h>
-#include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 
 #include <core/graphics/backend_selection.h>
@@ -40,8 +39,7 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
 ){
     static_cast<void>(context);
     if(
-        !payload.meshSystem
-        || !payload.materialSystem
+        !payload.materialSystem
         || !payload.targets
         || !payload.timingTicket
         || !*payload.timingTicket
@@ -51,7 +49,6 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
     )
         return false;
 
-    RendererMeshSystem& meshSystem = *payload.meshSystem;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
     const bool frameSetupReady =
@@ -64,9 +61,9 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     MaterialPassDrawItems drawItems{ scratchArena };
     payload.plan.materialize(drawItems);
-    // The graph imported the exact persistent output handles retained by the frozen plan. Reject a live mesh
-    // resource replacement instead of dispatching into a newly selected descriptor target outside that set.
-    if(!payload.plan.matches(meshSystem, drawItems.computeDrawItems))
+    // The graph imported the exact persistent output handles retained by the frozen plan. Reject a corrupted
+    // materialized stream instead of dispatching into a descriptor target outside that set.
+    if(!payload.plan.matches(drawItems.computeDrawItems))
         return false;
     if(
         !payload.materialDrawBuffersUploaded
@@ -120,8 +117,7 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::record(
 ){
     static_cast<void>(context);
     if(
-        !payload.meshSystem
-        || !payload.materialSystem
+        !payload.materialSystem
         || !payload.targets
         || !payload.timingTicket
         || !*payload.timingTicket
@@ -141,13 +137,12 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::record(
         return true;
     }
 
-    RendererMeshSystem& meshSystem = *payload.meshSystem;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
     const bool frameSetupReady =
         *payload.meshViewSetupReady
         && *payload.sceneShadingSetupReady
     ;
-    if(!frameSetupReady || !payload.plan.matches(meshSystem, payload.drawIndex))
+    if(!frameSetupReady || !payload.plan.matches(payload.drawIndex))
         return false;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);

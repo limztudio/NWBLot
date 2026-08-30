@@ -7,7 +7,6 @@
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/material_system.h>
-#include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 
 #include <core/graphics/backend_selection.h>
@@ -42,8 +41,7 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
 ){
     static_cast<void>(context);
     if(
-        !payload.meshSystem
-        || !payload.materialSystem
+        !payload.materialSystem
         || !payload.targets
         || !payload.timingTicket
         || !*payload.timingTicket
@@ -53,7 +51,6 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
     )
         return false;
 
-    RendererMeshSystem& meshSystem = *payload.meshSystem;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
     const bool frameSetupReady =
@@ -67,9 +64,8 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
     MaterialPassDrawItems drawItems{ scratchArena };
     CsgFrameGpuData csgFrameData{ scratchArena };
     payload.plan.materialize(drawItems, csgFrameData);
-    // The output set imported by the graph is immutable.  Do not re-resolve a changed mesh resource into an
-    // arbitrary descriptor slot after declaration; reject and let the existing graph retry path rebuild it.
-    if(!payload.plan.matches(meshSystem))
+    // The output set imported by the graph is immutable. Reject a corrupted retained plan before recording.
+    if(!payload.plan.matches())
         return false;
 
     const bool deferredResourcesReady =
@@ -142,7 +138,6 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
     static_cast<void>(context);
     if(
         !payload.graphics
-        || !payload.meshSystem
         || !payload.materialSystem
         || !payload.targets
         || !payload.timingTicket
@@ -155,7 +150,6 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
         return false;
 
     Core::Graphics& graphics = *payload.graphics;
-    RendererMeshSystem& meshSystem = *payload.meshSystem;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
     const bool frameSetupReady =
@@ -169,9 +163,8 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
     MaterialPassDrawItems drawItems{ scratchArena };
     CsgFrameGpuData csgFrameData{ scratchArena };
     payload.plan.materialize(drawItems, csgFrameData);
-    // The graph imported these exact output handles and descriptor slots. A live replacement must reject the
-    // packet, not write through a newly selected CSG material descriptor after declaration.
-    if(!payload.plan.matches(meshSystem))
+    // The graph imported these exact output handles and descriptor slots. Reject a corrupted retained plan.
+    if(!payload.plan.matches())
         return false;
 
     const bool deferredResourcesReady =

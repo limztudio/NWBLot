@@ -44,6 +44,31 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
     return Vector3LessOrEqual(VectorSubtract(maxScale, minScale), tolerance);
 }
 
+[[nodiscard]] static MaterialPassMeshResourceSnapshot CaptureMeshResourceSnapshot(const MeshResources& mesh){
+    MaterialPassMeshResourceSnapshot snapshot;
+    snapshot.sourceBuffers = mesh;
+    for(u32 slotIndex = 0u; slotIndex < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++slotIndex)
+        snapshot.geometryHeapHandles[slotIndex] = mesh.geometryHeapHandles[slotIndex];
+    snapshot.emulationVertexBuffer = mesh.emulationVertexBuffer;
+    snapshot.emulationVertexHeapHandle = mesh.emulationVertexHeapHandle;
+    snapshot.meshletCount = mesh.meshletCount;
+    snapshot.meshletPrimitiveIndexCount = mesh.meshletPrimitiveIndexCount;
+    snapshot.runtimeMesh = mesh.runtimeMesh;
+    snapshot.dynamicMeshletBoundsFresh = mesh.dynamicMeshletBoundsFresh;
+    snapshot.dynamicMeshletConesFresh = mesh.dynamicMeshletConesFresh;
+    return snapshot;
+}
+
+[[nodiscard]] static MaterialPassPipelineResourceSnapshot CapturePipelineResourceSnapshot(
+    const MaterialPipelineResources& pipelineResources
+){
+    return {
+        .emulationPipeline = pipelineResources.emulationPipeline,
+        .meshletPipeline = pipelineResources.meshletPipeline,
+        .computePipeline = pipelineResources.computePipeline,
+    };
+}
+
 struct MaterialTypedByteRangeKey{
     Name materialName = NAME_NONE;
     u64 typedLayoutHash = 0u;
@@ -612,6 +637,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         MaterialPassDrawItem drawItem;
         drawItem.meshKey = mesh.meshName;
         drawItem.pipelineKey = pipelineKey;
+        drawItem.meshResources = __hidden_material_pass::CaptureMeshResourceSnapshot(mesh);
+        drawItem.pipelineResources = __hidden_material_pass::CapturePipelineResourceSnapshot(*pipelineResources);
         drawItem.instanceIndex = instanceIndex;
         drawItem.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
         drawItem.shadingModelId = materialInfo->shadingModelId;
@@ -628,6 +655,9 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         if(csgReceiverSurfaceActive){
             MaterialPassDrawItem csgReceiverSurfaceDrawItem = drawItem;
             csgReceiverSurfaceDrawItem.pipelineKey = csgReceiverSurfacePipelineKey;
+            csgReceiverSurfaceDrawItem.pipelineResources =
+                __hidden_material_pass::CapturePipelineResourceSnapshot(*csgReceiverSurfacePipelineResources)
+            ;
             appendDrawItemForRenderPath(
                 csgReceiverSurfaceRenderPath,
                 csgReceiverSurfaceDrawItem,

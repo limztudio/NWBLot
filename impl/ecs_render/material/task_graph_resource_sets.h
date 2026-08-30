@@ -9,7 +9,6 @@
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
-#include <impl/ecs_render/mesh/mesh_system.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,7 +27,6 @@ namespace RendererTaskGraphDetail{
 
 
 [[nodiscard]] inline bool GatherPreparedMaterialGeometryUses(
-    RendererMeshSystem& meshSystem,
     Core::GpuTaskGraph& graph,
     const MaterialPassDrawItems* const* const drawItemSets,
     const usize drawItemSetCount,
@@ -41,12 +39,12 @@ namespace RendererTaskGraphDetail{
 
     Vector<Core::BufferHandle, Core::Alloc::ScratchArena> sourceBuffers{ scratchArena };
     const auto appendDrawItem = [&](const MaterialPassDrawItem& drawItem){
-        MeshResources* mesh = nullptr;
-        if(!meshSystem.findMeshResources(drawItem.meshKey, mesh) || !mesh)
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        if(!mesh.valid())
             return false;
 
         bool buffersReady = true;
-        RendererMeshSystem::forEachMeshSourceBuffer(*mesh, [&](const u32, const Core::BufferHandle& buffer, const bool){
+        ForEachMaterialPassMeshSourceBuffer(mesh, [&](const Core::BufferHandle& buffer){
             if(!buffersReady)
                 return;
             if(!buffer){
@@ -99,7 +97,6 @@ namespace RendererTaskGraphDetail{
 // the established helper above, then give the graph one immutable named collection so a consuming task can declare
 // the whole bindless geometry set without retaining its own per-buffer use list.
 [[nodiscard]] inline bool GatherPreparedMaterialGeometryResourceSet(
-    RendererMeshSystem& meshSystem,
     Core::GpuTaskGraph& graph,
     const MaterialPassDrawItems* const* const drawItemSets,
     const usize drawItemSetCount,
@@ -111,7 +108,6 @@ namespace RendererTaskGraphDetail{
     outResourceSet = {};
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     if(!GatherPreparedMaterialGeometryUses(
-        meshSystem,
         graph,
         drawItemSets,
         drawItemSetCount,

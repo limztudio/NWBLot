@@ -6,7 +6,6 @@
 
 
 #include <impl/ecs_render/material/renderer_draw_types.h>
-#include <impl/ecs_render/mesh/mesh_system.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,10 +45,7 @@ struct OpaqueRegularComputeEmulationGraphPlan{
         captured = false;
     }
 
-    [[nodiscard]] bool capture(
-        RendererMeshSystem& meshSystem,
-        const MaterialPassDrawItems& sourceDrawItems
-    ){
+    [[nodiscard]] bool capture(const MaterialPassDrawItems& sourceDrawItems){
         reset();
         if(sourceDrawItems.computeDrawItems.empty())
             return false;
@@ -64,12 +60,10 @@ struct OpaqueRegularComputeEmulationGraphPlan{
                 reset();
                 return false;
             }
-            MeshResources* mesh = nullptr;
+            const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
             if(
-                !meshSystem.findMeshResources(drawItem.meshKey, mesh)
-                || !mesh
-                || !mesh->emulationVertexBuffer
-                || !mesh->emulationVertexHeapHandle.valid()
+                !mesh.emulationVertexBuffer
+                || !mesh.emulationVertexHeapHandle.valid()
             ){
                 reset();
                 return false;
@@ -78,22 +72,19 @@ struct OpaqueRegularComputeEmulationGraphPlan{
             // overwrite this whole persistent buffer.  This first graph-owned slice deliberately declines that
             // case rather than moving either draw across a potentially aliasing producer.
             for(const Core::BufferHandle& existing : outputBuffers){
-                if(existing.get() == mesh->emulationVertexBuffer.get()){
+                if(existing.get() == mesh.emulationVertexBuffer.get()){
                     reset();
                     return false;
                 }
             }
             drawItems.push_back(drawItem);
-            outputBuffers.push_back(mesh->emulationVertexBuffer);
+            outputBuffers.push_back(mesh.emulationVertexBuffer);
         }
         captured = drawItems.size() == outputBuffers.size() && !drawItems.empty();
         return captured;
     }
 
-    [[nodiscard]] bool matches(
-        RendererMeshSystem& meshSystem,
-        const MaterialPassDrawItemVector& currentDrawItems
-    )const{
+    [[nodiscard]] bool matches(const MaterialPassDrawItemVector& currentDrawItems)const{
         if(
             !captured
             || currentDrawItems.size() != drawItems.size()
@@ -113,13 +104,11 @@ struct OpaqueRegularComputeEmulationGraphPlan{
             )
                 return false;
 
-            MeshResources* mesh = nullptr;
+            const MaterialPassMeshResourceSnapshot& mesh = current.meshResources;
             if(
-                !meshSystem.findMeshResources(current.meshKey, mesh)
-                || !mesh
-                || !mesh->emulationVertexBuffer
-                || !mesh->emulationVertexHeapHandle.valid()
-                || mesh->emulationVertexBuffer.get() != outputBuffers[drawIndex].get()
+                !mesh.emulationVertexBuffer
+                || !mesh.emulationVertexHeapHandle.valid()
+                || mesh.emulationVertexBuffer.get() != outputBuffers[drawIndex].get()
             )
                 return false;
         }

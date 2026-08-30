@@ -27,7 +27,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererMeshSystem;
 class RendererMaterialSystem;
 class RendererAvboitSystem;
 class RendererTaskTimingFeedback;
@@ -47,7 +46,6 @@ namespace RendererTaskGraphDetail{
 struct AvboitExtinctionComputeEmulationGraphTask{
     struct Payload{
         Core::Graphics* graphics = nullptr;
-        RendererMeshSystem* meshSystem = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
         ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
@@ -95,7 +93,6 @@ struct AvboitExtinctionSharedComputeEmulationGraphTask{
 
     struct Payload{
         Core::Graphics* graphics = nullptr;
-        RendererMeshSystem* meshSystem = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;

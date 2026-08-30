@@ -256,24 +256,46 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
 }
 
 
-TEST(EcsGraphics, MaterialSystemUsesMeshDomainLookupWithoutMeshStatePrivilege){
+TEST(EcsGraphics, MaterialDrawItemsRetainResourcesWithoutMeshStatePrivilege){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
     AString materialHeaderSource;
+    AString materialDrawTypesSource;
+    AString materialPassSource;
     AString materialResourcesSource;
+    AString materialDrawSource;
     AString rendererStateSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_system.h", materialHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "renderer_draw_types.h", materialDrawTypesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass.cpp", materialPassSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass_resources.cpp", materialResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass_draw.cpp", materialDrawSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
 
     const AStringView materialHeader(materialHeaderSource.data(), materialHeaderSource.size());
+    const AStringView materialDrawTypes(materialDrawTypesSource.data(), materialDrawTypesSource.size());
+    const AStringView materialPass(materialPassSource.data(), materialPassSource.size());
     const AStringView materialResources(materialResourcesSource.data(), materialResourcesSource.size());
+    const AStringView materialDraw(materialDrawSource.data(), materialDrawSource.size());
     const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
     const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
 
     EXPECT_FALSE(ContainsText(materialHeader, "RendererMeshState"));
     EXPECT_FALSE(ContainsText(materialResources, "m_meshState"));
-    EXPECT_TRUE(ContainsText(materialResources, "m_meshSystem.findMeshResources(drawItem.meshKey, mesh)"));
+    EXPECT_TRUE(ContainsText(materialDrawTypes, "struct MaterialPassMeshResourceSnapshot{"));
+    EXPECT_TRUE(ContainsText(materialDrawTypes, "struct MaterialPassPipelineResourceSnapshot{"));
+    EXPECT_TRUE(ContainsText(materialDrawTypes, "MaterialPassMeshResourceSnapshot meshResources;"));
+    EXPECT_TRUE(ContainsText(materialDrawTypes, "MaterialPassPipelineResourceSnapshot pipelineResources;"));
+    EXPECT_TRUE(ContainsText(materialPass, "drawItem.meshResources = __hidden_material_pass::CaptureMeshResourceSnapshot(mesh);"));
+    EXPECT_TRUE(ContainsText(materialPass, "drawItem.pipelineResources = __hidden_material_pass::CapturePipelineResourceSnapshot(*pipelineResources);"));
+    EXPECT_TRUE(ContainsText(materialPass, "csgReceiverSurfaceDrawItem.pipelineResources ="));
+    EXPECT_TRUE(ContainsText(materialResources, "const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;"));
+    EXPECT_TRUE(ContainsText(materialDraw, "const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;"));
+    EXPECT_FALSE(ContainsText(materialHeader, "findMaterialPassDrawItemResources"));
+    EXPECT_FALSE(ContainsText(materialResources, "findMaterialPassDrawItemResources"));
+    EXPECT_FALSE(ContainsText(materialDraw, "findMaterialPassDrawItemResources"));
+    EXPECT_FALSE(ContainsText(materialResources, "findMeshResources(drawItem.meshKey"));
+    EXPECT_FALSE(ContainsText(materialDraw, "findMeshResources(drawItem.meshKey"));
     EXPECT_FALSE(ContainsText(compactRendererState, "friendclassRendererMaterialSystem;friendclassRendererRayTracingSystem;"));
 }
 

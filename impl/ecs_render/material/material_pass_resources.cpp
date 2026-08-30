@@ -155,25 +155,28 @@ bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(
         return false;
 
     bool ready = true;
-    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem&, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
+    for(const MaterialPassDrawItem& drawItem : drawItems){
         if(!ready)
-            return;
+            break;
+
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
 
         if(!computeEmulation){
             ready = pipelineResources.meshletPipeline
-                && m_meshSystem.meshGeometryHeapHandlesReady(mesh)
+                && mesh.valid()
             ;
-            return;
+            continue;
         }
 
         ready = pipelineResources.computePipeline
             && pipelineResources.emulationPipeline
-            && m_meshSystem.meshGeometryHeapHandlesReady(mesh)
+            && mesh.valid()
             && mesh.emulationVertexBuffer
             && mesh.emulationVertexHeapHandle.valid()
             && mesh.emulationVertexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
         ;
-    });
+    }
     return ready;
 }
 
@@ -309,31 +312,6 @@ void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(
     for(InstanceGpuData& instance : instanceData)
         instance.geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT] = csgContextHeapSlot;
 }
-
-bool RendererMaterialSystem::findMaterialPassDrawItemResources(
-    const MaterialPassDrawItem& drawItem,
-    MeshResources*& outMesh,
-    MaterialPipelineResources*& outPipelineResources
-){
-    outMesh = nullptr;
-    outPipelineResources = nullptr;
-
-    MeshResources* mesh = nullptr;
-    if(!m_meshSystem.findMeshResources(drawItem.meshKey, mesh))
-        return false;
-
-    const auto foundPipeline = m_materialState.m_pipelines.find(drawItem.pipelineKey);
-    if(foundPipeline == m_materialState.m_pipelines.end())
-        return false;
-
-    outMesh = mesh;
-    outPipelineResources = &foundPipeline.value();
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 NWB_IMPL_END
 

@@ -96,10 +96,10 @@ static bool ResolveMeshFrameHeapSlots(
 
 void RendererMaterialSystem::setMaterialPassCommonBufferStates(
     const MaterialPassDrawContext& context,
-    const MeshResources& mesh
+    const MaterialPassMeshResourceSnapshot& mesh
 ){
     if(!context.materialGeometryStatesGraphOwned){
-        RendererMeshSystem::forEachMeshSourceBuffer(mesh, [&](const u32, const Core::BufferHandle& buffer, const bool){
+        ForEachMaterialPassMeshSourceBuffer(mesh, [&](const Core::BufferHandle& buffer){
             context.commandList.setBufferState(buffer.get(), Core::ResourceStates::ShaderResource);
         });
     }
@@ -128,10 +128,9 @@ void RendererMaterialSystem::setMaterialPassCommonBufferStates(
     }
 }
 
-bool RendererMaterialSystem::materialPassDrawResourcesReady(const MeshResources& mesh)const{
+bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassMeshResourceSnapshot& mesh)const{
     return
         mesh.valid()
-        && m_meshSystem.meshGeometryHeapHandlesReady(mesh)
         && m_meshSystem.meshFrameHeapHandlesReady()
         && m_drawState.m_instanceBuffer
         && m_drawState.m_meshViewBuffer
@@ -140,12 +139,11 @@ bool RendererMaterialSystem::materialPassDrawResourcesReady(const MeshResources&
 }
 
 bool RendererMaterialSystem::materialPassDrawResourcesReady(
-    const MeshResources& mesh,
+    const MaterialPassMeshResourceSnapshot& mesh,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
 )const{
     return
         mesh.valid()
-        && m_meshSystem.meshGeometryHeapHandlesReady(mesh)
         && frameBindings.bindingValid()
     ;
 }
@@ -167,11 +165,7 @@ bool RendererMaterialSystem::materialPassDrawResourcesReady(
 
 bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems){
     for(const MaterialPassDrawItem& drawItem : drawItems){
-        MeshResources* mesh = nullptr;
-        MaterialPipelineResources* pipelineResources = nullptr;
-        if(!findMaterialPassDrawItemResources(drawItem, mesh, pipelineResources))
-            return false;
-        if(!materialPassDrawResourcesReady(*mesh) || !pipelineResources->meshletPipeline){
+        if(!materialPassDrawResourcesReady(drawItem.meshResources) || !drawItem.pipelineResources.meshletPipeline){
             return false;
         }
     }
@@ -183,11 +177,10 @@ bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
 ){
     for(const MaterialPassDrawItem& drawItem : drawItems){
-        MeshResources* mesh = nullptr;
-        MaterialPipelineResources* pipelineResources = nullptr;
-        if(!findMaterialPassDrawItemResources(drawItem, mesh, pipelineResources))
-            return false;
-        if(!materialPassDrawResourcesReady(*mesh, frameBindings) || !pipelineResources->meshletPipeline)
+        if(
+            !materialPassDrawResourcesReady(drawItem.meshResources, frameBindings)
+            || !drawItem.pipelineResources.meshletPipeline
+        )
             return false;
     }
     return true;
@@ -198,16 +191,14 @@ bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(const Materia
         return true;
 
     for(const MaterialPassDrawItem& drawItem : drawItems){
-        MeshResources* mesh = nullptr;
-        MaterialPipelineResources* pipelineResources = nullptr;
-        if(!findMaterialPassDrawItemResources(drawItem, mesh, pipelineResources))
-            return false;
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
         if(
-            !materialPassDrawResourcesReady(*mesh)
-            || !pipelineResources->computePipeline
-            || !pipelineResources->emulationPipeline
-            || !mesh->emulationVertexHeapHandle.valid()
-            || !mesh->emulationVertexBuffer
+            !materialPassDrawResourcesReady(mesh)
+            || !pipelineResources.computePipeline
+            || !pipelineResources.emulationPipeline
+            || !mesh.emulationVertexHeapHandle.valid()
+            || !mesh.emulationVertexBuffer
         ){
             return false;
         }
@@ -223,16 +214,14 @@ bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(
         return true;
 
     for(const MaterialPassDrawItem& drawItem : drawItems){
-        MeshResources* mesh = nullptr;
-        MaterialPipelineResources* pipelineResources = nullptr;
-        if(!findMaterialPassDrawItemResources(drawItem, mesh, pipelineResources))
-            return false;
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
         if(
-            !materialPassDrawResourcesReady(*mesh, frameBindings)
-            || !pipelineResources->computePipeline
-            || !pipelineResources->emulationPipeline
-            || !mesh->emulationVertexHeapHandle.valid()
-            || !mesh->emulationVertexBuffer
+            !materialPassDrawResourcesReady(mesh, frameBindings)
+            || !pipelineResources.computePipeline
+            || !pipelineResources.emulationPipeline
+            || !mesh.emulationVertexHeapHandle.valid()
+            || !mesh.emulationVertexBuffer
         )
             return false;
     }
@@ -240,7 +229,7 @@ bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(
 }
 
 u32 RendererMaterialSystem::meshDispatchFlags(
-    const MeshResources& mesh,
+    const MaterialPassMeshResourceSnapshot& mesh,
     const MaterialPipelinePass::Enum pass,
     const bool twoSided,
     const bool meshletConeCullScaleSafe
@@ -261,7 +250,7 @@ u32 RendererMaterialSystem::meshDispatchFlags(
 u32 RendererMaterialSystem::materialPassDrawDispatchFlags(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItem& drawItem,
-    const MeshResources& mesh
+    const MaterialPassMeshResourceSnapshot& mesh
 )const{
     u32 flags = meshDispatchFlags(
         mesh,
@@ -281,7 +270,7 @@ u32 RendererMaterialSystem::materialPassDrawDispatchFlags(
 void RendererMaterialSystem::setMaterialPassDrawPushConstants(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItem& drawItem,
-    const MeshResources& mesh
+    const MaterialPassMeshResourceSnapshot& mesh
 ){
     const u32 dispatchFlags = materialPassDrawDispatchFlags(context, drawItem, mesh);
     const MaterialPipelineCsgBindingUse csgBindingUse =
@@ -339,7 +328,7 @@ void RendererMaterialSystem::setMaterialPassDrawPushConstants(
 void RendererMaterialSystem::setMaterialPassDrawItemResourceStates(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItem& drawItem,
-    const MeshResources& mesh
+    const MaterialPassMeshResourceSnapshot& mesh
 ){
     const MaterialPipelineCsgBindingUse csgBindingUse =
         MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, context.pass);
@@ -360,8 +349,8 @@ void RendererMaterialSystem::setMaterialPassDrawItemResourceStates(
 void RendererMaterialSystem::dispatchComputeMaterialPassDrawItem(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItem& drawItem,
-    const MeshResources& mesh,
-    MaterialPipelineResources& pipelineResources
+    const MaterialPassMeshResourceSnapshot& mesh,
+    const MaterialPassPipelineResourceSnapshot& pipelineResources
 ){
     Core::ComputeState computeState;
     computeState.setPipeline(pipelineResources.computePipeline.get());
@@ -400,8 +389,8 @@ void RendererMaterialSystem::dispatchComputeMaterialPassDrawItem(
 void RendererMaterialSystem::drawComputeMaterialPassDrawItem(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItem& drawItem,
-    const MeshResources& mesh,
-    MaterialPipelineResources& pipelineResources
+    const MaterialPassMeshResourceSnapshot& mesh,
+    const MaterialPassPipelineResourceSnapshot& pipelineResources
 ){
     Core::GraphicsState graphicsState;
     graphicsState.setPipeline(pipelineResources.emulationPipeline.get());
@@ -443,7 +432,9 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
 ){
-    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
+    for(const MaterialPassDrawItem& drawItem : drawItems){
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
         NWB_ASSERT(context.frameBindings
             ? materialPassDrawResourcesReady(mesh, *context.frameBindings)
             : materialPassDrawResourcesReady(mesh));
@@ -465,7 +456,7 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
 
             context.commandList.dispatchMesh(mesh.meshletCount);
         }
-    });
+    }
 }
 
 void RendererMaterialSystem::generateComputeMaterialPassDrawItems(
@@ -479,7 +470,9 @@ void RendererMaterialSystem::generateComputeMaterialPassDrawItems(
     NWB_ASSERT(context.emulationOutputEntryStateGraphOwned);
     NWB_ASSERT(context.frameBindings ? context.frameBindings->meshView.buffer : m_drawState.m_meshViewBuffer);
 
-    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
+    for(const MaterialPassDrawItem& drawItem : drawItems){
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
         NWB_ASSERT(context.frameBindings
             ? materialPassDrawResourcesReady(mesh, *context.frameBindings)
             : materialPassDrawResourcesReady(mesh));
@@ -488,7 +481,7 @@ void RendererMaterialSystem::generateComputeMaterialPassDrawItems(
         NWB_ASSERT(mesh.emulationVertexBuffer);
         setMaterialPassDrawItemResourceStates(context, drawItem, mesh);
         dispatchComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
-    });
+    }
 }
 
 void RendererMaterialSystem::renderComputeMaterialPassDrawItemsRasterOnly(
@@ -502,7 +495,9 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItemsRasterOnly(
     NWB_ASSERT(context.emulationOutputEntryStateGraphOwned);
     NWB_ASSERT(context.frameBindings ? context.frameBindings->meshView.buffer : m_drawState.m_meshViewBuffer);
 
-    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
+    for(const MaterialPassDrawItem& drawItem : drawItems){
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
         NWB_ASSERT(context.frameBindings
             ? materialPassDrawResourcesReady(mesh, *context.frameBindings)
             : materialPassDrawResourcesReady(mesh));
@@ -510,7 +505,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItemsRasterOnly(
         NWB_ASSERT(mesh.emulationVertexBuffer);
         setMaterialPassDrawItemResourceStates(context, drawItem, mesh);
         drawComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
-    });
+    }
 }
 
 void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
@@ -522,7 +517,9 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
     NWB_ASSERT(!context.emulationOutputEntryStateGraphOwned);
     NWB_ASSERT(context.frameBindings ? context.frameBindings->meshView.buffer : m_drawState.m_meshViewBuffer);
 
-    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
+    for(const MaterialPassDrawItem& drawItem : drawItems){
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
         NWB_ASSERT(context.frameBindings
             ? materialPassDrawResourcesReady(mesh, *context.frameBindings)
             : materialPassDrawResourcesReady(mesh));
@@ -539,7 +536,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
 
         context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
         drawComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
-    });
+    }
 }
 
 

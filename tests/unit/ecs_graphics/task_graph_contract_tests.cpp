@@ -220,7 +220,7 @@ TEST(EcsGraphics, RendererTaskPayloadsDependOnExactDomainsInsteadOfFramePipeline
     verifyTaskHeader(
         "material/task_graph_opaque_compute_tasks.h",
         {
-            { "RendererMeshSystem* meshSystem = nullptr;", 2u },
+            { "RendererMeshSystem* meshSystem = nullptr;", 0u },
             { "RendererMaterialSystem* materialSystem = nullptr;", 2u },
         }
     );
@@ -228,7 +228,7 @@ TEST(EcsGraphics, RendererTaskPayloadsDependOnExactDomainsInsteadOfFramePipeline
         "csg/task_graph_opaque_compute_tasks.h",
         {
             { "Core::Graphics* graphics = nullptr;", 1u },
-            { "RendererMeshSystem* meshSystem = nullptr;", 2u },
+            { "RendererMeshSystem* meshSystem = nullptr;", 0u },
             { "RendererMaterialSystem* materialSystem = nullptr;", 2u },
             { "RendererCsgSystem", 0u },
         }
@@ -252,7 +252,7 @@ TEST(EcsGraphics, RendererTaskPayloadsDependOnExactDomainsInsteadOfFramePipeline
         "avboit/task_graph_occupancy_tasks.h",
         {
             { "Core::Graphics* graphics = nullptr;", 2u },
-            { "RendererMeshSystem* meshSystem = nullptr;", 2u },
+            { "RendererMeshSystem* meshSystem = nullptr;", 0u },
             { "RendererMaterialSystem* materialSystem = nullptr;", 2u },
             { "RendererCsgSystem", 0u },
         }
@@ -261,7 +261,7 @@ TEST(EcsGraphics, RendererTaskPayloadsDependOnExactDomainsInsteadOfFramePipeline
         "avboit/task_graph_extinction_integration_tasks.h",
         {
             { "Core::Graphics* graphics = nullptr;", 2u },
-            { "RendererMeshSystem* meshSystem = nullptr;", 2u },
+            { "RendererMeshSystem* meshSystem = nullptr;", 0u },
             { "RendererMaterialSystem* materialSystem = nullptr;", 2u },
             { "RendererCsgSystem", 0u },
         }
@@ -270,7 +270,7 @@ TEST(EcsGraphics, RendererTaskPayloadsDependOnExactDomainsInsteadOfFramePipeline
         "avboit/task_graph_accumulation_tasks.h",
         {
             { "Core::Graphics* graphics = nullptr;", 2u },
-            { "RendererMeshSystem* meshSystem = nullptr;", 2u },
+            { "RendererMeshSystem* meshSystem = nullptr;", 0u },
             { "RendererMaterialSystem* materialSystem = nullptr;", 2u },
             { "RendererCsgSystem", 0u },
         }
@@ -3844,6 +3844,114 @@ TEST(EcsGraphics, SharedComputeEmulationRetainsFiveRegularDraws){
 }
 
 
+// A material draw packet owns the exact mesh buffers, descriptor handles, and executable pipelines selected while
+// the graph is declared. Recording and compute-plan materialization must never resolve a mutable registry key again.
+TEST(EcsGraphics, MaterialDrawSnapshotsRetainExactGraphResourceGenerations){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString drawTypesSource;
+    AString materialPassSource;
+    AString materialSurfaceSource;
+    AString resourceSetsSource;
+    AString planSources;
+    AString taskHeaderSources;
+    AString taskRecordSources;
+    AString rootGraphSources;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "renderer_draw_types.h", drawTypesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass.cpp", materialPassSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_surface.cpp", materialSurfaceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "task_graph_resource_sets.h", resourceSetsSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "material/task_graph_compute_emulation_plan.h",
+            "material/task_graph_opaque_compute_emulation_plan.h",
+            "csg/task_graph_opaque_compute_emulation_plan.h",
+            "avboit/task_graph_compute_emulation_plan.h",
+        },
+        planSources
+    ));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "material/task_graph_opaque_compute_tasks.h",
+            "csg/task_graph_opaque_compute_tasks.h",
+            "avboit/task_graph_occupancy_tasks.h",
+            "avboit/task_graph_extinction_integration_tasks.h",
+            "avboit/task_graph_accumulation_tasks.h",
+        },
+        taskHeaderSources
+    ));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "material/task_graph_opaque_compute_tasks.cpp",
+            "csg/task_graph_opaque_compute_tasks.cpp",
+            "avboit/task_graph_occupancy_tasks.cpp",
+            "avboit/task_graph_extinction_integration_tasks.cpp",
+            "avboit/task_graph_accumulation_tasks.cpp",
+        },
+        taskRecordSources
+    ));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "renderer_frame_pipeline_graphics_prefix.cpp",
+            "renderer_frame_pipeline_graph.cpp",
+        },
+        rootGraphSources
+    ));
+    const AStringView drawTypes(drawTypesSource.data(), drawTypesSource.size());
+    const AStringView materialPass(materialPassSource.data(), materialPassSource.size());
+    const AStringView materialSurface(materialSurfaceSource.data(), materialSurfaceSource.size());
+    const AStringView resourceSets(resourceSetsSource.data(), resourceSetsSource.size());
+    const AStringView plans(planSources.data(), planSources.size());
+    const AStringView taskHeaders(taskHeaderSources.data(), taskHeaderSources.size());
+    const AStringView taskRecords(taskRecordSources.data(), taskRecordSources.size());
+    const AStringView rootGraphs(rootGraphSources.data(), rootGraphSources.size());
+
+    EXPECT_TRUE(ContainsText(drawTypes, "#include <impl/assets/graphics/mesh/binding_slots.h>"));
+    EXPECT_EQ(CountText(drawTypes, "NWB_MESH_BINDING_"), 11u);
+    EXPECT_FALSE(ContainsText(drawTypes, "NWB_MESH_BINDING_MATERIAL_TYPED"));
+    EXPECT_TRUE(ContainsText(drawTypes, "Name meshKey = NAME_NONE;"));
+    EXPECT_TRUE(ContainsText(drawTypes, "MaterialPipelineKey pipelineKey;"));
+    EXPECT_TRUE(ContainsText(materialSurface, "m_materialState.m_surfaceInfos.find(drawItem.pipelineKey.material)"));
+    EXPECT_TRUE(ContainsText(materialPass, "csgReceiverSurfaceDrawItem.pipelineResources ="));
+
+    EXPECT_TRUE(ContainsText(resourceSets, "const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;"));
+    EXPECT_TRUE(ContainsText(resourceSets, "ForEachMaterialPassMeshSourceBuffer(mesh,"));
+    EXPECT_FALSE(ContainsText(resourceSets, "RendererMeshSystem& meshSystem"));
+    EXPECT_FALSE(ContainsText(resourceSets, "findMeshResources("));
+
+    EXPECT_EQ(CountText(plans, "const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;"), 5u);
+    EXPECT_EQ(CountText(plans, "outputBuffers.push_back(mesh.emulationVertexBuffer);"), 4u);
+    EXPECT_EQ(CountText(plans, "outputHeapSlots.push_back(mesh.emulationVertexHeapHandle.slot());"), 2u);
+    EXPECT_TRUE(ContainsText(plans, "outputBuffer = mesh.emulationVertexBuffer;"));
+    EXPECT_TRUE(ContainsText(plans, "outputHeapSlot = mesh.emulationVertexHeapHandle.slot();"));
+    EXPECT_FALSE(ContainsText(plans, "RendererMeshSystem"));
+    EXPECT_FALSE(ContainsText(plans, "findMeshResources("));
+
+    EXPECT_FALSE(ContainsText(taskHeaders, "RendererMeshSystem* meshSystem"));
+    EXPECT_FALSE(ContainsText(taskRecords, "payload.meshSystem"));
+    EXPECT_FALSE(ContainsText(taskRecords, "matches(meshSystem"));
+    EXPECT_TRUE(ContainsText(taskRecords, "payload.csgPlan.matches()"));
+    EXPECT_TRUE(ContainsText(taskRecords, "payload.plan.matches(payload.drawIndex)"));
+
+    constexpr AStringView s_RemovedMeshPayloadAssignments[] = {
+        "opaqueComputeEmulationPayload.meshSystem",
+        "opaqueCsgReceiverComputeEmulationPayload.meshSystem",
+        "opaqueCsgIntervalSampleComputeEmulationPayload.meshSystem",
+        "avboitOccupancyComputeEmulationPayload.meshSystem",
+        "avboitExtinctionComputeEmulationPayload.meshSystem",
+        "avboitAccumulationComputeEmulationPayload.meshSystem",
+    };
+    for(const AStringView assignment : s_RemovedMeshPayloadAssignments)
+        EXPECT_FALSE(ContainsText(rootGraphs, assignment));
+    EXPECT_FALSE(ContainsText(rootGraphs, "payload.meshSystem = &m_meshSystem;"));
+}
+
+
 // Shadow Visibility has both a fully split soft-transparent route and a retained monolithic compatibility route.
 // Each graph-owned chain may choose an alternate Compute family, while its direct successors retain that physical
 // queue and the explicit primary-Graphics presentation guard remains outside this effect.
@@ -4801,7 +4909,7 @@ TEST(EcsGraphics, CsgGraphResourcesAreFrozenOnceAndOwnedByEveryRecordPayload){
     );
     ASSERT_NE(materialUploadPrepareBegin, AStringView::npos);
     const usize materialUploadPrepareEnd = materialResources.find(
-        "bool RendererMaterialSystem::findMaterialPassDrawItemResources(",
+        "\nNWB_IMPL_END",
         materialUploadPrepareBegin
     );
     ASSERT_NE(materialUploadPrepareEnd, AStringView::npos);

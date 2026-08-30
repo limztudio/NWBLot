@@ -2091,7 +2091,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 &transparentCsgDrawItems.csgReceiverSurface,
             };
             avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryResourceSet(
-                m_meshSystem,
                 m_deferredLightingTaskGraph,
                 transparentCsgMaterialGeometryDrawSets,
                 LengthOf(transparentCsgMaterialGeometryDrawSets),
@@ -2821,7 +2820,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 &occupancyDrawItems.csg,
             };
             avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryResourceSet(
-                m_meshSystem,
                 m_deferredLightingTaskGraph,
                 occupancyMaterialGeometryDrawSets,
                 LengthOf(occupancyMaterialGeometryDrawSets),
@@ -3047,10 +3045,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             occupancyRegularComputeEmulationPlanCaptured = occupancyDrawItems.csg.computeDrawItems.empty()
                 && avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
                 && occupancyMaterialSampledTexturesCollected
-                && avboitOccupancyComputeEmulationPayload.plan.capture(
-                    m_meshSystem,
-                    occupancyDrawItems.regular
-                )
+                && avboitOccupancyComputeEmulationPayload.plan.capture(occupancyDrawItems.regular)
             ;
             occupancyCsgComputeEmulationPlanCaptured = occupancyDrawItems.regular.computeDrawItems.empty()
                 && occupancyCsgStreamsUploaded
@@ -3058,7 +3053,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 && avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
                 && occupancyMaterialSampledTexturesCollected
                 && avboitOccupancyComputeEmulationPayload.csgPlan.capture(
-                    m_meshSystem,
                     occupancyDrawItems.csg,
                     occupancyCsgFrameData
                 )
@@ -3073,7 +3067,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 && avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
                 && occupancyMaterialSampledTexturesCollected
                 && occupancySharedComputeEmulationPlan.capture(
-                    m_meshSystem,
                     occupancyDrawItems.regular,
                     ECSRenderDetail::s_SharedComputeEmulationMaximumDrawCount
                 )
@@ -3468,7 +3461,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitOccupancyScheduling.allowMergeAcrossConsumerFrontier = true;
     if(occupancyComputeEmulationOutputStatesGraphOwned){
         avboitOccupancyComputeEmulationPayload.graphics = &m_graphics;
-        avboitOccupancyComputeEmulationPayload.meshSystem = &m_meshSystem;
         avboitOccupancyComputeEmulationPayload.materialSystem = &m_materialSystem;
         avboitOccupancyComputeEmulationPayload.targets = &deferredTargets;
         avboitOccupancyComputeEmulationPayload.timingTicket = &avboitPreTimingTicket;
@@ -3678,7 +3670,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             AvboitOccupancySharedComputeEmulationGraphTask::Payload payload;
             payload.frameBindings = frameBindings;
             payload.graphics = &m_graphics;
-            payload.meshSystem = &m_meshSystem;
             payload.materialSystem = &m_materialSystem;
             payload.targets = &deferredTargets;
             payload.timingTicket = &avboitPreTimingTicket;
@@ -3930,7 +3921,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 &extinctionDrawItems.csg,
             };
             avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryResourceSet(
-                m_meshSystem,
                 m_deferredLightingTaskGraph,
                 extinctionMaterialGeometryDrawSets,
                 LengthOf(extinctionMaterialGeometryDrawSets),
@@ -4156,10 +4146,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             extinctionRegularComputeEmulationPlanCaptured = extinctionDrawItems.csg.computeDrawItems.empty()
                 && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
                 && extinctionMaterialSampledTexturesCollected
-                && avboitExtinctionComputeEmulationPayload.plan.capture(
-                    m_meshSystem,
-                    extinctionDrawItems.regular
-                )
+                && avboitExtinctionComputeEmulationPayload.plan.capture(extinctionDrawItems.regular)
             ;
             extinctionCsgComputeEmulationPlanCaptured = extinctionDrawItems.regular.computeDrawItems.empty()
                 && extinctionCsgStreamsUploaded
@@ -4167,7 +4154,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
                 && extinctionMaterialSampledTexturesCollected
                 && avboitExtinctionComputeEmulationPayload.csgPlan.capture(
-                    m_meshSystem,
                     extinctionDrawItems.csg,
                     extinctionCsgFrameData
                 )
@@ -4178,7 +4164,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
                 && extinctionMaterialSampledTexturesCollected
                 && extinctionSharedComputeEmulationPlan.capture(
-                    m_meshSystem,
                     extinctionDrawItems.regular,
                     ECSRenderDetail::s_SharedComputeEmulationMaximumDrawCount
                 )
@@ -4410,7 +4395,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     Core::GpuTaskId extinctionDependency = extinctionUploadTask;
     if(extinctionComputeEmulationOutputStatesGraphOwned){
         avboitExtinctionComputeEmulationPayload.graphics = &m_graphics;
-        avboitExtinctionComputeEmulationPayload.meshSystem = &m_meshSystem;
         avboitExtinctionComputeEmulationPayload.materialSystem = &m_materialSystem;
         avboitExtinctionComputeEmulationPayload.targets = &deferredTargets;
         avboitExtinctionComputeEmulationPayload.timingTicket = avboitExtinctionPayload.timingTicket;
@@ -4618,7 +4602,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             AvboitExtinctionSharedComputeEmulationGraphTask::Payload payload;
             payload.frameBindings = frameBindings;
             payload.graphics = &m_graphics;
-            payload.meshSystem = &m_meshSystem;
             payload.materialSystem = &m_materialSystem;
             payload.targets = &deferredTargets;
             payload.timingTicket = avboitExtinctionTimingTicket;
@@ -4849,7 +4832,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 &accumulationDrawItems.csg,
             };
             avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryResourceSet(
-                m_meshSystem,
                 m_deferredLightingTaskGraph,
                 accumulationMaterialGeometryDrawSets,
                 LengthOf(accumulationMaterialGeometryDrawSets),
@@ -5074,10 +5056,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             accumulationRegularComputeEmulationPlanCaptured = accumulationDrawItems.csg.computeDrawItems.empty()
                 && avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
                 && accumulationMaterialSampledTexturesCollected
-                && avboitAccumulationComputeEmulationPayload.plan.capture(
-                    m_meshSystem,
-                    accumulationDrawItems.regular
-                )
+                && avboitAccumulationComputeEmulationPayload.plan.capture(accumulationDrawItems.regular)
             ;
             accumulationCsgComputeEmulationPlanCaptured = accumulationDrawItems.regular.computeDrawItems.empty()
                 && accumulationCsgStreamsUploaded
@@ -5085,7 +5064,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 && avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
                 && accumulationMaterialSampledTexturesCollected
                 && avboitAccumulationComputeEmulationPayload.csgPlan.capture(
-                    m_meshSystem,
                     accumulationDrawItems.csg,
                     accumulationCsgFrameData
                 )
@@ -5100,7 +5078,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 && avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
                 && accumulationMaterialSampledTexturesCollected
                 && accumulationSharedComputeEmulationPlan.capture(
-                    m_meshSystem,
                     accumulationDrawItems.regular,
                     ECSRenderDetail::s_SharedComputeEmulationMaximumDrawCount
                 )
@@ -5350,7 +5327,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     Core::GpuTaskId accumulationDependency = accumulationUploadTask;
     if(accumulationComputeEmulationOutputStatesGraphOwned){
         avboitAccumulationComputeEmulationPayload.graphics = &m_graphics;
-        avboitAccumulationComputeEmulationPayload.meshSystem = &m_meshSystem;
         avboitAccumulationComputeEmulationPayload.materialSystem = &m_materialSystem;
         avboitAccumulationComputeEmulationPayload.targets = &deferredTargets;
         avboitAccumulationComputeEmulationPayload.timingTicket = avboitAccumulationPayload.timingTicket;
@@ -5557,7 +5533,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             AvboitAccumulationSharedComputeEmulationGraphTask::Payload payload;
             payload.frameBindings = frameBindings;
             payload.graphics = &m_graphics;
-            payload.meshSystem = &m_meshSystem;
             payload.materialSystem = &m_materialSystem;
             payload.targets = &deferredTargets;
             payload.timingTicket = avboitAccumulationTimingTicket;

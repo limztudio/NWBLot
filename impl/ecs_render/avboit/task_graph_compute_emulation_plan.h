@@ -6,7 +6,6 @@
 
 
 #include <impl/ecs_render/material/renderer_draw_types.h>
-#include <impl/ecs_render/mesh/mesh_system.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,10 +46,7 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
         captured = false;
     }
 
-    [[nodiscard]] bool capture(
-        RendererMeshSystem& meshSystem,
-        const MaterialPassDrawItems& sourceDrawItems
-    ){
+    [[nodiscard]] bool capture(const MaterialPassDrawItems& sourceDrawItems){
         reset();
         if(sourceDrawItems.computeDrawItems.empty())
             return false;
@@ -63,28 +59,26 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
                 reset();
                 return false;
             }
-            MeshResources* mesh = nullptr;
+            const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
             if(
-                !meshSystem.findMeshResources(drawItem.meshKey, mesh)
-                || !mesh
-                || !mesh->emulationVertexBuffer
-                || !mesh->emulationVertexHeapHandle.valid()
+                !mesh.emulationVertexBuffer
+                || !mesh.emulationVertexHeapHandle.valid()
             ){
                 reset();
                 return false;
             }
             for(usize outputIndex = 0u; outputIndex < outputBuffers.size(); ++outputIndex){
                 if(
-                    outputBuffers[outputIndex].get() == mesh->emulationVertexBuffer.get()
-                    || outputHeapSlots[outputIndex] == mesh->emulationVertexHeapHandle.slot()
+                    outputBuffers[outputIndex].get() == mesh.emulationVertexBuffer.get()
+                    || outputHeapSlots[outputIndex] == mesh.emulationVertexHeapHandle.slot()
                 ){
                     reset();
                     return false;
                 }
             }
             drawItems.push_back(drawItem);
-            outputBuffers.push_back(mesh->emulationVertexBuffer);
-            outputHeapSlots.push_back(mesh->emulationVertexHeapHandle.slot());
+            outputBuffers.push_back(mesh.emulationVertexBuffer);
+            outputHeapSlots.push_back(mesh.emulationVertexHeapHandle.slot());
         }
         captured = drawItems.size() == outputBuffers.size()
             && outputBuffers.size() == outputHeapSlots.size()
@@ -93,7 +87,7 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
         return captured;
     }
 
-    [[nodiscard]] bool matches(RendererMeshSystem& meshSystem)const{
+    [[nodiscard]] bool matches()const{
         if(
             !captured
             || outputBuffers.size() != drawItems.size()
@@ -101,14 +95,12 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
         )
             return false;
         for(usize drawIndex = 0u; drawIndex < drawItems.size(); ++drawIndex){
-            MeshResources* mesh = nullptr;
+            const MaterialPassMeshResourceSnapshot& mesh = drawItems[drawIndex].meshResources;
             if(
-                !meshSystem.findMeshResources(drawItems[drawIndex].meshKey, mesh)
-                || !mesh
-                || !mesh->emulationVertexBuffer
-                || !mesh->emulationVertexHeapHandle.valid()
-                || mesh->emulationVertexBuffer.get() != outputBuffers[drawIndex].get()
-                || mesh->emulationVertexHeapHandle.slot() != outputHeapSlots[drawIndex]
+                !mesh.emulationVertexBuffer
+                || !mesh.emulationVertexHeapHandle.valid()
+                || mesh.emulationVertexBuffer.get() != outputBuffers[drawIndex].get()
+                || mesh.emulationVertexHeapHandle.slot() != outputHeapSlots[drawIndex]
             )
                 return false;
         }

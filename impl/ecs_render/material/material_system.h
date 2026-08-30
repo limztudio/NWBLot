@@ -233,9 +233,9 @@ public:
         u32& outConstantByteOffset
     );
     void pruneMaterialInstanceMutableCache();
-    [[nodiscard]] bool materialPassDrawResourcesReady(const MeshResources& mesh)const;
+    [[nodiscard]] bool materialPassDrawResourcesReady(const MaterialPassMeshResourceSnapshot& mesh)const;
     [[nodiscard]] bool materialPassDrawResourcesReady(
-        const MeshResources& mesh,
+        const MaterialPassMeshResourceSnapshot& mesh,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
     )const;
     [[nodiscard]] bool materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems);
@@ -268,26 +268,26 @@ public:
     [[nodiscard]] bool prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems);
     [[nodiscard]] bool prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
-    [[nodiscard]] u32 meshDispatchFlags(const MeshResources& mesh, MaterialPipelinePass::Enum pass, bool twoSided, bool meshletConeCullScaleSafe)const;
-    [[nodiscard]] u32 materialPassDrawDispatchFlags(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MeshResources& mesh)const;
-    void setMaterialPassCommonBufferStates(const MaterialPassDrawContext& context, const MeshResources& mesh);
+    [[nodiscard]] u32 meshDispatchFlags(const MaterialPassMeshResourceSnapshot& mesh, MaterialPipelinePass::Enum pass, bool twoSided, bool meshletConeCullScaleSafe)const;
+    [[nodiscard]] u32 materialPassDrawDispatchFlags(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh)const;
+    void setMaterialPassCommonBufferStates(const MaterialPassDrawContext& context, const MaterialPassMeshResourceSnapshot& mesh);
     void setMaterialPassDrawItemResourceStates(
         const MaterialPassDrawContext& context,
         const MaterialPassDrawItem& drawItem,
-        const MeshResources& mesh
+        const MaterialPassMeshResourceSnapshot& mesh
     );
-    void setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MeshResources& mesh);
+    void setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh);
     void dispatchComputeMaterialPassDrawItem(
         const MaterialPassDrawContext& context,
         const MaterialPassDrawItem& drawItem,
-        const MeshResources& mesh,
-        MaterialPipelineResources& pipelineResources
+        const MaterialPassMeshResourceSnapshot& mesh,
+        const MaterialPassPipelineResourceSnapshot& pipelineResources
     );
     void drawComputeMaterialPassDrawItem(
         const MaterialPassDrawContext& context,
         const MaterialPassDrawItem& drawItem,
-        const MeshResources& mesh,
-        MaterialPipelineResources& pipelineResources
+        const MaterialPassMeshResourceSnapshot& mesh,
+        const MaterialPassPipelineResourceSnapshot& pipelineResources
     );
     void renderMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItems& drawItems);
     void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
@@ -320,26 +320,10 @@ public:
         InstanceGpuDataVector& instanceData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
     );
-    [[nodiscard]] bool findMaterialPassDrawItemResources(
-        const MaterialPassDrawItem& drawItem,
-        MeshResources*& outMesh,
-        MaterialPipelineResources*& outPipelineResources
-    );
     [[nodiscard]] bool prepareMaterialPassResourceBindingsImpl(
         const MaterialPassDrawItemVector& drawItems,
         bool computeEmulation
     );
-    template<typename DrawItemHandler>
-    void forEachMaterialPassDrawItemResources(const MaterialPassDrawItemVector& drawItems, DrawItemHandler&& handler){
-        for(const MaterialPassDrawItem& drawItem : drawItems){
-            MeshResources* mesh = nullptr;
-            MaterialPipelineResources* pipelineResources = nullptr;
-            if(!findMaterialPassDrawItemResources(drawItem, mesh, pipelineResources))
-                continue;
-
-            handler(drawItem, *mesh, *pipelineResources);
-        }
-    }
 
 private:
     void releaseMaterialResourceReferences();

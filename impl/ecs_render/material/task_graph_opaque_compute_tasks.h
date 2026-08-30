@@ -22,7 +22,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererMeshSystem;
 class RendererMaterialSystem;
 struct DeferredFrameTargets;
 
@@ -38,7 +37,6 @@ namespace ECSRenderDetail{
 
 struct OpaqueRegularComputeEmulationGraphTask{
     struct Payload{
-        RendererMeshSystem* meshSystem = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
@@ -73,7 +71,6 @@ struct OpaqueRegularSharedComputeEmulationGraphTask{
     };
 
     struct Payload{
-        RendererMeshSystem* meshSystem = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;

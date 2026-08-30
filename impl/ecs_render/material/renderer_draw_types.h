@@ -7,6 +7,10 @@
 
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
 
+#include <impl/assets/graphics/mesh/binding_slots.h>
+#include <impl/assets/graphics/mesh/runtime_constants.h>
+#include <impl/ecs_mesh/runtime/mesh.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,9 +21,85 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct MaterialPassMeshResourceSnapshot{
+    RuntimeMeshBuffers sourceBuffers;
+    Core::GpuDescriptorHandle geometryHeapHandles[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
+    Core::BufferHandle emulationVertexBuffer;
+    Core::GpuDescriptorHandle emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
+    u32 meshletCount = 0u;
+    u32 meshletPrimitiveIndexCount = 0u;
+    bool runtimeMesh = false;
+    bool dynamicMeshletBoundsFresh = false;
+    bool dynamicMeshletConesFresh = false;
+
+    [[nodiscard]] bool geometryHeapHandlesReady()const noexcept{
+        constexpr u32 s_SourceBindingSlots[] = {
+            NWB_MESH_BINDING_POSITION,
+            NWB_MESH_BINDING_NORMAL,
+            NWB_MESH_BINDING_TANGENT,
+            NWB_MESH_BINDING_UV0,
+            NWB_MESH_BINDING_COLOR,
+            NWB_MESH_BINDING_MESHLET_DESC,
+            NWB_MESH_BINDING_MESHLET_BOUNDS,
+            NWB_MESH_BINDING_MESHLET_POSITION_REFS,
+            NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS,
+            NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS,
+            NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES,
+        };
+        for(const u32 bindingSlot : s_SourceBindingSlots){
+            const Core::GpuDescriptorHandle handle = geometryHeapHandles[bindingSlot];
+            if(
+                !handle.valid()
+                || handle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
+            )
+                return false;
+        }
+        return true;
+    }
+
+    [[nodiscard]] bool valid()const noexcept{
+        return
+            sourceBuffers.buffersValid()
+            && geometryHeapHandlesReady()
+            && meshletCount > 0u
+            && meshletPrimitiveIndexCount > 0u
+        ;
+    }
+};
+
+struct MaterialPassPipelineResourceSnapshot{
+    Core::GraphicsPipelineHandle emulationPipeline;
+    Core::MeshletPipelineHandle meshletPipeline;
+    Core::ComputePipelineHandle computePipeline;
+};
+
+template<typename BufferHandler>
+void ForEachMaterialPassMeshSourceBuffer(
+    const MaterialPassMeshResourceSnapshot& mesh,
+    BufferHandler&& handler
+){
+    handler(mesh.sourceBuffers.positionBuffer);
+    handler(mesh.sourceBuffers.normalBuffer);
+    handler(mesh.sourceBuffers.tangentBuffer);
+    handler(mesh.sourceBuffers.uv0Buffer);
+    handler(mesh.sourceBuffers.colorBuffer);
+    handler(mesh.sourceBuffers.meshletDescBuffer);
+    handler(mesh.sourceBuffers.meshletBoundsBuffer);
+    handler(mesh.sourceBuffers.meshletPositionRefDeltaBuffer);
+    handler(mesh.sourceBuffers.meshletAttributeRefDeltaBuffer);
+    handler(mesh.sourceBuffers.meshletLocalVertexRefBuffer);
+    handler(mesh.sourceBuffers.meshletPrimitiveIndexBuffer);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct MaterialPassDrawItem{
     Name meshKey = NAME_NONE;
     MaterialPipelineKey pipelineKey;
+    MaterialPassMeshResourceSnapshot meshResources;
+    MaterialPassPipelineResourceSnapshot pipelineResources;
     u32 instanceIndex = 0;
     u32 materialConstantByteOffset = 0u;
     u32 shadingModelId = 0u;

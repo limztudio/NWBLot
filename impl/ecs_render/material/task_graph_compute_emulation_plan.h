@@ -6,7 +6,6 @@
 
 
 #include <impl/ecs_render/material/renderer_draw_types.h>
-#include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/shared/task_graph_stage.h>
 
 
@@ -42,7 +41,6 @@ struct RegularSharedComputeEmulationGraphPlan{
     }
 
     [[nodiscard]] bool capture(
-        RendererMeshSystem& meshSystem,
         const MaterialPassDrawItems& sourceDrawItems,
         const usize allowedMaxDrawCount
     ){
@@ -60,22 +58,20 @@ struct RegularSharedComputeEmulationGraphPlan{
             if(drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None)
                 return false;
 
-            MeshResources* mesh = nullptr;
+            const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
             if(
-                !meshSystem.findMeshResources(drawItem.meshKey, mesh)
-                || !mesh
-                || !mesh->emulationVertexBuffer
-                || !mesh->emulationVertexHeapHandle.valid()
+                !mesh.emulationVertexBuffer
+                || !mesh.emulationVertexHeapHandle.valid()
             )
                 return false;
 
             if(drawIndex == 0u){
-                outputBuffer = mesh->emulationVertexBuffer;
-                outputHeapSlot = mesh->emulationVertexHeapHandle.slot();
+                outputBuffer = mesh.emulationVertexBuffer;
+                outputHeapSlot = mesh.emulationVertexHeapHandle.slot();
             }
             else if(
-                mesh->emulationVertexBuffer.get() != outputBuffer.get()
-                || mesh->emulationVertexHeapHandle.slot() != outputHeapSlot
+                mesh.emulationVertexBuffer.get() != outputBuffer.get()
+                || mesh.emulationVertexHeapHandle.slot() != outputHeapSlot
             )
                 return false;
 
@@ -85,17 +81,15 @@ struct RegularSharedComputeEmulationGraphPlan{
         return captured;
     }
 
-    [[nodiscard]] bool matches(RendererMeshSystem& meshSystem, const usize drawIndex)const{
+    [[nodiscard]] bool matches(const usize drawIndex)const{
         if(!captured || drawIndex >= drawCount || !outputBuffer)
             return false;
 
-        MeshResources* mesh = nullptr;
-        return meshSystem.findMeshResources(drawItems[drawIndex].meshKey, mesh)
-            && mesh
-            && mesh->emulationVertexBuffer
-            && mesh->emulationVertexHeapHandle.valid()
-            && mesh->emulationVertexBuffer.get() == outputBuffer.get()
-            && mesh->emulationVertexHeapHandle.slot() == outputHeapSlot
+        const MaterialPassMeshResourceSnapshot& mesh = drawItems[drawIndex].meshResources;
+        return mesh.emulationVertexBuffer
+            && mesh.emulationVertexHeapHandle.valid()
+            && mesh.emulationVertexBuffer.get() == outputBuffer.get()
+            && mesh.emulationVertexHeapHandle.slot() == outputHeapSlot
         ;
     }
 

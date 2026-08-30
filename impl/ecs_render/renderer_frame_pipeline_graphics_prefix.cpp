@@ -1017,7 +1017,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     ;
     gbufferPayload.materialGeometryStatesGraphOwned = gbufferUsesMaterialGeometry
         && GatherPreparedMaterialGeometryResourceSet(
-            m_meshSystem,
             m_deferredLightingTaskGraph,
             gbufferMaterialGeometryDrawSets,
             LengthOf(gbufferMaterialGeometryDrawSets),
@@ -1060,10 +1059,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const bool opaqueComputeEmulationPlanCaptured = gbufferPayload.materialFrameStatesGraphOwned
         && gbufferPayload.materialGeometryStatesGraphOwned
         && gbufferMaterialSampledTexturesCollected
-        && opaqueComputeEmulationPayload.plan.capture(
-            m_meshSystem,
-            opaqueDrawItems.regular
-        )
+        && opaqueComputeEmulationPayload.plan.capture(opaqueDrawItems.regular)
     ;
     const bool opaqueComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationPlanCaptured
         && GatherOpaqueRegularComputeEmulationResourceSet(
@@ -1093,7 +1089,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         && gbufferPayload.materialGeometryStatesGraphOwned
         && gbufferMaterialSampledTexturesCollected
         && opaqueSharedComputeEmulationPlan.capture(
-            m_meshSystem,
             opaqueDrawItems.regular,
             ECSRenderDetail::s_SharedComputeEmulationMaximumDrawCount
         )
@@ -1133,7 +1128,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         && gbufferPayload.materialGeometryStatesGraphOwned
         && gbufferMaterialSampledTexturesCollected
         && opaqueCsgReceiverComputeEmulationPayload.plan.capture(
-            m_meshSystem,
             opaqueDrawItems.csgReceiverSurface,
             opaqueDrawItems.regular,
             csgFrameData
@@ -1332,7 +1326,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
 
     Core::GpuTaskId gbufferDependency = csgIntervalClearTask;
     if(opaqueComputeEmulationOutputStatesGraphOwned){
-        opaqueComputeEmulationPayload.meshSystem = &m_meshSystem;
         opaqueComputeEmulationPayload.materialSystem = &m_materialSystem;
         opaqueComputeEmulationPayload.targets = &deferredTargets;
         // G-buffer's semantic timing ticket spans its preparatory compute half and its raster half in one packet.
@@ -1395,7 +1388,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         gbufferDependency = m_graphicsPrefixOpaqueComputeEmulationTask;
     }
     if(opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned){
-        opaqueCsgReceiverComputeEmulationPayload.meshSystem = &m_meshSystem;
         opaqueCsgReceiverComputeEmulationPayload.materialSystem = &m_materialSystem;
         opaqueCsgReceiverComputeEmulationPayload.csgResources = csgResources;
         opaqueCsgReceiverComputeEmulationPayload.targets = &deferredTargets;
@@ -1627,7 +1619,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             ;
             ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Payload payload;
             payload.frameBindings = frameBindings;
-            payload.meshSystem = &m_meshSystem;
             payload.materialSystem = &m_materialSystem;
             payload.targets = &deferredTargets;
             payload.timingTicket = timingTicketSlot(PrefixTimingSlot::Gbuffer);
@@ -1772,7 +1763,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         const bool csgIntervalSampleUsesMaterialGeometry = !opaqueDrawItems.csg.empty();
         csgIntervalSamplePayload.materialGeometryStatesGraphOwned = csgIntervalSampleUsesMaterialGeometry
             && GatherPreparedMaterialGeometryResourceSet(
-                m_meshSystem,
                 m_deferredLightingTaskGraph,
                 csgIntervalSampleMaterialGeometryDrawSets,
                 LengthOf(csgIntervalSampleMaterialGeometryDrawSets),
@@ -1811,7 +1801,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             && csgIntervalSamplePayload.materialGeometryStatesGraphOwned
             && csgIntervalSampleMaterialSampledTexturesCollected
             && opaqueCsgIntervalSampleComputeEmulationPayload.plan.capture(
-                m_meshSystem,
                 opaqueDrawItems.csg,
                 csgFrameData
             )
@@ -1927,7 +1916,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         Core::GpuTaskId csgIntervalSampleDependency = m_graphicsPrefixCsgIntervalCombineTask;
         if(opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned){
             opaqueCsgIntervalSampleComputeEmulationPayload.graphics = &m_graphics;
-            opaqueCsgIntervalSampleComputeEmulationPayload.meshSystem = &m_meshSystem;
             opaqueCsgIntervalSampleComputeEmulationPayload.materialSystem = &m_materialSystem;
             opaqueCsgIntervalSampleComputeEmulationPayload.csgResources = csgResources;
             opaqueCsgIntervalSampleComputeEmulationPayload.targets = &deferredTargets;

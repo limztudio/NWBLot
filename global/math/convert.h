@@ -680,7 +680,7 @@ NWB_INLINE SIMDMatrix SIMDCALL LoadFloat(const Float33U& src)noexcept{
 #elif defined (NWB_HAS_NEON)
     float32x4_t v0 = vld1q_f32(&src.m[0][0]);
     float32x4_t v1 = vld1q_f32(&src.m[1][1]);
-    float32x2_t v2 = vcreate_f32(static_cast<u64>(*reinterpret_cast<const u32*>(&src.m[2][2])));
+    float32x2_t v2 = vcreate_f32(static_cast<u64>(std::bit_cast<u32>(src.m[2][2])));
     float32x4_t T = vextq_f32(v0, v1, 3);
 
     SIMDMatrix M;

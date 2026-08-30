@@ -358,9 +358,8 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         return false;
 
     const bool rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
-    // Without hardware ray tracing the software BVH shadow fallback runs instead, reading the skinned
-    // positions and triangle indices as raw byte buffers, so those buffers need raw views in that case.
-    const bool swShadow = !rtSupported;
+    // Both the software fallback and the hybrid transparent-shadow tail read skinned positions and reconstructed
+    // triangle indices as raw byte buffers. Keep those views available even when hardware ray tracing is present.
 
     bool uploaded = true;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float3U>(
@@ -398,7 +397,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         instance.restPositions,
         true,
         NWB_TEXT("skinned position"),
-        swShadow,
+        true,
         rtSupported,
         Core::ResourceQueueSharing::GraphicsAndAsyncCompute
     ) && uploaded;
@@ -547,7 +546,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             triangleIndices,
             false,
             NWB_TEXT("rt triangle index"),
-            swShadow,
+            true,
             rtSupported,
             Core::ResourceQueueSharing::GraphicsAndAsyncCompute
         ) && uploaded;

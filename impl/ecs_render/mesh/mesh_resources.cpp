@@ -376,8 +376,8 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     }
 
     const bool rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
-    // Without hardware ray tracing the software BVH shadow fallback runs instead; it reads positions and the
-    // reconstructed triangle indices as raw byte buffers, so those buffers need raw views in that case.
+    // Both the software fallback and the hybrid transparent-shadow tail read positions and reconstructed triangle
+    // indices as raw byte buffers. Keep those views available even when hardware ray tracing is present.
     const bool swShadow = !rtSupported;
 
     bool uploaded = true;
@@ -388,7 +388,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         AStringView(":positions"),
         mesh.positionStream(),
         NWB_TEXT("position"),
-        swShadow,
+        true,
         rtSupported
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(
@@ -505,7 +505,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         }
 
         RuntimeMeshBufferUpload::BufferFlags indexFlags;
-        indexFlags.canHaveRawViews = swShadow;
+        indexFlags.canHaveRawViews = true;
         indexFlags.accelStructBuildInput = rtSupported;
         // The dedicated async shadow packet reads this reconstructed stream alongside the Graphics-side build
         // and raster packets. Keep the sharing contract consistent with the other shadow trace inputs so it
@@ -533,9 +533,8 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
 
         createdMesh.blasBuildPending = rtSupported;
         // The software BVH is built for the no-RT fallback AND, on RT hardware, for the HYBRID transparent shadow (the
-        // HW pass casts opaque shadows; the SW traversal casts the colored transparent shadow). The positions/indices
-        // already carry raw views on RT hardware (as accel-struct build inputs), so only the build itself is gated here;
-        // buildPendingMeshSwBvh only actually runs on RT hardware when the scene holds a transparent occluder.
+        // HW pass casts opaque shadows; the SW traversal casts the colored transparent shadow). The raw views above
+        // support both routes; buildPendingMeshSwBvh only runs on RT hardware when a transparent occluder needs it.
         createdMesh.swBvhBuildPending = swShadow || rtSupported;
     }
 

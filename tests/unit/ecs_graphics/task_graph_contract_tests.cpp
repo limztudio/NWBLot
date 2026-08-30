@@ -5918,6 +5918,44 @@ TEST(EcsGraphics, HardwareOpaqueShadowPreparationDoesNotEagerlyBuildSoftwareBvhs
 }
 
 
+// Hybrid transparent shadows build a software BVH on ray-tracing hardware, so both static and skinned trace inputs
+// must expose the raw views consumed by their global descriptor-heap slots.
+TEST(EcsGraphics, HybridSoftwareBvhInputsExposeRawViewsOnRayTracingHardware){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString meshResourcesSource;
+    AString skinningRuntimeCacheSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_resources.cpp", meshResourcesSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_mesh" / "skinning" / "runtime_cache_resources.cpp",
+        skinningRuntimeCacheSource
+    ));
+
+    const AStringView meshResources(meshResourcesSource.data(), meshResourcesSource.size());
+    const AStringView skinningRuntimeCache(skinningRuntimeCacheSource.data(), skinningRuntimeCacheSource.size());
+    EXPECT_TRUE(ContainsText(
+        meshResources,
+        "NWB_TEXT(\"position\"),\n"
+        "        true,\n"
+        "        rtSupported"
+    ));
+    EXPECT_TRUE(ContainsText(meshResources, "indexFlags.canHaveRawViews = true;"));
+    EXPECT_TRUE(ContainsText(
+        skinningRuntimeCache,
+        "NWB_TEXT(\"skinned position\"),\n"
+        "        true,\n"
+        "        rtSupported"
+    ));
+    EXPECT_TRUE(ContainsText(
+        skinningRuntimeCache,
+        "NWB_TEXT(\"rt triangle index\"),\n"
+        "            true,\n"
+        "            rtSupported"
+    ));
+}
+
+
 // A healthy hybrid tail requires both a fresh software triple and a complete frozen hardware restore triple. A tail
 // miss restores only declared blobs; invalid snapshots reject the merged packet for a fresh preflight.
 TEST(EcsGraphics, HybridHardwareFallbackRequiresCompleteGraphOwnedBlobs){

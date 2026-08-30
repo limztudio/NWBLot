@@ -300,6 +300,45 @@ TEST_F(DescriptorHeapBindLivenessTest, RetainedBufferAndTextureMustRemainReadyAt
         ASSERT_TRUE(commandList);
         commandList->open();
         commandList->setComputeState(ComputeState().setPipeline(pipeline.get()));
+        heap.bindCompute(*commandList, *pipeline);
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+        BufferDesc& mutableDesc = const_cast<BufferDesc&>(buffer->getDescription());
+        mutableDesc.isVirtual = true;
+        commandList->close();
+        mutableDesc.isVirtual = false;
+        EXPECT_TRUE(commandList->commandRecordingFailed());
+    }
+    heap.collectRetired();
+    ExpectLivenessHeapStatisticsEqual(populated, heap.lifecycleStatistics());
+
+    {
+        CommandListHandle commandList = localDevice.createCommandList();
+        ASSERT_TRUE(commandList);
+        commandList->open();
+        commandList->setComputeState(ComputeState().setPipeline(pipeline.get()));
+        heap.bindCompute(*commandList, *pipeline);
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+        commandList->close();
+        BufferDesc& mutableDesc = const_cast<BufferDesc&>(buffer->getDescription());
+        mutableDesc.isVirtual = true;
+        CommandList* commandLists[] = { commandList.get() };
+        const QueueSubmissionToken token = localDevice.executeCommandLists(
+            commandLists,
+            LengthOf(commandLists),
+            CommandQueue::Graphics,
+            QueueSubmissionDesc{}
+        );
+        mutableDesc.isVirtual = false;
+        EXPECT_FALSE(token.valid());
+    }
+    heap.collectRetired();
+    ExpectLivenessHeapStatisticsEqual(populated, heap.lifecycleStatistics());
+
+    {
+        CommandListHandle commandList = localDevice.createCommandList();
+        ASSERT_TRUE(commandList);
+        commandList->open();
+        commandList->setComputeState(ComputeState().setPipeline(pipeline.get()));
         TextureDesc& mutableDesc = const_cast<TextureDesc&>(texture->getDescription());
         mutableDesc.isVirtual = true;
         heap.bindCompute(*commandList, *pipeline);

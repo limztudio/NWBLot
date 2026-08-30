@@ -42,7 +42,6 @@ class RendererMeshSystem;
 class RendererMaterialSystem;
 class RendererCsgSystem;
 class RendererDeferredSystem;
-class RendererAvboitSystem;
 class RendererRayTracingSystem;
 
 
@@ -231,26 +230,6 @@ private:
     u8 m_lightGpuData[sizeof(f32) * NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT * NWB_SCENE_MAX_LIGHTS] = {};
     u32 m_lightGpuDataCount = 0u;
     bool m_lightGpuDataValid = false;
-};
-
-class RendererAvboitState final : NoCopy{
-    friend class RendererAvboitSystem;
-
-public:
-    RendererAvboitState() = default;
-
-
-public:
-    void invalidateResources();
-
-
-private:
-    Core::SamplerHandle m_linearSampler;
-    Core::ShaderHandle m_depthWarpComputeShader;
-    Core::ShaderHandle m_integrateComputeShader;
-    Core::ComputePipelineHandle m_depthWarpPipeline;
-    Core::ComputePipelineHandle m_integratePipeline;
-    bool m_targetsNeedClear = true;
 };
 
 // Feature-state bases preserve existing m_* access.

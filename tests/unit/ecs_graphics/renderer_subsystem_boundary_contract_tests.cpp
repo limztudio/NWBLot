@@ -307,24 +307,24 @@ TEST(EcsGraphics, MaterialDomainOwnsTheSharedMaterialPassLayout){
     AString materialPipelineSource;
     AString materialResourcesSource;
     AString avboitResourcesSource;
-    AString rendererStateSource;
+    AString avboitStateSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_system.h", materialHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pipeline.cpp", materialPipelineSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass_resources.cpp", materialResourcesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_resources.cpp", avboitResourcesSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "renderer_avboit_state.h", avboitStateSource));
 
     const AStringView materialHeader(materialHeaderSource.data(), materialHeaderSource.size());
     const AStringView materialPipeline(materialPipelineSource.data(), materialPipelineSource.size());
     const AStringView materialResources(materialResourcesSource.data(), materialResourcesSource.size());
     const AStringView avboitResources(avboitResourcesSource.data(), avboitResourcesSource.size());
-    const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
-    const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
-    const usize avboitStateBegin = compactRendererState.find("classRendererAvboitStatefinal:NoCopy{");
+    const AString compactAvboitStateStorage = CompactSource(AStringView(avboitStateSource.data(), avboitStateSource.size()));
+    const AStringView compactAvboitState(compactAvboitStateStorage.data(), compactAvboitStateStorage.size());
+    const usize avboitStateBegin = compactAvboitState.find("classRendererAvboitStatefinal:NoCopy{");
     ASSERT_NE(avboitStateBegin, AStringView::npos);
-    const usize avboitStateEnd = compactRendererState.find("};", avboitStateBegin);
+    const usize avboitStateEnd = compactAvboitState.find("};", avboitStateBegin);
     ASSERT_NE(avboitStateEnd, AStringView::npos);
-    const AStringView avboitState = compactRendererState.substr(avboitStateBegin, avboitStateEnd - avboitStateBegin);
+    const AStringView avboitState = compactAvboitState.substr(avboitStateBegin, avboitStateEnd - avboitStateBegin);
 
     EXPECT_FALSE(ContainsText(materialHeader, "RendererAvboitState"));
     EXPECT_FALSE(ContainsText(materialPipeline, "m_avboitState"));
@@ -333,6 +333,74 @@ TEST(EcsGraphics, MaterialDomainOwnsTheSharedMaterialPassLayout){
     EXPECT_FALSE(ContainsText(avboitResources, "m_avboitState.m_emptyBindingLayout"));
     EXPECT_FALSE(ContainsText(avboitState, "friendclassRendererMaterialSystem;"));
     EXPECT_FALSE(ContainsText(avboitState, "m_emptyBindingLayout"));
+}
+
+
+TEST(EcsGraphics, AvboitOwnsItsPrivateRendererState){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+    AString avboitStateHeaderSource;
+    AString rendererStateSource;
+    AString avboitPrivateSource;
+    AString avboitSystemSource;
+    AString rendererStateHeaderSource;
+    AString avboitStateSource;
+    AString pipelineHeaderSource;
+    AString rendererCmakeSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "renderer_avboit_state.h", avboitStateHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "renderer_avboit_state.cpp", avboitStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_private.h", avboitPrivateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_system.cpp", avboitSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.cpp", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.h", pipelineHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "CMakeLists.txt", rendererCmakeSource));
+
+    const AString compactAvboitStateHeaderStorage = CompactSource(
+        AStringView(avboitStateHeaderSource.data(), avboitStateHeaderSource.size())
+    );
+    const AStringView compactAvboitStateHeader(compactAvboitStateHeaderStorage.data(), compactAvboitStateHeaderStorage.size());
+    const AStringView avboitStateHeader(avboitStateHeaderSource.data(), avboitStateHeaderSource.size());
+    const AStringView avboitState(avboitStateSource.data(), avboitStateSource.size());
+    const AStringView avboitPrivate(avboitPrivateSource.data(), avboitPrivateSource.size());
+    const AStringView avboitSystem(avboitSystemSource.data(), avboitSystemSource.size());
+    const AStringView rendererStateHeader(rendererStateHeaderSource.data(), rendererStateHeaderSource.size());
+    const AStringView rendererState(rendererStateSource.data(), rendererStateSource.size());
+    const AStringView pipelineHeader(pipelineHeaderSource.data(), pipelineHeaderSource.size());
+    const AStringView rendererCmake(rendererCmakeSource.data(), rendererCmakeSource.size());
+
+    EXPECT_TRUE(ContainsText(compactAvboitStateHeader, "classRendererAvboitStatefinal:NoCopy{"));
+    EXPECT_TRUE(ContainsText(compactAvboitStateHeader, "friendclassRendererAvboitSystem;"));
+    EXPECT_FALSE(ContainsText(compactAvboitStateHeader, "friendclassRendererFramePipeline;"));
+    EXPECT_FALSE(ContainsText(compactAvboitStateHeader, "friendclassRendererMaterialSystem;"));
+    EXPECT_FALSE(ContainsText(compactAvboitStateHeader, "friendclassRendererCsgSystem;"));
+    EXPECT_FALSE(ContainsText(compactAvboitStateHeader, "friendclassRendererDeferredSystem;"));
+    EXPECT_FALSE(ContainsText(compactAvboitStateHeader, "friendclassRendererRayTracingSystem;"));
+    EXPECT_TRUE(ContainsText(compactAvboitStateHeader, "Core::SamplerHandlem_linearSampler;"));
+    EXPECT_TRUE(ContainsText(compactAvboitStateHeader, "Core::ShaderHandlem_depthWarpComputeShader;"));
+    EXPECT_TRUE(ContainsText(compactAvboitStateHeader, "Core::ShaderHandlem_integrateComputeShader;"));
+    EXPECT_TRUE(ContainsText(compactAvboitStateHeader, "Core::ComputePipelineHandlem_depthWarpPipeline;"));
+    EXPECT_TRUE(ContainsText(compactAvboitStateHeader, "Core::ComputePipelineHandlem_integratePipeline;"));
+    EXPECT_TRUE(ContainsText(compactAvboitStateHeader, "boolm_targetsNeedClear=true;"));
+    EXPECT_TRUE(ContainsText(avboitState, "void RendererAvboitState::invalidateResources()"));
+    EXPECT_TRUE(ContainsText(avboitState, "m_linearSampler.reset();"));
+    EXPECT_TRUE(ContainsText(avboitState, "m_depthWarpComputeShader.reset();"));
+    EXPECT_TRUE(ContainsText(avboitState, "m_integrateComputeShader.reset();"));
+    EXPECT_TRUE(ContainsText(avboitState, "m_depthWarpPipeline.reset();"));
+    EXPECT_TRUE(ContainsText(avboitState, "m_integratePipeline.reset();"));
+    EXPECT_TRUE(ContainsText(avboitState, "m_targetsNeedClear = true;"));
+    EXPECT_FALSE(ContainsText(avboitStateHeader, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_FALSE(ContainsText(rendererStateHeader, "RendererAvboitState"));
+    EXPECT_FALSE(ContainsText(rendererState, "RendererAvboitState"));
+    EXPECT_FALSE(ContainsText(rendererStateHeader, "#include <impl/ecs_render/avboit/renderer_avboit_state.h>"));
+    EXPECT_TRUE(ContainsText(pipelineHeader, "#include <impl/ecs_render/avboit/renderer_avboit_state.h>"));
+    EXPECT_TRUE(ContainsText(pipelineHeader, "RendererAvboitState m_avboitState;"));
+    EXPECT_TRUE(ContainsText(avboitPrivate, "#include <impl/ecs_render/avboit/renderer_avboit_state.h>"));
+    EXPECT_FALSE(ContainsText(avboitPrivate, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_TRUE(ContainsText(avboitSystem, "#include <impl/ecs_render/avboit/renderer_avboit_state.h>"));
+    EXPECT_FALSE(ContainsText(avboitSystem, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_TRUE(ContainsText(rendererCmake, "${CMAKE_CURRENT_LIST_DIR}/avboit/renderer_avboit_state.cpp"));
+    EXPECT_TRUE(ContainsText(rendererCmake, "${CMAKE_CURRENT_LIST_DIR}/avboit/renderer_avboit_state.h"));
 }
 
 
@@ -380,7 +448,7 @@ TEST(EcsGraphics, AvboitDoesNotDependOnDeferredPrivateState){
 
     const usize deferredStateBegin = compactRendererState.find("classRendererDeferredStatefinal:NoCopy{");
     ASSERT_NE(deferredStateBegin, AStringView::npos);
-    const usize deferredStateEnd = compactRendererState.find("classRendererAvboitStatefinal:NoCopy{", deferredStateBegin);
+    const usize deferredStateEnd = compactRendererState.find("structRtSceneBvhState{", deferredStateBegin);
     ASSERT_NE(deferredStateEnd, AStringView::npos);
     const AStringView deferredState = compactRendererState.substr(deferredStateBegin, deferredStateEnd - deferredStateBegin);
     EXPECT_FALSE(ContainsText(deferredState, "friendclassRendererAvboitSystem;"));
@@ -513,7 +581,7 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
 
     const usize deferredStateBegin = compactRendererState.find("classRendererDeferredStatefinal:NoCopy{");
     ASSERT_NE(deferredStateBegin, AStringView::npos);
-    const usize deferredStateEnd = compactRendererState.find("classRendererAvboitStatefinal:NoCopy{", deferredStateBegin);
+    const usize deferredStateEnd = compactRendererState.find("structRtSceneBvhState{", deferredStateBegin);
     ASSERT_NE(deferredStateEnd, AStringView::npos);
     const AStringView deferredState = compactRendererState.substr(deferredStateBegin, deferredStateEnd - deferredStateBegin);
     EXPECT_FALSE(ContainsText(deferredState, "friendclassRendererCsgSystem;"));
@@ -1064,7 +1132,7 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
 
     const usize deferredStateBegin = compactRendererState.find("classRendererDeferredStatefinal:NoCopy{");
     ASSERT_NE(deferredStateBegin, AStringView::npos);
-    const usize deferredStateEnd = compactRendererState.find("classRendererAvboitStatefinal:NoCopy{", deferredStateBegin);
+    const usize deferredStateEnd = compactRendererState.find("structRtSceneBvhState{", deferredStateBegin);
     ASSERT_NE(deferredStateEnd, AStringView::npos);
     const AStringView deferredState = compactRendererState.substr(deferredStateBegin, deferredStateEnd - deferredStateBegin);
     EXPECT_FALSE(ContainsText(deferredState, "friendclassRendererRayTracingSystem;"));
@@ -1152,7 +1220,7 @@ TEST(EcsGraphics, RootOwnsTheCrossDomainFrameTargetAggregate){
 
     const usize deferredStateBegin = compactRendererState.find("classRendererDeferredStatefinal:NoCopy{");
     ASSERT_NE(deferredStateBegin, AStringView::npos);
-    const usize deferredStateEnd = compactRendererState.find("classRendererAvboitStatefinal:NoCopy{", deferredStateBegin);
+    const usize deferredStateEnd = compactRendererState.find("structRtSceneBvhState{", deferredStateBegin);
     ASSERT_NE(deferredStateEnd, AStringView::npos);
     const AStringView deferredState = compactRendererState.substr(deferredStateBegin, deferredStateEnd - deferredStateBegin);
     EXPECT_FALSE(ContainsText(deferredState, "DeferredFrameTargets"));

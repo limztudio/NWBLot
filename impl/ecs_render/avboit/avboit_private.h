@@ -14,7 +14,7 @@
 #include <impl/ecs_render/material/renderer_render_state_private.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
-#include <impl/ecs_render/shared/renderer_state.h>
+#include <impl/ecs_render/avboit/renderer_avboit_state.h>
 
 #include <core/common/log.h>
 #include <core/graphics/module.h>

@@ -151,19 +151,6 @@ void RendererDeferredState::invalidateResources(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererAvboitState::invalidateResources(){
-    m_linearSampler.reset();
-    m_depthWarpComputeShader.reset();
-    m_integrateComputeShader.reset();
-    m_depthWarpPipeline.reset();
-    m_integratePipeline.reset();
-    m_targetsNeedClear = true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererRayTracingState::invalidateResources(){
     // The scene TLAS is GPU state and must be released on device/resource teardown; per-mesh BLAS
     // handles live on MeshResources and are released with the mesh cache. Ray tracing capability

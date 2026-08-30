@@ -6583,6 +6583,146 @@ TEST(EcsGraphics, FeatureSupportAndSmokeRoutesRemainNativeCapabilityAuthoritativ
 }
 
 
+// A frame graph captures raw bindless slots before native recording. The heap-wide lease is the lifetime bridge:
+// frees become an exact pending-recording state, the final overlapping release promotes that batch against the
+// latest recorded heap use, and a later lease cannot make an already-retired TLAS generation recordable again.
+TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNativeRecording){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString heapHeaderSource;
+    AString heapSource;
+    AString descriptorWriteSource;
+    AString nativeBindingSource;
+    AString rendererExecutionSource;
+    AString smokeSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", heapHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap.cpp", heapSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap_descriptor_buffer.cpp",
+        descriptorWriteSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "resource_bindings_commands.cpp",
+        nativeBindingSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_execute.cpp",
+        rendererExecutionSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "tests" / "smoke" / "descriptor_buffer" / "descriptor_buffer_round_trip_tests.cpp",
+        smokeSource
+    ));
+    const AStringView heapHeader(heapHeaderSource.data(), heapHeaderSource.size());
+    const AStringView heap(heapSource.data(), heapSource.size());
+    const AStringView descriptorWrite(descriptorWriteSource.data(), descriptorWriteSource.size());
+    const AStringView nativeBinding(nativeBindingSource.data(), nativeBindingSource.size());
+    const AStringView rendererExecution(rendererExecutionSource.data(), rendererExecutionSource.size());
+    const AStringView smoke(smokeSource.data(), smokeSource.size());
+
+    EXPECT_TRUE(ContainsText(heapHeader, "enum class SlotState : u8{"));
+    EXPECT_TRUE(ContainsText(heapHeader, "PendingRecording,"));
+    EXPECT_TRUE(ContainsText(heapHeader, "class PendingRecordingLease final{"));
+    EXPECT_TRUE(ContainsText(heapHeader, "PendingRecordingLease(const PendingRecordingLease&) = delete;"));
+    EXPECT_TRUE(ContainsText(heapHeader, "PendingRecordingLease(PendingRecordingLease&&) = delete;"));
+    EXPECT_TRUE(ContainsText(heapHeader, "u64 m_descriptorBufferGeneration = 0u;"));
+    EXPECT_TRUE(ContainsText(heapHeader, "Vector<GpuDescriptorHandle, Alloc::GlobalArena> m_pendingRecording;"));
+
+    EXPECT_TRUE(ContainsText(
+        heap,
+        "if(m_activePendingRecordingLeaseCount != 0u){\n"
+        "            allocator.slotStates[handle.slot()] = SlotState::PendingRecording;\n"
+        "            m_pendingRecording.push_back(handle);"
+    ));
+    EXPECT_TRUE(ContainsText(heap, "allocator.slotStates[slot] = SlotState::Retired;"));
+    EXPECT_TRUE(ContainsText(heap, "m_retired.push_back(RetiredSlot{ handle, m_lastHeapUseID });"));
+    EXPECT_TRUE(ContainsText(
+        heap,
+        "descriptorBufferGeneration != m_descriptorBufferGeneration\n"
+        "        )\n"
+        "            return;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        heap,
+        "statistics.pendingRetiredSlotCount = m_pendingRecording.size() + m_retired.size();"
+    ));
+    EXPECT_TRUE(ContainsText(
+        heap,
+        "if(m_activePendingRecordingLeaseCount != 0u){\n"
+        "        NWB_LOGGER_ERROR(NWB_TEXT(\"Vulkan: GpuDescriptorHeap initialization rejected while pending-recording leases are active.\"));"
+    ));
+    EXPECT_TRUE(ContainsText(
+        heap,
+        "if(m_activePendingRecordingLeaseCount != 0u || !m_heapUses.empty())"
+    ));
+    EXPECT_TRUE(ContainsText(
+        heap,
+        "m_accelStructSlots.slotStates[handle.slot()] != SlotState::Live"
+    ));
+    EXPECT_FALSE(ContainsText(
+        descriptorWrite,
+        "allocator.slotStates[handle.slot()] == SlotState::PendingRecording"
+    ));
+
+    EXPECT_TRUE(ContainsText(
+        nativeBinding,
+        "slotState != GpuDescriptorHeap::SlotState::Live\n"
+        "                && slotState != GpuDescriptorHeap::SlotState::PendingRecording"
+    ));
+    EXPECT_FALSE(ContainsText(nativeBinding, "m_activePendingRecordingLeaseCount != 0u"));
+
+    const usize deviceCheckOffset = rendererExecution.find(
+        "if(m_graphics.isDeviceRecreationRequested() || device.isDeviceLost())"
+    );
+    const usize recoveryCheckOffset = rendererExecution.find("if(m_frameRenderRecoveryFailed)", deviceCheckOffset);
+    const usize leaseOffset = rendererExecution.find(
+        "Core::GpuDescriptorHeap::PendingRecordingLease descriptorHeapPendingRecordingLease",
+        recoveryCheckOffset
+    );
+    const usize snapshotOffset = rendererExecution.find(
+        "const RayTracingFrameCpuStateSnapshot rayTracingCpuState",
+        leaseOffset
+    );
+    const usize graphBuildOffset = rendererExecution.find("buildDeferredLightingTaskGraph(", snapshotOffset);
+    ASSERT_NE(deviceCheckOffset, AStringView::npos);
+    ASSERT_NE(recoveryCheckOffset, AStringView::npos);
+    ASSERT_NE(leaseOffset, AStringView::npos);
+    ASSERT_NE(snapshotOffset, AStringView::npos);
+    ASSERT_NE(graphBuildOffset, AStringView::npos);
+    EXPECT_LT(deviceCheckOffset, recoveryCheckOffset);
+    EXPECT_LT(recoveryCheckOffset, leaseOffset);
+    EXPECT_LT(leaseOffset, snapshotOffset);
+    EXPECT_LT(snapshotOffset, graphBuildOffset);
+    EXPECT_EQ(CountText(
+        rendererExecution,
+        "Core::GpuDescriptorHeap::PendingRecordingLease descriptorHeapPendingRecordingLease"
+    ), 1u);
+
+    EXPECT_TRUE(ContainsText(
+        smoke,
+        "TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapPendingRecordingLeaseProtectsCapturedSlots)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        smoke,
+        "TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapPendingRecordingLeaseRejectsReinitializeAndRecyclesWithoutRecording)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        smoke,
+        "TEST_F(DescriptorBufferRoundTripTest, DeviceDescriptorHeapPendingRecordingLeaseTracksRecordedUse)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        smoke,
+        "heap.bindCompute(*commandList, *pipeline, handle);\n"
+        "        ASSERT_FALSE(commandList->commandRecordingFailed())"
+    ));
+    EXPECT_TRUE(ContainsText(
+        smoke,
+        "native TLAS binding rejected the exact pending-recording generation"
+    ));
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

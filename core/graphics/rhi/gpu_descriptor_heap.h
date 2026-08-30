@@ -152,7 +152,8 @@ struct GpuDescriptorHeapLifecycleStatistics{
     usize resourceLiveSlotCount = 0u;
     usize samplerLiveSlotCount = 0u;
     usize accelStructLiveSlotCount = 0u;
-    // Aggregate slots awaiting reuse because a prior heap binding could still need their descriptor/resource.
+    // Aggregate slots awaiting reuse because a pending CPU snapshot may still record them or a prior heap binding
+    // may still need their descriptor/resource.
     usize pendingRetiredSlotCount = 0u;
     // Heap uses with an accepted submission token, retained until collectRetired() reaps their token.
     // This can include work that has physically completed but has not yet been collected.

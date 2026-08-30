@@ -2018,19 +2018,26 @@ class GpuDescriptorHeap final : NoCopy{
 
 
 private:
+    enum class SlotState : u8{
+        Free,
+        Live,
+        PendingRecording,
+        Retired,
+    };
+
     // Fresh indices plus a recycled free list per namespace.
     struct SlotAllocator{
         u32 capacity = 0;
         u32 nextFresh = 0;
         Vector<u32, Alloc::GlobalArena> freeList;
-        // Rejects double frees and retired-handle writes.
-        Vector<u8, Alloc::GlobalArena> liveSlots;
+        // PendingRecording is the only freed state that native recording may still consume.
+        Vector<SlotState, Alloc::GlobalArena> slotStates;
         // Keeps the allocated class authoritative while a slot is live or quarantined.
         Vector<u8, Alloc::GlobalArena> allocatedClasses;
 
         explicit SlotAllocator(Alloc::GlobalArena& arena)
             : freeList(arena)
-            , liveSlots(arena)
+            , slotStates(arena)
             , allocatedClasses(arena)
         {}
     };
@@ -2047,11 +2054,40 @@ private:
 
 
 public:
+    class PendingRecordingLease final{
+        friend class GpuDescriptorHeap;
+
+
+    private:
+        explicit PendingRecordingLease(GpuDescriptorHeap& heap);
+
+    public:
+        ~PendingRecordingLease();
+        PendingRecordingLease(const PendingRecordingLease&) = delete;
+        PendingRecordingLease(PendingRecordingLease&&) = delete;
+        PendingRecordingLease& operator=(const PendingRecordingLease&) = delete;
+        PendingRecordingLease& operator=(PendingRecordingLease&&) = delete;
+
+
+    public:
+        [[nodiscard]] bool valid()const noexcept{ return m_heap != nullptr; }
+
+    private:
+        GpuDescriptorHeap* m_heap = nullptr;
+        u64 m_descriptorBufferGeneration = 0u;
+    };
+
+
+public:
     explicit GpuDescriptorHeap(Device& device);
     ~GpuDescriptorHeap();
 
 
 public:
+    // Prevents slot reuse while CPU snapshots may still record. The final overlapping release establishes the
+    // native heap-use boundary for every slot freed under the leases.
+    [[nodiscard]] PendingRecordingLease acquirePendingRecordingLease();
+
     bool initialize(const GpuDescriptorHeapDesc& desc);
     void shutdown();
 
@@ -2062,7 +2098,7 @@ public:
     // Returns invalid (logged) when the class namespace is exhausted.
     [[nodiscard]] GpuDescriptorHandle allocate(GpuDescriptorClass::Enum descriptorClass);
 
-    // Defers slot reuse until every command buffer that bound this heap before the free has completed or been abandoned.
+    // Defers reuse across pending CPU recording and until every protected heap binding completes or is abandoned.
     void free(GpuDescriptorHandle handle);
 
     // Resolves deferred reuse from accepted queue tokens and their completed timelines.
@@ -2121,6 +2157,7 @@ private:
     );
     void submitCommandBufferUse(TrackedCommandBuffer& commandBuffer, QueueSubmissionToken submissionToken);
     void discardCommandBufferUse(TrackedCommandBuffer& commandBuffer);
+    void releasePendingRecordingLease(u64 descriptorBufferGeneration);
     void shutdownForDeviceTeardown();
     void shutdownLocked();
 
@@ -2157,8 +2194,10 @@ private:
     SlotAllocator m_samplerSlots;
     SlotAllocator m_accelStructSlots;
 
+    Vector<GpuDescriptorHandle, Alloc::GlobalArena> m_pendingRecording;
     Vector<RetiredSlot, Alloc::GlobalArena> m_retired;
     Vector<HeapUse, Alloc::GlobalArena> m_heapUses;
+    usize m_activePendingRecordingLeaseCount = 0u;
     u64 m_lastHeapUseID = 0u;
     u64 m_descriptorBufferGeneration = 0u;
 

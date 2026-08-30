@@ -61273,6 +61273,230 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetiredAndDoubleFreed
 }
 
 
+// CPU graph snapshots can outlive the registry generation they captured until native recording consumes their raw
+// descriptor slots. Overlapping leases therefore keep every freed slot quarantined until the final lease releases.
+TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapPendingRecordingLeaseProtectsCapturedSlots){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    GraphicsBackend::GpuDescriptorHeap heap(device);
+    GpuDescriptorHeapDesc heapDesc;
+    heapDesc
+        .setResourceCapacity(2u)
+        .setSamplerCapacity(1u)
+        .setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
+    ;
+    ASSERT_TRUE(heap.initialize(heapDesc));
+
+    auto storageBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(4096u)
+            .setStructStride(16u)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(storageBuffer);
+
+    const GpuDescriptorHandle capturedHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(capturedHandle.valid());
+    ASSERT_TRUE(heap.write(
+        capturedHandle,
+        DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())
+    ));
+    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u);
+
+    GpuDescriptorHandle secondPendingHandle = GpuDescriptorHandle::invalid();
+    {
+        auto outerLease = heap.acquirePendingRecordingLease();
+        ASSERT_TRUE(outerLease.valid());
+        {
+            auto innerLease = heap.acquirePendingRecordingLease();
+            ASSERT_TRUE(innerLease.valid());
+
+            heap.free(capturedHandle);
+            const GpuDescriptorHeapLifecycleStatistics firstPendingStatistics = heap.lifecycleStatistics();
+            EXPECT_EQ(firstPendingStatistics.resourceLiveSlotCount, 0u);
+            EXPECT_EQ(firstPendingStatistics.pendingRetiredSlotCount, 1u);
+            EXPECT_EQ(storageBuffer->getReferenceCount(), 2u);
+
+            secondPendingHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+            ASSERT_TRUE(secondPendingHandle.valid());
+            EXPECT_NE(secondPendingHandle.slot(), capturedHandle.slot());
+            heap.free(secondPendingHandle);
+            heap.collectRetired();
+            EXPECT_EQ(heap.lifecycleStatistics().pendingRetiredSlotCount, 2u);
+
+            heap.shutdown();
+            EXPECT_TRUE(heap.isInitialized()) << "an active recording lease allowed heap shutdown";
+        }
+        EXPECT_EQ(heap.lifecycleStatistics().pendingRetiredSlotCount, 2u)
+            << "an overlapping lease release promoted slots too early";
+    }
+
+    const GpuDescriptorHeapLifecycleStatistics completedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(completedStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(completedStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(completedStatistics.unsubmittedHeapUseCount, 0u);
+    EXPECT_EQ(storageBuffer->getReferenceCount(), 1u);
+
+    const GpuDescriptorHandle recycledFirst = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    const GpuDescriptorHandle recycledSecond = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(recycledFirst.valid());
+    ASSERT_TRUE(recycledSecond.valid());
+    EXPECT_TRUE(recycledFirst.slot() == capturedHandle.slot() || recycledSecond.slot() == capturedHandle.slot());
+    EXPECT_TRUE(
+        recycledFirst.slot() == secondPendingHandle.slot()
+        || recycledSecond.slot() == secondPendingHandle.slot()
+    );
+    heap.free(recycledFirst);
+    heap.free(recycledSecond);
+    heap.collectRetired();
+}
+
+
+// A pending snapshot with no native recording has no GPU boundary to await. Reinitialization must preserve its heap
+// generation, and final lease release must make the quarantined capacity available immediately.
+TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapPendingRecordingLeaseRejectsReinitializeAndRecyclesWithoutRecording){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    GraphicsBackend::GpuDescriptorHeap heap(device);
+    GpuDescriptorHeapDesc heapDesc;
+    heapDesc
+        .setResourceCapacity(1u)
+        .setSamplerCapacity(1u)
+        .setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
+    ;
+    ASSERT_TRUE(heap.initialize(heapDesc));
+
+    const GpuDescriptorHandle capturedHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(capturedHandle.valid());
+    {
+        auto pendingRecordingLease = heap.acquirePendingRecordingLease();
+        ASSERT_TRUE(pendingRecordingLease.valid());
+        heap.free(capturedHandle);
+        EXPECT_EQ(heap.lifecycleStatistics().pendingRetiredSlotCount, 1u);
+
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+        EXPECT_DEATH_IF_SUPPORTED({
+            EXPECT_FALSE(heap.initialize(heapDesc));
+        }, "");
+#else
+        EXPECT_FALSE(heap.initialize(heapDesc));
+#endif
+        EXPECT_TRUE(heap.isInitialized());
+        EXPECT_EQ(heap.lifecycleStatistics().pendingRetiredSlotCount, 1u);
+    }
+
+    EXPECT_EQ(heap.lifecycleStatistics().pendingRetiredSlotCount, 0u);
+    const GpuDescriptorHandle recycledHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(recycledHandle.valid());
+    EXPECT_EQ(recycledHandle.slot(), capturedHandle.slot());
+    heap.free(recycledHandle);
+    heap.collectRetired();
+}
+
+
+// Only the device-owned heap can cross the native binding ingress. Record after freeing a captured slot, then prove
+// final lease release ties its retirement to that still-unsubmitted command buffer instead of recycling it early.
+TEST_F(DescriptorBufferRoundTripTest, DeviceDescriptorHeapPendingRecordingLeaseTracksRecordedUse){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
+    ASSERT_TRUE(device.waitForIdle());
+    heap.collectRetired();
+    const GpuDescriptorHeapLifecycleStatistics baselineStatistics = heap.lifecycleStatistics();
+
+    ShaderDesc shaderDesc(DescriptorBufferRoundTripTest::arena());
+    shaderDesc
+        .setShaderType(ShaderType::Compute)
+        .setDebugName(Name{"tests/descriptor_buffer/pending_recording_lease"})
+    ;
+    auto shader = device.createShader(
+        shaderDesc,
+        s_DescriptorHeapRetirementComputeSpirv,
+        sizeof(s_DescriptorHeapRetirementComputeSpirv)
+    );
+    ASSERT_TRUE(shader);
+
+    ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(shader)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
+    ;
+    auto pipeline = device.createComputePipeline(pipelineDesc);
+    ASSERT_TRUE(pipeline);
+
+    auto storageBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(4096u)
+            .setStructStride(16u)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(storageBuffer);
+
+    const GpuDescriptorHandle capturedHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(capturedHandle.valid());
+    ASSERT_TRUE(heap.write(
+        capturedHandle,
+        DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())
+    ));
+    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u);
+
+    auto commandList = device.createCommandList();
+    ASSERT_TRUE(commandList);
+    {
+        auto pendingRecordingLease = heap.acquirePendingRecordingLease();
+        ASSERT_TRUE(pendingRecordingLease.valid());
+        heap.free(capturedHandle);
+        const GpuDescriptorHeapLifecycleStatistics pendingStatistics = heap.lifecycleStatistics();
+        EXPECT_EQ(pendingStatistics.resourceLiveSlotCount, baselineStatistics.resourceLiveSlotCount);
+        EXPECT_EQ(pendingStatistics.pendingRetiredSlotCount, baselineStatistics.pendingRetiredSlotCount + 1u);
+
+        commandList->open();
+        ComputeState computeState;
+        computeState.setPipeline(pipeline.get());
+        commandList->setComputeState(computeState);
+        heap.bindCompute(*commandList, *pipeline);
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+        commandList->close();
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+        ASSERT_TRUE(commandList->hasCommandBuffer());
+    }
+
+    const GpuDescriptorHeapLifecycleStatistics recordedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(recordedStatistics.pendingRetiredSlotCount, baselineStatistics.pendingRetiredSlotCount + 1u);
+    EXPECT_EQ(recordedStatistics.acceptedHeapUseCount, baselineStatistics.acceptedHeapUseCount);
+    EXPECT_EQ(recordedStatistics.unsubmittedHeapUseCount, baselineStatistics.unsubmittedHeapUseCount + 1u);
+    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u);
+
+    CommandList* commandLists[] = { commandList.get() };
+    const QueueSubmissionToken submissionToken = device.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(submissionToken.valid());
+    ASSERT_TRUE(device.waitForIdle());
+    heap.collectRetired();
+
+    const GpuDescriptorHeapLifecycleStatistics completedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(completedStatistics.pendingRetiredSlotCount, baselineStatistics.pendingRetiredSlotCount);
+    EXPECT_EQ(completedStatistics.acceptedHeapUseCount, baselineStatistics.acceptedHeapUseCount);
+    EXPECT_EQ(completedStatistics.unsubmittedHeapUseCount, baselineStatistics.unsubmittedHeapUseCount);
+    EXPECT_EQ(storageBuffer->getReferenceCount(), 1u);
+
+    const GpuDescriptorHandle recycledHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(recycledHandle.valid());
+    EXPECT_EQ(recycledHandle.slot(), capturedHandle.slot());
+    heap.free(recycledHandle);
+    heap.collectRetired();
+}
+
+
 // The production heap is the only descriptor transport: an indexed write through its runtime StorageBuffer table
 // must reach a CPU-readable UAV without falling back to a classic descriptor set.
 TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapStorageBufferDispatchesAndReadsBack){
@@ -63647,9 +63871,66 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapWritesImmutableTlasBlo
     EXPECT_EQ(block.kind, GraphicsBackend::DescriptorBufferSegmentKind::Resource);
     EXPECT_GT(block.sizeBytes, 0u);
 
-    heap.free(handle);
-    // This headless test records no heap binding, so retirement is immediate and the block is released before the
-    // device fixture tears down.
+    ShaderDesc shaderDesc(descArena);
+    shaderDesc
+        .setShaderType(ShaderType::Compute)
+        .setDebugName(Name{"tests/descriptor_buffer/heap_pending_tlas"})
+    ;
+    auto shader = device.createShader(
+        shaderDesc,
+        s_DescriptorHeapRetirementComputeSpirv,
+        sizeof(s_DescriptorHeapRetirementComputeSpirv)
+    );
+    ASSERT_TRUE(shader);
+
+    ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(shader)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
+        .addBindingLayout(heap.getAccelStructLayout())
+    ;
+    auto pipeline = device.createComputePipeline(pipelineDesc);
+    ASSERT_TRUE(pipeline);
+
+    auto commandList = device.createCommandList();
+    ASSERT_TRUE(commandList);
+    {
+        auto pendingRecordingLease = heap.acquirePendingRecordingLease();
+        ASSERT_TRUE(pendingRecordingLease.valid());
+        heap.free(handle);
+        EXPECT_FALSE(heap.getAccelStructBufferBlock(handle).valid())
+            << "the public TLAS block query exposed a freed pending-recording handle";
+
+        commandList->open();
+        ComputeState computeState;
+        computeState.setPipeline(pipeline.get());
+        commandList->setComputeState(computeState);
+        heap.bindCompute(*commandList, *pipeline, handle);
+        ASSERT_FALSE(commandList->commandRecordingFailed())
+            << "native TLAS binding rejected the exact pending-recording generation";
+        commandList->close();
+        ASSERT_FALSE(commandList->commandRecordingFailed())
+            << "native TLAS binding became invalid while closing its pending-recording heap use";
+        ASSERT_TRUE(commandList->hasCommandBuffer())
+            << "native TLAS binding rejected the exact pending-recording generation";
+    }
+
+    const GpuDescriptorHeapLifecycleStatistics recordedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(recordedStatistics.pendingRetiredSlotCount, 1u);
+    EXPECT_EQ(recordedStatistics.unsubmittedHeapUseCount, 1u);
+
+    CommandList* commandLists[] = { commandList.get() };
+    const QueueSubmissionToken submissionToken = device.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(submissionToken.valid());
+    ASSERT_TRUE(device.waitForIdle());
+    heap.collectRetired();
+    EXPECT_EQ(heap.lifecycleStatistics().pendingRetiredSlotCount, 0u);
 }
 
 

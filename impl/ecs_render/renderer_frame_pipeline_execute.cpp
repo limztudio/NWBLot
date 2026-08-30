@@ -193,6 +193,14 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame render recovery failed; rendering is suspended until resources are recreated"));
         return;
     }
+    Core::GpuDescriptorHeap::PendingRecordingLease descriptorHeapPendingRecordingLease =
+        device.getDescriptorHeap().acquirePendingRecordingLease()
+    ;
+    if(!descriptorHeapPendingRecordingLease.valid()){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: descriptor heap pending-recording lease was unavailable; requesting recreation"));
+        m_graphics.requestDeviceRecreation();
+        return;
+    }
     // Renderer scheduling queries the physical transport exposed to the graph, not the legacy unresolved lane.
     // A Compute entry exists only when Vulkan created an enabled, distinct async-compute queue for this device.
     const Core::GpuPhysicalQueueId primaryGraphicsQueue =

@@ -372,16 +372,23 @@ void CommandList::bindDescriptorBufferHeapNative(
     DescriptorBufferSegment accelStructBlock{};
     if(bindAccelStruct){
         const u32 slot = accelStructHandle.slot();
+        const GpuDescriptorHeap::SlotState slotState = slot < heap.m_accelStructSlots.slotStates.size()
+            ? heap.m_accelStructSlots.slotStates[slot]
+            : GpuDescriptorHeap::SlotState::Free
+        ;
         if(
             accelStructHandle.descriptorClass() != GpuDescriptorClass::AccelStruct
-            || slot >= heap.m_accelStructSlots.liveSlots.size()
+            || slot >= heap.m_accelStructSlots.slotStates.size()
             || slot >= heap.m_accelStructSlots.allocatedClasses.size()
             || slot >= heap.m_accelStructBufferBlocks.size()
             || slot >= heap.m_accelStructResources.size()
-            || heap.m_accelStructSlots.liveSlots[slot] == 0u
+            || (
+                slotState != GpuDescriptorHeap::SlotState::Live
+                && slotState != GpuDescriptorHeap::SlotState::PendingRecording
+            )
             || heap.m_accelStructSlots.allocatedClasses[slot] != static_cast<u8>(GpuDescriptorClass::AccelStruct)
         ){
-            rejectCommandRecording(operationName, NWB_TEXT("TLAS handle is stale, retagged, or outside the live heap"));
+            rejectCommandRecording(operationName, NWB_TEXT("TLAS handle is stale, retagged, or outside the recordable heap"));
             return;
         }
 

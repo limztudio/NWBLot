@@ -144,9 +144,9 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
 
     SlotAllocator& allocator = allocatorForClass(descriptorClass);
     if(
-        handle.slot() >= allocator.liveSlots.size()
+        handle.slot() >= allocator.slotStates.size()
         || handle.slot() >= allocator.allocatedClasses.size()
-        || allocator.liveSlots[handle.slot()] == 0u
+        || allocator.slotStates[handle.slot()] != SlotState::Live
         || allocator.allocatedClasses[handle.slot()] != static_cast<u8>(descriptorClass)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected stale, retagged, or retired handle {}.")

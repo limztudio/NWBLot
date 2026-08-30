@@ -3298,6 +3298,40 @@ TEST(EcsGraphics, SurfelGiBaselineUsesFixedTemporalWarmup){
 }
 
 
+// Every surfel stage consumes the same packed [0,1] G-buffer normal contract. Keep the decode in one shader include so
+// spawn cannot silently store a different normal space from resolve and upsample.
+TEST(EcsGraphics, SurfelGbufferNormalsSharePackedDecodeContract){
+    TestArena testArena;
+    const TestPath surfelDirectory = RepoRoot(testArena) / "impl" / "assets" / "graphics" / "gi" / "surfel";
+
+    AString gbufferSource;
+    AString spawnSource;
+    AString resolveSource;
+    AString upsampleSource;
+    ASSERT_TRUE(ReadTextFile(surfelDirectory / "surfel_gbuffer.slangi", gbufferSource));
+    ASSERT_TRUE(ReadTextFile(surfelDirectory / "surfel_spawn_cs.slang", spawnSource));
+    ASSERT_TRUE(ReadTextFile(surfelDirectory / "surfel_resolve_cs.slang", resolveSource));
+    ASSERT_TRUE(ReadTextFile(surfelDirectory / "surfel_upsample_cs.slang", upsampleSource));
+    const AStringView gbuffer(gbufferSource.data(), gbufferSource.size());
+    const AStringView spawn(spawnSource.data(), spawnSource.size());
+    const AStringView resolve(resolveSource.data(), resolveSource.size());
+    const AStringView upsample(upsampleSource.data(), upsampleSource.size());
+
+    EXPECT_TRUE(ContainsText(gbuffer, "return normalize(packedNormal * 2.0 - 1.0);"));
+    EXPECT_TRUE(ContainsText(spawn, "#include \"surfel_gbuffer.slangi\""));
+    EXPECT_TRUE(ContainsText(resolve, "#include \"surfel_gbuffer.slangi\""));
+    EXPECT_TRUE(ContainsText(upsample, "#include \"surfel_gbuffer.slangi\""));
+    EXPECT_TRUE(ContainsText(spawn, "const float3 worldNormal = nwbSurfelDecodeGbufferNormal(rawNormal);"));
+    EXPECT_TRUE(ContainsText(resolve, "const float3 normal = nwbSurfelDecodeGbufferNormal(rawNormal);"));
+    EXPECT_TRUE(ContainsText(upsample, "const float3 centerNormal = nwbSurfelDecodeGbufferNormal(rawNormal);"));
+    EXPECT_TRUE(ContainsText(upsample, "const float3 tapNormal = nwbSurfelDecodeGbufferNormal(tapRawNormal);"));
+    EXPECT_FALSE(ContainsText(spawn, "normalize(rawNormal);"));
+    EXPECT_FALSE(ContainsText(spawn, "normalize(rawNormal * 2.0 - 1.0)"));
+    EXPECT_FALSE(ContainsText(resolve, "normalize(rawNormal * 2.0 - 1.0)"));
+    EXPECT_FALSE(ContainsText(upsample, "normalize(rawNormal * 2.0 - 1.0)"));
+}
+
+
 // Soft shadows retain temporal history even when the camera/yaw are frozen. Capture the same accepted history phase
 // through the smoke-only fixed clock before using this scene as a parity reference.
 TEST(EcsGraphics, SoftShadowBaselineUsesFixedTemporalWarmup){
@@ -5425,8 +5459,11 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString taskGraphSource;
+    AString avboitTargetsSource;
     ASSERT_TRUE(ReadRendererSources(repoRoot, { "renderer_frame_pipeline_graph.cpp" }, taskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_targets.cpp", avboitTargetsSource));
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const AStringView avboitTargets(avboitTargetsSource.data(), avboitTargetsSource.size());
     const usize lightingOffset = taskGraph.find("void RendererFramePipeline::buildDeferredLightingTaskGraph");
     const usize compileOffset = taskGraph.find("if(!compiler.compile(", lightingOffset);
     ASSERT_NE(lightingOffset, AStringView::npos);
@@ -5441,7 +5478,23 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
         "        return m_deferredLightingTaskGraph.importTexture(texture, desc);\n"
         "    };"
     ));
-    EXPECT_EQ(CountText(deferredLighting, "importFirstWriteTexture("), 5u);
+    EXPECT_EQ(CountText(deferredLighting, "importFirstWriteTexture("), 6u);
+    EXPECT_TRUE(ContainsText(
+        deferredLighting,
+        "const auto importAvboitTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){\n"
+        "        return clearAvboitTargets\n"
+        "            ? importFirstWriteTexture(texture, identity, label)\n"
+        "            : importTexture(texture, identity, label)\n"
+        "        ;\n"
+        "    };"
+    ));
+    EXPECT_EQ(CountText(deferredLighting, " = importAvboitTexture("), 4u);
+    EXPECT_EQ(CountText(avboitTargets, ".setInitialState(Core::ResourceStates::Common)"), 2u);
+    EXPECT_EQ(CountText(avboitTargets, ".setKeepInitialState(true)"), 2u);
+    EXPECT_EQ(CountText(
+        avboitTargets,
+        ".enableAutomaticStateTracking(Core::ResourceStates::Common)"
+    ), 1u);
     EXPECT_TRUE(ContainsText(
         deferredLighting,
         "const Core::GpuGraphResourceId opaqueColor = importFirstWriteTexture(\n"

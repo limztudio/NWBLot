@@ -350,6 +350,7 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     AString rayTracingSoftShadowSource;
     AString rayTracingCausticsSource;
     AString rayTracingSurfelSource;
+    AString rayTracingPrivateSource;
     AString pipelineHeaderSource;
     AString rendererCmakeSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "renderer_raytracing_state.h", stateHeaderSource));
@@ -364,6 +365,7 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow.cpp", rayTracingSoftShadowSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_caustics.cpp", rayTracingCausticsSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_surfel_gi.cpp", rayTracingSurfelSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_private.h", rayTracingPrivateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.h", pipelineHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "CMakeLists.txt", rendererCmakeSource));
 
@@ -423,6 +425,7 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(rayTracingSoftShadowSource, "#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>"));
     EXPECT_TRUE(ContainsText(rayTracingCausticsSource, "#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>"));
     EXPECT_TRUE(ContainsText(rayTracingSurfelSource, "#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>"));
+    EXPECT_FALSE(ContainsText(rayTracingPrivateSource, "renderer_raytracing_state.h"));
     EXPECT_TRUE(ContainsText(pipelineHeaderSource, "#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>"));
     EXPECT_TRUE(ContainsText(pipelineHeaderSource, "RendererRayTracingState m_rayTracingState;"));
     EXPECT_TRUE(ContainsText(rendererCmakeSource, "${CMAKE_CURRENT_LIST_DIR}/raytrace/renderer_raytracing_state.cpp"));

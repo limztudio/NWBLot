@@ -8320,6 +8320,175 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
 }
 
 
+TEST_F(DescriptorBufferRoundTripTest, ExplicitRenderPassClearSurvivesBarrierResumeAndStoresAttachments){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    constexpr u32 s_Width = 6u;
+    constexpr u32 s_Height = 4u;
+    constexpr FormatSupport::Mask s_RequiredColorSupport = FormatSupport::Texture
+        | FormatSupport::RenderTarget
+    ;
+    if(
+        (device.queryFormatSupport(Format::RGBA8_UNORM) & s_RequiredColorSupport)
+            != s_RequiredColorSupport
+        || (device.queryFormatSupport(Format::D32) & FormatSupport::DepthStencil)
+            != FormatSupport::DepthStencil
+    )
+        GTEST_SKIP() << "Explicit render-pass clear smoke: color or D32 render targets are unavailable.";
+
+    const TextureDesc colorDesc = TextureDesc()
+        .setWidth(s_Width)
+        .setHeight(s_Height)
+        .setFormat(Format::RGBA8_UNORM)
+        .setInRenderTarget(true)
+        .setInitialState(ResourceStates::Common)
+    ;
+    const TextureDesc depthDesc = TextureDesc()
+        .setWidth(s_Width)
+        .setHeight(s_Height)
+        .setFormat(Format::D32)
+        .setInRenderTarget(true)
+        .setInitialState(ResourceStates::Common)
+    ;
+    const TextureHandle colorTexture = device.createTexture(colorDesc);
+    const TextureHandle depthTexture = device.createTexture(depthDesc);
+    const StagingTextureHandle colorReadback = device.createStagingTexture(colorDesc, CpuAccessMode::Read);
+    const StagingTextureHandle depthReadback = device.createStagingTexture(depthDesc, CpuAccessMode::Read);
+    if(!colorTexture || !depthTexture || !colorReadback || !depthReadback)
+        GTEST_SKIP() << "Explicit render-pass clear smoke: attachment or readback creation failed.";
+
+    const FramebufferHandle framebuffer = device.createFramebuffer(
+        FramebufferDesc().addColorAttachment(colorTexture.get()).setDepthAttachment(depthTexture.get())
+    );
+    const BufferHandle barrierBuffer = device.createBuffer(
+        BufferDesc().setByteSize(sizeof(u32) * 4u).setInitialState(ResourceStates::Common).setKeepInitialState(true)
+    );
+    const CommandListHandle commandList = device.createCommandList();
+    ASSERT_TRUE(framebuffer);
+    ASSERT_TRUE(barrierBuffer);
+    ASSERT_TRUE(commandList);
+
+    RenderPassParameters params;
+    params.clearColorTargets = true;
+    params.colorClearMask = 1u;
+    params.colorClearValues[0u] = Color(0.25f, 0.5f, 0.75f, 1.0f);
+    params.clearDepthTarget = true;
+    params.depthClearValue = 0.75f;
+    constexpr Box s_FirstPartialBox(0, 2, 1, 3, 0, 1);
+    constexpr Box s_SecondPartialBox(4, 6, 1, 3, 0, 1);
+
+    commandList->open();
+    commandList->beginTrackingBufferState(barrierBuffer.get(), ResourceStates::Common);
+    commandList->beginRenderPass(framebuffer.get(), params);
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+    ASSERT_TRUE(commandList->isRenderPassActive());
+    EXPECT_EQ(
+        commandList->getTextureSubresourceState(colorTexture.get(), 0u, 0u),
+        ResourceStates::RenderTarget
+    );
+    EXPECT_EQ(
+        commandList->getTextureSubresourceState(depthTexture.get(), 0u, 0u),
+        ResourceStates::DepthWrite
+    );
+
+    commandList->clearTextureBoxFloat(
+        colorTexture.get(),
+        s_AllSubresources,
+        s_FirstPartialBox,
+        Color(1.0f, 0.0f, 0.0f, 1.0f)
+    );
+    commandList->clearDepthStencilTextureBox(
+        depthTexture.get(),
+        s_AllSubresources,
+        s_FirstPartialBox,
+        true,
+        0.25f,
+        false,
+        0u
+    );
+    ASSERT_TRUE(commandList->isRenderPassActive());
+
+    commandList->setBufferState(barrierBuffer.get(), ResourceStates::CopyDest);
+    commandList->commitBarriers();
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+    ASSERT_TRUE(commandList->isRenderPassActive());
+
+    commandList->clearTextureBoxFloat(
+        colorTexture.get(),
+        s_AllSubresources,
+        s_SecondPartialBox,
+        Color(0.0f, 1.0f, 0.0f, 1.0f)
+    );
+    commandList->clearDepthStencilTextureBox(
+        depthTexture.get(),
+        s_AllSubresources,
+        s_SecondPartialBox,
+        true,
+        0.5f,
+        false,
+        0u
+    );
+    ASSERT_TRUE(commandList->isRenderPassActive());
+    commandList->endRenderPass();
+    commandList->copyTexture(colorReadback.get(), TextureSlice(), colorTexture.get(), TextureSlice());
+    commandList->copyTexture(depthReadback.get(), TextureSlice(), depthTexture.get(), TextureSlice());
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+    commandList->close();
+    CommandList* const commandLists[] = { commandList.get() };
+    ASSERT_TRUE(device.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        commandList->getDescription().physicalQueue,
+        QueueSubmissionDesc{}
+    ).valid());
+    ASSERT_TRUE(device.waitForIdle());
+
+    usize colorRowPitch = 0u;
+    const u8* const colorBytes = static_cast<const u8*>(device.mapStagingTexture(
+        colorReadback.get(),
+        TextureSlice(),
+        CpuAccessMode::Read,
+        &colorRowPitch
+    ));
+    usize depthRowPitch = 0u;
+    const u8* const depthBytes = static_cast<const u8*>(device.mapStagingTexture(
+        depthReadback.get(),
+        TextureSlice(),
+        CpuAccessMode::Read,
+        &depthRowPitch
+    ));
+    ASSERT_NE(colorBytes, nullptr);
+    ASSERT_NE(depthBytes, nullptr);
+    ASSERT_GE(colorRowPitch, static_cast<usize>(s_Width) * 4u);
+    ASSERT_GE(depthRowPitch, static_cast<usize>(s_Width) * sizeof(f32));
+    constexpr u8 s_BaseColor[] = { 64u, 128u, 191u, 255u };
+    constexpr u8 s_FirstColor[] = { 255u, 0u, 0u, 255u };
+    constexpr u8 s_SecondColor[] = { 0u, 255u, 0u, 255u };
+    for(u32 y = 0u; y < s_Height; ++y){
+        for(u32 x = 0u; x < s_Width; ++x){
+            const bool insideFirst = x < 2u && y >= 1u && y < 3u;
+            const bool insideSecond = x >= 4u && y >= 1u && y < 3u;
+            const u8* const expectedColor = insideFirst
+                ? s_FirstColor
+                : insideSecond ? s_SecondColor : s_BaseColor
+            ;
+            const u8* const pixel = colorBytes + static_cast<usize>(y) * colorRowPitch + x * 4u;
+            for(u32 channel = 0u; channel < 4u; ++channel)
+                EXPECT_EQ(pixel[channel], expectedColor[channel]);
+
+            f32 actualDepth = 0.0f;
+            const u8* const pixelDepth = depthBytes
+                + static_cast<usize>(y) * depthRowPitch
+                + static_cast<usize>(x) * sizeof(f32)
+            ;
+            NWB_MEMCPY(&actualDepth, sizeof(actualDepth), pixelDepth, sizeof(actualDepth));
+            EXPECT_FLOAT_EQ(actualDepth, insideFirst ? 0.25f : insideSecond ? 0.5f : 0.75f);
+        }
+    }
+    device.unmapStagingTexture(depthReadback.get());
+    device.unmapStagingTexture(colorReadback.get());
+}
+
+
 TEST_F(DescriptorBufferRoundTripTest, TransferCommandsEndRenderingAndAttachmentTransitionsDoNotResumeIt){
     auto& device = DescriptorBufferRoundTripTest::device();
     const TextureHandle renderTarget = device.createTexture(

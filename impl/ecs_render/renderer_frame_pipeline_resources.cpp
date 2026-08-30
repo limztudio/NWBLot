@@ -137,7 +137,6 @@ void RendererFramePipeline::invalidateResources(){
     m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
-    m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixOpaqueComputeEmulationTask = {};
     for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)

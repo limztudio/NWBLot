@@ -59,8 +59,11 @@ bool CommandList::validateFramebufferForRendering(
         rejectCommandRecording(operationName, NWB_TEXT("depth/stencil metadata has no attachment texture"));
         return false;
     }
-    if(framebufferDesc.colorAttachments.size() > limits.maxColorAttachments){
-        rejectCommandRecording(operationName, NWB_TEXT("framebuffer color count exceeds the Vulkan device limit"));
+    if(
+        framebufferDesc.colorAttachments.size() > s_MaxRenderTargets
+        || framebufferDesc.colorAttachments.size() > limits.maxColorAttachments
+    ){
+        rejectCommandRecording(operationName, NWB_TEXT("framebuffer color count exceeds the render-target limit"));
         return false;
     }
     if(framebufferDesc.colorAttachments.empty() && !framebufferDesc.depthAttachment.valid()){
@@ -241,6 +244,80 @@ bool CommandList::validateFramebufferForRendering(
         }
     }
 
+    return true;
+}
+
+bool CommandList::validateRenderPassBegin(
+    Framebuffer* const framebuffer,
+    const RenderPassParameters& params,
+    const tchar* const operationName
+)noexcept{
+    if(m_renderPassActive){
+        rejectCommandRecording(operationName, NWB_TEXT("a render pass is already active"));
+        return false;
+    }
+    if(!framebuffer){
+        rejectCommandRecording(operationName, NWB_TEXT("framebuffer is null"));
+        return false;
+    }
+    if(!validateFramebufferForRendering(framebuffer, operationName))
+        return false;
+
+    const FramebufferDesc& framebufferDesc = framebuffer->m_desc;
+    const u32 colorAttachmentCount = static_cast<u32>(framebufferDesc.colorAttachments.size());
+    const u8 liveColorMask = static_cast<u8>((1u << colorAttachmentCount) - 1u);
+    if(params.clearColorTargets && (params.colorClearMask & liveColorMask) == 0u){
+        rejectCommandRecording(operationName, NWB_TEXT("color clear mask selects no framebuffer attachment"));
+        return false;
+    }
+    if(params.clearColorTargets){
+        for(u32 colorIndex = 0u; colorIndex < colorAttachmentCount; ++colorIndex){
+            if(!params.clearColorTarget(colorIndex))
+                continue;
+            const FramebufferAttachment& attachment = framebufferDesc.colorAttachments[colorIndex];
+            const Format::Enum format = attachment.format == Format::UNKNOWN
+                ? attachment.texture->m_creationDesc.format
+                : attachment.format
+            ;
+            if(GetFormatInfo(format).kind == FormatKind::Integer){
+                rejectCommandRecording(operationName, NWB_TEXT("float color clear value targets an integer attachment"));
+                return false;
+            }
+        }
+    }
+
+    if(!params.clearDepthTarget && !params.clearStencilTarget)
+        return true;
+    const FramebufferAttachment& depthAttachment = framebufferDesc.depthAttachment;
+    if(!depthAttachment.valid()){
+        rejectCommandRecording(operationName, NWB_TEXT("depth/stencil clear requested without an attachment"));
+        return false;
+    }
+    if(depthAttachment.isReadOnly){
+        rejectCommandRecording(operationName, NWB_TEXT("depth/stencil clear requested for a read-only attachment"));
+        return false;
+    }
+
+    const VkImageAspectFlags attachmentAspects = depthAttachment.texture->m_aspectMask;
+    if(params.clearDepthTarget && (attachmentAspects & VK_IMAGE_ASPECT_DEPTH_BIT) == 0u){
+        rejectCommandRecording(operationName, NWB_TEXT("depth clear requested for an attachment without depth"));
+        return false;
+    }
+    if(params.clearStencilTarget && (attachmentAspects & VK_IMAGE_ASPECT_STENCIL_BIT) == 0u){
+        rejectCommandRecording(operationName, NWB_TEXT("stencil clear requested for an attachment without stencil"));
+        return false;
+    }
+    if(
+        params.clearDepthTarget
+        && (
+            !IsFinite(params.depthClearValue)
+            || params.depthClearValue < 0.0f
+            || params.depthClearValue > 1.0f
+        )
+    ){
+        rejectCommandRecording(operationName, NWB_TEXT("depth clear value is outside the normalized depth range"));
+        return false;
+    }
     return true;
 }
 

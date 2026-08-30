@@ -1495,6 +1495,42 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
     depthStencilState.setStencilWriteMask(0u);
     EXPECT_TRUE(IsDepthStencilReadOnlyCompatible(depthStencilState, VK_IMAGE_ASPECT_STENCIL_BIT));
 
+    Graphics::RenderPassParameters renderPassParameters;
+    const RenderPassAttachmentOperations defaultColorOperations =
+        GetColorRenderPassAttachmentOperations(renderPassParameters, 0u)
+    ;
+    EXPECT_EQ(defaultColorOperations.loadOp, VK_ATTACHMENT_LOAD_OP_LOAD);
+    EXPECT_EQ(defaultColorOperations.storeOp, VK_ATTACHMENT_STORE_OP_STORE);
+    renderPassParameters.clearColorTargets = true;
+    renderPassParameters.colorClearMask = 1u << 1u;
+    const RenderPassAttachmentOperations unselectedColorOperations =
+        GetColorRenderPassAttachmentOperations(renderPassParameters, 0u)
+    ;
+    const RenderPassAttachmentOperations selectedColorOperations =
+        GetColorRenderPassAttachmentOperations(renderPassParameters, 1u)
+    ;
+    EXPECT_EQ(unselectedColorOperations.loadOp, VK_ATTACHMENT_LOAD_OP_LOAD);
+    EXPECT_EQ(selectedColorOperations.loadOp, VK_ATTACHMENT_LOAD_OP_CLEAR);
+    EXPECT_EQ(selectedColorOperations.storeOp, VK_ATTACHMENT_STORE_OP_STORE);
+    renderPassParameters.clearDepthTarget = true;
+    renderPassParameters.clearStencilTarget = true;
+    EXPECT_EQ(
+        GetDepthRenderPassAttachmentOperations(renderPassParameters).loadOp,
+        VK_ATTACHMENT_LOAD_OP_CLEAR
+    );
+    EXPECT_EQ(
+        GetStencilRenderPassAttachmentOperations(renderPassParameters).loadOp,
+        VK_ATTACHMENT_LOAD_OP_CLEAR
+    );
+    EXPECT_EQ(
+        GetDepthRenderPassAttachmentOperations(renderPassParameters).storeOp,
+        VK_ATTACHMENT_STORE_OP_STORE
+    );
+    EXPECT_EQ(
+        GetStencilRenderPassAttachmentOperations(renderPassParameters).storeOp,
+        VK_ATTACHMENT_STORE_OP_STORE
+    );
+
     Graphics::RasterState rasterState;
     EXPECT_EQ(BuildPipelineRasterizationState(rasterState, VK_POLYGON_MODE_FILL, VK_FALSE).depthBiasEnable, VK_FALSE);
     rasterState.slopeScaledDepthBias = 1.0f;

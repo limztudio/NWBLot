@@ -434,9 +434,8 @@ private:
     Core::GpuTaskId m_deferredShadowPrepareAccelStructFinalizeTask;
     Core::GpuTaskId m_graphicsPrefixMeshViewSetupTask;
     Core::GpuTaskId m_graphicsPrefixSceneShadingSetupTask;
-    // The timer begins inside this first built-in clear and ends inside the terminal opaque-color clear below.
-    // Both IDs must compile into one Graphics packet before recording.
-    Core::GpuTaskId m_graphicsPrefixDeferredClearFirstTask;
+    // Attachment LOAD_OP_CLEAR work is attributed to G-buffer timing. Deferred-clear timing belongs only to this
+    // standalone opaque-color UAV clear, whose before/after hooks share one graph task.
     Core::GpuTaskId m_graphicsPrefixDeferredClearTask;
     // The opaque CSG work-region clear is a two-value typed rectangle chain. Both tasks must remain in one
     // Graphics packet so its first/last hooks retain the existing CSG-clear timing interval.

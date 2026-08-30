@@ -2748,19 +2748,6 @@ private:
 // Command List
 
 
-struct RenderPassParameters{
-    Color colorClearValues[s_MaxRenderTargets]{};
-    f32 depthClearValue = s_DepthClearValue;
-    bool clearColorTargets = false;
-    u8 colorClearMask = static_cast<u8>((1u << s_MaxRenderTargets) - 1u);
-    bool clearDepthTarget = false;
-    bool clearStencilTarget = false;
-    u8 stencilClearValue = 0;
-
-
-    [[nodiscard]] bool clearColorTarget(u32 index)const{ return (colorClearMask & (1u << index)) != 0; }
-};
-
 class CommandList final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Device;
     friend class GpuDescriptorHeap;
@@ -2797,6 +2784,7 @@ public:
     }
     [[nodiscard]] bool isRenderPassActive()const noexcept{ return m_renderPassActive; }
     void clearState();
+    void beginRenderPass(Framebuffer* framebuffer, const RenderPassParameters& params);
     void endRenderPass();
 
     void setResourceStatesForFramebuffer(Framebuffer& framebuffer);
@@ -2941,6 +2929,11 @@ private:
         CommandQueue::Enum executionQueueClass
     )const noexcept;
     [[nodiscard]] bool validateFramebufferForRendering(Framebuffer* framebuffer, const tchar* operationName)noexcept;
+    [[nodiscard]] bool validateRenderPassBegin(
+        Framebuffer* framebuffer,
+        const RenderPassParameters& params,
+        const tchar* operationName
+    )noexcept;
     [[nodiscard]] bool prepareFramebufferForRendering(Framebuffer* framebuffer, const tchar* operationName)noexcept;
     [[nodiscard]] bool validateViewportState(
         const ViewportState& viewport,

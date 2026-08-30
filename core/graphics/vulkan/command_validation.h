@@ -195,6 +195,41 @@ namespace VulkanDetail{
     }
 }
 
+struct RenderPassAttachmentOperations{
+    VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+};
+
+[[nodiscard]] constexpr RenderPassAttachmentOperations GetColorRenderPassAttachmentOperations(
+    const RenderPassParameters& params,
+    const u32 attachmentIndex
+)noexcept{
+    return {
+        params.clearColorTargets && params.clearColorTarget(attachmentIndex)
+            ? VK_ATTACHMENT_LOAD_OP_CLEAR
+            : VK_ATTACHMENT_LOAD_OP_LOAD,
+        VK_ATTACHMENT_STORE_OP_STORE,
+    };
+}
+
+[[nodiscard]] constexpr RenderPassAttachmentOperations GetDepthRenderPassAttachmentOperations(
+    const RenderPassParameters& params
+)noexcept{
+    return {
+        params.clearDepthTarget ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
+        VK_ATTACHMENT_STORE_OP_STORE,
+    };
+}
+
+[[nodiscard]] constexpr RenderPassAttachmentOperations GetStencilRenderPassAttachmentOperations(
+    const RenderPassParameters& params
+)noexcept{
+    return {
+        params.clearStencilTarget ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
+        VK_ATTACHMENT_STORE_OP_STORE,
+    };
+}
+
 [[nodiscard]] inline bool IsPipelineColorAttachmentFormatClassValid(const Format::Enum format)noexcept{
     if(ConvertFormat(format) == VK_FORMAT_UNDEFINED)
         return false;

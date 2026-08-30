@@ -390,50 +390,43 @@ bool CommandList::beginDynamicRendering(Framebuffer* framebuffer, const RenderPa
     // Dynamic rendering (VK_KHR_dynamic_rendering)
     constexpr u32 kMaxColorAttachments = s_MaxRenderTargets;
     VkRenderingAttachmentInfo colorAttachments[kMaxColorAttachments] = {};
-    u32 numColorAttachments = 0;
+    const u32 numColorAttachments = static_cast<u32>(fbDesc.colorAttachments.size());
+    NWB_ASSERT(numColorAttachments <= kMaxColorAttachments);
 
-    for(u32 i = 0; i < static_cast<u32>(fbDesc.colorAttachments.size()); ++i){
-        if(numColorAttachments >= kMaxColorAttachments){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Render pass has more than {} color attachments; truncating to {}."), kMaxColorAttachments, kMaxColorAttachments);
-            break;
+    for(u32 i = 0u; i < numColorAttachments; ++i){
+        auto* const tex = fbDesc.colorAttachments[i].texture;
+        NWB_ASSERT(tex);
+
+        const TextureSubresourceSet resolvedColorSubresources = fbDesc.colorAttachments[i].subresources.resolve(
+            tex->m_creationDesc,
+            TextureSubresourceMipResolve::Single
+        );
+        const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(
+            tex->m_creationDesc,
+            resolvedColorSubresources
+        );
+        VkImageView view = tex->getView(
+            fbDesc.colorAttachments[i].subresources,
+            viewDimension,
+            fbDesc.colorAttachments[i].format
+        );
+        if(view == VK_NULL_HANDLE){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
+            return false;
         }
 
-        if(fbDesc.colorAttachments[i].texture){
-            auto* tex = fbDesc.colorAttachments[i].texture;
-
-            const TextureSubresourceSet resolvedColorSubresources = fbDesc.colorAttachments[i].subresources.resolve(
-                tex->m_creationDesc,
-                TextureSubresourceMipResolve::Single
-            );
-            const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(
-                tex->m_creationDesc,
-                resolvedColorSubresources
-            );
-            VkImageView view = tex->getView(
-                fbDesc.colorAttachments[i].subresources,
-                viewDimension,
-                fbDesc.colorAttachments[i].format
-            );
-            if(view == VK_NULL_HANDLE){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
-                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
-                return false;
-            }
-
-            colorAttachments[numColorAttachments].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-            colorAttachments[numColorAttachments].imageView = view;
-            colorAttachments[numColorAttachments].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-            if(params.clearColorTargets && params.clearColorTarget(i)){
-                colorAttachments[numColorAttachments].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                const Color& clr = params.colorClearValues[i];
-                colorAttachments[numColorAttachments].clearValue.color = {{ clr.r, clr.g, clr.b, clr.a }};
-            }
-            else
-                colorAttachments[numColorAttachments].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-
-            colorAttachments[numColorAttachments].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            ++numColorAttachments;
+        colorAttachments[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        colorAttachments[i].imageView = view;
+        colorAttachments[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        const VulkanDetail::RenderPassAttachmentOperations operations =
+            VulkanDetail::GetColorRenderPassAttachmentOperations(params, i)
+        ;
+        colorAttachments[i].loadOp = operations.loadOp;
+        colorAttachments[i].storeOp = operations.storeOp;
+        if(operations.loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR){
+            const Color& clr = params.colorClearValues[i];
+            colorAttachments[i].clearValue.color = {{ clr.r, clr.g, clr.b, clr.a }};
         }
     }
 
@@ -469,18 +462,24 @@ bool CommandList::beginDynamicRendering(Framebuffer* framebuffer, const RenderPa
             : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
         ;
         if((depthTex->m_aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) != 0){
+            const VulkanDetail::RenderPassAttachmentOperations operations =
+                VulkanDetail::GetDepthRenderPassAttachmentOperations(params)
+            ;
             depthAttachment.imageView = depthView;
             depthAttachment.imageLayout = depthStencilLayout;
-            depthAttachment.loadOp = params.clearDepthTarget ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
-            depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            depthAttachment.loadOp = operations.loadOp;
+            depthAttachment.storeOp = operations.storeOp;
             depthAttachment.clearValue.depthStencil.depth = params.depthClearValue;
             hasDepth = true;
         }
         if((depthTex->m_aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) != 0){
+            const VulkanDetail::RenderPassAttachmentOperations operations =
+                VulkanDetail::GetStencilRenderPassAttachmentOperations(params)
+            ;
             stencilAttachment.imageView = depthView;
             stencilAttachment.imageLayout = depthStencilLayout;
-            stencilAttachment.loadOp = params.clearStencilTarget ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
-            stencilAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            stencilAttachment.loadOp = operations.loadOp;
+            stencilAttachment.storeOp = operations.storeOp;
             stencilAttachment.clearValue.depthStencil.stencil = params.stencilClearValue;
             hasStencil = true;
         }
@@ -503,6 +502,38 @@ bool CommandList::beginDynamicRendering(Framebuffer* framebuffer, const RenderPa
 
 void CommandList::endDynamicRendering(){
     vkCmdEndRendering(m_currentCmdBuf->m_cmdBuf);
+}
+
+void CommandList::beginRenderPass(Framebuffer* const framebuffer, const RenderPassParameters& params){
+    constexpr const tchar* s_OperationName = NWB_TEXT("begin render pass");
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
+        return;
+    if(!validateRenderPassBegin(framebuffer, params, s_OperationName))
+        return;
+    if(!prepareFramebufferForRendering(framebuffer, s_OperationName))
+        return;
+
+    // Match automatic graphics-state passes: compiler-owned recording may supply exact attachment barriers.
+    if(m_enableAutomaticBarriers){
+        setResourceStatesForFramebuffer(*framebuffer);
+        if(m_commandRecordingFailed)
+            return;
+        commitBarriers();
+        if(m_commandRecordingFailed)
+            return;
+    }
+    if(!beginDynamicRendering(framebuffer, params)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("dynamic rendering could not begin"));
+        return;
+    }
+
+    retainResource(framebuffer);
+    m_currentGraphicsState = {};
+    m_currentComputeState = {};
+    m_currentMeshletState = {};
+    m_currentRayTracingState = {};
+    m_renderPassActive = true;
+    m_renderPassFramebuffer = framebuffer;
 }
 
 void CommandList::endRenderPass(){

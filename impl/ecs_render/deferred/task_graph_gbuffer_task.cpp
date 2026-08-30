@@ -6,6 +6,7 @@
 
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
@@ -106,21 +107,45 @@ namespace ECSRenderDetail{
         && (opaqueDrawItems.csgReceiverSurface.empty()
             || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface, payload.frameBindings))
     ;
-    if(deferredResourcesReady){
+    if(
+        regularDrawResourcesReady
+        && payload.regularSharedComputeEmulationDrawsGraphOwned
+        && (
+            !payload.regularSharedComputeEmulationTiming
+            || payload.regularSharedComputeEmulationTiming->has_value()
+        )
+    )
+        return false;
+
+    const bool csgSampleStateReady = csgResourcesReady;
+    if(deferredResourcesReady && csgSampleStateReady && csgFrameData.hasWork()){
         // Every opaque CSG frame byte is now captured in immutable graph uploads. Native recording consumes those
         // declared resources without rewriting the clip-context or interval-sample uniform payloads.
-        const bool csgSampleStateReady = csgResourcesReady;
-        if(csgSampleStateReady && csgFrameData.hasWork())
-            csgSystem.dispatchCsgIntervalPeels(
-                commandList,
-                deferredTargets,
-                csgFrameData,
-                payload.csgResources,
-                payload.frameBindings,
-                payload.csgIntervalPeelTargetStatesGraphOwned,
-                payload.csgClipBufferStatesGraphOwned,
-                payload.materialFrameStatesGraphOwned
-            );
+        csgSystem.dispatchCsgIntervalPeels(
+            commandList,
+            deferredTargets,
+            csgFrameData,
+            payload.csgResources,
+            payload.frameBindings,
+            payload.csgIntervalPeelTargetStatesGraphOwned,
+            payload.csgClipBufferStatesGraphOwned,
+            payload.materialFrameStatesGraphOwned
+        );
+    }
+
+    // Attachment clears begin the first raster segment after pre-raster compute. Any barrier-driven continuation
+    // resumes with LOAD, while the implicit STORE operations preserve all G-buffer data for later graph packets.
+    Core::RenderPassParameters renderPassParameters;
+    renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_BASE_COLOR_LOCATION] = ECSRenderDetail::s_ClearColor;
+    renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_NORMAL_LOCATION] =
+        ECSRenderDetail::s_GBufferNormalClearColor;
+    renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION] =
+        ECSRenderDetail::s_GBufferWorldPositionClearColor;
+    renderPassParameters.clearColorTargets = true;
+    renderPassParameters.clearDepthTarget = true;
+    commandList.beginRenderPass(deferredTargets.framebuffer.get(), renderPassParameters);
+
+    if(deferredResourcesReady){
         const MaterialPassDrawContext opaqueDrawContext{
             commandList,
             deferredTargets,
@@ -145,11 +170,6 @@ namespace ECSRenderDetail{
             )
         ){
             if(payload.regularSharedComputeEmulationDrawsGraphOwned){
-                if(
-                    !payload.regularSharedComputeEmulationTiming
-                    || payload.regularSharedComputeEmulationTiming->has_value()
-                )
-                    return false;
                 payload.regularSharedComputeEmulationTiming->emplace(
                     graphics.gpuTiming(),
                     RendererGpuTimingScope::s_OpaqueRegular,

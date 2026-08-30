@@ -215,7 +215,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
-    m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixCsgIntervalClearFirstTask = {};
     m_graphicsPrefixCsgIntervalClearTask = {};
@@ -560,22 +559,22 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             return;
         }
     }
-    const Core::GpuGraphResourceId albedo = importTexture(
+    const Core::GpuGraphResourceId albedo = importFirstWriteTexture(
         deferredTargets.albedo,
         Name("render.deferred_lighting.albedo"),
         "G-Buffer Albedo"
     );
-    const Core::GpuGraphResourceId normal = importTexture(
+    const Core::GpuGraphResourceId normal = importFirstWriteTexture(
         deferredTargets.normal,
         Name("render.deferred_lighting.normal"),
         "G-Buffer Normal"
     );
-    const Core::GpuGraphResourceId worldPosition = importTexture(
+    const Core::GpuGraphResourceId worldPosition = importFirstWriteTexture(
         deferredTargets.worldPosition,
         Name("render.deferred_lighting.world_position"),
         "G-Buffer World Position"
     );
-    const Core::GpuGraphResourceId depth = importTexture(
+    const Core::GpuGraphResourceId depth = importFirstWriteTexture(
         deferredTargets.depth,
         Name("render.deferred_lighting.depth"),
         "G-Buffer Depth"

@@ -75,7 +75,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
-    m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixOpaqueComputeEmulationTask = {};
     for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
@@ -854,20 +853,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             m_deferredLightingCompiledGraph.queueInfoForTask(graphicsPrefixTimingTasks[prefixTaskIndex]);
         graphicsPrefixPacketsAreGraphics = queue && queue->queueClass == Core::CommandQueue::Graphics;
     }
-    // The deferred-clear measure begins and ends inside the first and terminal typed clear tasks.  The terminal
-    // clear owns the later asynchronous handoff, so do not record unless the entire bracket is one Graphics packet.
-    const Core::GpuPhysicalQueueInfo* const graphicsPrefixDeferredClearQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_graphicsPrefixDeferredClearTask);
-    const bool graphicsPrefixDeferredClearBundleMerged =
-        taskIsCompiled(m_graphicsPrefixDeferredClearFirstTask)
-        && taskIsCompiled(m_graphicsPrefixDeferredClearTask)
-        && m_deferredLightingCompiledGraph.tasksSharePacket(
-            m_graphicsPrefixDeferredClearFirstTask,
-            m_graphicsPrefixDeferredClearTask
-        )
-        && graphicsPrefixDeferredClearQueue
-        && graphicsPrefixDeferredClearQueue->queueClass == Core::CommandQueue::Graphics
-    ;
     // The optional alias-free regular-emulation producer shares G-buffer's primary Graphics packet. Its required
     // UAV-to-VertexBuffer boundary is packet-local and G-buffer's timing/range remains the semantic endpoint.
     const bool graphicsPrefixOpaqueComputeEmulationMerged =
@@ -1303,7 +1288,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || shadowPrepareQueue->queueClass != Core::CommandQueue::Graphics
         || !m_graphicsPrefixMeshViewSetupTask.valid()
         || !m_graphicsPrefixSceneShadingSetupTask.valid()
-        || !m_graphicsPrefixDeferredClearFirstTask.valid()
         || !m_graphicsPrefixDeferredClearTask.valid()
         || !m_graphicsPrefixGbufferTask.valid()
         || (hasOpaqueCsgFrameWork && (
@@ -1314,7 +1298,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || !m_graphicsPrefixTask.valid()
         || !taskIsCompiled(m_graphicsPrefixMeshViewSetupTask)
         || !taskIsCompiled(m_graphicsPrefixSceneShadingSetupTask)
-        || !taskIsCompiled(m_graphicsPrefixDeferredClearFirstTask)
         || !taskIsCompiled(m_graphicsPrefixDeferredClearTask)
         || !taskIsCompiled(m_graphicsPrefixGbufferTask)
         || (hasOpaqueCsgFrameWork && (
@@ -1325,7 +1308,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || !taskIsCompiled(m_graphicsPrefixTask)
         || !graphicsPrefixTimingBindingsValid
         || !graphicsPrefixPacketsAreGraphics
-        || !graphicsPrefixDeferredClearBundleMerged
         || !graphicsPrefixOpaqueComputeEmulationMerged
         || !graphicsPrefixOpaqueSharedComputeEmulationMerged
         || !graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged

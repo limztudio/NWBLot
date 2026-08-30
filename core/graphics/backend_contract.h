@@ -193,6 +193,7 @@ concept CommandListApi = requires(
     const Rect& rect,
     const Box& box,
     const Color& color,
+    const RenderPassParameters& renderPassParameters,
     const UIntColor& uintColor,
     const IntColor& intColor,
     const void* data,
@@ -218,6 +219,7 @@ concept CommandListApi = requires(
     resourceStateHandoff.reset();
     { resourceStateHandoff.valid() }->SameAs<bool>;
     commandList.clearState();
+    commandList.beginRenderPass(&framebuffer, renderPassParameters);
     commandList.endRenderPass();
 
     commandList.clearTextureFloat(texture, subresources, color);

@@ -287,6 +287,21 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct RenderPassParameters{
+    Color colorClearValues[s_MaxRenderTargets]{};
+    f32 depthClearValue = s_DepthClearValue;
+    bool clearColorTargets = false;
+    u8 colorClearMask = static_cast<u8>((1u << s_MaxRenderTargets) - 1u);
+    bool clearDepthTarget = false;
+    bool clearStencilTarget = false;
+    u8 stencilClearValue = 0;
+
+
+    [[nodiscard]] constexpr bool clearColorTarget(const u32 index)const{
+        return index < s_MaxRenderTargets && (colorClearMask & (1u << index)) != 0u;
+    }
+};
+
 struct VertexBufferBinding{
     Buffer* buffer = nullptr;
     u64 offset = 0;

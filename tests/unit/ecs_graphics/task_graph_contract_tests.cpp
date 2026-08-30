@@ -1356,10 +1356,11 @@ TEST(EcsGraphics, PrefixAndShadowTopologyUsesSemanticTaskAnchors){
 
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredShadowPrepareTask)"));
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_graphicsPrefixTask)"));
-    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_graphicsPrefixDeferredClearFirstTask)"));
+    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_graphicsPrefixDeferredClearTask)"));
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredShadowVisibilityTask)"));
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredSoftwareCausticsTask)"));
-    EXPECT_TRUE(ContainsText(system, "tasksSharePacket(\n            m_graphicsPrefixDeferredClearFirstTask"));
+    EXPECT_FALSE(ContainsText(system, "m_graphicsPrefixDeferredClearFirstTask"));
+    EXPECT_FALSE(ContainsText(system, "graphicsPrefixDeferredClearBundleMerged"));
     EXPECT_FALSE(ContainsText(system, "shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct"));
     EXPECT_TRUE(ContainsText(shadowPrepare, ".states = m_shadowPreparePersistentState.source(),"));
     EXPECT_TRUE(ContainsText(shadowPrepare, ".setExternalStateSources("));
@@ -5491,7 +5492,7 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
         "        return m_deferredLightingTaskGraph.importTexture(texture, desc);\n"
         "    };"
     ));
-    EXPECT_EQ(CountText(deferredLighting, "importFirstWriteTexture("), 6u);
+    EXPECT_EQ(CountText(deferredLighting, "importFirstWriteTexture("), 10u);
     EXPECT_TRUE(ContainsText(
         deferredLighting,
         "const auto importAvboitTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){\n"
@@ -5508,6 +5509,26 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
         avboitTargets,
         ".enableAutomaticStateTracking(Core::ResourceStates::Common)"
     ), 1u);
+    EXPECT_TRUE(ContainsText(
+        deferredLighting,
+        "const Core::GpuGraphResourceId albedo = importFirstWriteTexture(\n"
+        "        deferredTargets.albedo,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        deferredLighting,
+        "const Core::GpuGraphResourceId normal = importFirstWriteTexture(\n"
+        "        deferredTargets.normal,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        deferredLighting,
+        "const Core::GpuGraphResourceId worldPosition = importFirstWriteTexture(\n"
+        "        deferredTargets.worldPosition,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        deferredLighting,
+        "const Core::GpuGraphResourceId depth = importFirstWriteTexture(\n"
+        "        deferredTargets.depth,"
+    ));
     EXPECT_TRUE(ContainsText(
         deferredLighting,
         "const Core::GpuGraphResourceId opaqueColor = importFirstWriteTexture(\n"
@@ -5550,6 +5571,97 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
         deferredLighting,
         "const Core::GpuGraphResourceId surfelIrradiance = importTexture(\n"
         "        history ? history->surfelIrradiance : deferredTargets.surfelIrradiance,"
+    ));
+}
+
+
+// G-buffer initialization belongs to the first attachment pass on tile GPUs. Follow-up raster tasks must declare
+// preservation explicitly because automatic barrier recovery resumes dynamic rendering with LOAD operations.
+TEST(EcsGraphics, GbufferClearsUseFirstTilePassAndContinuationLoads){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString gbufferTaskSource;
+    AString prefixSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_gbuffer_task.cpp",
+        gbufferTaskSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graphics_prefix.cpp",
+        prefixSource
+    ));
+    const AStringView gbufferTask(gbufferTaskSource.data(), gbufferTaskSource.size());
+    const AStringView prefix(prefixSource.data(), prefixSource.size());
+
+    const usize peelDispatch = gbufferTask.find("csgSystem.dispatchCsgIntervalPeels(");
+    const usize beginRenderPass = gbufferTask.find(
+        "commandList.beginRenderPass(deferredTargets.framebuffer.get(), renderPassParameters);"
+    );
+    ASSERT_NE(peelDispatch, AStringView::npos);
+    ASSERT_NE(beginRenderPass, AStringView::npos);
+    EXPECT_LT(peelDispatch, beginRenderPass);
+    EXPECT_TRUE(ContainsText(
+        gbufferTask,
+        "renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_BASE_COLOR_LOCATION] = "
+        "ECSRenderDetail::s_ClearColor;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        gbufferTask,
+        "renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_NORMAL_LOCATION] =\n"
+        "        ECSRenderDetail::s_GBufferNormalClearColor;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        gbufferTask,
+        "renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION] =\n"
+        "        ECSRenderDetail::s_GBufferWorldPositionClearColor;"
+    ));
+    EXPECT_TRUE(ContainsText(gbufferTask, "renderPassParameters.clearColorTargets = true;"));
+    EXPECT_TRUE(ContainsText(gbufferTask, "renderPassParameters.clearDepthTarget = true;"));
+
+    EXPECT_FALSE(ContainsText(prefix, "render.graphics_prefix.deferred_clear_albedo"));
+    EXPECT_FALSE(ContainsText(prefix, "render.graphics_prefix.deferred_clear_normal"));
+    EXPECT_FALSE(ContainsText(prefix, "render.graphics_prefix.deferred_clear_world_position"));
+    EXPECT_FALSE(ContainsText(prefix, "render.graphics_prefix.deferred_clear_depth"));
+    EXPECT_TRUE(ContainsText(prefix, "render.graphics_prefix.deferred_clear_opaque_color"));
+    EXPECT_FALSE(ContainsText(prefix, "m_graphicsPrefixDeferredClearFirstTask"));
+    EXPECT_TRUE(ContainsText(prefix, ".beforeClear = &ECSRenderDetail::BeginDeferredClearTiming,"));
+    EXPECT_TRUE(ContainsText(prefix, ".afterClear = &ECSRenderDetail::EndDeferredClearTiming,"));
+    EXPECT_TRUE(ContainsText(prefix, "G-buffer timing owns that fused work."));
+    EXPECT_TRUE(ContainsText(
+        prefix,
+        "gbufferResourceUses.push_back(WriteUse(albedo, Core::ResourceStates::RenderTarget));"
+    ));
+    EXPECT_TRUE(ContainsText(
+        prefix,
+        "gbufferResourceUses.push_back(WriteUse(normal, Core::ResourceStates::RenderTarget));"
+    ));
+    EXPECT_TRUE(ContainsText(
+        prefix,
+        "gbufferResourceUses.push_back(WriteUse(worldPosition, Core::ResourceStates::RenderTarget));"
+    ));
+    EXPECT_TRUE(ContainsText(
+        prefix,
+        "gbufferResourceUses.push_back(WriteUse(depth, Core::ResourceStates::DepthWrite));"
+    ));
+
+    EXPECT_TRUE(ContainsText(
+        prefix,
+        "opaqueSharedComputeEmulationRasterResourceUses.push_back(\n"
+        "            ReadWriteUse(albedo, Core::ResourceStates::RenderTarget)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        prefix,
+        "opaqueSharedComputeEmulationRasterResourceUses.push_back(\n"
+        "            ReadWriteUse(depth, Core::ResourceStates::DepthWrite)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        prefix,
+        "csgIntervalSampleResourceUses.push_back(ReadWriteUse(albedo, Core::ResourceStates::RenderTarget));"
+    ));
+    EXPECT_TRUE(ContainsText(
+        prefix,
+        "csgIntervalSampleResourceUses.push_back(ReadWriteUse(depth, Core::ResourceStates::DepthWrite));"
     ));
 }
 

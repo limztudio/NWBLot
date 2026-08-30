@@ -5744,6 +5744,90 @@ TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRe
 }
 
 
+// A descriptor-buffer bind validates every retained resource against the exact physical queue, not just descriptors
+// referenced by the current shader. Keep every renderer-owned heap resource admissible to Graphics and AsyncCompute.
+TEST(EcsGraphics, GlobalHeapRetainedResourcesAdmitAsyncCompute){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString rendererSource;
+    AString skinningCacheSource;
+    AString skinningResourcesSource;
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "material/material_pass_resources.cpp",
+            "csg/csg_peel_targets.cpp",
+            "csg/csg_resources.cpp",
+            "csg/csg_interval_resources.cpp",
+            "mesh/mesh_bindings.cpp",
+            "raytrace/rt_shadow.cpp",
+            "raytrace/rt_caustics.cpp",
+            "raytrace/rt_surfel_gi.cpp",
+            "raytrace/rt_swbvh.cpp",
+        },
+        rendererSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_mesh" / "skinning" / "runtime_cache_resources.cpp",
+        skinningCacheSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_mesh" / "skinning" / "resources.cpp",
+        skinningResourcesSource
+    ));
+
+    const AStringView renderer(rendererSource.data(), rendererSource.size());
+    const AStringView skinningCache(skinningCacheSource.data(), skinningCacheSource.size());
+    const AStringView skinningResources(skinningResourcesSource.data(), skinningResourcesSource.size());
+    constexpr AStringView s_Sharing = "Core::ResourceQueueSharing::GraphicsAndAsyncCompute";
+    const auto expectSharedBlock = [&](const AStringView source, const AStringView beginMarker, const AStringView endMarker){
+        const usize beginOffset = source.find(beginMarker);
+        const usize endOffset = source.find(endMarker, beginOffset);
+        ASSERT_NE(beginOffset, AStringView::npos);
+        ASSERT_NE(endOffset, AStringView::npos);
+        ASSERT_LT(beginOffset, endOffset);
+        EXPECT_TRUE(ContainsText(source.substr(beginOffset, endOffset - beginOffset), s_Sharing));
+    };
+
+    expectSharedBlock(renderer, "Core::BufferDesc instanceBufferDesc;", "Core::BufferHandle instanceBuffer =");
+    expectSharedBlock(renderer, "Core::BufferDesc materialTypedBufferDesc;", "Core::BufferHandle materialTypedBuffer =");
+    expectSharedBlock(renderer, "auto createCsgTexture =", "auto createPeelTexture =");
+    expectSharedBlock(renderer, "[[nodiscard]] static bool ReserveCsgStructuredBuffer(", "[[nodiscard]] static CsgClipCutterResolveResult::Enum");
+    expectSharedBlock(renderer, "if(!m_csgState.m_clipContextSlotsBuffer){", "EnsureCsgBufferHeapHandle(");
+    expectSharedBlock(renderer, "bool RendererCsgSystem::createCsgIntervalSampleStateBuffer(){", "m_csgState.m_intervalSampleStateBuffer =");
+    expectSharedBlock(renderer, "Core::BufferDesc emulationVertexBufferDesc;", "mesh.emulationVertexBuffer =");
+    expectSharedBlock(renderer, "Core::TextureDesc coarseDesc;", "targets.shadowCoarseTransmittance =");
+    expectSharedBlock(renderer, "Core::TextureDesc softHalfADesc;", "targets.shadowSoftHalfA =");
+    expectSharedBlock(renderer, "Core::TextureDesc softGeometryDesc;", "targets.shadowSoftGeometry =");
+    expectSharedBlock(renderer, "Core::BufferDesc edgeListDesc;", "Core::BufferHandle edgeListBuffer =");
+    expectSharedBlock(renderer, "Core::BufferDesc edgeStatsDesc;", "m_rayTracingState.m_swShadowEdgeStatsBuffer =");
+    expectSharedBlock(renderer, "Core::BufferDesc edgeCounterDesc;", "m_rayTracingState.m_swShadowEdgeCounterBuffer =");
+    expectSharedBlock(renderer, "Core::BufferDesc indirectArgsDesc;", "m_rayTracingState.m_swShadowIndirectArgsBuffer =");
+    expectSharedBlock(renderer, "Core::TextureDesc surfelIrradianceHalfDesc;", "targets.surfelIrradianceHalf =");
+    expectSharedBlock(renderer, "Core::TextureDesc accumulatorDesc;", "targets.causticAccumulator =");
+    expectSharedBlock(renderer, "Core::TextureDesc historyDesc;", "targets.causticHistory =");
+    expectSharedBlock(renderer, "Core::TextureDesc halfBDesc;", "targets.causticResolveHalf =");
+    expectSharedBlock(renderer, "Core::TextureDesc geometryDesc;", "targets.causticResolveGeometry =");
+    expectSharedBlock(renderer, "if(!m_rayTracingState.m_surfelTraceIndirectArgsBuffer){", "m_rayTracingState.m_surfelTraceIndirectArgsBuffer =");
+    expectSharedBlock(renderer, "if(!m_rayTracingState.m_surfelFreeListBuffer){", "m_rayTracingState.m_surfelFreeListBuffer =");
+    expectSharedBlock(renderer, "Core::BufferDesc keysBufferDesc;", "Core::BufferHandle keysBuffer =");
+    expectSharedBlock(renderer, "Core::BufferDesc payloadBufferDesc;", "Core::BufferHandle payloadBuffer =");
+    expectSharedBlock(renderer, "Core::BufferDesc counterBufferDesc;", "Core::BufferHandle counterBuffer =");
+    expectSharedBlock(renderer, "Core::BufferDesc parentBufferDesc;", "Core::BufferHandle newParentBuffer =");
+
+    EXPECT_EQ(
+        CountText(
+            skinningCache,
+            "const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute"
+        ),
+        3u
+    );
+    expectSharedBlock(skinningResources, "return RuntimeMeshBufferUpload::SetupBuffer<PayloadT>(", "static bool RegisterStorageBuffer(");
+    expectSharedBlock(skinningResources, "Core::BufferDesc bindlessSlotsBufferDesc;", "rebuilt.bindlessResourceSlotsBuffer =");
+}
+
+
 // The split software-BVH task records only compute commands after graph-owned clears. The compatibility Shadow
 // Preparation endpoint can still record both transfer clears and compute dispatches, while preferring Graphics.
 TEST(EcsGraphics, ShadowPreparationQueueCapabilitiesMatchNativeCommands){
@@ -6261,7 +6345,7 @@ TEST(EcsGraphics, HybridHardwareFallbackRequiresCompleteGraphOwnedBlobs){
     EXPECT_TRUE(ContainsText(healthyCapture, "NWB_HYBRID_SHADOW_BOUNDARY_OPAQUE_BASELINE=0"));
     EXPECT_TRUE(ContainsText(
         healthyCapture,
-        "set_property(TEST nwb_hybrid_shadow_boundary_healthy_capture_smoke PROPERTY CONFIGURATIONS \"dbg;opt\")"
+        "CONFIGURATIONS dbg opt"
     ));
     EXPECT_FALSE(ContainsText(healthyCapture, "enabled natural opaque hardware-shadow baseline"));
     EXPECT_FALSE(ContainsText(healthyCapture, "RendererSystem: created RayQuery shadow compute pipeline"));
@@ -6300,7 +6384,7 @@ TEST(EcsGraphics, HybridHardwareFallbackRequiresCompleteGraphOwnedBlobs){
     EXPECT_TRUE(ContainsText(opaqueCapture, "NWB_HYBRID_SHADOW_BOUNDARY_OPAQUE_BASELINE=1"));
     EXPECT_TRUE(ContainsText(
         opaqueCapture,
-        "set_property(TEST nwb_hybrid_shadow_boundary_opaque_capture_smoke PROPERTY CONFIGURATIONS \"dbg;opt\")"
+        "CONFIGURATIONS dbg opt"
     ));
     EXPECT_FALSE(ContainsText(opaqueCapture, "enabled healthy hybrid transparent-shadow benchmark"));
     EXPECT_FALSE(ContainsText(opaqueCapture, "RendererSystem: created RayQuery shadow compute pipeline"));

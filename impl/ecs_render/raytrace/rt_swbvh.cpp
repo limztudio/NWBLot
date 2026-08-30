@@ -2302,6 +2302,7 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
         .setByteSize(static_cast<u64>(sizeof(u32) * capacity))
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(Name("bvh_sort_keys"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
@@ -2316,6 +2317,7 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
         .setByteSize(static_cast<u64>(sizeof(u32) * capacity))
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(Name("bvh_sort_payload"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
@@ -2515,6 +2517,7 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
         .setByteSize(static_cast<u64>(sizeof(u32) * capacity))
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(Name("bvh_visit_counter"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
@@ -2604,6 +2607,7 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
         .setByteSize(static_cast<u64>(sizeof(u32) * nodeCount))
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(Name("bvh_mesh_parent"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;

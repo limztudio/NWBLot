@@ -847,6 +847,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
             .setStructStride(sizeof(u32))
             .setCanHaveUAVs(true)
             .setIsDrawIndirectArgs(true)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setDebugName(Name("surfel_trace_indirect_args"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
@@ -864,6 +865,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
             .setByteSize(static_cast<u64>(sizeof(u32)) * poolCapacity)
             .setStructStride(sizeof(u32))
             .setCanHaveUAVs(true)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setDebugName(Name("surfel_free_list"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;

@@ -310,6 +310,7 @@ static void BuildResolvedClipCutterGpuData(
     bufferDesc
         .setByteSize(static_cast<u64>(capacity * elementByteSize))
         .setStructStride(static_cast<u32>(elementByteSize))
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(debugName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
@@ -638,6 +639,7 @@ bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount,
         bufferDesc
             .setByteSize(sizeof(CsgClipContextSlots))
             .setIsConstantBuffer(true)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setDebugName("engine/csg/clip_context_slots")
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;

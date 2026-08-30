@@ -214,7 +214,7 @@ template<typename PayloadT, typename PayloadVector>
     const tchar* label,
     const bool canHaveRawViews = false,
     const bool accelStructBuildInput = false,
-    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::Exclusive
+    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute
 ){
     const Name bufferName = DeriveRuntimeResourceName(
         instance.sourceName,
@@ -268,7 +268,7 @@ template<typename PayloadT, typename PayloadVector>
     const tchar* label,
     const bool canHaveRawViews = false,
     const bool accelStructBuildInput = false,
-    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::Exclusive
+    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute
 ){
     outBuffer = SetupRuntimeBuffer<PayloadT>(
         graphics,
@@ -294,7 +294,7 @@ template<typename PayloadVector>
     const PayloadVector& payload,
     const bool canHaveUavs,
     const tchar* label,
-    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::Exclusive
+    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute
 ){
     outBuffer = nullptr;
 

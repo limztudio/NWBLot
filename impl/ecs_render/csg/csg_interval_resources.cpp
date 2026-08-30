@@ -357,6 +357,7 @@ bool RendererCsgSystem::createCsgIntervalSampleStateBuffer(){
     bufferDesc
         .setByteSize(sizeof(CsgIntervalSampleStateGpuData))
         .setIsConstantBuffer(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName("engine/csg/interval_sample_state")
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;

@@ -64,6 +64,7 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
             .setArraySize(layerCount)
             .setFormat(format)
             .setDimension(Core::TextureDimension::Texture2DArray)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         ;
         if(renderTarget)
             desc.setInRenderTarget(true);

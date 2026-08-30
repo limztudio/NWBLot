@@ -70,6 +70,7 @@ bool RendererMeshSystem::createComputeEmulationHeapHandle(MeshResources& mesh){
             .setStructStride(ECSRenderDetail::s_EmulatedVertexStride)
             .setCanHaveUAVs(true)
             .setIsVertexBuffer(true)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setDebugName(emulationVertexBufferName)
         ;
         mesh.emulationVertexBuffer = m_graphics.createBuffer(emulationVertexBufferDesc);

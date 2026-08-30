@@ -196,6 +196,7 @@ bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceC
     instanceBufferDesc
         .setByteSize(static_cast<u64>(capacity * sizeof(InstanceGpuData)))
         .setStructStride(sizeof(InstanceGpuData))
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(ECSRenderDetail::s_InstanceBufferName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
@@ -232,6 +233,7 @@ bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byte
     materialTypedBufferDesc
         .setByteSize(static_cast<u64>(capacity))
         .setStructStride(sizeof(u32))
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(ECSRenderDetail::s_MaterialTypedBufferName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;

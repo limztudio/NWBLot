@@ -892,6 +892,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         .setHeight(DivideUp(targets.height, static_cast<u32>(NWB_SURFEL_RESOLVE_HALF_FACTOR)))
         .setFormat(targets.surfelIrradianceFormat)
         .setInUAV(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/gi/surfel_irradiance_half")
     ;
     targets.surfelIrradianceHalf = m_graphics.createTexture(surfelIrradianceHalfDesc);
@@ -908,6 +909,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         .setDimension(Core::TextureDimension::Texture2DArray)
         .setFormat(targets.causticAccumulatorFormat)
         .setInUAV(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/caustic/accumulator")
     ;
     targets.causticAccumulator = m_graphics.createTexture(accumulatorDesc);
@@ -922,6 +924,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         .setHeight(halfHeight)
         .setFormat(targets.causticHistoryFormat)
         .setInUAV(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/caustic/atrous_half_a")
     ;
     targets.causticHistory = m_graphics.createTexture(historyDesc);
@@ -936,6 +939,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         .setHeight(halfHeight)
         .setFormat(targets.causticHistoryFormat)
         .setInUAV(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/caustic/atrous_half_b")
     ;
     targets.causticResolveHalf = m_graphics.createTexture(halfBDesc);
@@ -951,6 +955,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         .setHeight(halfHeight)
         .setFormat(targets.causticHistoryFormat)
         .setInUAV(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/caustic/resolve_geometry")
     ;
     targets.causticResolveGeometry = m_graphics.createTexture(geometryDesc);

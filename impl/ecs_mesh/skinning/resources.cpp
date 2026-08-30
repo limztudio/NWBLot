@@ -48,7 +48,8 @@ static Core::BufferHandle SetupStructuredBuffer(
         graphics,
         debugName,
         payload,
-        count
+        count,
+        { false, false, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute }
     );
 }
 
@@ -320,6 +321,7 @@ bool MeshSkinningSystem::ensureRuntimeResources(
     bindlessSlotsBufferDesc
         .setByteSize(sizeof(RuntimeBindlessResourceSlots))
         .setIsConstantBuffer(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(bindlessSlotsBufferName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;

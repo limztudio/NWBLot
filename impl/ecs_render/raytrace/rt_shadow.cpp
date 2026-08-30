@@ -999,6 +999,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setDimension(Core::TextureDimension::Texture2DArray)
         .setFormat(targets.shadowCoarseTransmittanceFormat)
         .setInUAV(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/shadow/coarse_transmittance")
     ;
     targets.shadowCoarseTransmittance = m_graphics.createTexture(coarseDesc);
@@ -1021,6 +1022,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setDimension(Core::TextureDimension::Texture2DArray)
         .setFormat(targets.shadowSoftFormat)
         .setInUAV(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/shadow/soft_half_a")
     ;
     targets.shadowSoftHalfA = m_graphics.createTexture(softHalfADesc);
@@ -1043,6 +1045,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setHeight(softHalfHeight)
         .setFormat(targets.shadowSoftGeometryFormat)
         .setInUAV(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/shadow/soft_geometry")
     ;
     targets.shadowSoftGeometry = m_graphics.createTexture(softGeometryDesc);
@@ -1136,6 +1139,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setByteSize(static_cast<u64>(sizeof(u32)) * static_cast<u64>(NWB_SW_SHADOW_EDGE_RECORD_WORDS) * static_cast<u64>(edgeListCapacityRecords))
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(Name("sw_shadow_edge_list"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
@@ -2436,6 +2440,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
             .setByteSize(static_cast<u64>(sizeof(u32) * NWB_SW_SHADOW_EDGE_STATS_COUNT))
             .setStructStride(sizeof(u32))
             .setCanHaveUAVs(true)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setDebugName(Name("sw_shadow_edge_stats"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
@@ -2466,6 +2471,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
             .setByteSize(static_cast<u64>(sizeof(u32) * NWB_SW_SHADOW_EDGE_COUNTER_SIZE))
             .setStructStride(sizeof(u32))
             .setCanHaveUAVs(true)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setDebugName(Name("sw_shadow_edge_counter"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
@@ -2482,6 +2488,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
             .setStructStride(sizeof(u32))
             .setCanHaveUAVs(true)
             .setIsDrawIndirectArgs(true)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setDebugName(Name("sw_shadow_indirect_args"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;

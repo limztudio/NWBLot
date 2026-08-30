@@ -572,6 +572,13 @@ TEST(EcsGraphics, MaterialDrawItemsRetainResourcesWithoutMeshStatePrivilege){
     const AStringView materialDraw(materialDrawSource.data(), materialDrawSource.size());
     const AString compactMaterialStateStorage = CompactSource(AStringView(materialStateSource.data(), materialStateSource.size()));
     const AStringView compactMaterialState(compactMaterialStateStorage.data(), compactMaterialStateStorage.size());
+    const usize primaryPipelineSnapshotOffset = materialPass.find(
+        "const MaterialPassPipelineResourceSnapshot pipelineResourceSnapshot"
+    );
+    const usize receiverSurfacePipelineLookupOffset = materialPass.find(
+        "createRendererPipeline(*materialInfo, csgReceiverSurfacePipelineKey"
+    );
+    const usize primaryDrawItemSnapshotOffset = materialPass.find("drawItem.pipelineResources = pipelineResourceSnapshot;");
 
     EXPECT_FALSE(ContainsText(materialHeader, "RendererMeshState"));
     EXPECT_FALSE(ContainsText(materialResources, "m_meshState"));
@@ -580,7 +587,15 @@ TEST(EcsGraphics, MaterialDrawItemsRetainResourcesWithoutMeshStatePrivilege){
     EXPECT_TRUE(ContainsText(materialDrawTypes, "MaterialPassMeshResourceSnapshot meshResources;"));
     EXPECT_TRUE(ContainsText(materialDrawTypes, "MaterialPassPipelineResourceSnapshot pipelineResources;"));
     EXPECT_TRUE(ContainsText(materialPass, "drawItem.meshResources = __hidden_material_pass::CaptureMeshResourceSnapshot(mesh);"));
-    EXPECT_TRUE(ContainsText(materialPass, "drawItem.pipelineResources = __hidden_material_pass::CapturePipelineResourceSnapshot(*pipelineResources);"));
+    ASSERT_NE(primaryPipelineSnapshotOffset, AStringView::npos);
+    ASSERT_NE(receiverSurfacePipelineLookupOffset, AStringView::npos);
+    ASSERT_NE(primaryDrawItemSnapshotOffset, AStringView::npos);
+    EXPECT_LT(primaryPipelineSnapshotOffset, receiverSurfacePipelineLookupOffset);
+    EXPECT_LT(receiverSurfacePipelineLookupOffset, primaryDrawItemSnapshotOffset);
+    EXPECT_EQ(
+        materialPass.find("CapturePipelineResourceSnapshot(*pipelineResources)", receiverSurfacePipelineLookupOffset),
+        AStringView::npos
+    );
     EXPECT_TRUE(ContainsText(materialPass, "csgReceiverSurfaceDrawItem.pipelineResources ="));
     EXPECT_TRUE(ContainsText(materialResources, "const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;"));
     EXPECT_TRUE(ContainsText(materialDraw, "const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;"));

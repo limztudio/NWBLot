@@ -559,6 +559,11 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         if(!pipelineReady)
             return false;
         const RenderPath::Enum renderPath = pipelineResources->renderPath;
+        // Freeze the primary handles before the receiver-surface lookup below; creating its sibling cache entry can
+        // grow the pipeline map and invalidate this lookup pointer.
+        const MaterialPassPipelineResourceSnapshot pipelineResourceSnapshot =
+            __hidden_material_pass::CapturePipelineResourceSnapshot(*pipelineResources)
+        ;
 
         const bool passDrawItemActive = pass != MaterialPipelinePass::CsgReceiverSurface;
         const bool csgReceiverSurfaceActive =
@@ -637,7 +642,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         drawItem.meshKey = mesh.meshName;
         drawItem.pipelineKey = pipelineKey;
         drawItem.meshResources = __hidden_material_pass::CaptureMeshResourceSnapshot(mesh);
-        drawItem.pipelineResources = __hidden_material_pass::CapturePipelineResourceSnapshot(*pipelineResources);
+        drawItem.pipelineResources = pipelineResourceSnapshot;
         drawItem.instanceIndex = instanceIndex;
         drawItem.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
         drawItem.shadingModelId = materialInfo->shadingModelId;

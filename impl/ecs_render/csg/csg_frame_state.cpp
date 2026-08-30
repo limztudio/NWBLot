@@ -6,7 +6,7 @@
 
 #include <impl/ecs_render/material/material_surface_lookup.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
-#include <impl/ecs_render/shared/renderer_state.h>
+#include <impl/ecs_render/csg/renderer_csg_state.h>
 
 #include <core/ecs/world.h>
 #include <impl/ecs_csg/module.h>

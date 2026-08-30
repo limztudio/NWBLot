@@ -8,7 +8,7 @@
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
-#include <impl/ecs_render/shared/renderer_state.h>
+#include <impl/ecs_render/csg/renderer_csg_state.h>
 
 #include <impl/ecs_render/kernel/timing_names.h>
 

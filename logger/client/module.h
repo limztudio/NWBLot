@@ -83,6 +83,9 @@ public:
 protected:
     bool internalInit(NotNull<const char*> url);
     bool internalUpdate();
+    [[nodiscard]] inline bool workerCanExit()const{
+        return !m_hasPendingPayload && !m_msgCount.load(MemoryOrder::acquire) && !m_telemetryCount.load(MemoryOrder::acquire);
+    }
 
 protected:
     inline void enqueue(MessageType&& data){

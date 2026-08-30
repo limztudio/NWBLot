@@ -2,6 +2,7 @@ nwb_declare_gtest_executable(nwb_logserver_crash_tests)
 target_sources(nwb_logserver_crash_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/crash_test_helpers.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_test_helpers.h"
+    "${CMAKE_CURRENT_LIST_DIR}/logclient_shutdown_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/logserver_crash_tests.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_auth.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_ingest.cpp"
@@ -16,7 +17,9 @@ target_link_libraries(nwb_logserver_crash_tests PRIVATE
     nwb_common
     nwb_crash_package
     nwb_alloc
+    nwb_logclient
     nwb::aftermath_headers
+    nwb::microhttpd
     nwb::rgd_backend
 )
 nwb_copy_aftermath_runtime(nwb_logserver_crash_tests)

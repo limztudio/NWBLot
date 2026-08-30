@@ -171,13 +171,14 @@ bool Client::internalUpdate(){
 
     auto scheduleRetry = [this](){
         if(this->m_exit.load(MemoryOrder::acquire))
-            return;
+            return false;
 
         SleepMS(__hidden_log_client::s_RetrySleepMs);
         if(this->m_exit.load(MemoryOrder::acquire))
-            return;
+            return false;
 
         this->m_semaphore.release();
+        return true;
     };
 
     CURL* const curlHandle = static_cast<CURL*>(m_curl);
@@ -195,28 +196,20 @@ bool Client::internalUpdate(){
             ? m_telemetryUrl.c_str()
             : m_messageUrl.c_str()
     );
-    if(ret != CURLE_OK){
-        scheduleRetry();
-        return true;
-    }
+    if(ret != CURLE_OK)
+        return scheduleRetry();
 
     ret = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDS, reinterpret_cast<char*>(m_pendingPayload.data()));
-    if(ret != CURLE_OK){
-        scheduleRetry();
-        return true;
-    }
+    if(ret != CURLE_OK)
+        return scheduleRetry();
 
     ret = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(m_pendingPayload.size()));
-    if(ret != CURLE_OK){
-        scheduleRetry();
-        return true;
-    }
+    if(ret != CURLE_OK)
+        return scheduleRetry();
 
     ret = curl_easy_perform(curlHandle);
-    if(ret != CURLE_OK){
-        scheduleRetry();
-        return true;
-    }
+    if(ret != CURLE_OK)
+        return scheduleRetry();
 
     m_pendingPayload.clear();
     m_hasPendingPayload = false;

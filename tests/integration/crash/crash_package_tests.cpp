@@ -11,7 +11,9 @@
 #include <global/filesystem/operations.h>
 #include <global/thread.h>
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(NWB_PLATFORM_WINDOWS)
+#include <windows.h>
+#elif defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 #include <errno.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -357,6 +359,53 @@ TEST(Crash, FlushReportsFailsWhenUploadingRecoveryIsBlocked){
 
     RemoveTestArtifacts(arena, s_Group);
 }
+
+#if defined(NWB_PLATFORM_WINDOWS)
+TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    NWB::Core::Alloc::PersistentArena installArena(
+        s_InstallArena,
+        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
+    );
+    constexpr AStringView s_Group("crash_handler_handle_inheritance_test");
+    RemoveTestArtifacts(arena, s_Group);
+
+    const CrashTestPath testDirectory = TestCaseDirectory(arena, s_Group);
+    ErrorCode error;
+    ASSERT_TRUE(EnsureDirectories(testDirectory, error));
+
+    const CrashTestPath sentinelPath = testDirectory / "inheritable_handle_sentinel.tmp";
+    SECURITY_ATTRIBUTES securityAttributes = {};
+    securityAttributes.nLength = sizeof(securityAttributes);
+    securityAttributes.bInheritHandle = TRUE;
+    const HANDLE sentinelHandle = CreateFileW(
+        sentinelPath.c_str(),
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        &securityAttributes,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_TEMPORARY,
+        nullptr
+    );
+    ASSERT_NE(sentinelHandle, INVALID_HANDLE_VALUE);
+
+    NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
+    config.applicationName = AStringView("crash_tests");
+    config.version = AStringView("1");
+    config.buildId = AStringView("handle-inheritance-test");
+    config.spoolDirectory = SpoolDirectory(arena, s_Group);
+
+    const bool installed = NWB::Core::Crash::InstallCrashHandler(installArena, config);
+    EXPECT_TRUE(installed);
+    EXPECT_TRUE(CloseHandle(sentinelHandle));
+    EXPECT_TRUE(DeleteFileW(sentinelPath.c_str()));
+    if(installed)
+        NWB::Core::Crash::UninstallCrashHandler();
+
+    RemoveTestArtifacts(arena, s_Group);
+}
+#endif
 
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
 TEST(Crash, DesktopInstalledHandlerWritesManualDumpPackage){

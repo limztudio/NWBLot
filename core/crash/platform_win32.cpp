@@ -299,13 +299,66 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
     commandLine += NWB_TEXT(" ");
     commandLine += StringConvert(handlerExecutablePath.arena(), AStringView(ackEventText));
 
-    STARTUPINFO startupInfo = {};
-    startupInfo.cb = sizeof(startupInfo);
-    startupInfo.dwFlags = STARTF_USESHOWWINDOW;
-    startupInfo.wShowWindow = SW_HIDE;
+    SIZE_T attributeListBytes = 0u;
+    const BOOL attributeListSizeQueried = InitializeProcThreadAttributeList(nullptr, 1u, 0u, &attributeListBytes);
+    if(attributeListSizeQueried || GetLastError() != ERROR_INSUFFICIENT_BUFFER || attributeListBytes == 0u){
+        CloseHandle(requestReadHandle);
+        CloseHandle(requestWriteHandle);
+        CloseHandle(ackReadHandle);
+        CloseHandle(ackWriteHandle);
+        CloseHandle(ackEvent);
+        return false;
+    }
+
+    void* const attributeListMemory = AllocateArenaCMemory(handlerExecutablePath.arena(), static_cast<usize>(attributeListBytes));
+    if(!attributeListMemory){
+        CloseHandle(requestReadHandle);
+        CloseHandle(requestWriteHandle);
+        CloseHandle(ackReadHandle);
+        CloseHandle(ackWriteHandle);
+        CloseHandle(ackEvent);
+        return false;
+    }
+
+    auto* const attributeList = static_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attributeListMemory);
+    if(!InitializeProcThreadAttributeList(attributeList, 1u, 0u, &attributeListBytes)){
+        DeallocateArenaCMemory(handlerExecutablePath.arena(), attributeListMemory);
+        CloseHandle(requestReadHandle);
+        CloseHandle(requestWriteHandle);
+        CloseHandle(ackReadHandle);
+        CloseHandle(ackWriteHandle);
+        CloseHandle(ackEvent);
+        return false;
+    }
+
+    HANDLE inheritedHandles[] = { requestReadHandle, ackWriteHandle, ackEvent };
+    if(!UpdateProcThreadAttribute(
+        attributeList,
+        0u,
+        PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+        inheritedHandles,
+        sizeof(inheritedHandles),
+        nullptr,
+        nullptr
+    )){
+        DeleteProcThreadAttributeList(attributeList);
+        DeallocateArenaCMemory(handlerExecutablePath.arena(), attributeListMemory);
+        CloseHandle(requestReadHandle);
+        CloseHandle(requestWriteHandle);
+        CloseHandle(ackReadHandle);
+        CloseHandle(ackWriteHandle);
+        CloseHandle(ackEvent);
+        return false;
+    }
+
+    STARTUPINFOEX startupInfo = {};
+    startupInfo.StartupInfo.cb = sizeof(startupInfo);
+    startupInfo.StartupInfo.dwFlags = STARTF_USESHOWWINDOW;
+    startupInfo.StartupInfo.wShowWindow = SW_HIDE;
+    startupInfo.lpAttributeList = attributeList;
 
     PROCESS_INFORMATION processInfo = {};
-    const DWORD creationFlags = CREATE_NO_WINDOW | DETACHED_PROCESS;
+    const DWORD creationFlags = CREATE_NO_WINDOW | DETACHED_PROCESS | EXTENDED_STARTUPINFO_PRESENT;
     const BOOL created = CreateProcess(
         handlerExecutablePath.c_str(),
         commandLine.data(),
@@ -315,9 +368,12 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
         creationFlags,
         nullptr,
         nullptr,
-        &startupInfo,
+        &startupInfo.StartupInfo,
         &processInfo
     );
+
+    DeleteProcThreadAttributeList(attributeList);
+    DeallocateArenaCMemory(handlerExecutablePath.arena(), attributeListMemory);
 
     CloseHandle(requestReadHandle);
     CloseHandle(ackWriteHandle);

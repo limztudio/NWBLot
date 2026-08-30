@@ -129,28 +129,6 @@ void RendererDrawState::invalidateResources(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererDeferredState::invalidateResources(){
-    m_lightingBindingLayout.reset();
-    m_sceneShadingBuffer.reset();
-    m_lightBuffer.reset();
-    m_lightingComputeShader.reset();
-    m_lightingPipeline.reset();
-    m_compositeComputeBindingLayout.reset();
-    m_compositeComputeShader.reset();
-    m_compositeComputePipeline.reset();
-    m_presentBindingLayout.reset();
-    m_sampler.reset();
-    m_presentPixelShader.reset();
-    m_presentPipeline.reset();
-    m_sceneShadingGpuDataValid = false;
-    m_lightGpuDataCount = 0u;
-    m_lightGpuDataValid = false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererRayTracingState::invalidateResources(){
     // The scene TLAS is GPU state and must be released on device/resource teardown; per-mesh BLAS
     // handles live on MeshResources and are released with the mesh cache. Ray tracing capability

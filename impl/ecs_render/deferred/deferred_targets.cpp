@@ -8,7 +8,8 @@
 
 #include <impl/ecs_render/kernel/renderer_format_private.h>
 #include <impl/ecs_render/kernel/timing_names.h>
-#include <impl/ecs_render/shared/renderer_state.h>
+#include <impl/ecs_render/deferred/renderer_deferred_state.h>
+#include <impl/ecs_render/kernel/renderer_constants_private.h>
 
 #include <core/common/log.h>
 #include <core/graphics/module.h>

@@ -404,18 +404,104 @@ TEST(EcsGraphics, AvboitOwnsItsPrivateRendererState){
 }
 
 
+TEST(EcsGraphics, DeferredOwnsItsPrivateRendererState){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+    AString stateHeaderSource;
+    AString stateSystemSource;
+    AString sharedHeaderSource;
+    AString sharedSystemSource;
+    AString deferredSystemSource;
+    AString deferredLightingSource;
+    AString deferredCompositeSource;
+    AString deferredTargetsSource;
+    AString pipelineHeaderSource;
+    AString rendererCmakeSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "renderer_deferred_state.h", stateHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "renderer_deferred_state.cpp", stateSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", sharedHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.cpp", sharedSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.cpp", deferredSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_lighting.cpp", deferredLightingSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_composite.cpp", deferredCompositeSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_targets.cpp", deferredTargetsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.h", pipelineHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "CMakeLists.txt", rendererCmakeSource));
+
+    const AString compactStateHeaderStorage = CompactSource(AStringView(stateHeaderSource.data(), stateHeaderSource.size()));
+    const AStringView compactStateHeader(compactStateHeaderStorage.data(), compactStateHeaderStorage.size());
+    const AString compactStateSystemStorage = CompactSource(AStringView(stateSystemSource.data(), stateSystemSource.size()));
+    const AStringView compactStateSystem(compactStateSystemStorage.data(), compactStateSystemStorage.size());
+
+    EXPECT_TRUE(ContainsText(compactStateHeader, "classRendererDeferredStatefinal:NoCopy{friendclassRendererDeferredSystem;"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererFramePipeline;"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererAvboitSystem;"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererCsgSystem;"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererRayTracingSystem;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::BindingLayoutHandlem_lightingBindingLayout;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::BufferHandlem_sceneShadingBuffer;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::BufferHandlem_lightBuffer;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::ShaderHandlem_lightingComputeShader;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::ComputePipelineHandlem_lightingPipeline;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::BindingLayoutHandlem_compositeComputeBindingLayout;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::ShaderHandlem_compositeComputeShader;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::ComputePipelineHandlem_compositeComputePipeline;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::BindingLayoutHandlem_presentBindingLayout;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::SamplerHandlem_sampler;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::ShaderHandlem_presentPixelShader;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::GraphicsPipelineHandlem_presentPipeline;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "u8m_sceneShadingGpuData[sizeof(f32)*NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT]={};"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "boolm_sceneShadingGpuDataValid=false;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "u8m_lightGpuData[sizeof(f32)*NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT*NWB_SCENE_MAX_LIGHTS]={};"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "u32m_lightGpuDataCount=0u;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "boolm_lightGpuDataValid=false;"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "voidRendererDeferredState::invalidateResources(){"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_lightingBindingLayout.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_sceneShadingBuffer.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_lightBuffer.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_lightingComputeShader.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_lightingPipeline.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_compositeComputeBindingLayout.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_compositeComputeShader.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_compositeComputePipeline.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_presentBindingLayout.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_sampler.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_presentPixelShader.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_presentPipeline.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_sceneShadingGpuDataValid=false;"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_lightGpuDataCount=0u;"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_lightGpuDataValid=false;"));
+    EXPECT_FALSE(ContainsText(stateHeaderSource, "shared/renderer_state.h"));
+    EXPECT_FALSE(ContainsText(sharedHeaderSource, "RendererDeferredState"));
+    EXPECT_FALSE(ContainsText(sharedSystemSource, "RendererDeferredState"));
+    EXPECT_FALSE(ContainsText(sharedHeaderSource, "deferred/renderer_deferred_state.h"));
+    EXPECT_TRUE(ContainsText(pipelineHeaderSource, "#include <impl/ecs_render/deferred/renderer_deferred_state.h>"));
+    EXPECT_TRUE(ContainsText(pipelineHeaderSource, "RendererDeferredState m_deferredState;"));
+    EXPECT_TRUE(ContainsText(deferredSystemSource, "#include <impl/ecs_render/deferred/renderer_deferred_state.h>"));
+    EXPECT_TRUE(ContainsText(deferredLightingSource, "#include <impl/ecs_render/deferred/renderer_deferred_state.h>"));
+    EXPECT_TRUE(ContainsText(deferredCompositeSource, "#include <impl/ecs_render/deferred/renderer_deferred_state.h>"));
+    EXPECT_TRUE(ContainsText(deferredTargetsSource, "#include <impl/ecs_render/deferred/renderer_deferred_state.h>"));
+    EXPECT_FALSE(ContainsText(deferredSystemSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_FALSE(ContainsText(deferredLightingSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_FALSE(ContainsText(deferredCompositeSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_FALSE(ContainsText(deferredTargetsSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_TRUE(ContainsText(rendererCmakeSource, "${CMAKE_CURRENT_LIST_DIR}/deferred/renderer_deferred_state.cpp"));
+    EXPECT_TRUE(ContainsText(rendererCmakeSource, "${CMAKE_CURRENT_LIST_DIR}/deferred/renderer_deferred_state.h"));
+}
+
+
 TEST(EcsGraphics, AvboitDoesNotDependOnDeferredPrivateState){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
     AString avboitHeaderSource;
     AString avboitSystemSource;
     AString avboitResourcesSource;
-    AString rendererStateSource;
+    AString deferredStateSource;
     AString rootResourcesSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_system.h", avboitHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_system.cpp", avboitSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_resources.cpp", avboitResourcesSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "renderer_deferred_state.h", deferredStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_resources.cpp", rootResourcesSource));
 
     const AStringView avboitHeader(avboitHeaderSource.data(), avboitHeaderSource.size());
@@ -423,8 +509,8 @@ TEST(EcsGraphics, AvboitDoesNotDependOnDeferredPrivateState){
     const AStringView avboitResources(avboitResourcesSource.data(), avboitResourcesSource.size());
     const AString compactAvboitHeaderStorage = CompactSource(avboitHeader);
     const AStringView compactAvboitHeader(compactAvboitHeaderStorage.data(), compactAvboitHeaderStorage.size());
-    const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
-    const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
+    const AString compactDeferredStateStorage = CompactSource(AStringView(deferredStateSource.data(), deferredStateSource.size()));
+    const AStringView compactDeferredState(compactDeferredStateStorage.data(), compactDeferredStateStorage.size());
     const AStringView rootResources(rootResourcesSource.data(), rootResourcesSource.size());
 
     EXPECT_TRUE(ConstructorParameterTypesMatch(
@@ -446,12 +532,7 @@ TEST(EcsGraphics, AvboitDoesNotDependOnDeferredPrivateState){
     EXPECT_FALSE(ContainsText(avboitResources, "m_deferredState"));
     EXPECT_TRUE(ContainsText(avboitResources, "m_avboitState.m_linearSampler"));
 
-    const usize deferredStateBegin = compactRendererState.find("classRendererDeferredStatefinal:NoCopy{");
-    ASSERT_NE(deferredStateBegin, AStringView::npos);
-    const usize deferredStateEnd = compactRendererState.find("structRtSceneBvhState{", deferredStateBegin);
-    ASSERT_NE(deferredStateEnd, AStringView::npos);
-    const AStringView deferredState = compactRendererState.substr(deferredStateBegin, deferredStateEnd - deferredStateBegin);
-    EXPECT_FALSE(ContainsText(deferredState, "friendclassRendererAvboitSystem;"));
+    EXPECT_FALSE(ContainsText(compactDeferredState, "friendclassRendererAvboitSystem;"));
 
     const usize createDeferredTargets = rootResources.find("m_deferredSystem.createDeferredFrameTargets");
     const usize createAvboitResources = rootResources.find("m_avboitSystem.createAvboitResources");
@@ -474,6 +555,7 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
     AString csgIntervalPeelSource;
     AString meshHeaderSource;
     AString rendererStateSource;
+    AString deferredStateSource;
     AString frameTypesSource;
     AString materialDrawSource;
     AString deferredGbufferTaskHeaderSource;
@@ -488,6 +570,7 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_interval_peel.cpp", csgIntervalPeelSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.h", meshHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "renderer_deferred_state.h", deferredStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_frame_types.h", frameTypesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass_draw.cpp", materialDrawSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_gbuffer_task.h", deferredGbufferTaskHeaderSource));
@@ -511,6 +594,8 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
     const AStringView compactMeshHeader(compactMeshHeaderStorage.data(), compactMeshHeaderStorage.size());
     const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
     const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
+    const AString compactDeferredStateStorage = CompactSource(AStringView(deferredStateSource.data(), deferredStateSource.size()));
+    const AStringView compactDeferredState(compactDeferredStateStorage.data(), compactDeferredStateStorage.size());
     const AString compactFrameTypesStorage = CompactSource(AStringView(frameTypesSource.data(), frameTypesSource.size()));
     const AStringView compactFrameTypes(compactFrameTypesStorage.data(), compactFrameTypesStorage.size());
     const AString compactMaterialDrawStorage = CompactSource(AStringView(materialDrawSource.data(), materialDrawSource.size()));
@@ -579,12 +664,7 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
     EXPECT_TRUE(ContainsText(compactCsgHeader, "setCsgIntervalSampleImageStates(Core::CommandList&commandList,constDeferredFrameTargets&targets);"));
     EXPECT_TRUE(ContainsText(compactCsgResources, "targets.bindless.slotsBufferDescriptor.slot()"));
 
-    const usize deferredStateBegin = compactRendererState.find("classRendererDeferredStatefinal:NoCopy{");
-    ASSERT_NE(deferredStateBegin, AStringView::npos);
-    const usize deferredStateEnd = compactRendererState.find("structRtSceneBvhState{", deferredStateBegin);
-    ASSERT_NE(deferredStateEnd, AStringView::npos);
-    const AStringView deferredState = compactRendererState.substr(deferredStateBegin, deferredStateEnd - deferredStateBegin);
-    EXPECT_FALSE(ContainsText(deferredState, "friendclassRendererCsgSystem;"));
+    EXPECT_FALSE(ContainsText(compactDeferredState, "friendclassRendererCsgSystem;"));
 
     const usize drawStateBegin = compactRendererState.find("classRendererDrawStatefinal:NoCopy{");
     ASSERT_NE(drawStateBegin, AStringView::npos);
@@ -869,7 +949,7 @@ TEST(EcsGraphics, RootInvalidatesFeatureResourcesThroughDomainSystems){
     const usize materialStateBegin = meshStateEnd;
     const usize materialStateEnd = compactRendererState.find("classRendererDrawStatefinal:NoCopy{", materialStateBegin);
     const usize csgStateBegin = compactRendererState.find("classRendererCsgStatefinal:NoCopy{", materialStateEnd);
-    const usize csgStateEnd = compactRendererState.find("classRendererDeferredStatefinal:NoCopy{", csgStateBegin);
+    const usize csgStateEnd = compactRendererState.find("structRtSceneBvhState{", csgStateBegin);
     ASSERT_NE(meshStateBegin, AStringView::npos);
     ASSERT_NE(meshStateEnd, AStringView::npos);
     ASSERT_NE(materialStateEnd, AStringView::npos);
@@ -1063,7 +1143,7 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
     AString rayTracingSoftShadowSource;
     AString rayTracingCausticsSource;
     AString rayTracingSurfelSource;
-    AString rendererStateSource;
+    AString deferredStateSource;
     AString rootGraphSource;
     AString rootShadowSource;
     AString rootCausticsSource;
@@ -1076,7 +1156,7 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow.cpp", rayTracingSoftShadowSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_caustics.cpp", rayTracingCausticsSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_surfel_gi.cpp", rayTracingSurfelSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "renderer_deferred_state.h", deferredStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", rootGraphSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", rootShadowSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_caustics.cpp", rootCausticsSource));
@@ -1094,8 +1174,8 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
     const AStringView compactRayTracingCaustics(compactRayTracingCausticsStorage.data(), compactRayTracingCausticsStorage.size());
     const AString compactRayTracingSurfelStorage = CompactSource(AStringView(rayTracingSurfelSource.data(), rayTracingSurfelSource.size()));
     const AStringView compactRayTracingSurfel(compactRayTracingSurfelStorage.data(), compactRayTracingSurfelStorage.size());
-    const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
-    const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
+    const AString compactDeferredStateStorage = CompactSource(AStringView(deferredStateSource.data(), deferredStateSource.size()));
+    const AStringView compactDeferredState(compactDeferredStateStorage.data(), compactDeferredStateStorage.size());
     const AString compactRootGraphStorage = CompactSource(AStringView(rootGraphSource.data(), rootGraphSource.size()));
     const AStringView compactRootGraph(compactRootGraphStorage.data(), compactRootGraphStorage.size());
     const AString compactRootShadowStorage = CompactSource(AStringView(rootShadowSource.data(), rootShadowSource.size()));
@@ -1130,12 +1210,7 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
     EXPECT_FALSE(ContainsText(AStringView(rayTracingCausticsSource.data(), rayTracingCausticsSource.size()), "m_deferredState"));
     EXPECT_FALSE(ContainsText(AStringView(rayTracingSurfelSource.data(), rayTracingSurfelSource.size()), "m_deferredState"));
 
-    const usize deferredStateBegin = compactRendererState.find("classRendererDeferredStatefinal:NoCopy{");
-    ASSERT_NE(deferredStateBegin, AStringView::npos);
-    const usize deferredStateEnd = compactRendererState.find("structRtSceneBvhState{", deferredStateBegin);
-    ASSERT_NE(deferredStateEnd, AStringView::npos);
-    const AStringView deferredState = compactRendererState.substr(deferredStateBegin, deferredStateEnd - deferredStateBegin);
-    EXPECT_FALSE(ContainsText(deferredState, "friendclassRendererRayTracingSystem;"));
+    EXPECT_FALSE(ContainsText(compactDeferredState, "friendclassRendererRayTracingSystem;"));
 
     EXPECT_TRUE(ContainsText(compactRayTracingHeader, "renderShadowVisibility(Core::CommandList&commandList,DeferredFrameTargets&targets,constDeferredLightingGraphResources&deferredLightingResources,"));
     EXPECT_TRUE(ContainsText(compactRayTracingHeader, "renderGpuBvhShadowVisibility(Core::CommandList&commandList,DeferredFrameTargets&targets,constDeferredLightingGraphResources&deferredLightingResources,"));
@@ -1178,7 +1253,7 @@ TEST(EcsGraphics, RootOwnsTheCrossDomainFrameTargetAggregate){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
     AString pipelineHeaderSource;
-    AString rendererStateSource;
+    AString deferredStateSource;
     AString deferredHeaderSource;
     AString deferredSystemSource;
     AString deferredTargetsSource;
@@ -1186,7 +1261,7 @@ TEST(EcsGraphics, RootOwnsTheCrossDomainFrameTargetAggregate){
     AString rootExecuteSource;
     AString rootTelemetrySource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.h", pipelineHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "renderer_deferred_state.h", deferredStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.h", deferredHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.cpp", deferredSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_targets.cpp", deferredTargetsSource));
@@ -1196,8 +1271,8 @@ TEST(EcsGraphics, RootOwnsTheCrossDomainFrameTargetAggregate){
 
     const AString compactPipelineHeaderStorage = CompactSource(AStringView(pipelineHeaderSource.data(), pipelineHeaderSource.size()));
     const AStringView compactPipelineHeader(compactPipelineHeaderStorage.data(), compactPipelineHeaderStorage.size());
-    const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
-    const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
+    const AString compactDeferredStateStorage = CompactSource(AStringView(deferredStateSource.data(), deferredStateSource.size()));
+    const AStringView compactDeferredState(compactDeferredStateStorage.data(), compactDeferredStateStorage.size());
     const AString compactDeferredHeaderStorage = CompactSource(AStringView(deferredHeaderSource.data(), deferredHeaderSource.size()));
     const AStringView compactDeferredHeader(compactDeferredHeaderStorage.data(), compactDeferredHeaderStorage.size());
     const AString compactDeferredSystemStorage = CompactSource(AStringView(deferredSystemSource.data(), deferredSystemSource.size()));
@@ -1218,12 +1293,7 @@ TEST(EcsGraphics, RootOwnsTheCrossDomainFrameTargetAggregate){
     ASSERT_NE(firstDomainSystem, AStringView::npos);
     EXPECT_LT(frameTargetStorage, firstDomainSystem);
 
-    const usize deferredStateBegin = compactRendererState.find("classRendererDeferredStatefinal:NoCopy{");
-    ASSERT_NE(deferredStateBegin, AStringView::npos);
-    const usize deferredStateEnd = compactRendererState.find("structRtSceneBvhState{", deferredStateBegin);
-    ASSERT_NE(deferredStateEnd, AStringView::npos);
-    const AStringView deferredState = compactRendererState.substr(deferredStateBegin, deferredStateEnd - deferredStateBegin);
-    EXPECT_FALSE(ContainsText(deferredState, "DeferredFrameTargets"));
+    EXPECT_FALSE(ContainsText(compactDeferredState, "DeferredFrameTargets"));
     EXPECT_FALSE(ContainsText(compactDeferredHeader, "frameTargetsMatch("));
     EXPECT_FALSE(ContainsText(compactDeferredHeader, "tryFrameTargets("));
     EXPECT_FALSE(ContainsText(compactDeferredHeader, "commitDeferredFrameTargets("));

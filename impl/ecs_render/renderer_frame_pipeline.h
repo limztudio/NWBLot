@@ -10,6 +10,7 @@
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/deferred/deferred_system.h>
+#include <impl/ecs_render/deferred/renderer_deferred_state.h>
 #include <impl/ecs_render/kernel/task_timing_feedback.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/material/material_system.h>

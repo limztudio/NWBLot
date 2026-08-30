@@ -738,6 +738,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
                 "--timeout" "${_nwb_skinning_culling_benchmark_script_timeout_seconds}"
                 ${_nwb_skinning_culling_logserver_args}
                 "--expect-log-message" "SkinningCullingBenchmark: completed"
+                "--expect-log-message" "Telemetry upload processed:"
         )
         set_tests_properties(nwb_skinning_culling_benchmark PROPERTIES
             RESOURCE_LOCK nwb_display

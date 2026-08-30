@@ -529,7 +529,7 @@ public:
 public:
     virtual bool onStartup()override{
         if(!m_staticPreview)
-            m_context.setTelemetryCapture(NWB::Core::Telemetry::CaptureOptions::All());
+            m_context.setTelemetryCapture(NWB::Core::Telemetry::CaptureOptions::PerfOnly());
 
         if(!loadSkeletonBindJoints()){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));

@@ -264,7 +264,7 @@ public:
         const MaterialPassDrawItem& drawItem,
         const MaterialPassMeshResourceSnapshot& mesh
     );
-    void setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh);
+    [[nodiscard]] bool setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh);
     void dispatchComputeMaterialPassDrawItem(
         const MaterialPassDrawContext& context,
         const MaterialPassDrawItem& drawItem,

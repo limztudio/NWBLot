@@ -196,7 +196,7 @@ u32 RendererMaterialSystem::materialPassDrawDispatchFlags(
     return flags;
 }
 
-void RendererMaterialSystem::setMaterialPassDrawPushConstants(
+bool RendererMaterialSystem::setMaterialPassDrawPushConstants(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItem& drawItem,
     const MaterialPassMeshResourceSnapshot& mesh
@@ -205,15 +205,15 @@ void RendererMaterialSystem::setMaterialPassDrawPushConstants(
     const MaterialPipelineCsgBindingUse csgBindingUse =
         MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, context.pass);
     u32 csgContextHeapSlot = 0u;
-    const bool csgContextHeapSlotReady = !csgBindingUse.clip
-        || (
+    if(csgBindingUse.clip){
+        const bool csgContextHeapSlotReady =
             context.csgResources
             && context.csgResources->findClipContextHeapSlot(csgContextHeapSlot)
-        )
-    ;
-    NWB_ASSERT(!csgBindingUse.clip || csgContextHeapSlotReady);
-    if(!csgBindingUse.clip)
-        csgContextHeapSlot = 0u;
+        ;
+        NWB_ASSERT(csgContextHeapSlotReady);
+        if(!csgContextHeapSlotReady)
+            return false;
+    }
     ECSRenderDetail::MeshFrameHeapSlots frameHeapSlots;
     const bool frameHeapSlotsReady = __hidden_material_pass_draw::ResolveMeshFrameHeapSlots(
         context,
@@ -221,7 +221,7 @@ void RendererMaterialSystem::setMaterialPassDrawPushConstants(
     );
     NWB_ASSERT(frameHeapSlotsReady);
     if(!frameHeapSlotsReady)
-        return;
+        return false;
     if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
         ECSRenderDetail::SetTransparentDrawPushConstants(
             context.commandList,
@@ -235,7 +235,7 @@ void RendererMaterialSystem::setMaterialPassDrawPushConstants(
             m_graphics.isHDR10OutputActive(),
             csgContextHeapSlot
         );
-        return;
+        return true;
     }
 
     // CSG pixel-only variants reuse the otherwise-unused generated-vertex lane as their global context selector.
@@ -251,6 +251,7 @@ void RendererMaterialSystem::setMaterialPassDrawPushConstants(
         frameHeapSlots,
         dispatchFlags
     );
+    return true;
 }
 
 void RendererMaterialSystem::setMaterialPassDrawItemResourceStates(
@@ -333,7 +334,8 @@ void RendererMaterialSystem::drawComputeMaterialPassDrawItem(
     context.commandList.setGraphicsState(graphicsState);
     m_graphics.getDevice().getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.emulationPipeline.get());
 
-    setMaterialPassDrawPushConstants(context, drawItem, mesh);
+    if(!setMaterialPassDrawPushConstants(context, drawItem, mesh))
+        return;
 
     Core::DrawArguments drawArgs;
     drawArgs.setVertexCount(mesh.meshletPrimitiveIndexCount);
@@ -375,7 +377,8 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         // Geometry streams are heap-backed for every raster material pass (opaque and AVBOIT alike).
         m_graphics.getDevice().getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.meshletPipeline.get());
 
-        setMaterialPassDrawPushConstants(context, drawItem, mesh);
+        if(!setMaterialPassDrawPushConstants(context, drawItem, mesh))
+            continue;
         {
             Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);
 

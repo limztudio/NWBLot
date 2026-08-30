@@ -1075,6 +1075,11 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "context.deferredTargets"));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "setCsgReceiverSurfaceImageStates(commandList,deferredTargets)"));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "setCsgIntervalSampleImageStates(commandList,deferredTargets)"));
+    EXPECT_TRUE(ContainsText(compactMaterialDraw, "boolRendererMaterialSystem::setMaterialPassDrawPushConstants("));
+    EXPECT_TRUE(ContainsText(compactMaterialDraw, "NWB_ASSERT(csgContextHeapSlotReady);"));
+    EXPECT_TRUE(ContainsText(compactMaterialDraw, "if(!csgContextHeapSlotReady)returnfalse;"));
+    EXPECT_TRUE(ContainsText(compactMaterialDraw, "if(!frameHeapSlotsReady)returnfalse;"));
+    EXPECT_EQ(CountText(compactMaterialDraw, "if(!setMaterialPassDrawPushConstants(context,drawItem,mesh))"), 2u);
     EXPECT_TRUE(ContainsText(compactDeferredGbufferTaskHeader, "MeshFrameBindingSnapshotframeBindings;"));
     EXPECT_TRUE(ContainsText(compactOpaqueCsgTaskHeader, "MeshFrameBindingSnapshotframeBindings;"));
     EXPECT_TRUE(ContainsText(compactAvboitOccupancyTaskHeader, "MeshFrameBindingSnapshotframeBindings;"));

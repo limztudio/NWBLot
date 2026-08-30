@@ -1868,6 +1868,43 @@ TEST(EcsGraphics, KernelDoesNotOwnRootOrAllDomainUmbrellas){
 }
 
 
+TEST(EcsGraphics, RendererCMakeListsIncludesEverySourceFileOnce){
+    TestArena testArena;
+    const TestPath rendererDirectory = RepoRoot(testArena) / "impl" / "ecs_render";
+    AString cmakeSource;
+    ASSERT_TRUE(ReadTextFile(rendererDirectory / "CMakeLists.txt", cmakeSource));
+    const AStringView cmake(cmakeSource.data(), cmakeSource.size());
+
+    ErrorCode directoryError;
+    RecursiveDirectoryIterator sourceDirectory(rendererDirectory, directoryError);
+    ASSERT_FALSE(directoryError);
+
+    usize sourceFileCount = 0u;
+    for(const auto& entry : sourceDirectory){
+        ErrorCode regularFileError;
+        const bool regularFile = entry.is_regular_file(regularFileError);
+        ASSERT_FALSE(regularFileError);
+        if(!regularFile)
+            continue;
+
+        const TestPath extension = entry.path().extension();
+        const TStringView extensionText = extension.native();
+        if(extensionText != NWB_TEXT(".h") && extensionText != NWB_TEXT(".cpp"))
+            continue;
+
+        const TestPath relativePath = entry.path().lexically_relative(rendererDirectory);
+        const AInteropString relativeSourcePath = relativePath.generic_string();
+        AString cmakeEntry = "\"${CMAKE_CURRENT_LIST_DIR}/";
+        cmakeEntry.append(relativeSourcePath.data(), relativeSourcePath.size());
+        cmakeEntry += '"';
+        const AStringView cmakeEntryView(cmakeEntry.data(), cmakeEntry.size());
+        EXPECT_EQ(CountText(cmake, cmakeEntryView), 1u);
+        ++sourceFileCount;
+    }
+    EXPECT_GT(sourceFileCount, 0u);
+}
+
+
 TEST(EcsGraphics, RootFrameGraphUsesRayTracingContractsInsteadOfDomainState){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);

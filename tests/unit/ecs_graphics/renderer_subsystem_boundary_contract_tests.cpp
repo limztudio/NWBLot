@@ -335,6 +335,136 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
 }
 
 
+TEST(EcsGraphics, MaterialOwnsItsPrivateRendererState){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+    AString stateHeaderSource;
+    AString stateSystemSource;
+    AString pipelineTypesSystemSource;
+    AString sharedHeaderSource;
+    AString sharedSystemSource;
+    AString materialHeaderSource;
+    AString materialSystemSource;
+    AString materialInstanceSource;
+    AString materialSurfaceSource;
+    AString materialPassSource;
+    AString materialPassDrawSource;
+    AString materialPassResourcesSource;
+    AString materialPipelineSource;
+    AString pipelineHeaderSource;
+    AString rendererCmakeSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "renderer_material_state.h", stateHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "renderer_material_state.cpp", stateSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "renderer_pipeline_types.cpp", pipelineTypesSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", sharedHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.cpp", sharedSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_system.h", materialHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_system.cpp", materialSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_instance.cpp", materialInstanceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_surface.cpp", materialSurfaceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass.cpp", materialPassSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass_draw.cpp", materialPassDrawSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass_resources.cpp", materialPassResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pipeline.cpp", materialPipelineSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.h", pipelineHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "CMakeLists.txt", rendererCmakeSource));
+
+    const AString compactStateHeaderStorage = CompactSource(AStringView(stateHeaderSource.data(), stateHeaderSource.size()));
+    const AStringView compactStateHeader(compactStateHeaderStorage.data(), compactStateHeaderStorage.size());
+    const AString compactStateSystemStorage = CompactSource(AStringView(stateSystemSource.data(), stateSystemSource.size()));
+    const AStringView compactStateSystem(compactStateSystemStorage.data(), compactStateSystemStorage.size());
+    const AString compactPipelineTypesSystemStorage = CompactSource(AStringView(pipelineTypesSystemSource.data(), pipelineTypesSystemSource.size()));
+    const AStringView compactPipelineTypesSystem(compactPipelineTypesSystemStorage.data(), compactPipelineTypesSystemStorage.size());
+    const AString compactMaterialSystemStorage = CompactSource(AStringView(materialSystemSource.data(), materialSystemSource.size()));
+    const AStringView compactMaterialSystem(compactMaterialSystemStorage.data(), compactMaterialSystemStorage.size());
+
+    EXPECT_TRUE(ContainsText(compactStateHeader, "structRendererMaterialResourceState{"));
+    EXPECT_TRUE(ContainsText(
+        compactStateHeader,
+        "HashMap<Name,UniquePtr<TextureGpuResource>,Hasher<Name>,EqualTo<Name>,Core::Alloc::GlobalArena>textureAssetCache;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compactStateHeader,
+        "HashMap<Name,UniquePtr<SamplerGpuResource>,Hasher<Name>,EqualTo<Name>,Core::Alloc::GlobalArena>samplerAssetCache;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compactStateHeader,
+        "explicitRendererMaterialResourceState(Core::Alloc::GlobalArena&arena):textureAssetCache(0,Hasher<Name>(),EqualTo<Name>(),arena),samplerAssetCache(0,Hasher<Name>(),EqualTo<Name>(),arena){}"
+    ));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "classRendererMaterialStatefinal:NoCopy{friendclassRendererMaterialSystem;"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererFramePipeline;"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererAvboitSystem;"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererCsgSystem;"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererDeferredSystem;"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererMeshSystem;"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "friendclassRendererRayTracingSystem;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::BindingLayoutHandlem_materialPassBindingLayout;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "HashMap<Name,MaterialSurfaceInfo,Hasher<Name>,EqualTo<Name>,Core::Alloc::GlobalArena>m_surfaceInfos;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "RendererMaterialResourceStatem_resourceState;"));
+    EXPECT_TRUE(ContainsText(
+        compactStateHeader,
+        "HashMap<MaterialPipelineKey,MaterialPipelineResources,MaterialPipelineKeyHasher,MaterialPipelineKeyEqualTo,Core::Alloc::GlobalArena>m_pipelines;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compactStateHeader,
+        "HashMap<Core::ECS::EntityID,MaterialInstanceMutableCacheEntry,Hasher<Core::ECS::EntityID>,EqualTo<Core::ECS::EntityID>,Core::Alloc::GlobalArena>m_instanceMutableCache;"
+    ));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "HashMap<Name,RenderPath::Enum,Hasher<Name>,EqualTo<Name>,Core::Alloc::GlobalArena>m_loggedMaterialPaths;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "u64m_instanceMutableCacheComponentMutationVersion=0u;"));
+    EXPECT_TRUE(ContainsText(
+        compactStateSystem,
+        "RendererMaterialState::RendererMaterialState(Core::Alloc::GlobalArena&arena):m_surfaceInfos(0,Hasher<Name>(),EqualTo<Name>(),arena),m_resourceState(arena),m_pipelines(0,MaterialPipelineKeyHasher(),MaterialPipelineKeyEqualTo(),arena),m_instanceMutableCache(0,Hasher<Core::ECS::EntityID>(),EqualTo<Core::ECS::EntityID>(),arena),m_loggedMaterialPaths(0,Hasher<Name>(),EqualTo<Name>(),arena){}"
+    ));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_pipelines.clear();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_materialPassBindingLayout.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_instanceMutableCache.clear();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_loggedMaterialPaths.clear();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_instanceMutableCacheComponentMutationVersion=0u;"));
+    EXPECT_TRUE(ContainsText(compactPipelineTypesSystem, "usizeMaterialPipelineKeyHasher::operator()(constMaterialPipelineKey&key)const{"));
+    EXPECT_TRUE(ContainsText(compactPipelineTypesSystem, "boolMaterialPipelineKeyEqualTo::operator()(constMaterialPipelineKey&lhs,constMaterialPipelineKey&rhs)const{"));
+    EXPECT_TRUE(ContainsText(compactMaterialSystem, "releaseMaterialResourceReferences();m_materialState.invalidateResources();"));
+    EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <impl/ecs_render/material/renderer_draw_types.h>"));
+    EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <core/ecs/entity_id.h>"));
+    EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <core/graphics/rhi/pipeline.h>"));
+    EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <impl/assets_sampler/loader.h>"));
+    EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <impl/assets_texture/loader.h>"));
+    EXPECT_FALSE(ContainsText(stateHeaderSource, "shared/renderer_state.h"));
+    EXPECT_FALSE(ContainsText(stateSystemSource, "shared/renderer_state.h"));
+    EXPECT_FALSE(ContainsText(sharedHeaderSource, "RendererMaterialResourceState"));
+    EXPECT_FALSE(ContainsText(sharedHeaderSource, "RendererMaterialState"));
+    EXPECT_FALSE(ContainsText(sharedSystemSource, "RendererMaterialState"));
+    EXPECT_FALSE(ContainsText(sharedSystemSource, "MaterialPipelineKeyHasher"));
+    EXPECT_FALSE(ContainsText(sharedSystemSource, "MaterialPipelineKeyEqualTo"));
+    EXPECT_FALSE(ContainsText(sharedHeaderSource, "material/renderer_material_state.h"));
+    EXPECT_FALSE(ContainsText(sharedHeaderSource, "material/renderer_draw_types.h"));
+    EXPECT_FALSE(ContainsText(sharedHeaderSource, "material/renderer_pipeline_types.h"));
+    EXPECT_FALSE(ContainsText(sharedHeaderSource, "core/ecs/entity_id.h"));
+    EXPECT_FALSE(ContainsText(sharedHeaderSource, "assets_sampler/loader.h"));
+    EXPECT_FALSE(ContainsText(sharedHeaderSource, "assets_texture/loader.h"));
+    EXPECT_TRUE(ContainsText(materialHeaderSource, "class RendererMaterialState;"));
+    EXPECT_FALSE(ContainsText(materialHeaderSource, "renderer_material_state.h"));
+    EXPECT_TRUE(ContainsText(materialSystemSource, "#include <impl/ecs_render/material/renderer_material_state.h>"));
+    EXPECT_FALSE(ContainsText(materialSystemSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_TRUE(ContainsText(materialInstanceSource, "#include <impl/ecs_render/material/renderer_material_state.h>"));
+    EXPECT_FALSE(ContainsText(materialInstanceSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_TRUE(ContainsText(materialSurfaceSource, "#include <impl/ecs_render/material/renderer_material_state.h>"));
+    EXPECT_FALSE(ContainsText(materialSurfaceSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_TRUE(ContainsText(materialPassResourcesSource, "#include <impl/ecs_render/material/renderer_material_state.h>"));
+    EXPECT_TRUE(ContainsText(materialPassResourcesSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_TRUE(ContainsText(materialPipelineSource, "#include <impl/ecs_render/material/renderer_material_state.h>"));
+    EXPECT_TRUE(ContainsText(materialPipelineSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_FALSE(ContainsText(materialPassDrawSource, "renderer_material_state.h"));
+    EXPECT_TRUE(ContainsText(materialPassDrawSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_FALSE(ContainsText(materialPassSource, "renderer_material_state.h"));
+    EXPECT_FALSE(ContainsText(materialPassSource, "#include <impl/ecs_render/shared/renderer_state.h>"));
+    EXPECT_TRUE(ContainsText(pipelineHeaderSource, "#include <impl/ecs_render/material/renderer_material_state.h>"));
+    EXPECT_TRUE(ContainsText(pipelineHeaderSource, "RendererMaterialState m_materialState;"));
+    EXPECT_TRUE(ContainsText(rendererCmakeSource, "${CMAKE_CURRENT_LIST_DIR}/material/renderer_material_state.cpp"));
+    EXPECT_TRUE(ContainsText(rendererCmakeSource, "${CMAKE_CURRENT_LIST_DIR}/material/renderer_material_state.h"));
+    EXPECT_TRUE(ContainsText(rendererCmakeSource, "${CMAKE_CURRENT_LIST_DIR}/material/renderer_pipeline_types.cpp"));
+}
+
+
 TEST(EcsGraphics, MaterialDrawItemsRetainResourcesWithoutMeshStatePrivilege){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -343,21 +473,21 @@ TEST(EcsGraphics, MaterialDrawItemsRetainResourcesWithoutMeshStatePrivilege){
     AString materialPassSource;
     AString materialResourcesSource;
     AString materialDrawSource;
-    AString rendererStateSource;
+    AString materialStateSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_system.h", materialHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "renderer_draw_types.h", materialDrawTypesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass.cpp", materialPassSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass_resources.cpp", materialResourcesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass_draw.cpp", materialDrawSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "renderer_material_state.h", materialStateSource));
 
     const AStringView materialHeader(materialHeaderSource.data(), materialHeaderSource.size());
     const AStringView materialDrawTypes(materialDrawTypesSource.data(), materialDrawTypesSource.size());
     const AStringView materialPass(materialPassSource.data(), materialPassSource.size());
     const AStringView materialResources(materialResourcesSource.data(), materialResourcesSource.size());
     const AStringView materialDraw(materialDrawSource.data(), materialDrawSource.size());
-    const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
-    const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
+    const AString compactMaterialStateStorage = CompactSource(AStringView(materialStateSource.data(), materialStateSource.size()));
+    const AStringView compactMaterialState(compactMaterialStateStorage.data(), compactMaterialStateStorage.size());
 
     EXPECT_FALSE(ContainsText(materialHeader, "RendererMeshState"));
     EXPECT_FALSE(ContainsText(materialResources, "m_meshState"));
@@ -375,7 +505,7 @@ TEST(EcsGraphics, MaterialDrawItemsRetainResourcesWithoutMeshStatePrivilege){
     EXPECT_FALSE(ContainsText(materialDraw, "findMaterialPassDrawItemResources"));
     EXPECT_FALSE(ContainsText(materialResources, "findMeshResources(drawItem.meshKey"));
     EXPECT_FALSE(ContainsText(materialDraw, "findMeshResources(drawItem.meshKey"));
-    EXPECT_FALSE(ContainsText(compactRendererState, "friendclassRendererMaterialSystem;friendclassRendererRayTracingSystem;"));
+    EXPECT_FALSE(ContainsText(compactMaterialState, "friendclassRendererRayTracingSystem;"));
 }
 
 
@@ -1104,7 +1234,7 @@ TEST(EcsGraphics, RootInvalidatesFeatureResourcesThroughDomainSystems){
     AString csgSystemSource;
     AString csgStateSource;
     AString meshStateSource;
-    AString rendererStateSource;
+    AString materialStateSource;
     AString rootResourcesSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.h", meshHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.cpp", meshSystemSource));
@@ -1114,7 +1244,7 @@ TEST(EcsGraphics, RootInvalidatesFeatureResourcesThroughDomainSystems){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_system.cpp", csgSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "renderer_csg_state.h", csgStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "renderer_mesh_state.h", meshStateSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "renderer_material_state.h", materialStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_resources.cpp", rootResourcesSource));
 
     const AString compactMeshHeaderStorage = CompactSource(AStringView(meshHeaderSource.data(), meshHeaderSource.size()));
@@ -1133,8 +1263,8 @@ TEST(EcsGraphics, RootInvalidatesFeatureResourcesThroughDomainSystems){
     const AStringView compactCsgState(compactCsgStateStorage.data(), compactCsgStateStorage.size());
     const AString compactMeshStateStorage = CompactSource(AStringView(meshStateSource.data(), meshStateSource.size()));
     const AStringView compactMeshState(compactMeshStateStorage.data(), compactMeshStateStorage.size());
-    const AString compactRendererStateStorage = CompactSource(AStringView(rendererStateSource.data(), rendererStateSource.size()));
-    const AStringView compactRendererState(compactRendererStateStorage.data(), compactRendererStateStorage.size());
+    const AString compactMaterialStateStorage = CompactSource(AStringView(materialStateSource.data(), materialStateSource.size()));
+    const AStringView compactMaterialState(compactMaterialStateStorage.data(), compactMaterialStateStorage.size());
     const AString compactRootResourcesStorage = CompactSource(AStringView(rootResourcesSource.data(), rootResourcesSource.size()));
     const AStringView compactRootResources(compactRootResourcesStorage.data(), compactRootResourcesStorage.size());
 
@@ -1147,16 +1277,11 @@ TEST(EcsGraphics, RootInvalidatesFeatureResourcesThroughDomainSystems){
     EXPECT_FALSE(ContainsText(compactMaterialHeader, "public:voidreleaseMaterialResourceReferences();"));
     EXPECT_FALSE(ContainsText(compactCsgHeader, "public:voidreleaseCsgClipContextHeapHandles();"));
 
-    const usize materialStateBegin = compactRendererState.find("classRendererMaterialStatefinal:NoCopy{");
-    const usize materialStateEnd = compactRendererState.find("classRendererDrawStatefinal:NoCopy{", materialStateBegin);
-    ASSERT_NE(materialStateBegin, AStringView::npos);
-    ASSERT_NE(materialStateEnd, AStringView::npos);
-    const AStringView materialState = compactRendererState.substr(materialStateBegin, materialStateEnd - materialStateBegin);
     EXPECT_TRUE(ContainsText(compactMeshState, "private:voidinvalidateResources();"));
-    EXPECT_TRUE(ContainsText(materialState, "private:voidinvalidateResources();"));
+    EXPECT_TRUE(ContainsText(compactMaterialState, "private:voidinvalidateResources();"));
     EXPECT_TRUE(ContainsText(compactCsgState, "private:voidinvalidateResources();"));
     EXPECT_FALSE(ContainsText(compactMeshState, "public:voidinvalidateResources();"));
-    EXPECT_FALSE(ContainsText(materialState, "public:voidinvalidateResources();"));
+    EXPECT_FALSE(ContainsText(compactMaterialState, "public:voidinvalidateResources();"));
     EXPECT_FALSE(ContainsText(compactCsgState, "public:voidinvalidateResources();"));
 
     const usize meshDomainInvalidationBegin = compactMeshSystem.find("RendererMeshSystem::invalidateResources(){");

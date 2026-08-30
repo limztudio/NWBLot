@@ -6,6 +6,7 @@
 
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/material/material_pass_csg_private.h>
+#include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>

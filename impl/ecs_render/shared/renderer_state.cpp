@@ -14,57 +14,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize MaterialPipelineKeyHasher::operator()(const MaterialPipelineKey& key)const{
-    usize seed = Hasher<Name>{}(key.material);
-    ::HashCombine(seed, static_cast<u32>(key.pass));
-    ::HashCombine(seed, key.twoSided ? 1u : 0u);
-    ::HashCombine(seed, static_cast<u32>(key.csgMode));
-    ::HashCombine(seed, Hasher<Name>{}(key.csgEvaluatorVariant));
-    ::HashCombine(seed, key.framebufferInfo.depthFormat);
-    ::HashCombine(seed, key.framebufferInfo.sampleCount);
-    ::HashCombine(seed, key.framebufferInfo.sampleQuality);
-    for(const Core::Format::Enum format : key.framebufferInfo.colorFormats)
-        ::HashCombine(seed, format);
-
-    return seed;
-}
-
-bool MaterialPipelineKeyEqualTo::operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const{
-    return
-        lhs.material == rhs.material
-        && lhs.pass == rhs.pass
-        && lhs.twoSided == rhs.twoSided
-        && lhs.csgMode == rhs.csgMode
-        && lhs.csgEvaluatorVariant == rhs.csgEvaluatorVariant
-        && lhs.framebufferInfo == rhs.framebufferInfo
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-RendererMaterialState::RendererMaterialState(Core::Alloc::GlobalArena& arena)
-    : m_surfaceInfos(0, Hasher<Name>(), EqualTo<Name>(), arena)
-    , m_resourceState(arena)
-    , m_pipelines(0, MaterialPipelineKeyHasher(), MaterialPipelineKeyEqualTo(), arena)
-    , m_instanceMutableCache(0, Hasher<Core::ECS::EntityID>(), EqualTo<Core::ECS::EntityID>(), arena)
-    , m_loggedMaterialPaths(0, Hasher<Name>(), EqualTo<Name>(), arena)
-{}
-
-
-void RendererMaterialState::invalidateResources(){
-    m_pipelines.clear();
-    m_materialPassBindingLayout.reset();
-    m_instanceMutableCache.clear();
-    m_loggedMaterialPaths.clear();
-    m_instanceMutableCacheComponentMutationVersion = 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererDrawState::invalidateResources(){
     m_computeBindingLayout.reset();
     m_instanceBuffer.reset();

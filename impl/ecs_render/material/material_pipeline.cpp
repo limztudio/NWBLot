@@ -6,6 +6,7 @@
 
 #include <impl/ecs_render/avboit/avboit_private.h>
 #include <impl/ecs_render/material/material_shader_variants_private.h>
+#include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/renderer_state.h>
 

@@ -8,11 +8,8 @@
 #include <impl/global.h>
 
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
-#include <impl/ecs_render/material/renderer_draw_types.h>
-#include <impl/ecs_render/material/renderer_pipeline_types.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 
-#include <core/ecs/entity_id.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 
 #include <impl/assets/graphics/mesh/runtime_constants.h>
@@ -21,9 +18,6 @@
 #include <impl/assets/graphics/caustic/sw_binding_slots.h>
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 #include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
-#include <impl/assets_texture/loader.h>
-#include <impl/assets_sampler/loader.h>
-
 #include <global/generic.h>
 #include <global/containers.h>   // dynamic Vector storage for the per-frame SW distinct-mesh table
 
@@ -38,23 +32,7 @@ NWB_IMPL_BEGIN
 
 
 class RendererMeshSystem;
-class RendererMaterialSystem;
 class RendererRayTracingSystem;
-
-
-// Device-lifetime material asset caches retain the descriptor owner for every patched global heap slot.
-struct RendererMaterialResourceState{
-    HashMap<Name, UniquePtr<TextureGpuResource>, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> textureAssetCache;
-    HashMap<Name, UniquePtr<SamplerGpuResource>, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> samplerAssetCache;
-
-    explicit RendererMaterialResourceState(Core::Alloc::GlobalArena& arena)
-        : textureAssetCache(0, Hasher<Name>(), EqualTo<Name>(), arena)
-        , samplerAssetCache(0, Hasher<Name>(), EqualTo<Name>(), arena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Cross-frame Buffer* cache. keepAlive prevents key reuse; failed registrations stay uncached.
@@ -75,27 +53,6 @@ using RtMeshHeapHandleCache = HashMap<
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-class RendererMaterialState final : NoCopy{
-    friend class RendererMaterialSystem;
-
-public:
-    explicit RendererMaterialState(Core::Alloc::GlobalArena& arena);
-
-
-private:
-    void invalidateResources();
-
-
-private:
-    Core::BindingLayoutHandle m_materialPassBindingLayout;
-    HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_surfaceInfos;
-    RendererMaterialResourceState m_resourceState;
-    HashMap<MaterialPipelineKey, MaterialPipelineResources, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo, Core::Alloc::GlobalArena> m_pipelines;
-    HashMap<Core::ECS::EntityID, MaterialInstanceMutableCacheEntry, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>, Core::Alloc::GlobalArena> m_instanceMutableCache;
-    HashMap<Name, RenderPath::Enum, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_loggedMaterialPaths;
-    u64 m_instanceMutableCacheComponentMutationVersion = 0u;
-};
 
 class RendererDrawState final : NoCopy{
     friend class RendererMeshSystem;

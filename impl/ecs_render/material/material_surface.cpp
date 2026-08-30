@@ -4,7 +4,7 @@
 
 #include "material_system.h"
 
-#include <impl/ecs_render/shared/renderer_state.h>
+#include <impl/ecs_render/material/renderer_material_state.h>
 
 #include <core/assets/manager.h>
 #include <core/common/log.h>

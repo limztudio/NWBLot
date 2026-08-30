@@ -14,6 +14,7 @@
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
 #include <impl/ecs_render/kernel/task_timing_feedback.h>
 #include <impl/ecs_render/material/material_instance.h>
+#include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>

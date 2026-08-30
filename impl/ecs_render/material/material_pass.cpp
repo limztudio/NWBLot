@@ -8,7 +8,6 @@
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
-#include <impl/ecs_render/shared/renderer_state.h>
 
 #include <core/common/log.h>
 #include <core/ecs/world.h>

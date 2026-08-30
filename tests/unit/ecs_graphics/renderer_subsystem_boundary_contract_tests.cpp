@@ -550,6 +550,184 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
 }
 
 
+TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+    AString meshHeaderSource;
+    AString meshBindingsSource;
+    AString frameTypesSource;
+    AString materialPassSource;
+    AString materialDrawSource;
+    AString avboitHeaderSource;
+    AString avboitPassSource;
+    AString prefixSource;
+    AString rootGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.h", meshHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_bindings.cpp", meshBindingsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_frame_types.h", frameTypesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass.cpp", materialPassSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass_draw.cpp", materialDrawSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_system.h", avboitHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_pass.cpp", avboitPassSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graphics_prefix.cpp", prefixSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", rootGraphSource));
+
+    const AString compactMeshHeaderStorage = CompactSource(AStringView(meshHeaderSource.data(), meshHeaderSource.size()));
+    const AStringView compactMeshHeader(compactMeshHeaderStorage.data(), compactMeshHeaderStorage.size());
+    const AString compactMeshBindingsStorage = CompactSource(AStringView(meshBindingsSource.data(), meshBindingsSource.size()));
+    const AStringView compactMeshBindings(compactMeshBindingsStorage.data(), compactMeshBindingsStorage.size());
+    const AString compactFrameTypesStorage = CompactSource(AStringView(frameTypesSource.data(), frameTypesSource.size()));
+    const AStringView compactFrameTypes(compactFrameTypesStorage.data(), compactFrameTypesStorage.size());
+    const AString compactMaterialPassStorage = CompactSource(AStringView(materialPassSource.data(), materialPassSource.size()));
+    const AStringView compactMaterialPass(compactMaterialPassStorage.data(), compactMaterialPassStorage.size());
+    const AString compactMaterialDrawStorage = CompactSource(AStringView(materialDrawSource.data(), materialDrawSource.size()));
+    const AStringView compactMaterialDraw(compactMaterialDrawStorage.data(), compactMaterialDrawStorage.size());
+    const AString compactAvboitHeaderStorage = CompactSource(AStringView(avboitHeaderSource.data(), avboitHeaderSource.size()));
+    const AStringView compactAvboitHeader(compactAvboitHeaderStorage.data(), compactAvboitHeaderStorage.size());
+    const AString compactAvboitPassStorage = CompactSource(AStringView(avboitPassSource.data(), avboitPassSource.size()));
+    const AStringView compactAvboitPass(compactAvboitPassStorage.data(), compactAvboitPassStorage.size());
+    const AString compactPrefixStorage = CompactSource(AStringView(prefixSource.data(), prefixSource.size()));
+    const AStringView compactPrefix(compactPrefixStorage.data(), compactPrefixStorage.size());
+    const AString compactRootGraphStorage = CompactSource(AStringView(rootGraphSource.data(), rootGraphSource.size()));
+    const AStringView compactRootGraph(compactRootGraphStorage.data(), compactRootGraphStorage.size());
+
+    EXPECT_TRUE(ContainsText(compactMeshHeader, "usizeinstanceBufferCapacity=0u;"));
+    EXPECT_TRUE(ContainsText(compactMeshHeader, "usizematerialTypedBufferCapacity=0u;"));
+    EXPECT_TRUE(ContainsText(
+        compactMeshHeader,
+        "frameReady(constusizeinstanceCount,constusizematerialTypedByteCount)constnoexcept{"
+    ));
+    EXPECT_TRUE(ContainsText(compactMeshHeader, "instanceBufferCapacity>=instanceCount"));
+    EXPECT_TRUE(ContainsText(
+        compactMeshHeader,
+        "materialTypedBufferCapacity>=Max<usize>(materialTypedByteCount,sizeof(u32))"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compactMeshBindings,
+        ".instanceBufferCapacity=m_drawState.m_instanceBufferCapacity,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compactMeshBindings,
+        ".materialTypedBufferCapacity=m_drawState.m_materialTypedBufferCapacity,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compactFrameTypes,
+        "constECSRenderDetail::MeshFrameBindingSnapshot*frameBindings=nullptr;"
+    ));
+
+    EXPECT_TRUE(ContainsText(compactMaterialPass, "frameBindings.frameReady(instanceCount,materialTypedByteCount)"));
+    EXPECT_TRUE(ContainsText(
+        compactMaterialPass,
+        "materialPassDrawResourcesReady(drawItems.regular,frameBindings)"
+    ));
+    EXPECT_TRUE(ContainsText(compactMaterialPass, "nullptr,&frameBindings"));
+    EXPECT_TRUE(ContainsText(compactMaterialPass, "&csgResources,&frameBindings"));
+    EXPECT_TRUE(ContainsText(compactMaterialDraw, "if(context.frameBindings){"));
+    EXPECT_TRUE(ContainsText(
+        compactMaterialDraw,
+        "outSlots.instance=context.frameBindings->instanceHeapHandle.slot();"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compactMaterialDraw,
+        "outSlots.materialTyped=context.frameBindings->materialTypedHeapHandle.slot();"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compactMaterialDraw,
+        "outSlots.view=context.frameBindings->meshView.heapHandle.slot();"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compactMaterialDraw,
+        "if(context.materialFrameStatesGraphOwned||!meshSystem.meshFrameHeapHandlesReady())returnfalse;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compactMaterialDraw,
+        "setBufferState(context.frameBindings->instanceBuffer.get(),Core::ResourceStates::ShaderResource)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compactMaterialDraw,
+        "setBufferState(context.frameBindings->meshView.buffer.get(),Core::ResourceStates::ConstantBuffer)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compactMaterialDraw,
+        "setBufferState(context.frameBindings->materialTypedBuffer.get(),Core::ResourceStates::ShaderResource)"
+    ));
+
+    EXPECT_TRUE(ContainsText(
+        compactAvboitHeader,
+        "constECSRenderDetail::MeshFrameBindingSnapshot*preparedOccupancyFrameBindings=nullptr"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compactAvboitHeader,
+        "constECSRenderDetail::MeshFrameBindingSnapshot*preparedExtinctionFrameBindings=nullptr"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compactAvboitHeader,
+        "constECSRenderDetail::MeshFrameBindingSnapshot*preparedAccumulationFrameBindings=nullptr"
+    ));
+    EXPECT_TRUE(ContainsText(compactAvboitPass, "NWB_ASSERT(preparedOccupancyFrameBindings);"));
+    EXPECT_TRUE(ContainsText(compactAvboitPass, "NWB_ASSERT(preparedExtinctionFrameBindings);"));
+    EXPECT_TRUE(ContainsText(compactAvboitPass, "NWB_ASSERT(preparedAccumulationFrameBindings);"));
+    EXPECT_EQ(CountText(compactAvboitPass, "*preparedOccupancyFrameBindings,"), 1u);
+    EXPECT_EQ(CountText(compactAvboitPass, "*preparedExtinctionFrameBindings,"), 1u);
+    EXPECT_EQ(CountText(compactAvboitPass, "*preparedAccumulationFrameBindings,"), 1u);
+
+    const TestPath taskHeaderPaths[] = {
+        repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_gbuffer_task.h",
+        repoRoot / "impl" / "ecs_render" / "material" / "task_graph_opaque_compute_tasks.h",
+        repoRoot / "impl" / "ecs_render" / "csg" / "task_graph_opaque_compute_tasks.h",
+        repoRoot / "impl" / "ecs_render" / "csg" / "task_graph_opaque_interval_tasks.h",
+        repoRoot / "impl" / "ecs_render" / "csg" / "task_graph_transparent_interval_tasks.h",
+        repoRoot / "impl" / "ecs_render" / "avboit" / "task_graph_occupancy_tasks.h",
+        repoRoot / "impl" / "ecs_render" / "avboit" / "task_graph_extinction_integration_tasks.h",
+        repoRoot / "impl" / "ecs_render" / "avboit" / "task_graph_accumulation_tasks.h",
+    };
+    usize payloadFrameBindingCount = 0u;
+    for(const TestPath& taskHeaderPath : taskHeaderPaths){
+        AString taskHeaderSource;
+        ASSERT_TRUE(ReadTextFile(taskHeaderPath, taskHeaderSource));
+        const AString compactTaskHeaderStorage = CompactSource(
+            AStringView(taskHeaderSource.data(), taskHeaderSource.size())
+        );
+        const AStringView compactTaskHeader(compactTaskHeaderStorage.data(), compactTaskHeaderStorage.size());
+        payloadFrameBindingCount += CountText(compactTaskHeader, "MeshFrameBindingSnapshotframeBindings;");
+    }
+    EXPECT_EQ(payloadFrameBindingCount, 20u);
+
+    const TestPath taskSourcePaths[] = {
+        repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_gbuffer_task.cpp",
+        repoRoot / "impl" / "ecs_render" / "material" / "task_graph_opaque_compute_tasks.cpp",
+        repoRoot / "impl" / "ecs_render" / "csg" / "task_graph_opaque_compute_tasks.cpp",
+        repoRoot / "impl" / "ecs_render" / "csg" / "task_graph_opaque_interval_tasks.cpp",
+        repoRoot / "impl" / "ecs_render" / "csg" / "task_graph_transparent_interval_tasks.cpp",
+        repoRoot / "impl" / "ecs_render" / "avboit" / "task_graph_occupancy_tasks.cpp",
+        repoRoot / "impl" / "ecs_render" / "avboit" / "task_graph_extinction_integration_tasks.cpp",
+        repoRoot / "impl" / "ecs_render" / "avboit" / "task_graph_accumulation_tasks.cpp",
+    };
+    usize capturedReadinessCount = 0u;
+    usize liveReadinessCount = 0u;
+    usize capturedContextCount = 0u;
+    for(const TestPath& taskSourcePath : taskSourcePaths){
+        AString taskSource;
+        ASSERT_TRUE(ReadTextFile(taskSourcePath, taskSource));
+        const AString compactTaskSourceStorage = CompactSource(AStringView(taskSource.data(), taskSource.size()));
+        const AStringView compactTaskSource(compactTaskSourceStorage.data(), compactTaskSourceStorage.size());
+        capturedReadinessCount += CountText(compactTaskSource, "frameBindings.frameReady(");
+        liveReadinessCount += CountText(compactTaskSource, "materialPassDrawBuffersReady(");
+        capturedContextCount += CountText(AStringView(taskSource.data(), taskSource.size()), "&payload.frameBindings");
+    }
+    EXPECT_EQ(capturedReadinessCount, 16u);
+    EXPECT_EQ(liveReadinessCount, 0u);
+    EXPECT_EQ(capturedContextCount, 17u);
+
+    EXPECT_EQ(CountText(compactPrefix, ".frameBindings=frameBindings;"), 8u);
+    EXPECT_EQ(CountText(compactRootGraph, ".frameBindings=frameBindings;"), 12u);
+    EXPECT_EQ(CountText(compactPrefix, "frameBindings.frameReady("), 1u);
+    EXPECT_EQ(CountText(compactRootGraph, "frameBindings.frameReady("), 4u);
+    EXPECT_EQ(CountText(compactPrefix, "materialPassDrawBuffersReady("), 0u);
+    EXPECT_EQ(CountText(compactRootGraph, "materialPassDrawBuffersReady("), 0u);
+}
+
+
 TEST(EcsGraphics, RootInvalidatesFeatureResourcesThroughDomainSystems){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);

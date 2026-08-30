@@ -60,13 +60,14 @@ bool AvboitCsgReceiverSpanGraphTask::record(
     payload.transparentCsgSnapshot.materialize(receiverSurfaceDrawItems, csgFrameData);
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
     RendererCsgSystem& csgSystem = *payload.csgSystem;
-    const bool drawBuffersReady = materialSystem.materialPassDrawBuffersReady(
+    const bool drawBuffersReady = payload.frameBindings.frameReady(
         payload.transparentCsgSnapshot.instanceCount,
         payload.transparentCsgSnapshot.materialTypedByteCount
     );
     const bool csgResourcesReady = payload.csgResources.frameReady(csgFrameData);
     const bool receiverSurfaceDrawResourcesReady = materialSystem.materialPassDrawResourcesReady(
-        receiverSurfaceDrawItems
+        receiverSurfaceDrawItems,
+        payload.frameBindings
     );
     const bool spanReady =
         payload.csgFrameBuffersUploaded
@@ -138,13 +139,14 @@ bool AvboitCsgIntervalCombineGraphTask::record(
     payload.transparentCsgSnapshot.materialize(receiverSurfaceDrawItems, csgFrameData);
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
     RendererCsgSystem& csgSystem = *payload.csgSystem;
-    const bool drawBuffersReady = materialSystem.materialPassDrawBuffersReady(
+    const bool drawBuffersReady = payload.frameBindings.frameReady(
         payload.transparentCsgSnapshot.instanceCount,
         payload.transparentCsgSnapshot.materialTypedByteCount
     );
     const bool csgResourcesReady = payload.csgResources.frameReady(csgFrameData);
     const bool receiverSurfaceDrawResourcesReady = materialSystem.materialPassDrawResourcesReady(
-        receiverSurfaceDrawItems
+        receiverSurfaceDrawItems,
+        payload.frameBindings
     );
     const bool combineReady =
         payload.csgFrameBuffersUploaded

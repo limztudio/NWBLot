@@ -50,6 +50,7 @@ namespace RendererTaskGraphDetail{
     const MaterialPassDrawItems* preparedTransparentCsgReceiverSurfaceDrawItems = nullptr;
     const CsgFrameGpuData* preparedTransparentCsgFrameData = nullptr;
     const ECSRenderDetail::CsgGraphResourceSnapshot* preparedTransparentCsgResources = nullptr;
+    const ECSRenderDetail::MeshFrameBindingSnapshot* preparedTransparentCsgFrameBindings = nullptr;
     usize preparedTransparentCsgInstanceCount = 0u;
     usize preparedTransparentCsgMaterialTypedByteCount = 0u;
     if(payload.transparentCsgStreamsUploaded && payload.transparentCsgSnapshot.captured){
@@ -60,6 +61,7 @@ namespace RendererTaskGraphDetail{
         preparedTransparentCsgReceiverSurfaceDrawItems = &transparentCsgReceiverSurfaceDrawItems;
         preparedTransparentCsgFrameData = &transparentCsgFrameData;
         preparedTransparentCsgResources = &payload.csgResources;
+        preparedTransparentCsgFrameBindings = &payload.frameBindings;
         preparedTransparentCsgInstanceCount = payload.transparentCsgSnapshot.instanceCount;
         preparedTransparentCsgMaterialTypedByteCount = payload.transparentCsgSnapshot.materialTypedByteCount;
     }
@@ -70,7 +72,7 @@ namespace RendererTaskGraphDetail{
             preparedTransparentCsgReceiverSurfaceDrawItems,
             preparedTransparentCsgFrameData,
             preparedTransparentCsgResources,
-            &payload.frameBindings,
+            preparedTransparentCsgFrameBindings,
             preparedTransparentCsgInstanceCount,
             preparedTransparentCsgMaterialTypedByteCount,
             payload.transparentCsgIntervalTargetsGraphOwned,
@@ -130,7 +132,7 @@ void AvboitOccupancyComputeEmulationGraphTask::discardTiming(Optional<Core::GpuT
             ? payload.csgPlan.matches(meshSystem)
             : payload.plan.matches(meshSystem))
         || !payload.materialDrawBuffersUploaded
-        || !materialSystem.materialPassDrawBuffersReady(
+        || !payload.frameBindings.frameReady(
             payload.instanceCount,
             payload.materialTypedByteCount
         )
@@ -148,7 +150,7 @@ void AvboitOccupancyComputeEmulationGraphTask::discardTiming(Optional<Core::GpuT
     // material/pipeline loss so the packet is discarded and the next frame re-preflights instead of accepting
     // Occupancy with stale generated vertices.
     if(
-        !materialSystem.materialPassDrawResourcesReady(drawItems)
+        !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
         || (csgComputeEmulation && (
             !payload.csgFrameBuffersUploaded
             || !payload.csgIntervalSampleImageStatesGraphOwned
@@ -188,7 +190,8 @@ void AvboitOccupancyComputeEmulationGraphTask::discardTiming(Optional<Core::GpuT
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true,
-        csgComputeEmulation ? &payload.csgResources : nullptr
+        csgComputeEmulation ? &payload.csgResources : nullptr,
+        &payload.frameBindings
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
@@ -229,7 +232,7 @@ void AvboitOccupancySharedComputeEmulationGraphTask::discardTiming(Optional<Core
     if(
         !payload.plan.matches(meshSystem, payload.drawIndex)
         || !payload.materialDrawBuffersUploaded
-        || !materialSystem.materialPassDrawBuffersReady(
+        || !payload.frameBindings.frameReady(
             payload.instanceCount,
             payload.materialTypedByteCount
         )
@@ -239,7 +242,7 @@ void AvboitOccupancySharedComputeEmulationGraphTask::discardTiming(Optional<Core
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     MaterialPassDrawItems drawItems{ scratchArena };
     payload.plan.materialize(payload.drawIndex, drawItems);
-    if(!materialSystem.materialPassDrawResourcesReady(drawItems))
+    if(!materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings))
         return false;
 
     if(payload.phase == Phase::Generate){
@@ -282,6 +285,8 @@ void AvboitOccupancySharedComputeEmulationGraphTask::discardTiming(Optional<Core
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true,
+        nullptr,
+        &payload.frameBindings
     };
     if(payload.phase == Phase::Generate){
         materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
@@ -343,6 +348,7 @@ void AvboitOccupancySharedComputeEmulationGraphTask::discarded(Payload& payload)
             preparedOccupancyDrawItems,
             preparedOccupancyCsgFrameData,
             &payload.csgResources,
+            &payload.frameBindings,
             preparedOccupancyInstanceCount,
             preparedOccupancyMaterialTypedByteCount,
             // The task's declared depth/coverage uses have already lowered and committed their graph barrier.

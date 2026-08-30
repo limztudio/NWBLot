@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
@@ -46,6 +47,7 @@ struct AvboitAccumulationComputeEmulationGraphTask{
         Core::Graphics* graphics = nullptr;
         RendererMeshSystem* meshSystem = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
+        ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
@@ -95,6 +97,7 @@ struct AvboitAccumulationSharedComputeEmulationGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* accumulationTiming = nullptr;
+        ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::RegularSharedComputeEmulationGraphPlan plan;
         usize drawIndex = 0u;
         usize instanceCount = 0u;
@@ -124,6 +127,7 @@ struct AvboitAccumulationGraphTask{
         RendererAvboitSystem* avboitSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot accumulationSnapshot;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         bool accumulationPhasePrepared = false;

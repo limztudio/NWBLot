@@ -73,7 +73,7 @@ bool CsgReceiverSpanBuildGraphTask::record(
     const bool deferredResourcesReady =
         hasDeferredDrawItems
         && payload.materialDrawBuffersUploaded
-        && materialSystem.materialPassDrawBuffersReady(
+        && payload.frameBindings.frameReady(
             payload.opaqueDrawSnapshot.instanceCount,
             payload.opaqueDrawSnapshot.materialTypedByteCount
         )
@@ -91,7 +91,7 @@ bool CsgReceiverSpanBuildGraphTask::record(
     const bool csgReceiverSurfaceDrawResourcesReady =
         csgResourcesReady
         && (opaqueDrawItems.csgReceiverSurface.empty()
-            || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
+            || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface, payload.frameBindings))
     ;
     if(csgResourcesReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady){
         csgSystem.dispatchCsgReceiverSpanBuild(
@@ -151,7 +151,7 @@ bool CsgIntervalCombineGraphTask::record(
     const bool deferredResourcesReady =
         hasDeferredDrawItems
         && payload.materialDrawBuffersUploaded
-        && materialSystem.materialPassDrawBuffersReady(
+        && payload.frameBindings.frameReady(
             payload.opaqueDrawSnapshot.instanceCount,
             payload.opaqueDrawSnapshot.materialTypedByteCount
         )
@@ -169,7 +169,7 @@ bool CsgIntervalCombineGraphTask::record(
     const bool csgReceiverSurfaceDrawResourcesReady =
         csgResourcesReady
         && (opaqueDrawItems.csgReceiverSurface.empty()
-            || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
+            || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface, payload.frameBindings))
     ;
     if(csgResourcesReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady){
         csgSystem.dispatchCsgIntervalCombine(
@@ -233,7 +233,7 @@ bool CsgIntervalSampleGraphTask::record(
     const bool deferredResourcesReady =
         hasDeferredDrawItems
         && payload.materialDrawBuffersUploaded
-        && materialSystem.materialPassDrawBuffersReady(
+        && payload.frameBindings.frameReady(
             payload.opaqueDrawSnapshot.instanceCount,
             payload.opaqueDrawSnapshot.materialTypedByteCount
         )
@@ -251,12 +251,13 @@ bool CsgIntervalSampleGraphTask::record(
     ;
     const bool csgDrawResourcesReady =
         csgResourcesReady
-        && (opaqueDrawItems.csg.empty() || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csg))
+        && (opaqueDrawItems.csg.empty()
+            || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csg, payload.frameBindings))
     ;
     const bool csgReceiverSurfaceDrawResourcesReady =
         csgResourcesReady
         && (opaqueDrawItems.csgReceiverSurface.empty()
-            || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
+            || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface, payload.frameBindings))
     ;
     // The producer validates the same frozen full CSG stream before opening this cross-callback measure. Keep
     // the fallback defensive: if a later readiness check disagrees, retire the reservation instead of leaving
@@ -291,7 +292,8 @@ bool CsgIntervalSampleGraphTask::record(
             payload.materialFrameStatesGraphOwned,
             payload.materialGeometryStatesGraphOwned,
             payload.csgComputeEmulationOutputStatesGraphOwned,
-            &payload.csgResources
+            &payload.csgResources,
+            &payload.frameBindings
         };
         if(!opaqueDrawItems.csg.empty()){
             if(payload.csgComputeEmulationOutputStatesGraphOwned){

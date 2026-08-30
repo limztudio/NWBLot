@@ -174,6 +174,8 @@ ECSRenderDetail::MeshFrameBindingSnapshot RendererMeshSystem::meshFrameBindingSn
         },
         .instanceHeapHandle = m_drawState.m_instanceBufferHeapHandle,
         .materialTypedHeapHandle = m_drawState.m_materialTypedBufferHeapHandle,
+        .instanceBufferCapacity = m_drawState.m_instanceBufferCapacity,
+        .materialTypedBufferCapacity = m_drawState.m_materialTypedBufferCapacity,
     };
 }
 

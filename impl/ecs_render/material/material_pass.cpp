@@ -168,6 +168,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     const MaterialPassDrawItemPartitions& drawItems,
     const CsgFrameGpuData& csgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const usize instanceCount,
     const usize materialTypedByteCount,
     const bool csgIntervalSampleImageStatesGraphOwned,
@@ -210,11 +211,11 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
 
     // Graph declaration froze the draw ordering and published all stream bytes before this task records. Keep this
     // consumer side-effect free: in particular, never replace its mesh-view, material, or CSG buffer contents.
-    if(!materialPassDrawBuffersReady(instanceCount, materialTypedByteCount)){
+    if(!frameBindings.frameReady(instanceCount, materialTypedByteCount)){
         discardEmulationOutputTiming();
         return;
     }
-    const bool regularDrawResourcesReady = materialPassDrawResourcesReady(drawItems.regular);
+    const bool regularDrawResourcesReady = materialPassDrawResourcesReady(drawItems.regular, frameBindings);
     // An active output handoff covers every regular compute draw. If a late resource check disagrees with the
     // producer, reject this prepared raster rather than consuming a buffer the current packet did not generate.
     if(emulationOutputEntryStateGraphOwned && !regularDrawResourcesReady){
@@ -223,7 +224,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     }
     const bool csgResourcesReady = csgResources.frameReady(csgFrameData);
     const bool csgDrawResourcesReady = csgResourcesReady
-        && (drawItems.csg.empty() || materialPassDrawResourcesReady(drawItems.csg))
+        && (drawItems.csg.empty() || materialPassDrawResourcesReady(drawItems.csg, frameBindings))
     ;
     if(csgEmulationOutputEntryStateGraphOwned && !csgDrawResourcesReady){
         discardEmulationOutputTiming();
@@ -244,7 +245,9 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         csgClipBufferStatesGraphOwned,
         materialFrameStatesGraphOwned,
         materialGeometryStatesGraphOwned,
-        emulationOutputEntryStateGraphOwned
+        emulationOutputEntryStateGraphOwned,
+        nullptr,
+        &frameBindings
     };
     // CSG may opt in only through its own frozen alias-free producer. This remains separate from the regular flag
     // so mixed streams cannot suppress the local interleaving required by an unowned CSG output.
@@ -261,7 +264,8 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         materialFrameStatesGraphOwned,
         materialGeometryStatesGraphOwned,
         csgEmulationOutputEntryStateGraphOwned,
-        &csgResources
+        &csgResources,
+        &frameBindings
     };
     const auto recordPreparedDraws = [&](){
         if(regularDrawResourcesReady)

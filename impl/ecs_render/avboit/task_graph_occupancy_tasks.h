@@ -88,6 +88,7 @@ struct AvboitOccupancyComputeEmulationGraphTask{
         Core::Graphics* graphics = nullptr;
         RendererMeshSystem* meshSystem = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
+        ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
@@ -138,6 +139,7 @@ struct AvboitOccupancySharedComputeEmulationGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* occupancyTiming = nullptr;
+        ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::RegularSharedComputeEmulationGraphPlan plan;
         usize drawIndex = 0u;
         usize instanceCount = 0u;
@@ -170,6 +172,7 @@ struct AvboitOccupancyGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool hasTransparentRenderers = false;
+        ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot occupancySnapshot;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         bool occupancyPhasePrepared = false;

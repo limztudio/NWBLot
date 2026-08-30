@@ -67,6 +67,7 @@ namespace RendererResourceLookupMode{
 
 namespace ECSRenderDetail{
     struct CsgGraphResourceSnapshot;
+    struct MeshFrameBindingSnapshot;
     struct MeshViewGpuData;
 
     struct MaterialPassBufferSnapshot{
@@ -141,6 +142,7 @@ public:
         const MaterialPassDrawItemPartitions& drawItems,
         const CsgFrameGpuData& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         usize instanceCount,
         usize materialTypedByteCount,
         // The graph can declare the removed-interval StorageImage reads at a producer/consumer boundary. Direct
@@ -232,9 +234,25 @@ public:
     );
     void pruneMaterialInstanceMutableCache();
     [[nodiscard]] bool materialPassDrawResourcesReady(const MeshResources& mesh)const;
+    [[nodiscard]] bool materialPassDrawResourcesReady(
+        const MeshResources& mesh,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+    )const;
     [[nodiscard]] bool materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems);
+    [[nodiscard]] bool materialPassDrawResourcesReady(
+        const MaterialPassDrawItems& drawItems,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+    );
     [[nodiscard]] bool meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems);
+    [[nodiscard]] bool meshMaterialPassDrawResourcesReady(
+        const MaterialPassDrawItemVector& drawItems,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+    );
     [[nodiscard]] bool computeMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems);
+    [[nodiscard]] bool computeMaterialPassDrawResourcesReady(
+        const MaterialPassDrawItemVector& drawItems,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+    );
     // Resolves the exact persistent sampled textures selected by frozen prepared draw streams. It never creates
     // assets or descriptors: a missing or unresolved cached resource makes the collection unavailable so callers
     // can retain their existing compatibility route.
@@ -252,12 +270,7 @@ public:
     [[nodiscard]] bool prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] u32 meshDispatchFlags(const MeshResources& mesh, MaterialPipelinePass::Enum pass, bool twoSided, bool meshletConeCullScaleSafe)const;
     [[nodiscard]] u32 materialPassDrawDispatchFlags(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MeshResources& mesh)const;
-    void setMaterialPassCommonBufferStates(
-        Core::CommandList& commandList,
-        const MeshResources& mesh,
-        bool materialFrameStatesGraphOwned,
-        bool materialGeometryStatesGraphOwned
-    );
+    void setMaterialPassCommonBufferStates(const MaterialPassDrawContext& context, const MeshResources& mesh);
     void setMaterialPassDrawItemResourceStates(
         const MaterialPassDrawContext& context,
         const MaterialPassDrawItem& drawItem,

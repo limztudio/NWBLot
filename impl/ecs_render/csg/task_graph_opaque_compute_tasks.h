@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/graphics/task_graph/task_graph.h>
@@ -43,6 +44,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphTask{
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* meshViewSetupReady = nullptr;
         const bool* sceneShadingSetupReady = nullptr;
+        MeshFrameBindingSnapshot frameBindings;
         CsgGraphResourceSnapshot csgResources;
         OpaqueCsgReceiverComputeEmulationGraphPlan plan;
         usize instanceCount = 0u;
@@ -76,6 +78,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
         const bool* meshViewSetupReady = nullptr;
         const bool* sceneShadingSetupReady = nullptr;
         Optional<Core::GpuTimingMeasure>* opaqueCsgTiming = nullptr;
+        MeshFrameBindingSnapshot frameBindings;
         CsgGraphResourceSnapshot csgResources;
         OpaqueCsgIntervalSampleComputeEmulationGraphPlan plan;
         usize instanceCount = 0u;

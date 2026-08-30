@@ -74,7 +74,7 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
 
     const bool deferredResourcesReady =
         payload.materialDrawBuffersUploaded
-        && materialSystem.materialPassDrawBuffersReady(
+        && payload.frameBindings.frameReady(
             payload.instanceCount,
             payload.materialTypedByteCount
         )
@@ -87,7 +87,7 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
     ;
     if(
         !csgResourcesReady
-        || !materialSystem.materialPassDrawResourcesReady(drawItems)
+        || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
     )
         return true;
 
@@ -111,7 +111,8 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true,
-        &payload.csgResources
+        &payload.csgResources,
+        &payload.frameBindings
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
@@ -175,7 +176,7 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
 
     const bool deferredResourcesReady =
         payload.materialDrawBuffersUploaded
-        && materialSystem.materialPassDrawBuffersReady(
+        && payload.frameBindings.frameReady(
             payload.instanceCount,
             payload.materialTypedByteCount
         )
@@ -188,7 +189,7 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
     ;
     if(
         !csgResourcesReady
-        || !materialSystem.materialPassDrawResourcesReady(drawItems)
+        || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
     )
         return true;
     if(payload.opaqueCsgTiming->has_value())
@@ -220,7 +221,8 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true,
-        &payload.csgResources
+        &payload.csgResources,
+        &payload.frameBindings
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;

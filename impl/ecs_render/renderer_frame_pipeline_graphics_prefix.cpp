@@ -572,7 +572,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         if(
             !materialInstances.valid()
             || !materialTyped.valid()
-            || !m_materialSystem.materialPassDrawBuffersReady(instanceData, materialTypedBytes)
+            || !frameBindings.frameReady(instanceData.size(), materialTypedBytes.size())
         ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared opaque material draw buffers were unavailable during graph declaration"));
             return false;
@@ -819,6 +819,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         materialTypedBytes.size()
     );
     ECSRenderDetail::CsgReceiverSpanBuildGraphTask::Payload csgReceiverSpanPayload{ m_arena };
+    csgReceiverSpanPayload.frameBindings = frameBindings;
     if(hasOpaqueCsgFrameWork){
         csgReceiverSpanPayload.materialSystem = &m_materialSystem;
         csgReceiverSpanPayload.csgSystem = &m_csgSystem;
@@ -841,6 +842,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         );
     }
     ECSRenderDetail::CsgIntervalCombineGraphTask::Payload csgIntervalCombinePayload{ m_arena };
+    csgIntervalCombinePayload.frameBindings = frameBindings;
     if(hasOpaqueCsgFrameWork){
         csgIntervalCombinePayload.materialSystem = &m_materialSystem;
         csgIntervalCombinePayload.csgSystem = &m_csgSystem;
@@ -867,6 +869,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     csgIntervalSamplePayload.csgResources = csgResources;
     ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask::Payload
         opaqueCsgIntervalSampleComputeEmulationPayload{ m_arena };
+    opaqueCsgIntervalSampleComputeEmulationPayload.frameBindings = frameBindings;
     if(hasOpaqueCsgFrameWork){
         csgIntervalSamplePayload.graphics = &m_graphics;
         csgIntervalSamplePayload.materialSystem = &m_materialSystem;
@@ -1053,6 +1056,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     // wrong when multiple frozen draw items select the same output. The plan deliberately enables only the fully
     // alias-free regular opaque case; all other streams keep their established local interleaved handoff.
     ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask::Payload opaqueComputeEmulationPayload{ m_arena };
+    opaqueComputeEmulationPayload.frameBindings = frameBindings;
     const bool opaqueComputeEmulationPlanCaptured = gbufferPayload.materialFrameStatesGraphOwned
         && gbufferPayload.materialGeometryStatesGraphOwned
         && gbufferMaterialSampledTexturesCollected
@@ -1122,6 +1126,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask::Payload opaqueCsgReceiverComputeEmulationPayload{
         m_arena
     };
+    opaqueCsgReceiverComputeEmulationPayload.frameBindings = frameBindings;
     const bool opaqueCsgReceiverComputeEmulationPlanCaptured = hasOpaqueCsgFrameWork
         && hasCsgFrameGpuWork
         && gbufferPayload.materialFrameStatesGraphOwned
@@ -1593,6 +1598,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             &opaqueRegularSharedComputeEmulationTiming,
             &instanceData,
             &materialTypedBytes,
+            &frameBindings,
             opaqueSharedMaterialDrawBuffersUploaded,
             opaqueSharedMaterialFrameStatesGraphOwned,
             opaqueSharedMaterialGeometryStatesGraphOwned,
@@ -1620,6 +1626,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
                 .setResourceSetUses(resourceSetUses, resourceSetUseCount)
             ;
             ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Payload payload;
+            payload.frameBindings = frameBindings;
             payload.meshSystem = &m_meshSystem;
             payload.materialSystem = &m_materialSystem;
             payload.targets = &deferredTargets;

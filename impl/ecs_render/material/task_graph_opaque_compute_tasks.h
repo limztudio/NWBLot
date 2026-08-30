@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
 
@@ -43,6 +44,7 @@ struct OpaqueRegularComputeEmulationGraphTask{
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* meshViewSetupReady = nullptr;
         const bool* sceneShadingSetupReady = nullptr;
+        MeshFrameBindingSnapshot frameBindings;
         OpaqueRegularComputeEmulationGraphPlan plan;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
@@ -78,6 +80,7 @@ struct OpaqueRegularSharedComputeEmulationGraphTask{
         const bool* meshViewSetupReady = nullptr;
         const bool* sceneShadingSetupReady = nullptr;
         Optional<Core::GpuTimingMeasure>* opaqueRegularTiming = nullptr;
+        MeshFrameBindingSnapshot frameBindings;
         RegularSharedComputeEmulationGraphPlan plan;
         usize drawIndex = 0u;
         usize instanceCount = 0u;

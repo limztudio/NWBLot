@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 
 #include <core/graphics/gpu_timing.h>
@@ -42,6 +43,7 @@ struct AvboitCsgReceiverSpanGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* transparentCsgIntervalsTiming = nullptr;
+        MeshFrameBindingSnapshot frameBindings;
         CsgGraphResourceSnapshot csgResources;
         TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
         bool csgFrameBuffersUploaded = false;
@@ -68,6 +70,7 @@ struct AvboitCsgIntervalCombineGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* transparentCsgIntervalsTiming = nullptr;
+        MeshFrameBindingSnapshot frameBindings;
         CsgGraphResourceSnapshot csgResources;
         TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
         bool csgFrameBuffersUploaded = false;

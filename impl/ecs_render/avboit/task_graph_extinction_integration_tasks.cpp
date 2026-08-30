@@ -65,7 +65,7 @@ void AvboitExtinctionComputeEmulationGraphTask::discardTiming(Optional<Core::Gpu
             ? payload.csgPlan.matches(meshSystem)
             : payload.plan.matches(meshSystem))
         || !payload.materialDrawBuffersUploaded
-        || !materialSystem.materialPassDrawBuffersReady(
+        || !payload.frameBindings.frameReady(
             payload.instanceCount,
             payload.materialTypedByteCount
         )
@@ -83,7 +83,7 @@ void AvboitExtinctionComputeEmulationGraphTask::discardTiming(Optional<Core::Gpu
     // Reject a late material/pipeline loss so the packet is discarded and the next frame re-preflights instead
     // of accepting an all-or-nothing Extinction phase with stale generated vertices.
     if(
-        !materialSystem.materialPassDrawResourcesReady(drawItems)
+        !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
         || (csgComputeEmulation && (
             !payload.csgFrameBuffersUploaded
             || !payload.csgIntervalSampleImageStatesGraphOwned
@@ -123,7 +123,8 @@ void AvboitExtinctionComputeEmulationGraphTask::discardTiming(Optional<Core::Gpu
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true,
-        csgComputeEmulation ? &payload.csgResources : nullptr
+        csgComputeEmulation ? &payload.csgResources : nullptr,
+        &payload.frameBindings
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
@@ -164,7 +165,7 @@ void AvboitExtinctionSharedComputeEmulationGraphTask::discardTiming(Optional<Cor
     if(
         !payload.plan.matches(meshSystem, payload.drawIndex)
         || !payload.materialDrawBuffersUploaded
-        || !materialSystem.materialPassDrawBuffersReady(
+        || !payload.frameBindings.frameReady(
             payload.instanceCount,
             payload.materialTypedByteCount
         )
@@ -174,7 +175,7 @@ void AvboitExtinctionSharedComputeEmulationGraphTask::discardTiming(Optional<Cor
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     MaterialPassDrawItems drawItems{ scratchArena };
     payload.plan.materialize(payload.drawIndex, drawItems);
-    if(!materialSystem.materialPassDrawResourcesReady(drawItems))
+    if(!materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings))
         return false;
 
     if(payload.phase == Phase::Generate){
@@ -215,6 +216,8 @@ void AvboitExtinctionSharedComputeEmulationGraphTask::discardTiming(Optional<Cor
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true,
+        nullptr,
+        &payload.frameBindings
     };
     if(payload.phase == Phase::Generate){
         materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
@@ -276,6 +279,7 @@ void AvboitExtinctionSharedComputeEmulationGraphTask::discarded(Payload& payload
             preparedExtinctionDrawItems,
             preparedExtinctionCsgFrameData,
             &payload.csgResources,
+            &payload.frameBindings,
             preparedExtinctionInstanceCount,
             preparedExtinctionMaterialTypedByteCount,
             payload.extinctionCsgIntervalSampleImageStatesGraphOwned,

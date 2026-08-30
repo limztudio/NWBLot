@@ -2024,7 +2024,9 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitPrePayload.hasTransparentRenderers = hasTransparentRenderers;
     avboitPrePayload.frameBindings = frameBindings;
     avboitPrePayload.csgResources = csgResources;
+    avboitCsgReceiverSpanPayload.frameBindings = frameBindings;
     avboitCsgReceiverSpanPayload.csgResources = csgResources;
+    avboitCsgIntervalCombinePayload.frameBindings = frameBindings;
     avboitCsgIntervalCombinePayload.csgResources = csgResources;
 
 
@@ -2071,12 +2073,15 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 || !csgCutters.valid()
                 || !csgClipContextSlots.valid()
                 || !csgIntervalSampleState.valid()
-                || !m_materialSystem.materialPassDrawBuffersReady(
-                    transparentCsgInstanceData,
-                    transparentCsgMaterialTypedBytes
+                || !frameBindings.frameReady(
+                    transparentCsgInstanceData.size(),
+                    transparentCsgMaterialTypedBytes.size()
                 )
                 || !csgResources.frameReady(transparentCsgFrameData)
-                || !m_materialSystem.materialPassDrawResourcesReady(transparentCsgDrawItems.csgReceiverSurface)
+                || !m_materialSystem.materialPassDrawResourcesReady(
+                    transparentCsgDrawItems.csgReceiverSurface,
+                    frameBindings
+                )
             ){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared transparent CSG interval resources were unavailable during graph declaration"));
                 return;
@@ -2741,6 +2746,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     AvboitOccupancyGraphTask::Payload avboitOccupancyPayload{ m_arena };
     AvboitOccupancyComputeEmulationGraphTask::Payload avboitOccupancyComputeEmulationPayload{ m_arena };
+    avboitOccupancyPayload.frameBindings = frameBindings;
+    avboitOccupancyComputeEmulationPayload.frameBindings = frameBindings;
     avboitOccupancyPayload.avboitSystem = &m_avboitSystem;
     avboitOccupancyPayload.targets = &deferredTargets;
     avboitOccupancyPayload.timingTicket = &avboitPreTimingTicket;
@@ -2790,11 +2797,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             if(
                 !materialInstances.valid()
                 || !materialTyped.valid()
-                || !m_materialSystem.materialPassDrawBuffersReady(
-                    occupancyInstanceData,
-                    occupancyMaterialTypedBytes
+                || !frameBindings.frameReady(
+                    occupancyInstanceData.size(),
+                    occupancyMaterialTypedBytes.size()
                 )
-                || !m_materialSystem.materialPassDrawResourcesReady(occupancyDrawItems.regular)
+                || !m_materialSystem.materialPassDrawResourcesReady(occupancyDrawItems.regular, frameBindings)
                 || (occupancyHasCsgDrawItems && (
                     !occupancyCsgFrameData.hasWork()
                     ||
@@ -2802,7 +2809,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                     || !csgCutters.valid()
                     || !csgClipContextSlots.valid()
                     || !csgResources.frameReady(occupancyCsgFrameData)
-                    || !m_materialSystem.materialPassDrawResourcesReady(occupancyDrawItems.csg)
+                    || !m_materialSystem.materialPassDrawResourcesReady(occupancyDrawItems.csg, frameBindings)
                 ))
             ){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT occupancy resources were unavailable during graph declaration"));
@@ -3638,6 +3645,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             &deferredTargets,
             &occupancySharedComputeEmulationPlan,
             &avboitOccupancyComputeEmulationTiming,
+            &frameBindings,
             occupancySharedComputeEmulationInstanceCount,
             occupancySharedComputeEmulationMaterialTypedByteCount,
             occupancyStreamsUploaded = avboitOccupancyPayload.occupancyStreamsUploaded,
@@ -3668,6 +3676,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 .setResourceSetUses(resourceSetUses, resourceSetUseCount)
             ;
             AvboitOccupancySharedComputeEmulationGraphTask::Payload payload;
+            payload.frameBindings = frameBindings;
             payload.graphics = &m_graphics;
             payload.meshSystem = &m_meshSystem;
             payload.materialSystem = &m_materialSystem;
@@ -3846,6 +3855,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     // phase can overwrite the other phase's instance/typed/CSG stream.
     AvboitExtinctionGraphTask::Payload avboitExtinctionPayload{ m_arena };
     AvboitExtinctionComputeEmulationGraphTask::Payload avboitExtinctionComputeEmulationPayload{ m_arena };
+    avboitExtinctionPayload.frameBindings = frameBindings;
+    avboitExtinctionComputeEmulationPayload.frameBindings = frameBindings;
     avboitExtinctionPayload.avboitSystem = &m_avboitSystem;
     avboitExtinctionPayload.targets = &deferredTargets;
     avboitExtinctionPayload.timingTicket = &avboitExtinctionTimingTicket;
@@ -3895,11 +3906,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             if(
                 !materialInstances.valid()
                 || !materialTyped.valid()
-                || !m_materialSystem.materialPassDrawBuffersReady(
-                    extinctionInstanceData,
-                    extinctionMaterialTypedBytes
+                || !frameBindings.frameReady(
+                    extinctionInstanceData.size(),
+                    extinctionMaterialTypedBytes.size()
                 )
-                || !m_materialSystem.materialPassDrawResourcesReady(extinctionDrawItems.regular)
+                || !m_materialSystem.materialPassDrawResourcesReady(extinctionDrawItems.regular, frameBindings)
                 || (extinctionHasCsgDrawItems && (
                     !extinctionCsgFrameData.hasWork()
                     || !csgReceiverRanges.valid()
@@ -3907,7 +3918,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                     || !csgClipContextSlots.valid()
                     || !csgIntervalSampleState.valid()
                     || !csgResources.frameReady(extinctionCsgFrameData)
-                    || !m_materialSystem.materialPassDrawResourcesReady(extinctionDrawItems.csg)
+                    || !m_materialSystem.materialPassDrawResourcesReady(extinctionDrawItems.csg, frameBindings)
                 ))
             ){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT extinction resources were unavailable during graph declaration"));
@@ -4574,6 +4585,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             &deferredTargets,
             &extinctionSharedComputeEmulationPlan,
             &avboitExtinctionComputeEmulationTiming,
+            &frameBindings,
             extinctionSharedComputeEmulationInstanceCount,
             extinctionSharedComputeEmulationMaterialTypedByteCount,
             extinctionStreamsUploaded,
@@ -4604,6 +4616,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 .setResourceSetUses(resourceSetUses, resourceSetUseCount)
             ;
             AvboitExtinctionSharedComputeEmulationGraphTask::Payload payload;
+            payload.frameBindings = frameBindings;
             payload.graphics = &m_graphics;
             payload.meshSystem = &m_meshSystem;
             payload.materialSystem = &m_materialSystem;
@@ -4760,6 +4773,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     // bytes after integration, rather than letting native recording re-gather mutable scene state after extinction.
     AvboitAccumulationGraphTask::Payload avboitAccumulationPayload{ m_arena };
     AvboitAccumulationComputeEmulationGraphTask::Payload avboitAccumulationComputeEmulationPayload{ m_arena };
+    avboitAccumulationPayload.frameBindings = frameBindings;
+    avboitAccumulationComputeEmulationPayload.frameBindings = frameBindings;
     avboitAccumulationPayload.avboitSystem = &m_avboitSystem;
     avboitAccumulationPayload.targets = &deferredTargets;
     avboitAccumulationPayload.timingTicket = &avboitAccumulationTimingTicket;
@@ -4810,11 +4825,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             if(
                 !materialInstances.valid()
                 || !materialTyped.valid()
-                || !m_materialSystem.materialPassDrawBuffersReady(
-                    accumulationInstanceData,
-                    accumulationMaterialTypedBytes
+                || !frameBindings.frameReady(
+                    accumulationInstanceData.size(),
+                    accumulationMaterialTypedBytes.size()
                 )
-                || !m_materialSystem.materialPassDrawResourcesReady(accumulationDrawItems.regular)
+                || !m_materialSystem.materialPassDrawResourcesReady(accumulationDrawItems.regular, frameBindings)
                 || (accumulationHasCsgDrawItems && (
                     !accumulationCsgFrameData.hasWork()
                     || !csgReceiverRanges.valid()
@@ -4822,7 +4837,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                     || !csgClipContextSlots.valid()
                     || !csgIntervalSampleState.valid()
                     || !csgResources.frameReady(accumulationCsgFrameData)
-                    || !m_materialSystem.materialPassDrawResourcesReady(accumulationDrawItems.csg)
+                    || !m_materialSystem.materialPassDrawResourcesReady(accumulationDrawItems.csg, frameBindings)
                 ))
             ){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT accumulation resources were unavailable during graph declaration"));
@@ -5509,6 +5524,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             &deferredTargets,
             &accumulationSharedComputeEmulationPlan,
             &avboitAccumulationComputeEmulationTiming,
+            &frameBindings,
             accumulationSharedComputeEmulationInstanceCount,
             accumulationSharedComputeEmulationMaterialTypedByteCount,
             accumulationStreamsUploaded,
@@ -5539,6 +5555,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 .setResourceSetUses(resourceSetUses, resourceSetUseCount)
             ;
             AvboitAccumulationSharedComputeEmulationGraphTask::Payload payload;
+            payload.frameBindings = frameBindings;
             payload.graphics = &m_graphics;
             payload.meshSystem = &m_meshSystem;
             payload.materialSystem = &m_materialSystem;

@@ -24,6 +24,7 @@ struct DeferredFrameTargets;
 
 namespace ECSRenderDetail{
     struct CsgGraphResourceSnapshot;
+    struct MeshFrameBindingSnapshot;
 };
 
 struct AvboitFrameTargets{
@@ -125,6 +126,9 @@ struct MaterialPassDrawContext{
     // Prepared CSG draws consume the root-captured descriptor/buffer tuple. Regular and compatibility paths leave
     // this null because no CSG heap binding is part of their draw contract.
     const ECSRenderDetail::CsgGraphResourceSnapshot* csgResources = nullptr;
+    // Graph-owned material recording consumes the root-captured frame buffers and descriptor generation. Native
+    // compatibility callers leave this null and explicitly retain the live Mesh-owned binding path.
+    const ECSRenderDetail::MeshFrameBindingSnapshot* frameBindings = nullptr;
 };
 
 

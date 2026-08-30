@@ -70,11 +70,11 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
         return false;
     if(
         !payload.materialDrawBuffersUploaded
-        || !materialSystem.materialPassDrawBuffersReady(
+        || !payload.frameBindings.frameReady(
             payload.instanceCount,
             payload.materialTypedByteCount
         )
-        || !materialSystem.materialPassDrawResourcesReady(drawItems)
+        || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
     )
         return true;
 
@@ -95,6 +95,8 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true,
+        nullptr,
+        &payload.frameBindings
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
@@ -153,11 +155,11 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::record(
     payload.plan.materialize(payload.drawIndex, drawItems);
     if(
         !payload.materialDrawBuffersUploaded
-        || !materialSystem.materialPassDrawBuffersReady(
+        || !payload.frameBindings.frameReady(
             payload.instanceCount,
             payload.materialTypedByteCount
         )
-        || !materialSystem.materialPassDrawResourcesReady(drawItems)
+        || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
     ){
         discardTiming(payload.opaqueRegularTiming);
         if(payload.phase == Phase::Raster)
@@ -182,6 +184,8 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::record(
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true,
+        nullptr,
+        &payload.frameBindings
     };
     if(payload.phase == Phase::Generate)
         materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);

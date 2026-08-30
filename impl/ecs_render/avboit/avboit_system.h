@@ -152,6 +152,7 @@ public:
         const MaterialPassDrawItemPartitions* preparedOccupancyDrawItems = nullptr,
         const CsgFrameGpuData* preparedOccupancyCsgFrameData = nullptr,
         const ECSRenderDetail::CsgGraphResourceSnapshot* preparedOccupancyCsgResources = nullptr,
+        const ECSRenderDetail::MeshFrameBindingSnapshot* preparedOccupancyFrameBindings = nullptr,
         usize preparedOccupancyInstanceCount = 0u,
         usize preparedOccupancyMaterialTypedByteCount = 0u,
         // The normal task-graph path declares depth as ShaderResource and coverage as UnorderedAccess before this
@@ -178,6 +179,7 @@ public:
         const MaterialPassDrawItemPartitions* preparedExtinctionDrawItems = nullptr,
         const CsgFrameGpuData* preparedExtinctionCsgFrameData = nullptr,
         const ECSRenderDetail::CsgGraphResourceSnapshot* preparedExtinctionCsgResources = nullptr,
+        const ECSRenderDetail::MeshFrameBindingSnapshot* preparedExtinctionFrameBindings = nullptr,
         usize preparedExtinctionInstanceCount = 0u,
         usize preparedExtinctionMaterialTypedByteCount = 0u,
         bool extinctionCsgIntervalSampleImageStatesGraphOwned = false,
@@ -196,6 +198,7 @@ public:
         const MaterialPassDrawItemPartitions* preparedAccumulationDrawItems = nullptr,
         const CsgFrameGpuData* preparedAccumulationCsgFrameData = nullptr,
         const ECSRenderDetail::CsgGraphResourceSnapshot* preparedAccumulationCsgResources = nullptr,
+        const ECSRenderDetail::MeshFrameBindingSnapshot* preparedAccumulationFrameBindings = nullptr,
         usize preparedAccumulationInstanceCount = 0u,
         usize preparedAccumulationMaterialTypedByteCount = 0u,
         // The normal task-graph path declares the two accumulation attachments and read-only deferred depth as

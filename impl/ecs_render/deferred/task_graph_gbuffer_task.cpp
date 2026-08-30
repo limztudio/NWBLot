@@ -72,14 +72,14 @@ namespace ECSRenderDetail{
     const bool deferredResourcesReady =
         hasDeferredDrawItems
         && payload.materialDrawBuffersUploaded
-        && materialSystem.materialPassDrawBuffersReady(
+        && payload.frameBindings.frameReady(
             payload.opaqueDrawSnapshot.instanceCount,
             payload.opaqueDrawSnapshot.materialTypedByteCount
         )
     ;
     const bool regularDrawResourcesReady =
         deferredResourcesReady
-        && materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.regular)
+        && materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.regular, payload.frameBindings)
     ;
     MaterialPassDrawItems regularMeshDrawItems{ scratchArena };
     const MaterialPassDrawItems* regularDrawItemsForGbuffer = &opaqueDrawItems.regular;
@@ -103,7 +103,8 @@ namespace ECSRenderDetail{
     ;
     const bool csgReceiverSurfaceDrawResourcesReady =
         csgResourcesReady
-        && (opaqueDrawItems.csgReceiverSurface.empty() || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
+        && (opaqueDrawItems.csgReceiverSurface.empty()
+            || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface, payload.frameBindings))
     ;
     if(deferredResourcesReady){
         // Every opaque CSG frame byte is now captured in immutable graph uploads. Native recording consumes those
@@ -132,7 +133,9 @@ namespace ECSRenderDetail{
             false,
             payload.materialFrameStatesGraphOwned,
             payload.materialGeometryStatesGraphOwned,
-            payload.regularComputeEmulationOutputStatesGraphOwned
+            payload.regularComputeEmulationOutputStatesGraphOwned,
+            nullptr,
+            &payload.frameBindings
         };
         if(
             regularDrawResourcesReady
@@ -195,7 +198,8 @@ namespace ECSRenderDetail{
             payload.materialFrameStatesGraphOwned,
             payload.materialGeometryStatesGraphOwned,
             payload.csgReceiverComputeEmulationOutputStatesGraphOwned,
-            &payload.csgResources
+            &payload.csgResources,
+            &payload.frameBindings
         };
         if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
             Core::GpuTimingMeasure timing(

@@ -44,6 +44,7 @@ struct CsgReceiverSpanBuildGraphTask{
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* meshViewSetupReady = nullptr;
         const bool* sceneShadingSetupReady = nullptr;
+        MeshFrameBindingSnapshot frameBindings;
         CsgGraphResourceSnapshot csgResources;
         OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
         bool materialDrawBuffersUploaded = false;
@@ -73,6 +74,7 @@ struct CsgIntervalCombineGraphTask{
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* meshViewSetupReady = nullptr;
         const bool* sceneShadingSetupReady = nullptr;
+        MeshFrameBindingSnapshot frameBindings;
         CsgGraphResourceSnapshot csgResources;
         OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
         bool materialDrawBuffersUploaded = false;

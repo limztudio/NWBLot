@@ -65,6 +65,8 @@ namespace ECSRenderDetail{
         MeshViewBufferSnapshot meshView;
         Core::GpuDescriptorHandle instanceHeapHandle = Core::GpuDescriptorHandle::invalid();
         Core::GpuDescriptorHandle materialTypedHeapHandle = Core::GpuDescriptorHandle::invalid();
+        usize instanceBufferCapacity = 0u;
+        usize materialTypedBufferCapacity = 0u;
 
         [[nodiscard]] bool bindingValid()const noexcept{
             return
@@ -75,6 +77,19 @@ namespace ECSRenderDetail{
                 && instanceHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
                 && materialTypedHeapHandle.valid()
                 && materialTypedHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+            ;
+        }
+        [[nodiscard]] bool frameReady(const usize instanceCount, const usize materialTypedByteCount)const noexcept{
+            if(
+                materialTypedByteCount == 0u
+                || (materialTypedByteCount & (sizeof(u32) - 1u)) != 0u
+            )
+                return false;
+
+            return
+                bindingValid()
+                && instanceBufferCapacity >= instanceCount
+                && materialTypedBufferCapacity >= Max<usize>(materialTypedByteCount, sizeof(u32))
             ;
         }
     };

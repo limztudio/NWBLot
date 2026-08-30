@@ -24,7 +24,7 @@ int Run(const int argc, char** argv){
         NWB_CERR << "[tex_conv] logger.init() failed\n";
         return -1;
     }
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
 
     return NWB::TexConv::Run(argc, argv);
 }

@@ -1113,7 +1113,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     desc
         .setIdentity(Name("render.shadow_prepare"))
         .setMarkerLabel("Shadow Preparation")
-        .setQueue(GraphicsQueueRequest())
+        .setQueue(GraphicsPreferredComputeQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(dependencies, dependencyCount)
         .setExternalStateSources(

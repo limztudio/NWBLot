@@ -408,6 +408,79 @@ bool CommandListResourceStateHandoff::buildTextureRangeSubset(
     return true;
 }
 
+bool CommandListResourceStateHandoff::coversTextureRangeWithOwnership(
+    Texture* const texture,
+    const TextureSubresourceSet subresources,
+    const GpuPhysicalQueueId expectedOwnerQueue,
+    const GpuPhysicalQueueId expectedReleaseDestinationQueue
+)const{
+    if(
+        !m_valid
+        || m_deviceGeneration == 0u
+        || !texture
+        || !expectedOwnerQueue.valid()
+    )
+        return false;
+
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(
+        texture->getCreationDescription(),
+        TextureSubresourceMipResolve::Range
+    );
+    if(resolvedSubresources.numMipLevels == 0u || resolvedSubresources.numArraySlices == 0u)
+        return false;
+
+    const auto ownershipMatches = [&expectedOwnerQueue, &expectedReleaseDestinationQueue](
+        const GpuPhysicalQueueId ownerQueue,
+        const GpuPhysicalQueueId releaseDestinationQueue
+    ){
+        if(ownerQueue != expectedOwnerQueue)
+            return false;
+        return expectedOwnerQueue == expectedReleaseDestinationQueue
+            ? !releaseDestinationQueue.valid()
+            : releaseDestinationQueue == expectedReleaseDestinationQueue
+        ;
+    };
+
+    const PermanentTextureState* permanentState = nullptr;
+    for(const PermanentTextureState& state : m_permanentTextureStates){
+        if(state.texture != texture)
+            continue;
+        if(
+            permanentState
+            || !ownershipMatches(state.ownerQueue, state.releaseDestinationQueue)
+        )
+            return false;
+        permanentState = &state;
+    }
+    if(permanentState)
+        return true;
+
+    for(MipLevel mipOffset = 0u; mipOffset < resolvedSubresources.numMipLevels; ++mipOffset){
+        const MipLevel mipLevel = resolvedSubresources.baseMipLevel + mipOffset;
+        for(ArraySlice arrayOffset = 0u; arrayOffset < resolvedSubresources.numArraySlices; ++arrayOffset){
+            const ArraySlice arraySlice = resolvedSubresources.baseArraySlice + arrayOffset;
+            const TextureState* matchingState = nullptr;
+            for(const TextureState& state : m_textureStates){
+                if(
+                    state.texture != texture
+                    || state.mipLevel != mipLevel
+                    || state.arraySlice != arraySlice
+                )
+                    continue;
+                if(
+                    matchingState
+                    || !ownershipMatches(state.ownerQueue, state.releaseDestinationQueue)
+                )
+                    return false;
+                matchingState = &state;
+            }
+            if(!matchingState)
+                return false;
+        }
+    }
+    return true;
+}
+
 bool CommandListResourceStateHandoff::copyFrom(const CommandListResourceStateHandoff& source){
     if(this == &source)
         return source.valid() && source.m_deviceGeneration != 0u;

@@ -10732,6 +10732,89 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsIntoLaterGraph)
     ASSERT_NE(handoff.terminalRanges, nullptr);
     ASSERT_EQ(handoff.waitTokenCount, 1u);
 
+    // A descriptor cannot widen one terminal source to cover mip 1 when its immutable packet snapshot contains
+    // only mip 0. The acquire must reject during recording rather than treating the nonempty subset as proof of
+    // the whole claimed range.
+    const CommandListResourceStateHandoff* const mip0StateSource = sourceRecordedGraph.taskFinalStateSeed(
+        sourceCompiledGraph,
+        sourceMip0Task
+    );
+    ASSERT_NE(mip0StateSource, nullptr);
+    GpuTaskGraph incompleteSourceGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuExternalCompletionId incompleteSourceCompletion = incompleteSourceGraph.importExternalCompletion(
+        GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/multi_import_incomplete_source_completion"))
+            .setMarkerLabel("Multi Import Incomplete Source Completion")
+    );
+    ASSERT_TRUE(incompleteSourceCompletion.valid());
+    const GpuGraphInitialOwnerHandoffSourceDesc incompleteSource{
+        .range = GpuTaskResourceRange{
+            .textureSubresources = TextureSubresourceSet(0u, 2u, 0u, 1u),
+        },
+        .sourceQueue = handoff.terminalRanges[0u].sourceQueue,
+        .destinationQueue = handoff.destinationQueue,
+        .completion = incompleteSourceCompletion,
+        .minimumCompletionToken = handoff.terminalRanges[0u].token,
+        .stateSource = mip0StateSource,
+    };
+    const GpuGraphResourceId incompleteSourceTexture = incompleteSourceGraph.importTexture(
+        texture,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/multi_import_incomplete_source_texture"))
+            .setMarkerLabel("Multi Import Incomplete Source Texture")
+            .setType(GpuGraphResourceType::Texture)
+            .setInitialState(ResourceStates::ShaderResource)
+            .setInitialOwnerHandoffSources(&incompleteSource, 1u)
+    );
+    ASSERT_TRUE(incompleteSourceTexture.valid());
+    const GpuTaskResourceUse incompleteSourceUse{
+        .resource = incompleteSourceTexture,
+        .range = incompleteSource.range,
+        .requiredState = ResourceStates::ShaderResource,
+        .access = GpuTaskResourceAccess::Read,
+    };
+    GpuTaskDesc incompleteSourceTaskDesc;
+    incompleteSourceTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/multi_import_incomplete_source_use"))
+        .setMarkerLabel("Multi Import Incomplete Source Use")
+        .setQueue(graphicsRequest)
+        .setResourceUses(&incompleteSourceUse, 1u)
+    ;
+    bool incompleteSourceRecorded = false;
+    const GpuTaskId incompleteSourceTask = incompleteSourceGraph.addTask<NativePacketExternalFinalTextureProbeTask>(
+        incompleteSourceTaskDesc,
+        NativePacketExternalFinalTextureProbeTask::Payload{
+            .texture = texture.get(),
+            .recorded = &incompleteSourceRecorded,
+        }
+    );
+    ASSERT_TRUE(incompleteSourceTask.valid());
+    GpuTaskGraphAnalysis incompleteSourceAnalysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments incompleteSourceAssignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph incompleteSourceCompiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena incompleteSourceScratch(Name("tests/descriptor_buffer/multi_import_incomplete_source_scratch"));
+    ASSERT_TRUE(compiler.compile(
+        incompleteSourceGraph,
+        incompleteSourceAnalysis,
+        topology,
+        incompleteSourceAssignments,
+        incompleteSourceCompiledGraph,
+        incompleteSourceScratch
+    ));
+    const GpuSubmissionPacketId incompleteSourcePacket = incompleteSourceCompiledGraph.packetForTask(
+        incompleteSourceTask
+    );
+    ASSERT_TRUE(incompleteSourcePacket.valid());
+    GpuRecordedGraph incompleteSourceRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
+        incompleteSourceGraph,
+        incompleteSourceCompiledGraph,
+        GpuSubmissionPacketRange{ .first = incompleteSourcePacket, .packetCount = 1u },
+        incompleteSourceRecordedGraph
+    ));
+    EXPECT_EQ(incompleteSourceRecordedGraph.find(incompleteSourcePacket), nullptr);
+    EXPECT_FALSE(incompleteSourceRecorded);
+
     GpuTaskGraph destinationGraph(DescriptorBufferRoundTripTest::arena());
     const GpuExternalCompletionId destinationCompletions[] = {
         destinationGraph.importExternalCompletion(
@@ -11167,6 +11250,33 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsCrossQueueTextu
     const QueueSubmissionToken* const mip1Wait = waitTokenForRange(handoff.terminalRanges[1u]);
     ASSERT_NE(mip0Wait, nullptr);
     ASSERT_NE(mip1Wait, nullptr);
+    const GpuTaskGraphExternalResourceHandoffRange* computeRange = nullptr;
+    for(usize rangeIndex = 0u; rangeIndex < handoff.terminalRangeCount; ++rangeIndex){
+        if(handoff.terminalRanges[rangeIndex].sourceQueue == computeQueue){
+            computeRange = handoff.terminalRanges + rangeIndex;
+            break;
+        }
+    }
+    ASSERT_NE(computeRange, nullptr);
+    ASSERT_NE(handoff.stateSource, nullptr);
+    EXPECT_TRUE(handoff.stateSource->coversTextureRangeWithOwnership(
+        texture.get(),
+        computeRange->range.textureSubresources,
+        computeQueue,
+        graphicsQueue
+    ));
+    EXPECT_FALSE(handoff.stateSource->coversTextureRangeWithOwnership(
+        texture.get(),
+        computeRange->range.textureSubresources,
+        graphicsQueue,
+        graphicsQueue
+    ));
+    EXPECT_FALSE(handoff.stateSource->coversTextureRangeWithOwnership(
+        texture.get(),
+        computeRange->range.textureSubresources,
+        computeQueue,
+        computeQueue
+    ));
 
     GpuTaskGraph destinationGraph(asyncScope.arena());
     const GpuExternalCompletionId completions[] = {

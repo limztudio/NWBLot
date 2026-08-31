@@ -246,11 +246,20 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         switch(resource.type){
         case GpuGraphResourceType::Texture:{
             Texture* const texture = graph.textureForResource(barrier.resource);
-            if(!texture || !scratch.stateSubsetScratch.buildTextureRangeSubset(
-                *sourceStates,
-                texture,
-                barrier.range.textureSubresources
-            ))
+            if(
+                !texture
+                || !sourceStates->coversTextureRangeWithOwnership(
+                    texture,
+                    barrier.range.textureSubresources,
+                    barrier.sourceQueue,
+                    barrier.destinationQueue
+                )
+                || !scratch.stateSubsetScratch.buildTextureRangeSubset(
+                    *sourceStates,
+                    texture,
+                    barrier.range.textureSubresources
+                )
+            )
                 return false;
             break;
         }

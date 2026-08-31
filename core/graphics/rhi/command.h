@@ -268,6 +268,15 @@ public:
         Texture* texture,
         TextureSubresourceSet subresources
     );
+    // Imported exclusive-owner texture handoffs must provide one concrete state for every selected subresource.
+    // Verify that exact coverage before a graph lowers its paired acquire, including the source owner and (when
+    // distinct) the release destination captured by the producer's native state tracker.
+    [[nodiscard]] bool coversTextureRangeWithOwnership(
+        Texture* texture,
+        TextureSubresourceSet subresources,
+        GpuPhysicalQueueId expectedOwnerQueue,
+        GpuPhysicalQueueId expectedReleaseDestinationQueue
+    )const;
     // Copies a valid state snapshot without exposing backend tracker storage.  Packet recording uses this to retain
     // graph-owned producer seeds while legacy consumers still request their own final handoff.
     [[nodiscard]] bool copyFrom(const CommandListResourceStateHandoff& source);

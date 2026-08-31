@@ -288,6 +288,7 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
             hasExternalFinalRelease
             && (
                 desc.externalFinalState == ResourceStates::Unknown
+                || desc.queueSharing != ResourceQueueSharing::Exclusive
                 || (
                     desc.type != GpuGraphResourceType::Texture
                     && desc.type != GpuGraphResourceType::Buffer
@@ -354,9 +355,20 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
             )
                 return {};
             for(usize previousSourceIndex = 0u; previousSourceIndex < sourceIndex; ++previousSourceIndex){
+                const GpuGraphInitialOwnerHandoffSourceDesc& previousSource =
+                    desc.initialOwnerHandoffSources[previousSourceIndex]
+                ;
+                // One completion binding supplies one physical-queue timeline token at submission. Reusing it for
+                // sources from different queues would make a later graph impossible to submit safely: one acquire
+                // would necessarily wait on the wrong producer frontier.
+                if(
+                    source.completion == previousSource.completion
+                    && source.sourceQueue != previousSource.sourceQueue
+                )
+                    return {};
                 if(__hidden_gpu_task_graph_storage::TextureRangesOverlap(
                     source.range.textureSubresources,
-                    desc.initialOwnerHandoffSources[previousSourceIndex].range.textureSubresources
+                    previousSource.range.textureSubresources
                 ))
                     return {};
             }

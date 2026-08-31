@@ -196,11 +196,20 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
             switch(graphResource.type){
             case GpuGraphResourceType::Texture:{
                 Texture* const texture = graph.textureForResource(resource);
-                if(!texture || !stateSubset.buildTextureRangeSubset(
-                    *sourceStates,
-                    texture,
-                    source.range.textureSubresources
-                ))
+                if(
+                    !texture
+                    || !sourceStates->coversTextureRangeWithOwnership(
+                        texture,
+                        source.range.textureSubresources,
+                        source.sourceQueue,
+                        exportInfo->destinationQueue
+                    )
+                    || !stateSubset.buildTextureRangeSubset(
+                        *sourceStates,
+                        texture,
+                        source.range.textureSubresources
+                    )
+                )
                     return {};
                 break;
             }

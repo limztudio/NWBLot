@@ -21,6 +21,7 @@
 #include <core/telemetry/frame_graph_contributor.h>
 #include <global/filesystem/operations.h>
 #include <global/filesystem/path.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -9122,6 +9123,59 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     );
     ASSERT_EQ(scoredGraph.packet(scoredThirdPacket).dependencyCount, 1u);
     EXPECT_EQ(scoredGraph.packetDependencies(scoredThirdPacket)[0u].producer, scoredFirstPacket);
+}
+
+TEST(GpuTaskGraph, ReducesDenseLayeredDagAndPreservesStableTopologicalOrder){
+    constexpr usize s_LayerCount = 3u;
+    constexpr usize s_LayerWidth = 16u;
+    constexpr usize s_TaskCount = s_LayerCount * s_LayerWidth;
+    constexpr usize s_RawEdgeCount = 3u * s_LayerWidth * s_LayerWidth;
+    constexpr usize s_SchedulingEdgeCount = 2u * s_LayerWidth * s_LayerWidth;
+
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Name taskBaseName("tests/task_graph/dense_layered_task_");
+    Graphics::GpuTaskId tasks[s_TaskCount] = {};
+    for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
+        char taskIndexBuffer[32u] = {};
+        const usize layerIndex = taskIndex / s_LayerWidth;
+        const usize dependencyCount = layerIndex * s_LayerWidth;
+        tasks[taskIndex] = AddTask(
+            graph,
+            DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer)),
+            "Dense Layered DAG Task",
+            tasks,
+            dependencyCount
+        );
+        ASSERT_TRUE(tasks[taskIndex].valid());
+    }
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    EXPECT_TRUE(analysis.validFor(graph));
+    ASSERT_EQ(analysis.edges().size(), s_RawEdgeCount);
+    EXPECT_EQ(analysis.explicitEdgeCount(), s_RawEdgeCount);
+    EXPECT_EQ(analysis.inferredEdgeCount(), 0u);
+    EXPECT_TRUE(analysis.inferredEdges().empty());
+    ASSERT_EQ(analysis.topologicalOrder().size(), s_TaskCount);
+    for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex)
+        EXPECT_EQ(analysis.topologicalOrder()[taskIndex], tasks[taskIndex]);
+
+    ASSERT_EQ(analysis.schedulingEdges().size(), s_SchedulingEdgeCount);
+    usize schedulingEdgeIndex = 0u;
+    for(usize destinationLayer = 1u; destinationLayer < s_LayerCount; ++destinationLayer){
+        for(usize consumerOffset = 0u; consumerOffset < s_LayerWidth; ++consumerOffset){
+            for(usize producerOffset = 0u; producerOffset < s_LayerWidth; ++producerOffset){
+                const Graphics::GpuTaskDependencyEdge& edge = analysis.schedulingEdges()[schedulingEdgeIndex++];
+                EXPECT_EQ(edge.producer, tasks[(destinationLayer - 1u) * s_LayerWidth + producerOffset]);
+                EXPECT_EQ(edge.consumer, tasks[destinationLayer * s_LayerWidth + consumerOffset]);
+                EXPECT_EQ(edge.hazard, Graphics::GpuTaskHazardType::Explicit);
+                EXPECT_FALSE(edge.resource.valid());
+                EXPECT_FALSE(edge.resourceVersion.valid());
+            }
+        }
+    }
+    EXPECT_EQ(schedulingEdgeIndex, s_SchedulingEdgeCount);
 }
 
 TEST(GpuTaskGraph, TracksOnlyTheNearestWholeResourceWriters){

@@ -55,6 +55,14 @@ constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
     return queueBit != 0u && (static_cast<u8>(sharing) & queueBit) != 0u;
 }
 
+// The graph and Vulkan lowerer deliberately keep raw depth/stencil plane copies on Graphics. Vulkan permits
+// non-Graphics depth/stencil copies only when optional per-format queue features have been enabled and queried;
+// this backend does neither, so choosing a Graphics transport is the portable, fail-closed public contract.
+[[nodiscard]] static bool TextureUploadRequiresGraphicsQueue(const TextureDesc& textureDesc)noexcept{
+    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
+    return formatInfo.hasDepth || formatInfo.hasStencil;
+}
+
 struct SetupUploadSameClassRouting{
     GpuPhysicalQueueId primaryQueue;
     bool enabled = false;
@@ -142,8 +150,12 @@ struct SetupUploadSameClassRouting{
     GraphicsBackend::Device& device,
     const CommandQueue::Enum requestedQueue,
     const usize uploadBytes,
-    const bool hasKnownFinalState
+    const bool hasKnownFinalState,
+    const bool requiresGraphicsQueue = false
 )noexcept{
+    if(requiresGraphicsQueue)
+        return CommandQueue::Graphics;
+
     switch(requestedQueue){
     case CommandQueue::kCount:
         if(uploadBytes < s_TransferPreferredUploadMinimumBytes || !hasKnownFinalState)
@@ -169,11 +181,24 @@ struct SetupUploadSameClassRouting{
 // final state, and an already-resolved physical transport. Keep the public API synchronous while using the same
 // compiler/recorder/transaction path as graph-owned frame uploads. Because callers receive only a resource handle,
 // graph-owned no-op consumer packets retain the legacy same-queue readiness guarantee before the call returns.
-[[nodiscard]] static GpuQueueRequest SetupUploadGraphQueueRequest(const CommandQueue::Enum uploadQueue)noexcept{
+[[nodiscard]] static GpuQueueRequest SetupUploadGraphQueueRequest(
+    const CommandQueue::Enum uploadQueue,
+    const bool requiresGraphicsQueue = false
+)noexcept{
     GpuQueueRequest request;
-    request.requiredCapabilities = GpuQueueCapability::Transfer;
+    request.requiredCapabilities = requiresGraphicsQueue
+        ? static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Transfer)
+            | static_cast<u8>(GpuQueueCapability::Graphics)
+        )
+        : GpuQueueCapability::Transfer
+    ;
     request.allowFallback = false;
     request.compilerMayOverridePreference = false;
+    if(requiresGraphicsQueue){
+        request.preferredQueue = GpuQueuePreference::Graphics;
+        return request;
+    }
     switch(uploadQueue){
     case CommandQueue::Graphics:
         request.preferredQueue = GpuQueuePreference::Graphics;
@@ -511,23 +536,22 @@ static bool ComputeTextureUploadByteSize(const Graphics::TextureSetupDesc& desc,
         return false;
 
     const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
-    const u32 formatBlockWidth = GetFormatBlockWidth(formatInfo);
-    const u32 formatBlockHeight = GetFormatBlockHeight(formatInfo);
-    if(formatBlockWidth == 0 || formatBlockHeight == 0 || formatInfo.bytesPerBlock == 0)
+    TextureUploadAspectLayout aspectLayout;
+    if(!GetTextureUploadAspectLayout(formatInfo, desc.aspect, aspectLayout))
         return false;
 
     const u32 width = Max<u32>(1u, textureDesc.width >> desc.mipLevel);
     const u32 height = Max<u32>(1u, textureDesc.height >> desc.mipLevel);
     const u32 depth = Max<u32>(1u, textureDesc.depth >> desc.mipLevel);
 
-    const u64 blockCountX = DivideUp(static_cast<u64>(width), static_cast<u64>(formatBlockWidth));
-    const u64 blockCountY = DivideUp(static_cast<u64>(height), static_cast<u64>(formatBlockHeight));
-    if(blockCountX > Limit<u64>::s_Max / formatInfo.bytesPerBlock)
+    const u64 blockCountX = DivideUp(static_cast<u64>(width), static_cast<u64>(aspectLayout.blockWidth));
+    const u64 blockCountY = DivideUp(static_cast<u64>(height), static_cast<u64>(aspectLayout.blockHeight));
+    if(blockCountX > Limit<u64>::s_Max / aspectLayout.bytesPerBlock)
         return false;
 
-    const u64 naturalRowPitch = blockCountX * formatInfo.bytesPerBlock;
+    const u64 naturalRowPitch = blockCountX * aspectLayout.bytesPerBlock;
     const u64 effectiveRowPitch = desc.rowPitch != 0 ? static_cast<u64>(desc.rowPitch) : naturalRowPitch;
-    if(effectiveRowPitch == 0 || effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % formatInfo.bytesPerBlock) != 0)
+    if(effectiveRowPitch == 0 || effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % aspectLayout.bytesPerBlock) != 0)
         return false;
     if(blockCountY > Limit<u64>::s_Max / effectiveRowPitch)
         return false;
@@ -603,11 +627,12 @@ static bool ValidateTextureSetupUpload(const Graphics::TextureSetupDesc& desc){
     }
 
     const FormatInfo& formatInfo = GetFormatInfo(desc.textureDesc.format);
-    // VkBufferImageCopy permits exactly one depth/stencil aspect per copy. The public setup descriptor has one
-    // packed payload and cannot state separate depth/stencil byte layouts, so accepting it would either skip the
-    // upload in debug or issue an explicitly unsupported native copy in release.
-    if(formatInfo.hasDepth && formatInfo.hasStencil){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up texture '{}': combined depth/stencil uploads require an explicit per-aspect upload API"), StringConvert(desc.textureDesc.name.c_str()));
+    TextureUploadAspect::Enum resolvedAspect;
+    if(!ResolveTextureUploadAspect(formatInfo, desc.aspect, resolvedAspect)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Graphics: failed to set up texture '{}': upload aspect must name one aspect present in the texture format; D24S8/D32S8 require Depth or Stencil")
+            , StringConvert(desc.textureDesc.name.c_str())
+        );
         return false;
     }
     // A retained texture must publish a concrete state. Leaving it Unknown makes command-list close restore an
@@ -663,13 +688,6 @@ static bool ValidateTextureSetupUpload(const Graphics::TextureSetupDesc& desc){
         );
         return false;
     }
-    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
-    if(formatInfo.hasDepth && formatInfo.hasStencil){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch '{}': combined depth/stencil uploads require an explicit per-aspect upload API")
-            , StringConvert(textureDesc.name.c_str())
-        );
-        return false;
-    }
     if(textureDesc.keepInitialState && desc.finalState != textureDesc.initialState){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch '{}': keep-initial-state requires final state {}")
             , StringConvert(textureDesc.name.c_str())
@@ -688,6 +706,7 @@ static bool ValidateTextureSetupUpload(const Graphics::TextureSetupDesc& desc){
         regionDesc.depthPitch = region.depthPitch;
         regionDesc.arraySlice = region.arraySlice;
         regionDesc.mipLevel = region.mipLevel;
+        regionDesc.aspect = region.aspect;
         if(!ValidateTextureSetupUpload(regionDesc))
             return false;
         if(AddOverflows<usize>(outTotalByteCount, region.dataSize)){
@@ -707,6 +726,9 @@ static bool ValidateTextureSetupUpload(const Graphics::TextureSetupDesc& desc){
     const usize uploadBytes,
     const TextureDesc& textureDesc
 )noexcept{
+    if(TextureUploadRequiresGraphicsQueue(textureDesc))
+        return CommandQueue::Graphics;
+
     const auto canUse = [&](const CommandQueue::Enum queue){
         return queue == CommandQueue::Graphics
             || (device.getQueue(queue) && QueueSharingIncludesQueue(textureDesc.queueSharing, queue))
@@ -1619,11 +1641,13 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
     if(!desc.data || desc.uploadDataSize == 0)
         return device.createTexture(desc.textureDesc);
 
+    const bool requiresGraphicsQueue = __hidden_graphics::TextureUploadRequiresGraphicsQueue(desc.textureDesc);
     const CommandQueue::Enum uploadQueue = __hidden_graphics::ResolveSetupUploadQueue(
         device,
         desc.queue,
         desc.uploadDataSize,
-        desc.textureDesc.initialState != ResourceStates::Unknown
+        desc.textureDesc.initialState != ResourceStates::Unknown,
+        requiresGraphicsQueue
     );
     const __hidden_graphics::SetupUploadSameClassRouting sameClassRouting =
         __hidden_graphics::ResolveSetupUploadSameClassRouting(device, uploadQueue, desc.uploadDataSize)
@@ -1646,7 +1670,7 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
         m_allocator.getObjectArena(),
         uploadDesc.queueSharing,
         uploadQueue,
-        [&texture, &desc, &uploadDesc, uploadQueue, sameClassRouting, &uploadToken](GpuTaskGraph& graph){
+        [&texture, &desc, &uploadDesc, uploadQueue, requiresGraphicsQueue, sameClassRouting, &uploadToken](GpuTaskGraph& graph){
             const GpuGraphResourceId destination = graph.importTexture(
                 texture,
                 GpuGraphResourceDesc{}
@@ -1664,7 +1688,7 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
             uploadTaskDesc
                 .setIdentity(Name("graphics.setup_texture.upload"))
                 .setMarkerLabel("Setup Texture Upload")
-                .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue))
+                .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue, requiresGraphicsQueue))
                 .setScheduling(__hidden_graphics::SetupUploadGraphScheduling(
                     desc.uploadDataSize,
                     sameClassRouting.enabled,
@@ -1682,6 +1706,7 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
                     .depthPitch = desc.depthPitch,
                     .finalState = __hidden_graphics::SetupUploadGraphFinalState(uploadDesc.initialState),
                     .acceptedToken = &uploadToken,
+                    .aspect = desc.aspect,
                 }
             );
         },
@@ -1730,6 +1755,7 @@ bool Graphics::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
         return false;
 
     const TextureDesc& textureDesc = desc.destination->getDescription();
+    const bool requiresGraphicsQueue = __hidden_graphics::TextureUploadRequiresGraphicsQueue(textureDesc);
     const CommandQueue::Enum uploadQueue = __hidden_graphics::ResolveTextureUploadBatchQueue(
         device,
         desc.queue,
@@ -1753,7 +1779,7 @@ bool Graphics::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
         m_allocator.getObjectArena(),
         textureDesc.queueSharing,
         uploadQueue,
-        [&desc, &textureDesc, uploadQueue, sameClassRouting, &uploadToken](GpuTaskGraph& graph){
+        [&desc, &textureDesc, uploadQueue, requiresGraphicsQueue, sameClassRouting, &uploadToken](GpuTaskGraph& graph){
             const GpuGraphResourceId destination = graph.importTexture(
                 desc.destination,
                 GpuGraphResourceDesc{}
@@ -1790,7 +1816,7 @@ bool Graphics::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
                 uploadTaskDesc
                     .setIdentity(Name("graphics.upload_texture_batch.upload"))
                     .setMarkerLabel("Texture Upload Batch")
-                    .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue))
+                    .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue, requiresGraphicsQueue))
                     .setScheduling(scheduling)
                 ;
                 if(previousTask.valid())
@@ -1807,6 +1833,7 @@ bool Graphics::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
                         .depthPitch = region.depthPitch,
                         .finalState = desc.finalState,
                         .acceptedToken = regionIndex + 1u == desc.regionCount ? &uploadToken : nullptr,
+                        .aspect = region.aspect,
                     }
                 );
                 if(!uploadTask.valid())

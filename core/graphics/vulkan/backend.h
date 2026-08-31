@@ -2178,9 +2178,18 @@ public:
         u32 mipLevel,
         const void* data,
         usize rowPitch,
-        usize depthPitch = 0
+        usize depthPitch = 0,
+        TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic
     );
-    void writeTexture(Texture* dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch = 0);
+    void writeTexture(
+        Texture* dest,
+        u32 arraySlice,
+        u32 mipLevel,
+        const void* data,
+        usize rowPitch,
+        usize depthPitch = 0,
+        TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic
+    );
     void resolveTexture(Texture* dest, const TextureSubresourceSet& dstSubresources, Texture* src, const TextureSubresourceSet& srcSubresources);
 
     void setPushConstants(const void* data, usize byteSize);

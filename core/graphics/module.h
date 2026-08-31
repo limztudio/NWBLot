@@ -61,6 +61,10 @@ public:
         // requires a concrete initial state and is rejected otherwise.
         CommandQueue::Enum queue = CommandQueue::kCount;
         QueueSubmissionToken* acceptedToken = nullptr;
+        // Automatic preserves the legacy one-plane behavior for color, depth-only, and stencil-only formats.
+        // D24S8/D32S8 require the caller to select one concrete aspect because Vulkan copies their depth and
+        // stencil planes from independently laid out CPU payloads.
+        TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
     };
 
     // One immutable CPU payload for a texture subresource upload.  uploadTextureBatch() copies every region into
@@ -74,6 +78,7 @@ public:
         usize depthPitch = 0u;
         u32 arraySlice = 0u;
         u32 mipLevel = 0u;
+        TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
     };
 
     // Uploads every listed region into an existing texture through a compiler-owned task graph.  This is the

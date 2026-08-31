@@ -229,6 +229,37 @@ const FormatInfo& GetFormatInfo(Format::Enum format)noexcept;
 [[nodiscard]] u32 GetFormatBlockWidth(const FormatInfo& formatInfo)noexcept;
 [[nodiscard]] u32 GetFormatBlockHeight(const FormatInfo& formatInfo)noexcept;
 
+// Buffer-to-image copies of a combined depth/stencil texture address one aspect plane at a time.  Automatic keeps
+// existing color/depth-only/stencil-only callers source-compatible, while a combined format requires the caller to
+// select exactly Depth or Stencil so its independent byte layout is unambiguous.
+namespace TextureUploadAspect{
+    enum Enum : u8{
+        Automatic,
+        Color,
+        Depth,
+        Stencil,
+
+        kCount,
+    };
+};
+
+struct TextureUploadAspectLayout{
+    u32 blockWidth = 0u;
+    u32 blockHeight = 0u;
+    u32 bytesPerBlock = 0u;
+};
+
+[[nodiscard]] bool ResolveTextureUploadAspect(
+    const FormatInfo& formatInfo,
+    TextureUploadAspect::Enum requestedAspect,
+    TextureUploadAspect::Enum& outAspect
+)noexcept;
+[[nodiscard]] bool GetTextureUploadAspectLayout(
+    const FormatInfo& formatInfo,
+    TextureUploadAspect::Enum requestedAspect,
+    TextureUploadAspectLayout& outLayout
+)noexcept;
+
 namespace FormatSupport{
     enum Mask : u32{
         None = 0,

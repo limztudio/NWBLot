@@ -40452,9 +40452,9 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAc
 }
 
 
-// Public texture uploads no longer retain a native fallback.  A generic packed payload cannot describe the two
-// independently copied aspects of D24S8/D32S8, and retaining an Unknown initial state makes the post-upload state
-// untrackable.  Both cases must fail before a command list can claim a successful upload.
+// Public texture uploads no longer retain a native fallback. A generic packed payload still cannot identify one
+// plane of D24S8/D32S8, and retaining an Unknown initial state makes the post-upload state untrackable. Both cases
+// must fail before a command list can claim a successful upload.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsRejectUnsafeLegacyDescriptors){
     auto& graphics = s_scope->graphics();
     const u8 depthStencilBytes[8u] = {};
@@ -40581,6 +40581,68 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsRejectUnsafeLegacy
     EXPECT_FALSE(graphics.uploadTextureBatch(unknownRejectedBatchDesc));
     EXPECT_FALSE(unknownBatchToken.valid());
 #endif
+}
+
+
+// Combined depth/stencil uploads are representable once each immutable payload names its exact aspect. The graph
+// records the two copies serially, publishes their shared subresource as DepthWrite, and keeps them on Graphics so
+// this backend never relies on optional depth/stencil copy-on-Compute/Transfer format features.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsAcceptExplicitDepthStencilAspectPlanes){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    const u32 setupDepthPlane = 0x005abcdeu;
+    QueueSubmissionToken setupToken;
+    Graphics::TextureSetupDesc setupDesc;
+    setupDesc.textureDesc = TextureDesc()
+        .setWidth(1u)
+        .setHeight(1u)
+        .setFormat(Format::D24S8)
+        .setInRenderTarget(true)
+        .setInitialState(ResourceStates::DepthWrite)
+    ;
+    setupDesc.data = &setupDepthPlane;
+    setupDesc.uploadDataSize = sizeof(setupDepthPlane);
+    // An explicit non-Graphics preference must resolve safely rather than emit a depth copy on a queue family
+    // whose per-format depth-copy capability the backend does not negotiate.
+    setupDesc.queue = CommandQueue::Transfer;
+    setupDesc.acceptedToken = &setupToken;
+    setupDesc.aspect = TextureUploadAspect::Depth;
+    const TextureHandle destination = graphics.setupTexture(setupDesc);
+    ASSERT_NE(destination.get(), nullptr);
+    ASSERT_TRUE(setupToken.valid());
+    EXPECT_EQ(setupToken.queue, CommandQueue::Graphics);
+
+    const u32 batchDepthPlane = 0x00754321u;
+    const u8 batchStencilPlane = 0x5du;
+    const Graphics::TextureUploadRegion regions[] = {
+        Graphics::TextureUploadRegion{
+            .data = &batchDepthPlane,
+            .dataSize = sizeof(batchDepthPlane),
+            .arraySlice = 0u,
+            .mipLevel = 0u,
+            .aspect = TextureUploadAspect::Depth,
+        },
+        Graphics::TextureUploadRegion{
+            .data = &batchStencilPlane,
+            .dataSize = sizeof(batchStencilPlane),
+            .arraySlice = 0u,
+            .mipLevel = 0u,
+            .aspect = TextureUploadAspect::Stencil,
+        },
+    };
+    QueueSubmissionToken batchToken;
+    ASSERT_TRUE(graphics.uploadTextureBatch(Graphics::TextureUploadBatchDesc{
+        .destination = destination,
+        .regions = regions,
+        .regionCount = LengthOf(regions),
+        .finalState = ResourceStates::DepthWrite,
+        .queue = CommandQueue::Transfer,
+        .acceptedToken = &batchToken,
+    }));
+    ASSERT_TRUE(batchToken.valid());
+    EXPECT_EQ(batchToken.queue, CommandQueue::Graphics);
+    EXPECT_TRUE(device.waitForIdle());
 }
 
 

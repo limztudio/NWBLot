@@ -60,6 +60,58 @@ struct TextureCreateMetadata{
     VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
 };
 
+// VkBufferImageCopy names exactly one image aspect.  Keep the public upload-plane contract in the generic format
+// layer, then lower its selected plane into the Vulkan aspect and byte layout used by the copy command.  Texture
+// state tracking deliberately remains subresource-wide: it is conservative for two sequential aspect uploads and
+// does not invent independent depth/stencil layout tracking for the rest of the renderer.
+inline bool ResolveTextureUploadCopyAspect(
+    const TextureDesc& textureDesc,
+    const VkImageAspectFlags textureAspectMask,
+    const TextureUploadAspect::Enum requestedAspect,
+    VkImageAspectFlags& outAspectMask,
+    VulkanDetail::TextureFormatBlockLayout& outFormatLayout
+){
+    outAspectMask = 0u;
+    outFormatLayout = {};
+
+    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
+    TextureUploadAspect::Enum resolvedAspect;
+    TextureUploadAspectLayout uploadLayout;
+    if(
+        !ResolveTextureUploadAspect(formatInfo, requestedAspect, resolvedAspect)
+        || !GetTextureUploadAspectLayout(formatInfo, requestedAspect, uploadLayout)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: upload aspect is not present in the destination format"));
+        return false;
+    }
+
+    switch(resolvedAspect){
+    case TextureUploadAspect::Color:
+        outAspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        break;
+    case TextureUploadAspect::Depth:
+        outAspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        break;
+    case TextureUploadAspect::Stencil:
+        outAspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
+        break;
+    default:
+        return false;
+    }
+    if((textureAspectMask & outAspectMask) != outAspectMask){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: selected upload aspect is not available on the destination texture"));
+        return false;
+    }
+
+    outFormatLayout.blockWidth = uploadLayout.blockWidth;
+    outFormatLayout.blockHeight = uploadLayout.blockHeight;
+    outFormatLayout.bytesPerBlock = uploadLayout.bytesPerBlock;
+    return outFormatLayout.blockWidth != 0u
+        && outFormatLayout.blockHeight != 0u
+        && outFormatLayout.bytesPerBlock != 0u
+    ;
+}
+
 inline u32 GetMaxMipLevels(const TextureDesc& desc){
     const u32 depth = desc.dimension == TextureDimension::Texture3D ? desc.depth : 1u;
     u32 maxExtent = Max(Max(desc.width, desc.height), depth);
@@ -1994,7 +2046,8 @@ bool CommandList::tryWriteTexture(
     u32 mipLevel,
     const void* data,
     usize rowPitch,
-    usize depthPitch
+    usize depthPitch,
+    TextureUploadAspect::Enum aspect
 ){
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("write texture"), NWB_TEXT("destination texture is null"), destResource))
         return false;
@@ -2026,14 +2079,34 @@ bool CommandList::tryWriteTexture(
 
     const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(texDesc, mipLevel);
 
-    if(!VulkanDetail::DebugValidateBufferImageCopyAspect(dest.m_aspectMask, NWB_TEXT("write texture")))
+    VkImageAspectFlags copyAspectMask = 0u;
+    VulkanDetail::TextureFormatBlockLayout copyFormatLayout;
+    if(!__hidden_vulkan_texture::ResolveTextureUploadCopyAspect(
+        texDesc,
+        dest.m_aspectMask,
+        aspect,
+        copyAspectMask,
+        copyFormatLayout
+    ))
         return false;
+
+    // This backend does not enable or query the optional depth/stencil copy-on-compute/transfer format features.
+    // Restrict selected depth/stencil planes to a Graphics queue, where Vulkan core guarantees the copy command
+    // subset we lower. The graph declares the same requirement before it can create a packet.
+    if(copyAspectMask != VK_IMAGE_ASPECT_COLOR_BIT && m_desc.queueType != CommandQueue::Graphics){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: depth/stencil aspect uploads require a Graphics command queue"));
+        return false;
+    }
+#if defined(NWB_DEBUG)
+    if(copyAspectMask != VK_IMAGE_ASPECT_COLOR_BIT)
+        recordTaskCapability(GpuQueueCapability::Graphics);
+#endif
 
     VulkanDetail::BufferImageCopyLayout copyLayout;
     if(
         !VulkanDetail::BuildBufferImageCopyLayout(
             mipExtent,
-            dest.m_formatLayout,
+            copyFormatLayout,
             static_cast<u64>(rowPitch),
             static_cast<u64>(depthPitch),
             VulkanDetail::BufferImageCopyRequiredSize::PaddedSlices,
@@ -2063,7 +2136,7 @@ bool CommandList::tryWriteTexture(
     region.bufferOffset = stagingOffset;
     region.bufferRowLength = copyLayout.bufferRowLength;
     region.bufferImageHeight = copyLayout.bufferImageHeight;
-    region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(dest.m_aspectMask, mipLevel, arraySlice);
+    region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(copyAspectMask, mipLevel, arraySlice);
     region.imageExtent = mipExtent;
 
     vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, dest.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
@@ -2073,8 +2146,16 @@ bool CommandList::tryWriteTexture(
     return true;
 }
 
-void CommandList::writeTexture(Texture* destResource, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch){
-    if(!tryWriteTexture(destResource, arraySlice, mipLevel, data, rowPitch, depthPitch))
+void CommandList::writeTexture(
+    Texture* destResource,
+    u32 arraySlice,
+    u32 mipLevel,
+    const void* data,
+    usize rowPitch,
+    usize depthPitch,
+    TextureUploadAspect::Enum aspect
+){
+    if(!tryWriteTexture(destResource, arraySlice, mipLevel, data, rowPitch, depthPitch, aspect))
         return;
 }
 

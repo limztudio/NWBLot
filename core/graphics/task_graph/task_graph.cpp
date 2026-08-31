@@ -228,6 +228,7 @@ struct UploadTextureTask{
         usize depthPitch = 0u;
         ResourceStates::Mask finalState = ResourceStates::CopyDest;
         QueueSubmissionToken* acceptedToken = nullptr;
+        TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
     };
 
     [[nodiscard]] static bool record(
@@ -256,7 +257,8 @@ struct UploadTextureTask{
             payload.mipLevel,
             bytes,
             payload.rowPitch,
-            payload.depthPitch
+            payload.depthPitch,
+            payload.aspect
         ))
             return false;
         if(payload.finalState != ResourceStates::CopyDest){
@@ -579,6 +581,7 @@ struct ClearTextureRectUIntTask{
     const u32 mipLevel,
     const usize rowPitch,
     const usize depthPitch,
+    const TextureUploadAspect::Enum aspect,
     usize& outRequiredBytes
 )noexcept{
     outRequiredBytes = 0u;
@@ -596,16 +599,8 @@ struct ClearTextureRectUIntTask{
         return false;
 
     const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
-    const u32 blockWidth = GetFormatBlockWidth(formatInfo);
-    const u32 blockHeight = GetFormatBlockHeight(formatInfo);
-    // CommandList::writeTexture emits one aspect for the entire texture upload. Keep the graph helper on the same
-    // contract: combined depth/stencil images need a specialized per-aspect path rather than this color-style copy.
-    if(
-        blockWidth == 0u
-        || blockHeight == 0u
-        || formatInfo.bytesPerBlock == 0u
-        || (formatInfo.hasDepth && formatInfo.hasStencil)
-    )
+    TextureUploadAspectLayout aspectLayout;
+    if(!GetTextureUploadAspectLayout(formatInfo, aspect, aspectLayout))
         return false;
 
     const u32 width = Max<u32>(1u, textureDesc.width >> mipLevel);
@@ -614,17 +609,17 @@ struct ClearTextureRectUIntTask{
         ? Max<u32>(1u, textureDesc.depth >> mipLevel)
         : 1u
     ;
-    const u64 blockCountX = DivideUp(static_cast<u64>(width), static_cast<u64>(blockWidth));
-    const u64 blockCountY = DivideUp(static_cast<u64>(height), static_cast<u64>(blockHeight));
-    if(blockCountX > Limit<u64>::s_Max / formatInfo.bytesPerBlock)
+    const u64 blockCountX = DivideUp(static_cast<u64>(width), static_cast<u64>(aspectLayout.blockWidth));
+    const u64 blockCountY = DivideUp(static_cast<u64>(height), static_cast<u64>(aspectLayout.blockHeight));
+    if(blockCountX > Limit<u64>::s_Max / aspectLayout.bytesPerBlock)
         return false;
 
-    const u64 naturalRowPitch = blockCountX * formatInfo.bytesPerBlock;
+    const u64 naturalRowPitch = blockCountX * aspectLayout.bytesPerBlock;
     const u64 effectiveRowPitch = rowPitch != 0u ? static_cast<u64>(rowPitch) : naturalRowPitch;
     if(
         effectiveRowPitch == 0u
         || effectiveRowPitch < naturalRowPitch
-        || (effectiveRowPitch % formatInfo.bytesPerBlock) != 0u
+        || (effectiveRowPitch % aspectLayout.bytesPerBlock) != 0u
         || blockCountY > Limit<u64>::s_Max / effectiveRowPitch
     )
         return false;
@@ -640,13 +635,13 @@ struct ClearTextureRectUIntTask{
 
     // These pitches become VkBufferImageCopy's 32-bit texel fields in CommandList::writeTexture. Validate them at
     // declaration time so an accepted graph upload cannot lower to a native no-op after the command list rejects it.
-    const u64 bufferRowBlocks = effectiveRowPitch / formatInfo.bytesPerBlock;
+    const u64 bufferRowBlocks = effectiveRowPitch / aspectLayout.bytesPerBlock;
     const u64 bufferImageBlocks = effectiveDepthPitch / effectiveRowPitch;
     if(
-        bufferRowBlocks > Limit<u64>::s_Max / blockWidth
-        || bufferImageBlocks > Limit<u64>::s_Max / blockHeight
-        || bufferRowBlocks * blockWidth > Limit<u32>::s_Max
-        || bufferImageBlocks * blockHeight > Limit<u32>::s_Max
+        bufferRowBlocks > Limit<u64>::s_Max / aspectLayout.blockWidth
+        || bufferImageBlocks > Limit<u64>::s_Max / aspectLayout.blockHeight
+        || bufferRowBlocks * aspectLayout.blockWidth > Limit<u32>::s_Max
+        || bufferImageBlocks * aspectLayout.blockHeight > Limit<u32>::s_Max
     )
         return false;
 
@@ -1023,8 +1018,20 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
 
     usize requiredBytes = 0u;
     const TextureDesc& destinationDesc = destinationResource.texture->getDescription();
+    const FormatInfo& destinationFormatInfo = GetFormatInfo(destinationDesc.format);
+    TextureUploadAspect::Enum resolvedAspect;
+    if(!ResolveTextureUploadAspect(destinationFormatInfo, uploadDesc.aspect, resolvedAspect))
+        return {};
+    const u8 requiredQueueCapabilities = static_cast<u8>(GpuQueueCapability::Transfer)
+        | (
+            resolvedAspect == TextureUploadAspect::Color
+                ? 0u
+                : static_cast<u8>(GpuQueueCapability::Graphics)
+        )
+    ;
     if(
         (destinationDesc.keepInitialState && uploadDesc.finalState != destinationDesc.initialState)
+        || (static_cast<u8>(desc.queue.requiredCapabilities) & requiredQueueCapabilities) != requiredQueueCapabilities
         ||
         !__hidden_gpu_task_graph::ComputeTextureUploadByteSize(
             destinationDesc,
@@ -1032,6 +1039,7 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
             uploadDesc.mipLevel,
             uploadDesc.rowPitch,
             uploadDesc.depthPitch,
+            uploadDesc.aspect,
             requiredBytes
         )
         || source->bytes.size() < requiredBytes
@@ -1050,6 +1058,7 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
     payload->depthPitch = uploadDesc.depthPitch;
     payload->finalState = uploadDesc.finalState;
     payload->acceptedToken = uploadDesc.acceptedToken;
+    payload->aspect = uploadDesc.aspect;
 
     const GpuTaskResourceUse resourceUse{
         .resource = uploadDesc.destination,

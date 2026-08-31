@@ -299,6 +299,7 @@ struct GpuUploadTextureTaskDesc{
     // Optional lifecycle output. Storage must outlive late recording/submission; the helper clears it at declaration
     // and again if the task is discarded, then writes the accepted packet token only after successful submission.
     QueueSubmissionToken* acceptedToken = nullptr;
+    TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
 };
 
 

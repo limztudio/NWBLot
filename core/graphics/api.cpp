@@ -247,6 +247,81 @@ u32 GetFormatBlockHeight(const FormatInfo& formatInfo)noexcept{
     }
 }
 
+bool ResolveTextureUploadAspect(
+    const FormatInfo& formatInfo,
+    const TextureUploadAspect::Enum requestedAspect,
+    TextureUploadAspect::Enum& outAspect
+)noexcept{
+    outAspect = TextureUploadAspect::Automatic;
+    if(requestedAspect >= TextureUploadAspect::kCount)
+        return false;
+
+    if(formatInfo.hasDepth && formatInfo.hasStencil){
+        if(
+            requestedAspect != TextureUploadAspect::Depth
+            && requestedAspect != TextureUploadAspect::Stencil
+        )
+            return false;
+        outAspect = requestedAspect;
+        return true;
+    }
+
+    if(formatInfo.hasDepth){
+        if(
+            requestedAspect != TextureUploadAspect::Automatic
+            && requestedAspect != TextureUploadAspect::Depth
+        )
+            return false;
+        outAspect = TextureUploadAspect::Depth;
+        return true;
+    }
+
+    if(formatInfo.hasStencil){
+        if(
+            requestedAspect != TextureUploadAspect::Automatic
+            && requestedAspect != TextureUploadAspect::Stencil
+        )
+            return false;
+        outAspect = TextureUploadAspect::Stencil;
+        return true;
+    }
+
+    if(
+        requestedAspect != TextureUploadAspect::Automatic
+        && requestedAspect != TextureUploadAspect::Color
+    )
+        return false;
+    outAspect = TextureUploadAspect::Color;
+    return true;
+}
+
+bool GetTextureUploadAspectLayout(
+    const FormatInfo& formatInfo,
+    const TextureUploadAspect::Enum requestedAspect,
+    TextureUploadAspectLayout& outLayout
+)noexcept{
+    outLayout = {};
+
+    TextureUploadAspect::Enum resolvedAspect;
+    if(!ResolveTextureUploadAspect(formatInfo, requestedAspect, resolvedAspect))
+        return false;
+
+    outLayout.blockWidth = GetFormatBlockWidth(formatInfo);
+    outLayout.blockHeight = GetFormatBlockHeight(formatInfo);
+    outLayout.bytesPerBlock = formatInfo.bytesPerBlock;
+    // Depth/stencil image aspects are copied from independent CPU planes.  D24S8/D32S8 both use a 32-bit
+    // depth plane and an 8-bit stencil plane even though their opaque whole-image allocation sizes differ.
+    if(resolvedAspect == TextureUploadAspect::Depth && formatInfo.hasStencil)
+        outLayout.bytesPerBlock = sizeof(u32);
+    else if(resolvedAspect == TextureUploadAspect::Stencil)
+        outLayout.bytesPerBlock = sizeof(u8);
+
+    return outLayout.blockWidth != 0u
+        && outLayout.blockHeight != 0u
+        && outLayout.bytesPerBlock != 0u
+    ;
+}
+
 
 TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
     NWB_ASSERT(mipLevel < desc.mipLevels);
@@ -402,7 +477,6 @@ bool ResolveFramebufferAttachmentExtent(const FramebufferAttachment& attachment,
     outArraySize = subresources.numArraySlices;
     return true;
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

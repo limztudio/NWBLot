@@ -500,6 +500,79 @@ static void WriteCommandIrPod(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST(TextureUploadAspect, ResolvesExactDepthStencilPlanesAndLayouts){
+    const Graphics::FormatInfo& d24s8 = Graphics::GetFormatInfo(Graphics::Format::D24S8);
+    const Graphics::FormatInfo& d32s8 = Graphics::GetFormatInfo(Graphics::Format::D32S8);
+    const Graphics::FormatInfo& rgba = Graphics::GetFormatInfo(Graphics::Format::RGBA8_UNORM);
+    Graphics::TextureUploadAspect::Enum resolvedAspect = Graphics::TextureUploadAspect::Automatic;
+    Graphics::TextureUploadAspectLayout layout;
+
+    EXPECT_FALSE(Graphics::ResolveTextureUploadAspect(
+        d24s8,
+        Graphics::TextureUploadAspect::Automatic,
+        resolvedAspect
+    ));
+    EXPECT_FALSE(Graphics::ResolveTextureUploadAspect(
+        d24s8,
+        Graphics::TextureUploadAspect::Color,
+        resolvedAspect
+    ));
+
+    ASSERT_TRUE(Graphics::ResolveTextureUploadAspect(
+        d24s8,
+        Graphics::TextureUploadAspect::Depth,
+        resolvedAspect
+    ));
+    EXPECT_EQ(resolvedAspect, Graphics::TextureUploadAspect::Depth);
+    ASSERT_TRUE(Graphics::GetTextureUploadAspectLayout(
+        d24s8,
+        Graphics::TextureUploadAspect::Depth,
+        layout
+    ));
+    EXPECT_EQ(layout.blockWidth, 1u);
+    EXPECT_EQ(layout.blockHeight, 1u);
+    EXPECT_EQ(layout.bytesPerBlock, sizeof(u32));
+
+    ASSERT_TRUE(Graphics::ResolveTextureUploadAspect(
+        d24s8,
+        Graphics::TextureUploadAspect::Stencil,
+        resolvedAspect
+    ));
+    EXPECT_EQ(resolvedAspect, Graphics::TextureUploadAspect::Stencil);
+    ASSERT_TRUE(Graphics::GetTextureUploadAspectLayout(
+        d24s8,
+        Graphics::TextureUploadAspect::Stencil,
+        layout
+    ));
+    EXPECT_EQ(layout.bytesPerBlock, sizeof(u8));
+
+    ASSERT_TRUE(Graphics::GetTextureUploadAspectLayout(
+        d32s8,
+        Graphics::TextureUploadAspect::Depth,
+        layout
+    ));
+    EXPECT_EQ(layout.bytesPerBlock, sizeof(u32));
+    ASSERT_TRUE(Graphics::GetTextureUploadAspectLayout(
+        d32s8,
+        Graphics::TextureUploadAspect::Stencil,
+        layout
+    ));
+    EXPECT_EQ(layout.bytesPerBlock, sizeof(u8));
+
+    ASSERT_TRUE(Graphics::ResolveTextureUploadAspect(
+        rgba,
+        Graphics::TextureUploadAspect::Automatic,
+        resolvedAspect
+    ));
+    EXPECT_EQ(resolvedAspect, Graphics::TextureUploadAspect::Color);
+    EXPECT_FALSE(Graphics::ResolveTextureUploadAspect(
+        rgba,
+        Graphics::TextureUploadAspect::Depth,
+        resolvedAspect
+    ));
+}
+
+
 TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

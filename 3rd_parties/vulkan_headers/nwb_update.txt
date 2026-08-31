@@ -1,5 +1,5 @@
 package: vulkan_headers
-version: vulkan-sdk-1.4.350.1 (VK_HEADER_VERSION 350; Vulkan 1.4.350)
-updated_utc: 2026-08-11T16:09:16Z
-source: https://github.com/KhronosGroup/Vulkan-Headers/releases/tag/vulkan-sdk-1.4.350.1
-notes: Header-only Vulkan-Headers subset flattened out of volk. Retains vulkan/{vk_platform.h,vulkan_core.h,vulkan_wayland.h,vulkan_win32.h,vulkan_xlib.h} and vk_video/*.h for the supported Windows/Linux (Xlib/Wayland) builds.
+version: vulkan-sdk-1.4.357.0 (VK_HEADER_VERSION 357; Vulkan 1.4.357)
+updated_utc: 2026-08-31T17:51:50Z
+source: https://github.com/KhronosGroup/Vulkan-Headers/tree/vulkan-sdk-1.4.357.0
+notes: Header-only Vulkan-Headers subset from the matching Vulkan SDK tag. Retains vulkan/{vk_platform.h,vulkan_core.h,vulkan_wayland.h,vulkan_win32.h,vulkan_xlib.h} and vk_video/*.h for the supported Windows/Linux (Xlib/Wayland) builds.

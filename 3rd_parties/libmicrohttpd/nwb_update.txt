@@ -1,5 +1,5 @@
 package: libmicrohttpd
-version: 1.0.9
-updated_utc: 2026-08-04T16:18:30Z
-source: https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-1.0.9.tar.gz
-notes: GNU libmicrohttpd HTTP server for the log server. Official 1.0.9 snapshot; vendored src/include + src/microhttpd only, with generated autotools Makefile.in files and unused TLS, websocket, test, and example trees pruned. NWB CMake remains local/offline integration. The vendored Windows and Linux/POSIX builds generate MHD_config.h into the CMake binary tree from the NWB integration template; the Linux build is static and links pthread.
+version: 1.0.10
+updated_utc: 2026-08-31T17:52:07Z
+source: https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-1.0.10.tar.gz
+notes: GNU libmicrohttpd HTTP server for the log server. Official 1.0.10 snapshot; vendored src/include + src/microhttpd only, with generated autotools Makefile.in files excluded. NWB CMake remains local/offline integration and compiles its explicit plain-HTTP source set. The vendored Windows and Linux/POSIX builds generate MHD_config.h into the CMake binary tree from the NWB integration template; the Linux build is static and links pthread. Consumers include their own POSIX socket declarations; the loopback integration test reads its ephemeral port from the actual listen socket when using MHD_OPTION_SOCK_ADDR_LEN.

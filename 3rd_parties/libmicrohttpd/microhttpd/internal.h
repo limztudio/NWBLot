@@ -1627,6 +1627,36 @@ struct MHD_Connection
   volatile bool resuming;
 
   /**
+   * Has the connection been resumed without its states having been
+   * updated since?
+   *
+   * #MHD_connection_update_event_loop_info() deliberately does not
+   * touch a suspended connection, so whatever the application did
+   * while the connection was suspended -- queueing a response, or the
+   * content reader reporting that it has no data yet and moving the
+   * connection to #MHD_CONNECTION_NORMAL_BODY_UNREADY -- leaves
+   * @e event_loop_info describing the state from before the
+   * suspension.  The event loop must not act on that stale value; see
+   * the use in call_handlers().
+   */
+  bool resumed;
+
+  /**
+   * Inter-thread communication channel used to wake up the thread that
+   * handles this connection when the connection is resumed.
+   *
+   * Only initialised in thread-per-connection mode with
+   * #MHD_ALLOW_SUSPEND_RESUME enabled, invalid otherwise.
+   *
+   * The daemon-wide ITC cannot serve this purpose: the daemon's own
+   * thread waits on it as well, and #MHD_itc_clear_() drains it, so
+   * whichever of the two threads runs first consumes the notification
+   * and the other one sleeps through it.  A channel that only this
+   * connection's thread ever reads cannot lose the wake-up that way.
+   */
+  struct MHD_itc_ resume_itc;
+
+  /**
    * Special member to be returned by #MHD_get_connection_info()
    */
   union MHD_ConnectionInfo connection_info_dummy;

@@ -31,7 +31,7 @@ VkOpacityMicromapFormatEXT ConvertOpacityMicromapFormat(const OpacityMicromapFor
     case OpacityMicromapFormat::OC1_4_State:
         return VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT;
     default:
-        return VK_OPACITY_MICROMAP_FORMAT_MAX_ENUM_EXT;
+        return VK_OPACITY_MICROMAP_FORMAT_MAX_ENUM_KHR;
     }
 }
 
@@ -79,7 +79,7 @@ bool BuildOpacityMicromapUsageCounts(
     for(usize i = 0; i < counts.size(); ++i){
         const RayTracingOpacityMicromapUsageCount& count = counts[i];
         const VkOpacityMicromapFormatEXT format = ConvertOpacityMicromapFormat(count.format);
-        if(format == VK_OPACITY_MICROMAP_FORMAT_MAX_ENUM_EXT){
+        if(format == VK_OPACITY_MICROMAP_FORMAT_MAX_ENUM_KHR){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: opacity micromap usage count {} has invalid format {}")
                 , operation
                 , i

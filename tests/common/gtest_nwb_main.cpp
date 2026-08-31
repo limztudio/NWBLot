@@ -39,6 +39,9 @@ static int GoogleTestEntryPoint(const isize argc, tchar** argv, void*){
 
     int googleTestArgc = static_cast<int>(argc);
     ::testing::InitGoogleTest(&googleTestArgc, argv);
+    // Common initialization starts worker threads before individual suites run.  Re-exec death tests so GoogleTest
+    // never forks that live threaded runtime; v1.18 diagnoses the unsafe fast-style fork and can skip its death body.
+    GTEST_FLAG_SET(death_test_style, "threadsafe");
     return RUN_ALL_TESTS();
 }
 

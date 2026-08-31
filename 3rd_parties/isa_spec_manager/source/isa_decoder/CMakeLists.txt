@@ -36,6 +36,11 @@ set (ALL_H
     ${SRC_DIR}/common/amdisa_xml_element_consts.h
     ${SRC_DIR}/common/amdisa_utility.h
     ${SRC_DIR}/common/isa_xml_reader.h
+    ${SRC_DIR}/common/xml_expression_tree_reader.h
+
+    # Decoder implementation headers.
+    ./isa_decoder_strategy.h
+    ./v1_1_1/encoding_condition_handler_v1_1_1.h
 
     # Third party library headers.
     ${TINYXML_DIR}/tinyxml2.h
@@ -46,11 +51,13 @@ set (ALL_CPP
     # Top interface source file.
     ./isa_decoder.cpp
     ./encoding_condition_handler.hpp
+    ./v1_1_1/isa_decoder_v1_1_1.cpp
 
     # Local library source files.
     ${SRC_DIR}/common/amdisa_utility.cpp
     ${SRC_DIR}/common/amdisa_structures.cpp
     ${SRC_DIR}/common/isa_xml_reader.cpp
+    ${SRC_DIR}/common/xml_expression_tree_reader.cpp
 
 )
 if (NOT _NWB_USE_TINYXML2_TARGET)

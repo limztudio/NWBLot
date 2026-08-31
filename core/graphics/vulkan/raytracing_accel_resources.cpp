@@ -368,7 +368,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
                 const usize usageOffset = opacityMicromapUsageOffsets[i];
                 for(u32 usageIndex = 0u; usageIndex < triangles.numOmmUsageCounts; ++usageIndex){
                     const RayTracingOpacityMicromapUsageCount& usage = triangles.pOmmUsageCounts[usageIndex];
-                    VkOpacityMicromapFormatEXT format = VK_OPACITY_MICROMAP_FORMAT_MAX_ENUM_EXT;
+                    VkOpacityMicromapFormatEXT format = VK_OPACITY_MICROMAP_FORMAT_MAX_ENUM_KHR;
                     if(usage.format == OpacityMicromapFormat::OC1_2_State)
                         format = VK_OPACITY_MICROMAP_FORMAT_2_STATE_EXT;
                     else if(usage.format == OpacityMicromapFormat::OC1_4_State)

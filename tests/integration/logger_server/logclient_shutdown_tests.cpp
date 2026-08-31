@@ -8,6 +8,11 @@
 
 #include <microhttpd.h>
 
+#if defined(NWB_PLATFORM_LINUX)
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -132,14 +137,27 @@ bool ShutdownCaptureServer::start(){
     if(!m_daemon)
         return false;
 
-    const MHD_DaemonInfo* const daemonInfo = MHD_get_daemon_info(m_daemon, MHD_DAEMON_INFO_BIND_PORT);
-    if(!daemonInfo || daemonInfo->port == 0u){
+    const MHD_DaemonInfo* const daemonInfo = MHD_get_daemon_info(m_daemon, MHD_DAEMON_INFO_LISTEN_FD);
+    sockaddr_in boundAddress = {};
+    socklen_t boundAddressSize = static_cast<socklen_t>(sizeof(boundAddress));
+    if(
+        !daemonInfo
+        || daemonInfo->listen_fd == MHD_INVALID_SOCKET
+        || ::getsockname(
+            daemonInfo->listen_fd,
+            reinterpret_cast<sockaddr*>(&boundAddress),
+            &boundAddressSize
+        ) != 0
+        || boundAddressSize != static_cast<socklen_t>(sizeof(boundAddress))
+        || boundAddress.sin_family != AF_INET
+        || boundAddress.sin_port == 0u
+    ){
         MHD_stop_daemon(m_daemon);
         m_daemon = nullptr;
         return false;
     }
 
-    m_port = daemonInfo->port;
+    m_port = ntohs(boundAddress.sin_port);
     return true;
 }
 

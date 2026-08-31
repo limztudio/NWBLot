@@ -1,78 +1,111 @@
-- Targets support x64 and Windows ARM64; 32-bit targets are intentionally unsupported.
+# NWBLot
 
-- Supported build configurations are `dbg`, `opt`, and `fin`.
-  - `dbg`: no optimization and no inlining.
-  - `opt`: optimized, only primitives are inlined, and frame pointers are available.
-  - `fin`: optimized, inlined, frame pointers are omitted, and debugging is intentionally limited.
+NWBLot is a C++ Vulkan engine with an asset cooker, runtime loader, ECS renderer, developer tools, automated tests, and a runnable Testbed. CMake, Ninja, and LLVM/Clang are the supported build stack.
 
-- CMake is the cross-platform build entry point for this repository.
-- LLVM/Clang is the required compiler toolchain on every platform.
+## Supported targets
 
-- Windows quick start
-  - engine-only configure: `cmake --preset windows-clang-engine-x64`
-  - engine-only build: `cmake --build --preset windows-clang-engine-dbg --target nwb_resource_cooker`
-  - testbed configure: `cmake --preset windows-clang-testbed-x64`
-  - testbed build: `cmake --build --preset windows-clang-testbed-dbg --target testbed`
-  - full configure/test preset: `cmake --preset windows-clang-x64`
-  - Visual Studio can open the repository root as a CMake project; builds use Ninja + `clang`/`clang++`.
+- Windows x64
+- Windows ARM64
+- Linux x64
 
-- Windows ARM64 quick start
-  - engine-only configure: `cmake --preset windows-clang-engine-arm64`
-  - engine-only build: `cmake --build --preset windows-clang-engine-arm64-dbg --target nwb_resource_cooker`
-  - testbed configure: `cmake --preset windows-clang-testbed-arm64`
-  - testbed build: `cmake --build --preset windows-clang-testbed-arm64-dbg --target testbed`
-  - full configure: `cmake --preset windows-clang-arm64`
-  - full debug build/test: `cmake --build --preset windows-clang-arm64-dbg`, then `ctest --preset windows-clang-arm64-dbg`
-  - Native mesh shaders default to the renderer's compute-emulation path on Windows ARM64 even when Vulkan advertises
-    `VK_EXT_mesh_shader`. A qualified adapter may opt in with `Graphics::setNativeMeshShadersEnabled(true)` before
-    graphics instance creation.
+All targets are 64-bit. The checked-in CMake presets build `dbg`, `opt`, and `fin` configurations.
 
-- Windows requirements
-  - Install Visual Studio 2022 Build Tools (or Visual Studio 2022) with these native build components:
-    - `Microsoft.VisualStudio.Workload.VCTools` (`Desktop development with C++`).
-    - `Microsoft.VisualStudio.Component.VC.Tools.ARM64` (MSVC v143 ARM64 tools and libraries).
-    - `Microsoft.VisualStudio.Component.VC.CMake.Project` (CMake tools for Windows and the Visual Studio Ninja build).
-    - A Windows 11 SDK. `Microsoft.VisualStudio.Component.Windows11SDK.26100` / SDK `10.0.26100.0` is verified.
-  - Ninja must be available, or discoverable through `NWB_NINJA` / `NWB_NINJA_ROOT`.
-  - Clang/LLVM must be available, or discoverable through `NWB_LLVM_ROOT` / `LLVM_ROOT`.
-  - `VULKAN_SDK` must be set.
-  - `slangc` must be available on `PATH`, discoverable through `VULKAN_SDK`, or provided with `NWB_SLANGC_EXECUTABLE`.
-  - The Windows toolchain uses `clang`/`clang++`, `lld-link`, and Ninja. It targets the Windows/MSVC ABI, so the Windows SDK and the Microsoft C++ runtime/standard library remain part of the environment.
+## Requirements
 
-- Linux status
-  - Local verification should use the repo-bundled CMake and CTest binaries under `__cmake/tool-venv/bin/` when system `cmake` / `ctest` are not on `PATH`.
-  - full configure/test preset: `linux-clang-x64`
-  - engine-only configure preset: `linux-clang-engine-x64`
-  - testbed configure preset: `linux-clang-testbed-x64`
-  - Linux uses the same CMake + Ninja + Clang flow and `dbg` / `opt` / `fin` build configurations as Windows.
-  - `slangc` is required when `NWB_BUILD_RESOURCE_COOKER` is enabled.
-  - `nwb_frame`, `nwb_loader`, `nwb_logserver`, `nwb_resource_cooker`, and `testbed` are configured through the CMake build options and platform dependencies.
-  - Full Linux configure (includes internal validation targets): `cmake --preset linux-clang-x64`.
-  - Debug test verification: `cmake --build --preset linux-clang-dbg`, then `ctest --test-dir __cmake/build/linux-clang-x64 -C dbg --output-on-failure`.
-  - Transparent multi capture verification: configure with `cmake --preset linux-clang-x64`, build the executable/assets with `cmake --build --preset linux-clang-dbg --target nwb_transparent_multi_smoke`, then run `ctest --test-dir __cmake/build/linux-clang-x64 -C dbg -R "^nwb_transparent_multi_capture_smoke$" --output-on-failure`.
-  - `nwb_transparent_multi_capture_smoke` is a CTest entry, not a Ninja build target. Its 24-bit BMP capture is written beneath `__cmake/build/linux-clang-x64/Testing/smoke/dbg/transparent_multi_capture.bmp`.
-  - Window-capture smoke tests require a usable X11 display server. In headless Linux environments without `DISPLAY` or `Xvfb`, `nwb_testbed_window_capture_smoke` is expected to skip with `XOpenDisplay failed`.
-  - fin skinning-culling benchmark verification: configure with `cmake --preset linux-clang-x64`, build `nwb_skinning_culling_benchmark` with `cmake --build --preset linux-clang-fin --target nwb_skinning_culling_benchmark`, then run `ctest --test-dir __cmake/build/linux-clang-x64 -C fin -R nwb_skinning_culling_benchmark --output-on-failure`.
-  - The skinning-culling benchmark CTest entry is `fin`-only and is configured only when `tests/smoke/assets/characters/body.nwb` is present.
-  - The benchmark CTest is a smoke/regression check. It records GPU timing metrics in the log and allows a small tolerance for near-equal no-culling and culling render times.
-  - Project code should request a clean shutdown through `ProjectRuntimeContext::requestQuit`; do not call platform-specific quit APIs such as `PostQuitMessage` from project or smoke-test code.
-  - When `requestQuit` is raised during project update, the frame loop exits without submitting another graphics frame.
+Common tools:
 
-- Launcher
-  - Repo-level launcher: `python launcher.py run testbed --config dbg`
-  - Testbed directory launcher: `python launcher.py testbed --config dbg`
-  - Generic executable target: `python launcher.py run nwb_resource_cooker -- --help`
-  - Launch with profiling/logserver: `python launcher.py run testbed --with-profile`
-  - Smoke profile through root dispatch: `python launcher.py smoke transparent-multi --backend native`
-  - Smoke profile with profiling/logserver: `python launcher.py smoke transparent-multi --backend native --with-profile`
-  - Smoke-domain launcher script: `python tests/smoke/launch.py --scene transparent-multi --backend native`
-  - A/B workflows through root dispatch include `python launcher.py async-shadow-m4` and `python launcher.py frame-lagged-async-lighting`
-  - Root commands stay flat, but dispatch through every router in the directory hierarchy: `launcher.py` →
-    `CoolStuff/launch.py`, `tests/launch.py`, or `utilities/launch.py` → any intermediate group launcher such as
-    `tests/ab/launch.py` → the workflow's terminal `launch.py`. Every directory that groups child launchers must
-    provide a router; only terminal launchers become root commands, using their directory name with `_` changed to
-    `-`.
-  - Source-only and CTest-owned directories under `tests/` are not launcher commands. Add a terminal `launch.py`
-    only for an explicit, independently runnable workflow.
-  - `python launcher.py profiles` lists all currently discovered commands, so adding a utility or test launcher does
-    not require editing the root launcher.
+- Git with Git LFS
+- CMake 3.25 or newer
+- Ninja
+- LLVM/Clang, including the LLVM linker and archive tools
+- Python 3 for the launcher and test-enabled builds
+- `slangc` for the resource cooker, which is enabled by default
+- A Vulkan loader and a compatible Vulkan driver for rendering
+
+Windows builds also need Visual Studio 2022 Build Tools or Visual Studio 2022 with the C++ workload and a Windows SDK. Install the ARM64 C++ tools when building the ARM64 presets. CMake, Ninja, and LLVM may come from Visual Studio or standalone installations.
+
+The Vulkan SDK is optional. The repository vendors Vulkan headers and Volk; the SDK is a convenient source for `slangc`, validation layers, and Vulkan diagnostics.
+
+Linux builds require X11, zlib, libcurl, and oneTBB development packages. Wayland support is enabled when the Wayland client, scanner, protocols, and xkbcommon development files are available.
+
+See [Build and Verification](https://github.com/limztudio/NWBLot/wiki/Build-and-Verification) for installation details, tool discovery, every preset, output locations, and focused test commands.
+
+## Quick start
+
+### Windows ARM64
+
+```powershell
+cmake --preset windows-clang-arm64
+cmake --build --preset windows-clang-arm64-dbg
+ctest --preset windows-clang-arm64-dbg
+```
+
+### Windows x64
+
+```powershell
+cmake --preset windows-clang-x64
+cmake --build --preset windows-clang-dbg
+ctest --preset windows-clang-dbg
+```
+
+### Linux x64
+
+```bash
+cmake --preset linux-clang-x64
+cmake --build --preset linux-clang-dbg
+ctest --preset linux-clang-dbg
+```
+
+Append `--target <target>` to a build command for a focused build. For example:
+
+```powershell
+cmake --build --preset windows-clang-arm64-dbg --target testbed
+```
+
+## Run the Testbed and tools
+
+The repository launcher configures when needed, builds the selected target, and starts it from the correct runtime directory. On Windows it selects the native host architecture unless `--arch` is supplied.
+
+```powershell
+python launcher.py testbed --config dbg
+python launcher.py run nwb_resource_cooker -- --help
+python launcher.py smoke --profiles
+python launcher.py profiles
+```
+
+Use `--with-profile` to start the log server with a launched application. Use `--run-seconds <N>` for a bounded profiling run.
+
+## Build configurations and outputs
+
+| Configuration | Clang optimization | Frame pointer |
+| --- | --- | --- |
+| `dbg` | `-O0` | Kept |
+| `opt` | `-O2` | Kept |
+| `fin` | `-O3` | Omitted |
+
+Configure trees are written below `__cmake/build/<configure-preset>/`. Runtime artifacts use these roots:
+
+- Engine-only: `__exec/<platform>/<arch>/<config>/`
+- Full: `__exec/<platform>/<arch>/full/<config>/`
+- Testbed-only: `__exec/<platform>/<arch>/testbed/<config>/`
+- Name-symbol: `__exec/<platform>/<arch>/namesym/<config>/`
+
+Building `testbed` also cooks its required assets into the matching runtime `res` directory.
+
+## Rendering portability
+
+The Vulkan backend validates required device capabilities at startup. `VK_EXT_descriptor_buffer` is required by the renderer. Windows ARM64 uses the compute-emulation mesh path by default; a qualified adapter can opt into native mesh shaders before graphics instance creation.
+
+Texture cooking and runtime format selection account for device format support, including BC and ASTC-capable GPUs. See [Renderer Feature Paths](https://github.com/limztudio/NWBLot/wiki/Renderer-Feature-Paths) and [Texture Conversion](https://github.com/limztudio/NWBLot/wiki/Texture-Conversion) for the current contracts.
+
+## Source and dependency registration
+
+`CMakePresets.json` defines supported build variants. Each target's nearest `CMakeLists.txt` owns its source list through `target_sources`; add new C/C++ files there and reconfigure CMake.
+
+Third-party packages are vendored as flat top-level directories under `3rd_parties/`. Each package records its source and version in `nwb_update.txt`. See [Third-Party Packages](https://github.com/limztudio/NWBLot/wiki/Third-Party-Packages) before updating a dependency.
+
+Read [`.helper/standard.md`](.helper/standard.md) before changing project code. Use the project wrappers defined under `global/`; in particular, `BitCast` from `global/bit.h` is the project wrapper for `std::bit_cast`.
+
+## Documentation
+
+Start with the [NWBLot Wiki](https://github.com/limztudio/NWBLot/wiki), then use [Architecture](https://github.com/limztudio/NWBLot/wiki/Architecture), [Asset Flow](https://github.com/limztudio/NWBLot/wiki/Asset-Flow), [Runtime and ECS](https://github.com/limztudio/NWBLot/wiki/Runtime-and-ECS), and [Build and Verification](https://github.com/limztudio/NWBLot/wiki/Build-and-Verification) for the corresponding subsystem.

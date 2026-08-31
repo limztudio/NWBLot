@@ -249,6 +249,132 @@ TEST(SwapChainPresentation, NativeTextureImportReceivesExactSwapchainProvenanceB
 }
 
 
+// Device creation owns one canonical identity for every queue requested from Vulkan, while only scheduler-visible
+// roles enter physical topology. A distinct present-only queue therefore remains available for synchronized WSI
+// without being mislabeled as a task-graph queue.
+TEST(SwapChainPresentation, CanonicalNativeQueueRegistryPrecedesPhysicalSchedulerProjection){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString moduleHeader;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "module.h", moduleHeader));
+    const AStringView fullModuleHeader(moduleHeader.data(), moduleHeader.size());
+    const usize nativeDescOffset = fullModuleHeader.find("struct VulkanNativeQueueDesc{");
+    const usize physicalDescOffset = fullModuleHeader.find("struct VulkanPhysicalQueueDesc{");
+    const usize nativeIndexOffset = fullModuleHeader.find(
+        "u32 nativeQueueIndex = Limit<u32>::s_Max;",
+        physicalDescOffset
+    );
+    ASSERT_NE(nativeDescOffset, AStringView::npos);
+    ASSERT_NE(physicalDescOffset, AStringView::npos);
+    ASSERT_NE(nativeIndexOffset, AStringView::npos);
+    EXPECT_LT(nativeDescOffset, physicalDescOffset);
+    EXPECT_LT(physicalDescOffset, nativeIndexOffset);
+
+    AString deviceSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "backend_context_device.cpp",
+        deviceSource
+    ));
+    const AStringView fullDeviceSource(deviceSource.data(), deviceSource.size());
+    const usize nativeLoopOffset = fullDeviceSource.find("for(const VkDeviceQueueCreateInfo& queueInfo : queueDesc){");
+    const usize queueIndexLoopOffset = fullDeviceSource.find(
+        "for(u32 nativeQueueOffset = 0u; nativeQueueOffset < queueInfo.queueCount; ++nativeQueueOffset){",
+        nativeLoopOffset
+    );
+    const usize nativeGetOffset = fullDeviceSource.find(
+        "vkGetDeviceQueue(m_vulkanDevice, queueInfo.queueFamilyIndex, nativeQueueOffset, &queue);",
+        queueIndexLoopOffset
+    );
+    const usize nativePublishOffset = fullDeviceSource.find(
+        "m_nativeQueues.push_back(VulkanNativeQueueDesc{",
+        nativeGetOffset
+    );
+    const usize presentLookupOffset = fullDeviceSource.find(
+        "m_presentNativeQueueIndex = findNativeQueueIndex(",
+        nativePublishOffset
+    );
+    const usize presentFamilyAppendOffset = fullDeviceSource.find(
+        "appendUniqueQueueFamily(m_presentQueueFamily);"
+    );
+    ASSERT_NE(nativeLoopOffset, AStringView::npos);
+    ASSERT_NE(queueIndexLoopOffset, AStringView::npos);
+    ASSERT_NE(nativeGetOffset, AStringView::npos);
+    ASSERT_NE(nativePublishOffset, AStringView::npos);
+    ASSERT_NE(presentLookupOffset, AStringView::npos);
+    ASSERT_NE(presentFamilyAppendOffset, AStringView::npos);
+    EXPECT_LT(presentFamilyAppendOffset, nativeLoopOffset);
+    EXPECT_LT(nativeLoopOffset, queueIndexLoopOffset);
+    EXPECT_LT(queueIndexLoopOffset, nativeGetOffset);
+    EXPECT_LT(nativeGetOffset, nativePublishOffset);
+    EXPECT_LT(nativePublishOffset, presentLookupOffset);
+
+    AString orchestrationSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "backend_context_orchestration.cpp",
+        orchestrationSource
+    ));
+    const AStringView fullOrchestrationSource(orchestrationSource.data(), orchestrationSource.size());
+    const usize physicalProjectionOffset = fullOrchestrationSource.find(
+        "Vector<VulkanPhysicalQueueDesc, Alloc::ScratchArena> physicalQueues{scratchArena};"
+    );
+    const usize nativeRegistryOffset = fullOrchestrationSource.find(
+        "deviceDesc.nativeQueues = m_nativeQueues.data();"
+    );
+    const usize nativeCountOffset = fullOrchestrationSource.find(
+        "deviceDesc.nativeQueueCount = m_nativeQueues.size();",
+        nativeRegistryOffset
+    );
+    const usize physicalRegistryOffset = fullOrchestrationSource.find(
+        "deviceDesc.physicalQueues = physicalQueues.data();",
+        nativeCountOffset
+    );
+    const usize physicalCountOffset = fullOrchestrationSource.find(
+        "deviceDesc.physicalQueueCount = physicalQueues.size();",
+        physicalRegistryOffset
+    );
+    ASSERT_NE(physicalProjectionOffset, AStringView::npos);
+    ASSERT_NE(nativeRegistryOffset, AStringView::npos);
+    ASSERT_NE(nativeCountOffset, AStringView::npos);
+    ASSERT_NE(physicalRegistryOffset, AStringView::npos);
+    ASSERT_NE(physicalCountOffset, AStringView::npos);
+    EXPECT_LT(physicalProjectionOffset, nativeRegistryOffset);
+    EXPECT_LT(nativeRegistryOffset, nativeCountOffset);
+    EXPECT_LT(nativeCountOffset, physicalRegistryOffset);
+    EXPECT_EQ(
+        fullOrchestrationSource.substr(physicalProjectionOffset, physicalCountOffset - physicalProjectionOffset).find(
+            "m_presentNativeQueueIndex"
+        ),
+        AStringView::npos
+    );
+    EXPECT_EQ(fullOrchestrationSource.find(".queue = m_graphicsQueue"), AStringView::npos);
+    EXPECT_EQ(fullOrchestrationSource.find(".queue = m_computeQueue"), AStringView::npos);
+    EXPECT_EQ(fullOrchestrationSource.find(".queue = m_transferQueue"), AStringView::npos);
+
+    AString rhiDeviceSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device.cpp", rhiDeviceSource));
+    const AStringView fullRhiDeviceSource(rhiDeviceSource.data(), rhiDeviceSource.size());
+    const usize familyBoundsOffset = fullRhiDeviceSource.find(
+        "nativeQueue.familyIndex >= physicalQueueFamilyCount"
+    );
+    const usize queueBoundsOffset = fullRhiDeviceSource.find(
+        "nativeQueue.queueIndex >= physicalQueueFamilies[nativeQueue.familyIndex].queueCount",
+        familyBoundsOffset
+    );
+    ASSERT_NE(familyBoundsOffset, AStringView::npos);
+    ASSERT_NE(queueBoundsOffset, AStringView::npos);
+    EXPECT_LT(familyBoundsOffset, queueBoundsOffset);
+
+    AString queueSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device_queue.cpp", queueSource));
+    const AStringView fullQueueSource(queueSource.data(), queueSource.size());
+    EXPECT_NE(
+        fullQueueSource.find("desc.primaryForClass && m_explicitPrimaryQueues[queueClassIndex]"),
+        AStringView::npos
+    );
+}
+
+
 // Swapchain teardown must invalidate retained wrappers before the driver can destroy their images, while reserving
 // each native identity until destruction is complete. This source contract covers the WSI-only interval that a
 // headless public fixture cannot enter without exposing a production mutation seam.

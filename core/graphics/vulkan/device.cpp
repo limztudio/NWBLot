@@ -143,11 +143,80 @@ Device::Device(const DeviceDesc& desc)
     VkResult res = VK_SUCCESS;
 
     m_context.descriptorBufferManager = &m_descriptorBufferManager;
+    if(!desc.nativeQueues || desc.nativeQueueCount == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device creation requires a non-empty canonical native queue registry."));
+        return;
+    }
+    if(m_context.physicalDevice == VK_NULL_HANDLE){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Canonical native queue validation requires a physical device."));
+        return;
+    }
+    Alloc::ScratchArena queueFamilyQueryArena(VulkanArenaScope::s_QueueFamilyQueryArena);
+    u32 physicalQueueFamilyCount = 0u;
+    vkGetPhysicalDeviceQueueFamilyProperties(m_context.physicalDevice, &physicalQueueFamilyCount, nullptr);
+    if(physicalQueueFamilyCount == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Physical device exposes no queue families."));
+        return;
+    }
+    Vector<VkQueueFamilyProperties, Alloc::ScratchArena> physicalQueueFamilies(
+        physicalQueueFamilyCount,
+        queueFamilyQueryArena
+    );
+    vkGetPhysicalDeviceQueueFamilyProperties(
+        m_context.physicalDevice,
+        &physicalQueueFamilyCount,
+        physicalQueueFamilies.data()
+    );
+    if(physicalQueueFamilyCount == 0u || physicalQueueFamilyCount > physicalQueueFamilies.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Physical-device queue-family enumeration returned an invalid count."));
+        return;
+    }
+    for(usize nativeQueueIndex = 0u; nativeQueueIndex < desc.nativeQueueCount; ++nativeQueueIndex){
+        const VulkanNativeQueueDesc& nativeQueue = desc.nativeQueues[nativeQueueIndex];
+        if(
+            nativeQueue.queue == VK_NULL_HANDLE
+            || nativeQueue.familyIndex == Limit<u32>::s_Max
+            || nativeQueue.queueIndex == Limit<u32>::s_Max
+            || nativeQueue.familyIndex >= physicalQueueFamilyCount
+            || nativeQueue.queueIndex >= physicalQueueFamilies[nativeQueue.familyIndex].queueCount
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing invalid canonical native queue registry entry."));
+            return;
+        }
+        for(usize existingIndex = 0u; existingIndex < nativeQueueIndex; ++existingIndex){
+            const VulkanNativeQueueDesc& existing = desc.nativeQueues[existingIndex];
+            const bool duplicateCoordinates =
+                existing.familyIndex == nativeQueue.familyIndex
+                && existing.queueIndex == nativeQueue.queueIndex
+            ;
+            if(duplicateCoordinates || existing.queue == nativeQueue.queue){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing conflicting canonical native queue registry identity."));
+                return;
+            }
+        }
+    }
     for(usize queueIndex = 0u; queueIndex < desc.physicalQueueCount; ++queueIndex){
-        if(!registerPhysicalQueue(desc.physicalQueues[queueIndex]))
+        const VulkanPhysicalQueueDesc& physicalQueue = desc.physicalQueues[queueIndex];
+        if(
+            physicalQueue.nativeQueueIndex >= desc.nativeQueueCount
+            || !registerPhysicalQueue(physicalQueue, desc.nativeQueues[physicalQueue.nativeQueueIndex])
+        ){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to register a native physical queue."));
+            return;
+        }
+    }
+    for(u32 queueClassIndex = 0u; queueClassIndex < static_cast<u32>(CommandQueue::kCount); ++queueClassIndex){
+        if(m_primaryQueues[queueClassIndex] && !m_explicitPrimaryQueues[queueClassIndex]){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Every registered physical queue class requires one explicit primary."));
+            return;
+        }
+    }
+    if(!m_explicitPrimaryQueues[static_cast<u32>(CommandQueue::Graphics)]){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device creation requires a primary Graphics queue."));
+        return;
     }
     configureLegacyQueueContext();
+    m_queueRegistryReady = true;
 
     vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);
     vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);
@@ -617,11 +686,21 @@ void Device::runGarbageCollection(){
 
 
 DeviceHandle CreateDevice(const DeviceDesc& desc){
-    if(!desc.physicalQueues || desc.physicalQueueCount == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device creation requires a non-empty physical queue registry."));
+    if(
+        !desc.nativeQueues
+        || desc.nativeQueueCount == 0u
+        || !desc.physicalQueues
+        || desc.physicalQueueCount == 0u
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device creation requires non-empty native and physical queue registries."));
         return {};
     }
     auto* device = NewArenaObject<Device>(desc.allocator.getObjectArena(), desc);
+    if(!device || !device->m_queueRegistryReady){
+        if(device)
+            DestroyArenaObject(desc.allocator.getObjectArena(), device);
+        return {};
+    }
     return DeviceHandle(device, DeviceHandle::deleter_type(&desc.allocator.getObjectArena()), AdoptRef);
 }
 

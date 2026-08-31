@@ -30,6 +30,7 @@ BackendContext::BackendContext(
     , m_rayTracingExtensions(0, Hasher<GraphicsString>(), EqualTo<GraphicsString>(), m_arena)
     , m_rendererString(m_arena)
     , m_swapChainImages(m_arena)
+    , m_nativeQueues(m_arena)
     , m_sameClassQueues(m_arena)
     , m_acquireSemaphores(m_arena)
     , m_presentSemaphores(m_arena)

@@ -16,6 +16,16 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+u32 BackendContext::findNativeQueueIndex(const u32 familyIndex, const u32 queueIndex)const noexcept{
+    for(usize nativeQueueIndex = 0u; nativeQueueIndex < m_nativeQueues.size(); ++nativeQueueIndex){
+        const VulkanNativeQueueDesc& nativeQueue = m_nativeQueues[nativeQueueIndex];
+        if(nativeQueue.familyIndex == familyIndex && nativeQueue.queueIndex == queueIndex)
+            return static_cast<u32>(nativeQueueIndex);
+    }
+    return Limit<u32>::s_Max;
+}
+
+
 bool BackendContext::createVulkanDevice(){
     VkResult res = VK_SUCCESS;
 
@@ -645,22 +655,60 @@ bool BackendContext::createVulkanDevice(){
 
     volkLoadDevice(m_vulkanDevice);
 
-    m_secondaryGraphicsQueue = VK_NULL_HANDLE;
+    usize nativeQueueCount = 0u;
+    for(const VkDeviceQueueCreateInfo& queueInfo : queueDesc)
+        nativeQueueCount += queueInfo.queueCount;
+    m_nativeQueues.clear();
+    m_nativeQueues.reserve(nativeQueueCount);
+    for(const VkDeviceQueueCreateInfo& queueInfo : queueDesc){
+        for(u32 nativeQueueOffset = 0u; nativeQueueOffset < queueInfo.queueCount; ++nativeQueueOffset){
+            VkQueue queue = VK_NULL_HANDLE;
+            vkGetDeviceQueue(m_vulkanDevice, queueInfo.queueFamilyIndex, nativeQueueOffset, &queue);
+            if(queue == VK_NULL_HANDLE){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Created native queue could not be retrieved."));
+                return false;
+            }
+            m_nativeQueues.push_back(VulkanNativeQueueDesc{
+                .queue = queue,
+                .familyIndex = queueInfo.queueFamilyIndex,
+                .queueIndex = nativeQueueOffset,
+            });
+        }
+    }
+
     m_sameClassGraphicsQueueEnabled = false;
     m_secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
     m_sameClassQueues.clear();
     m_sameClassQueues.reserve(sameClassQueueRequests.size());
-    m_secondaryComputeQueue = VK_NULL_HANDLE;
     m_sameClassComputeQueueEnabled = false;
     m_secondaryComputeQueueFamily = s_InvalidQueueFamilyIndex;
-    m_secondaryTransferQueue = VK_NULL_HANDLE;
     m_sameClassTransferQueueEnabled = false;
     m_secondaryTransferQueueFamily = s_InvalidQueueFamilyIndex;
-    vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_graphicsQueueFamily), s_GraphicsQueueIndex, &m_graphicsQueue);
-    if(createAsyncComputeQueue)
-        vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_computeQueueFamily), s_ComputeQueueIndex, &m_computeQueue);
-    if(createDedicatedTransferQueue)
-        vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_transferQueueFamily), s_TransferQueueIndex, &m_transferQueue);
+    m_presentNativeQueueIndex = Limit<u32>::s_Max;
+    if(
+        findNativeQueueIndex(static_cast<u32>(m_graphicsQueueFamily), s_GraphicsQueueIndex) == Limit<u32>::s_Max
+        || (
+            createAsyncComputeQueue
+            && findNativeQueueIndex(static_cast<u32>(m_computeQueueFamily), s_ComputeQueueIndex) == Limit<u32>::s_Max
+        )
+        || (
+            createDedicatedTransferQueue
+            && findNativeQueueIndex(static_cast<u32>(m_transferQueueFamily), s_TransferQueueIndex) == Limit<u32>::s_Max
+        )
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required scheduler queue is absent from the canonical native registry."));
+        return false;
+    }
+    if(!m_deviceParams.headlessDevice){
+        m_presentNativeQueueIndex = findNativeQueueIndex(
+            static_cast<u32>(m_presentQueueFamily),
+            s_PresentQueueIndex
+        );
+        if(m_presentNativeQueueIndex == Limit<u32>::s_Max){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Present queue is absent from the canonical native registry."));
+            return false;
+        }
+    }
 
     const auto capabilitiesForSameClassQueue = [&physicalQueueFamilies](const i32 queueFamily){
         if(
@@ -681,7 +729,6 @@ bool BackendContext::createVulkanDevice(){
         &physicalQueueFamilies
     ](
         const CommandQueue::Enum queueClass,
-        VkQueue& secondaryQueue,
         bool& sameClassQueueEnabled,
         i32& secondaryQueueFamily
     ){
@@ -689,53 +736,48 @@ bool BackendContext::createVulkanDevice(){
             if(request.queueClass != queueClass)
                 continue;
 
-            VkQueue queue = VK_NULL_HANDLE;
-            vkGetDeviceQueue(
-                m_vulkanDevice,
-                static_cast<uint32_t>(request.family),
-                request.queueIndex,
-                &queue
+            const u32 nativeQueueIndex = findNativeQueueIndex(
+                static_cast<u32>(request.family),
+                request.queueIndex
             );
-            if(queue == VK_NULL_HANDLE)
-                continue;
+            if(nativeQueueIndex == Limit<u32>::s_Max){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Same-class queue is absent from the canonical native registry."));
+                return false;
+            }
 
             m_sameClassQueues.push_back(VulkanPhysicalQueueDesc{
-                .queue = queue,
+                .nativeQueueIndex = nativeQueueIndex,
                 .queueClass = queueClass,
                 .capabilities = capabilitiesForSameClassQueue(request.family),
-                .familyIndex = static_cast<u32>(request.family),
-                .queueIndex = request.queueIndex,
                 .timestampValidBits = physicalQueueFamilies[static_cast<usize>(request.family)].timestampValidBits,
                 .dedicated = queueClass != CommandQueue::Graphics,
                 .primaryForClass = false,
             });
             if(!sameClassQueueEnabled){
-                secondaryQueue = queue;
                 secondaryQueueFamily = request.family;
                 sameClassQueueEnabled = true;
             }
         }
+        return true;
     };
-    registerSameClassQueues(
-        CommandQueue::Graphics,
-        m_secondaryGraphicsQueue,
-        m_sameClassGraphicsQueueEnabled,
-        m_secondaryGraphicsQueueFamily
-    );
-    registerSameClassQueues(
-        CommandQueue::Compute,
-        m_secondaryComputeQueue,
-        m_sameClassComputeQueueEnabled,
-        m_secondaryComputeQueueFamily
-    );
-    registerSameClassQueues(
-        CommandQueue::Transfer,
-        m_secondaryTransferQueue,
-        m_sameClassTransferQueueEnabled,
-        m_secondaryTransferQueueFamily
-    );
-    if(!m_deviceParams.headlessDevice)
-        vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_presentQueueFamily), s_PresentQueueIndex, &m_presentQueue);
+    if(
+        !registerSameClassQueues(
+            CommandQueue::Graphics,
+            m_sameClassGraphicsQueueEnabled,
+            m_secondaryGraphicsQueueFamily
+        )
+        || !registerSameClassQueues(
+            CommandQueue::Compute,
+            m_sameClassComputeQueueEnabled,
+            m_secondaryComputeQueueFamily
+        )
+        || !registerSameClassQueues(
+            CommandQueue::Transfer,
+            m_sameClassTransferQueueEnabled,
+            m_secondaryTransferQueueFamily
+        )
+    )
+        return false;
 
     m_bufferDeviceAddressSupported = vulkan12features.bufferDeviceAddress == VK_TRUE;
     m_textureCompressionBcFeatureEnabled = coreDeviceFeatures.textureCompressionBC == VK_TRUE;

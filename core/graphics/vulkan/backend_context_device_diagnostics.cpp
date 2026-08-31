@@ -116,9 +116,9 @@ void BackendContext::logVulkanDeviceConfiguration(
 
     m_asyncComputeLaneEnabled =
         m_deviceParams.enableAsyncComputeLane
-        && m_computeQueue != VK_NULL_HANDLE
         && m_computeQueueFamily != s_InvalidQueueFamilyIndex
         && m_computeQueueFamily != m_graphicsQueueFamily
+        && findNativeQueueIndex(static_cast<u32>(m_computeQueueFamily), s_ComputeQueueIndex) != Limit<u32>::s_Max
     ;
     const bool asyncComputeLaneEffective = m_asyncComputeLaneEnabled;
     const char* const asyncComputeLaneReason = !m_deviceParams.enableAsyncComputeLane
@@ -159,10 +159,10 @@ void BackendContext::logVulkanDeviceConfiguration(
 
     m_transferQueueEnabled =
         m_deviceParams.enableTransferQueue
-        && m_transferQueue != VK_NULL_HANDLE
         && m_transferQueueFamily != s_InvalidQueueFamilyIndex
         && m_transferQueueFamily != m_graphicsQueueFamily
         && m_transferQueueFamily != m_computeQueueFamily
+        && findNativeQueueIndex(static_cast<u32>(m_transferQueueFamily), s_TransferQueueIndex) != Limit<u32>::s_Max
     ;
     const bool transferQueueEffective = m_transferQueueEnabled;
     const char* const transferQueueReason = !m_deviceParams.enableTransferQueue

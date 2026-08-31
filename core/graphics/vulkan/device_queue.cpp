@@ -43,7 +43,10 @@ namespace __hidden_vulkan_device_queue{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc){
+bool Device::registerPhysicalQueue(
+    const VulkanPhysicalQueueDesc& desc,
+    const VulkanNativeQueueDesc& nativeQueue
+){
     const u32 queueClassIndex = static_cast<u32>(desc.queueClass);
     const u8 requiredCapabilities = static_cast<u8>(VulkanDetail::DeviceMinimumQueueCapabilities(desc.queueClass));
     const u8 providedCapabilities = static_cast<u8>(desc.capabilities);
@@ -61,9 +64,10 @@ bool Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc){
         && (providedCapabilities & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
     ;
     if(
-        desc.queue == VK_NULL_HANDLE
+        nativeQueue.queue == VK_NULL_HANDLE
+        || nativeQueue.familyIndex == Limit<u32>::s_Max
+        || nativeQueue.queueIndex == Limit<u32>::s_Max
         || queueClassIndex >= static_cast<u32>(CommandQueue::kCount)
-        || desc.familyIndex == Limit<u32>::s_Max
         || requiredCapabilities == 0u
         || (providedCapabilities & requiredCapabilities) != requiredCapabilities
         || (providedCapabilities & static_cast<u8>(~knownCapabilities)) != 0u
@@ -76,10 +80,14 @@ bool Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc){
     }
 
     for(const GpuPhysicalQueueInfo& existing : m_physicalQueueInfos){
-        if(existing.familyIndex == desc.familyIndex && existing.queueIndex == desc.queueIndex){
+        if(existing.familyIndex == nativeQueue.familyIndex && existing.queueIndex == nativeQueue.queueIndex){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing duplicate physical queue family/index registry entry."));
             return false;
         }
+    }
+    if(desc.primaryForClass && m_explicitPrimaryQueues[queueClassIndex]){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing duplicate primary physical queue class entry."));
+        return false;
     }
 
     const GpuPhysicalQueueInfo info{
@@ -89,18 +97,26 @@ bool Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc){
         },
         .queueClass = desc.queueClass,
         .capabilities = desc.capabilities,
-        .familyIndex = desc.familyIndex,
-        .queueIndex = desc.queueIndex,
+        .familyIndex = nativeQueue.familyIndex,
+        .queueIndex = nativeQueue.queueIndex,
         .timestampValidBits = desc.timestampValidBits,
         .dedicated = desc.dedicated,
     };
-    Queue* const queue = NewArenaObject<Queue>(m_context.objectArena, m_context, *this, info, desc.queue);
+    Queue* const queue = NewArenaObject<Queue>(m_context.objectArena, m_context, *this, info, nativeQueue.queue);
     if(!queue)
         return false;
+    if(queue->m_trackingSemaphore == VK_NULL_HANDLE){
+        DestroyArenaObject(m_context.objectArena, queue);
+        return false;
+    }
 
     m_physicalQueueInfos.push_back(info);
     m_physicalQueues.push_back(queue);
-    if(desc.primaryForClass || !m_primaryQueues[queueClassIndex])
+    if(desc.primaryForClass){
+        m_primaryQueues[queueClassIndex] = queue;
+        m_explicitPrimaryQueues[queueClassIndex] = true;
+    }
+    else if(!m_primaryQueues[queueClassIndex])
         m_primaryQueues[queueClassIndex] = queue;
     return true;
 }

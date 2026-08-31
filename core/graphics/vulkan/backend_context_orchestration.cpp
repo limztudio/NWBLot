@@ -130,6 +130,26 @@ bool BackendContext::createDevice(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: selected primary Graphics queue family does not support Graphics, Compute, and Transfer."));
         return false;
     }
+    const u32 graphicsNativeQueueIndex = findNativeQueueIndex(
+        static_cast<u32>(m_graphicsQueueFamily),
+        s_GraphicsQueueIndex
+    );
+    const u32 computeNativeQueueIndex = findNativeQueueIndex(
+        static_cast<u32>(m_computeQueueFamily),
+        s_ComputeQueueIndex
+    );
+    const u32 transferNativeQueueIndex = findNativeQueueIndex(
+        static_cast<u32>(m_transferQueueFamily),
+        s_TransferQueueIndex
+    );
+    if(
+        graphicsNativeQueueIndex == Limit<u32>::s_Max
+        || (m_asyncComputeLaneEnabled && computeNativeQueueIndex == Limit<u32>::s_Max)
+        || (m_transferQueueEnabled && transferNativeQueueIndex == Limit<u32>::s_Max)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Scheduler queue projection references a missing native queue."));
+        return false;
+    }
     Vector<VulkanPhysicalQueueDesc, Alloc::ScratchArena> physicalQueues{scratchArena};
     physicalQueues.reserve(1u + m_sameClassQueues.size() + 2u);
     const auto appendSameClassQueues = [this, &physicalQueues](const CommandQueue::Enum queueClass){
@@ -139,11 +159,9 @@ bool BackendContext::createDevice(){
         }
     };
     physicalQueues.push_back(VulkanPhysicalQueueDesc{
-        .queue = m_graphicsQueue,
+        .nativeQueueIndex = graphicsNativeQueueIndex,
         .queueClass = CommandQueue::Graphics,
         .capabilities = graphicsQueueCapabilities,
-        .familyIndex = static_cast<u32>(m_graphicsQueueFamily),
-        .queueIndex = s_GraphicsQueueIndex,
         .timestampValidBits = timestampValidBitsForFamily(m_graphicsQueueFamily),
         .dedicated = false,
         .primaryForClass = true,
@@ -151,11 +169,9 @@ bool BackendContext::createDevice(){
     appendSameClassQueues(CommandQueue::Graphics);
     if(m_asyncComputeLaneEnabled){
         physicalQueues.push_back(VulkanPhysicalQueueDesc{
-            .queue = m_computeQueue,
+            .nativeQueueIndex = computeNativeQueueIndex,
             .queueClass = CommandQueue::Compute,
             .capabilities = computeQueueCapabilities,
-            .familyIndex = static_cast<u32>(m_computeQueueFamily),
-            .queueIndex = s_ComputeQueueIndex,
             .timestampValidBits = timestampValidBitsForFamily(m_computeQueueFamily),
             .dedicated = true,
             .primaryForClass = true,
@@ -164,17 +180,17 @@ bool BackendContext::createDevice(){
     }
     if(m_transferQueueEnabled){
         physicalQueues.push_back(VulkanPhysicalQueueDesc{
-            .queue = m_transferQueue,
+            .nativeQueueIndex = transferNativeQueueIndex,
             .queueClass = CommandQueue::Transfer,
             .capabilities = transferQueueCapabilities,
-            .familyIndex = static_cast<u32>(m_transferQueueFamily),
-            .queueIndex = s_TransferQueueIndex,
             .timestampValidBits = timestampValidBitsForFamily(m_transferQueueFamily),
             .dedicated = true,
             .primaryForClass = true,
         });
         appendSameClassQueues(CommandQueue::Transfer);
     }
+    deviceDesc.nativeQueues = m_nativeQueues.data();
+    deviceDesc.nativeQueueCount = m_nativeQueues.size();
     deviceDesc.physicalQueues = physicalQueues.data();
     deviceDesc.physicalQueueCount = physicalQueues.size();
     deviceDesc.instanceExtensions = vecInstanceExt.data();
@@ -277,6 +293,9 @@ void BackendContext::destroy(){
     clearSemaphores(m_acquireSemaphores);
 
     m_rhiDevice = nullptr;
+    m_sameClassQueues.clear();
+    m_nativeQueues.clear();
+    m_presentNativeQueueIndex = Limit<u32>::s_Max;
     m_rendererString.clear();
 
     if(m_vulkanDevice){
@@ -675,7 +694,14 @@ bool BackendContext::present(){
     presentInfo.pSwapchains = &m_swapChain;
     presentInfo.pImageIndices = &m_swapChainIndex;
 
-    res = vkQueuePresentKHR(m_presentQueue, &presentInfo);
+    if(
+        m_presentNativeQueueIndex >= m_nativeQueues.size()
+        || m_nativeQueues[m_presentNativeQueueIndex].queue == VK_NULL_HANDLE
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Presentation references an invalid canonical native queue."));
+        return false;
+    }
+    res = vkQueuePresentKHR(m_nativeQueues[m_presentNativeQueueIndex].queue, &presentInfo);
     const VulkanDetail::QueuePresentWaitDisposition::Enum presentWaitDisposition =
         VulkanDetail::ClassifyQueuePresentWaitDisposition(res);
     m_swapChainImages[m_swapChainIndex].presentationState.observeQueuePresentWaitDisposition(presentWaitDisposition);

@@ -3194,6 +3194,7 @@ private:
 
 
 class Device final : public RefCounter<GraphicsResource>, NoCopy{
+    friend DeviceHandle CreateDevice(const DeviceDesc& desc);
     friend class Buffer;
     friend class CommandList;
     friend class Queue;
@@ -3410,7 +3411,10 @@ public:
 
 
 private:
-    [[nodiscard]] bool registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc);
+    [[nodiscard]] bool registerPhysicalQueue(
+        const VulkanPhysicalQueueDesc& desc,
+        const VulkanNativeQueueDesc& nativeQueue
+    );
     void configureLegacyQueueContext();
     // Probed once at device initialization so compressed texture selection does not rely on
     // a later optimistic format-property query.
@@ -3520,6 +3524,7 @@ private:
 private:
     // First: queues unregister command lists during destruction.
     bool m_gpuCrashDiagnosticsEnabled = false;
+    bool m_queueRegistryReady = false;
     u16 m_deviceGeneration = 0u;
     // Distinguishes submit rejection from device loss.
     Atomic<bool> m_deviceLost = false;
@@ -3540,6 +3545,7 @@ private:
     GraphicsVector<Queue*> m_physicalQueues;
     GraphicsVector<GpuPhysicalQueueInfo> m_physicalQueueInfos;
     Array<Queue*, static_cast<u32>(CommandQueue::kCount)> m_primaryQueues = {};
+    Array<bool, static_cast<u32>(CommandQueue::kCount)> m_explicitPrimaryQueues = {};
     // Only block-compressed entries are populated; all are resolved before the device is exposed.
     Array<FormatSupport::Mask, static_cast<usize>(Format::kCount)> m_compressedFormatSupport = {};
 

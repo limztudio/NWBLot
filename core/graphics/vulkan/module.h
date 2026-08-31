@@ -39,15 +39,21 @@ namespace ObjectTypes{
 class Device;
 typedef Handle<Device> DeviceHandle;
 
-// One real VkQueue exposed to the RHI. The registry may contain more than one entry with the same broad queue
-// class; `primaryForClass` only preserves legacy CommandQueue-based callers while graph packets use the physical
-// ID assigned by Device.
-struct VulkanPhysicalQueueDesc{
+// Canonical native queue identity. Enumerate every queue created by VkDeviceQueueCreateInfo exactly once, including
+// queues used only for presentation. Scheduler-visible physical queues reference this table by index.
+struct VulkanNativeQueueDesc{
     VkQueue queue = VK_NULL_HANDLE;
+    u32 familyIndex = Limit<u32>::s_Max;
+    u32 queueIndex = Limit<u32>::s_Max;
+};
+
+// One canonical native queue exposed to the RHI scheduler. The projection may contain more than one entry with the
+// same broad class; `primaryForClass` only preserves legacy CommandQueue-based callers while graph packets use the
+// physical ID assigned by Device.
+struct VulkanPhysicalQueueDesc{
+    u32 nativeQueueIndex = Limit<u32>::s_Max;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     GpuQueueCapability::Mask capabilities = GpuQueueCapability::None;
-    u32 familyIndex = Limit<u32>::s_Max;
-    u32 queueIndex = 0u;
     u32 timestampValidBits = 0u;
     bool dedicated = false;
     bool primaryForClass = false;
@@ -58,7 +64,10 @@ struct DeviceDesc{
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device = VK_NULL_HANDLE;
 
-    // Required native registry input, synchronously consumed by CreateDevice. Enumerate every active VkQueue here.
+    // Required canonical registry inputs, synchronously consumed by CreateDevice. The native table includes queues
+    // that are intentionally absent from physical task-graph topology, such as a distinct present-only queue.
+    const VulkanNativeQueueDesc* nativeQueues = nullptr;
+    usize nativeQueueCount = 0u;
     const VulkanPhysicalQueueDesc* physicalQueues = nullptr;
     usize physicalQueueCount = 0u;
 

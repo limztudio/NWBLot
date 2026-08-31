@@ -187,6 +187,7 @@ private:
     void installDebugMessenger();
     bool pickPhysicalDevice();
     bool findQueueFamilies(VkPhysicalDevice physicalDevice);
+    [[nodiscard]] u32 findNativeQueueIndex(u32 familyIndex, u32 queueIndex)const noexcept;
     bool createVulkanDevice();
     void logVulkanDeviceConfiguration(
         Alloc::ScratchArena& scratchArena,
@@ -251,16 +252,6 @@ private:
     i32 m_presentQueueFamily = s_InvalidQueueFamilyIndex;
 
     VkDevice m_vulkanDevice = VK_NULL_HANDLE;
-    VkQueue m_graphicsQueue = VK_NULL_HANDLE;
-    // Optional auxiliary Graphics VkQueue. It may come from the primary family or, under the separate cross-family
-    // opt-in, a distinct Graphics-capable family. It is exposed only through the physical registry; legacy
-    // CommandQueue::Graphics callers continue to use m_graphicsQueue.
-    VkQueue m_secondaryGraphicsQueue = VK_NULL_HANDLE;
-    VkQueue m_computeQueue = VK_NULL_HANDLE;
-    VkQueue m_secondaryComputeQueue = VK_NULL_HANDLE;
-    VkQueue m_transferQueue = VK_NULL_HANDLE;
-    VkQueue m_secondaryTransferQueue = VK_NULL_HANDLE;
-    VkQueue m_presentQueue = VK_NULL_HANDLE;
 
     VkSurfaceKHR m_windowSurface = VK_NULL_HANDLE;
 
@@ -268,10 +259,14 @@ private:
     VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
 
     GraphicsVector<SwapChainImage> m_swapChainImages;
+    // One entry per VkQueue created from m_vulkanDevice. Physical scheduling queues and the present role reference
+    // this authoritative identity table instead of copying raw handles independently.
+    GraphicsVector<VulkanNativeQueueDesc> m_nativeQueues;
     DeviceHandle m_rhiDevice;
     // Exact opt-in same-class transports registered after their class primary. The first entry for each class
     // keeps the legacy secondary fields above populated, while graph packets use this complete physical registry.
     GraphicsVector<VulkanPhysicalQueueDesc> m_sameClassQueues;
+    u32 m_presentNativeQueueIndex = Limit<u32>::s_Max;
 
     SemaphoreVector m_acquireSemaphores;
     SemaphoreVector m_presentSemaphores;

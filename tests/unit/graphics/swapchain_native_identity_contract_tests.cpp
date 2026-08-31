@@ -509,7 +509,7 @@ TEST(SwapChainPresentation, CanonicalNativeQueueStateSerializesEveryInternalHost
     EXPECT_LT(transitionIdleOffset, preparedStateOffset);
 
     AString querySource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "queries.cpp", querySource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "event_query.cpp", querySource));
     const AStringView fullQuerySource(querySource.data(), querySource.size());
     const usize querySemanticLockOffset = fullQuerySource.find("ScopedLock lock(q->m_mutex);");
     const usize queryHostLockOffset = fullQuerySource.find(

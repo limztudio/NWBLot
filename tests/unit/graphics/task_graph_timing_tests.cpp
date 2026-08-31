@@ -283,6 +283,55 @@ TEST(GpuTaskGraphTiming, RejectsIncompleteForeignAndReversedEnvelopeEndpoints){
     EXPECT_FALSE(compiledGraph.valid());
 }
 
+TEST(GpuTaskGraphTiming, ResolvesEnvelopeByTopologicalPositionInsteadOfTaskIndex){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+
+    const Graphics::GpuTaskId futureEarly{ 2u, graph.generation() };
+    const Graphics::GpuTaskId late = AddTask(
+        graph,
+        Name("tests/task_graph_timing/topological_late"),
+        futureEarly,
+        scheduling
+    );
+    const Graphics::GpuTaskId prefix = AddTask(
+        graph,
+        Name("tests/task_graph_timing/topological_prefix"),
+        {},
+        scheduling
+    );
+    const Graphics::GpuTaskId early = AddTask(
+        graph,
+        Name("tests/task_graph_timing/topological_early"),
+        prefix,
+        scheduling
+    );
+    ASSERT_TRUE(late.valid());
+    ASSERT_TRUE(prefix.valid());
+    ASSERT_TRUE(early.valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    Graphics::GpuTaskGraphCompileOptions options;
+    options.packetTimingEnvelope = { .firstTask = early, .lastTask = late };
+    ASSERT_TRUE(Compile(graph, analysis, assignments, compiledGraph, options));
+    ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
+    EXPECT_EQ(analysis.topologicalOrder()[0u], prefix);
+    EXPECT_EQ(analysis.topologicalOrder()[1u], early);
+    EXPECT_EQ(analysis.topologicalOrder()[2u], late);
+    EXPECT_LT(compiledGraph.packetForTask(early).index, compiledGraph.packetForTask(late).index);
+    ASSERT_TRUE(compiledGraph.packetTimingEnvelopeRange().valid());
+    EXPECT_EQ(compiledGraph.packetTimingEnvelopeRange().packetCount, 2u);
+
+    options.packetTimingEnvelope = { .firstTask = late, .lastTask = early };
+    EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
+    EXPECT_FALSE(compiledGraph.valid());
+}
+
 TEST(GpuTaskGraphTiming, RejectsEnvelopeRangesAtOrAfterAcceptedQueueFrontierPackets){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

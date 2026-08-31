@@ -440,6 +440,8 @@ public:
 
 private:
     GraphicsVector<GpuCompiledTask> m_tasks;
+    // Dense declaration-task index to topological m_tasks offset. Offsets remain stable when arena vector storage moves.
+    GraphicsVector<u32> m_compiledTaskIndexByTask;
     GraphicsVector<GpuSubmissionPacket> m_packets;
     GraphicsVector<GpuTaskId> m_packetTasks;
     GraphicsVector<GpuPacketDependency> m_packetDependencies;

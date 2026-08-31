@@ -33,18 +33,11 @@ namespace __hidden_gpu_task_graph_compiler_packetization{
     if(!hasFirstTask)
         return true;
 
-    usize firstTaskIndex = Limit<usize>::s_Max;
-    usize lastTaskIndex = Limit<usize>::s_Max;
-    for(usize taskIndex = 0u; taskIndex < compiledPlan.tasks.size(); ++taskIndex){
-        const GpuCompiledTask& task = compiledPlan.tasks[taskIndex];
-        if(task.task == options.firstTask)
-            firstTaskIndex = taskIndex;
-        if(task.task == options.lastTask)
-            lastTaskIndex = taskIndex;
-    }
+    const u32 firstTaskIndex = GpuTaskGraphCompilerDetail::FindCompiledTaskIndex(compiledPlan, options.firstTask);
+    const u32 lastTaskIndex = GpuTaskGraphCompilerDetail::FindCompiledTaskIndex(compiledPlan, options.lastTask);
     if(
-        firstTaskIndex == Limit<usize>::s_Max
-        || lastTaskIndex == Limit<usize>::s_Max
+        firstTaskIndex == Limit<u32>::s_Max
+        || lastTaskIndex == Limit<u32>::s_Max
         || lastTaskIndex < firstTaskIndex
     )
         return false;
@@ -93,30 +86,39 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] u32 FindCompiledTaskIndex(
+    const GpuTaskGraphCompiledPlanStorage& compiledPlan,
+    const GpuTaskId& task
+)noexcept{
+    if(
+        !task.valid()
+        || task.generation != compiledPlan.graphGeneration
+        || task.index >= compiledPlan.compiledTaskIndexByTask.size()
+    )
+        return Limit<u32>::s_Max;
+    const u32 compiledTaskIndex = compiledPlan.compiledTaskIndexByTask[task.index];
+    if(
+        compiledTaskIndex >= compiledPlan.tasks.size()
+        || compiledPlan.tasks[compiledTaskIndex].task != task
+    )
+        return Limit<u32>::s_Max;
+    return compiledTaskIndex;
+}
+
 [[nodiscard]] const GpuCompiledTask* FindCompiledTask(
     const GpuTaskGraphCompiledPlanStorage& compiledPlan,
     const GpuTaskId& task
 )noexcept{
-    if(!task.valid() || task.generation != compiledPlan.graphGeneration)
-        return nullptr;
-    for(const GpuCompiledTask& compiledTask : compiledPlan.tasks){
-        if(compiledTask.task == task)
-            return &compiledTask;
-    }
-    return nullptr;
+    const u32 compiledTaskIndex = FindCompiledTaskIndex(compiledPlan, task);
+    return compiledTaskIndex != Limit<u32>::s_Max ? &compiledPlan.tasks[compiledTaskIndex] : nullptr;
 }
 
 [[nodiscard]] GpuCompiledTask* FindCompiledTask(
     GpuTaskGraphCompiledPlanStorage& compiledPlan,
     const GpuTaskId& task
 )noexcept{
-    if(!task.valid() || task.generation != compiledPlan.graphGeneration)
-        return nullptr;
-    for(GpuCompiledTask& compiledTask : compiledPlan.tasks){
-        if(compiledTask.task == task)
-            return &compiledTask;
-    }
-    return nullptr;
+    const u32 compiledTaskIndex = FindCompiledTaskIndex(compiledPlan, task);
+    return compiledTaskIndex != Limit<u32>::s_Max ? &compiledPlan.tasks[compiledTaskIndex] : nullptr;
 }
 
 [[nodiscard]] GpuSubmissionPacketId FindCompiledPacketForTask(
@@ -153,6 +155,12 @@ namespace GpuTaskGraphCompilerDetail{
     GpuTaskGraphCompiledPlanStorage& compiledPlan,
     GpuSubmissionPacketRange& outTimingEnvelopeRange
 ){
+    if(
+        compiledPlan.compiledTaskIndexByTask.size() != graph.taskCount()
+        || !compiledPlan.tasks.empty()
+    )
+        return false;
+
     // Tasks retain one exact acceptance and synchronization point by default. An explicitly opted-in successor may
     // share its immediately preceding compatible packet, preserving task order while retaining one submission for a
     // temporary imported/native recording bridge. The separate FrontierScored policy is deliberately opt-in too:
@@ -160,6 +168,16 @@ namespace GpuTaskGraphCompilerDetail{
     // frontier. This keeps current renderer packet boundaries stable while the generic compiler can reduce safe
     // one-task submission overhead for new callers.
     for(const GpuTaskId taskID : analysis.topologicalOrder()){
+        if(
+            !taskID.valid()
+            || taskID.generation != compiledPlan.graphGeneration
+            || taskID.index >= compiledPlan.compiledTaskIndexByTask.size()
+            || compiledPlan.compiledTaskIndexByTask[taskID.index] != Limit<u32>::s_Max
+            || compiledPlan.tasks.size() >= Limit<u32>::s_Max
+        )
+            return false;
+        const u32 compiledTaskIndex = static_cast<u32>(compiledPlan.tasks.size());
+
         const GpuTaskQueueAssignment* const assignment = assignments.find(taskID);
         if(!assignment || !assignment->queue.valid())
             return false;
@@ -350,7 +368,10 @@ namespace GpuTaskGraphCompilerDetail{
                 )
             ),
         });
+        compiledPlan.compiledTaskIndexByTask[taskID.index] = compiledTaskIndex;
     }
+    if(compiledPlan.tasks.size() != compiledPlan.compiledTaskIndexByTask.size())
+        return false;
     return __hidden_gpu_task_graph_compiler_packetization::ResolvePacketTimingEnvelope(
         timingEnvelope,
         compiledPlan,

@@ -15409,6 +15409,164 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
     EXPECT_EQ(analysis.topologicalOrder()[0], second);
     EXPECT_EQ(analysis.topologicalOrder()[1], third);
     EXPECT_EQ(analysis.topologicalOrder()[2], first);
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+
+    const Graphics::GpuTaskId topologicalTasks[] = { second, third, first };
+    for(usize taskIndex = 0u; taskIndex < LengthOf(topologicalTasks); ++taskIndex){
+        const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetIdAt(taskIndex);
+        ASSERT_TRUE(packet.valid());
+        ASSERT_EQ(compiledGraph.packet(packet).taskCount, 1u);
+        ASSERT_NE(compiledGraph.packetTasks(packet), nullptr);
+        EXPECT_EQ(compiledGraph.packetTasks(packet)[0u], topologicalTasks[taskIndex]);
+    }
+
+    const Graphics::GpuTaskId lookupOrder[] = { first, second, third, third, second, first };
+    for(const Graphics::GpuTaskId task : lookupOrder){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        ASSERT_NE(compiledTask, nullptr);
+        EXPECT_EQ(compiledTask->task, task);
+        EXPECT_EQ(compiledGraph.packetForTask(task), compiledTask->packet);
+        ASSERT_NE(compiledGraph.packetTasks(compiledTask->packet), nullptr);
+        EXPECT_EQ(compiledGraph.packetTasks(compiledTask->packet)[0u], task);
+    }
+}
+
+TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuTaskId first = AddTask(
+        graph,
+        Name("tests/task_graph/compiled_lookup_first"),
+        "Compiled Lookup First"
+    );
+    ASSERT_TRUE(first.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_NE(compiledGraph.findTask(first), nullptr);
+
+    const auto expectMissingTask = [&compiledGraph](const Graphics::GpuTaskId task){
+        EXPECT_EQ(compiledGraph.findTask(task), nullptr);
+        EXPECT_FALSE(compiledGraph.packetForTask(task).valid());
+        EXPECT_EQ(
+            compiledGraph.packetizationDecisionForTask(task),
+            Graphics::GpuTaskPacketizationDecision::Unknown
+        );
+    };
+    const Graphics::GpuTaskId onePastCompiledTasks{
+        static_cast<u32>(graph.taskCount()),
+        graph.generation(),
+    };
+    const Graphics::GpuTaskId largeSameGenerationTask{
+        Limit<u32>::s_Max - 1u,
+        graph.generation(),
+    };
+    ASSERT_TRUE(onePastCompiledTasks.valid());
+    ASSERT_TRUE(largeSameGenerationTask.valid());
+    expectMissingTask(onePastCompiledTasks);
+    expectMissingTask(largeSameGenerationTask);
+
+    Graphics::GpuTaskGraph foreignGraph(testArena.arena);
+    const Graphics::GpuTaskId foreign = AddTask(
+        foreignGraph,
+        Name("tests/task_graph/compiled_lookup_foreign"),
+        "Compiled Lookup Foreign"
+    );
+    ASSERT_TRUE(foreign.valid());
+    ASSERT_NE(foreign.generation, graph.generation());
+    expectMissingTask(foreign);
+
+    const Graphics::GpuTaskId appended = AddTask(
+        graph,
+        Name("tests/task_graph/compiled_lookup_appended"),
+        "Compiled Lookup Appended"
+    );
+    ASSERT_TRUE(appended.valid());
+    EXPECT_FALSE(compiledGraph.validFor(graph));
+    expectMissingTask(appended);
+
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(compiledGraph.validFor(graph));
+    ASSERT_NE(compiledGraph.findTask(first), nullptr);
+    ASSERT_NE(compiledGraph.findTask(appended), nullptr);
+
+    graph.reset();
+    const Graphics::GpuTaskId replacement = AddTask(
+        graph,
+        Name("tests/task_graph/compiled_lookup_replacement"),
+        "Compiled Lookup Replacement"
+    );
+    ASSERT_TRUE(replacement.valid());
+    ASSERT_NE(replacement.generation, first.generation);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    expectMissingTask(first);
+    expectMissingTask(appended);
+    ASSERT_NE(compiledGraph.findTask(replacement), nullptr);
+    EXPECT_TRUE(compiledGraph.packetForTask(replacement).valid());
+}
+
+TEST(GpuTaskGraph, CompiledTaskLookupScalesAcrossDenseTaskIds){
+    constexpr usize s_TaskCount = 4096u;
+    constexpr usize s_QuerySweepCount = 16u;
+
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Core::Alloc::ScratchArena lookupScratchArena(Name("tests/graphics/task_graph_lookup_scale_scratch"));
+    Vector<Graphics::GpuTaskId, Core::Alloc::ScratchArena> tasks(lookupScratchArena);
+    tasks.reserve(s_TaskCount);
+    const Name taskBaseName("tests/task_graph/compiled_lookup_scale_task_");
+    char taskIndexBuffer[32u] = {};
+    for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
+        const Graphics::GpuTaskId task = AddTask(
+            graph,
+            DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer)),
+            "Compiled Lookup Scale Task"
+        );
+        ASSERT_TRUE(task.valid());
+        tasks.push_back(task);
+    }
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_EQ(compiledGraph.taskCount(), s_TaskCount);
+
+    u64 packetChecksum = 0u;
+    for(usize sweepIndex = 0u; sweepIndex < s_QuerySweepCount; ++sweepIndex){
+        for(usize queryIndex = 0u; queryIndex < s_TaskCount; ++queryIndex){
+            const usize taskIndex = (queryIndex * 4051u + sweepIndex) % s_TaskCount;
+            const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(tasks[taskIndex]);
+            if(!compiledTask || compiledTask->task != tasks[taskIndex] || !compiledTask->packet.valid()){
+                ADD_FAILURE() << "Dense compiled-task lookup failed at task " << taskIndex;
+                return;
+            }
+            packetChecksum += static_cast<u64>(compiledTask->packet.index) + 1u;
+        }
+    }
+    const u64 expectedSweepChecksum = static_cast<u64>(s_TaskCount) * (s_TaskCount + 1u) / 2u;
+    EXPECT_EQ(packetChecksum, expectedSweepChecksum * s_QuerySweepCount);
 }
 
 TEST(GpuTaskGraph, RejectsRecoverySubmissionWithoutAcceptedQueueFrontierRole){

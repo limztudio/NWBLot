@@ -18,6 +18,7 @@ NWB_CORE_BEGIN
 
 GpuCompiledGraph::GpuCompiledGraph(GraphicsArena& arena)
     : m_tasks(arena)
+    , m_compiledTaskIndexByTask(arena)
     , m_packets(arena)
     , m_packetTasks(arena)
     , m_packetDependencies(arena)
@@ -34,6 +35,7 @@ GpuCompiledGraph::GpuCompiledGraph(GraphicsArena& arena)
 
 void GpuCompiledGraph::reset(){
     m_tasks.clear();
+    m_compiledTaskIndexByTask.clear();
     m_packets.clear();
     m_packetTasks.clear();
     m_packetDependencies.clear();
@@ -64,6 +66,7 @@ bool GpuCompiledGraph::validFor(const GpuTaskGraph& graph)const noexcept{
         && m_declarationRevision == graph.declarationRevision()
         && m_graphTaskCount == graph.taskCount()
         && m_tasks.size() == m_graphTaskCount
+        && m_compiledTaskIndexByTask.size() == m_graphTaskCount
         && m_packetTasks.size() == m_graphTaskCount
         && (
             (m_graphTaskCount == 0u && m_packets.empty())
@@ -133,13 +136,17 @@ GpuSubmissionPacketRange GpuCompiledGraph::allPacketRange()const noexcept{
 }
 
 const GpuCompiledTask* GpuCompiledGraph::findTask(const GpuTaskId& task)const noexcept{
-    if(!task.valid() || task.generation != m_generation)
+    if(
+        !task.valid()
+        || task.generation != m_generation
+        || task.index >= m_compiledTaskIndexByTask.size()
+    )
         return nullptr;
-    for(const GpuCompiledTask& compiledTask : m_tasks){
-        if(compiledTask.task == task)
-            return &compiledTask;
-    }
-    return nullptr;
+    const u32 compiledTaskIndex = m_compiledTaskIndexByTask[task.index];
+    if(compiledTaskIndex >= m_tasks.size())
+        return nullptr;
+    const GpuCompiledTask& compiledTask = m_tasks[compiledTaskIndex];
+    return compiledTask.task == task ? &compiledTask : nullptr;
 }
 
 GpuSubmissionPacketId GpuCompiledGraph::packetForTask(const GpuTaskId& task)const noexcept{

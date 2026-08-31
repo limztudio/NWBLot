@@ -294,6 +294,7 @@ bool GpuTaskGraphCompiler::compile(
     outCompiledGraph.m_planGeneration = AllocateCompiledPlanGeneration();
     outCompiledGraph.m_deviceGeneration = topology.queues[0].id.deviceGeneration;
     outCompiledGraph.m_graphTaskCount = graph.taskCount();
+    outCompiledGraph.m_compiledTaskIndexByTask.resize(graph.taskCount(), Limit<u32>::s_Max);
     outCompiledGraph.m_tasks.reserve(graph.taskCount());
     outCompiledGraph.m_packets.reserve(graph.taskCount());
     outCompiledGraph.m_packetTasks.reserve(graph.taskCount());
@@ -309,6 +310,7 @@ bool GpuTaskGraphCompiler::compile(
 
     GpuTaskGraphCompiledPlanStorage compiledPlan{
         .tasks = outCompiledGraph.m_tasks,
+        .compiledTaskIndexByTask = outCompiledGraph.m_compiledTaskIndexByTask,
         .packets = outCompiledGraph.m_packets,
         .packetTasks = outCompiledGraph.m_packetTasks,
         .packetDependencies = outCompiledGraph.m_packetDependencies,

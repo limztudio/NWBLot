@@ -25,6 +25,7 @@ namespace GpuTaskGraphCompilerDetail{
 
 struct GpuTaskGraphCompiledPlanStorage{
     GraphicsVector<GpuCompiledTask>& tasks;
+    GraphicsVector<u32>& compiledTaskIndexByTask;
     GraphicsVector<GpuSubmissionPacket>& packets;
     GraphicsVector<GpuTaskId>& packetTasks;
     GraphicsVector<GpuPacketDependency>& packetDependencies;
@@ -230,6 +231,11 @@ struct GpuTaskGraphResourceStatePlan{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] u32 FindCompiledTaskIndex(
+    const GpuTaskGraphCompiledPlanStorage& compiledPlan,
+    const GpuTaskId& task
+)noexcept;
 
 [[nodiscard]] const GpuCompiledTask* FindCompiledTask(
     const GpuTaskGraphCompiledPlanStorage& compiledPlan,

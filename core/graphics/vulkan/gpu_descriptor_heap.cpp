@@ -122,8 +122,11 @@ GpuDescriptorHeap::~GpuDescriptorHeap(){
     NWB_LOGGER_WARNING(
         NWB_TEXT("Vulkan: GpuDescriptorHeap destruction is forcing cleanup after public shutdown rejected live uses.")
     );
-    if(!m_device.waitForIdle())
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: GpuDescriptorHeap destruction is continuing after device-idle wait failed."));
+    const bool deviceIdle = m_device.waitForIdle();
+    NWB_FATAL_ASSERT_MSG(
+        deviceIdle || m_device.isDeviceLost(),
+        NWB_TEXT("Vulkan: GpuDescriptorHeap destruction requires either a completed device join or terminal device loss.")
+    );
     shutdownForDeviceTeardown();
 }
 

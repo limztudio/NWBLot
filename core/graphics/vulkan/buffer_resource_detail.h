@@ -186,7 +186,7 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
         return false;
     if(
         (usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
-        && (!context.extensions.buffer_device_address || !vkGetBufferDeviceAddress)
+        && (!context.extensions.buffer_device_address || !context.deviceDispatch.vkGetBufferDeviceAddress)
     )
         return false;
 

@@ -511,12 +511,14 @@ bool GpuTaskGraphCompiler::compile(
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena> trackedResourceStates(scratchArena);
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena> pendingEpilogueBarriers(scratchArena);
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialOwnershipDependencies(scratchArena);
+    Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialAvailabilityDependencies(scratchArena);
     Vector<GpuPacketDependency, Alloc::ScratchArena> terminalFinalizationDependencies(scratchArena);
     Vector<TrackedTextureStateFragment, Alloc::ScratchArena> stateFragments(scratchArena);
     Vector<GpuTaskResourceRange, Alloc::ScratchArena> taskFirstUseRanges(scratchArena);
     trackedResourceStates.reserve(graph.taskCount());
     pendingEpilogueBarriers.reserve(graph.taskCount());
     initialOwnershipDependencies.reserve(graph.taskCount());
+    initialAvailabilityDependencies.reserve(graph.taskCount());
     terminalFinalizationDependencies.reserve(graph.taskCount());
     stateFragments.reserve(graph.taskCount());
     taskFirstUseRanges.reserve(graph.taskCount());
@@ -529,6 +531,7 @@ bool GpuTaskGraphCompiler::compile(
         .trackedResourceStates = trackedResourceStates,
         .pendingEpilogueBarriers = pendingEpilogueBarriers,
         .initialOwnershipDependencies = initialOwnershipDependencies,
+        .initialAvailabilityDependencies = initialAvailabilityDependencies,
         .terminalFinalizationDependencies = terminalFinalizationDependencies,
         .stateFragments = stateFragments,
         .taskFirstUseRanges = taskFirstUseRanges,
@@ -548,6 +551,7 @@ bool GpuTaskGraphCompiler::compile(
         graph,
         outAnalysis,
         initialOwnershipDependencies,
+        initialAvailabilityDependencies,
         terminalFinalizationDependencies,
         compiledPlan,
         scratchArena
@@ -667,6 +671,7 @@ bool GpuTaskGraphCompiler::compile(
     statistics.packetExternalDependencyCount = outCompiledGraph.m_packetExternalDependencies.size();
     statistics.externalDependencyCount = statistics.packetExternalDependencyCount;
     statistics.initialOwnershipExternalDependencyCount = initialOwnershipDependencies.size();
+    statistics.initialAvailabilityExternalDependencyCount = initialAvailabilityDependencies.size();
     statistics.prologueStateSeedCount = outCompiledGraph.m_prologueStateSeeds.size();
     statistics.prologueBarrierCount = outCompiledGraph.m_prologueBarriers.size();
     statistics.epilogueBarrierCount = outCompiledGraph.m_epilogueBarriers.size();

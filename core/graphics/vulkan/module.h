@@ -39,8 +39,9 @@ namespace ObjectTypes{
 class Device;
 typedef Handle<Device> DeviceHandle;
 
-// Canonical native queue identity. Enumerate every queue created by VkDeviceQueueCreateInfo exactly once, including
-// queues used only for presentation. Scheduler-visible physical queues reference this table by index.
+// Canonical native queue construction identity. Enumerate every queue created by VkDeviceQueueCreateInfo exactly
+// once, including queues used only for presentation. Device materializes stable synchronized states from this table,
+// and scheduler-visible physical queues reference those states by index.
 struct VulkanNativeQueueDesc{
     VkQueue queue = VK_NULL_HANDLE;
     u32 familyIndex = Limit<u32>::s_Max;
@@ -63,6 +64,9 @@ struct DeviceDesc{
     VkInstance instance = VK_NULL_HANDLE;
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device = VK_NULL_HANDLE;
+    PFN_vkGetInstanceProcAddr getInstanceProcAddr = nullptr;
+    VolkInstanceTable instanceDispatch = {};
+    VolkDeviceTable deviceDispatch = {};
 
     // Required canonical registry inputs, synchronously consumed by CreateDevice. The native table includes queues
     // that are intentionally absent from physical task-graph topology, such as a distinct present-only queue.
@@ -84,6 +88,8 @@ struct DeviceDesc{
 
     // Indicates if VkPhysicalDeviceVulkan12Features::bufferDeviceAddress was set to 'true' at device creation time
     bool bufferDeviceAddressSupported = false;
+    // Retains the exact VkPhysicalDeviceVulkan12Features::hostQueryReset bit enabled at device creation time.
+    bool hostQueryResetFeatureEnabled = false;
     // Retains the texture-compression features enabled through vkCreateDevice.
     bool textureCompressionBcFeatureEnabled = false;
     bool textureCompressionAstcLdrFeatureEnabled = false;

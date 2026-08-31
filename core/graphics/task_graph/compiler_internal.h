@@ -73,6 +73,7 @@ struct GpuTaskGraphResourceStatePlan{
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedResourceStates;
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena>& pendingEpilogueBarriers;
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies;
+    Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies;
     Vector<GpuPacketDependency, Alloc::ScratchArena>& terminalFinalizationDependencies;
     Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& stateFragments;
     Vector<GpuTaskResourceRange, Alloc::ScratchArena>& taskFirstUseRanges;
@@ -339,6 +340,7 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan);
     const GpuTaskGraph& graph,
     const GpuTaskGraphAnalysis& analysis,
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies,
+    const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies,
     const Vector<GpuPacketDependency, Alloc::ScratchArena>& terminalFinalizationDependencies,
     GpuTaskGraphCompiledPlanStorage& compiledPlan,
     Alloc::ScratchArena& scratchArena

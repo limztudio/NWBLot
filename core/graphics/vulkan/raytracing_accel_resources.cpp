@@ -156,7 +156,7 @@ AccelStruct::AccelStruct(
 }
 AccelStruct::~AccelStruct(){
     if(m_accelStruct){
-        vkDestroyAccelerationStructureKHR(m_context.device, m_accelStruct, m_context.allocationCallbacks);
+        m_context.deviceDispatch.vkDestroyAccelerationStructureKHR(m_context.device, m_accelStruct, m_context.allocationCallbacks);
         m_accelStruct = VK_NULL_HANDLE;
     }
 
@@ -221,7 +221,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 
         u32 primitiveCount = static_cast<u32>(desc.topLevelMaxInstances);
         auto sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
-        vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
+        m_context.deviceDispatch.vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
         if(sizeInfo.accelerationStructureSize > 0)
             accelStructSize = sizeInfo.accelerationStructureSize;
     }
@@ -423,7 +423,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         buildInfo.pGeometries = blasScratch.geometries.data();
 
         auto sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
-        vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, blasScratch.primitiveCounts.data(), &sizeInfo);
+        m_context.deviceDispatch.vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, blasScratch.primitiveCounts.data(), &sizeInfo);
         if(sizeInfo.accelerationStructureSize > 0)
             accelStructSize = sizeInfo.accelerationStructureSize;
     }
@@ -449,7 +449,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     createInfo.size = bufferDesc.byteSize;
     createInfo.type = asType;
 
-    res = vkCreateAccelerationStructureKHR(m_context.device, &createInfo, m_context.allocationCallbacks, &as->m_accelStruct);
+    res = m_context.deviceDispatch.vkCreateAccelerationStructureKHR(m_context.device, &createInfo, m_context.allocationCallbacks, &as->m_accelStruct);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acceleration structure: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, as);
@@ -467,7 +467,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
             DestroyArenaObject(m_context.objectArena, as);
             return nullptr;
         }
-        as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
+        as->m_deviceAddress = m_context.deviceDispatch.vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
     }
 
     return RayTracingAccelStructHandle(as, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena), AdoptRef);
@@ -511,7 +511,7 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
     if(
         !m_context.extensions.NV_cluster_acceleration_structure
         || !m_context.clusterAccelerationStructureFeatureEnabled
-        || !vkGetClusterAccelerationStructureBuildSizesNV
+        || !m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV
     )
         return info;
     constexpr u32 s_SupportedOperationFlags =
@@ -564,13 +564,13 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
             return info;
 
         VkFormatProperties formatProperties{};
-        vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, clusterInput.vertexFormat, &formatProperties);
+        m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, clusterInput.vertexFormat, &formatProperties);
         if((formatProperties.bufferFeatures & VK_FORMAT_FEATURE_ACCELERATION_STRUCTURE_VERTEX_BUFFER_BIT_KHR) == 0u)
             return info;
     }
 
     auto vkSizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
-    vkGetClusterAccelerationStructureBuildSizesNV(m_context.device, &inputInfo, &vkSizeInfo);
+    m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV(m_context.device, &inputInfo, &vkSizeInfo);
 
     info.resultMaxSizeInBytes = vkSizeInfo.accelerationStructureSize;
     info.scratchSizeInBytes = vkSizeInfo.buildScratchSize;
@@ -604,7 +604,7 @@ bool Device::bindAccelStructMemory(RayTracingAccelStruct* accelStructResource, H
 
         auto addressInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
         addressInfo.accelerationStructure = as->m_accelStruct;
-        as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
+        as->m_deviceAddress = m_context.deviceDispatch.vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
         if(as->m_deviceAddress != 0u)
             return true;
 

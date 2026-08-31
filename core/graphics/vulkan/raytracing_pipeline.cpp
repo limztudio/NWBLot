@@ -357,7 +357,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     createInfo.maxPipelineRayRecursionDepth = desc.maxRecursionDepth;
     createInfo.layout = pso->m_pipelineLayout;
 
-    res = vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->m_pipeline);
+    res = m_context.deviceDispatch.vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, pso);
@@ -381,7 +381,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
     const usize shaderGroupHandleBytes = static_cast<usize>(groupCount) * static_cast<usize>(handleSize);
     pso->m_shaderGroupHandles.resize(shaderGroupHandleBytes);
-    res = vkGetRayTracingShaderGroupHandlesKHR(
+    res = m_context.deviceDispatch.vkGetRayTracingShaderGroupHandlesKHR(
         m_context.device,
         pso->m_pipeline,
         0,

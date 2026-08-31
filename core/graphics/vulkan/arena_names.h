@@ -27,6 +27,7 @@ inline constexpr Name s_InstanceCreateArena("core/graphics/backend_instance_crea
 inline constexpr Name s_QueueFamilyQueryArena("core/graphics/backend_queue_family_query");
 inline constexpr Name s_PhysicalDeviceSelectArena("core/graphics/backend_physical_device_select");
 inline constexpr Name s_DeviceCreateArena("core/graphics/backend_device_create");
+inline constexpr Name s_DeviceWaitIdleArena("core/graphics/device_wait_idle");
 inline constexpr Name s_SwapChainPresentModeArena("core/graphics/backend_swap_chain_present_mode");
 inline constexpr Name s_DeviceExtensionSetupArena("core/graphics/backend_device_extension_setup");
 inline constexpr Name s_AdapterEnumerateArena("core/graphics/backend_adapter_enumerate");

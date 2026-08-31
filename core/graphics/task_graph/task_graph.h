@@ -85,6 +85,7 @@ struct GpuTaskGraphResourceView{
     const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSources = nullptr;
     usize initialOwnerHandoffSourceCount = 0u;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+    GpuExternalCompletionId initialAvailabilityCompletion;
     // Typed resource imports own an exact copy of the backend's immutable physical admission facts. Metadata-only
     // resources have no snapshot and retain the logical queue-sharing resolver.
     ResourceQueueAdmissionSnapshot queueAdmission;
@@ -297,6 +298,7 @@ private:
         const CommandListResourceStateHandoff* initialOwnerStateSourceIdentity = nullptr;
         GpuExternalCompletionId initialOwnerCompletion;
         QueueSubmissionToken initialOwnerMinimumCompletionToken;
+        GpuExternalCompletionId initialAvailabilityCompletion;
         ResourceStates::Mask initialState = ResourceStates::Unknown;
         ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
         u32 markerLabelOffset = 0u;

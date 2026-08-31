@@ -119,7 +119,7 @@ Buffer::~Buffer(){
 
     for(auto& viewEntry : m_bufferViews){
         if(viewEntry.view != VK_NULL_HANDLE){
-            vkDestroyBufferView(m_context.device, viewEntry.view, m_context.allocationCallbacks);
+            m_context.deviceDispatch.vkDestroyBufferView(m_context.device, viewEntry.view, m_context.allocationCallbacks);
             viewEntry.view = VK_NULL_HANDLE;
         }
     }
@@ -132,7 +132,7 @@ Buffer::~Buffer(){
             {
                 ScopedLock heapLock(boundHeap->m_bindingMutex);
                 if(m_buffer != VK_NULL_HANDLE){
-                    vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
+                    m_context.deviceDispatch.vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
                     m_buffer = VK_NULL_HANDLE;
                 }
                 boundHeap->eraseBindingReservationLocked(this);
@@ -146,7 +146,7 @@ Buffer::~Buffer(){
         else if(m_managed){
             if(m_creationDesc.isVirtual){
                 if(m_buffer != VK_NULL_HANDLE){
-                    vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
+                    m_context.deviceDispatch.vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
                     m_buffer = VK_NULL_HANDLE;
                 }
             }
@@ -240,7 +240,7 @@ VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
     viewInfo.range = resolvedSize;
 
     VkBufferView view = VK_NULL_HANDLE;
-    res = vkCreateBufferView(m_context.device, &viewInfo, m_context.allocationCallbacks, &view);
+    res = m_context.deviceDispatch.vkCreateBufferView(m_context.device, &viewInfo, m_context.allocationCallbacks, &view);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer view: {}"), ResultToString(res));
         return VK_NULL_HANDLE;
@@ -346,7 +346,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         buffer->m_versionTracking.resize(d.maxVersions);
 
     if(d.isVirtual)
-        res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer->m_buffer);
+        res = m_context.deviceDispatch.vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer->m_buffer);
     else
         res = m_allocator.createBuffer(*buffer, bufferInfo);
     if(res != VK_SUCCESS){
@@ -367,7 +367,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
             VkBufferDeviceAddressInfo addressInfo{};
             addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
             addressInfo.buffer = buffer->m_buffer;
-            buffer->m_deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
+            buffer->m_deviceAddress = m_context.deviceDispatch.vkGetBufferDeviceAddress(m_context.device, &addressInfo);
         }
     }
 
@@ -470,7 +470,7 @@ bool CommandList::tryWriteBuffer(Buffer* bufferResource, const void* data, usize
     region.dstOffset = destOffsetBytes;
     region.size = dataSize;
 
-    vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, buffer.m_buffer, 1, &region);
+    m_context.deviceDispatch.vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, buffer.m_buffer, 1, &region);
 
     retainResource(bufferResource);
     retainStagingBuffer(*stagingBuffer);
@@ -508,7 +508,7 @@ void CommandList::clearBufferUInt(Buffer* bufferResource, u32 clearValue){
     if(m_commandRecordingFailed)
         return;
 
-    vkCmdFillBuffer(m_currentCmdBuf->m_cmdBuf, buffer.m_buffer, 0, VK_WHOLE_SIZE, clearValue);
+    m_context.deviceDispatch.vkCmdFillBuffer(m_currentCmdBuf->m_cmdBuf, buffer.m_buffer, 0, VK_WHOLE_SIZE, clearValue);
     retainResource(bufferResource);
 }
 
@@ -597,7 +597,7 @@ void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* 
     region.dstOffset = destOffsetBytes;
     region.size = dataSizeBytes;
 
-    vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, src.m_buffer, dest.m_buffer, 1, &region);
+    m_context.deviceDispatch.vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, src.m_buffer, dest.m_buffer, 1, &region);
 
     retainResource(srcResource);
     retainResource(destResource);
@@ -696,7 +696,7 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
     region.srcOffset = srcOffsetBytes;
     region.dstOffset = destOffsetBytes;
     region.size = dataSizeBytes;
-    vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, src.m_buffer, dest.m_buffer, 1u, &region);
+    m_context.deviceDispatch.vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, src.m_buffer, dest.m_buffer, 1u, &region);
 
     retainResource(srcResource);
     retainResource(destResource);

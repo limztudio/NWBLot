@@ -50,34 +50,6 @@ namespace Feature{
     };
 };
 
-// A completion edge produced only by an accepted queue submission. `valid()` is intentionally false for rejected or
-// empty work, while an accepted synchronization-only submission may still produce a token for dependency forwarding.
-// `physicalQueueIndex` and `deviceGeneration` identify the concrete backend queue that produced the timeline value.
-// They are deliberately optional for retained source compatibility with older direct callers; graph submission and
-// external graph completions require them so a token from a retired device cannot be mistaken for current work.
-struct QueueSubmissionToken{
-    CommandQueue::Enum queue = CommandQueue::kCount;
-    u64 value = 0;
-    u16 physicalQueueIndex = Limit<u16>::s_Max;
-    u16 deviceGeneration = 0u;
-
-    [[nodiscard]] constexpr bool valid()const{
-        return static_cast<u32>(queue) < static_cast<u32>(CommandQueue::kCount) && value != 0u;
-    }
-    [[nodiscard]] constexpr bool hasPhysicalQueueIdentity()const{
-        return physicalQueueIndex != Limit<u16>::s_Max && deviceGeneration != 0u;
-    }
-    [[nodiscard]] constexpr bool matchesPhysicalQueue(
-        const u16 index,
-        const u16 generation
-    )const{
-        return hasPhysicalQueueIdentity()
-            && physicalQueueIndex == index
-            && deviceGeneration == generation
-        ;
-    }
-};
-
 // One opaque native binary semaphore signal contributed by a submission-local hook. `Object` avoids exposing a
 // backend handle type to graph code; only the native Device that owns the exact queue may decode it. This is narrow
 // by design: swap-chain presentation requires one binary signal, while timeline dependencies remain token based.
@@ -90,19 +62,35 @@ struct QueueSubmissionNativeSignal{
 
 // Called immediately before one validated native submission reaches its selected physical queue. It returns an
 // opaque binary signal that Device attaches directly to that submission, rather than appending it to a queue-global
-// pending list where another concurrent submit could consume it. A callback may retain the identity only to verify
-// the immediately returned completion token; it must not use it to route later submissions.
+// pending list where another concurrent submit could consume it. The hook is a borrowed one-shot value: context
+// must outlive executeCommandLists, and copies must not be retained past resolution or their owner's lifecycle.
 using QueueSubmissionPreSubmitCallback = bool(*) (
     void* context,
+    u64 identity,
     const GpuPhysicalQueueId& executionQueue,
     QueueSubmissionNativeSignal& outSignal
 );
 
-struct QueueSubmissionPreSubmitHook{
-    void* context = nullptr;
-    QueueSubmissionPreSubmitCallback invoke = nullptr;
+// Called exactly once after hook preparation, with the accepted physical-queue timeline token or an invalid token
+// when native submission was rejected. Callbacks must resolve one-shot state without synchronously draining Device.
+using QueueSubmissionResolvedCallback = bool(*) (
+    void* context,
+    u64 identity,
+    const QueueSubmissionToken& submissionToken
+)noexcept;
 
-    [[nodiscard]] constexpr bool valid()const noexcept{ return invoke != nullptr; }
+struct QueueSubmissionPreSubmitHook{
+private:
+    [[nodiscard]] static bool IgnoreResolution(void*, u64, const QueueSubmissionToken&)noexcept{ return true; }
+
+
+public:
+    void* context = nullptr;
+    u64 identity = 0u;
+    QueueSubmissionPreSubmitCallback invoke = nullptr;
+    QueueSubmissionResolvedCallback resolved = &QueueSubmissionPreSubmitHook::IgnoreResolution;
+
+    [[nodiscard]] constexpr bool valid()const noexcept{ return invoke != nullptr && resolved != nullptr; }
 };
 
 // Submission-local cross-queue dependencies. Same-queue tokens collapse to normal queue order; distinct queue
@@ -426,13 +414,6 @@ struct SwapChainRuntimeState{
     bool vsyncEnabled = false;
     bool swapChainReadbackAvailable = false;
 };
-
-struct BackBufferResizeCallbacks{
-    void* userData = nullptr;
-    void (*beforeResize)(void*) = nullptr;
-    void (*afterResize)(void*) = nullptr;
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

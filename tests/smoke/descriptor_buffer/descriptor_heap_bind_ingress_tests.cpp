@@ -427,7 +427,7 @@ TEST_F(DescriptorHeapBindIngressTest, ManagerRolloverRejectsStaleHeapAndRecordin
     ASSERT_FALSE(commandList->commandRecordingFailed());
     const GpuDescriptorHeapLifecycleStatistics beforeRollover = heap.lifecycleStatistics();
 
-    manager.shutdown();
+    ASSERT_TRUE(manager.shutdown());
     EXPECT_FALSE(manager.isEnabled());
     if(!manager.initialize()){
         ADD_FAILURE() << "descriptor-buffer manager did not recover after deliberate rollover";
@@ -517,7 +517,7 @@ TEST_F(DescriptorHeapBindIngressTest, PushOnlyRecordingSurvivesManagerRollover){
     ASSERT_FALSE(commandList->commandRecordingFailed());
     commandList->close();
 
-    manager.shutdown();
+    ASSERT_TRUE(manager.shutdown());
     if(!manager.initialize()){
         ADD_FAILURE() << "descriptor-buffer manager did not recover after push-only recording rollover";
         return;

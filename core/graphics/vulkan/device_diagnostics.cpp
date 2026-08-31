@@ -44,7 +44,7 @@ static const char* GpuCrashAvailabilityText(const bool available){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void Device::captureGpuCrash(const AStringView context)noexcept{
+void Device::captureDeviceLoss(const AStringView context)noexcept{
     // Device-loss state must not depend on optional crash diagnostics.
     m_deviceLost.store(true, MemoryOrder::release);
     if(!m_gpuCrashDiagnosticsEnabled)
@@ -74,9 +74,11 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
                 if(!physicalQueue || remainingEntries == 0u)
                     continue;
 
-                VkQueue queue = physicalQueue->m_queue;
+                // Vulkan checkpoint retrieval is a device-loss diagnostic and has no VkQueue host-synchronization
+                // requirement. Do not wait behind a potentially wedged submission lock while collecting it.
+                VkQueue queue = physicalQueue->m_nativeQueue.queue;
                 uint32_t checkpointCount = 0;
-                vkGetQueueCheckpointDataNV(queue, &checkpointCount, nullptr);
+                m_context.deviceDispatch.vkGetQueueCheckpointDataNV(queue, &checkpointCount, nullptr);
                 if(checkpointCount == 0)
                     continue;
                 if(checkpointCount > remainingEntries)
@@ -84,7 +86,7 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
 
                 Vector<VkCheckpointDataNV, Alloc::PersistentArena> checkpoints(m_gpuCrashReportArena);
                 checkpoints.resize(checkpointCount, VulkanDetail::MakeVkStruct<VkCheckpointDataNV>(VK_STRUCTURE_TYPE_CHECKPOINT_DATA_NV));
-                vkGetQueueCheckpointDataNV(queue, &checkpointCount, checkpoints.data());
+                m_context.deviceDispatch.vkGetQueueCheckpointDataNV(queue, &checkpointCount, checkpoints.data());
 
                 for(const auto& checkpoint : checkpoints){
                     const usize markerHash = reinterpret_cast<usize>(checkpoint.pCheckpointMarker);
@@ -187,7 +189,7 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
 
         if(hasDeviceFault && remainingEntries > 0u){
             auto faultCounts = VulkanDetail::MakeVkStruct<VkDeviceFaultCountsEXT>(VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT);
-            if(vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, nullptr) == VK_SUCCESS){
+            if(m_context.deviceDispatch.vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, nullptr) == VK_SUCCESS){
                 const VkDeviceSize vendorBinaryByteSize = faultCounts.vendorBinarySize;
                 const bool vendorBinaryIsRgd = m_context.physicalDeviceProperties.vendorID == s_AmdVendorId;
                 if(faultCounts.addressInfoCount > remainingEntries)
@@ -209,7 +211,7 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
                 faultInfo.pVendorInfos = vendorInfos.empty() ? nullptr : vendorInfos.data();
                 faultInfo.pVendorBinaryData = vendorBinary.empty() ? nullptr : vendorBinary.data();
 
-                const VkResult faultResult = vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, &faultInfo);
+                const VkResult faultResult = m_context.deviceDispatch.vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, &faultInfo);
                 if(faultResult == VK_SUCCESS || faultResult == VK_INCOMPLETE){
                     const char* faultDescription = faultInfo.description;
                     report.details.append(StringFormat(m_gpuCrashReportArena, "device fault: {}\n", __hidden_vulkan_device_diagnostics::TrimGpuCrashText(faultDescription)));

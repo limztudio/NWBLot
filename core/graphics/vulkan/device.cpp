@@ -29,6 +29,32 @@ namespace __hidden_vulkan_device{
 // by the Device registry (not CommandQueue ordinals) and the generation makes a recreated Device reject old tokens.
 static VulkanDetail::DeviceGenerationAllocator s_DeviceGenerationAllocator;
 
+using DeviceWaitMutexVector = Vector<Futex*, Alloc::ScratchArena>;
+
+class DeviceWaitLockSet final : NoCopy{
+public:
+    explicit DeviceWaitLockSet(const DeviceWaitMutexVector& mutexes)
+        : m_mutexes(mutexes)
+    {
+        for(Futex* const mutex : m_mutexes){
+            NWB_ASSERT(mutex);
+            mutex->lock();
+            ++m_lockedCount;
+        }
+    }
+    ~DeviceWaitLockSet(){
+        while(m_lockedCount > 0u){
+            --m_lockedCount;
+            m_mutexes[m_lockedCount]->unlock();
+        }
+    }
+
+
+private:
+    const DeviceWaitMutexVector& m_mutexes;
+    usize m_lockedCount = 0u;
+};
+
 [[nodiscard]] static u16 AllocateDeviceGeneration()noexcept{
     const u16 generation = s_DeviceGenerationAllocator.allocate();
     NWB_FATAL_ASSERT_MSG(generation != 0u, NWB_TEXT("Vulkan: Device-generation identity space is exhausted."));
@@ -127,6 +153,9 @@ Device::Device(const DeviceDesc& desc)
         desc.instance,
         desc.physicalDevice,
         desc.device,
+        desc.getInstanceProcAddr,
+        desc.instanceDispatch,
+        desc.deviceDispatch,
         desc.allocationCallbacks,
         m_deviceGeneration
     )
@@ -135,6 +164,7 @@ Device::Device(const DeviceDesc& desc)
     , m_gpuDescriptorHeap(*this)
     , m_pipelineCacheDirectory(m_context.objectArena, desc.pipelineCacheDirectory)
     , m_pipelineCacheVolumeName(m_context.objectArena)
+    , m_nativeQueueStates(m_context.objectArena)
     , m_physicalQueues(m_context.objectArena)
     , m_physicalQueueInfos(m_context.objectArena)
     , m_uploadManager(*this, s_DefaultUploadChunkSize, 0, false)
@@ -153,7 +183,7 @@ Device::Device(const DeviceDesc& desc)
     }
     Alloc::ScratchArena queueFamilyQueryArena(VulkanArenaScope::s_QueueFamilyQueryArena);
     u32 physicalQueueFamilyCount = 0u;
-    vkGetPhysicalDeviceQueueFamilyProperties(m_context.physicalDevice, &physicalQueueFamilyCount, nullptr);
+    m_context.instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(m_context.physicalDevice, &physicalQueueFamilyCount, nullptr);
     if(physicalQueueFamilyCount == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Physical device exposes no queue families."));
         return;
@@ -162,7 +192,7 @@ Device::Device(const DeviceDesc& desc)
         physicalQueueFamilyCount,
         queueFamilyQueryArena
     );
-    vkGetPhysicalDeviceQueueFamilyProperties(
+    m_context.instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(
         m_context.physicalDevice,
         &physicalQueueFamilyCount,
         physicalQueueFamilies.data()
@@ -195,11 +225,26 @@ Device::Device(const DeviceDesc& desc)
             }
         }
     }
+    m_nativeQueueStates.reserve(desc.nativeQueueCount);
+    for(usize nativeQueueIndex = 0u; nativeQueueIndex < desc.nativeQueueCount; ++nativeQueueIndex){
+        const VulkanNativeQueueDesc& nativeQueue = desc.nativeQueues[nativeQueueIndex];
+        NativeQueueState* const nativeQueueState = NewArenaObject<NativeQueueState>(
+            m_context.objectArena,
+            nativeQueue.queue,
+            nativeQueue.familyIndex,
+            nativeQueue.queueIndex
+        );
+        if(!nativeQueueState){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate canonical native queue state."));
+            return;
+        }
+        m_nativeQueueStates.push_back(nativeQueueState);
+    }
     for(usize queueIndex = 0u; queueIndex < desc.physicalQueueCount; ++queueIndex){
         const VulkanPhysicalQueueDesc& physicalQueue = desc.physicalQueues[queueIndex];
         if(
-            physicalQueue.nativeQueueIndex >= desc.nativeQueueCount
-            || !registerPhysicalQueue(physicalQueue, desc.nativeQueues[physicalQueue.nativeQueueIndex])
+            physicalQueue.nativeQueueIndex >= m_nativeQueueStates.size()
+            || !registerPhysicalQueue(physicalQueue, *m_nativeQueueStates[physicalQueue.nativeQueueIndex])
         ){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to register a native physical queue."));
             return;
@@ -218,11 +263,12 @@ Device::Device(const DeviceDesc& desc)
     configureLegacyQueueContext();
     m_queueRegistryReady = true;
 
-    vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);
-    vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);
+    m_context.instanceDispatch.vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);
+    m_context.instanceDispatch.vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);
     m_pipelineCacheVolumeName.assign(VulkanDetail::s_PipelineCacheVolumeName);
 
     m_context.extensions.buffer_device_address = desc.bufferDeviceAddressSupported;
+    m_context.hostQueryResetFeatureEnabled = desc.hostQueryResetFeatureEnabled;
     m_context.textureCompressionBcFeatureEnabled = desc.textureCompressionBcFeatureEnabled;
     m_context.textureCompressionAstcLdrFeatureEnabled = desc.textureCompressionAstcLdrFeatureEnabled;
     m_context.textureCompressionAstcHdrFeatureEnabled = desc.textureCompressionAstcHdrFeatureEnabled;
@@ -298,8 +344,8 @@ Device::Device(const DeviceDesc& desc)
         comparableGpuTimestamps = __hidden_vulkan_device::ProbeComparableGpuTimestamps(
             m_context.physicalDevice,
             m_context.device,
-            vkGetPhysicalDeviceCalibrateableTimeDomainsKHR,
-            vkGetCalibratedTimestampsKHR,
+            m_context.instanceDispatch.vkGetPhysicalDeviceCalibrateableTimeDomainsKHR,
+            m_context.deviceDispatch.vkGetCalibratedTimestampsKHR,
             calibratedTimestampProbeArena
         );
     }
@@ -307,8 +353,8 @@ Device::Device(const DeviceDesc& desc)
         comparableGpuTimestamps = __hidden_vulkan_device::ProbeComparableGpuTimestamps(
             m_context.physicalDevice,
             m_context.device,
-            vkGetPhysicalDeviceCalibrateableTimeDomainsEXT,
-            vkGetCalibratedTimestampsEXT,
+            m_context.instanceDispatch.vkGetPhysicalDeviceCalibrateableTimeDomainsEXT,
+            m_context.deviceDispatch.vkGetCalibratedTimestampsEXT,
             calibratedTimestampProbeArena
         );
     }
@@ -332,22 +378,22 @@ Device::Device(const DeviceDesc& desc)
         m_context.coopVecFeatures.cooperativeVectorTraining = desc.cooperativeVectorTrainingFeatureEnabled ? VK_TRUE : VK_FALSE;
     }
 
-    if(m_context.extensions.EXT_debug_utils && (!vkCmdBeginDebugUtilsLabelEXT || !vkCmdEndDebugUtilsLabelEXT)){
+    if(m_context.extensions.EXT_debug_utils && (!m_context.instanceDispatch.vkCmdBeginDebugUtilsLabelEXT || !m_context.instanceDispatch.vkCmdEndDebugUtilsLabelEXT)){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Debug utils marker entry points are unavailable."));
         m_context.extensions.EXT_debug_utils = false;
     }
 
-    if(m_context.extensions.NV_device_diagnostic_checkpoints && (!vkCmdSetCheckpointNV || !vkGetQueueCheckpointDataNV)){
+    if(m_context.extensions.NV_device_diagnostic_checkpoints && (!m_context.deviceDispatch.vkCmdSetCheckpointNV || !m_context.deviceDispatch.vkGetQueueCheckpointDataNV)){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device diagnostic checkpoint entry points are unavailable."));
         m_context.extensions.NV_device_diagnostic_checkpoints = false;
     }
 
-    if(m_context.extensions.EXT_device_fault && !vkGetDeviceFaultInfoEXT){
+    if(m_context.extensions.EXT_device_fault && !m_context.deviceDispatch.vkGetDeviceFaultInfoEXT){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device fault info entry point is unavailable."));
         m_context.extensions.EXT_device_fault = false;
     }
 
-    if(m_context.extensions.AMD_buffer_marker && !vkCmdWriteBufferMarkerAMD){
+    if(m_context.extensions.AMD_buffer_marker && !m_context.deviceDispatch.vkCmdWriteBufferMarkerAMD){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Buffer marker entry point is unavailable."));
         m_context.extensions.AMD_buffer_marker = false;
     }
@@ -367,11 +413,11 @@ Device::Device(const DeviceDesc& desc)
     if(
         m_context.extensions.KHR_acceleration_structure
         && (
-            !vkCreateAccelerationStructureKHR
-            || !vkDestroyAccelerationStructureKHR
-            || !vkGetAccelerationStructureBuildSizesKHR
-            || !vkGetAccelerationStructureDeviceAddressKHR
-            || !vkCmdBuildAccelerationStructuresKHR
+            !m_context.deviceDispatch.vkCreateAccelerationStructureKHR
+            || !m_context.deviceDispatch.vkDestroyAccelerationStructureKHR
+            || !m_context.deviceDispatch.vkGetAccelerationStructureBuildSizesKHR
+            || !m_context.deviceDispatch.vkGetAccelerationStructureDeviceAddressKHR
+            || !m_context.deviceDispatch.vkCmdBuildAccelerationStructuresKHR
         )
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Acceleration structure entry points are unavailable."));
@@ -382,9 +428,9 @@ Device::Device(const DeviceDesc& desc)
     if(
         m_context.extensions.KHR_ray_tracing_pipeline
         && (
-            !vkCreateRayTracingPipelinesKHR
-            || !vkGetRayTracingShaderGroupHandlesKHR
-            || !vkCmdTraceRaysKHR
+            !m_context.deviceDispatch.vkCreateRayTracingPipelinesKHR
+            || !m_context.deviceDispatch.vkGetRayTracingShaderGroupHandlesKHR
+            || !m_context.deviceDispatch.vkCmdTraceRaysKHR
         )
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ray tracing pipeline entry points are unavailable."));
@@ -395,10 +441,10 @@ Device::Device(const DeviceDesc& desc)
     if(
         m_context.extensions.EXT_opacity_micromap
         && (
-            !vkCreateMicromapEXT
-            || !vkDestroyMicromapEXT
-            || !vkGetMicromapBuildSizesEXT
-            || !vkCmdBuildMicromapsEXT
+            !m_context.deviceDispatch.vkCreateMicromapEXT
+            || !m_context.deviceDispatch.vkDestroyMicromapEXT
+            || !m_context.deviceDispatch.vkGetMicromapBuildSizesEXT
+            || !m_context.deviceDispatch.vkCmdBuildMicromapsEXT
         )
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Opacity micromap entry points are unavailable."));
@@ -409,8 +455,8 @@ Device::Device(const DeviceDesc& desc)
     if(
         m_context.extensions.NV_cluster_acceleration_structure
         && (
-            !vkGetClusterAccelerationStructureBuildSizesNV
-            || !vkCmdBuildClusterAccelerationStructureIndirectNV
+            !m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV
+            || !m_context.deviceDispatch.vkCmdBuildClusterAccelerationStructureIndirectNV
         )
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Cluster acceleration structure entry points are unavailable."));
@@ -421,9 +467,9 @@ Device::Device(const DeviceDesc& desc)
     if(
         m_context.extensions.NV_cooperative_vector
         && (
-            !vkGetPhysicalDeviceCooperativeVectorPropertiesNV
-            || !vkConvertCooperativeVectorMatrixNV
-            || !vkCmdConvertCooperativeVectorMatrixNV
+            !m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV
+            || !m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV
+            || !m_context.deviceDispatch.vkCmdConvertCooperativeVectorMatrixNV
         )
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Cooperative vector entry points are unavailable."));
@@ -432,7 +478,7 @@ Device::Device(const DeviceDesc& desc)
         m_context.coopVecFeatures.cooperativeVectorTraining = VK_FALSE;
     }
 
-    if(m_context.extensions.EXT_mesh_shader && !vkCmdDrawMeshTasksEXT){
+    if(m_context.extensions.EXT_mesh_shader && !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Mesh shader draw entry point is unavailable."));
         m_context.extensions.EXT_mesh_shader = false;
         m_context.meshShaderFeatures.meshShader = VK_FALSE;
@@ -485,7 +531,7 @@ Device::Device(const DeviceDesc& desc)
 
         if(pNext){
             props2.pNext = pNext;
-            vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
+            m_context.instanceDispatch.vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
         }
     }
 
@@ -592,7 +638,7 @@ Device::Device(const DeviceDesc& desc)
         cacheInfo.initialDataSize = pipelineCacheInitialData.size();
         cacheInfo.pInitialData = pipelineCacheInitialData.data();
     }
-    res = vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);
+    res = m_context.deviceDispatch.vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);
     if(res != VK_SUCCESS && !pipelineCacheInitialData.empty()){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create pipeline cache from runtime volume '{}'. Retrying empty cache. {}")
             , StringConvert(m_pipelineCacheVolumeName)
@@ -600,7 +646,7 @@ Device::Device(const DeviceDesc& desc)
         );
         cacheInfo.initialDataSize = 0;
         cacheInfo.pInitialData = nullptr;
-        res = vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);
+        res = m_context.deviceDispatch.vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);
     }
     if(res != VK_SUCCESS){
         m_context.pipelineCache = VK_NULL_HANDLE;
@@ -609,13 +655,22 @@ Device::Device(const DeviceDesc& desc)
 
 }
 Device::~Device(){
-    waitForIdle();
+    const bool lifecycleDestructionPrepared = m_lifecycleDestructionPrepared.load(MemoryOrder::acquire);
+    const bool deviceIdle = lifecycleDestructionPrepared || waitForIdle();
+    NWB_FATAL_ASSERT_MSG(
+        deviceIdle || isDeviceLost(),
+        NWB_TEXT("Vulkan Device destruction requires either a completed device join or terminal device loss")
+    );
 
     m_uploadManager.clear();
     m_scratchManager.clear();
 
     m_gpuDescriptorHeap.shutdownForDeviceTeardown();
-    m_descriptorBufferManager.shutdown();
+    const bool descriptorBufferShutdownSucceeded = m_descriptorBufferManager.shutdownAfterDeviceIdleOrLoss();
+    NWB_FATAL_ASSERT_MSG(
+        descriptorBufferShutdownSucceeded,
+        NWB_TEXT("Vulkan Device destruction could not safely shut down descriptor-buffer storage")
+    );
 
     for(Queue* queue : m_physicalQueues){
         if(queue)
@@ -624,12 +679,18 @@ Device::~Device(){
     m_physicalQueues.clear();
     m_physicalQueueInfos.clear();
 
+    for(NativeQueueState* nativeQueueState : m_nativeQueueStates){
+        if(nativeQueueState)
+            DestroyArenaObject(m_context.objectArena, nativeQueueState);
+    }
+    m_nativeQueueStates.clear();
+
     if(m_amdBreadcrumb.allocation)
         m_allocator.destroyHostMappedBuffer(m_amdBreadcrumb.buffer, m_amdBreadcrumb.allocation, m_amdBreadcrumb.mappedMemory);
 
     if(m_context.pipelineCache){
         savePipelineCacheData();
-        vkDestroyPipelineCache(m_context.device, m_context.pipelineCache, m_context.allocationCallbacks);
+        m_context.deviceDispatch.vkDestroyPipelineCache(m_context.device, m_context.pipelineCache, m_context.allocationCallbacks);
         m_context.pipelineCache = VK_NULL_HANDLE;
     }
 }
@@ -638,15 +699,32 @@ Device::~Device(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 bool Device::waitForIdle(){
-    if(isDeviceLost())
-        return false;
+    Alloc::ScratchArena waitArena(VulkanArenaScope::s_DeviceWaitIdleArena);
+    __hidden_vulkan_device::DeviceWaitMutexVector waitMutexes{waitArena};
+    waitMutexes.reserve(m_physicalQueues.size() + m_nativeQueueStates.size());
+    for(Queue* queue : m_physicalQueues){
+        if(queue)
+            waitMutexes.push_back(&queue->m_mutex);
+    }
+    for(NativeQueueState* nativeQueueState : m_nativeQueueStates){
+        if(nativeQueueState)
+            waitMutexes.push_back(&nativeQueueState->hostMutex);
+    }
 
     VkResult res = VK_SUCCESS;
-
-    res = vkDeviceWaitIdle(m_context.device);
+    {
+        __hidden_vulkan_device::DeviceWaitLockSet lockSet(waitMutexes);
+        res = isDeviceLost() ? VK_ERROR_DEVICE_LOST : m_context.deviceDispatch.vkDeviceWaitIdle(m_context.device);
+        if(res == VK_SUCCESS){
+            for(Queue* queue : m_physicalQueues){
+                if(queue)
+                    queue->m_lastFinishedID = queue->m_lastSubmittedID;
+            }
+        }
+    }
     if(res == VK_ERROR_DEVICE_LOST){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Device was lost during waitForIdle."));
-        captureGpuCrash("wait idle");
+        captureDeviceLoss("wait idle");
         return false;
     }
     else if(res != VK_SUCCESS){
@@ -655,8 +733,10 @@ bool Device::waitForIdle(){
     }
 
     for(Queue* queue : m_physicalQueues){
-        if(queue)
-            queue->waitForIdle();
+        if(queue){
+            ScopedLock lock(queue->m_mutex);
+            queue->collectCompletedCommandBuffers();
+        }
     }
     m_scratchManager.collectCompletedChunks();
     m_gpuDescriptorHeap.collectRetired();
@@ -691,6 +771,9 @@ DeviceHandle CreateDevice(const DeviceDesc& desc){
         || desc.nativeQueueCount == 0u
         || !desc.physicalQueues
         || desc.physicalQueueCount == 0u
+        || !desc.getInstanceProcAddr
+        || !desc.instanceDispatch.vkGetPhysicalDeviceProperties
+        || !desc.deviceDispatch.vkDestroyDevice
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device creation requires non-empty native and physical queue registries."));
         return {};

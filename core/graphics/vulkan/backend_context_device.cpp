@@ -4,6 +4,7 @@
 
 #include "backend_context.h"
 #include "backend_context_detail.h"
+#include "dispatch.h"
 #include "device_detail.h"
 
 
@@ -31,6 +32,7 @@ bool BackendContext::createVulkanDevice(){
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DeviceCreateArena, s_DeviceSetupScratchArenaBytes);
     m_bufferDeviceAddressSupported = false;
+    m_hostQueryResetFeatureEnabled = false;
     m_textureCompressionBcFeatureEnabled = false;
     m_textureCompressionAstcLdrFeatureEnabled = false;
     m_textureCompressionAstcHdrFeatureEnabled = false;
@@ -55,13 +57,13 @@ bool BackendContext::createVulkanDevice(){
     m_rayTracingLinearSweptSpheresSupported = false;
 
     uint32_t extCount = 0;
-    res = vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, nullptr);
+    res = m_instanceDispatch.vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, nullptr);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate device extension count. {}"), ResultToString(res));
         return false;
     }
     Vector<VkExtensionProperties, Alloc::ScratchArena> deviceExtensions(extCount, scratchArena);
-    res = vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, deviceExtensions.data());
+    res = m_instanceDispatch.vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, deviceExtensions.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate device extensions. {}"), ResultToString(res));
         return false;
@@ -103,7 +105,7 @@ bool BackendContext::createVulkanDevice(){
     }
 
     VkPhysicalDeviceProperties physicalDeviceProperties;
-    vkGetPhysicalDeviceProperties(m_vulkanPhysicalDevice, &physicalDeviceProperties);
+    m_instanceDispatch.vkGetPhysicalDeviceProperties(m_vulkanPhysicalDevice, &physicalDeviceProperties);
 
 #ifdef NWB_UNICODE
     {
@@ -179,7 +181,7 @@ bool BackendContext::createVulkanDevice(){
     }
 
     physicalDeviceFeatures2.pNext = pNext;
-    vkGetPhysicalDeviceFeatures2(m_vulkanPhysicalDevice, &physicalDeviceFeatures2);
+    m_instanceDispatch.vkGetPhysicalDeviceFeatures2(m_vulkanPhysicalDevice, &physicalDeviceFeatures2);
 
     if(apiSupportsVulkan13){
         synchronization2Features.synchronization2 = supportedVulkan13Features.synchronization2;
@@ -360,9 +362,9 @@ bool BackendContext::createVulkanDevice(){
     // Query family counts here, after physical-device selection and before vkCreateDevice, so no unsupported queue
     // index is placed in the immutable Device registry.
     uint32_t physicalQueueFamilyCount = 0u;
-    vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysicalDevice, &physicalQueueFamilyCount, nullptr);
+    m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysicalDevice, &physicalQueueFamilyCount, nullptr);
     Vector<VkQueueFamilyProperties, Alloc::ScratchArena> physicalQueueFamilies(physicalQueueFamilyCount, scratchArena);
-    vkGetPhysicalDeviceQueueFamilyProperties(
+    m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(
         m_vulkanPhysicalDevice,
         &physicalQueueFamilyCount,
         physicalQueueFamilies.data()
@@ -647,13 +649,13 @@ bool BackendContext::createVulkanDevice(){
     deviceCreateInfo.ppEnabledLayerNames = nullptr;
     deviceCreateInfo.pNext = &vulkan12features;
 
-    res = vkCreateDevice(m_vulkanPhysicalDevice, &deviceCreateInfo, nullptr, &m_vulkanDevice);
+    res = m_instanceDispatch.vkCreateDevice(m_vulkanPhysicalDevice, &deviceCreateInfo, nullptr, &m_vulkanDevice);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create logical device. {}"), ResultToString(res));
         return false;
     }
 
-    volkLoadDevice(m_vulkanDevice);
+    VulkanDetail::LoadVolkDeviceDispatch(m_instanceDispatch, m_deviceDispatch, m_vulkanInstance, m_vulkanDevice);
 
     usize nativeQueueCount = 0u;
     for(const VkDeviceQueueCreateInfo& queueInfo : queueDesc)
@@ -663,7 +665,7 @@ bool BackendContext::createVulkanDevice(){
     for(const VkDeviceQueueCreateInfo& queueInfo : queueDesc){
         for(u32 nativeQueueOffset = 0u; nativeQueueOffset < queueInfo.queueCount; ++nativeQueueOffset){
             VkQueue queue = VK_NULL_HANDLE;
-            vkGetDeviceQueue(m_vulkanDevice, queueInfo.queueFamilyIndex, nativeQueueOffset, &queue);
+            m_deviceDispatch.vkGetDeviceQueue(m_vulkanDevice, queueInfo.queueFamilyIndex, nativeQueueOffset, &queue);
             if(queue == VK_NULL_HANDLE){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Created native queue could not be retrieved."));
                 return false;
@@ -780,6 +782,7 @@ bool BackendContext::createVulkanDevice(){
         return false;
 
     m_bufferDeviceAddressSupported = vulkan12features.bufferDeviceAddress == VK_TRUE;
+    m_hostQueryResetFeatureEnabled = vulkan12features.hostQueryReset == VK_TRUE;
     m_textureCompressionBcFeatureEnabled = coreDeviceFeatures.textureCompressionBC == VK_TRUE;
     m_textureCompressionAstcLdrFeatureEnabled = coreDeviceFeatures.textureCompressionASTC_LDR == VK_TRUE;
     m_textureCompressionAstcHdrFeatureEnabled = textureCompressionAstcHdrFeatureEnabled;

@@ -37,6 +37,7 @@ namespace __hidden_texture_device{
 
 [[nodiscard]] static bool ValidateNativeTextureSharing(
     const Device& device,
+    const VolkInstanceTable& instanceDispatch,
     const VkPhysicalDevice physicalDevice,
     const TextureDesc& desc,
     const NativeTextureProvenance& provenance
@@ -76,7 +77,7 @@ namespace __hidden_texture_device{
     }
 
     u32 physicalQueueFamilyCount = 0u;
-    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &physicalQueueFamilyCount, nullptr);
+    instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &physicalQueueFamilyCount, nullptr);
     if(
         physicalQueueFamilyCount == 0u
         || provenance.queueFamilyIndexCount > physicalQueueFamilyCount
@@ -165,7 +166,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
 
     VkResult res;
     if(d.isVirtual)
-        res = vkCreateImage(m_context.device, &imageInfo, m_context.allocationCallbacks, &texture->m_image);
+        res = m_context.deviceDispatch.vkCreateImage(m_context.device, &imageInfo, m_context.allocationCallbacks, &texture->m_image);
     else
         res = m_allocator.createTexture(*texture, imageInfo);
     if(res != VK_SUCCESS){
@@ -211,7 +212,7 @@ MemoryRequirements Device::getTextureMemoryRequirements(Texture* textureResource
     requirementsInfo.image = texture.m_image;
     VkMemoryRequirements2 memoryRequirements{};
     memoryRequirements.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
-    vkGetImageMemoryRequirements2(m_context.device, &requirementsInfo, &memoryRequirements);
+    m_context.deviceDispatch.vkGetImageMemoryRequirements2(m_context.device, &requirementsInfo, &memoryRequirements);
 
     MemoryRequirements result;
     result.size = memoryRequirements.memoryRequirements.size;
@@ -266,7 +267,7 @@ bool Device::bindTextureMemory(Texture* textureResource, Heap* heap, u64 offset)
     VkImageMemoryRequirementsInfo2 requirementsInfo{};
     requirementsInfo.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2;
     requirementsInfo.image = texture.m_image;
-    vkGetImageMemoryRequirements2(m_context.device, &requirementsInfo, &memoryRequirements);
+    m_context.deviceDispatch.vkGetImageMemoryRequirements2(m_context.device, &requirementsInfo, &memoryRequirements);
 
     ScopedLock heapLock(memoryHeap.m_bindingMutex);
     VulkanDetail::HeapBindingRange bindingRange;
@@ -359,6 +360,7 @@ TextureHandle Device::createHandleForNativeTexture(
     }
     if(!__hidden_texture_device::ValidateNativeTextureSharing(
         *this,
+        m_context.instanceDispatch,
         m_context.physicalDevice,
         desc,
         nativeProvenance
@@ -419,7 +421,7 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
 
     const VkSamplerCreateInfo samplerInfo = VulkanDetail::BuildSamplerCreateInfo(normalizedDesc);
 
-    const VkResult res = vkCreateSampler(m_context.device, &samplerInfo, m_context.allocationCallbacks, &sampler->m_sampler);
+    const VkResult res = m_context.deviceDispatch.vkCreateSampler(m_context.device, &samplerInfo, m_context.allocationCallbacks, &sampler->m_sampler);
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create sampler"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler: {}"), ResultToString(res));

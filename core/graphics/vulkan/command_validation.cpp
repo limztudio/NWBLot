@@ -627,7 +627,7 @@ bool CommandList::validateMeshletState(const MeshletState& state)noexcept{
         if(
             !m_context.extensions.EXT_mesh_shader
             || m_context.meshShaderFeatures.meshShader != VK_TRUE
-            || !vkCmdDrawMeshTasksEXT
+            || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT
         ){
             rejectCommandRecording(s_OperationName, NWB_TEXT("mesh shader feature or entry point is unavailable"));
             return false;

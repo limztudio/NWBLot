@@ -183,8 +183,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const bool hasTransparentRenderers = m_preparedHasTransparentRenderers;
     NWB_ASSERT(csgFrameState.empty() || deferredTargets.csgIntervalTargetsValid());
     auto& device = m_graphics.getDevice();
-    if(m_graphics.isDeviceRecreationRequested() || device.isDeviceLost()){
-        if(device.isDeviceLost())
+    if(m_graphics.isDeviceRecreationRequested() || device.requiresRecreation()){
+        if(device.requiresRecreation())
             m_graphics.requestDeviceRecreation();
         return;
     }
@@ -1608,8 +1608,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         // Retire the accepted frame scope after a rejected packet. The transaction supplies one latest token from
         // every other accepted physical queue directly to the graph-marked recovery packet; Graphics order covers
         // its own accepted prefix without a redundant timeline wait.
-        if(device.isDeviceLost()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery packet skipped because the graphics device is lost"));
+        if(device.requiresRecreation()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery packet skipped because the graphics device requires recreation"));
             m_deferredFrameRecoveryArmed = false;
             m_deferredFrameRecoveryRetiresTiming = false;
             frameTimingTransaction.discard();
@@ -2581,12 +2581,17 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     bool presentationSignalReady = true;
     if(framePresentationSignal.valid()){
         if(finalPresentationSubmissionToken.valid()){
-            presentationSignalReady = m_graphics.confirmFramePresentationSignal(finalPresentationSubmissionToken);
-            if(!presentationSignalReady)
-                m_graphics.cancelFramePresentationSignal();
+            presentationSignalReady = m_graphics.confirmFramePresentationSignal(
+                framePresentationSignal,
+                finalPresentationSubmissionToken
+            );
+            if(!presentationSignalReady && !m_graphics.cancelFramePresentationSignal(framePresentationSignal))
+                m_graphics.requestDeviceRecreation();
         }
         else{
-            m_graphics.cancelFramePresentationSignal();
+            presentationSignalReady = false;
+            if(!m_graphics.cancelFramePresentationSignal(framePresentationSignal))
+                m_graphics.requestDeviceRecreation();
         }
     }
 

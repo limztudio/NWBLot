@@ -104,15 +104,19 @@ DescriptorBufferManager::DescriptorBufferManager(Device& device, const VulkanCon
     , m_samplerSegment(context.objectArena, VulkanDetail::AllocateDescriptorBufferStorageIdentity())
 {}
 DescriptorBufferManager::~DescriptorBufferManager(){
-    shutdown();
+    const bool shutdownSucceeded = shutdown();
+    NWB_FATAL_ASSERT_MSG(
+        shutdownSucceeded,
+        NWB_TEXT("Vulkan: DescriptorBufferManager destruction requires either a completed device join or terminal device loss.")
+    );
 }
 
-void DescriptorBufferManager::shutdownForLifecycleOperation(){
+bool DescriptorBufferManager::shutdownForLifecycleOperation(const bool deviceIdleOrLostAlreadyProven){
     {
         ScopedLock lifecycleLock(m_lifecycleMutex);
         if(m_lifecycleTransitioning){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer shutdown rejected during another lifecycle transition."));
-            return;
+            return false;
         }
         if(
             m_resourceSegment.buffer == VK_NULL_HANDLE
@@ -122,7 +126,7 @@ void DescriptorBufferManager::shutdownForLifecycleOperation(){
         ){
             m_bindingGeneration = 0u;
             m_enabled = false;
-            return;
+            return true;
         }
 
         m_lifecycleTransitioning = true;
@@ -130,8 +134,14 @@ void DescriptorBufferManager::shutdownForLifecycleOperation(){
         m_enabled = false;
     }
 
-    if(!m_device.waitForIdle())
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Descriptor-buffer shutdown is continuing after device-idle wait failed."));
+    const bool deviceIdle = deviceIdleOrLostAlreadyProven || m_device.waitForIdle();
+    if(!deviceIdle && !m_device.isDeviceLost()){
+        ScopedLock lifecycleLock(m_lifecycleMutex);
+
+        m_lifecycleTransitioning = false;
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer shutdown is refusing to destroy storage after device-idle wait failed."));
+        return false;
+    }
 
     ScopedLock lifecycleLock(m_lifecycleMutex);
     ScopedLock resourceLock(m_resourceSegment.mutex);
@@ -140,12 +150,14 @@ void DescriptorBufferManager::shutdownForLifecycleOperation(){
     shutdownSegment(m_resourceSegment);
     shutdownSegment(m_samplerSegment);
     m_lifecycleTransitioning = false;
+    return true;
 }
 
 bool DescriptorBufferManager::initialize(){
     ScopedLock operationLock(m_lifecycleOperationMutex);
 
-    shutdownForLifecycleOperation();
+    if(!shutdownForLifecycleOperation())
+        return false;
 
     ScopedLock lifecycleLock(m_lifecycleMutex);
     if(m_lifecycleTransitioning){
@@ -242,10 +254,16 @@ bool DescriptorBufferManager::initialize(){
     return true;
 }
 
-void DescriptorBufferManager::shutdown(){
+bool DescriptorBufferManager::shutdown(){
     ScopedLock operationLock(m_lifecycleOperationMutex);
 
-    shutdownForLifecycleOperation();
+    return shutdownForLifecycleOperation();
+}
+
+bool DescriptorBufferManager::shutdownAfterDeviceIdleOrLoss(){
+    ScopedLock operationLock(m_lifecycleOperationMutex);
+
+    return shutdownForLifecycleOperation(true);
 }
 
 bool DescriptorBufferManager::isEnabled()const{
@@ -739,7 +757,7 @@ bool DescriptorBufferManager::writeDescriptor(
                 return false;
             }
             VkFormatProperties formatProperties{};
-            vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, vkFormat, &formatProperties);
+            m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, vkFormat, &formatProperties);
             const VkFormatFeatureFlags requiredFormatFeature = item.type == ResourceType::TypedBuffer_UAV
                 ? VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT
                 : VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT
@@ -828,7 +846,7 @@ bool DescriptorBufferManager::writeDescriptor(
         }
     }
 
-    vkGetDescriptorEXT(m_context.device, &getInfo, descriptorSize, dstBytes + dstOffsetBytes);
+    m_context.deviceDispatch.vkGetDescriptorEXT(m_context.device, &getInfo, descriptorSize, dstBytes + dstOffsetBytes);
     return true;
 }
 
@@ -948,7 +966,7 @@ bool DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const A
     VkBufferDeviceAddressInfo addressInfo{};
     addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     addressInfo.buffer = segment.buffer;
-    segment.deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
+    segment.deviceAddress = m_context.deviceDispatch.vkGetBufferDeviceAddress(m_context.device, &addressInfo);
     if(segment.deviceAddress == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query descriptor buffer device address '{}'.")
             , StringConvert(debugName.view())

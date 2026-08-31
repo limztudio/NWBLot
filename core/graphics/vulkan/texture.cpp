@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+
 #include "backend.h"
 #include "texture_resource_detail.h"
 
@@ -449,7 +450,7 @@ Texture::~Texture(){
     const VkImage registeredNativeImage = m_image;
 
     for(const auto& [_, view] : m_views)
-        vkDestroyImageView(m_context.device, view, m_context.allocationCallbacks);
+        m_context.deviceDispatch.vkDestroyImageView(m_context.device, view, m_context.allocationCallbacks);
     m_views.clear();
 
     {
@@ -459,7 +460,7 @@ Texture::~Texture(){
             {
                 ScopedLock heapLock(boundHeap->m_bindingMutex);
                 if(m_image != VK_NULL_HANDLE){
-                    vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
+                    m_context.deviceDispatch.vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
                     m_image = VK_NULL_HANDLE;
                 }
                 boundHeap->eraseBindingReservationLocked(this);
@@ -470,7 +471,7 @@ Texture::~Texture(){
         else if(m_managed){
             if(m_creationDesc.isVirtual){
                 if(m_image != VK_NULL_HANDLE){
-                    vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
+                    m_context.deviceDispatch.vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
                     m_image = VK_NULL_HANDLE;
                 }
             }
@@ -580,7 +581,7 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
         return VK_NULL_HANDLE;
 
     VkImageView view = VK_NULL_HANDLE;
-    const VkResult res = vkCreateImageView(m_context.device, &viewInfo, m_context.allocationCallbacks, &view);
+    const VkResult res = m_context.deviceDispatch.vkCreateImageView(m_context.device, &viewInfo, m_context.allocationCallbacks, &view);
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image view"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: {}"), ResultToString(res));
@@ -589,6 +590,17 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
 
     m_views.emplace(key, view);
     return view;
+}
+
+bool Texture::canRevokeUnmanagedNativeImage(const VkImage expectedNativeImage)noexcept{
+    if(expectedNativeImage == VK_NULL_HANDLE)
+        return false;
+
+    ScopedLock bindingLock(m_memoryBindingMutex);
+    if(m_managed || m_image != expectedNativeImage)
+        return false;
+
+    return m_allocator.isTextureNativeIdentityRegistered(expectedNativeImage, *this);
 }
 
 bool Texture::revokeUnmanagedNativeImage(const VkImage expectedNativeImage)noexcept{
@@ -602,7 +614,7 @@ bool Texture::revokeUnmanagedNativeImage(const VkImage expectedNativeImage)noexc
     ScopedLock viewsLock(m_viewsMutex);
     const bool identityRegistered = m_allocator.isTextureNativeIdentityRegistered(expectedNativeImage, *this);
     for(const auto& [_, view] : m_views)
-        vkDestroyImageView(m_context.device, view, m_context.allocationCallbacks);
+        m_context.deviceDispatch.vkDestroyImageView(m_context.device, view, m_context.allocationCallbacks);
     m_views.clear();
     m_image = VK_NULL_HANDLE;
     return identityRegistered;
@@ -681,3 +693,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

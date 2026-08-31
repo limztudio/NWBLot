@@ -230,7 +230,7 @@ MemoryRequirements Device::getBufferMemoryRequirements(Buffer* bufferResource){
     requirementsInfo.buffer = buffer.m_buffer;
     VkMemoryRequirements2 memoryRequirements{};
     memoryRequirements.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
-    vkGetBufferMemoryRequirements2(m_context.device, &requirementsInfo, &memoryRequirements);
+    m_context.deviceDispatch.vkGetBufferMemoryRequirements2(m_context.device, &requirementsInfo, &memoryRequirements);
 
     const MemoryRequirements nativeRequirements{
         .size = memoryRequirements.memoryRequirements.size,
@@ -305,7 +305,7 @@ bool Device::bindBufferMemory(Buffer* bufferResource, Heap* heap, u64 offset){
     VkBufferMemoryRequirementsInfo2 requirementsInfo{};
     requirementsInfo.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2;
     requirementsInfo.buffer = buffer.m_buffer;
-    vkGetBufferMemoryRequirements2(m_context.device, &requirementsInfo, &memoryRequirements);
+    m_context.deviceDispatch.vkGetBufferMemoryRequirements2(m_context.device, &requirementsInfo, &memoryRequirements);
 
     const MemoryRequirements nativeRequirements{
         .size = memoryRequirements.memoryRequirements.size,
@@ -359,7 +359,7 @@ bool Device::bindBufferMemory(Buffer* bufferResource, Heap* heap, u64 offset){
         VkBufferDeviceAddressInfo addressInfo{};
         addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
         addressInfo.buffer = buffer.m_buffer;
-        buffer.m_deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
+        buffer.m_deviceAddress = m_context.deviceDispatch.vkGetBufferDeviceAddress(m_context.device, &addressInfo);
     }
     buffer.m_heapBindingRange = bindingRange;
     if(memoryHeap.m_desc.type != HeapType::DeviceLocal){

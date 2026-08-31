@@ -33,6 +33,32 @@ namespace __hidden_vulkan_device_queue{
 #endif
 }
 
+class ScopedSubmissionHookResolution final : NoCopy{
+public:
+    explicit ScopedSubmissionHookResolution(const QueueSubmissionPreSubmitHook& hook)noexcept
+        : m_hook(hook)
+    {}
+    ~ScopedSubmissionHookResolution(){
+        if(m_armed && !resolve({}))
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Submission hook rejected rollback resolution"));
+    }
+
+
+public:
+    void arm()noexcept{ m_armed = m_hook.resolved != nullptr; }
+    [[nodiscard]] bool resolve(const QueueSubmissionToken& token)noexcept{
+        if(!m_armed)
+            return true;
+        m_armed = false;
+        return m_hook.resolved(m_hook.context, m_hook.identity, token);
+    }
+
+
+private:
+    QueueSubmissionPreSubmitHook m_hook;
+    bool m_armed = false;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -43,9 +69,122 @@ namespace __hidden_vulkan_device_queue{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool Device::beginSubmissionOperation()noexcept{
+    ScopedLock lock(m_submissionOperationMutex);
+    if(submissionsBlocked())
+        return false;
+
+    ++m_activeSubmissionOperationCount;
+    return true;
+}
+
+void Device::endSubmissionOperation()noexcept{
+    bool drained = false;
+    {
+        ScopedLock lock(m_submissionOperationMutex);
+        NWB_ASSERT(m_activeSubmissionOperationCount > 0u);
+        --m_activeSubmissionOperationCount;
+        drained = m_activeSubmissionOperationCount == 0u;
+    }
+    if(drained)
+        m_submissionOperationCondition.notify_all();
+}
+
+bool Device::beginLifecycleDrain()noexcept{
+    // A public submission hook executes while its submit operation remains leased. Re-entering teardown from that
+    // callback must fail before closing the gate, otherwise this thread would wait forever for its own lease.
+    if(submissionOperationActiveOnCurrentThread())
+        return false;
+
+    UniqueLock<Futex> lock(m_submissionOperationMutex);
+    if(m_submissionSuspended.load(MemoryOrder::acquire))
+        return false;
+
+    m_submissionSuspended.store(true, MemoryOrder::release);
+    m_submissionOperationCondition.wait(lock, [this](){ return m_activeSubmissionOperationCount == 0u; });
+    return true;
+}
+
+void Device::endLifecycleDrain()noexcept{
+    ScopedLock lock(m_submissionOperationMutex);
+    NWB_ASSERT(!m_lifecycleDestructionPrepared.load(MemoryOrder::acquire));
+    NWB_ASSERT(m_activeSubmissionOperationCount == 0u);
+    NWB_ASSERT(m_submissionSuspended.load(MemoryOrder::acquire));
+    m_submissionSuspended.store(false, MemoryOrder::release);
+}
+
+bool Device::sealLifecycleDrainForDestruction()noexcept{
+    ScopedLock lock(m_submissionOperationMutex);
+    if(!m_submissionSuspended.load(MemoryOrder::acquire))
+        return false;
+    NWB_ASSERT(m_activeSubmissionOperationCount == 0u);
+    m_lifecycleDestructionPrepared.store(true, MemoryOrder::release);
+    return true;
+}
+
+QueueSubmissionToken Device::consumeAcquiredImageSemaphore(const VkSemaphore semaphore){
+    SubmissionOperationLease submissionOperation(*this);
+    if(!submissionOperation.valid() || semaphore == VK_NULL_HANDLE)
+        return {};
+
+    const GpuPhysicalQueueId executionQueue = getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    Queue* const queue = getQueue(executionQueue);
+    if(!queue)
+        return {};
+
+    const Queue::SubmissionWait acquireWait{ semaphore, 0u };
+    bool submissionAccepted = false;
+    const u64 submittedID = queue->submit(
+        nullptr,
+        0u,
+        nullptr,
+        &acquireWait,
+        1u,
+        &submissionAccepted,
+        nullptr,
+        0u,
+        true
+    );
+    if(!submissionAccepted)
+        return {};
+
+    return QueueSubmissionToken{
+        .queue = queue->m_queueID,
+        .value = submittedID,
+        .physicalQueueIndex = executionQueue.index,
+        .deviceGeneration = executionQueue.deviceGeneration,
+    };
+}
+
+bool Device::presentNativeQueue(
+    const u32 nativeQueueIndex,
+    const VkPresentInfoKHR& presentInfo,
+    VkResult& outResult
+){
+    SubmissionOperationLease submissionOperation(*this);
+    outResult = VK_ERROR_UNKNOWN;
+    if(!submissionOperation.valid())
+        return false;
+    if(
+        nativeQueueIndex >= m_nativeQueueStates.size()
+        || !m_nativeQueueStates[nativeQueueIndex]
+        || m_nativeQueueStates[nativeQueueIndex]->queue == VK_NULL_HANDLE
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Presentation references an invalid canonical native queue state."));
+        return false;
+    }
+
+    NativeQueueState& nativeQueue = *m_nativeQueueStates[nativeQueueIndex];
+    ScopedLock hostLock(nativeQueue.hostMutex);
+    if(submissionsBlocked())
+        return false;
+    outResult = m_context.deviceDispatch.vkQueuePresentKHR(nativeQueue.queue, &presentInfo);
+    return true;
+}
+
 bool Device::registerPhysicalQueue(
     const VulkanPhysicalQueueDesc& desc,
-    const VulkanNativeQueueDesc& nativeQueue
+    NativeQueueState& nativeQueue
 ){
     const u32 queueClassIndex = static_cast<u32>(desc.queueClass);
     const u8 requiredCapabilities = static_cast<u8>(VulkanDetail::DeviceMinimumQueueCapabilities(desc.queueClass));
@@ -102,7 +241,7 @@ bool Device::registerPhysicalQueue(
         .timestampValidBits = desc.timestampValidBits,
         .dedicated = desc.dedicated,
     };
-    Queue* const queue = NewArenaObject<Queue>(m_context.objectArena, m_context, *this, info, nativeQueue.queue);
+    Queue* const queue = NewArenaObject<Queue>(m_context.objectArena, m_context, *this, info, nativeQueue);
     if(!queue)
         return false;
     if(queue->m_trackingSemaphore == VK_NULL_HANDLE){
@@ -271,6 +410,46 @@ bool Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const
     ;
 }
 
+bool Device::waitForSubmissionToken(const QueueSubmissionToken& token)noexcept{
+    if(
+        !token.valid()
+        || !token.hasPhysicalQueueIdentity()
+        || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration)
+        || token.physicalQueueIndex >= m_physicalQueues.size()
+    )
+        return false;
+
+    Queue* const producerQueue = m_physicalQueues[token.physicalQueueIndex];
+    if(!producerQueue)
+        return false;
+
+    ScopedLock producerLock(producerQueue->m_mutex);
+    if(
+        producerQueue->m_trackingSemaphore == VK_NULL_HANDLE
+        || producerQueue->m_queueID != token.queue
+        || token.value > producerQueue->m_lastSubmittedID
+    )
+        return false;
+    if(token.value <= producerQueue->m_lastFinishedID)
+        return true;
+
+    auto waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreWaitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO);
+    waitInfo.semaphoreCount = 1u;
+    waitInfo.pSemaphores = &producerQueue->m_trackingSemaphore;
+    waitInfo.pValues = &token.value;
+    const VkResult result = m_context.deviceDispatch.vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
+    if(result != VK_SUCCESS){
+        if(result == VK_ERROR_DEVICE_LOST)
+            captureDeviceLoss("submission token wait");
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait for submission token: {}"), ResultToString(result));
+        return false;
+    }
+
+    producerQueue->m_lastFinishedID = Max(producerQueue->m_lastFinishedID, token.value);
+    producerQueue->collectCompletedCommandBuffers();
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -321,11 +500,11 @@ u64 Device::executeCommandLists(
     const GpuPhysicalQueueId& executionQueue,
     bool* const outCommandListsSubmitted
 ){
+    SubmissionOperationLease submissionOperation(*this);
     if(outCommandListsSubmitted)
         *outCommandListsSubmitted = false;
 
-    // Device loss makes recovery submissions unsafe.
-    if(isDeviceLost())
+    if(!submissionOperation.valid())
         return 0u;
 
     Queue* queue = getQueue(executionQueue);
@@ -440,8 +619,8 @@ QueueSubmissionToken Device::executeCommandLists(
     const GpuPhysicalQueueId& executionQueue,
     const QueueSubmissionDesc& submitDesc
 ){
-    // Do not submit or wait after terminal device loss.
-    if(isDeviceLost())
+    SubmissionOperationLease submissionOperation(*this);
+    if(!submissionOperation.valid())
         return {};
 
     Queue* const queue = getQueue(executionQueue);
@@ -553,16 +732,18 @@ QueueSubmissionToken Device::executeCommandLists(
     Queue::SubmissionSignal hookSignal = {};
     const Queue::SubmissionSignal* localSignals = nullptr;
     usize localSignalCount = 0u;
+    __hidden_vulkan_device_queue::ScopedSubmissionHookResolution hookResolution(submitDesc.preSubmitHook);
     if(submitDesc.preSubmitHook.valid()){
         QueueSubmissionNativeSignal nativeSignal;
-        if(
-            !submitDesc.preSubmitHook.invoke(
+        const bool hookPrepared = submitDesc.preSubmitHook.invoke(
                 submitDesc.preSubmitHook.context,
+                submitDesc.preSubmitHook.identity,
                 executionQueue,
                 nativeSignal
-            )
-            || !nativeSignal.valid()
-        ){
+        );
+        if(hookPrepared)
+            hookResolution.arm();
+        if(!hookPrepared || !nativeSignal.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to prepare exact queue submission hook"));
             return {};
         }
@@ -589,6 +770,18 @@ QueueSubmissionToken Device::executeCommandLists(
         localSignalCount,
         submitDesc.forceNativeSubmission
     );
+    const QueueSubmissionToken submissionToken = submissionAccepted
+        ? QueueSubmissionToken{
+            .queue = queue->m_queueID,
+            .value = submittedID,
+            .physicalQueueIndex = executionQueue.index,
+            .deviceGeneration = executionQueue.deviceGeneration,
+        }
+        : QueueSubmissionToken{}
+    ;
+    if(!hookResolution.resolve(submissionToken))
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Exact queue submission hook rejected its resolution token"));
+
     if(!expectedCommandLists.empty()){
         if(submissionAccepted){
             m_uploadManager.submitChunks(
@@ -643,12 +836,7 @@ QueueSubmissionToken Device::executeCommandLists(
     if(!submissionAccepted)
         return {};
 
-    return QueueSubmissionToken{
-        .queue = queue->m_queueID,
-        .value = submittedID,
-        .physicalQueueIndex = executionQueue.index,
-        .deviceGeneration = executionQueue.deviceGeneration,
-    };
+    return submissionToken;
 }
 
 u32 Device::getQueueFamilyIndex(const CommandQueue::Enum queueType)const{

@@ -190,6 +190,9 @@ struct GpuGraphResourceDesc{
     // Appended so positional aggregate initializers retain their existing field layout. Prefer setInitialState()
     // whenever Unknown is intended as an explicit physical initial state rather than an unspecified default.
     bool hasExplicitInitialState = false;
+    // Pure availability is independent of queue-family ownership and native state. The compiler attaches this
+    // completion to every first consumer range and lets packet submission elide same-queue waits normally.
+    GpuExternalCompletionId initialAvailabilityCompletion;
 
     constexpr GpuGraphResourceDesc& setIdentity(const Name& value){ identity = value; return *this; }
     constexpr GpuGraphResourceDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
@@ -211,6 +214,7 @@ struct GpuGraphResourceDesc{
         return *this;
     }
     constexpr GpuGraphResourceDesc& setQueueSharing(const ResourceQueueSharing::Mask value){ queueSharing = value; return *this; }
+    constexpr GpuGraphResourceDesc& setInitialAvailabilityCompletion(const GpuExternalCompletionId value){ initialAvailabilityCompletion = value; return *this; }
 };
 
 // A version identifies one semantic value of one exact physical resource range. Imported roots enter the graph

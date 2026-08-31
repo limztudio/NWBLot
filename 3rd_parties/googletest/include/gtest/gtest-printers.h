@@ -104,7 +104,6 @@
 #ifndef GOOGLETEST_INCLUDE_GTEST_GTEST_PRINTERS_H_
 #define GOOGLETEST_INCLUDE_GTEST_GTEST_PRINTERS_H_
 
-#include <any>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -125,6 +124,10 @@
 #endif  // GTEST_HAS_ABSL
 #include "gtest/internal/gtest-internal.h"
 #include "gtest/internal/gtest-port.h"
+
+#if GTEST_HAS_RTTI
+#include <any>
+#endif  // GTEST_HAS_RTTI
 
 #if GTEST_INTERNAL_HAS_STD_SPAN
 #include <span>  // NOLINT
@@ -913,7 +916,10 @@ class [[nodiscard]] UniversalPrinter {
 template <typename T>
 class [[nodiscard]] UniversalPrinter<const T> : public UniversalPrinter<T> {};
 
-// Printer for std::any
+// Printer for std::any. The Microsoft standard library omits std::any when
+// static RTTI is disabled, so the specialization must follow GTest's RTTI
+// capability instead of the selected C++ language level alone.
+#if GTEST_HAS_RTTI
 template <>
 class [[nodiscard]] UniversalPrinter<std::any> {
  public:
@@ -935,6 +941,7 @@ class [[nodiscard]] UniversalPrinter<std::any> {
 #endif  // GTEST_HAS_RTTI
   }
 };
+#endif  // GTEST_HAS_RTTI
 
 // Printer for std::optional
 template <typename T>

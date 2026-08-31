@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+
 #include "module.h"
 #include "module_internal.h"
 
@@ -45,6 +46,7 @@ inline constexpr Name s_GraphicsFramePreambleCpuTimingScope("graphics.frame_prea
 inline constexpr Name s_GraphicsRenderCpuTimingScope("graphics.render");
 inline constexpr Name s_GraphicsPresentCpuTimingScope("graphics.present");
 inline constexpr Name s_GraphicsGarbageCollectCpuTimingScope("graphics.garbage_collect");
+inline constexpr usize s_MaxBeginFrameResizeAttempts = 3u;
 
 
 [[nodiscard]] static bool CopyInstanceParameters(DeviceCreationParameters& dst, const InstanceParameters& src){
@@ -105,17 +107,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Graphics::BackBufferResizingCallback(void* userData){
-    if(auto* graphics = static_cast<Graphics*>(userData))
-        graphics->backBufferResizing();
-}
-
-void Graphics::BackBufferResizedCallback(void* userData){
-    if(auto* graphics = static_cast<Graphics*>(userData))
-        graphics->backBufferResized();
-}
-
-
 Graphics::Graphics(
     GraphicsAllocator& allocator,
     Alloc::ThreadPool& threadPool,
@@ -147,7 +138,10 @@ Graphics::Graphics(
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
 }
 Graphics::~Graphics(){
-    destroy();
+    NWB_FATAL_ASSERT_MSG(
+        destroy(),
+        NWB_TEXT("Graphics destruction requires either a completed device join or terminal device loss")
+    );
 }
 
 bool Graphics::init(const Common::FrameData& data){
@@ -176,16 +170,19 @@ bool Graphics::init(const Common::FrameData& data){
     if(!m_backend->createSwapChain())
         return false;
 
-    m_swapChainState.backBufferWidth = 0;
-    m_swapChainState.backBufferHeight = 0;
-    updateWindowState(data.width(), data.height(), true, true);
+    m_windowVisible = data.width() != 0u && data.height() != 0u;
+    m_windowIsInFocus = true;
+    if(!backBufferResized()){
+        requestDeviceRecreation();
+        return false;
+    }
     m_previousFrameTimestamp = TimerNow();
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Graphics: window device and swap chain created ({}x{})")
         , data.width()
         , data.height()
     );
-    return validateRenderPassResources();
+    return true;
 }
 
 bool Graphics::createHeadlessDevice(){
@@ -317,23 +314,23 @@ void Graphics::requestDeviceRecreation()const{
     NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: device recreation requested; ending the current graphics session before another submission."));
 }
 
-void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
+bool Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
     if(m_deviceRecreationRequested)
-        return;
-    if(auto* device = m_backend->getDevice(); device && device->isDeviceLost()){
+        return false;
+    if(auto* device = m_backend->getDevice(); device && device->requiresRecreation()){
         requestDeviceRecreation();
-        return;
+        return false;
     }
 
     m_windowVisible = windowVisible;
     m_windowIsInFocus = windowIsInFocus;
 
     if(!m_windowVisible)
-        return;
+        return true;
 
     if(width == 0 || height == 0){
         m_windowVisible = false;
-        return;
+        return true;
     }
 
     if(
@@ -341,37 +338,47 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
         || static_cast<i32>(m_swapChainState.backBufferHeight) != static_cast<i32>(height)
         || m_swapChainState.vsyncEnabled != m_requestedVSync
     ){
-        backBufferResizing();
-
-        m_swapChainState.backBufferWidth = width;
-        m_swapChainState.backBufferHeight = height;
-        m_swapChainState.vsyncEnabled = m_requestedVSync;
-
-        m_backend->resizeSwapChain();
-        backBufferResized();
+        if(!resizeBackBuffer(width, height, m_requestedVSync))
+            return false;
     }
 
     m_swapChainState.vsyncEnabled = m_requestedVSync;
+    return true;
 }
 
-void Graphics::destroy(){
-    m_acquiredPresentationFrame = {};
+bool Graphics::destroy(){
     waitAllJobs();
-    waitForIdle();
 
+    SwapChainTransitionTicket transitionTicket;
+    if(!m_backend->prepareSwapChainTransition(SwapChainTransitionKind::Destroy, transitionTicket)){
+        m_deviceRecreationRequested = true;
+        return false;
+    }
+
+    m_acquiredPresentationFrame = {};
     invalidateRenderPassResources();
     m_renderPasses.clear();
     m_gpuTiming.resetQueries();
 
     m_swapChainFramebuffers.clear();
-    m_backend->destroy();
+    if(!m_backend->commitDestroy(Move(transitionTicket))){
+        m_deviceRecreationRequested = true;
+        return false;
+    }
     m_instanceCreated = false;
     m_deviceRecreationRequested = false;
+    return true;
 }
 
-void Graphics::waitForIdle(){
+bool Graphics::waitForIdle(){
     if(auto* device = m_backend->getDevice())
-        device->waitForIdle();
+        return device->waitForIdle();
+    return true;
+}
+bool Graphics::isDeviceLost()const noexcept{
+    if(const auto* device = m_backend->getDevice())
+        return device->isDeviceLost();
+    return false;
 }
 
 GraphicsBackend::Device& Graphics::getDevice()const noexcept{
@@ -392,12 +399,15 @@ QueueSubmissionPreSubmitHook Graphics::claimFramePresentationSignal()noexcept{
     return m_backend->claimFramePresentationSignal();
 }
 
-bool Graphics::confirmFramePresentationSignal(const QueueSubmissionToken& token)noexcept{
-    return m_backend->confirmFramePresentationSignal(token);
+bool Graphics::confirmFramePresentationSignal(
+    const QueueSubmissionPreSubmitHook& claim,
+    const QueueSubmissionToken& token
+)noexcept{
+    return m_backend->confirmFramePresentationSignal(claim, token);
 }
 
-void Graphics::cancelFramePresentationSignal()noexcept{
-    m_backend->cancelFramePresentationSignal();
+bool Graphics::cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim)noexcept{
+    return m_backend->cancelFramePresentationSignal(claim);
 }
 
 void Graphics::addRenderPassToFront(IRenderPass& pass){
@@ -422,7 +432,12 @@ void Graphics::addRenderPassToBack(IRenderPass& pass){
 
 void Graphics::removeRenderPass(IRenderPass& pass){
     waitAllJobs();
-    waitForIdle();
+    const bool deviceIdle = waitForIdle();
+    GraphicsBackend::Device* const device = m_backend->getDevice();
+    NWB_FATAL_ASSERT_MSG(
+        deviceIdle || (device && device->isDeviceLost()),
+        NWB_TEXT("Render-pass removal requires either a completed device join or terminal device loss")
+    );
 
     pass.invalidateResources();
     m_renderPasses.remove(&pass);
@@ -485,31 +500,73 @@ TextureHandle Graphics::createTexture(const TextureDesc& desc)const{
     return getDevice().createTexture(desc);
 }
 
-void Graphics::backBufferResizing(){
-    m_acquiredPresentationFrame = {};
+bool Graphics::backBufferResizing(SwapChainTransitionTicket& outTicket){
     waitAllJobs();
-    waitForIdle();
+    if(!m_backend->prepareSwapChainTransition(SwapChainTransitionKind::Resize, outTicket)){
+        requestDeviceRecreation();
+        return false;
+    }
 
+    m_acquiredPresentationFrame = {};
     invalidateRenderPassResources();
     m_swapChainFramebuffers.clear();
 
     for(auto* renderPass : m_renderPasses)
         renderPass->backBufferResizing();
+    return true;
 }
 
-void Graphics::backBufferResized(){
+bool Graphics::resizeBackBuffer(
+    const u32 width,
+    const u32 height,
+    const bool vsyncEnabled
+){
+    SwapChainTransitionTicket transitionTicket;
+    if(!backBufferResizing(transitionTicket))
+        return false;
+
+    m_swapChainState.backBufferWidth = width;
+    m_swapChainState.backBufferHeight = height;
+    m_swapChainState.vsyncEnabled = vsyncEnabled;
+    if(!m_backend->commitSwapChainResize(Move(transitionTicket))){
+        requestDeviceRecreation();
+        return false;
+    }
+    if(!backBufferResized()){
+        requestDeviceRecreation();
+        return false;
+    }
+    return true;
+}
+
+bool Graphics::backBufferResized(){
     for(auto* renderPass : m_renderPasses)
         renderPass->backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
 
     const u32 backBufferCount = getBackBufferCount();
     m_swapChainFramebuffers.clear();
     m_swapChainFramebuffers.reserve(backBufferCount);
-    for(u32 index = 0; index < backBufferCount; ++index)
-        m_swapChainFramebuffers.push_back(getDevice().createFramebuffer(FramebufferDesc().addColorAttachment(getBackBuffer(index))));
+    for(u32 index = 0; index < backBufferCount; ++index){
+        FramebufferHandle framebuffer = getDevice().createFramebuffer(
+            FramebufferDesc().addColorAttachment(getBackBuffer(index))
+        );
+        if(!framebuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to rebuild swap-chain framebuffer {}"), index);
+            m_swapChainFramebuffers.clear();
+            invalidateRenderPassResources();
+            return false;
+        }
+        m_swapChainFramebuffers.push_back(Move(framebuffer));
+    }
 
-    if(!validateRenderPassResources())
-        NWB_LOGGER_WARNING(NWB_TEXT("Graphics: one or more render passes failed to validate resources after back buffer resize"));
+    if(!validateRenderPassResources()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: one or more render passes failed to validate resources after back buffer resize"));
+        m_swapChainFramebuffers.clear();
+        invalidateRenderPassResources();
+        return false;
+    }
     NWB_LOGGER_INFO(NWB_TEXT("Graphics: Back buffer resized to {}x{}"), m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
+    return true;
 }
 
 void Graphics::invalidateRenderPassResources(){
@@ -548,7 +605,7 @@ void Graphics::animate(f64 elapsedTime){
 
 bool Graphics::prepareFramePreamble(){
     auto& device = getDevice();
-    if(device.isDeviceLost()){
+    if(device.requiresRecreation()){
         requestDeviceRecreation();
         return false;
     }
@@ -576,7 +633,7 @@ bool Graphics::prepareFramePreamble(){
         }
     }
 
-    if(device.isDeviceLost()){
+    if(device.requiresRecreation()){
         requestDeviceRecreation();
         return false;
     }
@@ -587,7 +644,7 @@ bool Graphics::prepareFramePreamble(){
 void Graphics::render(){
     Framebuffer* const framebuffer = m_acquiredPresentationFrame.framebuffer.get();
     auto& device = getDevice();
-    if(device.isDeviceLost()){
+    if(device.requiresRecreation()){
         requestDeviceRecreation();
         return;
     }
@@ -596,8 +653,8 @@ void Graphics::render(){
     // renderer prepares the dependent mesh, CSG, and ray-tracing packets; a global all-pass prepare phase would
     // observe stale runtime meshes.
     for(auto* renderPass : m_renderPasses){
-        if(m_deviceRecreationRequested || device.isDeviceLost()){
-            if(device.isDeviceLost())
+        if(m_deviceRecreationRequested || device.requiresRecreation()){
+            if(device.requiresRecreation())
                 requestDeviceRecreation();
             return;
         }
@@ -610,8 +667,8 @@ void Graphics::render(){
 
         // A render pass can request recreation after an unrecoverable cross-queue ownership failure. Do not let a
         // later pass record or submit against this device generation in the same frame.
-        if(m_deviceRecreationRequested || device.isDeviceLost()){
-            if(device.isDeviceLost())
+        if(m_deviceRecreationRequested || device.requiresRecreation()){
+            if(device.requiresRecreation())
                 requestDeviceRecreation();
             return;
         }
@@ -683,7 +740,7 @@ bool Graphics::runFrame(){
         return false;
 
     auto& device = getDevice();
-    if(device.isDeviceLost()){
+    if(device.requiresRecreation()){
         requestDeviceRecreation();
         return false;
     }
@@ -708,7 +765,7 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
         return false;
 
     auto& device = getDevice();
-    if(device.isDeviceLost()){
+    if(device.requiresRecreation()){
         requestDeviceRecreation();
         return false;
     }
@@ -732,17 +789,36 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
             phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsAnimateCpuTimingScope, animateBegin);
 
         if(m_frameIndex > 0 || !m_skipRenderOnFirstFrame){
-            const BackBufferResizeCallbacks resizeCallbacks = {
-                this,
-                &Graphics::BackBufferResizingCallback,
-                &Graphics::BackBufferResizedCallback,
-            };
             Timer beginFrameBegin;
             if(phaseTiming)
                 beginFrameBegin = TimerNow();
-            AcquiredBackBuffer acquiredBackBuffer = m_backend->beginFrame(resizeCallbacks);
+            BeginFrameResult beginFrameResult;
+            for(usize attempt = 0u; attempt < __hidden_graphics_lifecycle::s_MaxBeginFrameResizeAttempts; ++attempt){
+                beginFrameResult = m_backend->beginFrame();
+                if(beginFrameResult.status != BeginFrameStatus::ResizeRequired)
+                    break;
+                if(
+                    beginFrameResult.suggestedWidth == 0u
+                    || beginFrameResult.suggestedHeight == 0u
+                    || !resizeBackBuffer(
+                        beginFrameResult.suggestedWidth,
+                        beginFrameResult.suggestedHeight,
+                        m_requestedVSync
+                    )
+                )
+                    break;
+            }
             if(phaseTiming)
                 phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsBeginFrameCpuTimingScope, beginFrameBegin);
+            if(!beginFrameResult.acquired()){
+                if(beginFrameResult.status == BeginFrameStatus::ResizeRequired)
+                    NWB_LOGGER_WARNING(NWB_TEXT("Graphics: swap-chain resize retries were exhausted; requesting device recreation."));
+                else
+                    NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to acquire a presentation frame; requesting device recreation."));
+                requestDeviceRecreation();
+                return false;
+            }
+            AcquiredBackBuffer acquiredBackBuffer = Move(beginFrameResult.backBuffer);
             if(acquiredBackBuffer.valid()){
                 const u32 acquiredBackBufferIndex = acquiredBackBuffer.index;
                 if(
@@ -782,8 +858,8 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
                 if(phaseTiming)
                     phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsFramePreambleCpuTimingScope, framePreambleBegin);
                 if(!preamblePrepared){
-                    // prepareFramePreamble() returns false only after terminal device loss. Do not issue recovery
-                    // GPU work; required device teardown owns the unresolved acquired image and synchronization.
+                    // prepareFramePreamble() returns false only after the device requires recreation. Do not issue
+                    // recovery GPU work; required device teardown owns the unresolved acquired image and synchronization.
                     requestDeviceRecreation();
                     return false;
                 }
@@ -795,8 +871,8 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
                 if(phaseTiming)
                     phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsRenderCpuTimingScope, renderBegin);
 
-                if(m_deviceRecreationRequested || device.isDeviceLost()){
-                    if(device.isDeviceLost())
+                if(m_deviceRecreationRequested || device.requiresRecreation()){
+                    if(device.requiresRecreation())
                         requestDeviceRecreation();
                     else if(!m_backend->abandonAcquiredFrame())
                         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: failed to quarantine the aborted acquired frame; device teardown is required."));
@@ -812,13 +888,13 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
                 if(!presented){
                     // A consumed presentation already cleared acquisition and makes abandonment a no-op. Every
                     // healthy unconsumed failure is drained and quarantined before recreation.
-                    if(!device.isDeviceLost() && !m_backend->abandonAcquiredFrame())
+                    if(!device.requiresRecreation() && !m_backend->abandonAcquiredFrame())
                         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: failed to quarantine the unpresented acquired frame; device teardown is required."));
                     requestDeviceRecreation();
                     return false;
                 }
 
-                if(device.isDeviceLost()){
+                if(device.requiresRecreation()){
                     requestDeviceRecreation();
                     return false;
                 }
@@ -836,7 +912,7 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
     device.runGarbageCollection();
     if(phaseTiming)
         phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsGarbageCollectCpuTimingScope, garbageCollectionBegin);
-    if(device.isDeviceLost()){
+    if(device.requiresRecreation()){
         requestDeviceRecreation();
         return false;
     }
@@ -856,3 +932,4 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

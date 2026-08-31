@@ -279,6 +279,13 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
         || desc.type >= GpuGraphResourceType::kCount
         || !ResourceQueueSharing::IsValid(desc.queueSharing)
         || (
+            desc.initialAvailabilityCompletion.valid()
+            && (
+                desc.type == GpuGraphResourceType::HazardDomain
+                || !validExternalCompletion(desc.initialAvailabilityCompletion)
+            )
+        )
+        || (
             desc.externalFinalState != ResourceStates::Unknown
             && desc.type != GpuGraphResourceType::Texture
             && desc.type != GpuGraphResourceType::Buffer
@@ -453,6 +460,7 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
     resource.initialOwnerReleaseDestinationQueue = desc.initialOwnerReleaseDestinationQueue;
     resource.initialOwnerCompletion = desc.initialOwnerCompletion;
     resource.initialOwnerMinimumCompletionToken = desc.initialOwnerMinimumCompletionToken;
+    resource.initialAvailabilityCompletion = desc.initialAvailabilityCompletion;
     resource.initialOwnerStateSource = initialOwnerStateSnapshot;
     resource.initialOwnerStateSourceIdentity = desc.initialOwnerStateSource;
     resource.initialOwnerHandoffSourceOffset = static_cast<u32>(initialOwnerHandoffSourceOffset);

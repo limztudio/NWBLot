@@ -28,9 +28,10 @@ concept BackendApi = requires(
     T& backend,
     const T& constBackend,
     GraphicsVector<AdapterInfo>& adapters,
-    const BackBufferResizeCallbacks& callbacks,
     const Common::FrameParam& frameParam,
-    const QueueSubmissionToken& submissionToken
+    const QueueSubmissionToken& submissionToken,
+    const QueueSubmissionPreSubmitHook& presentationClaim,
+    SwapChainTransitionTicket& transitionTicket
 ){
     { constBackend.getDevice() }->SameAs<GraphicsBackend::Device*>;
     { constBackend.getRendererString() }->SameAs<const tchar*>;
@@ -44,13 +45,15 @@ concept BackendApi = requires(
     { backend.createInstance() }->SameAs<bool>;
     { backend.createDevice() }->SameAs<bool>;
     { backend.createSwapChain() }->SameAs<bool>;
-    backend.destroy();
-    backend.resizeSwapChain();
-    { backend.beginFrame(callbacks) }->SameAs<AcquiredBackBuffer>;
+    { backend.destroy() }->SameAs<bool>;
+    { backend.prepareSwapChainTransition(SwapChainTransitionKind::Resize, transitionTicket) }->SameAs<bool>;
+    { backend.commitSwapChainResize(Move(transitionTicket)) }->SameAs<bool>;
+    { backend.commitDestroy(Move(transitionTicket)) }->SameAs<bool>;
+    { backend.beginFrame() }->SameAs<BeginFrameResult>;
     { backend.abandonAcquiredFrame() }->SameAs<bool>;
     { backend.claimFramePresentationSignal() }->SameAs<QueueSubmissionPreSubmitHook>;
-    { backend.confirmFramePresentationSignal(submissionToken) }->SameAs<bool>;
-    backend.cancelFramePresentationSignal();
+    { backend.confirmFramePresentationSignal(presentationClaim, submissionToken) }->SameAs<bool>;
+    { backend.cancelFramePresentationSignal(presentationClaim) }->SameAs<bool>;
     { backend.present() }->SameAs<bool>;
     backend.reportLiveObjects();
 };
@@ -125,9 +128,9 @@ concept DeviceApi = requires(
     { device.createInputLayout(vertexAttributeDescs, u32{}, shader) }->SameAs<InputLayoutHandle>;
 
     { device.createEventQuery() }->SameAs<EventQueryHandle>;
-    device.setEventQuery(eventQuery, CommandQueue::Graphics);
+    { device.setEventQuery(eventQuery, CommandQueue::Graphics) }->SameAs<bool>;
     { device.pollEventQuery(eventQuery) }->SameAs<bool>;
-    device.waitEventQuery(eventQuery);
+    { device.waitEventQuery(eventQuery) }->SameAs<bool>;
     { device.createTimerQuery() }->SameAs<TimerQueryHandle>;
     { device.pollTimerQuery(timerQuery) }->SameAs<bool>;
     { device.getTimerQueryResult(timerQuery, timerQueryResult) }->SameAs<bool>;
@@ -166,6 +169,7 @@ concept DeviceApi = requires(
     { device.matchesPhysicalQueueIdentity(GpuPhysicalQueueId{}) }->SameAs<bool>;
     { device.validateSubmissionWaitToken(QueueSubmissionToken{}) }->SameAs<bool>;
     { device.isDeviceLost() }->SameAs<bool>;
+    { device.requiresRecreation() }->SameAs<bool>;
     { device.waitForIdle() }->SameAs<bool>;
     device.runGarbageCollection();
     { device.queryFeatureSupport(Feature::Meshlets, featureInfo, usize{}) }->SameAs<bool>;
@@ -188,6 +192,7 @@ concept CommandListApi = requires(
     RayTracingAccelStruct* accelStruct,
     RayTracingOpacityMicromap* opacityMicromap,
     TimerQuery* timerQuery,
+    TimerQueryRecordingToken& timerQueryRecordingToken,
     const TextureSlice& textureSlice,
     const TextureSubresourceSet& subresources,
     const Rect& rect,
@@ -272,8 +277,9 @@ concept CommandListApi = requires(
     commandList.executeMultiIndirectClusterOperation(clusterOperationDesc);
     commandList.buildTopLevelAccelStructFromBuffer(accelStruct, buffer, u64{}, usize{}, RayTracingAccelStructBuildFlags::None);
     commandList.convertCoopVecMatrices(coopVecConvertDescs, usize{});
-    { commandList.beginTimerQuery(timerQuery) }->SameAs<bool>;
-    { commandList.endTimerQuery(timerQuery) }->SameAs<bool>;
+    { commandList.resetTimerQuery(timerQuery) }->SameAs<bool>;
+    { commandList.beginTimerQuery(timerQuery, timerQueryRecordingToken) }->SameAs<bool>;
+    { commandList.endTimerQuery(timerQuery, timerQueryRecordingToken) }->SameAs<bool>;
     commandList.beginMarker(markerName);
     commandList.endMarker();
 

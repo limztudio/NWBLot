@@ -247,8 +247,8 @@ void CommandList::bindDescriptorBufferHeapNative(
         || manager != &m_device.m_descriptorBufferManager
         || manager != heap.m_context.descriptorBufferManager
         || pipelineBindings.m_pipelineLayout == VK_NULL_HANDLE
-        || !vkCmdBindDescriptorBuffersEXT
-        || !vkCmdSetDescriptorBufferOffsetsEXT
+        || !m_context.deviceDispatch.vkCmdBindDescriptorBuffersEXT
+        || !m_context.deviceDispatch.vkCmdSetDescriptorBufferOffsetsEXT
         || !VulkanDetail::IsDescriptorBufferBackendReady(m_context)
     ){
         rejectCommandRecording(operationName, NWB_TEXT("heap, device, context, manager, or pipeline layout is not exact"));
@@ -471,7 +471,7 @@ void CommandList::bindDescriptorBufferHeapNative(
         accelStructBlock.offsetBytes
     };
 
-    vkCmdSetDescriptorBufferOffsetsEXT(
+    m_context.deviceDispatch.vkCmdSetDescriptorBufferOffsetsEXT(
         m_currentCmdBuf->m_cmdBuf,
         bindPoint,
         pipelineBindings.m_pipelineLayout,
@@ -491,7 +491,7 @@ void CommandList::ensureDescriptorBuffersBound(
     if(m_descriptorBuffersBound)
         return;
 
-    vkCmdBindDescriptorBuffersEXT(
+    m_context.deviceDispatch.vkCmdBindDescriptorBuffersEXT(
         m_currentCmdBuf->m_cmdBuf,
         DescriptorBufferManager::s_PersistentDescriptorBufferCount,
         snapshot.bindingInfos.data()

@@ -27,12 +27,17 @@ namespace VulkanDetail{
 constexpr usize s_MaxGraphicsPipelineShaderStageCount = 5u;
 
 
-void SetGraphicsDynamicState(VkCommandBuffer commandBuffer, const GraphicsPipelineDesc& desc, const GraphicsState& state){
+void SetGraphicsDynamicState(
+    const VolkDeviceTable& deviceDispatch,
+    VkCommandBuffer commandBuffer,
+    const GraphicsPipelineDesc& desc,
+    const GraphicsState& state
+){
     const RasterState& rasterState = desc.renderState.rasterState;
     const DepthStencilState& depthStencilState = desc.renderState.depthStencilState;
 
-    vkCmdSetLineWidth(commandBuffer, s_DefaultRasterLineWidth);
-    vkCmdSetDepthBias(commandBuffer, static_cast<f32>(rasterState.depthBias), rasterState.depthBiasClamp, rasterState.slopeScaledDepthBias);
+    deviceDispatch.vkCmdSetLineWidth(commandBuffer, s_DefaultRasterLineWidth);
+    deviceDispatch.vkCmdSetDepthBias(commandBuffer, static_cast<f32>(rasterState.depthBias), rasterState.depthBiasClamp, rasterState.slopeScaledDepthBias);
 
     const f32 blendConstants[] = {
         state.blendConstantColor.r,
@@ -40,13 +45,13 @@ void SetGraphicsDynamicState(VkCommandBuffer commandBuffer, const GraphicsPipeli
         state.blendConstantColor.b,
         state.blendConstantColor.a,
     };
-    vkCmdSetBlendConstants(commandBuffer, blendConstants);
-    vkCmdSetDepthBounds(commandBuffer, 0.f, 1.f);
-    vkCmdSetStencilCompareMask(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, depthStencilState.stencilReadMask);
-    vkCmdSetStencilWriteMask(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, depthStencilState.stencilWriteMask);
+    deviceDispatch.vkCmdSetBlendConstants(commandBuffer, blendConstants);
+    deviceDispatch.vkCmdSetDepthBounds(commandBuffer, 0.f, 1.f);
+    deviceDispatch.vkCmdSetStencilCompareMask(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, depthStencilState.stencilReadMask);
+    deviceDispatch.vkCmdSetStencilWriteMask(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, depthStencilState.stencilWriteMask);
 
     const u8 stencilRef = depthStencilState.dynamicStencilRef ? state.dynamicStencilRefValue : depthStencilState.stencilRefValue;
-    vkCmdSetStencilReference(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, stencilRef);
+    deviceDispatch.vkCmdSetStencilReference(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, stencilRef);
 }
 
 
@@ -92,7 +97,7 @@ void CommandList::setViewportState(const ViewportState& viewportState){
         viewport.height = viewportValues.w;
         viewport.minDepth = vp.minZ;
         viewport.maxDepth = vp.maxZ;
-        vkCmdSetViewport(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &viewport);
+        m_context.deviceDispatch.vkCmdSetViewport(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &viewport);
     }
 
     if(!viewportState.scissorRects.empty()){
@@ -100,7 +105,7 @@ void CommandList::setViewportState(const ViewportState& viewportState){
         const auto& sr = viewportState.scissorRects[0];
         scissor.offset = { static_cast<int32_t>(sr.minX), static_cast<int32_t>(sr.minY) };
         scissor.extent = { static_cast<uint32_t>(sr.maxX - sr.minX), static_cast<uint32_t>(sr.maxY - sr.minY) };
-        vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &scissor);
+        m_context.deviceDispatch.vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &scissor);
     }
     else if(!viewportState.viewports.empty()){
         VkRect2D scissor{};
@@ -111,7 +116,7 @@ void CommandList::setViewportState(const ViewportState& viewportState){
         NWB_ASSERT(implicitScissorBuilt);
         if(!implicitScissorBuilt)
             return;
-        vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &scissor);
+        m_context.deviceDispatch.vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &scissor);
     }
 }
 
@@ -496,12 +501,12 @@ bool CommandList::beginDynamicRendering(Framebuffer* framebuffer, const RenderPa
     if(hasStencil)
         renderingInfo.pStencilAttachment = &stencilAttachment;
 
-    vkCmdBeginRendering(m_currentCmdBuf->m_cmdBuf, &renderingInfo);
+    m_context.deviceDispatch.vkCmdBeginRendering(m_currentCmdBuf->m_cmdBuf, &renderingInfo);
     return true;
 }
 
 void CommandList::endDynamicRendering(){
-    vkCmdEndRendering(m_currentCmdBuf->m_cmdBuf);
+    m_context.deviceDispatch.vkCmdEndRendering(m_currentCmdBuf->m_cmdBuf);
 }
 
 void CommandList::beginRenderPass(Framebuffer* const framebuffer, const RenderPassParameters& params){
@@ -606,9 +611,9 @@ void CommandList::setGraphicsState(const GraphicsState& state){
 
     auto* pipeline = state.pipeline;
     if(pipeline){
-        vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
+        m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
         retainResource(pipeline);
-        VulkanDetail::SetGraphicsDynamicState(m_currentCmdBuf->m_cmdBuf, pipeline->m_desc, state);
+        VulkanDetail::SetGraphicsDynamicState(m_context.deviceDispatch, m_currentCmdBuf->m_cmdBuf, pipeline->m_desc, state);
     }
 
     setViewportState(state.viewport);
@@ -616,14 +621,14 @@ void CommandList::setGraphicsState(const GraphicsState& state){
     for(const VertexBufferBinding& binding : state.vertexBuffers){
         VkBuffer vertexBuffer = binding.buffer->m_buffer;
         VkDeviceSize offset = binding.offset;
-        vkCmdBindVertexBuffers(m_currentCmdBuf->m_cmdBuf, binding.slot, 1, &vertexBuffer, &offset);
+        m_context.deviceDispatch.vkCmdBindVertexBuffers(m_currentCmdBuf->m_cmdBuf, binding.slot, 1, &vertexBuffer, &offset);
         retainResource(binding.buffer);
     }
 
     if(state.indexBuffer.buffer){
         auto* ib = state.indexBuffer.buffer;
         const VkIndexType indexType = state.indexBuffer.format == Format::R16_UINT ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
-        vkCmdBindIndexBuffer(m_currentCmdBuf->m_cmdBuf, ib->m_buffer, state.indexBuffer.offset, indexType);
+        m_context.deviceDispatch.vkCmdBindIndexBuffer(m_currentCmdBuf->m_cmdBuf, ib->m_buffer, state.indexBuffer.offset, indexType);
         retainResource(ib);
     }
     retainResource(state.indirectParams);
@@ -637,7 +642,7 @@ void CommandList::draw(const DrawArguments& args){
     if(!validateGraphicsDrawArguments(args, false, NWB_TEXT("draw")))
         return;
 
-    vkCmdDraw(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startVertexLocation, args.startInstanceLocation);
+    m_context.deviceDispatch.vkCmdDraw(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startVertexLocation, args.startInstanceLocation);
 }
 
 void CommandList::drawIndexed(const DrawArguments& args){
@@ -648,7 +653,7 @@ void CommandList::drawIndexed(const DrawArguments& args){
     if(!validateGraphicsDrawArguments(args, true, NWB_TEXT("draw indexed")))
         return;
 
-    vkCmdDrawIndexed(
+    m_context.deviceDispatch.vkCmdDrawIndexed(
         m_currentCmdBuf->m_cmdBuf,
         args.vertexCount,
         args.instanceCount,
@@ -675,7 +680,7 @@ void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
     ))
         return;
 
-    vkCmdDrawIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndirectArguments));
+    m_context.deviceDispatch.vkCmdDrawIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndirectArguments));
     retainResource(m_currentGraphicsState.indirectParams);
 }
 
@@ -696,7 +701,7 @@ void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
     ))
         return;
 
-    vkCmdDrawIndexedIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
+    m_context.deviceDispatch.vkCmdDrawIndexedIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
     retainResource(m_currentGraphicsState.indirectParams);
 }
 

@@ -914,7 +914,11 @@ static void EmitResult(const Result& result){
     result.warmupCount = arguments.warmupCount;
     result.sampleCount = arguments.sampleCount;
     const auto finish = [&](int exitCode){
-        graphics.destroy();
+        if(!graphics.destroy()){
+            result.status = "failed";
+            result.reason = "graphics_destroy_failed";
+            exitCode = 1;
+        }
         result.loggerErrors = logger.errorCount();
         if(exitCode == 0 && result.loggerErrors != 0u){
             result.status = "failed";

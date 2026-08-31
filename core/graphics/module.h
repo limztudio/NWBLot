@@ -145,10 +145,6 @@ private:
     // touching the TimingSink, so a failed frame cannot make a partial phase scope observable.
     struct CpuTimingPhaseBatch;
 
-    static void BackBufferResizingCallback(void* userData);
-    static void BackBufferResizedCallback(void* userData);
-
-
 public:
     Graphics(
         GraphicsAllocator& allocator,
@@ -206,9 +202,10 @@ public:
     // tear down and recreate the device/resources before resuming.
     void requestDeviceRecreation()const;
     [[nodiscard]] bool isDeviceRecreationRequested()const noexcept{ return m_deviceRecreationRequested; }
-    void updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
-    void destroy();
-    void waitForIdle();
+    [[nodiscard]] bool updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
+    [[nodiscard]] bool destroy();
+    [[nodiscard]] bool waitForIdle();
+    [[nodiscard]] bool isDeviceLost()const noexcept;
 
 public:
     [[nodiscard]] GraphicsBackend::Device& getDevice()const noexcept;
@@ -228,8 +225,11 @@ public:
     // The deferred graph claims the current swap-chain binary semaphore and attaches it to its exact terminal
     // packet. Direct/non-graph render paths receive an empty hook and retain BackendContext::present()'s fallback.
     [[nodiscard]] QueueSubmissionPreSubmitHook claimFramePresentationSignal()noexcept;
-    [[nodiscard]] bool confirmFramePresentationSignal(const QueueSubmissionToken& token)noexcept;
-    void cancelFramePresentationSignal()noexcept;
+    [[nodiscard]] bool confirmFramePresentationSignal(
+        const QueueSubmissionPreSubmitHook& claim,
+        const QueueSubmissionToken& token
+    )noexcept;
+    [[nodiscard]] bool cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim)noexcept;
 
     // Optional overlays register here instead of coupling a renderer directly to their module. The active
     // contributor may append one final Graphics packet to a renderer-owned task graph before presentation.
@@ -310,8 +310,8 @@ public:
     void waitJob(JobHandle handle)const;
     void waitAllJobs()const{ m_jobSystem.waitAll(); }
 
-    void backBufferResizing();
-    void backBufferResized();
+    [[nodiscard]] bool backBufferResizing(SwapChainTransitionTicket& outTicket);
+    [[nodiscard]] bool backBufferResized();
     void invalidateRenderPassResources();
     [[nodiscard]] bool validateRenderPassResources();
     void displayScaleChanged();
@@ -330,6 +330,7 @@ public:
 
 private:
     bool animateRenderPresentInternal(CpuTimingPhaseBatch* phaseTiming);
+    [[nodiscard]] bool resizeBackBuffer(u32 width, u32 height, bool vsyncEnabled);
 
 
 private:

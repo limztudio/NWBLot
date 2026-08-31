@@ -28,7 +28,7 @@ void BackendContext::logVulkanDeviceConfiguration(
     const i32 secondaryTransferQueueFamily
 ){
     if(m_deviceParams.enableDebugRuntime){
-        const u64 deviceLocalMemoryMiB = VulkanDetail::BytesToMiB(VulkanDetail::GetDeviceLocalMemoryBytes(m_vulkanPhysicalDevice));
+        const u64 deviceLocalMemoryMiB = VulkanDetail::BytesToMiB(VulkanDetail::GetDeviceLocalMemoryBytes(m_instanceDispatch, m_vulkanPhysicalDevice));
 
         auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
         ss << "Vulkan GPU debug: selected device"

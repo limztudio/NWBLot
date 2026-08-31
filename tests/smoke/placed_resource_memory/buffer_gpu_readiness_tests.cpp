@@ -231,6 +231,7 @@ struct BufferDescriptionDriftHookContext{
 
 [[nodiscard]] static bool ReleaseBufferOwnerDuringSubmissionHook(
     void* const rawContext,
+    const u64,
     const GpuPhysicalQueueId& executionQueue,
     QueueSubmissionNativeSignal& outSignal
 ){
@@ -253,6 +254,7 @@ struct BufferDescriptionDriftHookContext{
 
 [[nodiscard]] static bool DriftBufferDescriptionDuringSubmissionHook(
     void* const rawContext,
+    const u64,
     const GpuPhysicalQueueId& executionQueue,
     QueueSubmissionNativeSignal& outSignal
 ){

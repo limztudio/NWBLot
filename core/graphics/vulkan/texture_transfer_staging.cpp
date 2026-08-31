@@ -159,7 +159,7 @@ void CommandList::copyTexture(
         return;
 
     registerHostReadbackStagingTexture(*dest);
-    vkCmdCopyImageToBuffer(
+    m_context.deviceDispatch.vkCmdCopyImageToBuffer(
         m_currentCmdBuf->m_cmdBuf,
         src->m_image,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -236,7 +236,7 @@ void CommandList::copyTexture(
     if(m_commandRecordingFailed)
         return;
 
-    vkCmdCopyBufferToImage(
+    m_context.deviceDispatch.vkCmdCopyBufferToImage(
         m_currentCmdBuf->m_cmdBuf,
         src->m_buffer,
         dest->m_image,

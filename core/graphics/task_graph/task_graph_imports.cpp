@@ -48,7 +48,9 @@ namespace __hidden_gpu_task_graph_imports{
         && resource.initialOwnerMinimumCompletionToken.physicalQueueIndex == desc.initialOwnerMinimumCompletionToken.physicalQueueIndex
         && resource.initialOwnerMinimumCompletionToken.deviceGeneration == desc.initialOwnerMinimumCompletionToken.deviceGeneration
         && initialOwnerStateSourceIdentity == desc.initialOwnerStateSource
-        && resource.queueSharing == desc.queueSharing;
+        && resource.queueSharing == desc.queueSharing
+        && resource.initialAvailabilityCompletion == desc.initialAvailabilityCompletion
+    ;
 }
 
 [[nodiscard]] static bool CompatibleRetainedExternalFinalState(

@@ -55,12 +55,12 @@ struct DescriptorBufferStartupPrerequisites{
     return {
         .descriptorBufferExtensionEnabled = context.extensions.EXT_descriptor_buffer,
         .bufferDeviceAddressFeatureEnabled = context.extensions.buffer_device_address,
-        .getBufferDeviceAddressAvailable = vkGetBufferDeviceAddress != nullptr,
-        .getDescriptorAvailable = vkGetDescriptorEXT != nullptr,
-        .getDescriptorSetLayoutSizeAvailable = vkGetDescriptorSetLayoutSizeEXT != nullptr,
-        .getDescriptorSetLayoutBindingOffsetAvailable = vkGetDescriptorSetLayoutBindingOffsetEXT != nullptr,
-        .cmdBindDescriptorBuffersAvailable = vkCmdBindDescriptorBuffersEXT != nullptr,
-        .cmdSetDescriptorBufferOffsetsAvailable = vkCmdSetDescriptorBufferOffsetsEXT != nullptr,
+        .getBufferDeviceAddressAvailable = context.deviceDispatch.vkGetBufferDeviceAddress != nullptr,
+        .getDescriptorAvailable = context.deviceDispatch.vkGetDescriptorEXT != nullptr,
+        .getDescriptorSetLayoutSizeAvailable = context.deviceDispatch.vkGetDescriptorSetLayoutSizeEXT != nullptr,
+        .getDescriptorSetLayoutBindingOffsetAvailable = context.deviceDispatch.vkGetDescriptorSetLayoutBindingOffsetEXT != nullptr,
+        .cmdBindDescriptorBuffersAvailable = context.deviceDispatch.vkCmdBindDescriptorBuffersEXT != nullptr,
+        .cmdSetDescriptorBufferOffsetsAvailable = context.deviceDispatch.vkCmdSetDescriptorBufferOffsetsEXT != nullptr,
     };
 }
 

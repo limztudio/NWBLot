@@ -9,6 +9,7 @@
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
 #include "native_buffer_provenance.h"
+#include "native_queue_state.h"
 #include "native_texture_provenance.h"
 
 #include <core/common/log.h>
@@ -356,7 +357,7 @@ bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOff
 u32 GetPushConstantByteSize(const BindingLayoutDesc& desc);
 bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, const tchar* operationName);
 bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, const tchar* operationName);
-void DestroyPipelineAndOwnedLayout(VkDevice device, const VkAllocationCallbacks* allocationCallbacks, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
+void DestroyPipelineAndOwnedLayout(const VulkanContext& context, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
 [[nodiscard]] bool ConvertAccelStructBuildFlags(
     RayTracingAccelStructBuildFlags::Mask buildFlags,
     VkBuildAccelerationStructureFlagsKHR& outBuildFlags,
@@ -585,6 +586,7 @@ inline void CopyHostMemory(
 
 
 class Device;
+class VulkanTestDispatchAccess;
 class Queue;
 class TrackedCommandBuffer;
 class StateTracker;
@@ -605,6 +607,9 @@ struct VulkanContext{
     VkInstance instance = VK_NULL_HANDLE;
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device = VK_NULL_HANDLE;
+    PFN_vkGetInstanceProcAddr getInstanceProcAddr = nullptr;
+    VolkInstanceTable instanceDispatch = {};
+    VolkDeviceTable deviceDispatch = {};
     u16 deviceGeneration = 0u;
     VkAllocationCallbacks* allocationCallbacks = nullptr;
     VkPipelineCache pipelineCache = VK_NULL_HANDLE;
@@ -630,6 +635,7 @@ struct VulkanContext{
     // True only after an enabled calibrated-timestamp extension exposes the DEVICE domain and its dispatch pair
     // completes a device-domain probe. It is immutable after Device construction.
     bool comparableGpuTimestamps = false;
+    bool hostQueryResetFeatureEnabled = false;
     bool textureCompressionBcFeatureEnabled = false;
     bool textureCompressionAstcLdrFeatureEnabled = false;
     bool textureCompressionAstcHdrFeatureEnabled = false;
@@ -700,11 +706,17 @@ struct VulkanContext{
         VkInstance inst,
         VkPhysicalDevice physDev,
         VkDevice dev,
+        PFN_vkGetInstanceProcAddr getInstanceProcAddress,
+        const VolkInstanceTable& instanceDispatchTable,
+        const VolkDeviceTable& deviceDispatchTable,
         VkAllocationCallbacks* allocCb,
         u16 generation = 0u)
         : instance(inst)
         , physicalDevice(physDev)
         , device(dev)
+        , getInstanceProcAddr(getInstanceProcAddress)
+        , instanceDispatch(instanceDispatchTable)
+        , deviceDispatch(deviceDispatchTable)
         , deviceGeneration(generation)
         , allocationCallbacks(allocCb)
         , objectArena(allocatorRef.getObjectArena())
@@ -827,6 +839,11 @@ namespace TrackedCommandBufferArenaState{
     };
 };
 
+struct QueueSubmissionWait{
+    VkSemaphore semaphore = VK_NULL_HANDLE;
+    u64 value = 0u;
+};
+
 class TrackedCommandBuffer final : public RefCounter<GraphicsResource>, NoCopy{
     friend class CommandList;
     friend class DescriptorBufferManager;
@@ -848,7 +865,35 @@ public:
 
 
 private:
+    struct TimerQueryRecordingClaim{
+        TimerQuery* query = nullptr;
+        GpuPhysicalQueueId queue;
+        QueueSubmissionToken resetAuthorizationSubmission;
+        QueueSubmissionToken prerequisiteSubmission;
+        u64 queryIncarnation = 0u;
+        u64 generation = 0u;
+        u64 resetRecordingAuthorizationGeneration = 0u;
+        u64 consumedResetAuthorizationGeneration = 0u;
+        u64 recordingID = 0u;
+        bool prerequisiteObservedComplete = false;
+        bool recordsReset = false;
+        bool recordsBegin = false;
+        bool recordsEnd = false;
+        bool consumesResetAuthorization = false;
+    };
+
     void retainResource(GraphicsResource& resource);
+    [[nodiscard]] TimerQueryRecordingClaim& findOrAppendTimerQueryRecordingClaim(TimerQuery& query);
+    [[nodiscard]] bool recordsTimerQueryBegin(const TimerQuery& query, u64 generation)const noexcept;
+    [[nodiscard]] bool validateTimerQueryRecordingClaims(
+        const Queue& submissionQueue,
+        const QueueSubmissionWait* localWaits,
+        usize localWaitCount,
+        TrackedCommandBuffer* const* precedingCommandBuffers,
+        usize precedingCommandBufferCount
+    )const noexcept;
+    void commitTimerQueryRecordingClaims(const QueueSubmissionToken& submissionToken)noexcept;
+    void discardTimerQueryRecordingClaims()noexcept;
     void retainBuffer(Buffer& buffer);
     void trackRetainedBuffer(Buffer& buffer);
     void appendRetainedBufferStateCommit(Buffer& buffer);
@@ -898,6 +943,7 @@ private:
     Vector<PendingAccelStructBuildCommit, Alloc::GlobalArena> m_pendingAccelStructBuildCommits;
     Vector<AccelStructGeometryBuildSignature, Alloc::GlobalArena> m_pendingAccelStructBuildSignatures;
     Vector<PendingOpacityMicromapBuildCommit, Alloc::GlobalArena> m_pendingOpacityMicromapBuildCommits;
+    Vector<TimerQueryRecordingClaim, Alloc::GlobalArena> m_timerQueryRecordingClaims;
     DescriptorBufferManager* m_descriptorBufferManager = nullptr;
     u64 m_descriptorBufferGeneration = 0u;
 
@@ -926,7 +972,7 @@ class Queue final : NoCopy{
 
 
 public:
-    Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueueInfo& info, VkQueue queue);
+    Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueueInfo& info, NativeQueueState& nativeQueue);
     ~Queue();
 
 
@@ -944,10 +990,7 @@ public:
     void addWaitSemaphore(VkSemaphore semaphore, u64 value);
     void addSignalSemaphore(VkSemaphore semaphore, u64 value);
 
-    struct SubmissionWait{
-        VkSemaphore semaphore = VK_NULL_HANDLE;
-        u64 value = 0u;
-    };
+    using SubmissionWait = QueueSubmissionWait;
     struct SubmissionSignal{
         VkSemaphore semaphore = VK_NULL_HANDLE;
         u64 value = 0u;
@@ -1026,6 +1069,12 @@ private:
     void destroyWorkerCommandArenas();
     void clearPendingSemaphores();
     void recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf);
+    [[nodiscard]] bool coversTimerQueryPrerequisite(
+        const QueueSubmissionToken& prerequisite,
+        bool prerequisiteObservedComplete,
+        const SubmissionWait* localWaits,
+        usize localWaitCount
+    )const noexcept;
 
 
 private:
@@ -1034,11 +1083,12 @@ private:
     const VulkanContext& m_context;
     Device& m_device;
 
-    VkQueue m_queue;
+    NativeQueueState& m_nativeQueue;
     CommandQueue::Enum m_queueID;
     GpuPhysicalQueueId m_physicalQueue;
     u32 m_queueFamilyIndex;
 
+    // Protects scheduler semantics. Always acquire before m_nativeQueue.hostMutex when both are required.
     Futex m_mutex;
     Futex m_workerCommandArenasMutex;
     Vector<VkSemaphore, Alloc::GlobalArena> m_waitSemaphores;
@@ -1508,6 +1558,7 @@ public:
 
 
 private:
+    [[nodiscard]] bool canRevokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
     [[nodiscard]] bool revokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
     void releaseRevokedNativeImageIdentity(VkImage expectedNativeImage)noexcept;
     [[nodiscard]] bool isRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel);
@@ -1798,8 +1849,7 @@ namespace VulkanDetail{
 
 inline void DestroyPipelineResource(const VulkanContext& context, PipelineBindingState& state, VkPipeline& pipeline){
     DestroyPipelineAndOwnedLayout(
-        context.device,
-        context.allocationCallbacks,
+        context,
         pipeline,
         state.m_pipelineLayout,
         state.m_ownsPipelineLayout
@@ -1869,6 +1919,7 @@ struct DescriptorBufferSegment{
 };
 
 class DescriptorBufferManager final : NoCopy{
+    friend class Device;
     friend class CommandList;
     friend class GpuDescriptorHeap;
     friend class Queue;
@@ -1928,12 +1979,13 @@ public:
 
 
 private:
-    void shutdownForLifecycleOperation();
+    [[nodiscard]] bool shutdownForLifecycleOperation(bool deviceIdleOrLostAlreadyProven = false);
+    [[nodiscard]] bool shutdownAfterDeviceIdleOrLoss();
 
 
 public:
     bool initialize();
-    void shutdown();
+    [[nodiscard]] bool shutdown();
 
     [[nodiscard]] bool isEnabled()const;
 
@@ -2897,11 +2949,11 @@ public:
     void executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& desc);
     void convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs);
 
-    void resetTimerQuery(TimerQuery* query);
+    [[nodiscard]] bool resetTimerQuery(TimerQuery* query);
     [[nodiscard]] bool canRecordTimerQueryHere()const;
     [[nodiscard]] bool canResetTimerQueryHere()const;
-    [[nodiscard]] bool beginTimerQuery(TimerQuery* query);
-    [[nodiscard]] bool endTimerQuery(TimerQuery* query);
+    [[nodiscard]] bool beginTimerQuery(TimerQuery* query, TimerQueryRecordingToken& outToken);
+    [[nodiscard]] bool endTimerQuery(TimerQuery* query, const TimerQueryRecordingToken& token);
     void beginMarker(const AStringView name);
     void endMarker();
 
@@ -3159,6 +3211,7 @@ public:
 
 
 private:
+    Futex m_mutex;
     VkFence m_fence = VK_NULL_HANDLE;
     bool m_started = false;
 
@@ -3173,17 +3226,53 @@ private:
 class TimerQuery final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Device;
     friend class CommandList;
-
-
-public:
-    TimerQuery(const VulkanContext& context);
-    ~TimerQuery();
+    friend class TrackedCommandBuffer;
 
 
 private:
+    struct RecordingOwner{
+        TrackedCommandBuffer* commandBuffer = nullptr;
+        u64 recordingID = 0u;
+    };
+
+
+public:
+    TimerQuery(const VulkanContext& context, u64 incarnation);
+    ~TimerQuery();
+
+    // The caller owns this unaccepted recording transaction; its command buffers cannot submit concurrently.
+    [[nodiscard]] bool discardUnacceptedRecording(const TimerQueryRecordingToken& token)noexcept;
+
+
+private:
+    Futex m_mutex;
     VkQueryPool m_queryPool = VK_NULL_HANDLE;
     GpuPhysicalQueueId m_timestampQueue;
     u32 m_timestampValidBits = 0u;
+    GpuPhysicalQueueId m_cycleBaselineQueue;
+    GpuPhysicalQueueId m_cycleQueue;
+    RecordingOwner m_resetRecordingOwner;
+    RecordingOwner m_beginRecordingOwner;
+    RecordingOwner m_endRecordingOwner;
+    u32 m_cycleBaselineValidBits = 0u;
+    u32 m_cycleValidBits = 0u;
+    u64 m_incarnation = 0u;
+    u64 m_nextRecordingGeneration = 0u;
+    u64 m_nextResetAuthorizationGeneration = 0u;
+    u64 m_lastAcceptedRecordingGeneration = 0u;
+    u64 m_resetRecordingAuthorizationGeneration = 0u;
+    u64 m_cycleGeneration = 0u;
+    u64 m_cycleBaselineCompletionGeneration = 0u;
+    u64 m_completedCycleGeneration = 0u;
+    u64 m_resetAuthorizationGeneration = 0u;
+    QueueSubmissionToken m_cycleBaselineCompletion;
+    QueueSubmissionToken m_completedCycleSubmission;
+    QueueSubmissionToken m_resetAuthorizationSubmission;
+    bool m_cycleBaselineActive = false;
+    bool m_beginAccepted = false;
+    bool m_cycleInvalidated = false;
+    bool m_resetAuthorizationAvailable = false;
+    bool m_recordingActive = false;
 
     const VulkanContext& m_context;
 };
@@ -3195,6 +3284,8 @@ private:
 
 class Device final : public RefCounter<GraphicsResource>, NoCopy{
     friend DeviceHandle CreateDevice(const DeviceDesc& desc);
+    friend class VulkanTestDispatchAccess;
+    friend class BackendContext;
     friend class Buffer;
     friend class CommandList;
     friend class Queue;
@@ -3204,6 +3295,50 @@ class Device final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 private:
+    class SubmissionOperationLease final : NoCopy{
+    private:
+        [[nodiscard]] static const SubmissionOperationLease*& activeLease()noexcept{
+            static thread_local const SubmissionOperationLease* value = nullptr;
+            return value;
+        }
+
+
+    public:
+        [[nodiscard]] static bool activeFor(const Device& device)noexcept{
+            for(const SubmissionOperationLease* lease = activeLease(); lease; lease = lease->m_previousActiveLease){
+                if(lease->m_device == &device)
+                    return true;
+            }
+            return false;
+        }
+
+
+    public:
+        explicit SubmissionOperationLease(Device& device)noexcept{
+            if(!device.beginSubmissionOperation())
+                return;
+            m_device = &device;
+            m_previousActiveLease = activeLease();
+            activeLease() = this;
+        }
+        ~SubmissionOperationLease(){
+            if(!m_device)
+                return;
+            NWB_ASSERT(activeLease() == this);
+            activeLease() = m_previousActiveLease;
+            m_device->endSubmissionOperation();
+        }
+
+
+    public:
+        [[nodiscard]] bool valid()const noexcept{ return m_device != nullptr; }
+
+
+    private:
+        Device* m_device = nullptr;
+        const SubmissionOperationLease* m_previousActiveLease = nullptr;
+    };
+
     // AMD breadcrumb ring provides best-effort per-queue observations; physical queues may execute out of sequence.
     struct AmdBreadcrumbSlotRecord{
         u64 serial = 0u;
@@ -3286,9 +3421,9 @@ public:
     [[nodiscard]] SamplerHandle createSampler(const SamplerDesc& d);
     [[nodiscard]] InputLayoutHandle createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, Shader*);
     [[nodiscard]] EventQueryHandle createEventQuery();
-    void setEventQuery(EventQuery* query, CommandQueue::Enum queue);
-    bool pollEventQuery(EventQuery* query);
-    void waitEventQuery(EventQuery* query);
+    [[nodiscard]] bool setEventQuery(EventQuery* query, CommandQueue::Enum queue);
+    [[nodiscard]] bool pollEventQuery(EventQuery* query);
+    [[nodiscard]] bool waitEventQuery(EventQuery* query);
     [[nodiscard]] TimerQueryHandle createTimerQuery();
     bool pollTimerQuery(TimerQuery* query);
     [[nodiscard]] bool getTimerQueryResult(TimerQuery* query, TimerQueryResult& outResult);
@@ -3365,8 +3500,15 @@ public:
     // Validates an accepted token as a current submission wait without changing queue state. The producer timeline
     // is sampled under its queue mutex so a failed submit cannot expose its tentative value as available work.
     [[nodiscard]] bool validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept;
-    // Device loss requires full device recreation.
+    // Blocks until one exact accepted queue timeline value completes. This is used to prove that a bridged WSI
+    // binary semaphore wait has consumed its signal before the acquire slot is reset and reused.
+    [[nodiscard]] bool waitForSubmissionToken(const QueueSubmissionToken& token)noexcept;
+    // Native device loss permits loss-aware teardown. Logical quarantine still requires an idle join before freeing.
     [[nodiscard]] bool isDeviceLost()const noexcept{ return m_deviceLost.load(MemoryOrder::acquire); }
+    [[nodiscard]] bool requiresRecreation()const noexcept{
+        return isDeviceLost() || m_deviceQuarantined.load(MemoryOrder::acquire);
+    }
+    void quarantineDevice()noexcept{ m_deviceQuarantined.store(true, MemoryOrder::release); }
     // Reports core Graphics+Compute timestamp-stage support only; it does not imply that distinct submissions share
     // a comparable timestamp epoch. Use supportsComparableGpuTimestamps() for absolute ranges.
     [[nodiscard]] bool supportsGraphicsAndComputeTimestamps()const{
@@ -3383,6 +3525,8 @@ public:
     [[nodiscard]] FormatSupport::Mask queryFormatSupport(Format::Enum format);
     [[nodiscard]] CooperativeVectorDeviceFeatures queryCoopVecFeatures();
     usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns);
+    // Borrowed interoperability identity only. External queue operations remain the caller's responsibility and
+    // must not overlap engine submission, presentation, idle, or teardown.
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue);
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue);
     bool isGpuCrashDiagnosticsEnabled(){ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.NV_device_diagnostic_checkpoints; }
@@ -3390,7 +3534,7 @@ public:
     // NV and AMD marker paths share one command-list tracker.
     bool isAnyGpuMarkerEnabled(){ return isGpuCrashDiagnosticsEnabled() || isAmdBreadcrumbEnabled(); }
     [[nodiscard]] GpuCrashTracker& getGpuCrashTracker(){ return m_gpuCrashTracker; }
-    void captureGpuCrash(AStringView context)noexcept;
+    void captureDeviceLoss(AStringView context)noexcept;
 
     [[nodiscard]] AmdBreadcrumbWrite reserveAmdBreadcrumb(
         const GpuPhysicalQueueId& queue,
@@ -3411,9 +3555,28 @@ public:
 
 
 private:
+    [[nodiscard]] bool beginSubmissionOperation()noexcept;
+    void endSubmissionOperation()noexcept;
+    [[nodiscard]] bool submissionOperationActiveOnCurrentThread()const noexcept{
+        return SubmissionOperationLease::activeFor(*this);
+    }
+    [[nodiscard]] bool beginLifecycleDrain()noexcept;
+    void endLifecycleDrain()noexcept;
+    // Records the prepare phase's idle-or-loss proof. Once sealed, the submission gate remains closed and the
+    // destructor must not issue another fallible Vulkan wait during the commit phase.
+    [[nodiscard]] bool sealLifecycleDrainForDestruction()noexcept;
+    [[nodiscard]] bool submissionsBlocked()const noexcept{
+        return requiresRecreation() || m_submissionSuspended.load(MemoryOrder::acquire);
+    }
+    [[nodiscard]] QueueSubmissionToken consumeAcquiredImageSemaphore(VkSemaphore semaphore);
+    [[nodiscard]] bool presentNativeQueue(
+        u32 nativeQueueIndex,
+        const VkPresentInfoKHR& presentInfo,
+        VkResult& outResult
+    );
     [[nodiscard]] bool registerPhysicalQueue(
         const VulkanPhysicalQueueDesc& desc,
-        const VulkanNativeQueueDesc& nativeQueue
+        NativeQueueState& nativeQueue
     );
     void configureLegacyQueueContext();
     // Probed once at device initialization so compressed texture selection does not rely on
@@ -3491,7 +3654,7 @@ private:
         PipelineT* pipeline,
         const VkComputePipelineCreateInfo& pipelineInfo
     )const{
-        const VkResult res = vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline->m_pipeline);
+        const VkResult res = m_context.deviceDispatch.vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline->m_pipeline);
         if(res == VK_SUCCESS)
             return true;
 
@@ -3505,7 +3668,7 @@ private:
         PipelineT* pipeline,
         const VkGraphicsPipelineCreateInfo& pipelineInfo
     )const{
-        const VkResult res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline->m_pipeline);
+        const VkResult res = m_context.deviceDispatch.vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline->m_pipeline);
         if(res == VK_SUCCESS)
             return true;
 
@@ -3526,9 +3689,16 @@ private:
     bool m_gpuCrashDiagnosticsEnabled = false;
     bool m_queueRegistryReady = false;
     u16 m_deviceGeneration = 0u;
-    // Distinguishes submit rejection from device loss.
+    // Actual Vulkan loss and logical quarantine remain distinct so only proven loss may bypass an idle teardown join.
     Atomic<bool> m_deviceLost = false;
+    Atomic<bool> m_deviceQuarantined = false;
+    Atomic<bool> m_submissionSuspended = false;
+    Atomic<bool> m_lifecycleDestructionPrepared = false;
     Atomic<bool> m_gpuCrashCaptured = false;
+    Atomic<u64> m_nextTimerQueryIncarnation = 0u;
+    Futex m_submissionOperationMutex;
+    ConditionVariableAny m_submissionOperationCondition;
+    u32 m_activeSubmissionOperationCount = 0u;
     GpuCrashTracker m_gpuCrashTracker;
     // Pre-reserved crash-capture arena.
     Alloc::PersistentArena m_gpuCrashReportArena;
@@ -3542,6 +3712,7 @@ private:
     GpuDescriptorHeap m_gpuDescriptorHeap;
     Path m_pipelineCacheDirectory;
     GraphicsString m_pipelineCacheVolumeName;
+    GraphicsVector<NativeQueueState*> m_nativeQueueStates;
     GraphicsVector<Queue*> m_physicalQueues;
     GraphicsVector<GpuPhysicalQueueInfo> m_physicalQueueInfos;
     Array<Queue*, static_cast<u32>(CommandQueue::kCount)> m_primaryQueues = {};

@@ -16,6 +16,24 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_gpu_timing_submission{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr Name s_SubmissionScratchArena("graphics.gpu_timing.submission_scratch");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 GpuTimingSubmissionTicket::RecordingScope::RecordingScope(GpuTimingSubmissionTicket& ticket)
     : m_ticket(ticket)
     , m_activated(m_ticket.activateOnCurrentThread(m_previousTicket))
@@ -29,6 +47,7 @@ GpuTimingSubmissionTicket::RecordingScope::~RecordingScope(){
 GpuTimingSubmissionTicket::GpuTimingSubmissionTicket(GpuTimingRecorder& recorder)
     : m_recorder(recorder)
     , m_scopes(recorder.m_arena)
+    , m_submissionPrerequisites(recorder.m_arena)
 {}
 
 GpuTimingSubmissionTicket::~GpuTimingSubmissionTicket(){
@@ -41,14 +60,19 @@ bool GpuTimingSubmissionTicket::submit(
     const usize commandListCount,
     const CommandQueue::Enum executionQueue
 ){
-    if(!prepareSubmission(commandLists, commandListCount))
+    Alloc::ScratchArena scratchArena(__hidden_gpu_timing_submission::s_SubmissionScratchArena);
+    Vector<QueueSubmissionToken, Alloc::ScratchArena> waitTokens(scratchArena);
+    if(!prepareSubmission(commandLists, commandListCount, waitTokens))
         return false;
 
+    QueueSubmissionDesc submitDesc;
+    if(!waitTokens.empty())
+        submitDesc.setWaitTokens(waitTokens.data(), waitTokens.size());
     const QueueSubmissionToken token = device.executeCommandLists(
         commandLists,
         commandListCount,
         executionQueue,
-        QueueSubmissionDesc{}
+        submitDesc
     );
     resolveSubmission(token);
     return token.valid();
@@ -61,14 +85,26 @@ QueueSubmissionToken GpuTimingSubmissionTicket::submit(
     const CommandQueue::Enum executionQueue,
     const QueueSubmissionDesc& submitDesc
 ){
-    if(!prepareSubmission(commandLists, commandListCount))
+    Alloc::ScratchArena scratchArena(__hidden_gpu_timing_submission::s_SubmissionScratchArena);
+    Vector<QueueSubmissionToken, Alloc::ScratchArena> waitTokens(scratchArena);
+    if(!prepareSubmission(commandLists, commandListCount, waitTokens))
         return {};
+    if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
+        discardPreparedSubmission();
+        return {};
+    }
+    waitTokens.reserve(waitTokens.size() + submitDesc.waitTokenCount);
+    for(usize waitTokenIndex = 0u; waitTokenIndex < submitDesc.waitTokenCount; ++waitTokenIndex)
+        waitTokens.push_back(submitDesc.waitTokens[waitTokenIndex]);
 
+    QueueSubmissionDesc mergedSubmitDesc = submitDesc;
+    if(!waitTokens.empty())
+        mergedSubmitDesc.setWaitTokens(waitTokens.data(), waitTokens.size());
     const QueueSubmissionToken token = device.executeCommandLists(
         commandLists,
         commandListCount,
         executionQueue,
-        submitDesc
+        mergedSubmitDesc
     );
     resolveSubmission(token);
     return token;
@@ -81,29 +117,50 @@ QueueSubmissionToken GpuTimingSubmissionTicket::submit(
     const GpuPhysicalQueueId& executionQueue,
     const QueueSubmissionDesc& submitDesc
 ){
-    if(!prepareSubmission(commandLists, commandListCount))
+    Alloc::ScratchArena scratchArena(__hidden_gpu_timing_submission::s_SubmissionScratchArena);
+    Vector<QueueSubmissionToken, Alloc::ScratchArena> waitTokens(scratchArena);
+    if(!prepareSubmission(commandLists, commandListCount, waitTokens))
         return {};
+    if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
+        discardPreparedSubmission();
+        return {};
+    }
+    waitTokens.reserve(waitTokens.size() + submitDesc.waitTokenCount);
+    for(usize waitTokenIndex = 0u; waitTokenIndex < submitDesc.waitTokenCount; ++waitTokenIndex)
+        waitTokens.push_back(submitDesc.waitTokens[waitTokenIndex]);
 
+    QueueSubmissionDesc mergedSubmitDesc = submitDesc;
+    if(!waitTokens.empty())
+        mergedSubmitDesc.setWaitTokens(waitTokens.data(), waitTokens.size());
     const QueueSubmissionToken token = device.executeCommandLists(
         commandLists,
         commandListCount,
         executionQueue,
-        submitDesc
+        mergedSubmitDesc
     );
     resolveSubmission(token);
     return token;
 }
 
-bool GpuTimingSubmissionTicket::prepareSubmission(CommandList* const* commandLists, const usize commandListCount){
+bool GpuTimingSubmissionTicket::prepareSubmission(
+    CommandList* const* commandLists,
+    const usize commandListCount,
+    Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens
+){
+    const usize initialWaitTokenCount = waitTokens.size();
     {
         ScopedLock lock(m_mutex);
         NWB_ASSERT_MSG(m_recordingScopeCount == 0u, NWB_TEXT("GPU timing submission ticket submitted while command recording is still active"));
         if(m_resolved || m_submissionPrepared || m_recordingScopeCount != 0u)
             return false;
         m_submissionPrepared = true;
+        waitTokens.reserve(waitTokens.size() + m_submissionPrerequisites.size());
+        for(const QueueSubmissionToken& token : m_submissionPrerequisites)
+            waitTokens.push_back(token);
     }
 
     if(!commandLists || commandListCount == 0u){
+        waitTokens.resize(initialWaitTokenCount);
         discardPreparedSubmission();
         return false;
     }
@@ -112,6 +169,7 @@ bool GpuTimingSubmissionTicket::prepareSubmission(CommandList* const* commandLis
     // allowing a producer from a split timing scope to execute without the consumer that contains its end timestamp.
     for(usize i = 0u; i < commandListCount; ++i){
         if(!commandLists[i] || !commandLists[i]->hasCommandBuffer()){
+            waitTokens.resize(initialWaitTokenCount);
             discardPreparedSubmission();
             return false;
         }
@@ -178,6 +236,32 @@ void GpuTimingSubmissionTicket::trackScope(const GpuTimingScope& scope){
     }
 
     m_scopes.push_back(scope);
+}
+
+bool GpuTimingSubmissionTicket::trackSubmissionPrerequisite(const QueueSubmissionToken& token){
+    if(!token.valid() || !token.hasPhysicalQueueIdentity())
+        return false;
+
+    ScopedLock lock(m_mutex);
+    NWB_ASSERT_MSG(!m_resolved && !m_submissionPrepared, NWB_TEXT("GPU timing submission prerequisite added after recording closed"));
+    if(m_resolved || m_submissionPrepared)
+        return false;
+
+    for(QueueSubmissionToken& prerequisite : m_submissionPrerequisites){
+        if(
+            prerequisite.physicalQueueIndex != token.physicalQueueIndex
+            || prerequisite.deviceGeneration != token.deviceGeneration
+        )
+            continue;
+        if(prerequisite.queue != token.queue)
+            return false;
+
+        prerequisite.value = Max(prerequisite.value, token.value);
+        return true;
+    }
+
+    m_submissionPrerequisites.push_back(token);
+    return true;
 }
 
 bool GpuTimingSubmissionTicket::activateOnCurrentThread(GpuTimingSubmissionTicket*& outPreviousTicket){
@@ -387,7 +471,11 @@ bool GpuTimingFrameTransaction::prepareForRecovery(){
 
 void GpuTimingFrameTransaction::discard(){
     if(m_scope.valid()){
-        if(m_beginSubmission.valid())
+        if(m_beginSubmission.valid() && m_state == State::BeginAccepted){
+            if(!m_recorder.retireScope(m_scope, m_beginSubmission))
+                m_recorder.quarantineScope(m_scope);
+        }
+        else if(m_beginSubmission.valid())
             m_recorder.quarantineScope(m_scope);
         else
             m_recorder.discardScope(m_scope);

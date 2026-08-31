@@ -148,7 +148,7 @@ void CommandList::setComputeState(const ComputeState& state){
     retainResource(state.indirectParams);
 
     auto* pipeline = state.pipeline;
-    vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipeline);
+    m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipeline);
     retainResource(pipeline);
 }
 
@@ -168,7 +168,7 @@ void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
         return;
     }
 
-    vkCmdDispatch(m_currentCmdBuf->m_cmdBuf, groupsX, groupsY, groupsZ);
+    m_context.deviceDispatch.vkCmdDispatch(m_currentCmdBuf->m_cmdBuf, groupsX, groupsY, groupsZ);
 }
 
 void CommandList::dispatchIndirect(u32 offsetBytes){
@@ -197,7 +197,7 @@ void CommandList::dispatchIndirect(u32 offsetBytes){
         return;
     }
 
-    vkCmdDispatchIndirect(m_currentCmdBuf->m_cmdBuf, buffer->m_buffer, offsetBytes);
+    m_context.deviceDispatch.vkCmdDispatchIndirect(m_currentCmdBuf->m_cmdBuf, buffer->m_buffer, offsetBytes);
     retainResource(buffer);
 }
 

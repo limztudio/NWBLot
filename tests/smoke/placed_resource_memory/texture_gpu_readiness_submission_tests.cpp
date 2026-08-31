@@ -58,6 +58,7 @@ struct TextureDescriptionDriftHookContext{
 
 [[nodiscard]] static bool RejectObservedSubmissionHook(
     void* const rawContext,
+    const u64,
     const GpuPhysicalQueueId& executionQueue,
     QueueSubmissionNativeSignal& outSignal
 ){
@@ -72,6 +73,7 @@ struct TextureDescriptionDriftHookContext{
 
 [[nodiscard]] static bool ReleaseTextureOwnerDuringSubmissionHook(
     void* const rawContext,
+    const u64,
     const GpuPhysicalQueueId& executionQueue,
     QueueSubmissionNativeSignal& outSignal
 ){
@@ -94,6 +96,7 @@ struct TextureDescriptionDriftHookContext{
 
 [[nodiscard]] static bool DriftTextureDescriptionDuringSubmissionHook(
     void* const rawContext,
+    const u64,
     const GpuPhysicalQueueId& executionQueue,
     QueueSubmissionNativeSignal& outSignal
 ){

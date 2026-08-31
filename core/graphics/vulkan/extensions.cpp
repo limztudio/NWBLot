@@ -97,7 +97,7 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
         return;
     }
 
-    vkCmdPushConstants(m_currentCmdBuf->m_cmdBuf, layout, VK_SHADER_STAGE_ALL, 0, pushConstantByteSize, data);
+    m_context.deviceDispatch.vkCmdPushConstants(m_currentCmdBuf->m_cmdBuf, layout, VK_SHADER_STAGE_ALL, 0, pushConstantByteSize, data);
 }
 
 
@@ -112,8 +112,8 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     if(
         !m_context.extensions.NV_cluster_acceleration_structure
         || !m_context.clusterAccelerationStructureFeatureEnabled
-        || !vkGetClusterAccelerationStructureBuildSizesNV
-        || !vkCmdBuildClusterAccelerationStructureIndirectNV
+        || !m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV
+        || !m_context.deviceDispatch.vkCmdBuildClusterAccelerationStructureIndirectNV
     ){
         rejectCommandRecording(s_OperationName, NWB_TEXT("cluster acceleration structure feature or entry points are unavailable"));
         return;
@@ -247,7 +247,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         }
 
         VkFormatProperties formatProperties{};
-        vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, clusterInput.vertexFormat, &formatProperties);
+        m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, clusterInput.vertexFormat, &formatProperties);
         if((formatProperties.bufferFeatures & VK_FORMAT_FEATURE_ACCELERATION_STRUCTURE_VERTEX_BUFFER_BIT_KHR) == 0u){
             rejectCommandRecording(s_OperationName, NWB_TEXT("triangle-cluster vertex format lacks acceleration-structure support"));
             return;
@@ -471,7 +471,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     }
 
     auto buildSize = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
-    vkGetClusterAccelerationStructureBuildSizesNV(m_context.device, &inputInfo, &buildSize);
+    m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV(m_context.device, &inputInfo, &buildSize);
     if(opDesc.scratchSizeInBytes < buildSize.buildScratchSize){
         rejectCommandRecording(s_OperationName, NWB_TEXT("declared scratch size is smaller than the queried requirement"));
         return;
@@ -575,7 +575,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     if(m_commandRecordingFailed)
         return;
 
-    vkCmdBuildClusterAccelerationStructureIndirectNV(m_currentCmdBuf->m_cmdBuf, &commandsInfo);
+    m_context.deviceDispatch.vkCmdBuildClusterAccelerationStructureIndirectNV(m_currentCmdBuf->m_cmdBuf, &commandsInfo);
     retainResource(indirectArgsBuffer);
     if(indirectArgCountBuffer)
         retainResource(indirectArgCountBuffer);
@@ -602,9 +602,9 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     if(
         !m_context.extensions.NV_cooperative_vector
         || !m_context.coopVecFeatures.cooperativeVector
-        || !vkGetPhysicalDeviceCooperativeVectorPropertiesNV
-        || !vkConvertCooperativeVectorMatrixNV
-        || !vkCmdConvertCooperativeVectorMatrixNV
+        || !m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV
+        || !m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV
+        || !m_context.deviceDispatch.vkCmdConvertCooperativeVectorMatrixNV
     ){
         rejectCommandRecording(s_OperationName, NWB_TEXT("cooperative-vector feature or entry points are unavailable"));
         return;
@@ -624,7 +624,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CooperativeVectorConvertArena);
 
     u32 cooperativeVectorPropertyCount = 0u;
-    VkResult result = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(
+    VkResult result = m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(
         m_context.physicalDevice,
         &cooperativeVectorPropertyCount,
         nullptr
@@ -643,7 +643,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         property.pNext = nullptr;
     }
     if(cooperativeVectorPropertyCount != 0u){
-        result = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(
+        result = m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(
             m_context.physicalDevice,
             &cooperativeVectorPropertyCount,
             cooperativeVectorProperties.data()
@@ -779,7 +779,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         queryInfo.dstLayout = layout;
         queryInfo.dstStride = 0u;
 
-        if(vkConvertCooperativeVectorMatrixNV(m_context.device, &queryInfo) != VK_SUCCESS || queriedByteSize == 0u)
+        if(m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV(m_context.device, &queryInfo) != VK_SUCCESS || queriedByteSize == 0u)
             return false;
 
         outByteSize = queriedByteSize;
@@ -1058,7 +1058,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     if(m_commandRecordingFailed)
         return;
 
-    vkCmdConvertCooperativeVectorMatrixNV(m_currentCmdBuf->m_cmdBuf, static_cast<u32>(numDescs), vkConvertDescs.data());
+    m_context.deviceDispatch.vkCmdConvertCooperativeVectorMatrixNV(m_currentCmdBuf->m_cmdBuf, static_cast<u32>(numDescs), vkConvertDescs.data());
     for(usize i = 0; i < numDescs; ++i){
         retainResource(convertDescs[i].src.buffer);
         retainResource(convertDescs[i].dst.buffer);

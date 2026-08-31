@@ -62,14 +62,19 @@ static bool MountPipelineCacheVolume(
 }
 
 template<typename CacheDataVector>
-static bool RetrievePipelineCacheData(VkDevice device, VkPipelineCache pipelineCache, CacheDataVector& outData){
+static bool RetrievePipelineCacheData(
+    const VolkDeviceTable& deviceDispatch,
+    VkDevice device,
+    VkPipelineCache pipelineCache,
+    CacheDataVector& outData
+){
     static_assert(IsSame_V<typename CacheDataVector::value_type, u8>, "pipeline cache data must be byte-addressable");
 
     outData.clear();
 
     for(usize attempt = 0; attempt < s_PipelineCacheDataMaxAttempts; ++attempt){
         size_t cacheSize = 0;
-        VkResult res = vkGetPipelineCacheData(device, pipelineCache, &cacheSize, nullptr);
+        VkResult res = deviceDispatch.vkGetPipelineCacheData(device, pipelineCache, &cacheSize, nullptr);
         if(res != VK_SUCCESS){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query pipeline cache data size. {}"), ResultToString(res));
             return false;
@@ -86,7 +91,7 @@ static bool RetrievePipelineCacheData(VkDevice device, VkPipelineCache pipelineC
 
         outData.resize(static_cast<usize>(cacheSize));
         size_t retrievedSize = cacheSize;
-        res = vkGetPipelineCacheData(device, pipelineCache, &retrievedSize, outData.data());
+        res = deviceDispatch.vkGetPipelineCacheData(device, pipelineCache, &retrievedSize, outData.data());
         if(res == VK_SUCCESS){
             if(retrievedSize > cacheSize || retrievedSize > static_cast<size_t>(Limit<usize>::s_Max)){
                 outData.clear();
@@ -218,7 +223,7 @@ void Device::savePipelineCacheData(){
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_PipelineCacheSaveArena);
     Vector<u8, Alloc::ScratchArena> cacheData{scratchArena};
-    if(!__hidden_vulkan_device_pipeline_cache::RetrievePipelineCacheData(m_context.device, m_context.pipelineCache, cacheData))
+    if(!__hidden_vulkan_device_pipeline_cache::RetrievePipelineCacheData(m_context.deviceDispatch, m_context.device, m_context.pipelineCache, cacheData))
         return;
     if(cacheData.empty())
         return;

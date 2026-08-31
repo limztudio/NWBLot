@@ -167,7 +167,7 @@ OpacityMicromap::OpacityMicromap(const VulkanContext& context)
 {}
 OpacityMicromap::~OpacityMicromap(){
     if(m_micromap != VK_NULL_HANDLE){
-        vkDestroyMicromapEXT(m_context.device, m_micromap, m_context.allocationCallbacks);
+        m_context.deviceDispatch.vkDestroyMicromapEXT(m_context.device, m_micromap, m_context.allocationCallbacks);
         m_micromap = VK_NULL_HANDLE;
     }
     m_dataBuffer.reset();
@@ -194,7 +194,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     );
     auto physicalDeviceProperties = VulkanDetail::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
     physicalDeviceProperties.pNext = &opacityMicromapProperties;
-    vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &physicalDeviceProperties);
+    m_context.instanceDispatch.vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &physicalDeviceProperties);
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena);
     VulkanDetail::MicromapUsageVector usageCounts{ scratchArena };
@@ -215,7 +215,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     buildInfo.pUsageCounts = usageCounts.empty() ? nullptr : usageCounts.data();
 
     auto buildSize = VulkanDetail::MakeVkStruct<VkMicromapBuildSizesInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT);
-    vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
+    m_context.deviceDispatch.vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
 
     auto* om = NewArenaObject<OpacityMicromap>(m_context.objectArena, m_context);
     om->m_desc = desc;
@@ -254,7 +254,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     createInfo.buffer = buffer->m_buffer;
     createInfo.size = buildSize.micromapSize;
 
-    res = vkCreateMicromapEXT(m_context.device, &createInfo, m_context.allocationCallbacks, &om->m_micromap);
+    res = m_context.deviceDispatch.vkCreateMicromapEXT(m_context.device, &createInfo, m_context.allocationCallbacks, &om->m_micromap);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create opacity micromap: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, om);
@@ -389,7 +389,7 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
     buildInfo.triangleArrayStride = sizeof(VkMicromapTriangleEXT);
 
     auto buildSize = VulkanDetail::MakeVkStruct<VkMicromapBuildSizesInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT);
-    vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
+    m_context.deviceDispatch.vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
 
     if(!dataBuffer || dataBuffer->getCreationDescription().byteSize < buildSize.micromapSize){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: micromap storage is too small"));
@@ -434,7 +434,7 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
     if(m_commandRecordingFailed)
         return;
 
-    vkCmdBuildMicromapsEXT(m_currentCmdBuf->m_cmdBuf, 1u, &buildInfo);
+    m_context.deviceDispatch.vkCmdBuildMicromapsEXT(m_currentCmdBuf->m_cmdBuf, 1u, &buildInfo);
     m_currentCmdBuf->appendPendingOpacityMicromapBuildCommit(*omm);
 
     retainResource(omm);

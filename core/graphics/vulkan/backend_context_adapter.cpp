@@ -17,12 +17,12 @@ NWB_VULKAN_BEGIN
 
 bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
     uint32_t queueFamilyCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
+    m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_QueueFamilyQueryArena);
 
     Vector<VkQueueFamilyProperties, Alloc::ScratchArena> props(queueFamilyCount, scratchArena);
-    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, props.data());
+    m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, props.data());
 
     m_graphicsQueueFamily = s_InvalidQueueFamilyIndex;
     m_secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
@@ -72,7 +72,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
 #ifdef NWB_PLATFORM_WINDOWS
         if(requirePresentQueue && m_presentQueueFamily == s_InvalidQueueFamilyIndex){
             if(queueFamily.queueCount > 0){
-                VkBool32 supported = vkGetPhysicalDeviceWin32PresentationSupportKHR(physicalDevice, i);
+                VkBool32 supported = m_instanceDispatch.vkGetPhysicalDeviceWin32PresentationSupportKHR(physicalDevice, i);
                 if(supported)
                     m_presentQueueFamily = i;
             }
@@ -82,7 +82,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
         if(requirePresentQueue && m_presentQueueFamily == s_InvalidQueueFamilyIndex && m_windowSurface){
             if(queueFamily.queueCount > 0){
                 VkBool32 supported = VK_FALSE;
-                res = vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, m_windowSurface, &supported);
+                res = m_instanceDispatch.vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, m_windowSurface, &supported);
                 if(res == VK_SUCCESS && supported)
                     m_presentQueueFamily = i;
             }
@@ -161,7 +161,7 @@ bool BackendContext::pickPhysicalDevice(){
     VkResult res = VK_SUCCESS;
 
     uint32_t deviceCount = 0;
-    res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
+    res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate physical device count. {}"), ResultToString(res));
         return false;
@@ -170,7 +170,7 @@ bool BackendContext::pickPhysicalDevice(){
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_PhysicalDeviceSelectArena, s_DeviceSetupScratchArenaBytes);
 
     Vector<VkPhysicalDevice, Alloc::ScratchArena> devices(deviceCount, scratchArena);
-    res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
+    res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate physical devices. {}"), ResultToString(res));
         return false;
@@ -230,7 +230,7 @@ bool BackendContext::pickPhysicalDevice(){
     for(i32 deviceIndex = firstDevice; deviceIndex <= lastDevice; ++deviceIndex){
         VkPhysicalDevice dev = devices[deviceIndex];
         VkPhysicalDeviceProperties prop;
-        vkGetPhysicalDeviceProperties(dev, &prop);
+        m_instanceDispatch.vkGetPhysicalDeviceProperties(dev, &prop);
 
         errorStream << "\n" << prop.deviceName << ":";
         if(!m_deviceParams.headlessDevice && prop.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU){
@@ -246,13 +246,13 @@ bool BackendContext::pickPhysicalDevice(){
         for(const auto& [name, _] : m_enabledExtensions.device)
             requiredExtensions.insert(VulkanDetail::MakeScratchString(scratchArena, AStringView(name)));
         uint32_t extCount = 0;
-        res = vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, nullptr);
+        res = m_instanceDispatch.vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, nullptr);
         if(res != VK_SUCCESS){
             errorStream << "\n  - failed to enumerate device extension count";
             continue;
         }
         Vector<VkExtensionProperties, Alloc::ScratchArena> deviceExtensions(extCount, scratchArena);
-        res = vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, deviceExtensions.data());
+        res = m_instanceDispatch.vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, deviceExtensions.data());
         if(res != VK_SUCCESS){
             errorStream << "\n  - failed to enumerate device extensions";
             continue;
@@ -269,7 +269,7 @@ bool BackendContext::pickPhysicalDevice(){
         }
 
         VkPhysicalDeviceFeatures deviceFeatures;
-        vkGetPhysicalDeviceFeatures(dev, &deviceFeatures);
+        m_instanceDispatch.vkGetPhysicalDeviceFeatures(dev, &deviceFeatures);
         if(!deviceFeatures.samplerAnisotropy){
             errorStream << "\n  - does not support samplerAnisotropy";
             deviceIsGood = false;
@@ -281,7 +281,7 @@ bool BackendContext::pickPhysicalDevice(){
 
         if(deviceIsGood && m_windowSurface){
             VkBool32 surfaceSupported = VK_FALSE;
-            res = vkGetPhysicalDeviceSurfaceSupportKHR(dev, m_presentQueueFamily, m_windowSurface, &surfaceSupported);
+            res = m_instanceDispatch.vkGetPhysicalDeviceSurfaceSupportKHR(dev, m_presentQueueFamily, m_windowSurface, &surfaceSupported);
             if(res != VK_SUCCESS){
                 errorStream << "\n  - failed to query surface support";
                 deviceIsGood = false;
@@ -292,20 +292,20 @@ bool BackendContext::pickPhysicalDevice(){
             }
             else{
                 VkSurfaceCapabilitiesKHR surfaceCaps;
-                res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev, m_windowSurface, &surfaceCaps);
+                res = m_instanceDispatch.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev, m_windowSurface, &surfaceCaps);
                 if(res != VK_SUCCESS){
                     errorStream << "\n  - failed to query surface capabilities";
                     continue;
                 }
 
                 uint32_t fmtCount = 0;
-                res = vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, nullptr);
+                res = m_instanceDispatch.vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, nullptr);
                 if(res != VK_SUCCESS){
                     errorStream << "\n  - failed to query surface format count";
                     continue;
                 }
                 Vector<VkSurfaceFormatKHR, Alloc::ScratchArena> surfaceFmts(fmtCount, scratchArena);
-                res = vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, surfaceFmts.data());
+                res = m_instanceDispatch.vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, surfaceFmts.data());
                 if(res != VK_SUCCESS){
                     errorStream << "\n  - failed to query surface formats";
                     continue;
@@ -383,7 +383,7 @@ bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters)
     }
 
     uint32_t deviceCount = 0;
-    res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
+    res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapter count. {}"), ResultToString(res));
         return false;
@@ -397,7 +397,7 @@ bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters)
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_AdapterEnumerateArena);
 
     Vector<VkPhysicalDevice, Alloc::ScratchArena> devices(deviceCount, scratchArena);
-    res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
+    res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapters. {}"), ResultToString(res));
         return false;
@@ -410,7 +410,7 @@ bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters)
 
     auto fillAdapterInfo = [&](usize i){
         AdapterInfo adapterInfo(m_arena);
-        VulkanDetail::PopulateAdapterInfo(devices[i], adapterInfo);
+        VulkanDetail::PopulateAdapterInfo(m_instanceDispatch, devices[i], adapterInfo);
         outAdapters[i] = Move(adapterInfo);
     };
 
@@ -428,7 +428,7 @@ bool BackendContext::getSelectedAdapterInfo(AdapterInfo& outAdapter)const{
     if(!m_rhiDevice || !m_vulkanPhysicalDevice)
         return false;
 
-    VulkanDetail::PopulateAdapterInfo(m_vulkanPhysicalDevice, outAdapter);
+    VulkanDetail::PopulateAdapterInfo(m_instanceDispatch, m_vulkanPhysicalDevice, outAdapter);
     return true;
 }
 

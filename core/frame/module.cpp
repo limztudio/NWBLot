@@ -108,7 +108,10 @@ void Frame::cleanup(){
         if(!flushTelemetryUpload(true))
             NWB_LOGGER_WARNING(NWB_TEXT("Frame: telemetry upload flush failed during cleanup"));
     }
-    m_graphics.destroy();
+    NWB_FATAL_ASSERT_MSG(
+        m_graphics.destroy(),
+        NWB_TEXT("Frame cleanup requires either a completed graphics join or terminal device loss")
+    );
 }
 void Frame::requestQuit(){
     m_quitRequested = true;
@@ -216,7 +219,8 @@ const tchar* Frame::windowTitleOrDefault()const{
 }
 
 const tchar* Frame::syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
-    m_graphics.updateWindowState(width, height, windowVisible, windowIsInFocus);
+    if(!m_graphics.updateWindowState(width, height, windowVisible, windowIsInFocus))
+        NWB_LOGGER_WARNING(NWB_TEXT("Frame: graphics window-state update requires device recreation"));
 
     const tchar* title = m_graphics.getWindowTitle();
     if(!title || m_appliedWindowTitle == title)

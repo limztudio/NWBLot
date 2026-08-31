@@ -71,11 +71,35 @@ private:
     };
     using SemaphoreVector = GraphicsVector<VkSemaphore>;
 
+    enum class AcquireSyncSlotState : u8{
+        Idle,
+        AcquirePending,
+        ConsumerAccepted,
+        Unconsumed,
+    };
+    struct AcquireSyncSlot{
+        VkSemaphore semaphore = VK_NULL_HANDLE;
+        VkFence fence = VK_NULL_HANDLE;
+        QueueSubmissionToken consumerToken;
+        AcquireSyncSlotState state = AcquireSyncSlotState::Idle;
+    };
+    using AcquireSyncSlotVector = GraphicsVector<AcquireSyncSlot>;
+
     enum class FramePresentationSignalState : u8{
         Idle,
         Claimed,
         Queued,
+        Rejected,
         Accepted,
+        Failed,
+    };
+    enum class SwapChainLifecycleState : u8{
+        Ready,
+        Preparing,
+        PreparedResize,
+        PreparedDestroy,
+        NeedsDestroy,
+        Destroyed,
     };
 
 
@@ -163,9 +187,14 @@ public:
     bool createInstance();
     bool createDevice();
     bool createSwapChain();
-    void destroy();
-    void resizeSwapChain();
-    [[nodiscard]] AcquiredBackBuffer beginFrame(const BackBufferResizeCallbacks& callbacks);
+    [[nodiscard]] bool destroy();
+    [[nodiscard]] bool prepareSwapChainTransition(
+        SwapChainTransitionKind::Enum kind,
+        SwapChainTransitionTicket& outTicket
+    );
+    [[nodiscard]] bool commitSwapChainResize(SwapChainTransitionTicket&& ticket);
+    [[nodiscard]] bool commitDestroy(SwapChainTransitionTicket&& ticket)noexcept;
+    [[nodiscard]] BeginFrameResult beginFrame();
     // Idempotently retires synchronization for a healthy aborted frame. The acquired WSI image stays quarantined
     // until swap-chain or device teardown; an already-resolved frame is a successful no-op.
     [[nodiscard]] bool abandonAcquiredFrame()noexcept;
@@ -174,10 +203,13 @@ public:
     // compatibility transition-submit path in present() active.
     [[nodiscard]] QueueSubmissionPreSubmitHook claimFramePresentationSignal()noexcept;
     // The renderer confirms only the terminal packet token accepted by the graph submission transaction.
-    [[nodiscard]] bool confirmFramePresentationSignal(const QueueSubmissionToken& token)noexcept;
+    [[nodiscard]] bool confirmFramePresentationSignal(
+        const QueueSubmissionPreSubmitHook& claim,
+        const QueueSubmissionToken& token
+    )noexcept;
     // A hook that reached a rejected or abandoned submission cannot be reused blindly; retire that binary signal
     // before the next frame instead of allowing it to leak into another present.
-    void cancelFramePresentationSignal()noexcept;
+    [[nodiscard]] bool cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim)noexcept;
     void reportLiveObjects()const{}
 
 private:
@@ -202,21 +234,44 @@ private:
         i32 secondaryTransferQueueFamily
     );
     bool createVulkanSwapChain();
-    void destroySwapChain();
+    [[nodiscard]] bool createSwapChainResources();
+    [[nodiscard]] bool preflightSwapChainImageRevocation()noexcept;
+    [[nodiscard]] bool destroySwapChainPrepared()noexcept;
     void clearSemaphores(SemaphoreVector& semaphores);
     bool recreateSemaphores(SemaphoreVector& semaphores, usize count, AStringView operationName);
+    void clearAcquireSyncSlots()noexcept;
+    [[nodiscard]] bool recreateAcquireSyncSlots(usize count);
+    [[nodiscard]] bool prepareAcquireSyncSlot(AcquireSyncSlot& slot)noexcept;
+    [[nodiscard]] bool waitAcquireSyncSlotsForLifecycle()noexcept;
     [[nodiscard]] bool createFrameSyncQueries();
     [[nodiscard]] static bool PrepareFramePresentationSignal(
         void* context,
+        u64 identity,
         const GpuPhysicalQueueId& executionQueue,
         QueueSubmissionNativeSignal& outSignal
     );
     [[nodiscard]] bool prepareFramePresentationSignal(
+        u64 identity,
         const GpuPhysicalQueueId& executionQueue,
         QueueSubmissionNativeSignal& outSignal
     )noexcept;
+    [[nodiscard]] static bool ResolveFramePresentationSignal(
+        void* context,
+        u64 identity,
+        const QueueSubmissionToken& token
+    )noexcept;
+    [[nodiscard]] bool resolveFramePresentationSignal(
+        u64 identity,
+        const QueueSubmissionToken& token
+    )noexcept;
     [[nodiscard]] bool replaceFramePresentationSemaphoreAfterIdle()noexcept;
     void resetFramePresentationSignal()noexcept;
+    [[nodiscard]] bool cancelFramePresentationSignal()noexcept;
+    [[nodiscard]] bool cancelFramePresentationSignalLocked()noexcept;
+    [[nodiscard]] bool validPreparedTicket(
+        const SwapChainTransitionTicket& ticket,
+        SwapChainTransitionKind::Enum kind
+    )const noexcept;
 
 
 private:
@@ -236,6 +291,8 @@ private:
     GraphicsTString m_rendererString;
 
     VkInstance m_vulkanInstance = VK_NULL_HANDLE;
+    PFN_vkGetInstanceProcAddr m_getInstanceProcAddr = nullptr;
+    VolkInstanceTable m_instanceDispatch = {};
     VkDebugUtilsMessengerEXT m_debugUtilsMessenger = VK_NULL_HANDLE;
 
     VkPhysicalDevice m_vulkanPhysicalDevice = VK_NULL_HANDLE;
@@ -252,6 +309,7 @@ private:
     i32 m_presentQueueFamily = s_InvalidQueueFamilyIndex;
 
     VkDevice m_vulkanDevice = VK_NULL_HANDLE;
+    VolkDeviceTable m_deviceDispatch = {};
 
     VkSurfaceKHR m_windowSurface = VK_NULL_HANDLE;
 
@@ -259,8 +317,8 @@ private:
     VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
 
     GraphicsVector<SwapChainImage> m_swapChainImages;
-    // One entry per VkQueue created from m_vulkanDevice. Physical scheduling queues and the present role reference
-    // this authoritative identity table instead of copying raw handles independently.
+    // One construction entry per VkQueue created from m_vulkanDevice. Device owns the corresponding synchronized
+    // states; physical scheduling queues and the present role retain only canonical indices.
     GraphicsVector<VulkanNativeQueueDesc> m_nativeQueues;
     DeviceHandle m_rhiDevice;
     // Exact opt-in same-class transports registered after their class primary. The first entry for each class
@@ -268,11 +326,15 @@ private:
     GraphicsVector<VulkanPhysicalQueueDesc> m_sameClassQueues;
     u32 m_presentNativeQueueIndex = Limit<u32>::s_Max;
 
-    SemaphoreVector m_acquireSemaphores;
+    AcquireSyncSlotVector m_acquireSyncSlots;
     SemaphoreVector m_presentSemaphores;
 
     VkSemaphore m_framePresentationSemaphore = VK_NULL_HANDLE;
     GpuPhysicalQueueId m_framePresentationQueue;
+    QueueSubmissionToken m_framePresentationSubmission;
+    u64 m_nextFramePresentationClaimIdentity = 0u;
+    u64 m_framePresentationClaimIdentity = 0u;
+    bool m_framePresentationClaimIdentityExhausted = false;
     u32 m_framePresentationSwapChainIndex = Limit<u32>::s_Max;
     FramePresentationSignalState m_framePresentationSignalState = FramePresentationSignalState::Idle;
     bool m_frameAcquired = false;
@@ -282,12 +344,24 @@ private:
     Vector<EventQueryHandle, Alloc::GlobalArena> m_queryPool;
 
     u32 m_swapChainIndex = Limit<u32>::s_Max;
-    u32 m_acquireSemaphoreIndex = 0;
+    u32 m_acquireSyncSlotIndex = 0u;
+    u32 m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
     u32 m_maxFramesInFlight = s_MaxFramesInFlight;
+
+    Futex m_swapChainLifecycleMutex;
+    SwapChainLifecycleState m_swapChainLifecycleState = SwapChainLifecycleState::Ready;
+    u64 m_swapChainLifecycleEpoch = 0u;
+    bool m_lifecycleDrainActive = false;
+    // Presentation hooks run inside queue submission and therefore cannot take the lifecycle mutex recursively.
+    // This narrower lock protects their state, while the claims-enabled gate closes before lifecycle joins begin.
+    Futex m_framePresentationMutex;
+    ConditionVariableAny m_framePresentationCondition;
+    bool m_framePresentationClaimsEnabled = true;
 
     bool m_swapChainMutableFormatSupported = false;
     bool m_hdr10ColorSpaceExtensionEnabled = false;
     bool m_bufferDeviceAddressSupported = false;
+    bool m_hostQueryResetFeatureEnabled = false;
     bool m_textureCompressionBcFeatureEnabled = false;
     bool m_textureCompressionAstcLdrFeatureEnabled = false;
     bool m_textureCompressionAstcHdrFeatureEnabled = false;

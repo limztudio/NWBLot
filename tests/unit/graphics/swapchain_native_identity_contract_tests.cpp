@@ -375,6 +375,321 @@ TEST(SwapChainPresentation, CanonicalNativeQueueRegistryPrecedesPhysicalSchedule
 }
 
 
+// Scheduler submission, WSI presentation, queue waits, event-query submits, and device idle must share the one
+// canonical host lock for each VkQueue. Device idle additionally freezes every scheduler-semantic queue first, then
+// covers present-only native states before entering Vulkan.
+TEST(SwapChainPresentation, CanonicalNativeQueueStateSerializesEveryInternalHostAccess){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString nativeStateHeader;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "native_queue_state.h",
+        nativeStateHeader
+    ));
+    const AStringView fullNativeStateHeader(nativeStateHeader.data(), nativeStateHeader.size());
+    EXPECT_NE(fullNativeStateHeader.find("VkQueue queue = VK_NULL_HANDLE;"), AStringView::npos);
+    EXPECT_NE(fullNativeStateHeader.find("Futex hostMutex;"), AStringView::npos);
+
+    AString backendHeader;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", backendHeader));
+    const AStringView fullBackendHeader(backendHeader.data(), backendHeader.size());
+    const usize queueClassOffset = fullBackendHeader.find("class Queue final : NoCopy{");
+    const usize eventQueryClassOffset = fullBackendHeader.find("class EventQuery final", queueClassOffset);
+    ASSERT_NE(queueClassOffset, AStringView::npos);
+    ASSERT_NE(eventQueryClassOffset, AStringView::npos);
+    const AStringView queueClass = fullBackendHeader.substr(
+        queueClassOffset,
+        eventQueryClassOffset - queueClassOffset
+    );
+    EXPECT_NE(queueClass.find("NativeQueueState& m_nativeQueue;"), AStringView::npos);
+    EXPECT_NE(queueClass.find("Futex m_mutex;"), AStringView::npos);
+    EXPECT_EQ(queueClass.find("VkQueue m_queue;"), AStringView::npos);
+    EXPECT_NE(fullBackendHeader.find("GraphicsVector<NativeQueueState*> m_nativeQueueStates;"), AStringView::npos);
+    EXPECT_NE(fullBackendHeader.find("[[nodiscard]] bool setEventQuery(EventQuery* query"), AStringView::npos);
+    EXPECT_NE(fullBackendHeader.find("[[nodiscard]] bool waitEventQuery(EventQuery* query"), AStringView::npos);
+
+    AString queueSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "queue.cpp", queueSource));
+    const AStringView fullQueueSource(queueSource.data(), queueSource.size());
+    const usize submitHostLockOffset = fullQueueSource.find("ScopedLock hostLock(m_nativeQueue.hostMutex);");
+    const usize nativeSubmitOffset = fullQueueSource.find("vkQueueSubmit2(m_nativeQueue.queue", submitHostLockOffset);
+    const usize waitHostLockOffset = fullQueueSource.find(
+        "ScopedLock hostLock(m_nativeQueue.hostMutex);",
+        nativeSubmitOffset
+    );
+    const usize nativeWaitOffset = fullQueueSource.find("vkQueueWaitIdle(m_nativeQueue.queue)", waitHostLockOffset);
+    ASSERT_NE(submitHostLockOffset, AStringView::npos);
+    ASSERT_NE(nativeSubmitOffset, AStringView::npos);
+    ASSERT_NE(waitHostLockOffset, AStringView::npos);
+    ASSERT_NE(nativeWaitOffset, AStringView::npos);
+    EXPECT_LT(submitHostLockOffset, nativeSubmitOffset);
+    EXPECT_LT(waitHostLockOffset, nativeWaitOffset);
+
+    AString deviceSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device.cpp", deviceSource));
+    const AStringView fullDeviceSource(deviceSource.data(), deviceSource.size());
+    const usize semanticLockListOffset = fullDeviceSource.find("waitMutexes.push_back(&queue->m_mutex);");
+    const usize hostLockListOffset = fullDeviceSource.find(
+        "waitMutexes.push_back(&nativeQueueState->hostMutex);",
+        semanticLockListOffset
+    );
+    const usize lockSetOffset = fullDeviceSource.find("DeviceWaitLockSet lockSet(waitMutexes);", hostLockListOffset);
+    const usize deviceIdleOffset = fullDeviceSource.find("vkDeviceWaitIdle(m_context.device);", lockSetOffset);
+    ASSERT_NE(semanticLockListOffset, AStringView::npos);
+    ASSERT_NE(hostLockListOffset, AStringView::npos);
+    ASSERT_NE(lockSetOffset, AStringView::npos);
+    ASSERT_NE(deviceIdleOffset, AStringView::npos);
+    EXPECT_LT(semanticLockListOffset, hostLockListOffset);
+    EXPECT_LT(hostLockListOffset, lockSetOffset);
+    EXPECT_LT(lockSetOffset, deviceIdleOffset);
+
+    AString deviceQueueSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "device_queue.cpp",
+        deviceQueueSource
+    ));
+    const AStringView fullDeviceQueueSource(deviceQueueSource.data(), deviceQueueSource.size());
+    const usize presentFunctionOffset = fullDeviceQueueSource.find("bool Device::presentNativeQueue(");
+    const usize registerFunctionOffset = fullDeviceQueueSource.find(
+        "bool Device::registerPhysicalQueue(",
+        presentFunctionOffset
+    );
+    ASSERT_NE(presentFunctionOffset, AStringView::npos);
+    ASSERT_NE(registerFunctionOffset, AStringView::npos);
+    const AStringView presentFunction = fullDeviceQueueSource.substr(
+        presentFunctionOffset,
+        registerFunctionOffset - presentFunctionOffset
+    );
+    const usize presentHostLockOffset = presentFunction.find("ScopedLock hostLock(nativeQueue.hostMutex);");
+    const usize nativePresentOffset = presentFunction.find("vkQueuePresentKHR(nativeQueue.queue", presentHostLockOffset);
+    ASSERT_NE(presentHostLockOffset, AStringView::npos);
+    ASSERT_NE(nativePresentOffset, AStringView::npos);
+    EXPECT_LT(presentHostLockOffset, nativePresentOffset);
+
+    AString orchestrationSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "backend_context_orchestration.cpp",
+        orchestrationSource
+    ));
+    const AStringView fullOrchestrationSource(orchestrationSource.data(), orchestrationSource.size());
+    EXPECT_NE(
+        fullOrchestrationSource.find("m_rhiDevice->presentNativeQueue(m_presentNativeQueueIndex, presentInfo, res)"),
+        AStringView::npos
+    );
+    EXPECT_EQ(fullOrchestrationSource.find("vkQueuePresentKHR"), AStringView::npos);
+
+    AString surfaceSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "backend_context_surface.cpp",
+        surfaceSource
+    ));
+    const AStringView fullSurfaceSource(surfaceSource.data(), surfaceSource.size());
+    EXPECT_EQ(fullSurfaceSource.find("vkDeviceWaitIdle"), AStringView::npos);
+    EXPECT_EQ(fullSurfaceSource.find("waitForIdle()"), AStringView::npos);
+    const usize lifecycleDrainOffset = fullOrchestrationSource.find("m_rhiDevice->beginLifecycleDrain()");
+    const usize acquireProofOffset = fullOrchestrationSource.find(
+        "waitAcquireSyncSlotsForLifecycle()",
+        lifecycleDrainOffset
+    );
+    const usize transitionIdleOffset = fullOrchestrationSource.find(
+        "const bool deviceIdle = m_rhiDevice->waitForIdle();",
+        acquireProofOffset
+    );
+    const usize preparedStateOffset = fullOrchestrationSource.find(
+        "? SwapChainLifecycleState::PreparedResize",
+        transitionIdleOffset
+    );
+    ASSERT_NE(lifecycleDrainOffset, AStringView::npos);
+    ASSERT_NE(acquireProofOffset, AStringView::npos);
+    ASSERT_NE(transitionIdleOffset, AStringView::npos);
+    ASSERT_NE(preparedStateOffset, AStringView::npos);
+    EXPECT_LT(lifecycleDrainOffset, acquireProofOffset);
+    EXPECT_LT(acquireProofOffset, transitionIdleOffset);
+    EXPECT_LT(transitionIdleOffset, preparedStateOffset);
+
+    AString querySource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "queries.cpp", querySource));
+    const AStringView fullQuerySource(querySource.data(), querySource.size());
+    const usize querySemanticLockOffset = fullQuerySource.find("ScopedLock lock(q->m_mutex);");
+    const usize queryHostLockOffset = fullQuerySource.find(
+        "ScopedLock hostLock(q->m_nativeQueue.hostMutex);",
+        querySemanticLockOffset
+    );
+    const usize querySubmitOffset = fullQuerySource.find("vkQueueSubmit(q->m_nativeQueue.queue", queryHostLockOffset);
+    ASSERT_NE(querySemanticLockOffset, AStringView::npos);
+    ASSERT_NE(queryHostLockOffset, AStringView::npos);
+    ASSERT_NE(querySubmitOffset, AStringView::npos);
+    EXPECT_LT(querySemanticLockOffset, queryHostLockOffset);
+    EXPECT_LT(queryHostLockOffset, querySubmitOffset);
+    EXPECT_NE(fullQuerySource.find("captureDeviceLoss(\"event query submit\")", querySubmitOffset), AStringView::npos);
+    EXPECT_NE(fullQuerySource.find("ScopedLock queryLock(query->m_mutex);"), AStringView::npos);
+    EXPECT_NE(fullQuerySource.find("if(query->m_started){"), AStringView::npos);
+    EXPECT_NE(fullQuerySource.find("captureDeviceLoss(\"event query reset\")"), AStringView::npos);
+    EXPECT_NE(fullQuerySource.find("captureDeviceLoss(\"event query poll\")"), AStringView::npos);
+    EXPECT_NE(fullQuerySource.find("captureDeviceLoss(\"event query wait\")"), AStringView::npos);
+
+    const usize frameQueryWaitOffset = fullOrchestrationSource.find("if(!m_rhiDevice->waitEventQuery(query.get())){");
+    const usize frameQueryPopOffset = fullOrchestrationSource.find("m_framesInFlight.pop();", frameQueryWaitOffset);
+    const usize frameQuerySubmitOffset = fullOrchestrationSource.find("if(!m_rhiDevice->setEventQuery(query.get()", frameQueryPopOffset);
+    const usize frameQueryPublishOffset = fullOrchestrationSource.find("m_framesInFlight.push(query);", frameQuerySubmitOffset);
+    ASSERT_NE(frameQueryWaitOffset, AStringView::npos);
+    ASSERT_NE(frameQueryPopOffset, AStringView::npos);
+    ASSERT_NE(frameQuerySubmitOffset, AStringView::npos);
+    ASSERT_NE(frameQueryPublishOffset, AStringView::npos);
+    EXPECT_LT(frameQueryWaitOffset, frameQueryPopOffset);
+    EXPECT_LT(frameQueryPopOffset, frameQuerySubmitOffset);
+    EXPECT_LT(frameQuerySubmitOffset, frameQueryPublishOffset);
+}
+
+
+// Logical submission quarantine must stop a generation without claiming native device loss. Only an observed
+// VK_ERROR_DEVICE_LOST may authorize teardown without a successful device-idle join or collect loss diagnostics.
+TEST(SwapChainPresentation, LogicalQuarantineRemainsDistinctFromNativeDeviceLoss){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString backendHeaderSource;
+    AString diagnosticSource;
+    AString orchestrationSource;
+    AString deviceQueueSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", backendHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device_diagnostics.cpp", diagnosticSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "backend_context_orchestration.cpp",
+        orchestrationSource
+    ));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device_queue.cpp", deviceQueueSource));
+    const AStringView backendHeader(backendHeaderSource.data(), backendHeaderSource.size());
+    const AStringView diagnostics(diagnosticSource.data(), diagnosticSource.size());
+    const AStringView orchestration(orchestrationSource.data(), orchestrationSource.size());
+    const AStringView deviceQueue(deviceQueueSource.data(), deviceQueueSource.size());
+
+    EXPECT_NE(backendHeader.find("Atomic<bool> m_deviceLost = false;"), AStringView::npos);
+    EXPECT_NE(backendHeader.find("Atomic<bool> m_deviceQuarantined = false;"), AStringView::npos);
+    EXPECT_NE(
+        backendHeader.find("return isDeviceLost() || m_deviceQuarantined.load(MemoryOrder::acquire);"),
+        AStringView::npos
+    );
+    EXPECT_NE(
+        backendHeader.find("void quarantineDevice()noexcept{ m_deviceQuarantined.store(true, MemoryOrder::release); }"),
+        AStringView::npos
+    );
+    EXPECT_NE(diagnostics.find("void Device::captureDeviceLoss("), AStringView::npos);
+    EXPECT_NE(diagnostics.find("m_deviceLost.store(true, MemoryOrder::release);"), AStringView::npos);
+    EXPECT_EQ(diagnostics.find("m_deviceQuarantined.store"), AStringView::npos);
+    EXPECT_EQ(backendHeader.find("captureGpuCrash"), AStringView::npos);
+
+    EXPECT_NE(orchestration.find("captureDeviceLoss(\"acquire next image\")"), AStringView::npos);
+    EXPECT_NE(orchestration.find("captureDeviceLoss(\"present\")"), AStringView::npos);
+    EXPECT_NE(orchestration.find("m_rhiDevice->quarantineDevice();"), AStringView::npos);
+    EXPECT_EQ(orchestration.find("captureDeviceLoss(\"present semaphore idle\")"), AStringView::npos);
+    EXPECT_NE(deviceQueue.find("if(submissionsBlocked())"), AStringView::npos);
+    EXPECT_NE(deviceQueue.find("bool Device::beginLifecycleDrain()noexcept{"), AStringView::npos);
+}
+
+
+// A failed host join must leave the public Graphics lifecycle live and retryable. A successful device-loss teardown
+// may release WSI objects, but resize must never create a replacement on the lost VkDevice.
+TEST(SwapChainPresentation, TeardownFailureDoesNotPublishADeadOrRecreatedInstance){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString backendHeader;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "backend_context.h",
+        backendHeader
+    ));
+    const AStringView fullBackendHeader(backendHeader.data(), backendHeader.size());
+    EXPECT_NE(fullBackendHeader.find("[[nodiscard]] bool destroy();"), AStringView::npos);
+
+    AString graphicsSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.cpp", graphicsSource));
+    const AStringView fullGraphicsSource(graphicsSource.data(), graphicsSource.size());
+    const usize graphicsDestroyOffset = fullGraphicsSource.find("bool Graphics::destroy(){");
+    const usize prepareDestroyOffset = fullGraphicsSource.find(
+        "prepareSwapChainTransition(SwapChainTransitionKind::Destroy, transitionTicket)",
+        graphicsDestroyOffset
+    );
+    const usize highLevelClearOffset = fullGraphicsSource.find("m_renderPasses.clear();", prepareDestroyOffset);
+    const usize commitDestroyOffset = fullGraphicsSource.find(
+        "m_backend->commitDestroy(Move(transitionTicket))",
+        highLevelClearOffset
+    );
+    const usize instanceDestroyedOffset = fullGraphicsSource.find(
+        "m_instanceCreated = false;",
+        commitDestroyOffset
+    );
+    ASSERT_NE(graphicsDestroyOffset, AStringView::npos);
+    ASSERT_NE(prepareDestroyOffset, AStringView::npos);
+    ASSERT_NE(highLevelClearOffset, AStringView::npos);
+    ASSERT_NE(commitDestroyOffset, AStringView::npos);
+    ASSERT_NE(instanceDestroyedOffset, AStringView::npos);
+    EXPECT_LT(prepareDestroyOffset, highLevelClearOffset);
+    EXPECT_LT(highLevelClearOffset, commitDestroyOffset);
+    EXPECT_LT(commitDestroyOffset, instanceDestroyedOffset);
+    const usize graphicsDestructorOffset = fullGraphicsSource.find("Graphics::~Graphics(){");
+    const usize destructorAssertionOffset = fullGraphicsSource.find("NWB_FATAL_ASSERT_MSG(", graphicsDestructorOffset);
+    const usize destructorDestroyOffset = fullGraphicsSource.find("destroy(),", destructorAssertionOffset);
+    ASSERT_NE(graphicsDestructorOffset, AStringView::npos);
+    ASSERT_NE(destructorAssertionOffset, AStringView::npos);
+    ASSERT_NE(destructorDestroyOffset, AStringView::npos);
+    EXPECT_LT(graphicsDestructorOffset, destructorAssertionOffset);
+    EXPECT_LT(destructorAssertionOffset, destructorDestroyOffset);
+    EXPECT_LT(destructorDestroyOffset, graphicsDestroyOffset);
+    const usize resizePreparationOffset = fullGraphicsSource.find("if(!backBufferResizing(transitionTicket))");
+    const usize resizeBackendOffset = fullGraphicsSource.find(
+        "if(!m_backend->commitSwapChainResize(Move(transitionTicket)))",
+        resizePreparationOffset
+    );
+    const usize resizeCompletionOffset = fullGraphicsSource.find("if(!backBufferResized())", resizeBackendOffset);
+    ASSERT_NE(resizePreparationOffset, AStringView::npos);
+    ASSERT_NE(resizeBackendOffset, AStringView::npos);
+    ASSERT_NE(resizeCompletionOffset, AStringView::npos);
+    EXPECT_LT(resizePreparationOffset, resizeBackendOffset);
+    EXPECT_LT(resizeBackendOffset, resizeCompletionOffset);
+
+    AString orchestrationSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "backend_context_orchestration.cpp",
+        orchestrationSource
+    ));
+    const AStringView fullOrchestrationSource(orchestrationSource.data(), orchestrationSource.size());
+    const usize resizeCommitOffset = fullOrchestrationSource.find(
+        "bool BackendContext::commitSwapChainResize(SwapChainTransitionTicket&& ticket)"
+    );
+    const usize resizeDestroyOffset = fullOrchestrationSource.find("if(!destroySwapChainPrepared())", resizeCommitOffset);
+    const usize resizeCreateOffset = fullOrchestrationSource.find("if(!createSwapChainResources())", resizeDestroyOffset);
+    const usize resizeReadyOffset = fullOrchestrationSource.find(
+        "m_swapChainLifecycleState = SwapChainLifecycleState::Ready;",
+        resizeCreateOffset
+    );
+    ASSERT_NE(resizeCommitOffset, AStringView::npos);
+    ASSERT_NE(resizeDestroyOffset, AStringView::npos);
+    ASSERT_NE(resizeCreateOffset, AStringView::npos);
+    ASSERT_NE(resizeReadyOffset, AStringView::npos);
+    EXPECT_LT(resizeCommitOffset, resizeDestroyOffset);
+    EXPECT_LT(resizeDestroyOffset, resizeCreateOffset);
+    EXPECT_LT(resizeCreateOffset, resizeReadyOffset);
+
+    AString rhiHeader;
+    AString presentationHeader;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "rhi" / "device.h", rhiHeader));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "rhi" / "presentation.h", presentationHeader));
+    const AStringView fullRhiHeader(rhiHeader.data(), rhiHeader.size());
+    const AStringView fullPresentationHeader(presentationHeader.data(), presentationHeader.size());
+    EXPECT_NE(fullPresentationHeader.find("struct BeginFrameResult{"), AStringView::npos);
+    EXPECT_NE(
+        fullPresentationHeader.find("BeginFrameStatus::Enum status = BeginFrameStatus::Failed;"),
+        AStringView::npos
+    );
+    EXPECT_EQ(fullRhiHeader.find("BackBufferResizeCallbacks"), AStringView::npos);
+    EXPECT_NE(fullGraphicsSource.find("if(beginFrameResult.status == BeginFrameStatus::ResizeRequired)"), AStringView::npos);
+    EXPECT_NE(fullGraphicsSource.find("requestDeviceRecreation();", resizeCompletionOffset), AStringView::npos);
+    EXPECT_EQ(fullOrchestrationSource.find("callbacks.resizeFailed"), AStringView::npos);
+}
+
+
 // Swapchain teardown must invalidate retained wrappers before the driver can destroy their images, while reserving
 // each native identity until destruction is complete. This source contract covers the WSI-only interval that a
 // headless public fixture cannot enter without exposing a production mutation seam.
@@ -388,7 +703,7 @@ TEST(SwapChainPresentation, NativeTextureRetirementBracketsNativeDestructionAndC
         surfaceSource
     ));
     const AStringView fullSurfaceSource(surfaceSource.data(), surfaceSource.size());
-    const usize destroyFunctionBegin = fullSurfaceSource.find("void BackendContext::destroySwapChain(){");
+    const usize destroyFunctionBegin = fullSurfaceSource.find("bool BackendContext::destroySwapChainPrepared()noexcept{");
     const usize destroyFunctionEnd = fullSurfaceSource.find(
         "bool BackendContext::createVulkanSwapChain(){",
         destroyFunctionBegin
@@ -417,6 +732,7 @@ TEST(SwapChainPresentation, NativeTextureRetirementBracketsNativeDestructionAndC
     EXPECT_LT(revokeOffset, nativeDestroyOffset);
     EXPECT_LT(nativeDestroyOffset, releaseOffset);
     EXPECT_LT(releaseOffset, wrapperClearOffset);
+    EXPECT_EQ(destroyFunction.find("waitForIdle()"), AStringView::npos);
 
     AString textureSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "texture.cpp", textureSource));

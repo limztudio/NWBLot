@@ -322,11 +322,31 @@ bool GpuTaskGraphSubmitter::submitPacketWithinSubmissionOperation(
         && !transaction.appendAcceptedQueueFrontierWaitTokens(packet.queue, waitTokens)
     )
         return false;
-    // Validate the fully assembled dependency frontier before reserving graph/task submission state. Device repeats
-    // this check at its final boundary because another queue may still be resolving a concurrent native submit.
+
+    // Freeze every timing ticket before validating the complete wait frontier: a query reservation may contribute
+    // the accepted frame-reset token that ordered this pool on another physical queue. Preparation remains retryable
+    // until the graph packet lease is acquired.
+    usize preparedTimingTicketCount = 0u;
+    for(; preparedTimingTicketCount < submissionTimingTickets.size(); ++preparedTimingTicketCount){
+        if(submissionTimingTickets[preparedTimingTicketCount]->prepareSubmission(
+            recordedPacket->commandLists,
+            recordedPacket->commandListCount,
+            waitTokens
+        ))
+            continue;
+        while(preparedTimingTicketCount > 0u)
+            submissionTimingTickets[--preparedTimingTicketCount]->rollbackPreparedSubmission();
+        return false;
+    }
+
+    // Device repeats this validation at its final boundary because another queue may still be resolving a concurrent
+    // native submit. Roll ticket preparation back here so a corrected external dependency can retry this packet.
     for(const QueueSubmissionToken& waitToken : waitTokens){
-        if(!m_device.validateSubmissionWaitToken(waitToken))
-            return false;
+        if(m_device.validateSubmissionWaitToken(waitToken))
+            continue;
+        while(preparedTimingTicketCount > 0u)
+            submissionTimingTickets[--preparedTimingTicketCount]->rollbackPreparedSubmission();
+        return false;
     }
 
     GpuGraphSubmissionTransaction::NativeSubmissionInfo nativeSubmissionInfo;
@@ -354,20 +374,6 @@ bool GpuTaskGraphSubmitter::submitPacketWithinSubmissionOperation(
             ++nativeSubmissionInfo.mergedTimelineWaitCount;
         else
             ++nativeSubmissionInfo.timelineWaitCount;
-    }
-
-    // Ticket preparation is still retryable: it claims every independent query transaction before graph state
-    // becomes submitting, and rolls those claims back if another operation wins the packet lease.
-    usize preparedTimingTicketCount = 0u;
-    for(; preparedTimingTicketCount < submissionTimingTickets.size(); ++preparedTimingTicketCount){
-        if(submissionTimingTickets[preparedTimingTicketCount]->prepareSubmission(
-            recordedPacket->commandLists,
-            recordedPacket->commandListCount
-        ))
-            continue;
-        while(preparedTimingTicketCount > 0u)
-            submissionTimingTickets[--preparedTimingTicketCount]->rollbackPreparedSubmission();
-        return false;
     }
 
     // A bad dependency or external completion is a pre-submit input error. Preserve the completed native packet

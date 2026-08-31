@@ -41,7 +41,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     if(
         !m_context.extensions.EXT_mesh_shader
         || m_context.meshShaderFeatures.meshShader != VK_TRUE
-        || !vkCmdDrawMeshTasksEXT
+        || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Mesh shader feature and entry point are required for meshlet pipelines."));
         return nullptr;
@@ -214,7 +214,7 @@ void CommandList::setMeshletState(const MeshletState& state){
 
     auto* pipeline = state.pipeline;
     if(pipeline){
-        vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
+        m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
         retainResource(pipeline);
 
         const f32 blendConstants[] = {
@@ -223,14 +223,14 @@ void CommandList::setMeshletState(const MeshletState& state){
             state.blendConstantColor.b,
             state.blendConstantColor.a,
         };
-        vkCmdSetBlendConstants(m_currentCmdBuf->m_cmdBuf, blendConstants);
+        m_context.deviceDispatch.vkCmdSetBlendConstants(m_currentCmdBuf->m_cmdBuf, blendConstants);
 
         const DepthStencilState& depthStencilState = pipeline->m_desc.renderState.depthStencilState;
         const u8 stencilReference = depthStencilState.dynamicStencilRef
             ? state.dynamicStencilRefValue
             : depthStencilState.stencilRefValue
         ;
-        vkCmdSetStencilReference(
+        m_context.deviceDispatch.vkCmdSetStencilReference(
             m_currentCmdBuf->m_cmdBuf,
             VK_STENCIL_FACE_FRONT_AND_BACK,
             stencilReference
@@ -274,7 +274,7 @@ void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){
     if(
         !m_context.extensions.EXT_mesh_shader
         || m_context.meshShaderFeatures.meshShader != VK_TRUE
-        || !vkCmdDrawMeshTasksEXT
+        || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT
     ){
         rejectCommandRecording(NWB_TEXT("dispatch mesh"), NWB_TEXT("mesh shader feature or entry point is unavailable"));
         return;
@@ -295,7 +295,7 @@ void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){
         return;
     }
 
-    vkCmdDrawMeshTasksEXT(m_currentCmdBuf->m_cmdBuf, groupsX, groupsY, groupsZ);
+    m_context.deviceDispatch.vkCmdDrawMeshTasksEXT(m_currentCmdBuf->m_cmdBuf, groupsX, groupsY, groupsZ);
 }
 
 

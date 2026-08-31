@@ -10,6 +10,7 @@
 #include <core/graphics/vulkan/backend.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
+#include <tests/common/vulkan_test_sync.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -189,9 +190,12 @@ TEST_F(CooperativeVectorQueryTest, MissingConversionEntrypointFailsClosed){
     if(!device().queryFeatureSupport(Feature::CooperativeVectorInferencing))
         GTEST_SKIP() << "Cooperative-vector query: VK_NV_cooperative_vector is unavailable.";
 
-    const PFN_vkConvertCooperativeVectorMatrixNV originalConvert = vkConvertCooperativeVectorMatrixNV;
-    ASSERT_NE(originalConvert, nullptr);
-    vkConvertCooperativeVectorMatrixNV = nullptr;
+    ScopedVulkanDeviceDispatchOverride<PFN_vkConvertCooperativeVectorMatrixNV> missingConversion(
+        device(),
+        &VolkDeviceTable::vkConvertCooperativeVectorMatrixNV
+    );
+    ASSERT_TRUE(missingConversion.valid());
+    ASSERT_TRUE(missingConversion.replace(nullptr));
     const bool advertisedWithoutEntrypoint = device().queryFeatureSupport(Feature::CooperativeVectorInferencing);
     const usize resultWithoutEntrypoint = device().getCoopVecMatrixSize(
         CooperativeVectorDataType::Float32,
@@ -199,8 +203,6 @@ TEST_F(CooperativeVectorQueryTest, MissingConversionEntrypointFailsClosed){
         2,
         2
     );
-    vkConvertCooperativeVectorMatrixNV = originalConvert;
-
     EXPECT_FALSE(advertisedWithoutEntrypoint);
     EXPECT_EQ(resultWithoutEntrypoint, 0u);
 }

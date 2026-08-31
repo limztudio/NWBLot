@@ -144,6 +144,7 @@ namespace GpuTaskGraphCompilerDetail{
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedResourceStates = plan.trackedResourceStates;
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena>& pendingEpilogueBarriers = plan.pendingEpilogueBarriers;
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies = plan.initialOwnershipDependencies;
+    Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies = plan.initialAvailabilityDependencies;
     Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& stateFragments = plan.stateFragments;
     Vector<GpuTaskResourceRange, Alloc::ScratchArena>& taskFirstUseRanges = plan.taskFirstUseRanges;
 
@@ -252,6 +253,12 @@ namespace GpuTaskGraphCompilerDetail{
                     bool usesInitialOwnerOnlyHandoff = false;
                     GpuCompiledBarrierType::Enum initialOwnerAcquireType = GpuCompiledBarrierType::kCount;
                     if(!previousState){
+                        if(resource.initialAvailabilityCompletion.valid()){
+                            initialAvailabilityDependencies.push_back(GpuTaskExternalDependencyEdge{
+                                .completion = resource.initialAvailabilityCompletion,
+                                .consumer = taskID,
+                            });
+                        }
                         if(
                             resource.initialOwnerReleaseDestinationQueue.valid()
                             && resource.initialOwnerReleaseDestinationQueue != compiledTask->queue
@@ -524,6 +531,12 @@ namespace GpuTaskGraphCompilerDetail{
             }
 
             const ResourceStates::Mask before = previousState ? previousState->state : resource.initialState;
+            if(!previousState && resource.initialAvailabilityCompletion.valid()){
+                initialAvailabilityDependencies.push_back(GpuTaskExternalDependencyEdge{
+                    .completion = resource.initialAvailabilityCompletion,
+                    .consumer = taskID,
+                });
+            }
             // An initial-owner handoff opens the packet with its immutable producer snapshot, which materializes
             // the authoritative native starting state. A known graph initial state still needs an explicit marker
             // after the acquire: it can differ from that snapshot and can be a no-op transition whose declared

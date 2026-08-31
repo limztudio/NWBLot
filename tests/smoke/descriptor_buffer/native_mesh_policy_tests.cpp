@@ -43,7 +43,12 @@ public:
     explicit BackendContextDestroyGuard(GraphicsBackend::BackendContext& context)
         : m_context(context)
     {}
-    ~BackendContextDestroyGuard(){ m_context.destroy(); }
+    ~BackendContextDestroyGuard(){
+        NWB_FATAL_ASSERT_MSG(
+            m_context.destroy(),
+            NWB_TEXT("Native-mesh policy teardown requires either a completed device join or terminal device loss")
+        );
+    }
 
 
 private:
@@ -91,7 +96,7 @@ TEST(NativeMeshPolicy, SetterFreezesAtInstanceCreationAndUnfreezesAfterDestroy){
         GTEST_SKIP() << "Native mesh policy lifecycle: no usable Vulkan instance.";
 
     EXPECT_FALSE(scope.graphics().setNativeMeshShadersEnabled(false));
-    scope.graphics().destroy();
+    ASSERT_TRUE(scope.graphics().destroy());
     EXPECT_TRUE(scope.graphics().setNativeMeshShadersEnabled(false));
 }
 
@@ -107,7 +112,7 @@ TEST(NativeMeshPolicy, WindowsArm64DefaultPublishesComputeFallback){
 #if !defined(NWB_FINAL)
     EXPECT_TRUE(logger.sawMessageContaining(NWB_TEXT("meshShaderRequested=no meshShader=no")));
 #endif
-    scope.graphics().destroy();
+    ASSERT_TRUE(scope.graphics().destroy());
 #if !defined(NWB_FINAL)
     __hidden_native_mesh_policy_tests::ExpectNoValidationErrors(logger);
 #endif
@@ -131,7 +136,7 @@ TEST(NativeMeshPolicy, ExplicitChoicesPublishRequestedAndEffectiveState){
             __hidden_native_mesh_policy_tests::ExpectedMeshDiagnostic(false, false)
         ));
 #endif
-        scope.graphics().destroy();
+        ASSERT_TRUE(scope.graphics().destroy());
 #if !defined(NWB_FINAL)
         __hidden_native_mesh_policy_tests::ExpectNoValidationErrors(logger);
 #endif
@@ -152,7 +157,7 @@ TEST(NativeMeshPolicy, ExplicitChoicesPublishRequestedAndEffectiveState){
             __hidden_native_mesh_policy_tests::ExpectedMeshDiagnostic(true, effective)
         ));
 #endif
-        scope.graphics().destroy();
+        ASSERT_TRUE(scope.graphics().destroy());
 #if !defined(NWB_FINAL)
         __hidden_native_mesh_policy_tests::ExpectNoValidationErrors(logger);
 #endif

@@ -182,7 +182,7 @@ void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSli
     }
 
     VkFormatProperties formatProperties{};
-    vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, src.m_imageInfo.format, &formatProperties);
+    m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, src.m_imageInfo.format, &formatProperties);
     constexpr VkFormatFeatureFlags s_RequiredFormatFeatures = VK_FORMAT_FEATURE_TRANSFER_SRC_BIT
         | VK_FORMAT_FEATURE_TRANSFER_DST_BIT
     ;
@@ -192,7 +192,7 @@ void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSli
     }
 
     VkImageFormatProperties sourceFormatProperties{};
-    const VkResult sourceFormatResult = vkGetPhysicalDeviceImageFormatProperties(
+    const VkResult sourceFormatResult = m_context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(
         m_context.physicalDevice,
         src.m_imageInfo.format,
         src.m_imageInfo.imageType,
@@ -202,7 +202,7 @@ void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSli
         &sourceFormatProperties
     );
     VkImageFormatProperties destinationFormatProperties{};
-    const VkResult destinationFormatResult = vkGetPhysicalDeviceImageFormatProperties(
+    const VkResult destinationFormatResult = m_context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(
         m_context.physicalDevice,
         dest.m_imageInfo.format,
         dest.m_imageInfo.imageType,
@@ -284,7 +284,7 @@ void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSli
     if(m_commandRecordingFailed)
         return;
 
-    vkCmdCopyImage(m_currentCmdBuf->m_cmdBuf, src.m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    m_context.deviceDispatch.vkCmdCopyImage(m_currentCmdBuf->m_cmdBuf, src.m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
     retainResource(srcResource);
     retainResource(destResource);
@@ -445,7 +445,7 @@ bool CommandList::tryWriteTexture(
     region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(copyAspectMask, mipLevel, arraySlice);
     region.imageExtent = mipExtent;
 
-    vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, dest.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, dest.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
     retainResource(destResource);
     retainStagingBuffer(*stagingBuffer);
@@ -591,7 +591,7 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
     }
 
     VkFormatProperties formatProperties{};
-    vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, src.m_imageInfo.format, &formatProperties);
+    m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, src.m_imageInfo.format, &formatProperties);
     constexpr VkFormatFeatureFlags s_RequiredFormatFeatures = VK_FORMAT_FEATURE_TRANSFER_SRC_BIT
         | VK_FORMAT_FEATURE_TRANSFER_DST_BIT
         | VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
@@ -605,7 +605,7 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
     }
 
     VkImageFormatProperties sourceFormatProperties{};
-    const VkResult sourceFormatResult = vkGetPhysicalDeviceImageFormatProperties(
+    const VkResult sourceFormatResult = m_context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(
         m_context.physicalDevice,
         src.m_imageInfo.format,
         src.m_imageInfo.imageType,
@@ -615,7 +615,7 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
         &sourceFormatProperties
     );
     VkImageFormatProperties destinationFormatProperties{};
-    const VkResult destinationFormatResult = vkGetPhysicalDeviceImageFormatProperties(
+    const VkResult destinationFormatResult = m_context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(
         m_context.physicalDevice,
         dest.m_imageInfo.format,
         dest.m_imageInfo.imageType,
@@ -680,7 +680,7 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
     if(m_commandRecordingFailed)
         return;
 
-    vkCmdResolveImage(
+    m_context.deviceDispatch.vkCmdResolveImage(
         m_currentCmdBuf->m_cmdBuf,
         src.m_image,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,

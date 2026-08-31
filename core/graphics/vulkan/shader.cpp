@@ -124,7 +124,7 @@ Sampler::Sampler(const VulkanContext& context)
 {}
 Sampler::~Sampler(){
     if(m_sampler != VK_NULL_HANDLE){
-        vkDestroySampler(m_context.device, m_sampler, m_context.allocationCallbacks);
+        m_context.deviceDispatch.vkDestroySampler(m_context.device, m_sampler, m_context.allocationCallbacks);
         m_sampler = VK_NULL_HANDLE;
     }
 }
@@ -144,7 +144,7 @@ Shader::Shader(const VulkanContext& context)
 {}
 Shader::~Shader(){
     if(m_shaderModule != VK_NULL_HANDLE){
-        vkDestroyShaderModule(m_context.device, m_shaderModule, m_context.allocationCallbacks);
+        m_context.deviceDispatch.vkDestroyShaderModule(m_context.device, m_shaderModule, m_context.allocationCallbacks);
         m_shaderModule = VK_NULL_HANDLE;
     }
 }
@@ -199,7 +199,7 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
     createInfo.codeSize = __hidden_vulkan_shader::SpirvByteSize(shader->m_spirvWords);
     createInfo.pCode = shader->m_spirvWords.data();
 
-    const VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
+    const VkResult res = m_context.deviceDispatch.vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module for entry '{}': {}"), StringConvert(shader->m_entryPointName), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, shader);
@@ -236,7 +236,7 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     createInfo.codeSize = binarySize;
     createInfo.pCode = shader->m_spirvWords.data();
 
-    const VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
+    const VkResult res = m_context.deviceDispatch.vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, shader);
@@ -271,7 +271,7 @@ ShaderHandle Device::createShaderSpecialization(Shader* baseShader, const Shader
     createInfo.codeSize = __hidden_vulkan_shader::SpirvByteSize(shader->m_spirvWords);
     createInfo.pCode = shader->m_spirvWords.data();
 
-    const VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
+    const VkResult res = m_context.deviceDispatch.vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module for specialization: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, shader);
@@ -498,12 +498,12 @@ Framebuffer::Framebuffer(const VulkanContext& context)
 {}
 Framebuffer::~Framebuffer(){
     if(m_framebuffer != VK_NULL_HANDLE){
-        vkDestroyFramebuffer(m_context.device, m_framebuffer, m_context.allocationCallbacks);
+        m_context.deviceDispatch.vkDestroyFramebuffer(m_context.device, m_framebuffer, m_context.allocationCallbacks);
         m_framebuffer = VK_NULL_HANDLE;
     }
 
     if(m_renderPass != VK_NULL_HANDLE){
-        vkDestroyRenderPass(m_context.device, m_renderPass, m_context.allocationCallbacks);
+        m_context.deviceDispatch.vkDestroyRenderPass(m_context.device, m_renderPass, m_context.allocationCallbacks);
         m_renderPass = VK_NULL_HANDLE;
     }
 }

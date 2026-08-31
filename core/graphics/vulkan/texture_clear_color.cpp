@@ -259,7 +259,7 @@ void CommandList::clearColorTexture(
         Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
         Vector<VkImageSubresourceRange, Alloc::ScratchArena> ranges(resolvedSubresources.numArraySlices, scratchArena);
         VulkanTextureDetail::BuildArrayLayerImageSubresourceRanges(resolvedSubresources, VK_IMAGE_ASPECT_COLOR_BIT, ranges);
-        vkCmdClearColorImage(
+        m_context.deviceDispatch.vkCmdClearColorImage(
             m_currentCmdBuf->m_cmdBuf,
             texture.m_image,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -273,7 +273,7 @@ void CommandList::clearColorTexture(
             resolvedSubresources,
             VK_IMAGE_ASPECT_COLOR_BIT
         );
-        vkCmdClearColorImage(
+        m_context.deviceDispatch.vkCmdClearColorImage(
             m_currentCmdBuf->m_cmdBuf,
             texture.m_image,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -553,7 +553,7 @@ void CommandList::clearColorTextureBox(
             );
             region.imageOffset = { mipPlan.resolvedBox.minX, mipPlan.resolvedBox.minY, mipPlan.resolvedBox.minZ };
             region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), static_cast<u32>(clearDepth) };
-            vkCmdCopyBufferToImage(
+            m_context.deviceDispatch.vkCmdCopyBufferToImage(
                 m_currentCmdBuf->m_cmdBuf,
                 stagingBuffer->m_buffer,
                 texture.m_image,
@@ -583,7 +583,7 @@ void CommandList::clearColorTextureBox(
             }
 
             if(!regions.empty())
-                vkCmdCopyBufferToImage(
+                m_context.deviceDispatch.vkCmdCopyBufferToImage(
                     m_currentCmdBuf->m_cmdBuf,
                     stagingBuffer->m_buffer,
                     texture.m_image,
@@ -611,7 +611,7 @@ void CommandList::clearColorTextureBox(
             }
 
             if(!regions.empty())
-                vkCmdCopyBufferToImage(
+                m_context.deviceDispatch.vkCmdCopyBufferToImage(
                     m_currentCmdBuf->m_cmdBuf,
                     stagingBuffer->m_buffer,
                     texture.m_image,

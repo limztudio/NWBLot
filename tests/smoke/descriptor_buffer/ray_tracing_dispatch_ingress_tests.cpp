@@ -12,6 +12,7 @@
 #include <core/graphics/vulkan/raytracing_internal.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
+#include <tests/common/vulkan_test_sync.h>
 
 #include <volk/volk.h>
 
@@ -110,23 +111,25 @@ private:
 
 
 public:
-    explicit ScopedNativeTraceRaysObserver(NativeTraceRaysCapture& capture)
-        : m_originalCmdTraceRays(vkCmdTraceRaysKHR)
+    ScopedNativeTraceRaysObserver(GraphicsBackend::Device& device, NativeTraceRaysCapture& capture)
+        : m_cmdTraceRaysOverride(device, &VolkDeviceTable::vkCmdTraceRaysKHR)
     {
         capture = {};
-        if(s_activeCapture || !m_originalCmdTraceRays)
+        if(s_activeCapture || !m_cmdTraceRaysOverride.valid())
             return;
 
-        s_forwardCmdTraceRays = m_originalCmdTraceRays;
+        s_forwardCmdTraceRays = m_cmdTraceRaysOverride.original();
         s_activeCapture = &capture;
-        vkCmdTraceRaysKHR = &ScopedNativeTraceRaysObserver::InterceptCmdTraceRays;
+        if(!m_cmdTraceRaysOverride.replace(&ScopedNativeTraceRaysObserver::InterceptCmdTraceRays)){
+            s_activeCapture = nullptr;
+            return;
+        }
         m_armed = true;
     }
     ~ScopedNativeTraceRaysObserver(){
         if(!m_armed)
             return;
 
-        vkCmdTraceRaysKHR = m_originalCmdTraceRays;
         s_activeCapture = nullptr;
     }
 
@@ -136,7 +139,7 @@ public:
 
 
 private:
-    PFN_vkCmdTraceRaysKHR m_originalCmdTraceRays = nullptr;
+    ScopedVulkanDeviceDispatchOverride<PFN_vkCmdTraceRaysKHR> m_cmdTraceRaysOverride;
     bool m_armed = false;
 };
 
@@ -464,11 +467,13 @@ TEST_F(RayTracingDispatchIngressTest, NativeFourRegionAddressesChangeAfterMutati
     __hidden_ray_tracing_dispatch_ingress_tests::NativeTraceRaysCapture nativeCapture;
     CommandListHandle originalCommandList;
     CommandListHandle replacementCommandList;
-    const PFN_vkCmdTraceRaysKHR originalCmdTraceRays = vkCmdTraceRaysKHR;
+    const VulkanTestDeviceContext nativeContext = VulkanTestDeviceProbe::capture(device());
+    ASSERT_TRUE(nativeContext.valid());
+    const PFN_vkCmdTraceRaysKHR originalCmdTraceRays = nativeContext.deviceDispatch->vkCmdTraceRaysKHR;
     ASSERT_TRUE(originalCmdTraceRays);
 
     {
-        __hidden_ray_tracing_dispatch_ingress_tests::ScopedNativeTraceRaysObserver observer(nativeCapture);
+        __hidden_ray_tracing_dispatch_ingress_tests::ScopedNativeTraceRaysObserver observer(device(), nativeCapture);
         ASSERT_TRUE(observer.valid());
 
         originalCommandList = device().createCommandList();
@@ -499,7 +504,7 @@ TEST_F(RayTracingDispatchIngressTest, NativeFourRegionAddressesChangeAfterMutati
         replacementCommandList->close();
         ASSERT_FALSE(replacementCommandList->commandRecordingFailed());
     }
-    ASSERT_EQ(vkCmdTraceRaysKHR, originalCmdTraceRays);
+    ASSERT_EQ(nativeContext.deviceDispatch->vkCmdTraceRaysKHR, originalCmdTraceRays);
 
     ASSERT_EQ(nativeCapture.commandCount, 2u);
     ASSERT_FALSE(nativeCapture.overflowed);

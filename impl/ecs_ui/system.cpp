@@ -237,6 +237,10 @@ static bool HasPendingTextureUploads(const ImDrawData& drawData){
 ){
     return lhs.framebuffer.get() == rhs.framebuffer.get()
         && lhs.backBuffer.texture.get() == rhs.backBuffer.texture.get()
+        && lhs.backBuffer.availabilityCompletion.queue == rhs.backBuffer.availabilityCompletion.queue
+        && lhs.backBuffer.availabilityCompletion.value == rhs.backBuffer.availabilityCompletion.value
+        && lhs.backBuffer.availabilityCompletion.physicalQueueIndex == rhs.backBuffer.availabilityCompletion.physicalQueueIndex
+        && lhs.backBuffer.availabilityCompletion.deviceGeneration == rhs.backBuffer.availabilityCompletion.deviceGeneration
         && lhs.backBuffer.nativeInitialState == rhs.backBuffer.nativeInitialState
         && lhs.backBuffer.index == rhs.backBuffer.index
     ;
@@ -257,21 +261,34 @@ static bool HasPendingTextureUploads(const ImDrawData& drawData){
     return backbuffer.valid() && graph.textureForResource(backbuffer) == frame.backBuffer.texture.get();
 }
 
-[[nodiscard]] static Core::GpuGraphResourceDesc PresentationBackBufferResourceDesc(
+[[nodiscard]] static Core::GpuGraphResourceId ImportPresentationBackBuffer(
+    Core::GpuTaskGraph& graph,
     const Core::AcquiredPresentationFrame& frame,
     const Name& identity,
-    const AStringView label
+    const AStringView label,
+    const Name& availabilityIdentity,
+    const AStringView availabilityLabel
 ){
+    const Core::GpuExternalCompletionId availability = graph.importExternalCompletion(
+        Core::GpuExternalCompletionDesc{}
+            .setIdentity(availabilityIdentity)
+            .setMarkerLabel(availabilityLabel)
+            .setToken(frame.backBuffer.availabilityCompletion)
+    );
+    if(!availability.valid())
+        return {};
+
     Core::GpuGraphResourceDesc desc;
     desc
         .setIdentity(identity)
         .setMarkerLabel(label)
         .setType(Core::GpuGraphResourceType::Texture)
         .setInitialState(frame.backBuffer.nativeInitialState)
+        .setInitialAvailabilityCompletion(availability)
         .setExternalFinalState(Core::ResourceStates::Present)
         .setQueueSharing(frame.backBuffer.texture->getCreationDescription().queueSharing)
     ;
-    return desc;
+    return graph.importTexture(frame.backBuffer.texture, desc);
 }
 
 [[nodiscard]] static bool IsTaskGraphResetCallback(const ImDrawCmd& drawCommand){
@@ -1389,13 +1406,13 @@ bool UiSystem::submitStandaloneTaskGraphPresentation(const Core::AcquiredPresent
                 && context->ui->m_taskGraphDrawSnapshot.valid
                 && !context->ui->m_taskGraphDrawCommands.empty()
             ){
-                backbuffer = graph.importTexture(
-                    context->frame.backBuffer.texture,
-                    __hidden_ui::PresentationBackBufferResourceDesc(
-                        context->frame,
-                        Name("ui.imgui_standalone_presentation.backbuffer"),
-                        "Standalone ImGui Presentation Back Buffer"
-                    )
+                backbuffer = __hidden_ui::ImportPresentationBackBuffer(
+                    graph,
+                    context->frame,
+                    Name("ui.imgui_standalone_presentation.backbuffer"),
+                    "Standalone ImGui Presentation Back Buffer",
+                    Name("ui.imgui_standalone_presentation.backbuffer_availability"),
+                    "Standalone ImGui Presentation Back Buffer Availability"
                 );
                 if(!__hidden_ui::GraphBindsAcquiredPresentationTexture(graph, context->frame, backbuffer))
                     return Core::GpuTaskId{};
@@ -1452,13 +1469,13 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
     )
         return {};
 
-    const Core::GpuGraphResourceId backbuffer = graph.importTexture(
-        frame.backBuffer.texture,
-        __hidden_ui::PresentationBackBufferResourceDesc(
-            frame,
-            Name("ui.imgui_standalone_legacy_presentation.backbuffer"),
-            "Standalone ImGui Legacy Presentation Back Buffer"
-        )
+    const Core::GpuGraphResourceId backbuffer = __hidden_ui::ImportPresentationBackBuffer(
+        graph,
+        frame,
+        Name("ui.imgui_standalone_legacy_presentation.backbuffer"),
+        "Standalone ImGui Legacy Presentation Back Buffer",
+        Name("ui.imgui_standalone_legacy_presentation.backbuffer_availability"),
+        "Standalone ImGui Legacy Presentation Back Buffer Availability"
     );
     const Core::GpuGraphResourceId opaqueCallbackDomain = graph.importHazardDomain(
         Core::GpuGraphResourceDesc{}

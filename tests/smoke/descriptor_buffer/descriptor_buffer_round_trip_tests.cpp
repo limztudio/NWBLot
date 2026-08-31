@@ -108,6 +108,7 @@ class VulkanBinarySubmissionSignal final : NoCopy{
 private:
     [[nodiscard]] static bool prepare(
         void* const context,
+        const u64,
         const GpuPhysicalQueueId& executionQueue,
         QueueSubmissionNativeSignal& outSignal
     ){
@@ -156,6 +157,115 @@ private:
 };
 
 
+// Deterministically holds one presentation-style signal claim after it publishes Queued but before Queue::submit.
+// This recreates the lifetime interval where cancellation and lifecycle drain must wait for exact native resolution
+// instead of retiring the binary semaphore while the submitting thread still owns its raw VkSemaphore handle.
+class BlockingPresentationSubmissionSignal final : NoCopy{
+private:
+    [[nodiscard]] static bool prepare(
+        void* const context,
+        const u64 identity,
+        const GpuPhysicalQueueId& executionQueue,
+        QueueSubmissionNativeSignal& outSignal
+    ){
+        BlockingPresentationSubmissionSignal* const signal =
+            static_cast<BlockingPresentationSubmissionSignal*>(context);
+        if(
+            !signal
+            || !signal->valid()
+            || identity != s_ClaimIdentity
+            || executionQueue != signal->m_expectedQueue
+            || signal->m_invocationCount != 0u
+        )
+            return false;
+
+        outSignal = signal->m_semaphore.nativeSignal();
+        ++signal->m_invocationCount;
+        signal->m_queued.test_and_set(MemoryOrder::release);
+        signal->m_queued.notify_all();
+        while(!signal->m_releasePrepare.test(MemoryOrder::acquire))
+            signal->m_releasePrepare.wait(false, MemoryOrder::acquire);
+        return true;
+    }
+
+    [[nodiscard]] static bool resolved(
+        void* const context,
+        const u64 identity,
+        const QueueSubmissionToken& submissionToken
+    )noexcept{
+        BlockingPresentationSubmissionSignal* const signal =
+            static_cast<BlockingPresentationSubmissionSignal*>(context);
+        if(!signal || identity != s_ClaimIdentity)
+            return false;
+
+        signal->m_resolvedToken = submissionToken;
+        signal->m_resolvedBeforeExecuteReturned = !signal->m_executeReturned.test(MemoryOrder::acquire);
+        signal->m_resolved.test_and_set(MemoryOrder::release);
+        signal->m_resolved.notify_all();
+        return true;
+    }
+
+
+public:
+    BlockingPresentationSubmissionSignal(
+        GraphicsBackend::Device& device,
+        const GpuPhysicalQueueId& expectedQueue
+    )
+        : m_semaphore(device)
+        , m_expectedQueue(expectedQueue)
+    {}
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{
+        return m_expectedQueue.valid() && m_semaphore.valid();
+    }
+    [[nodiscard]] QueueSubmissionPreSubmitHook hook()noexcept{
+        return QueueSubmissionPreSubmitHook{
+            .context = this,
+            .identity = s_ClaimIdentity,
+            .invoke = &BlockingPresentationSubmissionSignal::prepare,
+            .resolved = &BlockingPresentationSubmissionSignal::resolved,
+        };
+    }
+    void waitUntilQueued()const noexcept{
+        while(!m_queued.test(MemoryOrder::acquire))
+            m_queued.wait(false, MemoryOrder::acquire);
+    }
+    void waitUntilResolved()const noexcept{
+        while(!m_resolved.test(MemoryOrder::acquire))
+            m_resolved.wait(false, MemoryOrder::acquire);
+    }
+    void releasePrepare()noexcept{
+        m_releasePrepare.test_and_set(MemoryOrder::release);
+        m_releasePrepare.notify_all();
+    }
+    void markExecuteReturned()noexcept{
+        m_executeReturned.test_and_set(MemoryOrder::release);
+        m_executeReturned.notify_all();
+    }
+    [[nodiscard]] bool isResolved()const noexcept{ return m_resolved.test(MemoryOrder::acquire); }
+    [[nodiscard]] bool executeReturned()const noexcept{ return m_executeReturned.test(MemoryOrder::acquire); }
+    [[nodiscard]] bool resolvedBeforeExecuteReturned()const noexcept{ return m_resolvedBeforeExecuteReturned; }
+    [[nodiscard]] const QueueSubmissionToken& resolvedToken()const noexcept{ return m_resolvedToken; }
+    [[nodiscard]] u32 invocationCount()const noexcept{ return m_invocationCount; }
+
+
+private:
+    static constexpr u64 s_ClaimIdentity = 1u;
+
+    VulkanTestBinarySemaphore m_semaphore;
+    GpuPhysicalQueueId m_expectedQueue;
+    AtomicFlag m_queued;
+    AtomicFlag m_releasePrepare;
+    AtomicFlag m_resolved;
+    AtomicFlag m_executeReturned;
+    QueueSubmissionToken m_resolvedToken;
+    u32 m_invocationCount = 0u;
+    bool m_resolvedBeforeExecuteReturned = false;
+};
+
+
 class CallerOwnedRetainedStateBuffer final : NoCopy{
 private:
     [[nodiscard]] static Object encode(const VkBuffer buffer)noexcept{
@@ -179,12 +289,12 @@ public:
             !m_context.valid()
             || byteSize == 0u
             || usage == 0u
-            || !vkCreateBuffer
-            || !vkDestroyBuffer
-            || !vkGetBufferMemoryRequirements
-            || !vkAllocateMemory
-            || !vkFreeMemory
-            || !vkBindBufferMemory
+            || !m_context.deviceDispatch->vkCreateBuffer
+            || !m_context.deviceDispatch->vkDestroyBuffer
+            || !m_context.deviceDispatch->vkGetBufferMemoryRequirements
+            || !m_context.deviceDispatch->vkAllocateMemory
+            || !m_context.deviceDispatch->vkFreeMemory
+            || !m_context.deviceDispatch->vkBindBufferMemory
         )
             return;
 
@@ -198,13 +308,13 @@ public:
             .queueFamilyIndexCount = 0u,
             .pQueueFamilyIndices = nullptr,
         };
-        if(vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &m_buffer) != VK_SUCCESS){
+        if(m_context.deviceDispatch->vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &m_buffer) != VK_SUCCESS){
             m_buffer = VK_NULL_HANDLE;
             return;
         }
 
         VkMemoryRequirements memoryRequirements{};
-        vkGetBufferMemoryRequirements(m_context.device, m_buffer, &memoryRequirements);
+        m_context.deviceDispatch->vkGetBufferMemoryRequirements(m_context.device, m_buffer, &memoryRequirements);
         u32 memoryTypeIndex = VK_MAX_MEMORY_TYPES;
         for(u32 candidateIndex = 0u; candidateIndex < VK_MAX_MEMORY_TYPES; ++candidateIndex){
             if((memoryRequirements.memoryTypeBits & (1u << candidateIndex)) != 0u){
@@ -221,7 +331,7 @@ public:
             .allocationSize = memoryRequirements.size,
             .memoryTypeIndex = memoryTypeIndex,
         };
-        if(vkAllocateMemory(
+        if(m_context.deviceDispatch->vkAllocateMemory(
             m_context.device,
             &allocationInfo,
             m_context.allocationCallbacks,
@@ -230,17 +340,17 @@ public:
             m_memory = VK_NULL_HANDLE;
             return;
         }
-        if(vkBindBufferMemory(m_context.device, m_buffer, m_memory, 0u) != VK_SUCCESS)
+        if(m_context.deviceDispatch->vkBindBufferMemory(m_context.device, m_buffer, m_memory, 0u) != VK_SUCCESS)
             return;
         m_bound = true;
     }
     ~CallerOwnedRetainedStateBuffer(){
         if(m_buffer != VK_NULL_HANDLE){
-            vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
+            m_context.deviceDispatch->vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
             m_buffer = VK_NULL_HANDLE;
         }
         if(m_memory != VK_NULL_HANDLE){
-            vkFreeMemory(m_context.device, m_memory, m_context.allocationCallbacks);
+            m_context.deviceDispatch->vkFreeMemory(m_context.device, m_memory, m_context.allocationCallbacks);
             m_memory = VK_NULL_HANDLE;
         }
     }
@@ -314,21 +424,23 @@ public:
     class ScopedSubmitInterception final : NoCopy{
     public:
         explicit ScopedSubmitInterception(VulkanSubmissionTailGate& gate)
-            : m_original(vkQueueSubmit2)
+            : m_dispatchOverride(gate.m_device, &VolkDeviceTable::vkQueueSubmit2)
         {
-            if(!gate.valid() || s_activeGate || !m_original)
+            if(!gate.valid() || s_activeGate || !m_dispatchOverride.valid())
                 return;
 
-            s_forwardQueueSubmit2 = m_original;
+            s_forwardQueueSubmit2 = m_dispatchOverride.original();
             s_activeGate = &gate;
-            vkQueueSubmit2 = &VulkanSubmissionTailGate::InterceptQueueSubmit2;
+            if(!m_dispatchOverride.replace(&VulkanSubmissionTailGate::InterceptQueueSubmit2)){
+                s_activeGate = nullptr;
+                return;
+            }
             m_armed = true;
         }
         ~ScopedSubmitInterception(){
             if(!m_armed)
                 return;
 
-            vkQueueSubmit2 = m_original;
             s_activeGate = nullptr;
         }
 
@@ -338,7 +450,7 @@ public:
 
 
     private:
-        PFN_vkQueueSubmit2 m_original = nullptr;
+        ScopedVulkanDeviceDispatchOverride<PFN_vkQueueSubmit2> m_dispatchOverride;
         bool m_armed = false;
     };
 
@@ -365,7 +477,8 @@ private:
 
 public:
     VulkanSubmissionTailGate(GraphicsBackend::Device& device, const GpuPhysicalQueueId& queue)
-        : m_queue(device.getQueue(queue))
+        : m_device(device)
+        , m_queue(device.getQueue(queue))
         , m_nativeQueue(static_cast<VkQueue>(
             device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, queue).pointer
         ))
@@ -373,13 +486,14 @@ public:
         const VulkanTestDeviceContext capture = VulkanTestDeviceProbe::capture(device);
         m_nativeDevice = capture.device;
         m_allocationCallbacks = capture.allocationCallbacks;
+        m_deviceDispatch = capture.deviceDispatch;
         if(!m_queue || m_nativeQueue == VK_NULL_HANDLE || !capture.valid())
             return;
 
         if(!createTimeline(m_readySemaphore))
             return;
         if(!createTimeline(m_releaseSemaphore)){
-            vkDestroySemaphore(m_nativeDevice, m_readySemaphore, m_allocationCallbacks);
+            m_deviceDispatch->vkDestroySemaphore(m_nativeDevice, m_readySemaphore, m_allocationCallbacks);
             m_readySemaphore = VK_NULL_HANDLE;
         }
     }
@@ -394,9 +508,9 @@ public:
             return;
 
         if(m_releaseSemaphore != VK_NULL_HANDLE)
-            vkDestroySemaphore(m_nativeDevice, m_releaseSemaphore, m_allocationCallbacks);
+            m_deviceDispatch->vkDestroySemaphore(m_nativeDevice, m_releaseSemaphore, m_allocationCallbacks);
         if(m_readySemaphore != VK_NULL_HANDLE)
-            vkDestroySemaphore(m_nativeDevice, m_readySemaphore, m_allocationCallbacks);
+            m_deviceDispatch->vkDestroySemaphore(m_nativeDevice, m_readySemaphore, m_allocationCallbacks);
     }
 
 
@@ -412,7 +526,7 @@ public:
     }
     [[nodiscard]] bool splitSubmissionAccepted()const noexcept{ return m_splitSubmissionAccepted; }
     [[nodiscard]] bool waitUntilReady()const{
-        if(!m_splitSubmissionAccepted || !vkWaitSemaphores)
+        if(!m_splitSubmissionAccepted || !m_deviceDispatch->vkWaitSemaphores)
             return false;
 
         auto waitInfo = HostSync::MakeVkStruct<VkSemaphoreWaitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO);
@@ -420,10 +534,10 @@ public:
         waitInfo.semaphoreCount = 1u;
         waitInfo.pSemaphores = &m_readySemaphore;
         waitInfo.pValues = &readyValue;
-        return vkWaitSemaphores(m_nativeDevice, &waitInfo, 30'000'000'000u) == VK_SUCCESS;
+        return m_deviceDispatch->vkWaitSemaphores(m_nativeDevice, &waitInfo, 30'000'000'000u) == VK_SUCCESS;
     }
     [[nodiscard]] bool release(){
-        if(!m_splitSubmissionAccepted || !vkSignalSemaphore)
+        if(!m_splitSubmissionAccepted || !m_deviceDispatch->vkSignalSemaphore)
             return false;
         if(m_releaseSignaled)
             return true;
@@ -431,7 +545,7 @@ public:
         auto signalInfo = HostSync::MakeVkStruct<VkSemaphoreSignalInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO);
         signalInfo.semaphore = m_releaseSemaphore;
         signalInfo.value = 1u;
-        if(vkSignalSemaphore(m_nativeDevice, &signalInfo) != VK_SUCCESS)
+        if(m_deviceDispatch->vkSignalSemaphore(m_nativeDevice, &signalInfo) != VK_SUCCESS)
             return false;
         m_releaseSignaled = true;
         return true;
@@ -447,7 +561,7 @@ public:
 
 private:
     [[nodiscard]] bool createTimeline(VkSemaphore& semaphore)const{
-        if(!vkCreateSemaphore)
+        if(!m_deviceDispatch->vkCreateSemaphore)
             return false;
 
         auto typeInfo = HostSync::MakeVkStruct<VkSemaphoreTypeCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO);
@@ -455,7 +569,7 @@ private:
         typeInfo.initialValue = 0u;
         auto createInfo = HostSync::MakeVkStruct<VkSemaphoreCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO);
         createInfo.pNext = &typeInfo;
-        return vkCreateSemaphore(m_nativeDevice, &createInfo, m_allocationCallbacks, &semaphore) == VK_SUCCESS;
+        return m_deviceDispatch->vkCreateSemaphore(m_nativeDevice, &createInfo, m_allocationCallbacks, &semaphore) == VK_SUCCESS;
     }
     [[nodiscard]] VkResult splitQueueSubmit(
         const u32 submitCount,
@@ -501,10 +615,12 @@ private:
 
 
 private:
+    GraphicsBackend::Device& m_device;
     GraphicsBackend::Queue* m_queue = nullptr;
     VkQueue m_nativeQueue = VK_NULL_HANDLE;
     VkDevice m_nativeDevice = VK_NULL_HANDLE;
     const VkAllocationCallbacks* m_allocationCallbacks = nullptr;
+    VolkDeviceTable* m_deviceDispatch = nullptr;
     VkSemaphore m_readySemaphore = VK_NULL_HANDLE;
     VkSemaphore m_releaseSemaphore = VK_NULL_HANDLE;
     bool m_splitSubmissionObserved = false;
@@ -582,27 +698,30 @@ private:
 
 
 public:
-    explicit ScopedNativeUploadReuseTrace(NativeUploadReuseCapture& capture)
-        : m_originalGetBufferDeviceAddress(vkGetBufferDeviceAddress)
-        , m_originalCmdCopyBuffer(vkCmdCopyBuffer)
+    ScopedNativeUploadReuseTrace(GraphicsBackend::Device& device, NativeUploadReuseCapture& capture)
+        : m_getBufferDeviceAddressOverride(device, &VolkDeviceTable::vkGetBufferDeviceAddress)
+        , m_cmdCopyBufferOverride(device, &VolkDeviceTable::vkCmdCopyBuffer)
     {
         capture = {};
-        if(s_activeCapture || !m_originalGetBufferDeviceAddress || !m_originalCmdCopyBuffer)
+        if(s_activeCapture || !m_getBufferDeviceAddressOverride.valid() || !m_cmdCopyBufferOverride.valid())
             return;
 
-        s_forwardGetBufferDeviceAddress = m_originalGetBufferDeviceAddress;
-        s_forwardCmdCopyBuffer = m_originalCmdCopyBuffer;
+        s_forwardGetBufferDeviceAddress = m_getBufferDeviceAddressOverride.original();
+        s_forwardCmdCopyBuffer = m_cmdCopyBufferOverride.original();
         s_activeCapture = &capture;
-        vkGetBufferDeviceAddress = &ScopedNativeUploadReuseTrace::InterceptGetBufferDeviceAddress;
-        vkCmdCopyBuffer = &ScopedNativeUploadReuseTrace::InterceptCmdCopyBuffer;
+        if(
+            !m_getBufferDeviceAddressOverride.replace(&ScopedNativeUploadReuseTrace::InterceptGetBufferDeviceAddress)
+            || !m_cmdCopyBufferOverride.replace(&ScopedNativeUploadReuseTrace::InterceptCmdCopyBuffer)
+        ){
+            s_activeCapture = nullptr;
+            return;
+        }
         m_armed = true;
     }
     ~ScopedNativeUploadReuseTrace(){
         if(!m_armed)
             return;
 
-        vkGetBufferDeviceAddress = m_originalGetBufferDeviceAddress;
-        vkCmdCopyBuffer = m_originalCmdCopyBuffer;
         s_activeCapture = nullptr;
     }
 
@@ -612,8 +731,8 @@ public:
 
 
 private:
-    PFN_vkGetBufferDeviceAddress m_originalGetBufferDeviceAddress = nullptr;
-    PFN_vkCmdCopyBuffer m_originalCmdCopyBuffer = nullptr;
+    ScopedVulkanDeviceDispatchOverride<PFN_vkGetBufferDeviceAddress> m_getBufferDeviceAddressOverride;
+    ScopedVulkanDeviceDispatchOverride<PFN_vkCmdCopyBuffer> m_cmdCopyBufferOverride;
     bool m_armed = false;
 };
 
@@ -1858,8 +1977,9 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryResultCarriesNativePhysicalQueue
     ASSERT_NE(commandList.get(), nullptr);
 
     commandList->open();
-    ASSERT_TRUE(commandList->beginTimerQuery(query.get()));
-    ASSERT_TRUE(commandList->endTimerQuery(query.get()));
+    TimerQueryRecordingToken queryRecording;
+    ASSERT_TRUE(commandList->beginTimerQuery(query.get(), queryRecording));
+    ASSERT_TRUE(commandList->endTimerQuery(query.get(), queryRecording));
     commandList->close();
 
     CommandList* const commandLists[] = { commandList.get() };
@@ -1934,9 +2054,10 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryRejectsDifferentExactPhysicalQue
 
     primaryCommandList->open();
     secondaryCommandList->open();
-    ASSERT_TRUE(primaryCommandList->beginTimerQuery(query.get()));
-    EXPECT_FALSE(secondaryCommandList->endTimerQuery(query.get()));
-    ASSERT_TRUE(primaryCommandList->endTimerQuery(query.get()));
+    TimerQueryRecordingToken queryRecording;
+    ASSERT_TRUE(primaryCommandList->beginTimerQuery(query.get(), queryRecording));
+    EXPECT_FALSE(secondaryCommandList->endTimerQuery(query.get(), queryRecording));
+    ASSERT_TRUE(primaryCommandList->endTimerQuery(query.get(), queryRecording));
     secondaryCommandList->close();
     primaryCommandList->close();
 
@@ -2073,6 +2194,118 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingCompletionTracksExactAuxiliaryPhy
     }
     else
         EXPECT_FALSE(completedSamples.samples[0u].comparableRange.valid());
+
+    multiQueueScope.setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
+// A pool reset accepted on the primary queue must become an explicit prerequisite when the reserved query records
+// on another physical Graphics queue. Gate the reset token, then inspect and exercise the auxiliary native wait.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingDirectSubmissionWaitsForCrossQueueFrameReset){
+    HeadlessGraphicsScope multiQueueScope;
+    ASSERT_TRUE(multiQueueScope.setSameClassMultiQueueEnabled(true));
+    if(!multiQueueScope.initialize())
+        GTEST_SKIP() << "GPU timing reset prerequisite: no usable multi-queue headless Vulkan device on this host.";
+
+    auto& graphics = multiQueueScope.graphics();
+    auto& nativeDevice = graphics.getDevice();
+    const GpuPhysicalQueueId primaryQueue = nativeDevice.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueTopology topology = nativeDevice.getPhysicalQueueTopology();
+    const GpuPhysicalQueueInfo* secondaryInfo = nullptr;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+        if(
+            candidate.id != primaryQueue
+            && candidate.queueClass == CommandQueue::Graphics
+            && candidate.timestampValidBits != 0u
+        ){
+            secondaryInfo = &candidate;
+            break;
+        }
+    }
+    if(!secondaryInfo)
+        GTEST_SKIP() << "GPU timing reset prerequisite: adapter exposes no auxiliary timestamp-capable Graphics queue.";
+
+    auto& timing = graphics.gpuTiming();
+    multiQueueScope.setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_AuxiliaryCompletionScope.identity, nativeDevice, 1u));
+    timing.beginFrame(242u);
+
+    auto resetCommandList = nativeDevice.createCommandList();
+    ASSERT_NE(resetCommandList.get(), nullptr);
+    resetCommandList->open();
+    timing.recordFrameReset(*resetCommandList);
+    resetCommandList->close();
+    CommandList* resetCommandLists[] = { resetCommandList.get() };
+    __hidden_descriptor_buffer_round_trip_tests::VulkanSubmissionTailGate resetGate(nativeDevice, primaryQueue);
+    ASSERT_TRUE(resetGate.valid());
+    QueueSubmissionToken resetToken;
+    {
+        __hidden_descriptor_buffer_round_trip_tests::VulkanSubmissionTailGate::ScopedSubmitInterception interception(
+            resetGate
+        );
+        ASSERT_TRUE(interception.valid());
+        resetToken = nativeDevice.executeCommandLists(
+            resetCommandLists,
+            LengthOf(resetCommandLists),
+            primaryQueue,
+            QueueSubmissionDesc{}
+        );
+    }
+    ASSERT_TRUE(resetToken.valid());
+    ASSERT_TRUE(resetGate.splitSubmissionAccepted());
+    timing.confirmFrameReset(resetToken);
+    ASSERT_TRUE(resetGate.waitUntilReady());
+    EXPECT_LT(nativeDevice.queueGetCompletedInstance(primaryQueue), resetToken.value);
+
+    CommandListParameters parameters;
+    parameters.setPhysicalQueue(secondaryInfo->id);
+    auto commandList = nativeDevice.createCommandList(parameters);
+    ASSERT_NE(commandList.get(), nullptr);
+    GpuTimingSubmissionTicket ticket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(ticket);
+        commandList->open();
+        {
+            GpuTimingMeasure measure(timing, s_AuxiliaryCompletionScope, nativeDevice, *commandList);
+            ASSERT_TRUE(measure.valid());
+        }
+        commandList->close();
+    }
+
+    VulkanTestQueueSubmit2Observer submissionObserver(nativeDevice);
+    ASSERT_TRUE(submissionObserver.valid());
+    CommandList* commandLists[] = { commandList.get() };
+    const QueueSubmissionToken token = ticket.submit(
+        nativeDevice,
+        commandLists,
+        LengthOf(commandLists),
+        secondaryInfo->id,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(token.valid());
+    EXPECT_FALSE(submissionObserver.overflowed());
+    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 1u);
+    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 1u);
+    EXPECT_EQ(submissionObserver.successfulWaitCount(), 1u);
+    VulkanTestQueueSubmit2Capture capture;
+    ASSERT_TRUE(submissionObserver.capturedSubmission(0u, capture));
+    ASSERT_EQ(capture.result, VK_SUCCESS);
+    ASSERT_FALSE(capture.overflowed);
+    ASSERT_EQ(capture.submitCount, 1u);
+    ASSERT_EQ(capture.submits[0u].waitCount, 1u);
+    EXPECT_EQ(capture.submits[0u].waits[0u].value, resetToken.value);
+    EXPECT_LT(nativeDevice.queueGetCompletedInstance(secondaryInfo->id), token.value);
+
+    ASSERT_TRUE(resetGate.releaseAndWait());
+    ASSERT_TRUE(nativeDevice.waitForIdle());
+    EXPECT_GE(nativeDevice.queueGetCompletedInstance(secondaryInfo->id), token.value);
+    timing.collect(nativeDevice, 243u);
+    const GpuTimingRecorderStatistics statistics = timing.statistics(nativeDevice);
+    EXPECT_EQ(statistics.recordedScopeCount, 1u);
+    EXPECT_EQ(statistics.acceptedScopeCount, 1u);
+    EXPECT_EQ(statistics.quarantinedScopeCount, 0u);
 
     multiQueueScope.setGpuTimingEnabled(false);
     timing.resetQueries();
@@ -4957,6 +5190,7 @@ struct NativePacketSubmissionHookObserver{
 
 [[nodiscard]] static bool RejectNativePacketSubmissionHook(
     void* const rawContext,
+    const u64,
     const GpuPhysicalQueueId& executionQueue,
     QueueSubmissionNativeSignal& outSignal
 ){
@@ -4979,6 +5213,7 @@ struct NativePacketSubmissionLeaseMutationContext{
 
 [[nodiscard]] static bool ReplaceNativePacketSubmissionLease(
     void* const rawContext,
+    const u64,
     const GpuPhysicalQueueId& executionQueue,
     QueueSubmissionNativeSignal& outSignal
 ){
@@ -5255,7 +5490,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryResetRejectsExactTransferQueueAn
     ASSERT_NE(resetCommandList.get(), nullptr);
     resetCommandList->open();
     EXPECT_FALSE(resetCommandList->canResetTimerQueryHere());
-    resetCommandList->resetTimerQuery(query.get());
+    EXPECT_FALSE(resetCommandList->resetTimerQuery(query.get()));
     EXPECT_TRUE(resetCommandList->commandRecordingFailed());
     resetCommandList->close();
     EXPECT_FALSE(resetCommandList->hasCommandBuffer());
@@ -5263,7 +5498,8 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryResetRejectsExactTransferQueueAn
     auto beginCommandList = device.createCommandList(transferParameters);
     ASSERT_NE(beginCommandList.get(), nullptr);
     beginCommandList->open();
-    EXPECT_FALSE(beginCommandList->beginTimerQuery(query.get()));
+    TimerQueryRecordingToken transferQueryRecording;
+    EXPECT_FALSE(beginCommandList->beginTimerQuery(query.get(), transferQueryRecording));
     EXPECT_TRUE(beginCommandList->commandRecordingFailed());
     beginCommandList->close();
     EXPECT_FALSE(beginCommandList->hasCommandBuffer());
@@ -5299,10 +5535,11 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryResetRejectsExactTransferQueueAn
         ASSERT_NE(graphicsCommandList.get(), nullptr);
         graphicsCommandList->open();
         EXPECT_TRUE(graphicsCommandList->canResetTimerQueryHere());
-        graphicsCommandList->resetTimerQuery(query.get());
+        ASSERT_TRUE(graphicsCommandList->resetTimerQuery(query.get()));
         EXPECT_FALSE(graphicsCommandList->commandRecordingFailed());
-        ASSERT_TRUE(graphicsCommandList->beginTimerQuery(query.get()));
-        ASSERT_TRUE(graphicsCommandList->endTimerQuery(query.get()));
+        TimerQueryRecordingToken graphicsQueryRecording;
+        ASSERT_TRUE(graphicsCommandList->beginTimerQuery(query.get(), graphicsQueryRecording));
+        ASSERT_TRUE(graphicsCommandList->endTimerQuery(query.get(), graphicsQueryRecording));
         graphicsCommandList->close();
         CommandList* const commandLists[] = { graphicsCommandList.get() };
         const QueueSubmissionToken token = device.executeCommandLists(
@@ -8783,7 +9020,7 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentStateRecordingAttemptsCommitOnlyO
         device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, rejectedQueue).pointer
     );
     ASSERT_NE(nativeRejectedQueue, VK_NULL_HANDLE);
-    VulkanTestQueueSubmit2Observer submissionObserver;
+    VulkanTestQueueSubmit2Observer submissionObserver(device);
     ASSERT_TRUE(submissionObserver.valid());
     ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeRejectedQueue));
     EXPECT_FALSE(submit().valid());
@@ -8882,7 +9119,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativeBufferRetainedInitialStatePublishesO
     );
     ASSERT_NE(nativeRejectedQueue, VK_NULL_HANDLE);
     {
-        VulkanTestQueueSubmit2Observer submissionObserver;
+        VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
         ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeRejectedQueue));
         CommandList* const rejectedLists[] = { commandList.get() };
@@ -9058,14 +9295,15 @@ TEST_F(DescriptorBufferRoundTripTest, NativeRecordingScopeRejectsStateMarkerAndQ
 
         afterCloseBeginQuery->open();
         afterCloseBeginQuery->close();
-        EXPECT_FALSE(afterCloseBeginQuery->beginTimerQuery(query.get()));
+        TimerQueryRecordingToken afterCloseQueryRecording;
+        EXPECT_FALSE(afterCloseBeginQuery->beginTimerQuery(query.get(), afterCloseQueryRecording));
         EXPECT_TRUE(afterCloseBeginQuery->commandRecordingFailed());
         afterCloseBeginQuery->close();
         EXPECT_FALSE(afterCloseBeginQuery->hasCommandBuffer());
 
         afterCloseEndQuery->open();
         afterCloseEndQuery->close();
-        EXPECT_FALSE(afterCloseEndQuery->endTimerQuery(query.get()));
+        EXPECT_FALSE(afterCloseEndQuery->endTimerQuery(query.get(), afterCloseQueryRecording));
         EXPECT_TRUE(afterCloseEndQuery->commandRecordingFailed());
         afterCloseEndQuery->close();
         EXPECT_FALSE(afterCloseEndQuery->hasCommandBuffer());
@@ -9514,7 +9752,7 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
     EXPECT_EQ(staleRecordedGraph.find(disposablePacket), nullptr);
     ASSERT_TRUE(retiredTransaction.validFor(retiredCompiledGraph));
 
-    recoveryScope.graphics().destroy();
+    ASSERT_TRUE(recoveryScope.graphics().destroy());
     ASSERT_TRUE(recoveryScope.graphics().createHeadlessDevice());
     auto& secondDevice = recoveryScope.graphics().getDevice();
     const u16 secondDeviceGeneration = secondDevice.getDeviceGeneration();
@@ -9726,7 +9964,7 @@ TEST_F(DescriptorBufferRoundTripTest, RejectsStaleResourceStateHandoffAfterActua
         EXPECT_EQ(staleStates.deviceGeneration(), firstDeviceGeneration);
     }
 
-    recoveryScope.graphics().destroy();
+    ASSERT_TRUE(recoveryScope.graphics().destroy());
     ASSERT_TRUE(recoveryScope.graphics().createHeadlessDevice());
     auto& secondDevice = recoveryScope.graphics().getDevice();
     const u16 secondDeviceGeneration = secondDevice.getDeviceGeneration();
@@ -10405,7 +10643,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalStateOrdersOverlappingIndepen
     );
     ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
     ASSERT_NE(nativeComputeQueue, VK_NULL_HANDLE);
-    VulkanTestQueueSubmit2Observer submissionObserver;
+    VulkanTestQueueSubmit2Observer submissionObserver(device);
     ASSERT_TRUE(submissionObserver.valid());
 
     const GpuTaskGraphSubmitter submitter(device);
@@ -11675,7 +11913,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedExternalCompletionUsesStoredToke
         device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
     );
     ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
-    VulkanTestQueueSubmit2Observer submissionObserver;
+    VulkanTestQueueSubmit2Observer submissionObserver(device);
     ASSERT_TRUE(submissionObserver.valid());
 
     CommandListParameters producerParameters;
@@ -26920,15 +27158,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationPair
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    EXPECT_GT(device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
-    ), 0u);
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     auto generatedVertex = device.createBuffer(
         BufferDesc()
@@ -27258,15 +27495,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    EXPECT_GT(device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
-    ), 0u);
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     auto generatedVertex = device.createBuffer(
         BufferDesc()
@@ -27572,15 +27808,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationQuad
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     auto generatedVertex = device.createBuffer(
         BufferDesc()
@@ -29055,15 +29290,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationAliasFr
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](
         const Name& debugName,
@@ -29753,15 +29987,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](
         const Name& debugName,
@@ -30440,15 +30673,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](
         const Name& debugName,
@@ -31153,15 +31385,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](
         const Name& debugName,
@@ -31893,15 +32124,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](
         const Name& debugName,
@@ -32514,15 +32744,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](
         const Name& debugName,
@@ -33161,15 +33390,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](
         const Name& debugName,
@@ -33845,15 +34073,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyAliasFreeC
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](
         const Name& debugName,
@@ -34408,15 +34635,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyCsgAliasFr
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](
         const Name& debugName,
@@ -35412,15 +35638,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionAliasFree
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](
         const Name& debugName,
@@ -36201,15 +36426,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitTypedAvboitIntegrationTai
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](const Name& debugName, const bool isConstantBuffer = false){
         BufferDesc description;
@@ -36704,15 +36928,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](
         const Name& debugName,
@@ -37632,15 +37855,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](
         const Name& debugName,
@@ -38585,15 +38807,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](
         const Name& debugName,
@@ -39568,15 +39789,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionCsgAliasF
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](
         const Name& debugName,
@@ -40452,15 +40672,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationCsgAlia
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](
         const Name& debugName,
@@ -41788,15 +42007,14 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitExtinctionComputeEmulationShare
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
         BufferDesc description;
@@ -42379,15 +42597,14 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitSemanticRangeAcceptsAuxiliaryCo
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
     ASSERT_TRUE(device.waitForIdle());
 
     auto workBuffer = device.createBuffer(
@@ -42678,15 +42895,14 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](
         const Name& debugName,
@@ -43543,15 +43759,14 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitOccupancyComputeEmulationShares
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
         BufferDesc description;
@@ -49432,6 +49647,13 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingStatisticsDistinguishSkipsOutcome
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(acceptedToken.valid());
+    CommandList* staleDiscardedCommandLists[] = { discardedCommandList.get() };
+    EXPECT_FALSE(device.executeCommandLists(
+        staleDiscardedCommandLists,
+        LengthOf(staleDiscardedCommandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
     ASSERT_TRUE(device.waitForIdle());
     timing.collect(device, 241u);
 
@@ -49747,15 +49969,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
     timing.recordFrameReset(*timingResetCommandList);
     timingResetCommandList->close();
     CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
-    bool timingResetSubmitted = false;
-    device.executeCommandLists(
+    const QueueSubmissionToken timingResetToken = device.executeCommandLists(
         timingResetCommandLists,
         LengthOf(timingResetCommandLists),
         CommandQueue::Graphics,
-        &timingResetSubmitted
+        QueueSubmissionDesc{}
     );
-    ASSERT_TRUE(timingResetSubmitted);
-    timing.confirmFrameReset();
+    ASSERT_TRUE(timingResetToken.valid());
+    timing.confirmFrameReset(timingResetToken);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuSubmissionPacketId failedRecordingPacket;
@@ -50240,7 +50461,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleRollsBackRejectedGrap
             device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
         );
         ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
-        VulkanTestQueueSubmit2Observer submissionObserver;
+        VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
         ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
         ASSERT_TRUE(graphics.prepareFramePreamble());
@@ -50650,10 +50871,14 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
     timing.recordFrameReset(*resetCommandList);
     resetCommandList->close();
     CommandList* resetCommandLists[] = { resetCommandList.get() };
-    bool resetSubmitted = false;
-    device.executeCommandLists(resetCommandLists, 1u, CommandQueue::Graphics, &resetSubmitted);
-    ASSERT_TRUE(resetSubmitted);
-    timing.confirmFrameReset();
+    const QueueSubmissionToken resetToken = device.executeCommandLists(
+        resetCommandLists,
+        1u,
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(resetToken.valid());
+    timing.confirmFrameReset(resetToken);
 
     auto abandonedCommandList = device.createCommandList();
     ASSERT_NE(abandonedCommandList.get(), nullptr);
@@ -50667,12 +50892,35 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
             abandonedCommandList->setGraphicsState(graphicsState);
             {
                 GpuTimingMeasure abandonedTiming(timing, s_SubmissionTicketScope, device, *abandonedCommandList);
+                ASSERT_TRUE(abandonedTiming.valid());
                 abandonedTiming.discardTiming();
             }
             abandonedCommandList->endRenderPass();
             abandonedCommandList->close();
         }
     }
+
+    auto splitScopeResetCommandList = device.createCommandList();
+    ASSERT_NE(splitScopeResetCommandList.get(), nullptr);
+    splitScopeResetCommandList->open();
+    timing.recordFrameReset(*splitScopeResetCommandList);
+    splitScopeResetCommandList->close();
+    CommandList* splitScopeResetCommandLists[] = { splitScopeResetCommandList.get() };
+    const QueueSubmissionToken splitScopeResetToken = device.executeCommandLists(
+        splitScopeResetCommandLists,
+        LengthOf(splitScopeResetCommandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(splitScopeResetToken.valid());
+    timing.confirmFrameReset(splitScopeResetToken);
+    CommandList* staleAbandonedCommandLists[] = { abandonedCommandList.get() };
+    EXPECT_FALSE(device.executeCommandLists(
+        staleAbandonedCommandLists,
+        LengthOf(staleAbandonedCommandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
 
     auto producer = device.createCommandList();
     auto consumer = device.createCommandList();
@@ -50694,6 +50942,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
                 *producer,
                 rejectedTimingAttribution
             );
+            ASSERT_TRUE(rejectedTiming.valid());
             rejectedTiming.finishMarker();
             producer->endRenderPass();
             producer->close();
@@ -50708,8 +50957,6 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
         CommandList* rejectedCommandLists[] = { producer.get(), nullptr };
         EXPECT_FALSE(rejectedTicket.submit(device, rejectedCommandLists, 2u));
     }
-    producer.reset();
-    consumer.reset();
 
     // A discarded command buffer may contain timestamp writes, so a retry cannot reuse the query inside dynamic
     // rendering until the next accepted graph preamble resets it on the device timeline.
@@ -50743,10 +50990,24 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
     timing.recordFrameReset(*retryResetCommandList);
     retryResetCommandList->close();
     CommandList* retryResetCommandLists[] = { retryResetCommandList.get() };
-    bool retryResetSubmitted = false;
-    device.executeCommandLists(retryResetCommandLists, 1u, CommandQueue::Graphics, &retryResetSubmitted);
-    ASSERT_TRUE(retryResetSubmitted);
-    timing.confirmFrameReset();
+    const QueueSubmissionToken retryResetToken = device.executeCommandLists(
+        retryResetCommandLists,
+        1u,
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(retryResetToken.valid());
+    timing.confirmFrameReset(retryResetToken);
+
+    CommandList* staleSplitCommandLists[] = { producer.get(), consumer.get() };
+    EXPECT_FALSE(device.executeCommandLists(
+        staleSplitCommandLists,
+        LengthOf(staleSplitCommandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
+    producer.reset();
+    consumer.reset();
 
     auto acceptedCommandList = device.createCommandList();
     ASSERT_NE(acceptedCommandList.get(), nullptr);
@@ -50789,10 +51050,14 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
     timing.recordFrameReset(*retirementResetCommandList);
     retirementResetCommandList->close();
     CommandList* retirementResetCommandLists[] = { retirementResetCommandList.get() };
-    bool retirementResetSubmitted = false;
-    device.executeCommandLists(retirementResetCommandLists, 1u, CommandQueue::Graphics, &retirementResetSubmitted);
-    ASSERT_TRUE(retirementResetSubmitted);
-    timing.confirmFrameReset();
+    const QueueSubmissionToken retirementResetToken = device.executeCommandLists(
+        retirementResetCommandLists,
+        1u,
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(retirementResetToken.valid());
+    timing.confirmFrameReset(retirementResetToken);
 
     // Retiring capture before an accepted query is collected must notify the listener with an unusable result. This
     // releases higher-level task attribution without turning an old epoch into a timing sample after reactivation.
@@ -50910,10 +51175,14 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
     timing.recordFrameReset(*resetCommandList);
     resetCommandList->close();
     CommandList* resetCommandLists[] = { resetCommandList.get() };
-    bool resetSubmitted = false;
-    device.executeCommandLists(resetCommandLists, 1u, CommandQueue::Graphics, &resetSubmitted);
-    ASSERT_TRUE(resetSubmitted);
-    timing.confirmFrameReset();
+    const QueueSubmissionToken resetToken = device.executeCommandLists(
+        resetCommandLists,
+        1u,
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(resetToken.valid());
+    timing.confirmFrameReset(resetToken);
 
     auto firstCommandList = device.createCommandList();
     auto secondCommandList = device.createCommandList();
@@ -51079,15 +51348,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingRejectsAndReusesC
     timing.recordFrameReset(*resetCommandList);
     resetCommandList->close();
     CommandList* resetCommandLists[] = { resetCommandList.get() };
-    bool resetSubmitted = false;
-    EXPECT_GT(device.executeCommandLists(
+    const QueueSubmissionToken resetToken = device.executeCommandLists(
         resetCommandLists,
         LengthOf(resetCommandLists),
         CommandQueue::Graphics,
-        &resetSubmitted
-    ), 0u);
-    ASSERT_TRUE(resetSubmitted);
-    timing.confirmFrameReset();
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(resetToken.valid());
+    timing.confirmFrameReset(resetToken);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device, timing);
@@ -51120,7 +51388,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingRejectsAndReusesC
             device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, rejectedQueue).pointer
         );
         ASSERT_NE(nativeRejectedQueue, VK_NULL_HANDLE);
-        VulkanTestQueueSubmit2Observer submissionObserver;
+        VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
         ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeRejectedQueue));
         EXPECT_FALSE(submitter.submitTaskRangeInCompileOrder(
@@ -51160,15 +51428,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingRejectsAndReusesC
     timing.recordFrameReset(*retryResetCommandList);
     retryResetCommandList->close();
     CommandList* retryResetCommandLists[] = { retryResetCommandList.get() };
-    bool retryResetSubmitted = false;
-    EXPECT_GT(device.executeCommandLists(
+    const QueueSubmissionToken retryResetToken = device.executeCommandLists(
         retryResetCommandLists,
         LengthOf(retryResetCommandLists),
         CommandQueue::Graphics,
-        &retryResetSubmitted
-    ), 0u);
-    ASSERT_TRUE(retryResetSubmitted);
-    timing.confirmFrameReset();
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(retryResetToken.valid());
+    timing.confirmFrameReset(retryResetToken);
 
     auto retryCommandList = device.createCommandList();
     ASSERT_NE(retryCommandList.get(), nullptr);
@@ -51233,7 +51500,7 @@ TEST_F(DescriptorBufferRoundTripTest, ImguiTextureUploadBatchCommitsOnlyAfterAcc
             device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
         );
         ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
-        VulkanTestQueueSubmit2Observer submissionObserver;
+        VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
         ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
         device.executeCommandLists(rejectedCommandLists, 1u, CommandQueue::Graphics, &submitted);
@@ -51287,7 +51554,7 @@ TEST_F(DescriptorBufferRoundTripTest, DirectCommandListCanRetryAfterRejectedSubm
             device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
         );
         ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
-        VulkanTestQueueSubmit2Observer submissionObserver;
+        VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
         ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
         device.executeCommandLists(commandLists, 1u, CommandQueue::Graphics, &submitted);
@@ -51317,7 +51584,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsRetr
         device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
     );
     ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
-    VulkanTestQueueSubmit2Observer submissionObserver;
+    VulkanTestQueueSubmit2Observer submissionObserver(device);
     ASSERT_TRUE(submissionObserver.valid());
 
     CommandListParameters producerParameters;
@@ -51547,7 +51814,7 @@ TEST_F(DescriptorBufferRoundTripTest, QueueGlobalSynchronizationSurvivesInjected
         device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
     );
     ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
-    VulkanTestQueueSubmit2Observer submissionObserver;
+    VulkanTestQueueSubmit2Observer submissionObserver(device);
     ASSERT_TRUE(submissionObserver.valid());
     ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
     EXPECT_FALSE(device.executeCommandLists(nullptr, 0u, graphicsQueue, QueueSubmissionDesc{}).valid());
@@ -51585,7 +51852,7 @@ TEST_F(DescriptorBufferRoundTripTest, ForcedEmptySubmissionAdvancesExactQueueAnd
         device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
     );
     ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
-    VulkanTestQueueSubmit2Observer submissionObserver;
+    VulkanTestQueueSubmit2Observer submissionObserver(device);
     ASSERT_TRUE(submissionObserver.valid());
     ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
     EXPECT_FALSE(device.executeCommandLists(nullptr, 0u, graphicsQueue, forcedSubmitDesc).valid());
@@ -51597,6 +51864,147 @@ TEST_F(DescriptorBufferRoundTripTest, ForcedEmptySubmissionAdvancesExactQueueAnd
     EXPECT_TRUE(retryToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
     EXPECT_GT(retryToken.value, firstToken.value);
     EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// A presentation-style hook owns its binary semaphore from Queued publication through exact native resolution.
+// Cancellation waits on the resolver and lifecycle preparation joins the enclosing submission operation, so neither
+// path can destroy queue-visible state during the CPU interval before Queue::submit receives the native handle.
+TEST_F(DescriptorBufferRoundTripTest, PresentationSignalResolutionJoinsPreQueueSubmitCancellationAndLifecycleDrain){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+
+    {
+        __hidden_descriptor_buffer_round_trip_tests::BlockingPresentationSubmissionSignal signal(
+            device,
+            graphicsQueue
+        );
+        ASSERT_TRUE(signal.valid());
+        QueueSubmissionDesc submissionDesc;
+        submissionDesc.forceNativeSubmission = true;
+        submissionDesc.setPreSubmitHook(signal.hook());
+
+        QueueSubmissionToken submissionToken;
+        Thread submissionThread([&](){
+            submissionToken = device.executeCommandLists(nullptr, 0u, graphicsQueue, submissionDesc);
+            signal.markExecuteReturned();
+        });
+        signal.waitUntilQueued();
+
+        AtomicFlag cancellationEntered;
+        AtomicFlag cancellationFinished;
+        bool cancellationObservedAcceptedToken = false;
+        Thread cancellationThread([&](){
+            cancellationEntered.test_and_set(MemoryOrder::release);
+            cancellationEntered.notify_all();
+            signal.waitUntilResolved();
+            cancellationObservedAcceptedToken = signal.resolvedToken().valid();
+            cancellationFinished.test_and_set(MemoryOrder::release);
+            cancellationFinished.notify_all();
+        });
+        while(!cancellationEntered.test(MemoryOrder::acquire))
+            cancellationEntered.wait(false, MemoryOrder::acquire);
+
+        EXPECT_FALSE(signal.isResolved());
+        EXPECT_FALSE(signal.executeReturned());
+        EXPECT_FALSE(cancellationFinished.test(MemoryOrder::acquire));
+
+        signal.releasePrepare();
+        submissionThread.join();
+        cancellationThread.join();
+
+        ASSERT_TRUE(submissionToken.valid());
+        EXPECT_TRUE(cancellationObservedAcceptedToken);
+        EXPECT_TRUE(signal.isResolved());
+        EXPECT_TRUE(signal.executeReturned());
+        EXPECT_TRUE(signal.resolvedBeforeExecuteReturned());
+        EXPECT_EQ(signal.invocationCount(), 1u);
+        EXPECT_EQ(signal.resolvedToken().queue, submissionToken.queue);
+        EXPECT_EQ(signal.resolvedToken().physicalQueueIndex, submissionToken.physicalQueueIndex);
+        EXPECT_EQ(signal.resolvedToken().deviceGeneration, submissionToken.deviceGeneration);
+        EXPECT_EQ(signal.resolvedToken().value, submissionToken.value);
+        ASSERT_TRUE(device.waitForIdle());
+    }
+
+    {
+        __hidden_descriptor_buffer_round_trip_tests::BlockingPresentationSubmissionSignal signal(
+            device,
+            graphicsQueue
+        );
+        ASSERT_TRUE(signal.valid());
+        QueueSubmissionDesc submissionDesc;
+        submissionDesc.forceNativeSubmission = true;
+        submissionDesc.setPreSubmitHook(signal.hook());
+
+        QueueSubmissionToken submissionToken;
+        Thread submissionThread([&](){
+            submissionToken = device.executeCommandLists(nullptr, 0u, graphicsQueue, submissionDesc);
+            signal.markExecuteReturned();
+        });
+        signal.waitUntilQueued();
+
+        AtomicFlag cancellationEntered;
+        AtomicFlag cancellationFinished;
+        bool cancellationObservedAcceptedToken = false;
+        Thread cancellationThread([&](){
+            cancellationEntered.test_and_set(MemoryOrder::release);
+            cancellationEntered.notify_all();
+            signal.waitUntilResolved();
+            cancellationObservedAcceptedToken = signal.resolvedToken().valid();
+            cancellationFinished.test_and_set(MemoryOrder::release);
+            cancellationFinished.notify_all();
+        });
+        while(!cancellationEntered.test(MemoryOrder::acquire))
+            cancellationEntered.wait(false, MemoryOrder::acquire);
+
+        AtomicFlag lifecycleEntered;
+        AtomicFlag lifecycleFinished;
+        bool lifecycleDrainSucceeded = false;
+        bool lifecycleIdleSucceeded = false;
+        Thread lifecycleThread([&](){
+            lifecycleEntered.test_and_set(MemoryOrder::release);
+            lifecycleEntered.notify_all();
+            lifecycleDrainSucceeded = GraphicsBackend::VulkanTestDispatchAccess::beginLifecycleDrain(device);
+            if(lifecycleDrainSucceeded){
+                lifecycleIdleSucceeded = device.waitForIdle();
+                GraphicsBackend::VulkanTestDispatchAccess::endLifecycleDrain(device);
+            }
+            lifecycleFinished.test_and_set(MemoryOrder::release);
+            lifecycleFinished.notify_all();
+        });
+        while(!lifecycleEntered.test(MemoryOrder::acquire))
+            lifecycleEntered.wait(false, MemoryOrder::acquire);
+        while(
+            !GraphicsBackend::VulkanTestDispatchAccess::submissionsBlocked(device)
+            && !lifecycleFinished.test(MemoryOrder::acquire)
+        )
+            YieldThread();
+
+        EXPECT_TRUE(GraphicsBackend::VulkanTestDispatchAccess::submissionsBlocked(device));
+        EXPECT_FALSE(signal.isResolved());
+        EXPECT_FALSE(signal.executeReturned());
+        EXPECT_FALSE(cancellationFinished.test(MemoryOrder::acquire));
+        EXPECT_FALSE(lifecycleFinished.test(MemoryOrder::acquire));
+
+        signal.releasePrepare();
+        submissionThread.join();
+        cancellationThread.join();
+        lifecycleThread.join();
+
+        EXPECT_EQ(cancellationObservedAcceptedToken, submissionToken.valid());
+        EXPECT_TRUE(lifecycleDrainSucceeded);
+        EXPECT_TRUE(lifecycleIdleSucceeded);
+        EXPECT_TRUE(signal.isResolved());
+        EXPECT_TRUE(signal.executeReturned());
+        EXPECT_TRUE(signal.resolvedBeforeExecuteReturned());
+        EXPECT_EQ(signal.invocationCount(), 1u);
+        EXPECT_EQ(signal.resolvedToken().queue, submissionToken.queue);
+        EXPECT_EQ(signal.resolvedToken().physicalQueueIndex, submissionToken.physicalQueueIndex);
+        EXPECT_EQ(signal.resolvedToken().deviceGeneration, submissionToken.deviceGeneration);
+        EXPECT_EQ(signal.resolvedToken().value, submissionToken.value);
+        EXPECT_FALSE(GraphicsBackend::VulkanTestDispatchAccess::submissionsBlocked(device));
+    }
 }
 
 
@@ -52084,29 +52492,30 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryCommandsRetainQueryThroughAbando
     const usize referencesBeforeRecord = query->getReferenceCount();
 
     auto resetOnly = device.createCommandList(parameters);
-    auto beginOnly = device.createCommandList(parameters);
-    auto endOnly = device.createCommandList(parameters);
     ASSERT_TRUE(resetOnly);
-    ASSERT_TRUE(beginOnly);
-    ASSERT_TRUE(endOnly);
 
     resetOnly->open();
-    resetOnly->resetTimerQuery(query.get());
+    ASSERT_TRUE(resetOnly->resetTimerQuery(query.get()));
     resetOnly->close();
     EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + 1u);
+    resetOnly.reset();
+    EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord);
 
+    auto beginOnly = device.createCommandList(parameters);
+    auto endOnly = device.createCommandList(parameters);
+    ASSERT_TRUE(beginOnly);
+    ASSERT_TRUE(endOnly);
     beginOnly->open();
-    ASSERT_TRUE(beginOnly->beginTimerQuery(query.get()));
+    TimerQueryRecordingToken abandonedQueryRecording;
+    ASSERT_TRUE(beginOnly->beginTimerQuery(query.get(), abandonedQueryRecording));
     beginOnly->close();
-    EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + 2u);
+    EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + 1u);
 
     endOnly->open();
-    ASSERT_TRUE(endOnly->endTimerQuery(query.get()));
+    ASSERT_TRUE(endOnly->endTimerQuery(query.get(), abandonedQueryRecording));
     endOnly->close();
-    EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + 3u);
-
-    resetOnly.reset();
     EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + 2u);
+
     beginOnly.reset();
     EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + 1u);
     endOnly.reset();
@@ -52115,9 +52524,10 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryCommandsRetainQueryThroughAbando
     auto rejected = device.createCommandList(parameters);
     ASSERT_TRUE(rejected);
     rejected->open();
-    rejected->resetTimerQuery(query.get());
-    ASSERT_TRUE(rejected->beginTimerQuery(query.get()));
-    ASSERT_TRUE(rejected->endTimerQuery(query.get()));
+    ASSERT_TRUE(rejected->resetTimerQuery(query.get()));
+    TimerQueryRecordingToken rejectedQueryRecording;
+    ASSERT_TRUE(rejected->beginTimerQuery(query.get(), rejectedQueryRecording));
+    ASSERT_TRUE(rejected->endTimerQuery(query.get(), rejectedQueryRecording));
     rejected->close();
     EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + 1u);
 
@@ -52128,7 +52538,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryCommandsRetainQueryThroughAbando
             device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
         );
         ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
-        VulkanTestQueueSubmit2Observer submissionObserver;
+        VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
         ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
         rejectedToken = device.executeCommandLists(
@@ -52148,9 +52558,10 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryCommandsRetainQueryThroughAbando
     auto completed = device.createCommandList(parameters);
     ASSERT_TRUE(completed);
     completed->open();
-    completed->resetTimerQuery(query.get());
-    ASSERT_TRUE(completed->beginTimerQuery(query.get()));
-    ASSERT_TRUE(completed->endTimerQuery(query.get()));
+    ASSERT_TRUE(completed->resetTimerQuery(query.get()));
+    TimerQueryRecordingToken completedQueryRecording;
+    ASSERT_TRUE(completed->beginTimerQuery(query.get(), completedQueryRecording));
+    ASSERT_TRUE(completed->endTimerQuery(query.get(), completedQueryRecording));
     completed->close();
     EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + 1u);
 
@@ -52162,6 +52573,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryCommandsRetainQueryThroughAbando
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(completedToken.valid());
+    EXPECT_FALSE(retainedQuery->discardUnacceptedRecording(completedQueryRecording));
     query.reset();
     completed.reset();
     EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord);
@@ -52238,7 +52650,7 @@ TEST_F(DescriptorBufferRoundTripTest, AbandonedAndRejectedCommandBuffersReleaseR
             device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
         );
         ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
-        VulkanTestQueueSubmit2Observer submissionObserver;
+        VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
         ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
         rejectedToken = device.executeCommandLists(
@@ -52342,16 +52754,16 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingUnsupportedPhysicalQueueIsSuccess
 }
 
 
-// Frame transactions span submissions and therefore require an extension-backed absolute device epoch in addition
-// to queue-local timestamp support. A closed-list end distinguishes the active backend path from the inactive no-op.
-TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionFollowsComparableTimestampCapability){
+// A same-queue frame duration needs only the queue's native timestamp width. Calibrated absolute timestamps enrich
+// its optional comparable range, but their absence must not turn the ordinary frame transaction into a no-op.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionFollowsQueueTimestampCapability){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& timing = graphics.gpuTiming();
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     const GpuPhysicalQueueInfo* const graphicsQueueInfo = device.getPhysicalQueueInfo(graphicsQueue);
     ASSERT_NE(graphicsQueueInfo, nullptr);
-    const bool comparableTimestamps = device.supportsComparableGpuTimestamps(graphicsQueue);
+    const bool queueTimestampsSupported = graphicsQueueInfo->timestampValidBits != 0u;
 
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();
@@ -52370,18 +52782,18 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionFollowsComparable
         commandList->open();
         ASSERT_TRUE(transaction.begin(s_TimerQueryComparableEpochScope, device, *commandList));
         commandList->close();
-        EXPECT_EQ(transaction.recordEnd(*commandList), !comparableTimestamps);
+        EXPECT_EQ(transaction.recordEnd(*commandList), !queueTimestampsSupported);
     }
     EXPECT_FALSE(transaction.needsRetirement());
-    const GpuTimingRecorderStatistics comparableStatistics = timing.statistics(device);
-    EXPECT_EQ(comparableStatistics.recordedScopeCount, comparableTimestamps ? 1u : 0u);
+    const GpuTimingRecorderStatistics timestampStatistics = timing.statistics(device);
+    EXPECT_EQ(timestampStatistics.recordedScopeCount, queueTimestampsSupported ? 1u : 0u);
     EXPECT_EQ(
-        comparableStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::QueueTimestampsUnsupported],
-        graphicsQueueInfo->timestampValidBits == 0u ? 1u : 0u
+        timestampStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::QueueTimestampsUnsupported],
+        queueTimestampsSupported ? 0u : 1u
     );
     EXPECT_EQ(
-        comparableStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::ComparableTimestampsUnsupported],
-        graphicsQueueInfo->timestampValidBits != 0u && !comparableTimestamps ? 1u : 0u
+        timestampStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::ComparableTimestampsUnsupported],
+        0u
     );
 
     s_scope->setGpuTimingEnabled(false);
@@ -52401,8 +52813,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionPropagatesBackend
         device.getPrimaryPhysicalQueue(CommandQueue::Graphics)
     );
     ASSERT_NE(graphicsQueueInfo, nullptr);
-    if(!device.supportsComparableGpuTimestamps(graphicsQueueInfo->id))
-        GTEST_SKIP() << "GPU timing failure propagation: comparable 64-bit device timestamps are unavailable.";
+    if(graphicsQueueInfo->timestampValidBits == 0u)
+        GTEST_SKIP() << "GPU timing failure propagation: Graphics queue timestamps are unavailable.";
 
     s_scope->setGpuTimingEnabled(true);
     ASSERT_TRUE(timing.prepareScopeQueries(s_TimerQueryFailureScope.identity, device, 1u));
@@ -52553,8 +52965,10 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
     auto& device = DescriptorBufferRoundTripTest::device();
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     ASSERT_TRUE(graphicsQueue.valid());
-    if(!device.supportsComparableGpuTimestamps(graphicsQueue))
-        GTEST_SKIP() << "GPU timing recovery transaction: comparable 64-bit device timestamps are unavailable.";
+    const GpuPhysicalQueueInfo* const graphicsQueueInfo = device.getPhysicalQueueInfo(graphicsQueue);
+    ASSERT_NE(graphicsQueueInfo, nullptr);
+    if(graphicsQueueInfo->timestampValidBits == 0u)
+        GTEST_SKIP() << "GPU timing recovery transaction: Graphics queue timestamps are unavailable.";
     auto& timing = graphics.gpuTiming();
     auto& timingSink = s_scope->gpuTimingSink();
     GpuTimingSampleCapture completedSamples;
@@ -52612,7 +53026,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
             device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
         );
         ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
-        VulkanTestQueueSubmit2Observer submissionObserver;
+        VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
         ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
         EXPECT_FALSE(finalTicket.submit(
@@ -52954,7 +53368,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
             device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, rejectedQueue).pointer
         );
         ASSERT_NE(nativeRejectedQueue, VK_NULL_HANDLE);
-        VulkanTestQueueSubmit2Observer submissionObserver;
+        VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
         ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeRejectedQueue));
         EXPECT_FALSE(submitter.submitTaskRangeInCompileOrder(
@@ -53202,7 +53616,7 @@ TEST_F(DescriptorBufferRoundTripTest, TaskRangeHelperPreservesRecoveryOwnership)
             device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, rejectedQueue).pointer
         );
         ASSERT_NE(nativeRejectedQueue, VK_NULL_HANDLE);
-        VulkanTestQueueSubmit2Observer submissionObserver;
+        VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
         ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeRejectedQueue));
         EXPECT_FALSE(submitter.recordAndSubmitTaskRangeInCompileOrder(
@@ -53788,7 +54202,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorPreservesRecoveryOwners
         device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, rejectedQueue).pointer
     );
     ASSERT_NE(nativeRejectedQueue, VK_NULL_HANDLE);
-    VulkanTestQueueSubmit2Observer submissionObserver;
+    VulkanTestQueueSubmit2Observer submissionObserver(device);
     ASSERT_TRUE(submissionObserver.valid());
     struct FailureArm{
         VulkanTestQueueSubmit2Observer* observer = nullptr;
@@ -54138,7 +54552,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierTaskRangeHelperPreservesRecov
             device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, rejectedQueue).pointer
         );
         ASSERT_NE(nativeRejectedQueue, VK_NULL_HANDLE);
-        VulkanTestQueueSubmit2Observer submissionObserver;
+        VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
         ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeRejectedQueue));
         EXPECT_FALSE(submitter.recordAndSubmitTaskRangeInReadyFrontiers(
@@ -54189,8 +54603,12 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierTaskRangeHelperPreservesRecov
 TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraphTasks){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
-    if(!device.supportsComparableGpuTimestamps(device.getPrimaryPhysicalQueue(CommandQueue::Graphics)))
-        GTEST_SKIP() << "GPU timing task bindings: comparable 64-bit device timestamps are unavailable.";
+    const GpuPhysicalQueueInfo* const graphicsQueueInfo = device.getPhysicalQueueInfo(
+        device.getPrimaryPhysicalQueue(CommandQueue::Graphics)
+    );
+    ASSERT_NE(graphicsQueueInfo, nullptr);
+    if(graphicsQueueInfo->timestampValidBits == 0u)
+        GTEST_SKIP() << "GPU timing task bindings: Graphics queue timestamps are unavailable.";
     auto& timing = graphics.gpuTiming();
     auto& timingSink = s_scope->gpuTimingSink();
 
@@ -54204,10 +54622,14 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
     timing.recordFrameReset(*resetCommandList);
     resetCommandList->close();
     CommandList* resetCommandLists[] = { resetCommandList.get() };
-    bool resetSubmitted = false;
-    device.executeCommandLists(resetCommandLists, LengthOf(resetCommandLists), CommandQueue::Graphics, &resetSubmitted);
-    ASSERT_TRUE(resetSubmitted);
-    timing.confirmFrameReset();
+    const QueueSubmissionToken resetToken = device.executeCommandLists(
+        resetCommandLists,
+        LengthOf(resetCommandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(resetToken.valid());
+    timing.confirmFrameReset(resetToken);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     GpuTaskSchedulingHint scheduling;
@@ -54429,6 +54851,12 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
     EXPECT_FALSE(transaction.taskToken(compiledGraph, GpuTaskId{}).valid());
     GpuCompiledGraph unrelatedCompiledGraph(DescriptorBufferRoundTripTest::arena());
     EXPECT_FALSE(transaction.taskToken(unrelatedCompiledGraph, beginTask).valid());
+    const GpuTaskGraphPacketSubmissionStatistics beginSubmissionStatistics =
+        transaction.packetSubmissionStatistics(compiledGraph, beginPacket);
+    ASSERT_TRUE(beginSubmissionStatistics.valid());
+    EXPECT_EQ(beginSubmissionStatistics.plannedWaitTokenCount, 1u);
+    EXPECT_EQ(beginSubmissionStatistics.sameQueueWaitElisionCount, 1u);
+    EXPECT_EQ(beginSubmissionStatistics.timelineWaitCount, 0u);
     ASSERT_TRUE(frameTransaction.confirmBeginSubmission(beginTaskToken));
     ASSERT_TRUE(frameTransaction.confirmEndSubmission(endTaskToken, true));
     ASSERT_TRUE(device.waitForIdle());
@@ -54632,7 +55060,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     ));
     EXPECT_TRUE(rejectedSuffixRecorded);
 
-    VulkanTestQueueSubmit2Observer submissionObserver;
+    VulkanTestQueueSubmit2Observer submissionObserver(device);
     ASSERT_TRUE(submissionObserver.valid());
 
     const GpuTaskGraphSubmitter submitter(device);
@@ -54991,7 +55419,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativeTaskAcceptedCallbacksGateAcceptedFro
     );
     ASSERT_NE(nativeTransferQueue, VK_NULL_HANDLE);
     ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
-    VulkanTestQueueSubmit2Observer submissionObserver;
+    VulkanTestQueueSubmit2Observer submissionObserver(device);
     ASSERT_TRUE(submissionObserver.valid());
     Thread rangeSubmissionThread([&](){
         Alloc::ScratchArena submissionScratch(
@@ -56938,7 +57366,7 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAc
             device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
         );
         ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
-        VulkanTestQueueSubmit2Observer submissionObserver;
+        VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
         ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
         EXPECT_FALSE(graphics.submitStandaloneTaskGraph(
@@ -57272,7 +57700,7 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphRecoversAcceptedTransferFro
     };
     QueueSubmissionToken terminalToken;
     {
-        VulkanTestQueueSubmit2Observer submissionObserver;
+        VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
         ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
         EXPECT_FALSE(graphics.submitStandaloneTaskGraph(
@@ -57356,7 +57784,7 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphRecoversAcceptedTransferFro
     };
     QueueSubmissionToken unrecoveredTerminalToken;
     {
-        VulkanTestQueueSubmit2Observer submissionObserver;
+        VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
         ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue, 2u));
         EXPECT_FALSE(graphics.submitStandaloneTaskGraph(
@@ -59050,7 +59478,7 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuball
     CommandListHandle rejectedUpload = uploadDevice.createCommandList();
     ASSERT_TRUE(rejectedUpload);
     {
-        __hidden_descriptor_buffer_round_trip_tests::ScopedNativeUploadReuseTrace nativeTrace(rejectedNativeCapture);
+        __hidden_descriptor_buffer_round_trip_tests::ScopedNativeUploadReuseTrace nativeTrace(uploadDevice, rejectedNativeCapture);
         ASSERT_TRUE(nativeTrace.valid());
 
         rejectedUpload->open();
@@ -59065,7 +59493,7 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuball
 
     CommandList* const rejectedUploads[]{ rejectedUpload.get() };
     QueueSubmissionToken rejectedToken;
-    VulkanTestQueueSubmit2Observer submissionObserver;
+    VulkanTestQueueSubmit2Observer submissionObserver(uploadDevice);
     ASSERT_TRUE(submissionObserver.valid());
     const GpuPhysicalQueueId graphicsQueue = uploadDevice.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     ASSERT_TRUE(graphicsQueue.valid());
@@ -59091,7 +59519,7 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuball
     CommandListHandle retryUpload = uploadDevice.createCommandList();
     ASSERT_TRUE(retryUpload);
     {
-        __hidden_descriptor_buffer_round_trip_tests::ScopedNativeUploadReuseTrace nativeTrace(retryNativeCapture);
+        __hidden_descriptor_buffer_round_trip_tests::ScopedNativeUploadReuseTrace nativeTrace(uploadDevice, retryNativeCapture);
         ASSERT_TRUE(nativeTrace.valid());
 
         retryUpload->open();
@@ -59552,7 +59980,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
             if(failurePoint != FailurePoint::Clean)
                 ASSERT_TRUE(rejectionPacket.valid());
 
-            VulkanTestQueueSubmit2Observer submissionObserver;
+            VulkanTestQueueSubmit2Observer submissionObserver(device);
             ASSERT_TRUE(submissionObserver.valid());
             RejectionArm rejectionArm{
                 .observer = &submissionObserver,
@@ -59930,7 +60358,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphRejectsDedicatedFirstComputeA
     );
     ASSERT_NE(nativeComputeQueue, VK_NULL_HANDLE);
 
-    VulkanTestQueueSubmit2Observer submissionObserver;
+    VulkanTestQueueSubmit2Observer submissionObserver(device);
     ASSERT_TRUE(submissionObserver.valid());
     RejectionArm rejectionArm{
         .observer = &submissionObserver,
@@ -60176,7 +60604,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
     };
     for(const FailurePoint failurePoint : failurePoints){
         SCOPED_TRACE(static_cast<u32>(failurePoint));
-        VulkanTestQueueSubmit2Observer submissionObserver;
+        VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
 
         auto output = makeExclusiveBuffer();
@@ -62667,7 +63095,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
             device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
         );
         ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
-        VulkanTestQueueSubmit2Observer submissionObserver;
+        VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
         ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
 

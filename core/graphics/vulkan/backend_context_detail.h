@@ -254,8 +254,8 @@ inline const char* PresentModeToString(VkPresentModeKHR mode){
     }
 }
 
-inline void SetHdr10Metadata(const VkDevice device, const VkSwapchainKHR swapChain){
-    if(!vkSetHdrMetadataEXT || !device || !swapChain)
+inline void SetHdr10Metadata(const VolkDeviceTable& deviceDispatch, const VkDevice device, const VkSwapchainKHR swapChain){
+    if(!deviceDispatch.vkSetHdrMetadataEXT || !device || !swapChain)
         return;
 
     VkHdrMetadataEXT metadata = {};
@@ -270,12 +270,12 @@ inline void SetHdr10Metadata(const VkDevice device, const VkSwapchainKHR swapCha
     metadata.minLuminance = s_Hdr10MinimumLuminance;
     metadata.maxContentLightLevel = s_Hdr10MasteringPeakLuminance;
     metadata.maxFrameAverageLightLevel = s_Hdr10MaximumFrameAverageLightLevel;
-    vkSetHdrMetadataEXT(device, s_Hdr10MetadataSwapChainCount, &swapChain, &metadata);
+    deviceDispatch.vkSetHdrMetadataEXT(device, s_Hdr10MetadataSwapChainCount, &swapChain, &metadata);
 }
 
-inline u64 GetDeviceLocalMemoryBytes(VkPhysicalDevice physicalDevice){
+inline u64 GetDeviceLocalMemoryBytes(const VolkInstanceTable& instanceDispatch, VkPhysicalDevice physicalDevice){
     VkPhysicalDeviceMemoryProperties memoryProperties;
-    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+    instanceDispatch.vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
 
     u64 bytes = 0;
     for(uint32_t heapIndex = 0; heapIndex < memoryProperties.memoryHeapCount; ++heapIndex){
@@ -287,19 +287,19 @@ inline u64 GetDeviceLocalMemoryBytes(VkPhysicalDevice physicalDevice){
     return bytes;
 }
 
-inline void PopulateAdapterInfo(VkPhysicalDevice physicalDevice, AdapterInfo& outAdapter){
+inline void PopulateAdapterInfo(const VolkInstanceTable& instanceDispatch, VkPhysicalDevice physicalDevice, AdapterInfo& outAdapter){
     VkPhysicalDeviceProperties2 properties2 = {};
     properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
     VkPhysicalDeviceIDProperties idProperties = {};
     idProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
     properties2.pNext = &idProperties;
-    vkGetPhysicalDeviceProperties2(physicalDevice, &properties2);
+    instanceDispatch.vkGetPhysicalDeviceProperties2(physicalDevice, &properties2);
 
     const auto& properties = properties2.properties;
     outAdapter.name = properties.deviceName;
     outAdapter.vendorID = properties.vendorID;
     outAdapter.deviceID = properties.deviceID;
-    outAdapter.dedicatedVideoMemory = GetDeviceLocalMemoryBytes(physicalDevice);
+    outAdapter.dedicatedVideoMemory = GetDeviceLocalMemoryBytes(instanceDispatch, physicalDevice);
 
     NWB_MEMCPY(outAdapter.uuid.data(), outAdapter.uuid.size(), idProperties.deviceUUID, outAdapter.uuid.size());
     outAdapter.hasUUID = true;

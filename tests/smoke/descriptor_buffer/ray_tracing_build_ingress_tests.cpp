@@ -114,27 +114,36 @@ private:
 
 
 public:
-    explicit ScopedNativeBuildScratchReuseTrace(NativeBuildScratchReuseCapture& capture)
-        : m_originalGetBufferDeviceAddress(vkGetBufferDeviceAddress)
-        , m_originalCmdBuildAccelerationStructures(vkCmdBuildAccelerationStructuresKHR)
+    ScopedNativeBuildScratchReuseTrace(GraphicsBackend::Device& device, NativeBuildScratchReuseCapture& capture)
+        : m_getBufferDeviceAddressOverride(device, &VolkDeviceTable::vkGetBufferDeviceAddress)
+        , m_cmdBuildAccelerationStructuresOverride(device, &VolkDeviceTable::vkCmdBuildAccelerationStructuresKHR)
     {
         capture = {};
-        if(s_activeCapture || !m_originalGetBufferDeviceAddress || !m_originalCmdBuildAccelerationStructures)
+        if(
+            s_activeCapture
+            || !m_getBufferDeviceAddressOverride.valid()
+            || !m_cmdBuildAccelerationStructuresOverride.valid()
+        )
             return;
 
-        s_forwardGetBufferDeviceAddress = m_originalGetBufferDeviceAddress;
-        s_forwardCmdBuildAccelerationStructures = m_originalCmdBuildAccelerationStructures;
+        s_forwardGetBufferDeviceAddress = m_getBufferDeviceAddressOverride.original();
+        s_forwardCmdBuildAccelerationStructures = m_cmdBuildAccelerationStructuresOverride.original();
         s_activeCapture = &capture;
-        vkGetBufferDeviceAddress = &ScopedNativeBuildScratchReuseTrace::InterceptGetBufferDeviceAddress;
-        vkCmdBuildAccelerationStructuresKHR = &ScopedNativeBuildScratchReuseTrace::InterceptCmdBuildAccelerationStructures;
+        if(
+            !m_getBufferDeviceAddressOverride.replace(&ScopedNativeBuildScratchReuseTrace::InterceptGetBufferDeviceAddress)
+            || !m_cmdBuildAccelerationStructuresOverride.replace(
+                &ScopedNativeBuildScratchReuseTrace::InterceptCmdBuildAccelerationStructures
+            )
+        ){
+            s_activeCapture = nullptr;
+            return;
+        }
         m_armed = true;
     }
     ~ScopedNativeBuildScratchReuseTrace(){
         if(!m_armed)
             return;
 
-        vkGetBufferDeviceAddress = m_originalGetBufferDeviceAddress;
-        vkCmdBuildAccelerationStructuresKHR = m_originalCmdBuildAccelerationStructures;
         s_activeCapture = nullptr;
     }
 
@@ -144,8 +153,8 @@ public:
 
 
 private:
-    PFN_vkGetBufferDeviceAddress m_originalGetBufferDeviceAddress = nullptr;
-    PFN_vkCmdBuildAccelerationStructuresKHR m_originalCmdBuildAccelerationStructures = nullptr;
+    ScopedVulkanDeviceDispatchOverride<PFN_vkGetBufferDeviceAddress> m_getBufferDeviceAddressOverride;
+    ScopedVulkanDeviceDispatchOverride<PFN_vkCmdBuildAccelerationStructuresKHR> m_cmdBuildAccelerationStructuresOverride;
     bool m_armed = false;
 };
 
@@ -889,7 +898,7 @@ TEST_F(RayTracingBuildIngressTest, InjectedNativeSubmissionFailureDoesNotPublish
         device().getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
     );
     ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
-    VulkanTestQueueSubmit2Observer submissionObserver;
+    VulkanTestQueueSubmit2Observer submissionObserver(device());
     ASSERT_TRUE(submissionObserver.valid());
 
     const BufferHandle vertex = __hidden_ray_tracing_build_ingress_tests::CreateBuildInputBuffer(
@@ -980,7 +989,7 @@ TEST_F(RayTracingBuildIngressTest, InjectedNativeSubmissionFailureReusesBuildScr
         scratchDevice.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
     );
     ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
-    VulkanTestQueueSubmit2Observer submissionObserver;
+    VulkanTestQueueSubmit2Observer submissionObserver(scratchDevice);
     ASSERT_TRUE(submissionObserver.valid());
 
     const BufferHandle vertex = __hidden_ray_tracing_build_ingress_tests::CreateBuildInputBuffer(
@@ -1005,7 +1014,7 @@ TEST_F(RayTracingBuildIngressTest, InjectedNativeSubmissionFailureReusesBuildScr
 
     {
         __hidden_ray_tracing_build_ingress_tests::NativeBuildScratchReuseCapture nativeCapture;
-        __hidden_ray_tracing_build_ingress_tests::ScopedNativeBuildScratchReuseTrace nativeTrace(nativeCapture);
+        __hidden_ray_tracing_build_ingress_tests::ScopedNativeBuildScratchReuseTrace nativeTrace(scratchDevice, nativeCapture);
         ASSERT_TRUE(nativeTrace.valid());
 
         CommandListHandle rejectedBuild = scratchDevice.createCommandList();
@@ -1254,7 +1263,7 @@ TEST_F(RayTracingBuildIngressTest, InjectedNativeSubmissionFailureDoesNotPublish
         device().getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
     );
     ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
-    VulkanTestQueueSubmit2Observer submissionObserver;
+    VulkanTestQueueSubmit2Observer submissionObserver(device());
     ASSERT_TRUE(submissionObserver.valid());
 
     const RayTracingOpacityMicromapHandle opacityMicromap =

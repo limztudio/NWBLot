@@ -40,6 +40,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(
     , m_pendingAccelStructBuildCommits(context.objectArena)
     , m_pendingAccelStructBuildSignatures(context.objectArena)
     , m_pendingOpacityMicromapBuildCommits(context.objectArena)
+    , m_timerQueryRecordingClaims(context.objectArena)
     , m_context(context)
     , m_queue(queue)
 {
@@ -48,7 +49,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(
         poolInfo.queueFamilyIndex = queueFamilyIndex;
         poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
 
-        const VkResult createResult = vkCreateCommandPool(
+        const VkResult createResult = m_context.deviceDispatch.vkCreateCommandPool(
             m_context.device,
             &poolInfo,
             m_context.allocationCallbacks,
@@ -70,12 +71,12 @@ TrackedCommandBuffer::TrackedCommandBuffer(
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandBufferCount = 1;
 
-    const VkResult allocateResult = vkAllocateCommandBuffers(m_context.device, &allocInfo, &m_cmdBuf);
+    const VkResult allocateResult = m_context.deviceDispatch.vkAllocateCommandBuffers(m_context.device, &allocInfo, &m_cmdBuf);
     if(allocateResult != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate command buffer: {}"), ResultToString(allocateResult));
         m_cmdBuf = VK_NULL_HANDLE;
         if(m_ownsCmdPool)
-            vkDestroyCommandPool(m_context.device, m_cmdPool, m_context.allocationCallbacks);
+            m_context.deviceDispatch.vkDestroyCommandPool(m_context.device, m_cmdPool, m_context.allocationCallbacks);
         m_cmdPool = VK_NULL_HANDLE;
         m_ownsCmdPool = false;
     }
@@ -86,15 +87,15 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
         if(m_sharedCommandPoolMutex){
             ScopedLock lock(*m_sharedCommandPoolMutex);
 
-            vkFreeCommandBuffers(m_context.device, m_cmdPool, 1, &m_cmdBuf);
+            m_context.deviceDispatch.vkFreeCommandBuffers(m_context.device, m_cmdPool, 1, &m_cmdBuf);
         }
         else
-            vkFreeCommandBuffers(m_context.device, m_cmdPool, 1, &m_cmdBuf);
+            m_context.deviceDispatch.vkFreeCommandBuffers(m_context.device, m_cmdPool, 1, &m_cmdBuf);
         m_cmdBuf = VK_NULL_HANDLE;
     }
 
     if(m_ownsCmdPool && m_cmdPool){
-        vkDestroyCommandPool(m_context.device, m_cmdPool, m_context.allocationCallbacks);
+        m_context.deviceDispatch.vkDestroyCommandPool(m_context.device, m_cmdPool, m_context.allocationCallbacks);
     }
     m_cmdPool = VK_NULL_HANDLE;
     m_ownsCmdPool = false;
@@ -110,6 +111,274 @@ void TrackedCommandBuffer::retainResource(GraphicsResource& resource){
     }
 
     m_referencedResources.emplace_back(&resource, Handle<GraphicsResource>::deleter_type(&m_context.objectArena));
+}
+
+TrackedCommandBuffer::TimerQueryRecordingClaim& TrackedCommandBuffer::findOrAppendTimerQueryRecordingClaim(TimerQuery& query){
+    for(TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
+        if(claim.query == &query)
+            return claim;
+    }
+
+    retainResource(query);
+    m_timerQueryRecordingClaims.emplace_back();
+    TimerQueryRecordingClaim& claim = m_timerQueryRecordingClaims.back();
+    claim.query = &query;
+    claim.queryIncarnation = query.m_incarnation;
+    return claim;
+}
+
+bool TrackedCommandBuffer::recordsTimerQueryBegin(const TimerQuery& query, const u64 generation)const noexcept{
+    for(const TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
+        if(
+            claim.query == &query
+            && claim.generation == generation
+            && claim.recordingID == m_recordingID
+            && claim.recordsBegin
+        )
+            return true;
+    }
+    return false;
+}
+
+bool TrackedCommandBuffer::validateTimerQueryRecordingClaims(
+    const Queue& submissionQueue,
+    const QueueSubmissionWait* const localWaits,
+    const usize localWaitCount,
+    TrackedCommandBuffer* const* const precedingCommandBuffers,
+    const usize precedingCommandBufferCount
+)const noexcept{
+    for(const TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
+        TimerQuery* const query = claim.query;
+        if(
+            !query
+            || claim.queryIncarnation == 0u
+            || query->m_incarnation != claim.queryIncarnation
+            || claim.recordingID == 0u
+            || claim.recordingID != m_recordingID
+            || claim.queue != submissionQueue.m_physicalQueue
+        )
+            return false;
+
+        ScopedLock queryLock(query->m_mutex);
+        const QueueSubmissionToken currentPrerequisite = query->m_completedCycleSubmission.valid()
+            ? query->m_completedCycleSubmission
+            : query->m_resetAuthorizationSubmission
+        ;
+        const bool prerequisiteMatches =
+            currentPrerequisite.queue == claim.prerequisiteSubmission.queue
+            && currentPrerequisite.value == claim.prerequisiteSubmission.value
+            && currentPrerequisite.physicalQueueIndex == claim.prerequisiteSubmission.physicalQueueIndex
+            && currentPrerequisite.deviceGeneration == claim.prerequisiteSubmission.deviceGeneration
+        ;
+        if(
+            (claim.recordsReset || claim.recordsBegin)
+            && (
+                !prerequisiteMatches
+                || !submissionQueue.coversTimerQueryPrerequisite(
+                    claim.prerequisiteSubmission,
+                    claim.prerequisiteObservedComplete,
+                    localWaits,
+                    localWaitCount
+                )
+            )
+        )
+            return false;
+        const bool resetOwnerMatches =
+            query->m_resetRecordingOwner.commandBuffer == this
+            && query->m_resetRecordingOwner.recordingID == claim.recordingID
+            && query->m_resetRecordingAuthorizationGeneration != 0u
+            && query->m_resetRecordingAuthorizationGeneration == claim.resetRecordingAuthorizationGeneration
+        ;
+        const bool beginOwnerMatches =
+            query->m_beginRecordingOwner.commandBuffer == this
+            && query->m_beginRecordingOwner.recordingID == claim.recordingID
+            && query->m_cycleGeneration == claim.generation
+        ;
+        const bool endOwnerMatches =
+            query->m_endRecordingOwner.commandBuffer == this
+            && query->m_endRecordingOwner.recordingID == claim.recordingID
+            && query->m_cycleGeneration == claim.generation
+        ;
+        if(claim.recordsReset && !claim.recordsBegin && !resetOwnerMatches)
+            return false;
+        if(
+            claim.recordsBegin
+            && (
+                !beginOwnerMatches
+                || query->m_cycleInvalidated
+                || query->m_cycleQueue != claim.queue
+                || (
+                    claim.consumesResetAuthorization
+                    && (
+                        !query->m_resetAuthorizationAvailable
+                        || query->m_resetAuthorizationGeneration != claim.consumedResetAuthorizationGeneration
+                        || query->m_resetAuthorizationSubmission.queue != claim.resetAuthorizationSubmission.queue
+                        || query->m_resetAuthorizationSubmission.value != claim.resetAuthorizationSubmission.value
+                        || query->m_resetAuthorizationSubmission.physicalQueueIndex != claim.resetAuthorizationSubmission.physicalQueueIndex
+                        || query->m_resetAuthorizationSubmission.deviceGeneration != claim.resetAuthorizationSubmission.deviceGeneration
+                    )
+                )
+            )
+        )
+            return false;
+        if(claim.recordsEnd){
+            if(
+                !endOwnerMatches
+                || query->m_cycleInvalidated
+                || query->m_cycleQueue != claim.queue
+            )
+                return false;
+            if(query->m_beginAccepted || claim.recordsBegin)
+                continue;
+
+            bool orderedAfterBatchBegin = false;
+            for(usize precedingIndex = 0u; precedingIndex < precedingCommandBufferCount; ++precedingIndex){
+                TrackedCommandBuffer* const preceding = precedingCommandBuffers[precedingIndex];
+                if(
+                    preceding
+                    && preceding == query->m_beginRecordingOwner.commandBuffer
+                    && preceding->m_recordingID == query->m_beginRecordingOwner.recordingID
+                    && preceding->recordsTimerQueryBegin(*query, claim.generation)
+                ){
+                    orderedAfterBatchBegin = true;
+                    break;
+                }
+            }
+            if(!orderedAfterBatchBegin)
+                return false;
+        }
+    }
+    return true;
+}
+
+void TrackedCommandBuffer::commitTimerQueryRecordingClaims(const QueueSubmissionToken& submissionToken)noexcept{
+    for(const TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
+        TimerQuery* const query = claim.query;
+        if(!query || claim.queryIncarnation == 0u || query->m_incarnation != claim.queryIncarnation)
+            continue;
+
+        ScopedLock queryLock(query->m_mutex);
+        const bool resetOwnerMatches =
+            query->m_resetRecordingOwner.commandBuffer == this
+            && query->m_resetRecordingOwner.recordingID == claim.recordingID
+            && query->m_resetRecordingAuthorizationGeneration != 0u
+            && query->m_resetRecordingAuthorizationGeneration == claim.resetRecordingAuthorizationGeneration
+        ;
+        const bool beginOwnerMatches =
+            query->m_beginRecordingOwner.commandBuffer == this
+            && query->m_beginRecordingOwner.recordingID == claim.recordingID
+            && query->m_cycleGeneration == claim.generation
+        ;
+        const bool endOwnerMatches =
+            query->m_endRecordingOwner.commandBuffer == this
+            && query->m_endRecordingOwner.recordingID == claim.recordingID
+            && query->m_cycleGeneration == claim.generation
+        ;
+
+        if(claim.recordsReset && !claim.recordsBegin && resetOwnerMatches){
+            query->m_resetRecordingOwner = {};
+            query->m_resetAuthorizationGeneration = query->m_resetRecordingAuthorizationGeneration;
+            query->m_resetRecordingAuthorizationGeneration = 0u;
+            query->m_timestampQueue = {};
+            query->m_timestampValidBits = 0u;
+            query->m_completedCycleSubmission = {};
+            query->m_completedCycleGeneration = 0u;
+            query->m_resetAuthorizationSubmission = submissionToken;
+            query->m_resetAuthorizationAvailable = true;
+            query->m_recordingActive = false;
+        }
+        if(claim.recordsBegin && beginOwnerMatches){
+            query->m_beginRecordingOwner = {};
+            query->m_beginAccepted = true;
+            query->m_lastAcceptedRecordingGeneration = claim.generation;
+            query->m_timestampQueue = query->m_cycleQueue;
+            query->m_timestampValidBits = query->m_cycleValidBits;
+            query->m_completedCycleSubmission = {};
+            query->m_completedCycleGeneration = 0u;
+            query->m_resetAuthorizationSubmission = {};
+            query->m_resetAuthorizationGeneration = 0u;
+            query->m_resetAuthorizationAvailable = false;
+            query->m_recordingActive = true;
+        }
+        if(claim.recordsEnd && endOwnerMatches && (query->m_beginAccepted || claim.recordsBegin)){
+            query->m_endRecordingOwner = {};
+            query->m_recordingActive = false;
+            query->m_completedCycleSubmission = submissionToken;
+            query->m_completedCycleGeneration = claim.generation;
+            query->m_cycleBaselineQueue = {};
+            query->m_cycleQueue = {};
+            query->m_cycleBaselineValidBits = 0u;
+            query->m_cycleValidBits = 0u;
+            query->m_cycleBaselineCompletion = {};
+            query->m_cycleBaselineCompletionGeneration = 0u;
+            query->m_cycleBaselineActive = false;
+            query->m_beginRecordingOwner = {};
+            query->m_cycleGeneration = 0u;
+            query->m_beginAccepted = false;
+            query->m_cycleInvalidated = false;
+        }
+    }
+    m_timerQueryRecordingClaims.clear();
+}
+
+void TrackedCommandBuffer::discardTimerQueryRecordingClaims()noexcept{
+    for(const TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
+        TimerQuery* const query = claim.query;
+        if(!query || claim.queryIncarnation == 0u || query->m_incarnation != claim.queryIncarnation)
+            continue;
+        ScopedLock queryLock(query->m_mutex);
+        if(
+            claim.recordsReset
+            && !claim.recordsBegin
+            && query->m_resetRecordingOwner.commandBuffer == this
+            && query->m_resetRecordingOwner.recordingID == claim.recordingID
+            && query->m_resetRecordingAuthorizationGeneration != 0u
+            && query->m_resetRecordingAuthorizationGeneration == claim.resetRecordingAuthorizationGeneration
+        ){
+            query->m_resetRecordingOwner = {};
+            query->m_resetRecordingAuthorizationGeneration = 0u;
+        }
+        if(
+            claim.recordsEnd
+            && query->m_endRecordingOwner.commandBuffer == this
+            && query->m_endRecordingOwner.recordingID == claim.recordingID
+            && query->m_cycleGeneration == claim.generation
+        ){
+            query->m_endRecordingOwner = {};
+        }
+        if(
+            claim.recordsBegin
+            && query->m_beginRecordingOwner.commandBuffer == this
+            && query->m_beginRecordingOwner.recordingID == claim.recordingID
+            && query->m_cycleGeneration == claim.generation
+        ){
+            query->m_timestampQueue = query->m_cycleBaselineQueue;
+            query->m_timestampValidBits = query->m_cycleBaselineValidBits;
+            query->m_completedCycleSubmission = query->m_cycleBaselineCompletion;
+            query->m_completedCycleGeneration = query->m_cycleBaselineCompletionGeneration;
+            query->m_recordingActive = query->m_cycleBaselineActive;
+            query->m_beginRecordingOwner = {};
+            query->m_beginAccepted = false;
+            query->m_cycleInvalidated = query->m_endRecordingOwner.commandBuffer != nullptr;
+        }
+        if(
+            query->m_cycleGeneration == claim.generation
+            && !query->m_beginRecordingOwner.commandBuffer
+            && !query->m_endRecordingOwner.commandBuffer
+            && !query->m_beginAccepted
+        ){
+            query->m_cycleBaselineQueue = {};
+            query->m_cycleQueue = {};
+            query->m_cycleBaselineValidBits = 0u;
+            query->m_cycleValidBits = 0u;
+            query->m_cycleBaselineCompletion = {};
+            query->m_cycleBaselineCompletionGeneration = 0u;
+            query->m_cycleBaselineActive = false;
+            query->m_cycleGeneration = 0u;
+            query->m_cycleInvalidated = false;
+        }
+    }
+    m_timerQueryRecordingClaims.clear();
 }
 
 void TrackedCommandBuffer::retainBuffer(Buffer& buffer){
@@ -314,6 +583,7 @@ void TrackedCommandBuffer::discardPendingOpacityMicromapBuildCommits(){
 }
 
 void TrackedCommandBuffer::clearTrackedReferences(){
+    discardTimerQueryRecordingClaims();
     discardRetainedBufferStateCommits();
     discardRetainedTextureStateCommits();
     discardPendingAccelStructBuildCommits();
@@ -341,11 +611,11 @@ Queue::Queue(
     const VulkanContext& context,
     Device& device,
     const GpuPhysicalQueueInfo& info,
-    VkQueue queue
+    NativeQueueState& nativeQueue
 )
     : m_context(context)
     , m_device(device)
-    , m_queue(queue)
+    , m_nativeQueue(nativeQueue)
     , m_queueID(info.queueClass)
     , m_physicalQueue(info.id)
     , m_queueFamilyIndex(info.familyIndex)
@@ -360,6 +630,7 @@ Queue::Queue(
     , m_commandBuffersPool(context.objectArena)
     , m_workerCommandArenas(context.objectArena)
 {
+    NWB_ASSERT(m_nativeQueue.familyIndex == info.familyIndex && m_nativeQueue.queueIndex == info.queueIndex);
     auto timelineInfo = VulkanDetail::MakeVkStruct<VkSemaphoreTypeCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO);
     timelineInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
     timelineInfo.initialValue = 0;
@@ -367,7 +638,7 @@ Queue::Queue(
     auto semaphoreInfo = VulkanDetail::MakeVkStruct<VkSemaphoreCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO);
     semaphoreInfo.pNext = &timelineInfo;
 
-    const VkResult res = vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &m_trackingSemaphore);
+    const VkResult res = m_context.deviceDispatch.vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &m_trackingSemaphore);
     if(res != VK_SUCCESS){
         m_trackingSemaphore = VK_NULL_HANDLE;
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create queue timeline semaphore: {}"), ResultToString(res));
@@ -380,7 +651,7 @@ Queue::~Queue(){
         waitInfo.pSemaphores = &m_trackingSemaphore;
         waitInfo.pValues = &m_lastSubmittedID;
 
-        const VkResult res = vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
+        const VkResult res = m_context.deviceDispatch.vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
         if(res != VK_SUCCESS)
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait on queue timeline semaphore during teardown: {}"), ResultToString(res));
     }
@@ -390,7 +661,7 @@ Queue::~Queue(){
     destroyWorkerCommandArenas();
 
     if(m_trackingSemaphore){
-        vkDestroySemaphore(m_context.device, m_trackingSemaphore, m_context.allocationCallbacks);
+        m_context.deviceDispatch.vkDestroySemaphore(m_context.device, m_trackingSemaphore, m_context.allocationCallbacks);
         m_trackingSemaphore = VK_NULL_HANDLE;
     }
 }
@@ -758,7 +1029,7 @@ Queue::WorkerCommandArena* Queue::getOrCreateWorkerCommandArena(
     poolInfo.queueFamilyIndex = m_queueFamilyIndex;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
 
-    const VkResult createResult = vkCreateCommandPool(
+    const VkResult createResult = m_context.deviceDispatch.vkCreateCommandPool(
         m_context.device,
         &poolInfo,
         m_context.allocationCallbacks,
@@ -804,7 +1075,7 @@ TrackedCommandBufferPtr Queue::getOrCreateDirectCommandBuffer(){
         if(!cmdBuf || cmdBuf->m_cmdBuf == VK_NULL_HANDLE)
             return createCommandBuffer(VK_NULL_HANDLE, nullptr, 0u, 0u);
 
-        const VkResult res = vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
+        const VkResult res = m_context.deviceDispatch.vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
         if(res != VK_SUCCESS){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset command buffer, creating a new one: {}"), ResultToString(res));
             return createCommandBuffer(VK_NULL_HANDLE, nullptr, 0u, 0u);
@@ -844,10 +1115,10 @@ TrackedCommandBufferPtr Queue::getOrCreateWorkerCommandBuffer(
         if(!cmdBuf || cmdBuf->m_cmdBuf == VK_NULL_HANDLE)
             return createCommandBuffer(arena->commandPool, &arena->mutex, recordingWorkerDomain, recordingWorkerIndex);
 
-        const VkResult res = vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
+        const VkResult res = m_context.deviceDispatch.vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
         if(res != VK_SUCCESS){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset worker command buffer, creating a new one: {}"), ResultToString(res));
-            vkFreeCommandBuffers(m_context.device, arena->commandPool, 1u, &cmdBuf->m_cmdBuf);
+            m_context.deviceDispatch.vkFreeCommandBuffers(m_context.device, arena->commandPool, 1u, &cmdBuf->m_cmdBuf);
             cmdBuf->m_cmdBuf = VK_NULL_HANDLE;
             cmdBuf.reset();
             return createCommandBuffer(arena->commandPool, &arena->mutex, recordingWorkerDomain, recordingWorkerIndex);
@@ -896,7 +1167,7 @@ void Queue::destroyWorkerCommandArenas(){
             }
             arena->commandBuffersPool.clear();
             if(arena->commandPool){
-                vkDestroyCommandPool(m_context.device, arena->commandPool, m_context.allocationCallbacks);
+                m_context.deviceDispatch.vkDestroyCommandPool(m_context.device, arena->commandPool, m_context.allocationCallbacks);
                 arena->commandPool = VK_NULL_HANDLE;
             }
         }
@@ -941,6 +1212,46 @@ void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
     m_signalSemaphoreValues.push_back(value);
 }
 
+bool Queue::coversTimerQueryPrerequisite(
+    const QueueSubmissionToken& prerequisite,
+    const bool prerequisiteObservedComplete,
+    const SubmissionWait* const localWaits,
+    const usize localWaitCount
+)const noexcept{
+    if(!prerequisite.valid() || prerequisiteObservedComplete)
+        return true;
+    if(prerequisite.matchesPhysicalQueue(m_physicalQueue.index, m_physicalQueue.deviceGeneration))
+        return true;
+    if(
+        !prerequisite.hasPhysicalQueueIdentity()
+        || prerequisite.deviceGeneration != m_device.m_deviceGeneration
+        || prerequisite.physicalQueueIndex >= m_device.m_physicalQueues.size()
+    )
+        return false;
+
+    const Queue* const producerQueue = m_device.m_physicalQueues[prerequisite.physicalQueueIndex];
+    if(
+        !producerQueue
+        || producerQueue->m_physicalQueue.deviceGeneration != prerequisite.deviceGeneration
+        || producerQueue->m_queueID != prerequisite.queue
+        || producerQueue->m_trackingSemaphore == VK_NULL_HANDLE
+    )
+        return false;
+
+    const auto coveredBy = [&](const VkSemaphore semaphore, const u64 value) -> bool {
+        return semaphore == producerQueue->m_trackingSemaphore && value >= prerequisite.value;
+    };
+    for(usize waitIndex = 0u; waitIndex < localWaitCount; ++waitIndex){
+        if(coveredBy(localWaits[waitIndex].semaphore, localWaits[waitIndex].value))
+            return true;
+    }
+    for(usize waitIndex = 0u; waitIndex < m_waitSemaphores.size(); ++waitIndex){
+        if(coveredBy(m_waitSemaphores[waitIndex], m_waitSemaphoreValues[waitIndex]))
+            return true;
+    }
+    return false;
+}
+
 u64 Queue::submit(
     CommandList* const* ppCmd,
     const usize numCmd,
@@ -957,6 +1268,8 @@ u64 Queue::submit(
     UniqueLock<Futex> descriptorBufferLifecycleLock;
     if(outSubmissionAccepted)
         *outSubmissionAccepted = false;
+    if(m_device.submissionsBlocked())
+        return m_lastSubmittedID;
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_QueueSubmitArena);
 
@@ -1055,6 +1368,25 @@ u64 Queue::submit(
             }
             if(!cmdList->validateTrackedResourcesReadyForSubmission())
                 return m_lastSubmittedID;
+        }
+    }
+
+    Vector<TrackedCommandBuffer*, Alloc::ScratchArena> validatedTimerQueryCommandBuffers{scratchArena};
+    if(hasCommands){
+        validatedTimerQueryCommandBuffers.reserve(numCmd);
+        for(usize i = 0u; i < numCmd; ++i){
+            TrackedCommandBuffer* const tracked = ppCmd[i]->m_currentCmdBuf.get();
+            if(!tracked->validateTimerQueryRecordingClaims(
+                *this,
+                localWaits,
+                localWaitCount,
+                validatedTimerQueryCommandBuffers.empty() ? nullptr : validatedTimerQueryCommandBuffers.data(),
+                validatedTimerQueryCommandBuffers.size()
+            )){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: timer-query recording order is stale or unresolved"));
+                return m_lastSubmittedID;
+            }
+            validatedTimerQueryCommandBuffers.push_back(tracked);
         }
     }
 
@@ -1204,17 +1536,27 @@ u64 Queue::submit(
     submitInfo.signalSemaphoreInfoCount = static_cast<uint32_t>(signalInfos.size());
     submitInfo.pSignalSemaphoreInfos = signalInfos.data();
 
-    const VkResult res = vkQueueSubmit2(m_queue, 1, &submitInfo, VK_NULL_HANDLE);
+    VkResult res = VK_SUCCESS;
+    bool submissionSuppressed = false;
+    {
+        ScopedLock hostLock(m_nativeQueue.hostMutex);
+        submissionSuppressed = m_device.submissionsBlocked();
+        if(!submissionSuppressed)
+            res = m_context.deviceDispatch.vkQueueSubmit2(m_nativeQueue.queue, 1, &submitInfo, VK_NULL_HANDLE);
+    }
 
-    if(res != VK_SUCCESS){
+    if(submissionSuppressed || res != VK_SUCCESS){
         m_lastSubmittedID = submissionID - 1;
 
         if(descriptorBufferLifecycleLock.owns_lock())
             descriptorBufferLifecycleLock.unlock();
 
-        if(res == VK_ERROR_DEVICE_LOST){
+        if(submissionSuppressed){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Queue submission was suppressed because the device requires recreation."));
+        }
+        else if(res == VK_ERROR_DEVICE_LOST){
             clearPendingSemaphores();
-            m_device.captureGpuCrash("queue submit");
+            m_device.captureDeviceLoss("queue submit");
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Device was lost during queue submission."));
         }
         else if(res == VK_ERROR_OUT_OF_HOST_MEMORY || res == VK_ERROR_OUT_OF_DEVICE_MEMORY){
@@ -1244,6 +1586,7 @@ u64 Queue::submit(
         .deviceGeneration = m_physicalQueue.deviceGeneration,
     };
     for(auto& tracked : trackedBuffers){
+        tracked->commitTimerQueryRecordingClaims(submissionToken);
         tracked->commitRetainedBufferStateCommits();
         tracked->commitRetainedTextureStateCommits();
         tracked->commitPendingAccelStructBuildCommits();
@@ -1268,14 +1611,14 @@ void Queue::updateLastFinishedID(){
     }
 
     u64 completedValue = 0;
-    const VkResult res = vkGetSemaphoreCounterValue(m_context.device, m_trackingSemaphore, &completedValue);
+    const VkResult res = m_context.deviceDispatch.vkGetSemaphoreCounterValue(m_context.device, m_trackingSemaphore, &completedValue);
     if(res == VK_SUCCESS)
         // vkQueueWaitIdle() establishes a stronger completion fact than a later timeline query. Never let a stale
         // driver value make already-retired command buffers or descriptor uses appear in flight again.
         m_lastFinishedID = Max(m_lastFinishedID, completedValue);
     else{
         if(res == VK_ERROR_DEVICE_LOST)
-            m_device.captureGpuCrash("queue timeline query");
+            m_device.captureDeviceLoss("queue timeline query");
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(res));
     }
 }
@@ -1283,10 +1626,14 @@ void Queue::updateLastFinishedID(){
 void Queue::waitForIdle(){
     ScopedLock lock(m_mutex);
 
-    const VkResult res = vkQueueWaitIdle(m_queue);
+    VkResult res = VK_SUCCESS;
+    {
+        ScopedLock hostLock(m_nativeQueue.hostMutex);
+        res = m_device.isDeviceLost() ? VK_ERROR_DEVICE_LOST : m_context.deviceDispatch.vkQueueWaitIdle(m_nativeQueue.queue);
+    }
     if(res != VK_SUCCESS){
         if(res == VK_ERROR_DEVICE_LOST)
-            m_device.captureGpuCrash("queue wait idle");
+            m_device.captureDeviceLoss("queue wait idle");
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue wait-for-idle failed: {}"), ResultToString(res));
     }
     if(res == VK_SUCCESS){
@@ -1346,12 +1693,20 @@ void Queue::recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf){
 
 
 void Device::queueWaitForSemaphore(CommandQueue::Enum waitQueue, VkSemaphore semaphore, u64 value){
+    SubmissionOperationLease submissionOperation(*this);
+    if(!submissionOperation.valid())
+        return;
+
     Queue* q = getQueue(waitQueue);
     if(q)
         q->addWaitSemaphore(semaphore, value);
 }
 
 void Device::queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore semaphore, u64 value){
+    SubmissionOperationLease submissionOperation(*this);
+    if(!submissionOperation.valid())
+        return;
+
     Queue* q = getQueue(executionQueue);
     if(q)
         q->addSignalSemaphore(semaphore, value);
@@ -1378,6 +1733,10 @@ u64 Device::queueGetCompletedInstance(const GpuPhysicalQueueId& queue){
 }
 
 void Device::queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance){
+    SubmissionOperationLease submissionOperation(*this);
+    if(!submissionOperation.valid())
+        return;
+
     Queue* wait = getQueue(waitQueue);
     Queue* exec = getQueue(executionQueue);
 

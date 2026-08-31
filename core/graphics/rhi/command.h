@@ -52,6 +52,32 @@ inline constexpr bool operator!=(const GpuPhysicalQueueId& lhs, const GpuPhysica
     return !(lhs == rhs);
 }
 
+// A completion edge produced only by an accepted queue submission. `valid()` is intentionally false for rejected or
+// empty work, while an accepted synchronization-only submission may still produce a token for dependency forwarding.
+// Physical queue identity prevents a token from a retired logical-device generation from naming current work.
+struct QueueSubmissionToken{
+    CommandQueue::Enum queue = CommandQueue::kCount;
+    u64 value = 0;
+    u16 physicalQueueIndex = Limit<u16>::s_Max;
+    u16 deviceGeneration = 0u;
+
+    [[nodiscard]] constexpr bool valid()const{
+        return static_cast<u32>(queue) < static_cast<u32>(CommandQueue::kCount) && value != 0u;
+    }
+    [[nodiscard]] constexpr bool hasPhysicalQueueIdentity()const{
+        return physicalQueueIndex != Limit<u16>::s_Max && deviceGeneration != 0u;
+    }
+    [[nodiscard]] constexpr bool matchesPhysicalQueue(
+        const u16 index,
+        const u16 generation
+    )const{
+        return hasPhysicalQueueIdentity()
+            && physicalQueueIndex == index
+            && deviceGeneration == generation
+        ;
+    }
+};
+
 namespace GpuQueueCapability{
     enum Mask : u8{
         None = 0u,
@@ -130,6 +156,21 @@ struct GpuCommandArenaWorkerStatistics{
 
 typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
 typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
+
+// One recorded begin/end cycle. The exact query, device-generation queue, monotonically allocated generation, and
+// captured reset authorization prevent stale command buffers from closing or revoking a different cycle after reuse.
+struct TimerQueryRecordingToken{
+    TimerQuery* query = nullptr;
+    GpuPhysicalQueueId physicalQueue;
+    u64 queryIncarnation = 0u;
+    u64 generation = 0u;
+    u64 resetAuthorizationGeneration = 0u;
+
+
+    [[nodiscard]] constexpr bool valid()const noexcept{
+        return query != nullptr && physicalQueue.valid() && queryIncarnation != 0u && generation != 0u;
+    }
+};
 
 // Raw device-timestamp values for one timer query. Vulkan exposes only the low timestampValidBits from one physical
 // queue family, so ordinary durations use modular tick arithmetic. Absolute endpoints are available only when the

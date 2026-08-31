@@ -600,7 +600,7 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
         queueCompatibleDepInfo.pBufferMemoryBarriers = queueCompatibleBufferBarriers.data();
     }
 
-    vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &queueCompatibleDepInfo);
+    m_context.deviceDispatch.vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &queueCompatibleDepInfo);
 
     if(resumeFramebuffer){
         RenderPassParameters params = {};

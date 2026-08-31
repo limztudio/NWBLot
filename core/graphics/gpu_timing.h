@@ -33,6 +33,7 @@ struct GpuTimingScope{
     // Epoch and reservation distinguish a recreated accumulator and reused query-pool slot from an earlier scope.
     u32 epoch = 0u;
     u64 reservation = 0u;
+    TimerQueryRecordingToken timerQueryRecording;
     GpuTimingSubmissionTicket* submissionTicket = nullptr;
 
     [[nodiscard]] bool valid()const{ return scopeName != NAME_NONE && index != Limit<u32>::s_Max && epoch != 0u && reservation != 0u; }
@@ -223,14 +224,24 @@ private:
         Available,
         Recording,
         EndedUnaccepted,
+        EndFailedUnaccepted,
         PendingAccepted,
+        PendingRetirementAccepted,
         Quarantined,
+    };
+
+    enum class QueryEndResult : u8{
+        Invalid,
+        Ended,
+        RetirementRequired,
     };
 
     struct QueryRecord{
         TimerQueryHandle query;
         GpuPhysicalQueueId physicalQueue;
         QueueSubmissionToken acceptedSubmission;
+        QueueSubmissionToken frameResetSubmission;
+        GpuPhysicalQueueId frameResetRecordingQueue;
         u64 frameIndex = 0u;
         GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution;
         u32 epoch = 0u;
@@ -279,7 +290,7 @@ public:
         Alloc::ScratchArena& scratchArena
     );
     void recordFrameReset(CommandList& commandList);
-    void confirmFrameReset();
+    void confirmFrameReset(const QueueSubmissionToken& token);
     void discardFrameReset();
     void requestQueries(u32 queryCount);
     [[nodiscard]] bool materializeRequestedQueries(Device& device);
@@ -289,9 +300,10 @@ public:
         u64 frameIndex,
         u32 epoch,
         GpuTimingSampleAttribution attribution,
-        GpuTimingScope& outScope
+        GpuTimingScope& outScope,
+        QueueSubmissionToken& outResetSubmission
     );
-    [[nodiscard]] bool endQuery(CommandList& commandList, const GpuTimingScope& scope);
+    [[nodiscard]] QueryEndResult endQuery(CommandList& commandList, const GpuTimingScope& scope);
     [[nodiscard]] bool recordQueryEnd(CommandList& commandList, const GpuTimingScope& scope);
     [[nodiscard]] bool validateQuerySubmission(const GpuTimingScope& scope, const QueueSubmissionToken& token)const;
     [[nodiscard]] bool confirmQuery(
@@ -299,6 +311,7 @@ public:
         const QueueSubmissionToken& token,
         bool publishSample
     );
+    [[nodiscard]] bool retireQuery(const GpuTimingScope& scope, const QueueSubmissionToken& token);
     [[nodiscard]] bool prepareQueryForRecovery(const GpuTimingScope& scope);
     void discardQuery(const GpuTimingScope& scope);
     void quarantineQuery(const GpuTimingScope& scope);
@@ -308,6 +321,7 @@ private:
     [[nodiscard]] u32 findAvailableQuery()const;
     [[nodiscard]] u32 appendQuery(Device& device);
     void releaseQuery(QueryRecord& record);
+    void releaseUnacceptedQuery(QueryRecord& record);
     void retireAttributions(Vector<GpuTimingSample, Alloc::GlobalArena>& outSamples);
     void appendStatistics(GpuTimingRecorderStatistics& outStatistics)const noexcept;
 
@@ -420,7 +434,7 @@ public:
     // Call confirmFrameReset() only after that command list submits successfully. discardFrameReset() invalidates
     // prior-frame readiness when a new preamble cannot be submitted.
     void recordFrameReset(CommandList& commandList);
-    void confirmFrameReset();
+    void confirmFrameReset(const QueueSubmissionToken& token);
     void discardFrameReset();
 
 
@@ -449,6 +463,7 @@ private:
         bool publishSample
     );
     [[nodiscard]] bool prepareDeferredScopeForRecovery(const GpuTimingScope& scope);
+    [[nodiscard]] bool retireScope(const GpuTimingScope& scope, const QueueSubmissionToken& token);
     void discardScope(const GpuTimingScope& scope);
     void quarantineScope(const GpuTimingScope& scope);
     [[nodiscard]] GpuTimingSubmissionTicket* activeSubmissionTicket()const;
@@ -565,11 +580,16 @@ private:
     // Rejects incomplete batches before they can partially submit a split timing scope. Invalid command-list input
     // releases reservations. Successful preparation atomically blocks recording and any competing submission until
     // the caller either resolves the native attempt or rolls preparation back before reaching the device.
-    [[nodiscard]] bool prepareSubmission(CommandList* const* commandLists, usize commandListCount);
+    [[nodiscard]] bool prepareSubmission(
+        CommandList* const* commandLists,
+        usize commandListCount,
+        Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens
+    );
     void rollbackPreparedSubmission();
     void discardPreparedSubmission();
     void resolveSubmission(const QueueSubmissionToken& token);
     void trackScope(const GpuTimingScope& scope);
+    [[nodiscard]] bool trackSubmissionPrerequisite(const QueueSubmissionToken& token);
     [[nodiscard]] bool activateOnCurrentThread(GpuTimingSubmissionTicket*& outPreviousTicket);
     void deactivateOnCurrentThread(GpuTimingSubmissionTicket* previousTicket, bool activated);
     void confirm(const QueueSubmissionToken& token);
@@ -578,6 +598,7 @@ private:
 private:
     GpuTimingRecorder& m_recorder;
     Vector<GpuTimingScope, Alloc::GlobalArena> m_scopes;
+    Vector<QueueSubmissionToken, Alloc::GlobalArena> m_submissionPrerequisites;
     Futex m_mutex;
     u32 m_recordingScopeCount = 0u;
     bool m_submissionPrepared = false;

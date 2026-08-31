@@ -4,6 +4,7 @@
 
 #include "backend_context.h"
 #include "backend_context_detail.h"
+#include "dispatch.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,9 +52,14 @@ bool BackendContext::createVulkanInstance(){
     m_hdr10ColorSpaceExtensionEnabled = false;
 
     {
-        res = volkInitialize();
+        res = VulkanDetail::InitializeVolkLoader();
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to initialize volk. {}"), ResultToString(res));
+            return false;
+        }
+        m_getInstanceProcAddr = vkGetInstanceProcAddr;
+        if(!m_getInstanceProcAddr){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Volk initialized without vkGetInstanceProcAddr."));
             return false;
         }
     }
@@ -247,7 +253,7 @@ bool BackendContext::createVulkanInstance(){
         return false;
     }
 
-    volkLoadInstance(m_vulkanInstance);
+    VulkanDetail::LoadVolkInstanceDispatch(m_instanceDispatch, m_vulkanInstance);
 
     return true;
 }
@@ -259,7 +265,7 @@ bool BackendContext::createVulkanInstance(){
 void BackendContext::installDebugMessenger(){
     VkResult res = VK_SUCCESS;
 
-    if(!vkCreateDebugUtilsMessengerEXT){
+    if(!m_instanceDispatch.vkCreateDebugUtilsMessengerEXT){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan GPU debug: vkCreateDebugUtilsMessengerEXT is unavailable; validation messages will not be routed to the logger."));
         return;
     }
@@ -271,7 +277,7 @@ void BackendContext::installDebugMessenger(){
     createInfo.pfnUserCallback = VulkanDetail::VulkanDebugCallback;
     createInfo.pUserData = this;
 
-    res = vkCreateDebugUtilsMessengerEXT(m_vulkanInstance, &createInfo, nullptr, &m_debugUtilsMessenger);
+    res = m_instanceDispatch.vkCreateDebugUtilsMessengerEXT(m_vulkanInstance, &createInfo, nullptr, &m_debugUtilsMessenger);
     if(res != VK_SUCCESS){
         m_debugUtilsMessenger = VK_NULL_HANDLE;
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to install debug messenger. {}"), ResultToString(res));

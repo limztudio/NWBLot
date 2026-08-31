@@ -11,6 +11,7 @@
 #include <core/graphics/vulkan/backend.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
+#include <tests/common/vulkan_test_sync.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -292,17 +293,26 @@ TEST_F(ExtensionCommandIngressTest, ClusterFeatureAdvertisementRequiresPipelineA
         GTEST_SKIP() << "Cluster feature query: VK_NV_cluster_acceleration_structure is unavailable.";
 
     EXPECT_TRUE(device().queryFeatureSupport(Feature::RayTracingPipeline));
-    const PFN_vkGetClusterAccelerationStructureBuildSizesNV originalSizeQuery = vkGetClusterAccelerationStructureBuildSizesNV;
-    const PFN_vkCmdBuildClusterAccelerationStructureIndirectNV originalBuildCommand = vkCmdBuildClusterAccelerationStructureIndirectNV;
-    ASSERT_NE(originalSizeQuery, nullptr);
-    ASSERT_NE(originalBuildCommand, nullptr);
-
-    vkGetClusterAccelerationStructureBuildSizesNV = nullptr;
-    const bool advertisedWithoutSizeQuery = device().queryFeatureSupport(Feature::RayTracingClusters);
-    vkGetClusterAccelerationStructureBuildSizesNV = originalSizeQuery;
-    vkCmdBuildClusterAccelerationStructureIndirectNV = nullptr;
-    const bool advertisedWithoutBuildCommand = device().queryFeatureSupport(Feature::RayTracingClusters);
-    vkCmdBuildClusterAccelerationStructureIndirectNV = originalBuildCommand;
+    bool advertisedWithoutSizeQuery = true;
+    {
+        ScopedVulkanDeviceDispatchOverride<PFN_vkGetClusterAccelerationStructureBuildSizesNV> missingSizeQuery(
+            device(),
+            &VolkDeviceTable::vkGetClusterAccelerationStructureBuildSizesNV
+        );
+        ASSERT_TRUE(missingSizeQuery.valid());
+        ASSERT_TRUE(missingSizeQuery.replace(nullptr));
+        advertisedWithoutSizeQuery = device().queryFeatureSupport(Feature::RayTracingClusters);
+    }
+    bool advertisedWithoutBuildCommand = true;
+    {
+        ScopedVulkanDeviceDispatchOverride<PFN_vkCmdBuildClusterAccelerationStructureIndirectNV> missingBuildCommand(
+            device(),
+            &VolkDeviceTable::vkCmdBuildClusterAccelerationStructureIndirectNV
+        );
+        ASSERT_TRUE(missingBuildCommand.valid());
+        ASSERT_TRUE(missingBuildCommand.replace(nullptr));
+        advertisedWithoutBuildCommand = device().queryFeatureSupport(Feature::RayTracingClusters);
+    }
 
     EXPECT_FALSE(advertisedWithoutSizeQuery);
     EXPECT_FALSE(advertisedWithoutBuildCommand);

@@ -129,6 +129,49 @@ inline bool BuildRequiresInvalidate(const VkPhysicalDeviceMemoryProperties& memo
     return (propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0 && (propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0;
 }
 
+inline VmaVulkanFunctions BuildVmaVulkanFunctions(const VulkanContext& context){
+    VmaVulkanFunctions functions{};
+    functions.vkGetInstanceProcAddr = context.getInstanceProcAddr;
+    functions.vkGetDeviceProcAddr = context.instanceDispatch.vkGetDeviceProcAddr;
+    functions.vkGetPhysicalDeviceProperties = context.instanceDispatch.vkGetPhysicalDeviceProperties;
+    functions.vkGetPhysicalDeviceMemoryProperties = context.instanceDispatch.vkGetPhysicalDeviceMemoryProperties;
+    functions.vkAllocateMemory = context.deviceDispatch.vkAllocateMemory;
+    functions.vkFreeMemory = context.deviceDispatch.vkFreeMemory;
+    functions.vkMapMemory = context.deviceDispatch.vkMapMemory;
+    functions.vkUnmapMemory = context.deviceDispatch.vkUnmapMemory;
+    functions.vkFlushMappedMemoryRanges = context.deviceDispatch.vkFlushMappedMemoryRanges;
+    functions.vkInvalidateMappedMemoryRanges = context.deviceDispatch.vkInvalidateMappedMemoryRanges;
+    functions.vkBindBufferMemory = context.deviceDispatch.vkBindBufferMemory;
+    functions.vkBindImageMemory = context.deviceDispatch.vkBindImageMemory;
+    functions.vkGetBufferMemoryRequirements = context.deviceDispatch.vkGetBufferMemoryRequirements;
+    functions.vkGetImageMemoryRequirements = context.deviceDispatch.vkGetImageMemoryRequirements;
+    functions.vkCreateBuffer = context.deviceDispatch.vkCreateBuffer;
+    functions.vkDestroyBuffer = context.deviceDispatch.vkDestroyBuffer;
+    functions.vkCreateImage = context.deviceDispatch.vkCreateImage;
+    functions.vkDestroyImage = context.deviceDispatch.vkDestroyImage;
+    functions.vkCmdCopyBuffer = context.deviceDispatch.vkCmdCopyBuffer;
+#if VMA_DEDICATED_ALLOCATION || VMA_VULKAN_VERSION >= 1001000
+    functions.vkGetBufferMemoryRequirements2KHR = context.deviceDispatch.vkGetBufferMemoryRequirements2;
+    functions.vkGetImageMemoryRequirements2KHR = context.deviceDispatch.vkGetImageMemoryRequirements2;
+#endif
+#if VMA_BIND_MEMORY2 || VMA_VULKAN_VERSION >= 1001000
+    functions.vkBindBufferMemory2KHR = context.deviceDispatch.vkBindBufferMemory2;
+    functions.vkBindImageMemory2KHR = context.deviceDispatch.vkBindImageMemory2;
+#endif
+#if VMA_GET_PHYSICAL_DEVICE_PROPERTIES2
+    functions.vkGetPhysicalDeviceMemoryProperties2KHR = context.instanceDispatch.vkGetPhysicalDeviceMemoryProperties2;
+    functions.vkGetPhysicalDeviceProperties2KHR = context.instanceDispatch.vkGetPhysicalDeviceProperties2;
+#endif
+#if VMA_KHR_MAINTENANCE4 || VMA_VULKAN_VERSION >= 1003000
+    functions.vkGetDeviceBufferMemoryRequirements = context.deviceDispatch.vkGetDeviceBufferMemoryRequirements;
+    functions.vkGetDeviceImageMemoryRequirements = context.deviceDispatch.vkGetDeviceImageMemoryRequirements;
+#endif
+#if VMA_EXTERNAL_MEMORY_WIN32
+    functions.vkGetMemoryWin32HandleKHR = context.deviceDispatch.vkGetMemoryWin32HandleKHR;
+#endif
+    return functions;
+}
+
 inline VmaAllocator ToVmaAllocator(const VulkanAllocatorHandle allocator){
     static_assert(sizeof(VmaAllocator) == sizeof(VulkanAllocatorHandle));
     return reinterpret_cast<VmaAllocator>(allocator);
@@ -286,16 +329,10 @@ bool VulkanAllocator::initialize(){
     if(m_context.extensions.buffer_device_address)
         allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
-    VmaVulkanFunctions vulkanFunctions{};
-    VkResult res = vmaImportVulkanFunctionsFromVolk(&allocatorInfo, &vulkanFunctions);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to import Vulkan functions for VMA: {}"), ResultToString(res));
-        return false;
-    }
-
+    VmaVulkanFunctions vulkanFunctions = __hidden_vulkan_allocator::BuildVmaVulkanFunctions(m_context);
     allocatorInfo.pVulkanFunctions = &vulkanFunctions;
     VmaAllocator allocator = nullptr;
-    res = vmaCreateAllocator(&allocatorInfo, &allocator);
+    VkResult res = vmaCreateAllocator(&allocatorInfo, &allocator);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create VMA allocator: {}"), ResultToString(res));
         m_allocator = nullptr;

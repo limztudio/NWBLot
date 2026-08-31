@@ -145,7 +145,11 @@ inline void FinishDestroyingSmokeWorld(
     NotNullUniquePtr<Core::ECS::World>& world
 ){
     context.graphics.waitAllJobs();
-    context.graphics.waitForIdle();
+    const bool deviceIdle = context.graphics.waitForIdle();
+    NWB_FATAL_ASSERT_MSG(
+        deviceIdle || context.graphics.isDeviceLost(),
+        NWB_TEXT("Smoke-world destruction requires either a completed device join or terminal device loss")
+    );
 
     world->clear();
     world.owner().reset();

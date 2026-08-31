@@ -32,7 +32,7 @@ BackendContext::BackendContext(
     , m_swapChainImages(m_arena)
     , m_nativeQueues(m_arena)
     , m_sameClassQueues(m_arena)
-    , m_acquireSemaphores(m_arena)
+    , m_acquireSyncSlots(m_arena)
     , m_presentSemaphores(m_arena)
     , m_framesInFlight(Deque<EventQueryHandle, Alloc::GlobalArena>(m_arena))
     , m_queryPool(m_arena)

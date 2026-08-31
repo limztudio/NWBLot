@@ -2145,26 +2145,24 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     );
     const usize quarantineOffset = abandonment.find("m_swapChainIndex = Limit<u32>::s_Max;");
     const usize signalIdleOffset = abandonment.find("presentationSignalNeedsIdle && !m_rhiDevice->waitForIdle()");
-    const usize signalResetOffset = abandonment.find("resetFramePresentationSignal();", signalIdleOffset);
-    const usize forceSubmitOffset = abandonment.find("drainSubmitDesc.forceNativeSubmission = true;");
-    const usize drainSubmitOffset = abandonment.find("m_rhiDevice->executeCommandLists(nullptr, 0u, primaryGraphicsQueue, drainSubmitDesc)");
-    const usize idleOffset = abandonment.find("m_rhiDevice->waitForIdle()", drainSubmitOffset);
+    const usize abandonmentReplacementOffset = abandonment.find(
+        "replaceFramePresentationSemaphoreAfterIdle()",
+        signalIdleOffset
+    );
+    const usize signalResetOffset = abandonment.find("resetFramePresentationSignal();", abandonmentReplacementOffset);
     ASSERT_NE(quarantineOffset, AStringView::npos);
     ASSERT_NE(signalIdleOffset, AStringView::npos);
+    ASSERT_NE(abandonmentReplacementOffset, AStringView::npos);
     ASSERT_NE(signalResetOffset, AStringView::npos);
-    ASSERT_NE(forceSubmitOffset, AStringView::npos);
-    ASSERT_NE(drainSubmitOffset, AStringView::npos);
-    ASSERT_NE(idleOffset, AStringView::npos);
     EXPECT_LT(quarantineOffset, signalIdleOffset);
-    EXPECT_LT(signalIdleOffset, signalResetOffset);
-    EXPECT_LT(signalResetOffset, forceSubmitOffset);
-    EXPECT_LT(forceSubmitOffset, drainSubmitOffset);
-    EXPECT_LT(drainSubmitOffset, idleOffset);
+    EXPECT_LT(signalIdleOffset, abandonmentReplacementOffset);
+    EXPECT_LT(abandonmentReplacementOffset, signalResetOffset);
+    EXPECT_FALSE(ContainsText(abandonment, "forceNativeSubmission"));
+    EXPECT_FALSE(ContainsText(abandonment, "executeCommandLists(nullptr, 0u"));
     EXPECT_TRUE(ContainsText(abandonment, "if(!m_frameAcquired)\n        return true;"));
     EXPECT_TRUE(ContainsText(abandonment, "if(m_frameAbandonmentComplete){"));
     EXPECT_TRUE(ContainsText(abandonment, "replaceFramePresentationSemaphoreAfterIdle()"));
-    EXPECT_TRUE(ContainsText(abandonment, "m_rhiDevice->captureGpuCrash(\"acquired-frame abandonment drain\")"));
-    EXPECT_TRUE(ContainsText(abandonment, "m_rhiDevice->captureGpuCrash(\"acquired-frame abandonment drain idle\")"));
+    EXPECT_GE(CountText(abandonment, "m_rhiDevice->quarantineDevice();"), 2u);
     EXPECT_TRUE(ContainsText(abandonment, "m_frameAbandonmentComplete = true;"));
     EXPECT_FALSE(ContainsText(abandonment, "m_frameAcquired = false"));
 
@@ -2177,29 +2175,29 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
         nonConsumedOffset
     );
     const usize unconsumedIdleOffset = present.find("if(!m_rhiDevice->waitForIdle())", deviceLostOffset);
-    const usize idleFailureCaptureOffset = present.find("captureGpuCrash(\"present semaphore idle\")", unconsumedIdleOffset);
-    const usize replacementOffset = present.find("if(!replaceFramePresentationSemaphoreAfterIdle())", idleFailureCaptureOffset);
-    const usize replacementFailureCaptureOffset = present.find(
-        "captureGpuCrash(\"present semaphore replacement\")",
+    const usize idleFailureQuarantineOffset = present.find("m_rhiDevice->quarantineDevice();", unconsumedIdleOffset);
+    const usize replacementOffset = present.find("if(!replaceFramePresentationSemaphoreAfterIdle())", idleFailureQuarantineOffset);
+    const usize replacementFailureQuarantineOffset = present.find(
+        "m_rhiDevice->quarantineDevice();",
         replacementOffset
     );
-    const usize unconsumedResetOffset = present.find("resetFramePresentationSignal();", replacementFailureCaptureOffset);
+    const usize unconsumedResetOffset = present.find("resetFramePresentationSignal();", replacementFailureQuarantineOffset);
     ASSERT_NE(nonConsumedOffset, AStringView::npos);
     ASSERT_NE(deviceLostOffset, AStringView::npos);
     ASSERT_NE(unconsumedIdleOffset, AStringView::npos);
-    ASSERT_NE(idleFailureCaptureOffset, AStringView::npos);
+    ASSERT_NE(idleFailureQuarantineOffset, AStringView::npos);
     ASSERT_NE(replacementOffset, AStringView::npos);
-    ASSERT_NE(replacementFailureCaptureOffset, AStringView::npos);
+    ASSERT_NE(replacementFailureQuarantineOffset, AStringView::npos);
     ASSERT_NE(unconsumedResetOffset, AStringView::npos);
     EXPECT_LT(nonConsumedOffset, deviceLostOffset);
     EXPECT_LT(deviceLostOffset, unconsumedIdleOffset);
-    EXPECT_LT(unconsumedIdleOffset, idleFailureCaptureOffset);
-    EXPECT_LT(idleFailureCaptureOffset, replacementOffset);
-    EXPECT_LT(replacementOffset, replacementFailureCaptureOffset);
-    EXPECT_LT(replacementFailureCaptureOffset, unconsumedResetOffset);
+    EXPECT_LT(unconsumedIdleOffset, idleFailureQuarantineOffset);
+    EXPECT_LT(idleFailureQuarantineOffset, replacementOffset);
+    EXPECT_LT(replacementOffset, replacementFailureQuarantineOffset);
+    EXPECT_LT(replacementFailureQuarantineOffset, unconsumedResetOffset);
     EXPECT_TRUE(ContainsText(present, "if(!frameSignalAccepted || !m_rhiDevice){"));
     EXPECT_FALSE(ContainsText(
-        present.substr(nonConsumedOffset, replacementFailureCaptureOffset - nonConsumedOffset),
+        present.substr(nonConsumedOffset, replacementFailureQuarantineOffset - nonConsumedOffset),
         "resetFramePresentationSignal();"
     ));
 
@@ -2215,23 +2213,30 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     ASSERT_NE(animateOffset, AStringView::npos);
     const AStringView animate = graphics.substr(animateOffset);
     const usize entryClearOffset = animate.find("m_acquiredPresentationFrame = {};");
-    const usize acquireOffset = animate.find("AcquiredBackBuffer acquiredBackBuffer = m_backend->beginFrame(resizeCallbacks);");
+    const usize beginResultOffset = animate.find("BeginFrameResult beginFrameResult;");
+    const usize acquireOffset = animate.find("AcquiredBackBuffer acquiredBackBuffer = Move(beginFrameResult.backBuffer);");
     const usize identityOffset = animate.find("acquiredFramebufferDesc.colorAttachments[0].texture != acquiredBackBuffer.texture.get()");
     const usize publishOffset = animate.find("m_acquiredPresentationFrame = {", acquireOffset);
     const usize resetOffset = animate.find("ScopedAcquiredPresentationFrameReset acquiredFrameReset", publishOffset);
     const usize preambleOffset = animate.find("prepareFramePreamble()", resetOffset);
     ASSERT_NE(entryClearOffset, AStringView::npos);
+    ASSERT_NE(beginResultOffset, AStringView::npos);
     ASSERT_NE(acquireOffset, AStringView::npos);
     ASSERT_NE(identityOffset, AStringView::npos);
     ASSERT_NE(publishOffset, AStringView::npos);
     ASSERT_NE(resetOffset, AStringView::npos);
     ASSERT_NE(preambleOffset, AStringView::npos);
-    EXPECT_LT(entryClearOffset, acquireOffset);
+    EXPECT_LT(entryClearOffset, beginResultOffset);
+    EXPECT_LT(beginResultOffset, acquireOffset);
     EXPECT_LT(acquireOffset, identityOffset);
     EXPECT_LT(identityOffset, publishOffset);
     EXPECT_LT(publishOffset, resetOffset);
     EXPECT_LT(resetOffset, preambleOffset);
     EXPECT_TRUE(ContainsText(animate, "acquiredFramebufferDesc.colorAttachments.size() != 1u"));
+    EXPECT_TRUE(ContainsText(animate, "beginFrameResult = m_backend->beginFrame();"));
+    EXPECT_TRUE(ContainsText(animate, "beginFrameResult.status == BeginFrameStatus::ResizeRequired"));
+    EXPECT_TRUE(ContainsText(animate, "if(!beginFrameResult.acquired()){"));
+    EXPECT_FALSE(ContainsText(animate, "BackBufferResizeCallbacks"));
     const usize missingFramebufferWarningOffset = animate.find("acquired swap-chain image has no matching framebuffer");
     const usize missingFramebufferAbandonOffset = animate.find("m_backend->abandonAcquiredFrame()", missingFramebufferWarningOffset);
     const usize missingFramebufferRecreationOffset = animate.find("requestDeviceRecreation()", missingFramebufferAbandonOffset);
@@ -2251,11 +2256,11 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     EXPECT_LT(attachmentAbandonOffset, attachmentRecreationOffset);
     EXPECT_LT(attachmentRecreationOffset, publishOffset);
     const usize renderCallOffset = animate.find("render();", preambleOffset);
-    const usize postRenderExitOffset = animate.find("if(m_deviceRecreationRequested || device.isDeviceLost()){", renderCallOffset);
+    const usize postRenderExitOffset = animate.find("if(m_deviceRecreationRequested || device.requiresRecreation()){", renderCallOffset);
     const usize postRenderAbandonOffset = animate.find("else if(!m_backend->abandonAcquiredFrame())", postRenderExitOffset);
     const usize presentCallOffset = animate.find("const bool presented = m_backend->present();", postRenderAbandonOffset);
     const usize presentFailureOffset = animate.find("if(!presented){", presentCallOffset);
-    const usize presentAbandonOffset = animate.find("!device.isDeviceLost() && !m_backend->abandonAcquiredFrame()", presentFailureOffset);
+    const usize presentAbandonOffset = animate.find("!device.requiresRecreation() && !m_backend->abandonAcquiredFrame()", presentFailureOffset);
     ASSERT_NE(renderCallOffset, AStringView::npos);
     ASSERT_NE(postRenderExitOffset, AStringView::npos);
     ASSERT_NE(postRenderAbandonOffset, AStringView::npos);
@@ -2268,13 +2273,62 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     EXPECT_LT(presentCallOffset, presentFailureOffset);
     EXPECT_LT(presentFailureOffset, presentAbandonOffset);
     EXPECT_EQ(CountText(animate, "m_backend->abandonAcquiredFrame()"), 4u);
-    EXPECT_TRUE(ContainsText(animate, "prepareFramePreamble() returns false only after terminal device loss"));
+    EXPECT_TRUE(ContainsText(animate, "prepareFramePreamble() returns false only after the device requires recreation"));
     EXPECT_TRUE(ContainsText(animate, "required device teardown owns the unresolved acquired image and synchronization"));
     EXPECT_TRUE(ContainsText(graphics, "~ScopedAcquiredPresentationFrameReset(){ m_frame = {}; }"));
     EXPECT_TRUE(ContainsText(graphics, "bool Graphics::init(const Common::FrameData& data){\n    m_acquiredPresentationFrame = {};"));
     EXPECT_TRUE(ContainsText(graphics, "bool Graphics::createHeadlessDevice(){\n    m_acquiredPresentationFrame = {};"));
-    EXPECT_TRUE(ContainsText(graphics, "void Graphics::destroy(){\n    m_acquiredPresentationFrame = {};"));
-    EXPECT_TRUE(ContainsText(graphics, "void Graphics::backBufferResizing(){\n    m_acquiredPresentationFrame = {};"));
+
+    const usize destroyLifecycleOffset = graphics.find("bool Graphics::destroy(){");
+    const usize destroyJobJoinOffset = graphics.find("waitAllJobs();", destroyLifecycleOffset);
+    const usize destroyPrepareOffset = graphics.find(
+        "prepareSwapChainTransition(SwapChainTransitionKind::Destroy, transitionTicket)",
+        destroyJobJoinOffset
+    );
+    const usize destroySnapshotClearOffset = graphics.find("m_acquiredPresentationFrame = {};", destroyPrepareOffset);
+    const usize destroyCommitOffset = graphics.find(
+        "m_backend->commitDestroy(Move(transitionTicket))",
+        destroySnapshotClearOffset
+    );
+    ASSERT_NE(destroyLifecycleOffset, AStringView::npos);
+    ASSERT_NE(destroyJobJoinOffset, AStringView::npos);
+    ASSERT_NE(destroyPrepareOffset, AStringView::npos);
+    ASSERT_NE(destroySnapshotClearOffset, AStringView::npos);
+    ASSERT_NE(destroyCommitOffset, AStringView::npos);
+    EXPECT_LT(destroyLifecycleOffset, destroyJobJoinOffset);
+    EXPECT_LT(destroyJobJoinOffset, destroyPrepareOffset);
+    EXPECT_LT(destroyPrepareOffset, destroySnapshotClearOffset);
+    EXPECT_LT(destroySnapshotClearOffset, destroyCommitOffset);
+
+    const usize resizeLifecycleOffset = graphics.find("bool Graphics::backBufferResizing(SwapChainTransitionTicket& outTicket){");
+    const usize resizeJobJoinOffset = graphics.find("waitAllJobs();", resizeLifecycleOffset);
+    const usize resizePrepareOffset = graphics.find(
+        "prepareSwapChainTransition(SwapChainTransitionKind::Resize, outTicket)",
+        resizeJobJoinOffset
+    );
+    const usize resizeSnapshotClearOffset = graphics.find("m_acquiredPresentationFrame = {};", resizePrepareOffset);
+    ASSERT_NE(resizeLifecycleOffset, AStringView::npos);
+    ASSERT_NE(resizeJobJoinOffset, AStringView::npos);
+    ASSERT_NE(resizePrepareOffset, AStringView::npos);
+    ASSERT_NE(resizeSnapshotClearOffset, AStringView::npos);
+    EXPECT_LT(resizeLifecycleOffset, resizeJobJoinOffset);
+    EXPECT_LT(resizeJobJoinOffset, resizePrepareOffset);
+    EXPECT_LT(resizePrepareOffset, resizeSnapshotClearOffset);
+
+    const usize backendPrepareOffset = backendOrchestration.find("bool BackendContext::prepareSwapChainTransition(");
+    const usize backendAcquireJoinOffset = backendOrchestration.find(
+        "waitAcquireSyncSlotsForLifecycle()",
+        backendPrepareOffset
+    );
+    const usize backendDeviceJoinOffset = backendOrchestration.find(
+        "const bool deviceIdle = m_rhiDevice->waitForIdle();",
+        backendAcquireJoinOffset
+    );
+    ASSERT_NE(backendPrepareOffset, AStringView::npos);
+    ASSERT_NE(backendAcquireJoinOffset, AStringView::npos);
+    ASSERT_NE(backendDeviceJoinOffset, AStringView::npos);
+    EXPECT_LT(backendPrepareOffset, backendAcquireJoinOffset);
+    EXPECT_LT(backendAcquireJoinOffset, backendDeviceJoinOffset);
 
     for(const AStringView setupSource : { rendererResources, ui }){
         EXPECT_TRUE(ContainsText(setupSource, "Pipeline compatibility setup uses the stable framebuffer-zero prototype"));
@@ -2345,7 +2399,10 @@ TEST(EcsGraphics, CompatibilityPresentTransitionsExactAcquiredImageBeforeSignal)
         hookOffset
     );
     const usize executeOffset = compatibilityBranch.find("m_rhiDevice->executeCommandLists(", listOffset);
-    const usize confirmOffset = compatibilityBranch.find("confirmFramePresentationSignal(fallbackToken)", executeOffset);
+    const usize confirmOffset = compatibilityBranch.find(
+        "confirmFramePresentationSignal(presentationSignalHook, fallbackToken)",
+        executeOffset
+    );
     const usize acceptedOffset = compatibilityBranch.find("frameSignalAccepted = true;", confirmOffset);
     ASSERT_NE(acquiredImageOffset, AStringView::npos);
     ASSERT_NE(policyOffset, AStringView::npos);
@@ -2420,7 +2477,8 @@ TEST(EcsGraphics, CompatibilityPresentTransitionsExactAcquiredImageBeforeSignal)
     EXPECT_TRUE(ContainsText(
         compatibilityBranch,
         "if(!fallbackToken.valid()){\n"
-        "            cancelFramePresentationSignal();\n"
+        "            if(!cancelFramePresentationSignal(presentationSignalHook))\n"
+        "                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT(\"Vulkan: Failed to cancel presentation synchronization after submit rejection.\"));\n"
         "            NWB_LOGGER_ERROR(NWB_TEXT(\"Vulkan: Compatibility presentation transition/signal "
         "submission was rejected.\"));\n"
         "            return false;\n"
@@ -2428,15 +2486,18 @@ TEST(EcsGraphics, CompatibilityPresentTransitionsExactAcquiredImageBeforeSignal)
     ));
     EXPECT_TRUE(ContainsText(
         compatibilityBranch,
-        "if(!confirmFramePresentationSignal(fallbackToken)){\n"
-        "            cancelFramePresentationSignal();\n"
+        "if(!confirmFramePresentationSignal(presentationSignalHook, fallbackToken)){\n"
+        "            if(!cancelFramePresentationSignal(presentationSignalHook))\n"
+        "                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT(\"Vulkan: Failed to cancel presentation synchronization after confirmation rejection.\"));\n"
         "            NWB_LOGGER_ERROR(NWB_TEXT(\"Vulkan: Accepted compatibility presentation submission "
         "failed signal confirmation/tracking.\"));\n"
         "            return false;\n"
         "        }"
     ));
-    EXPECT_EQ(CountText(compatibilityBranch, "return false;"), 8u);
-    EXPECT_EQ(CountText(compatibilityBranch, "cancelFramePresentationSignal();"), 5u);
+    EXPECT_EQ(CountText(compatibilityBranch, "return false;"), 10u);
+    EXPECT_EQ(CountText(compatibilityBranch, "cancelFramePresentationSignal();"), 0u);
+    EXPECT_EQ(CountText(compatibilityBranch, "cancelFramePresentationSignal())"), 3u);
+    EXPECT_EQ(CountText(compatibilityBranch, "cancelFramePresentationSignal(presentationSignalHook)"), 2u);
 }
 
 
@@ -2510,7 +2571,12 @@ TEST(EcsGraphics, RendererPresentationGraphBindsExactAcquiredTexture){
     EXPECT_TRUE(ContainsText(
         presentationBuild,
         ".setInitialState(presentationFrame.backBuffer.nativeInitialState)\n"
+        "        .setInitialAvailabilityCompletion(backBufferAvailability)\n"
         "        .setExternalFinalState(Core::ResourceStates::Present)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        presentationBuild,
+        ".setToken(presentationFrame.backBuffer.availabilityCompletion)"
     ));
     EXPECT_TRUE(ContainsText(
         presentationBuild,
@@ -2619,10 +2685,12 @@ TEST(EcsGraphics, UiPresentationGraphsBindExactAcquiredTexture){
         ui,
         "graph.textureForResource(backbuffer) == frame.backBuffer.texture.get()"
     ));
-    EXPECT_TRUE(ContainsText(ui, "PresentationBackBufferResourceDesc("));
+    EXPECT_TRUE(ContainsText(ui, "ImportPresentationBackBuffer("));
     EXPECT_TRUE(ContainsText(ui, ".setType(Core::GpuGraphResourceType::Texture)"));
     EXPECT_TRUE(ContainsText(ui, ".setInitialState(frame.backBuffer.nativeInitialState)"));
+    EXPECT_TRUE(ContainsText(ui, ".setInitialAvailabilityCompletion(availability)"));
     EXPECT_TRUE(ContainsText(ui, ".setExternalFinalState(Core::ResourceStates::Present)"));
+    EXPECT_TRUE(ContainsText(ui, ".setToken(frame.backBuffer.availabilityCompletion)"));
 
     const usize renderTaskOffset = ui.find("struct UiSystem::TaskGraphRenderTask{");
     const usize uploadCompletionOffset = ui.find("struct UiSystem::TaskGraphUploadCompletionTask{", renderTaskOffset);
@@ -2684,7 +2752,10 @@ TEST(EcsGraphics, UiPresentationGraphsBindExactAcquiredTexture){
     EXPECT_TRUE(ContainsText(declaration, ".backbuffer = backbuffer,"));
 
     const usize drawBranchOffset = standalone.find("context->ui->m_taskGraphDrawUploadsPrepared");
-    const usize standaloneImportOffset = standalone.find("backbuffer = graph.importTexture(", drawBranchOffset);
+    const usize standaloneImportOffset = standalone.find(
+        "backbuffer = __hidden_ui::ImportPresentationBackBuffer(",
+        drawBranchOffset
+    );
     const usize standaloneDeclareOffset = standalone.find(
         "return context->ui->declareTaskGraphPresentation(",
         standaloneImportOffset
@@ -2695,16 +2766,17 @@ TEST(EcsGraphics, UiPresentationGraphsBindExactAcquiredTexture){
     EXPECT_LT(drawBranchOffset, standaloneImportOffset);
     EXPECT_LT(standaloneImportOffset, standaloneDeclareOffset);
     EXPECT_TRUE(ContainsText(standalone, "Core::GpuGraphResourceId backbuffer;"));
-    EXPECT_TRUE(ContainsText(standalone, "context->frame.backBuffer.texture,"));
-    EXPECT_TRUE(ContainsText(standalone, "PresentationBackBufferResourceDesc("));
+    EXPECT_TRUE(ContainsText(standalone, "graph,\n                    context->frame,"));
+    EXPECT_TRUE(ContainsText(standalone, "ImportPresentationBackBuffer("));
     EXPECT_FALSE(ContainsText(standalone, "importHazardDomain"));
 
     EXPECT_TRUE(ContainsText(
         legacyDeclaration,
-        "const Core::GpuGraphResourceId backbuffer = graph.importTexture(\n"
-        "        frame.backBuffer.texture,"
+        "const Core::GpuGraphResourceId backbuffer = __hidden_ui::ImportPresentationBackBuffer(\n"
+        "        graph,\n"
+        "        frame,"
     ));
-    EXPECT_TRUE(ContainsText(legacyDeclaration, "PresentationBackBufferResourceDesc("));
+    EXPECT_TRUE(ContainsText(legacyDeclaration, "ImportPresentationBackBuffer("));
     EXPECT_TRUE(ContainsText(legacyDeclaration, ".requiredState = Core::ResourceStates::RenderTarget,"));
     EXPECT_TRUE(ContainsText(
         legacyDeclaration,
@@ -7272,7 +7344,7 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
     EXPECT_FALSE(ContainsText(nativeBinding, "m_activePendingRecordingLeaseCount != 0u"));
 
     const usize deviceCheckOffset = rendererExecution.find(
-        "if(m_graphics.isDeviceRecreationRequested() || device.isDeviceLost())"
+        "if(m_graphics.isDeviceRecreationRequested() || device.requiresRecreation())"
     );
     const usize recoveryCheckOffset = rendererExecution.find("if(m_frameRenderRecoveryFailed)", deviceCheckOffset);
     const usize leaseOffset = rendererExecution.find(
@@ -7320,6 +7392,90 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
         smoke,
         "native TLAS binding rejected the exact pending-recording generation"
     ));
+}
+
+
+// Descriptor storage may be freed only after host access and native execution are joined. A failed non-loss wait
+// quarantines the manager storage for a later retry, while an actual device loss is the only teardown exception.
+TEST(EcsGraphics, DescriptorStorageTeardownRequiresCompletedDeviceJoinOrActualLoss){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString managerHeaderSource;
+    AString managerSource;
+    AString heapSource;
+    AString deviceSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", managerHeaderSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "resource_bindings_descriptor_buffer.cpp",
+        managerSource
+    ));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap.cpp", heapSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device.cpp", deviceSource));
+    const AStringView managerHeader(managerHeaderSource.data(), managerHeaderSource.size());
+    const AStringView manager(managerSource.data(), managerSource.size());
+    const AStringView heap(heapSource.data(), heapSource.size());
+    const AStringView device(deviceSource.data(), deviceSource.size());
+
+    EXPECT_TRUE(ContainsText(
+        managerHeader,
+        "[[nodiscard]] bool shutdownForLifecycleOperation(bool deviceIdleOrLostAlreadyProven = false);"
+    ));
+    EXPECT_TRUE(ContainsText(managerHeader, "[[nodiscard]] bool shutdownAfterDeviceIdleOrLoss();"));
+    EXPECT_TRUE(ContainsText(managerHeader, "[[nodiscard]] bool shutdown();"));
+    EXPECT_TRUE(ContainsText(
+        manager,
+        "DescriptorBufferManager::~DescriptorBufferManager(){\n"
+        "    const bool shutdownSucceeded = shutdown();\n"
+        "    NWB_FATAL_ASSERT_MSG(\n"
+        "        shutdownSucceeded,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        manager,
+        "if(!shutdownForLifecycleOperation())\n"
+        "        return false;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        manager,
+        "if(!deviceIdle && !m_device.isDeviceLost()){\n"
+        "        ScopedLock lifecycleLock(m_lifecycleMutex);\n\n"
+        "        m_lifecycleTransitioning = false;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        manager,
+        "Descriptor-buffer shutdown is refusing to destroy storage after device-idle wait failed."
+    ));
+
+    const usize managerWaitOffset = manager.find(
+        "const bool deviceIdle = deviceIdleOrLostAlreadyProven || m_device.waitForIdle();"
+    );
+    const usize managerRefusalOffset = manager.find("if(!deviceIdle && !m_device.isDeviceLost())", managerWaitOffset);
+    const usize managerDestroyOffset = manager.find("shutdownSegment(m_resourceSegment);", managerRefusalOffset);
+    ASSERT_NE(managerWaitOffset, AStringView::npos);
+    ASSERT_NE(managerRefusalOffset, AStringView::npos);
+    ASSERT_NE(managerDestroyOffset, AStringView::npos);
+    EXPECT_LT(managerWaitOffset, managerRefusalOffset);
+    EXPECT_LT(managerRefusalOffset, managerDestroyOffset);
+    EXPECT_TRUE(ContainsText(
+        manager,
+        "bool DescriptorBufferManager::shutdownAfterDeviceIdleOrLoss(){\n"
+        "    ScopedLock operationLock(m_lifecycleOperationMutex);\n\n"
+        "    return shutdownForLifecycleOperation(true);"
+    ));
+    EXPECT_TRUE(ContainsText(
+        device,
+        "m_descriptorBufferManager.shutdownAfterDeviceIdleOrLoss()"
+    ));
+
+    const usize heapWaitOffset = heap.find("const bool deviceIdle = m_device.waitForIdle();");
+    const usize heapJoinAssertOffset = heap.find("deviceIdle || m_device.isDeviceLost()", heapWaitOffset);
+    const usize heapDestroyOffset = heap.find("shutdownForDeviceTeardown();", heapJoinAssertOffset);
+    ASSERT_NE(heapWaitOffset, AStringView::npos);
+    ASSERT_NE(heapJoinAssertOffset, AStringView::npos);
+    ASSERT_NE(heapDestroyOffset, AStringView::npos);
+    EXPECT_LT(heapWaitOffset, heapJoinAssertOffset);
+    EXPECT_LT(heapJoinAssertOffset, heapDestroyOffset);
+    EXPECT_FALSE(ContainsText(heap, "destruction is continuing after device-idle wait failed"));
 }
 
 

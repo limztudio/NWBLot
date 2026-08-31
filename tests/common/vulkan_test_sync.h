@@ -21,6 +21,34 @@ NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace Core::GraphicsBackend{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class VulkanTestDispatchAccess final{
+public:
+    [[nodiscard]] static VkDevice nativeDevice(const Device& device)noexcept{ return device.m_context.device; }
+    [[nodiscard]] static const VkAllocationCallbacks* allocationCallbacks(const Device& device)noexcept{
+        return device.m_context.allocationCallbacks;
+    }
+    [[nodiscard]] static VolkDeviceTable& deviceDispatch(Device& device)noexcept{ return device.m_context.deviceDispatch; }
+    [[nodiscard]] static bool beginLifecycleDrain(Device& device)noexcept{ return device.beginLifecycleDrain(); }
+    static void endLifecycleDrain(Device& device)noexcept{ device.endLifecycleDrain(); }
+    [[nodiscard]] static bool submissionsBlocked(const Device& device)noexcept{ return device.submissionsBlocked(); }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace Tests{
 
 
@@ -30,55 +58,67 @@ namespace Tests{
 struct VulkanTestDeviceContext{
     VkDevice device = VK_NULL_HANDLE;
     const VkAllocationCallbacks* allocationCallbacks = nullptr;
+    VolkDeviceTable* deviceDispatch = nullptr;
 
 
-    [[nodiscard]] bool valid()const noexcept{ return device != VK_NULL_HANDLE; }
+    [[nodiscard]] bool valid()const noexcept{ return device != VK_NULL_HANDLE && deviceDispatch; }
 };
 
 
-class VulkanTestDeviceProbe final : NoCopy{
-private:
-    inline static thread_local VulkanTestDeviceContext* s_activeCapture = nullptr;
-    inline static PFN_vkCreateQueryPool s_forwardCreateQueryPool = nullptr;
-    inline static Futex s_captureMutex;
+class VulkanTestDeviceProbe final{
+public:
+    [[nodiscard]] static VulkanTestDeviceContext capture(Core::GraphicsBackend::Device& device)noexcept{
+        return VulkanTestDeviceContext{
+            .device = Core::GraphicsBackend::VulkanTestDispatchAccess::nativeDevice(device),
+            .allocationCallbacks = Core::GraphicsBackend::VulkanTestDispatchAccess::allocationCallbacks(device),
+            .deviceDispatch = &Core::GraphicsBackend::VulkanTestDispatchAccess::deviceDispatch(device),
+        };
+    }
+};
 
-    [[nodiscard]] static VKAPI_ATTR VkResult VKAPI_CALL captureCreateQueryPool(
-        const VkDevice device,
-        const VkQueryPoolCreateInfo* const createInfo,
-        const VkAllocationCallbacks* const allocationCallbacks,
-        VkQueryPool* const queryPool
-    ){
-        VulkanTestDeviceContext* const capture = s_activeCapture;
-        if(capture){
-            capture->device = device;
-            capture->allocationCallbacks = allocationCallbacks;
-        }
-        if(!s_forwardCreateQueryPool)
-            return VK_ERROR_INITIALIZATION_FAILED;
-        return s_forwardCreateQueryPool(device, createInfo, allocationCallbacks, queryPool);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename Function>
+class ScopedVulkanDeviceDispatchOverride final : NoCopy{
+public:
+    ScopedVulkanDeviceDispatchOverride(
+        Core::GraphicsBackend::Device& device,
+        Function VolkDeviceTable::* const function
+    )
+        : m_function(Core::GraphicsBackend::VulkanTestDispatchAccess::deviceDispatch(device).*function)
+        , m_original(m_function)
+    {}
+    ~ScopedVulkanDeviceDispatchOverride(){
+        if(!m_installed)
+            return;
+
+        NWB_ASSERT(m_function == m_replacement);
+        m_function = m_original;
     }
 
 
 public:
-    [[nodiscard]] static VulkanTestDeviceContext capture(Core::GraphicsBackend::Device& device){
-        VulkanTestDeviceContext capture;
-        if(!vkCreateQueryPool)
-            return capture;
+    [[nodiscard]] bool valid()const noexcept{ return m_original != nullptr; }
+    [[nodiscard]] bool installed()const noexcept{ return m_installed; }
+    [[nodiscard]] Function original()const noexcept{ return m_original; }
+    [[nodiscard]] bool replace(const Function replacement)noexcept{
+        if(!valid() || m_installed)
+            return false;
 
-        ScopedLock lock(s_captureMutex);
-        if(s_activeCapture)
-            return capture;
-
-        s_forwardCreateQueryPool = vkCreateQueryPool;
-        s_activeCapture = &capture;
-        vkCreateQueryPool = &VulkanTestDeviceProbe::captureCreateQueryPool;
-        auto probe = device.createTimerQuery();
-        vkCreateQueryPool = s_forwardCreateQueryPool;
-        s_activeCapture = nullptr;
-        if(!probe)
-            capture = {};
-        return capture;
+        m_replacement = replacement;
+        m_function = replacement;
+        m_installed = true;
+        return true;
     }
+
+
+private:
+    Function& m_function;
+    Function m_original = nullptr;
+    Function m_replacement = nullptr;
+    bool m_installed = false;
 };
 
 
@@ -266,20 +306,24 @@ private:
 
 
 public:
-    // Volk's dispatch slot is plain storage. Construct and destroy this observer only while new submissions and
-    // other vkQueueSubmit2 wrappers are quiescent; already registered interceptor calls are drained at teardown.
-    VulkanTestQueueSubmit2Observer(){
+    // The owning device's dispatch slot is plain storage. Construct and destroy this observer only while new
+    // submissions are quiescent; already registered interceptor calls are drained at teardown.
+    explicit VulkanTestQueueSubmit2Observer(Core::GraphicsBackend::Device& device)
+        : m_dispatchOverride(device, &VolkDeviceTable::vkQueueSubmit2)
+    {
         ScopedLock lock(s_installMutex);
         if(s_activeObserver.load(MemoryOrder::acquire))
             return;
 
-        m_originalQueueSubmit2 = vkQueueSubmit2;
-        if(!m_originalQueueSubmit2)
+        if(!m_dispatchOverride.valid())
             return;
 
-        s_forwardQueueSubmit2 = m_originalQueueSubmit2;
+        s_forwardQueueSubmit2 = m_dispatchOverride.original();
         s_activeObserver.store(this, MemoryOrder::release);
-        vkQueueSubmit2 = &VulkanTestQueueSubmit2Observer::interceptQueueSubmit2;
+        if(!m_dispatchOverride.replace(&VulkanTestQueueSubmit2Observer::interceptQueueSubmit2)){
+            s_activeObserver.store(nullptr, MemoryOrder::release);
+            return;
+        }
         m_armed = true;
     }
     ~VulkanTestQueueSubmit2Observer(){
@@ -290,8 +334,6 @@ public:
         s_activeObserver.store(nullptr, MemoryOrder::release);
         while(s_activeInterceptionCount.load(MemoryOrder::acquire) != 0u)
             YieldThread();
-        NWB_ASSERT(vkQueueSubmit2 == &VulkanTestQueueSubmit2Observer::interceptQueueSubmit2);
-        vkQueueSubmit2 = m_originalQueueSubmit2;
     }
 
 
@@ -386,7 +428,7 @@ public:
 
 
 private:
-    PFN_vkQueueSubmit2 m_originalQueueSubmit2 = nullptr;
+    ScopedVulkanDeviceDispatchOverride<PFN_vkQueueSubmit2> m_dispatchOverride;
     Array<VulkanTestQueueSubmit2Capture, 16u> m_captures = {};
     Array<Atomic<bool>, 16u> m_captureComplete = {};
     Atomic<u32> m_reservedCaptureCount = 0u;
@@ -418,7 +460,7 @@ public:
         : m_device(device)
         , m_context(VulkanTestDeviceProbe::capture(device))
     {
-        if(!m_context.valid() || !vkCreateSemaphore)
+        if(!m_context.valid() || !m_context.deviceDispatch->vkCreateSemaphore)
             return;
 
         const VkSemaphoreCreateInfo createInfo{
@@ -426,14 +468,14 @@ public:
             .pNext = nullptr,
             .flags = 0u,
         };
-        if(vkCreateSemaphore(m_context.device, &createInfo, m_context.allocationCallbacks, &m_semaphore) != VK_SUCCESS)
+        if(m_context.deviceDispatch->vkCreateSemaphore(m_context.device, &createInfo, m_context.allocationCallbacks, &m_semaphore) != VK_SUCCESS)
             m_semaphore = VK_NULL_HANDLE;
     }
     ~VulkanTestBinarySemaphore(){
         if(m_semaphore == VK_NULL_HANDLE || !m_device.waitForIdle())
             return;
 
-        vkDestroySemaphore(m_context.device, m_semaphore, m_context.allocationCallbacks);
+        m_context.deviceDispatch->vkDestroySemaphore(m_context.device, m_semaphore, m_context.allocationCallbacks);
         m_semaphore = VK_NULL_HANDLE;
     }
 
@@ -469,7 +511,7 @@ public:
         , m_context(VulkanTestDeviceProbe::capture(device))
     {
         Core::GraphicsBackend::Queue* const nativeQueue = device.getQueue(queue);
-        if(!nativeQueue || !m_context.valid() || !vkCreateSemaphore)
+        if(!nativeQueue || !m_context.valid() || !m_context.deviceDispatch->vkCreateSemaphore)
             return;
 
         const VkSemaphoreTypeCreateInfo timelineInfo{
@@ -483,7 +525,7 @@ public:
             .pNext = &timelineInfo,
             .flags = 0u,
         };
-        if(vkCreateSemaphore(m_context.device, &createInfo, m_context.allocationCallbacks, &m_semaphore) != VK_SUCCESS)
+        if(m_context.deviceDispatch->vkCreateSemaphore(m_context.device, &createInfo, m_context.allocationCallbacks, &m_semaphore) != VK_SUCCESS)
             m_semaphore = VK_NULL_HANDLE;
         if(m_semaphore == VK_NULL_HANDLE)
             return;
@@ -495,7 +537,7 @@ public:
         if(m_semaphore == VK_NULL_HANDLE || !release() || !drain() || !m_device.waitForIdle())
             return;
 
-        vkDestroySemaphore(m_context.device, m_semaphore, m_context.allocationCallbacks);
+        m_context.deviceDispatch->vkDestroySemaphore(m_context.device, m_semaphore, m_context.allocationCallbacks);
         m_semaphore = VK_NULL_HANDLE;
     }
 
@@ -505,7 +547,7 @@ public:
     [[nodiscard]] bool release(){
         if(m_released)
             return true;
-        if(m_semaphore == VK_NULL_HANDLE || !vkSignalSemaphore)
+        if(m_semaphore == VK_NULL_HANDLE || !m_context.deviceDispatch->vkSignalSemaphore)
             return false;
 
         const VkSemaphoreSignalInfo signalInfo{
@@ -514,7 +556,7 @@ public:
             .semaphore = m_semaphore,
             .value = s_ReleaseValue,
         };
-        if(vkSignalSemaphore(m_context.device, &signalInfo) != VK_SUCCESS)
+        if(m_context.deviceDispatch->vkSignalSemaphore(m_context.device, &signalInfo) != VK_SUCCESS)
             return false;
 
         m_released = true;

@@ -203,19 +203,18 @@ bool BuildPipelineRenderingInfo(
 }
 
 void DestroyPipelineAndOwnedLayout(
-    const VkDevice device,
-    const VkAllocationCallbacks* allocationCallbacks,
+    const VulkanContext& context,
     VkPipeline& pipeline,
     VkPipelineLayout& pipelineLayout,
     bool& ownsPipelineLayout
 ){
     if(pipeline){
-        vkDestroyPipeline(device, pipeline, allocationCallbacks);
+        context.deviceDispatch.vkDestroyPipeline(context.device, pipeline, context.allocationCallbacks);
         pipeline = VK_NULL_HANDLE;
     }
 
     if(ownsPipelineLayout && pipelineLayout != VK_NULL_HANDLE){
-        vkDestroyPipelineLayout(device, pipelineLayout, allocationCallbacks);
+        context.deviceDispatch.vkDestroyPipelineLayout(context.device, pipelineLayout, context.allocationCallbacks);
         pipelineLayout = VK_NULL_HANDLE;
         ownsPipelineLayout = false;
     }
@@ -369,7 +368,7 @@ bool CreatePipelineLayout(
     layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
     layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
 
-    res = vkCreatePipelineLayout(context.device, &layoutInfo, context.allocationCallbacks, &outLayout);
+    res = context.deviceDispatch.vkCreatePipelineLayout(context.device, &layoutInfo, context.allocationCallbacks, &outLayout);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for {}: {}"), operationName, ResultToString(res));
         outLayout = VK_NULL_HANDLE;
@@ -457,13 +456,13 @@ BindingLayout::BindingLayout(const VulkanContext& context)
 {}
 BindingLayout::~BindingLayout(){
     if(m_pipelineLayout){
-        vkDestroyPipelineLayout(m_context.device, m_pipelineLayout, m_context.allocationCallbacks);
+        m_context.deviceDispatch.vkDestroyPipelineLayout(m_context.device, m_pipelineLayout, m_context.allocationCallbacks);
         m_pipelineLayout = VK_NULL_HANDLE;
     }
 
     for(VkDescriptorSetLayout layout : m_descriptorSetLayouts){
         if(layout)
-            vkDestroyDescriptorSetLayout(m_context.device, layout, m_context.allocationCallbacks);
+            m_context.deviceDispatch.vkDestroyDescriptorSetLayout(m_context.device, layout, m_context.allocationCallbacks);
     }
     m_descriptorSetLayouts.clear();
 }
@@ -594,7 +593,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     layoutInfo.pBindings = bindings.data();
 
     VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
-    res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
+    res = m_context.deviceDispatch.vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
     if(res != VK_SUCCESS){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create bindless descriptor set layout: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, layout);
@@ -606,7 +605,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 
     const VkDescriptorSetLayout descriptorSetLayout = layout->m_descriptorSetLayouts[0];
     VkDeviceSize setSizeBytes = 0;
-    vkGetDescriptorSetLayoutSizeEXT(m_context.device, descriptorSetLayout, &setSizeBytes);
+    m_context.deviceDispatch.vkGetDescriptorSetLayoutSizeEXT(m_context.device, descriptorSetLayout, &setSizeBytes);
     if(setSizeBytes == 0u || setSizeBytes > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: descriptor-buffer set size is invalid."));
         DestroyArenaObject(m_context.objectArena, layout);
@@ -616,7 +615,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     layout->m_descriptorBufferBindingOffsets.reserve(desc.registerSpaces.size());
     for(const auto& item : desc.registerSpaces){
         VkDeviceSize bindingOffsetBytes = 0;
-        vkGetDescriptorSetLayoutBindingOffsetEXT(m_context.device, descriptorSetLayout, item.slot, &bindingOffsetBytes);
+        m_context.deviceDispatch.vkGetDescriptorSetLayoutBindingOffsetEXT(m_context.device, descriptorSetLayout, item.slot, &bindingOffsetBytes);
         if(!VulkanDetail::ValidateDescriptorBufferBindingFootprint(
             *m_context.descriptorBufferManager,
             VulkanDetail::ConvertDescriptorType(item.type),

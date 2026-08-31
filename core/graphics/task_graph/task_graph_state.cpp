@@ -296,6 +296,7 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
             : nullptr,
         .initialOwnerHandoffSourceCount = resource.initialOwnerHandoffSourceCount,
         .queueSharing = resource.queueSharing,
+        .initialAvailabilityCompletion = resource.initialAvailabilityCompletion,
         .queueAdmission = ResourceQueueAdmissionSnapshot{
             .admittedQueueClasses = resource.queueSharing,
             .queueFamilyIndices = resource.queueFamilyIndexCount != 0u

@@ -38,6 +38,7 @@ namespace __hidden_buffer_native{
 
 [[nodiscard]] static bool ValidateNativeBufferSharing(
     const Device& device,
+    const VolkInstanceTable& instanceDispatch,
     const VkPhysicalDevice physicalDevice,
     const BufferDesc& desc,
     const NativeBufferProvenance& provenance
@@ -77,7 +78,7 @@ namespace __hidden_buffer_native{
     }
 
     u32 physicalQueueFamilyCount = 0u;
-    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &physicalQueueFamilyCount, nullptr);
+    instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &physicalQueueFamilyCount, nullptr);
     if(physicalQueueFamilyCount == 0u || provenance.queueFamilyIndexCount > physicalQueueFamilyCount){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: native queue-family count is invalid")
@@ -178,7 +179,7 @@ BufferHandle Device::createHandleForNativeBuffer(
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: protected buffers are unsupported"));
         return nullptr;
     }
-    if(!__hidden_buffer_native::ValidateNativeBufferSharing(*this, m_context.physicalDevice, desc, nativeProvenance))
+    if(!__hidden_buffer_native::ValidateNativeBufferSharing(*this, m_context.instanceDispatch, m_context.physicalDevice, desc, nativeProvenance))
         return nullptr;
     if(!VulkanBufferDetail::IsBufferUsageCompatibleWithDescription(desc, nativeProvenance.usage)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: native usage contradicts the logical description"));
@@ -198,7 +199,7 @@ BufferHandle Device::createHandleForNativeBuffer(
         VkBufferDeviceAddressInfo addressInfo{};
         addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
         addressInfo.buffer = nativeBuffer;
-        deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
+        deviceAddress = m_context.deviceDispatch.vkGetBufferDeviceAddress(m_context.device, &addressInfo);
         if(deviceAddress == 0u){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: device address is zero"));
             return nullptr;

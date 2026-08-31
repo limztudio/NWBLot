@@ -5913,12 +5913,26 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         return;
     }
 
+    const Core::GpuExternalCompletionId backBufferAvailability =
+        m_deferredLightingTaskGraph.importExternalCompletion(
+            Core::GpuExternalCompletionDesc{}
+                .setIdentity(Name("render.deferred_present.backbuffer_availability"))
+                .setMarkerLabel("Presentation Back Buffer Availability")
+                .setToken(presentationFrame.backBuffer.availabilityCompletion)
+        )
+    ;
+    if(!backBufferAvailability.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import presentation back-buffer availability"));
+        return;
+    }
+
     Core::GpuGraphResourceDesc backBufferDesc = TextureResourceDesc(
         Name("render.deferred_present.backbuffer"),
         "Presentation Back Buffer"
     );
     backBufferDesc
         .setInitialState(presentationFrame.backBuffer.nativeInitialState)
+        .setInitialAvailabilityCompletion(backBufferAvailability)
         .setExternalFinalState(Core::ResourceStates::Present)
     ;
     const Core::GpuGraphResourceId backbuffer = m_deferredLightingTaskGraph.importTexture(

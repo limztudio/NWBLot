@@ -38,6 +38,7 @@ CommandList::~CommandList(){
     m_stateTracker.rollbackRecordingAttempt();
     resetMarkerState();
     if(m_currentCmdBuf){
+        m_currentCmdBuf->discardTimerQueryRecordingClaims();
         m_currentCmdBuf->discardRetainedBufferStateCommits();
         m_currentCmdBuf->discardRetainedTextureStateCommits();
         m_currentCmdBuf->discardPendingAccelStructBuildCommits();
@@ -60,7 +61,7 @@ void CommandList::resetMarkerState(){
         && m_context.extensions.EXT_debug_utils
     ){
         for(u32 markerIndex = 0u; markerIndex < m_markerDepth; ++markerIndex)
-            vkCmdEndDebugUtilsLabelEXT(m_currentCmdBuf->m_cmdBuf);
+            m_context.instanceDispatch.vkCmdEndDebugUtilsLabelEXT(m_currentCmdBuf->m_cmdBuf);
     }
 
     m_gpuCrashMarkerTracker.resetEventStack();
@@ -90,6 +91,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     clearStateInternal();
     m_hostReadbackBarrierTracker.clear();
     if(m_currentCmdBuf){
+        m_currentCmdBuf->discardTimerQueryRecordingClaims();
         m_currentCmdBuf->discardRetainedBufferStateCommits();
         m_currentCmdBuf->discardRetainedTextureStateCommits();
         m_currentCmdBuf->discardPendingAccelStructBuildCommits();
@@ -153,7 +155,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     auto beginInfo = VulkanDetail::MakeVkStruct<VkCommandBufferBeginInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO);
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    const VkResult res = vkBeginCommandBuffer(m_currentCmdBuf->m_cmdBuf, &beginInfo);
+    const VkResult res = m_context.deviceDispatch.vkBeginCommandBuffer(m_currentCmdBuf->m_cmdBuf, &beginInfo);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin command buffer recording: {}"), ResultToString(res));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin command buffer recording"));
@@ -243,7 +245,7 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
     }
     resetMarkerState();
 
-    const VkResult res = vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
+    const VkResult res = m_context.deviceDispatch.vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
     m_isRecording = false;
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to end command buffer recording: {}"), ResultToString(res));
@@ -738,7 +740,7 @@ void CommandList::discardInvalidCommandBuffer()noexcept{
         endActiveRenderPass();
         resetMarkerState();
 
-        const VkResult invalidEndResult = vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
+        const VkResult invalidEndResult = m_context.deviceDispatch.vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
         m_isRecording = false;
         if(invalidEndResult != VK_SUCCESS){
             NWB_LOGGER_WARNING(
@@ -748,6 +750,7 @@ void CommandList::discardInvalidCommandBuffer()noexcept{
         }
     }
 
+    m_currentCmdBuf->discardTimerQueryRecordingClaims();
     m_currentCmdBuf->discardRetainedBufferStateCommits();
     m_currentCmdBuf->discardRetainedTextureStateCommits();
     m_currentCmdBuf->discardPendingAccelStructBuildCommits();

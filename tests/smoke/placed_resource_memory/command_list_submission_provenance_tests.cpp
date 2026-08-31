@@ -49,6 +49,7 @@ struct SubmissionHookObserver{
 
 [[nodiscard]] static bool RejectObservedSubmissionHook(
     void* const rawContext,
+    const u64,
     const GpuPhysicalQueueId& executionQueue,
     QueueSubmissionNativeSignal& outSignal
 ){
@@ -107,6 +108,7 @@ struct SubmissionMutationHookContext{
 
 [[nodiscard]] static bool ForgeWorkerDuringSubmissionHook(
     void* const rawContext,
+    const u64,
     const GpuPhysicalQueueId& executionQueue,
     QueueSubmissionNativeSignal& outSignal
 ){

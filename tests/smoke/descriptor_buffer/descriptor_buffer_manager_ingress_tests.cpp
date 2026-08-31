@@ -265,7 +265,7 @@ TEST_F(DescriptorBufferManagerIngressTest, RejectsForeignRetaggedAndStaleStorage
 
     const u64 foreignStorageIdentity = foreignBlock.storageIdentity;
     const u64 foreignAllocationSerial = foreignBlock.allocationSerial;
-    foreignManager.shutdown();
+    ASSERT_TRUE(foreignManager.shutdown());
     ASSERT_TRUE(foreignManager.initialize());
     const auto reinitializedBlock = foreignManager.allocate(
         GraphicsBackend::DescriptorBufferSegmentKind::Resource,

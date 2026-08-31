@@ -13,6 +13,7 @@
 #include <core/graphics/vulkan/raytracing_internal.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
+#include <tests/common/vulkan_test_sync.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,26 +61,6 @@ void ExpectRayTracingPipelineRejection(Operation&& operation){
     EXPECT_FALSE(operation());
 #endif
 }
-
-template<typename Function>
-class ScopedVolkFunctionNull final{
-public:
-    explicit ScopedVolkFunctionNull(Function& function)
-        : m_function(function)
-        , m_original(function)
-    {
-        m_function = nullptr;
-    }
-    ~ScopedVolkFunctionNull(){ m_function = m_original; }
-
-    ScopedVolkFunctionNull(const ScopedVolkFunctionNull&) = delete;
-    ScopedVolkFunctionNull& operator=(const ScopedVolkFunctionNull&) = delete;
-
-
-private:
-    Function& m_function;
-    Function m_original;
-};
 
 [[nodiscard]] GraphicsBackend::VulkanDetail::RayTracingCapabilityInputs MakeSupportedRayTracingCapabilityInputs(){
     GraphicsBackend::VulkanDetail::RayTracingCapabilityInputs inputs;
@@ -557,8 +538,12 @@ TEST_F(RayTracingShaderTableIngressTest, OpacityMicromapPipelineRequestMatchesEn
 }
 
 TEST_F(RayTracingShaderTableIngressTest, PipelineFeatureAndCreationFailClosedWhenRequiredEntrypointIsMissing){
-    ASSERT_NE(vkCreateRayTracingPipelinesKHR, nullptr);
-    ScopedVolkFunctionNull<PFN_vkCreateRayTracingPipelinesKHR> missingCreatePipeline(vkCreateRayTracingPipelinesKHR);
+    ScopedVulkanDeviceDispatchOverride<PFN_vkCreateRayTracingPipelinesKHR> missingCreatePipeline(
+        device(),
+        &VolkDeviceTable::vkCreateRayTracingPipelinesKHR
+    );
+    ASSERT_TRUE(missingCreatePipeline.valid());
+    ASSERT_TRUE(missingCreatePipeline.replace(nullptr));
 
     EXPECT_FALSE(device().queryFeatureSupport(Feature::RayTracingPipeline));
     ExpectRayTracingPipelineRejection([&](){

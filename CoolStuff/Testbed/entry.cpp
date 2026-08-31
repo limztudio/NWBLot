@@ -117,8 +117,11 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
     context.graphics.removeRenderPass(*uiSystem);
 
     context.graphics.waitAllJobs();
-
-    context.graphics.waitForIdle();
+    const bool deviceIdle = context.graphics.waitForIdle();
+    NWB_FATAL_ASSERT_MSG(
+        deviceIdle || context.graphics.isDeviceLost(),
+        NWB_TEXT("Project-world destruction requires either a completed device join or terminal device loss")
+    );
 
     world->clear();
     world.reset();

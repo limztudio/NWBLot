@@ -206,7 +206,7 @@ struct FrameTimingResetGraphTask{
 
     static void accepted(Payload& payload, const QueueSubmissionToken& token){
         if(payload.timing && token.valid())
-            payload.timing->confirmFrameReset();
+            payload.timing->confirmFrameReset(token);
     }
 
     static void discarded(Payload& payload){

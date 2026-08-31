@@ -235,7 +235,9 @@ struct GpuTaskGraphCompileStatistics{
     usize declaredExternalDependencyCount = 0u;
     // Initial-ownership completion reasons before per-packet completion-token deduplication.
     usize initialOwnershipExternalDependencyCount = 0u;
-    // Total resolved task-to-packet external completion edges, including compiler-created initial-ownership waits.
+    // Initial resource-availability reasons before per-packet completion-token deduplication.
+    usize initialAvailabilityExternalDependencyCount = 0u;
+    // Total resolved task-to-packet external completion edges, including compiler-created initial waits.
     usize externalDependencyCount = 0u;
     usize packetCount = 0u;
     usize packetDependencyCount = 0u;

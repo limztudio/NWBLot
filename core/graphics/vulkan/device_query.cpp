@@ -29,25 +29,25 @@ namespace __hidden_device_query{
     VulkanDetail::RayTracingCapabilityInputs inputs;
     inputs.accelerationStructureExtensionEnabled = context.extensions.KHR_acceleration_structure;
     inputs.accelerationStructureFeatureEnabled = context.accelerationStructureFeatureEnabled;
-    inputs.createAccelerationStructureEntryPointAvailable = vkCreateAccelerationStructureKHR != nullptr;
-    inputs.destroyAccelerationStructureEntryPointAvailable = vkDestroyAccelerationStructureKHR != nullptr;
-    inputs.getAccelerationStructureBuildSizesEntryPointAvailable = vkGetAccelerationStructureBuildSizesKHR != nullptr;
-    inputs.getAccelerationStructureDeviceAddressEntryPointAvailable = vkGetAccelerationStructureDeviceAddressKHR != nullptr;
-    inputs.cmdBuildAccelerationStructuresEntryPointAvailable = vkCmdBuildAccelerationStructuresKHR != nullptr;
+    inputs.createAccelerationStructureEntryPointAvailable = context.deviceDispatch.vkCreateAccelerationStructureKHR != nullptr;
+    inputs.destroyAccelerationStructureEntryPointAvailable = context.deviceDispatch.vkDestroyAccelerationStructureKHR != nullptr;
+    inputs.getAccelerationStructureBuildSizesEntryPointAvailable = context.deviceDispatch.vkGetAccelerationStructureBuildSizesKHR != nullptr;
+    inputs.getAccelerationStructureDeviceAddressEntryPointAvailable = context.deviceDispatch.vkGetAccelerationStructureDeviceAddressKHR != nullptr;
+    inputs.cmdBuildAccelerationStructuresEntryPointAvailable = context.deviceDispatch.vkCmdBuildAccelerationStructuresKHR != nullptr;
 
     inputs.rayTracingPipelineExtensionEnabled = context.extensions.KHR_ray_tracing_pipeline;
     inputs.rayTracingPipelineFeatureEnabled = context.rayTracingPipelineFeatureEnabled;
-    inputs.createRayTracingPipelinesEntryPointAvailable = vkCreateRayTracingPipelinesKHR != nullptr;
-    inputs.getRayTracingShaderGroupHandlesEntryPointAvailable = vkGetRayTracingShaderGroupHandlesKHR != nullptr;
-    inputs.cmdTraceRaysEntryPointAvailable = vkCmdTraceRaysKHR != nullptr;
+    inputs.createRayTracingPipelinesEntryPointAvailable = context.deviceDispatch.vkCreateRayTracingPipelinesKHR != nullptr;
+    inputs.getRayTracingShaderGroupHandlesEntryPointAvailable = context.deviceDispatch.vkGetRayTracingShaderGroupHandlesKHR != nullptr;
+    inputs.cmdTraceRaysEntryPointAvailable = context.deviceDispatch.vkCmdTraceRaysKHR != nullptr;
 
     inputs.opacityMicromapExtensionEnabled = context.extensions.EXT_opacity_micromap;
     inputs.opacityMicromapFeatureEnabled = context.opacityMicromapFeatureEnabled;
     inputs.synchronization2ExtensionEnabled = context.extensions.KHR_synchronization2;
-    inputs.createMicromapEntryPointAvailable = vkCreateMicromapEXT != nullptr;
-    inputs.destroyMicromapEntryPointAvailable = vkDestroyMicromapEXT != nullptr;
-    inputs.getMicromapBuildSizesEntryPointAvailable = vkGetMicromapBuildSizesEXT != nullptr;
-    inputs.cmdBuildMicromapsEntryPointAvailable = vkCmdBuildMicromapsEXT != nullptr;
+    inputs.createMicromapEntryPointAvailable = context.deviceDispatch.vkCreateMicromapEXT != nullptr;
+    inputs.destroyMicromapEntryPointAvailable = context.deviceDispatch.vkDestroyMicromapEXT != nullptr;
+    inputs.getMicromapBuildSizesEntryPointAvailable = context.deviceDispatch.vkGetMicromapBuildSizesEXT != nullptr;
+    inputs.cmdBuildMicromapsEntryPointAvailable = context.deviceDispatch.vkCmdBuildMicromapsEXT != nullptr;
     return inputs;
 }
 
@@ -102,8 +102,8 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
             m_context.extensions.NV_cluster_acceleration_structure
             && m_context.clusterAccelerationStructureFeatureEnabled
             && VulkanDetail::SupportsRayTracingPipeline(rayTracingCapabilities)
-            && vkGetClusterAccelerationStructureBuildSizesNV
-            && vkCmdBuildClusterAccelerationStructureIndirectNV
+            && m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV
+            && m_context.deviceDispatch.vkCmdBuildClusterAccelerationStructureIndirectNV
         ;
     case Feature::SamplerFeedback:
     case Feature::VirtualResources:
@@ -113,21 +113,21 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
         return
             m_context.extensions.NV_cooperative_vector
             && m_context.coopVecFeatures.cooperativeVector == VK_TRUE
-            && vkGetPhysicalDeviceCooperativeVectorPropertiesNV
-            && vkConvertCooperativeVectorMatrixNV
-            && vkCmdConvertCooperativeVectorMatrixNV
+            && m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV
+            && m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV
+            && m_context.deviceDispatch.vkCmdConvertCooperativeVectorMatrixNV
         ;
     case Feature::CooperativeVectorTraining:
         return
             m_context.extensions.NV_cooperative_vector
             && m_context.coopVecFeatures.cooperativeVector == VK_TRUE
             && m_context.coopVecFeatures.cooperativeVectorTraining == VK_TRUE
-            && vkGetPhysicalDeviceCooperativeVectorPropertiesNV
-            && vkConvertCooperativeVectorMatrixNV
-            && vkCmdConvertCooperativeVectorMatrixNV
+            && m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV
+            && m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV
+            && m_context.deviceDispatch.vkCmdConvertCooperativeVectorMatrixNV
         ;
     case Feature::Meshlets:
-        return m_context.extensions.EXT_mesh_shader && m_context.meshShaderFeatures.meshShader == VK_TRUE && vkCmdDrawMeshTasksEXT;
+        return m_context.extensions.EXT_mesh_shader && m_context.meshShaderFeatures.meshShader == VK_TRUE && m_context.deviceDispatch.vkCmdDrawMeshTasksEXT;
     case Feature::VariableRateShading:
         return m_context.extensions.KHR_fragment_shading_rate;
     case Feature::WaveLaneCountMinMax:{
@@ -158,7 +158,7 @@ bool Device::canCreateSampledTextureFormat(const Format::Enum format)const{
     imageFormatInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     auto imageFormatProperties = VulkanDetail::MakeVkStruct<VkImageFormatProperties2>(VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2);
-    const VkResult res = vkGetPhysicalDeviceImageFormatProperties2(
+    const VkResult res = m_context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties2(
         m_context.physicalDevice,
         &imageFormatInfo,
         &imageFormatProperties
@@ -190,7 +190,7 @@ FormatSupport::Mask Device::queryFormatSupportUncached(const Format::Enum format
         return FormatSupport::None;
 
     VkFormatProperties props;
-    vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, vkFormat, &props);
+    m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, vkFormat, &props);
 
     FormatSupport::Mask support = FormatSupport::None;
 
@@ -284,7 +284,7 @@ Object Device::getNativeQueue(ObjectType objectType, CommandQueue::Enum queue){
 Object Device::getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue){
     if(objectType == ObjectTypes::VK_Queue){
         Queue* q = getQueue(queue);
-        return q ? Object(q->m_queue) : Object(nullptr);
+        return q ? Object(q->m_nativeQueue.queue) : Object(nullptr);
     }
     return Object(nullptr);
 }
@@ -380,7 +380,7 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
         return output;
 
     uint32_t propertyCount = 0;
-    res = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, nullptr);
+    res = m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, nullptr);
     if(res != VK_SUCCESS || propertyCount == 0)
         return output;
 
@@ -391,7 +391,7 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
         properties[i].pNext = nullptr;
     }
 
-    res = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, properties.data());
+    res = m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, properties.data());
     if(res != VK_SUCCESS)
         return output;
 
@@ -446,15 +446,15 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
     if(
         !m_context.extensions.NV_cooperative_vector
         || m_context.coopVecFeatures.cooperativeVector != VK_TRUE
-        || !vkGetPhysicalDeviceCooperativeVectorPropertiesNV
-        || !vkConvertCooperativeVectorMatrixNV
+        || !m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV
+        || !m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV
     )
         return 0;
 
     const VkComponentTypeKHR componentType = VulkanDetail::ConvertCoopVecDataType(type);
     if(componentType != VK_COMPONENT_TYPE_FLOAT32_KHR){
         uint32_t propertyCount = 0u;
-        res = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, nullptr);
+        res = m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, nullptr);
         if(res != VK_SUCCESS || propertyCount == 0u)
             return 0;
 
@@ -465,7 +465,7 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
             property.pNext = nullptr;
         }
 
-        res = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, properties.data());
+        res = m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, properties.data());
         if(res != VK_SUCCESS)
             return 0;
 
@@ -530,7 +530,7 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
     convertInfo.dstLayout = VulkanDetail::ConvertCoopVecMatrixLayout(layout);
     convertInfo.dstStride = dstStride;
 
-    res = vkConvertCooperativeVectorMatrixNV(m_context.device, &convertInfo);
+    res = m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV(m_context.device, &convertInfo);
     if(res == VK_SUCCESS)
         return dstSize;
 

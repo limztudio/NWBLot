@@ -73,7 +73,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         || !m_context.extensions.KHR_ray_tracing_pipeline
         || !m_context.extensions.buffer_device_address
         || !m_context.rayTracingPipelineFeatureEnabled
-        || !vkCmdTraceRaysKHR
+        || !m_context.deviceDispatch.vkCmdTraceRaysKHR
     ){
         rejectCommandRecording(
             NWB_TEXT("dispatch rays"),
@@ -227,7 +227,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     retainResource(snapshot.hit.buffer.get());
     retainResource(snapshot.callable.buffer.get());
 
-    vkCmdTraceRaysKHR(
+    m_context.deviceDispatch.vkCmdTraceRaysKHR(
         m_currentCmdBuf->m_cmdBuf,
         &raygenRegion,
         &missRegion,

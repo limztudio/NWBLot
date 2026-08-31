@@ -66,7 +66,8 @@ void BackendContext::logVulkanDeviceConfiguration(
            << " descriptorBuffer=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME))
            << " meshTaskShader=" << VulkanDetail::BoolToString(m_meshTaskShaderSupported)
            << " maintenance4=" << VulkanDetail::BoolToString(maintenance4Enabled && maintenance4Features.maintenance4 == VK_TRUE)
-           << "\n    optional paths: meshShader=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME))
+           << "\n    optional paths: meshShaderRequested=" << VulkanDetail::BoolToString(m_deviceParams.enableNativeMeshShaders)
+           << " meshShader=" << VulkanDetail::BoolToString(m_meshShaderFeatureEnabled)
            << " rayTracingPipeline=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME))
            << " rayQuery=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_KHR_RAY_QUERY_EXTENSION_NAME))
            << " shaderExecutionReordering=" << VulkanDetail::BoolToString(

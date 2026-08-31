@@ -85,6 +85,7 @@ bool BackendContext::createWindowSurface(){
 
 
 void BackendContext::destroySwapChain(){
+    m_swapChainState.swapChainReadbackAvailable = false;
     const bool replacePresentationSemaphore =
         m_framePresentationSignalState == FramePresentationSignalState::Queued
         || m_framePresentationSignalState == FramePresentationSignalState::Accepted
@@ -185,6 +186,26 @@ bool BackendContext::createVulkanSwapChain(){
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query surface capabilities. {}"), ResultToString(res));
         return false;
+    }
+
+    constexpr VkImageUsageFlags s_RequiredSwapChainImageUsage =
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+    ;
+    if((surfaceCaps.supportedUsageFlags & s_RequiredSwapChainImageUsage) != s_RequiredSwapChainImageUsage){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to create swapchain: surface lacks required color, transfer-destination, or sampled image usage")
+        );
+        return false;
+    }
+    const bool swapChainReadbackAvailable = m_deviceParams.enableSwapChainReadback
+        && (surfaceCaps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u
+    ;
+    if(m_deviceParams.enableSwapChainReadback){
+        const tchar* const status = swapChainReadbackAvailable
+            ? NWB_TEXT("enabled")
+            : NWB_TEXT("unavailable because the surface lacks transfer-source image usage")
+        ;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: Swapchain readback {}."), status);
     }
 
     VkExtent2D extent = {};
@@ -294,7 +315,9 @@ bool BackendContext::createVulkanSwapChain(){
     desc.imageColorSpace = m_swapChainFormat.colorSpace;
     desc.imageExtent = extent;
     desc.imageArrayLayers = 1;
-    desc.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    desc.imageUsage = s_RequiredSwapChainImageUsage;
+    if(swapChainReadbackAvailable)
+        desc.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     desc.imageSharingMode = enableSwapChainSharing ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
     NWB_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
     desc.queueFamilyIndexCount = enableSwapChainSharing ? static_cast<u32>(queueFamilyIndices.size()) : 0u;
@@ -402,6 +425,7 @@ bool BackendContext::createVulkanSwapChain(){
     }
 
     m_swapChainIndex = Limit<u32>::s_Max;
+    m_swapChainState.swapChainReadbackAvailable = swapChainReadbackAvailable;
 
     if(m_deviceParams.enableDebugRuntime){
         auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
@@ -417,6 +441,7 @@ bool BackendContext::createVulkanSwapChain(){
            << "\n    requested images: " << m_deviceParams.swapChainBufferCount
            << "\n    created images: " << imageCount
            << "\n    mutable format: " << VulkanDetail::BoolToString(m_swapChainMutableFormatSupported)
+           << "\n    readback: " << VulkanDetail::BoolToString(m_swapChainState.swapChainReadbackAvailable)
            << "\n    queue sharing: " << (enableSwapChainSharing ? "concurrent" : "exclusive")
         ;
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(ss.str()));

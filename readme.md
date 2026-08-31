@@ -23,6 +23,9 @@
   - testbed build: `cmake --build --preset windows-clang-testbed-arm64-dbg --target testbed`
   - full configure: `cmake --preset windows-clang-arm64`
   - full debug build/test: `cmake --build --preset windows-clang-arm64-dbg`, then `ctest --preset windows-clang-arm64-dbg`
+  - Native mesh shaders default to the renderer's compute-emulation path on Windows ARM64 even when Vulkan advertises
+    `VK_EXT_mesh_shader`. A qualified adapter may opt in with `Graphics::setNativeMeshShadersEnabled(true)` before
+    graphics instance creation.
 
 - Windows requirements
   - Install Visual Studio 2022 Build Tools (or Visual Studio 2022) with these native build components:

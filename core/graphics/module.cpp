@@ -233,6 +233,14 @@ bool Graphics::setDebugRuntimeEnabled(bool enabled){
     return true;
 }
 
+bool Graphics::setNativeMeshShadersEnabled(const bool enabled){
+    if(m_instanceCreated)
+        return false;
+
+    m_deviceCreationParams.enableNativeMeshShaders = enabled;
+    return true;
+}
+
 bool Graphics::setAsyncComputeLaneEnabled(const bool enabled){
     if(m_backend->getDevice())
         return false;
@@ -278,6 +286,14 @@ bool Graphics::setHDR10OutputEnabled(const bool enabled){
         return false;
 
     m_deviceCreationParams.enableHDR10Output = enabled;
+    return true;
+}
+
+bool Graphics::setSwapChainReadbackEnabled(const bool enabled){
+    if(m_backend->getDevice())
+        return false;
+
+    m_deviceCreationParams.enableSwapChainReadback = enabled;
     return true;
 }
 

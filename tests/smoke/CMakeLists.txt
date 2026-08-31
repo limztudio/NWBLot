@@ -23,10 +23,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
     set(_nwb_smoke_capture_late_settle_seconds "3.25")
     set(_nwb_caustic_sphere_capture_settle_seconds "3.0")
     set(_nwb_skinned_caustic_capture_late_settle_seconds "4.0")
-    # The texture smoke waits long enough for the persistent surfel field to pass its warm-up phases before its
-    # receiver-only colored-GI assertion samples the white plane.
-    set(_nwb_texture_smoke_capture_settle_seconds "6.0")
-
     # CTest budgets include process startup and orderly teardown around the script timeout.
     set(_nwb_window_capture_smoke_ctest_timeout_seconds 60)
     set(_nwb_skinning_culling_benchmark_script_timeout_seconds 240)
@@ -343,7 +339,11 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
 
             nwb_declare_executable(nwb_texture_smoke)
             target_sources(nwb_texture_smoke PRIVATE
+                "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
                 "${CMAKE_CURRENT_LIST_DIR}/texture_smoke_project.cpp"
+            )
+            target_compile_definitions(nwb_texture_smoke PRIVATE
+                NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1
             )
             nwb_configure_runtime_smoke_target(nwb_texture_smoke "${_nwb_texture_smoke_runtime_root}")
 
@@ -404,8 +404,9 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
                 "$<TARGET_FILE:nwb_texture_smoke>"
                 "${_nwb_texture_smoke_runtime_root}"
                 "NWB Texture Smoke"
+                "--application-capture"
+                "--application-capture-frame-count" "360"
                 "--expect-texture-smoke"
-                "--settle-seconds" "${_nwb_texture_smoke_capture_settle_seconds}"
                 "--reject-log-message" "[ERROR]"
                 "--reject-log-message" "failed to resolve shader"
             )

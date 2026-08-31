@@ -525,7 +525,7 @@ void RendererMaterialSystem::logMaterialRenderPathDecision(const Name& materialK
     case RenderPath::ComputeEmulation:{
         if(!meshSupported){
             NWB_LOGGER_ESSENTIAL_INFO(
-                NWB_TEXT("RendererSystem: material '{}' selected CS + PS by compiling its mesh shader for compute emulation because this device does not support mesh shaders"),
+                NWB_TEXT("RendererSystem: material '{}' selected CS + PS by compiling its mesh shader for compute emulation because native mesh shaders are unavailable in the current graphics configuration"),
                 StringConvert(materialKey.c_str())
             );
         }

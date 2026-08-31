@@ -31,8 +31,11 @@ void BackendContext::initDefaultExtensions(){
     for(const auto& e : s_EnabledDeviceExts)
         m_enabledExtensions.device.emplace(GraphicsString(e.name, m_arena), e.feature);
 
-    for(const auto& e : s_OptionalDeviceExts)
+    for(const auto& e : s_OptionalDeviceExts){
+        if(e.feature == DeviceExtensionFeature::MeshShader && !m_deviceParams.enableNativeMeshShaders)
+            continue;
         m_optionalExtensions.device.emplace(GraphicsString(e.name, m_arena), e.feature);
+    }
 
     if(m_deviceParams.enableDebugRuntime){
         for(const auto name : s_DebugRequiredInstanceExts)

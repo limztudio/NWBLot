@@ -367,11 +367,21 @@ struct DeviceCreationParameters : public InstanceParameters{
     // Opt-in preference: if the current surface cannot expose HDR10, creation continues with the
     // requested SDR format instead of rejecting the device or window.
     bool enableHDR10Output = false;
+    // Opt-in presentation-image readback. Unsupported surfaces keep a normal presentable swap chain and publish
+    // swapChainReadbackAvailable=false instead of failing device creation.
+    bool enableSwapChainReadback = false;
     u32 swapChainSampleCount = 1;
     u32 swapChainSampleQuality = 0;
     u32 maxFramesInFlight = s_MaxFramesInFlight;
     bool enableNvrhiValidationLayer = false;
     bool enableRayTracingExtensions = false;
+    // Native mesh shaders are optional. Windows ARM64 defaults to the compute-emulation path because extension
+    // advertisement alone does not qualify native mesh-output correctness; callers may explicitly opt in.
+#if defined(_WIN32) && (defined(__aarch64__) || defined(_M_ARM64))
+    bool enableNativeMeshShaders = false;
+#else
+    bool enableNativeMeshShaders = true;
+#endif
     // Best-effort asynchronous Compute topology. A dedicated compute-only family is used when present; otherwise
     // device creation succeeds without fabricating an alias queue.
     bool enableAsyncComputeLane = true;
@@ -414,6 +424,7 @@ struct SwapChainRuntimeState{
     Format::Enum backBufferFormat = Format::RGBA8_UNORM_SRGB;
     SwapChainOutputMode::Enum outputMode = SwapChainOutputMode::SDR;
     bool vsyncEnabled = false;
+    bool swapChainReadbackAvailable = false;
 };
 
 struct BackBufferResizeCallbacks{

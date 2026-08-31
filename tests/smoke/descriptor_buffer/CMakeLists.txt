@@ -17,6 +17,7 @@ target_sources(nwb_descriptor_buffer_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/descriptor_buffer_manager_ingress_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/descriptor_buffer_round_trip_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/extension_command_ingress_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/native_mesh_policy_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ray_tracing_build_ingress_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ray_tracing_dispatch_ingress_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ray_tracing_shader_table_ingress_tests.cpp"

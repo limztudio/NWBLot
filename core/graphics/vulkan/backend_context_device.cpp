@@ -127,6 +127,8 @@ bool BackendContext::createVulkanDevice(){
     auto physicalDeviceFeatures2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
 
     VulkanDetail::OptionalDeviceFeatureSet requestedOptionalFeatures = VulkanDetail::MakeRequestedOptionalDeviceFeatures();
+    if(!m_deviceParams.enableNativeMeshShaders)
+        requestedOptionalFeatures.meshShader.meshShader = VK_FALSE;
     VulkanDetail::OptionalDeviceFeatureSet supportedOptionalFeatures;
 
     VkPhysicalDeviceVulkan11Features supportedVulkan11Features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan11Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
@@ -295,8 +297,11 @@ bool BackendContext::createVulkanDevice(){
     m_multiDrawIndirectFeatureEnabled = true;
     m_drawIndirectFirstInstanceFeatureEnabled = true;
     VulkanDetail::FinalizeOptionalDeviceFeatureEnablement(requestedOptionalFeatures, supportedOptionalFeatures);
+    if(!m_deviceParams.enableNativeMeshShaders)
+        requestedOptionalFeatures.meshShader.taskShader = VK_FALSE;
     m_meshShaderFeatureEnabled =
-        isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME)
+        m_deviceParams.enableNativeMeshShaders
+        && isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME)
         && requestedOptionalFeatures.meshShader.meshShader == VK_TRUE
     ;
     m_accelerationStructureFeatureEnabled =

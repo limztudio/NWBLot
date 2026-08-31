@@ -166,6 +166,9 @@ public:
     bool createHeadlessDevice();
     bool createInstance(const InstanceParameters& params);
     bool setDebugRuntimeEnabled(bool enabled);
+    // Selects the native mesh-shader path when the backend supports it. Disabled configurations use the renderer's
+    // compute-emulation path. Must be configured before instance creation.
+    bool setNativeMeshShadersEnabled(bool enabled);
     // Must be configured before device creation. Unsupported adapters retain the Graphics-only path.
     bool setAsyncComputeLaneEnabled(bool enabled);
     // Must be configured before device creation. Unsupported adapters retain the Graphics/Compute copy fallback.
@@ -183,6 +186,9 @@ public:
     // Requests HDR10/PQ presentation where the current display surface supports it. Unsupported surfaces
     // automatically retain the normal SDR swap chain. Must be configured before device creation.
     bool setHDR10OutputEnabled(bool enabled);
+    // Requests transfer-source usage for presentation images. Unsupported surfaces retain the normal swap chain
+    // and report readback unavailable. Must be configured before device creation.
+    bool setSwapChainReadbackEnabled(bool enabled);
     bool setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi);
     void setPipelineCacheDirectory(const Path& directory);
     // Keeps the host update/event loop alive while preventing runFrame from recording, submitting, or presenting a
@@ -242,6 +248,7 @@ public:
     [[nodiscard]] const GpuTimingRecorder& gpuTiming()const{ return m_gpuTiming; }
     [[nodiscard]] bool isVsyncEnabled()const{ return m_swapChainState.vsyncEnabled; }
     [[nodiscard]] bool isHDR10OutputActive()const{ return m_swapChainState.outputMode == SwapChainOutputMode::HDR10; }
+    [[nodiscard]] bool isSwapChainReadbackAvailable()const{ return m_swapChainState.swapChainReadbackAvailable; }
     void setVSyncEnabled(bool enabled){ m_requestedVSync = enabled; }
     void reportLiveObjects()const;
 

@@ -36,9 +36,12 @@ bool BackendContext::createDevice(){
     }
 
     auto resolveDeviceExtensionFeature = [this](const GraphicsString& name)->DeviceExtensionFeature::Enum{
-        const auto optionalIt = m_optionalExtensions.device.find(name);
-        if(optionalIt != m_optionalExtensions.device.end() && optionalIt.value() != DeviceExtensionFeature::None)
-            return optionalIt.value();
+        // Feature metadata remains canonical even when policy removes an extension from the default optional set.
+        // A caller that names that extension explicitly must still receive coherent feature query/enable handling.
+        for(const ExtEntry& entry : s_OptionalDeviceExts){
+            if(name == entry.name)
+                return entry.feature;
+        }
 
         const auto rayTracingIt = m_rayTracingExtensions.find(name);
         if(rayTracingIt != m_rayTracingExtensions.end())

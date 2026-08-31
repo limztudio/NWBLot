@@ -24,6 +24,10 @@ STRICT_LOG_FAILURE_MESSAGES = (
     "Validation Error",
     "failed to resolve shader",
 )
+FRAMEBUFFER_CAPTURE_PATH_ENV = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH"
+FRAMEBUFFER_CAPTURE_FRAME_COUNT_ENV = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT"
+FRAMEBUFFER_CAPTURE_READY_MESSAGE = "FramebufferCapture: capture ready"
+FRAMEBUFFER_CAPTURE_SKIP_MESSAGE = "FramebufferCapture: skipped because swap-chain transfer-source usage is unavailable"
 
 # The textured-GI smoke has a fixed camera and a white receiver plane.  This client-relative rectangle has a clear gap
 # below the sphere silhouette and covers the nearby root of its foreground opaque direct shadow.  Because the light is
@@ -432,6 +436,31 @@ def build_launch_environment(args):
     return env
 
 
+def application_capture_partial_path(output_path):
+    return Path(f"{output_path}.partial")
+
+
+def prepare_application_capture_environment(args, base_environment):
+    try:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        raise SmokeFailure(f"failed to create application capture directory '{args.output.parent}': {error}") from error
+
+    partial_path = application_capture_partial_path(args.output)
+    for artifact_path in (args.output, partial_path):
+        try:
+            artifact_path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as error:
+            raise SmokeFailure(f"failed to remove stale application capture artifact '{artifact_path}': {error}") from error
+
+    env = base_environment.copy()
+    env[FRAMEBUFFER_CAPTURE_PATH_ENV] = str(args.output)
+    env[FRAMEBUFFER_CAPTURE_FRAME_COUNT_ENV] = str(args.application_capture_frame_count)
+    return env
+
+
 def write_bmp_24(path, width, height, rows_rgb):
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -451,8 +480,7 @@ def write_bmp_24(path, width, height, rows_rgb):
             out.write(padding)
 
 
-def write_capture_rows(handle, width, height, rows_rgb, output_path):
-    write_bmp_24(output_path, width, height, rows_rgb)
+def capture_result_from_rgb_rows(handle, width, height, rows_rgb):
     analysis = analyze_rgb_rows(rows_rgb)
     transparent_multi = analyze_transparent_multi_rows(rows_rgb)
     transparent_csg = analyze_transparent_csg_rows(rows_rgb)
@@ -467,6 +495,69 @@ def write_capture_rows(handle, width, height, rows_rgb, output_path):
         transparent_csg,
         texture_smoke,
     )
+
+
+def write_capture_rows(handle, width, height, rows_rgb, output_path):
+    write_bmp_24(output_path, width, height, rows_rgb)
+    return capture_result_from_rgb_rows(handle, width, height, rows_rgb)
+
+
+def read_bmp_24(path, handle=0):
+    try:
+        data = path.read_bytes()
+    except OSError as error:
+        raise SmokeFailure(f"failed to read application capture BMP '{path}': {error}") from error
+
+    if len(data) < 54:
+        raise SmokeFailure(f"application capture BMP '{path}' is shorter than the required headers")
+
+    signature, declared_file_size, _, _, pixel_offset = struct.unpack_from("<2sIHHI", data, 0)
+    if signature != b"BM":
+        raise SmokeFailure(f"application capture BMP '{path}' has an invalid signature")
+    if declared_file_size != len(data):
+        raise SmokeFailure(
+            f"application capture BMP '{path}' declares {declared_file_size} bytes but contains {len(data)}"
+        )
+
+    dib_size = struct.unpack_from("<I", data, 14)[0]
+    if dib_size < 40 or 14 + dib_size > len(data):
+        raise SmokeFailure(f"application capture BMP '{path}' has an invalid DIB header size {dib_size}")
+
+    width, signed_height, planes, bits_per_pixel, compression, image_size = struct.unpack_from("<iiHHII", data, 18)
+    if width <= 0 or signed_height == 0:
+        raise SmokeFailure(f"application capture BMP '{path}' has invalid dimensions {width}x{signed_height}")
+    if planes != 1 or bits_per_pixel != 24 or compression != 0:
+        raise SmokeFailure(
+            f"application capture BMP '{path}' must be uncompressed 24-bit RGB "
+            f"(planes={planes}, bits={bits_per_pixel}, compression={compression})"
+        )
+    if pixel_offset < 14 + dib_size or pixel_offset > len(data):
+        raise SmokeFailure(f"application capture BMP '{path}' has invalid pixel offset {pixel_offset}")
+
+    height = abs(signed_height)
+    row_stride = ((width * 3 + 3) // 4) * 4
+    expected_image_size = row_stride * height
+    expected_file_size = pixel_offset + expected_image_size
+    if image_size not in (0, expected_image_size):
+        raise SmokeFailure(
+            f"application capture BMP '{path}' declares image size {image_size}, expected {expected_image_size}"
+        )
+    if expected_file_size != len(data):
+        raise SmokeFailure(
+            f"application capture BMP '{path}' pixel payload ends at {expected_file_size}, file has {len(data)} bytes"
+        )
+
+    stored_rows = []
+    for stored_y in range(height):
+        row_start = pixel_offset + stored_y * row_stride
+        row = []
+        for x in range(width):
+            blue, green, red = data[row_start + x * 3:row_start + x * 3 + 3]
+            row.append((red, green, blue))
+        stored_rows.append(row)
+
+    rows_rgb = stored_rows if signed_height < 0 else list(reversed(stored_rows))
+    return capture_result_from_rgb_rows(handle, width, height, rows_rgb)
 
 
 def analyze_rgb_rows(rows_rgb):
@@ -1722,6 +1813,22 @@ def launch_testbed(args, executable, env, log_port):
     )
 
 
+def wait_for_application_capture_exit(process, output_path, timeout_seconds):
+    deadline = time.monotonic() + timeout_seconds
+    artifact_observed = False
+    while time.monotonic() < deadline:
+        artifact_observed = artifact_observed or output_path.is_file()
+        exit_code = process.poll()
+        if exit_code is not None:
+            return exit_code, artifact_observed or output_path.is_file()
+        time.sleep(0.05)
+
+    artifact_state = "was written" if artifact_observed or output_path.is_file() else "was not written"
+    raise SmokeFailure(
+        f"timed out waiting for testbed to self-exit after application capture; artifact {artifact_state}"
+    )
+
+
 def ensure_process_running(process, stage, process_name="testbed"):
     if process is None or process.poll() is None:
         return
@@ -1825,10 +1932,8 @@ def validate_texture_smoke_result(result):
         raise SmokeFailure(f"texture smoke did not show the expected sampled texture and receiver-side GI ({observed})")
 
 
-def validate_expected_log_messages(
-    log_directory,
-    log_baseline,
-    log_pattern,
+def validate_expected_log_text(
+    log_text,
     required_needles,
     rejected_needles,
     skip_needles=(),
@@ -1836,10 +1941,6 @@ def validate_expected_log_messages(
 ):
     if not required_needles and not rejected_needles and not skip_needles and not skip_blocking_needles:
         return
-    if not log_directory:
-        raise SmokeFailure("cannot validate expected log messages without captured runtime logs")
-
-    log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
     if not log_text:
         raise SmokeFailure("runtime log validation captured no output")
     for needle in skip_needles:
@@ -1859,8 +1960,44 @@ def validate_expected_log_messages(
     return None
 
 
-def capture_checked_window(args, backend, handle):
-    result = backend.capture_window(handle, args.output)
+def validate_expected_log_messages(
+    log_directory,
+    log_baseline,
+    log_pattern,
+    required_needles,
+    rejected_needles,
+    skip_needles=(),
+    skip_blocking_needles=(),
+):
+    if not required_needles and not rejected_needles and not skip_needles and not skip_blocking_needles:
+        return
+    if not log_directory:
+        raise SmokeFailure("cannot validate expected log messages without captured runtime logs")
+
+    return validate_expected_log_text(
+        collect_log_delta(log_directory, log_baseline, log_pattern),
+        required_needles,
+        rejected_needles,
+        skip_needles,
+        skip_blocking_needles,
+    )
+
+
+def validate_application_capture_log_text(log_text, args):
+    required_needles = [FRAMEBUFFER_CAPTURE_READY_MESSAGE]
+    required_needles.extend(args.expect_log_message)
+    skip_needles = [FRAMEBUFFER_CAPTURE_SKIP_MESSAGE]
+    skip_needles.extend(args.skip_log_message)
+    return validate_expected_log_text(
+        log_text,
+        required_needles,
+        args.reject_log_message,
+        skip_needles,
+        args.skip_blocking_log_message,
+    )
+
+
+def validate_capture_for_args(args, result):
     validate_capture_result(result)
     if args.expect_transparent_multi:
         validate_transparent_multi_result(result)
@@ -1868,6 +2005,11 @@ def capture_checked_window(args, backend, handle):
         validate_transparent_csg_result(result)
     if args.expect_texture_smoke:
         validate_texture_smoke_result(result)
+
+
+def capture_checked_window(args, backend, handle):
+    result = backend.capture_window(handle, args.output)
+    validate_capture_for_args(args, result)
     return result
 
 
@@ -1931,8 +2073,73 @@ def launch_and_capture(args, backend):
     return result
 
 
+def launch_and_capture_application(args):
+    executable = Path(args.executable).resolve()
+    if not executable.exists():
+        raise SmokeFailure(f"executable does not exist: {executable}")
+
+    env = prepare_application_capture_environment(args, build_launch_environment(args))
+    partial_path = application_capture_partial_path(args.output)
+    logserver_process = None
+    testbed_process = None
+    testbed_exit_code = None
+    testbed_exit_tail = ""
+    wait_failure = None
+    artifact_observed = False
+    log_text = ""
+    try:
+        logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(
+            args,
+            executable,
+            env,
+        )
+        testbed_process = launch_testbed(args, executable, env, log_port)
+        try:
+            testbed_exit_code, artifact_observed = wait_for_application_capture_exit(
+                testbed_process,
+                args.output,
+                args.timeout,
+            )
+        except SmokeFailure as error:
+            wait_failure = error
+
+        testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, "testbed")
+        testbed_process = None
+        log_text = shutdown_logserver_and_collect(
+            logserver_process,
+            log_directory,
+            log_baseline,
+            log_pattern,
+        )
+        logserver_process = None
+    finally:
+        if testbed_process is not None:
+            terminate_process(testbed_process, "testbed")
+        if logserver_process is not None:
+            terminate_process(logserver_process, "logserver")
+
+    if wait_failure:
+        raise wait_failure
+    if testbed_exit_code != 0:
+        detail = f"\n{testbed_exit_tail}" if testbed_exit_tail else ""
+        raise SmokeFailure(f"testbed self-exited during application capture (exit {testbed_exit_code}){detail}")
+
+    skip_reason = validate_application_capture_log_text(log_text, args)
+    if skip_reason:
+        raise SmokeSkip(skip_reason)
+    if not args.output.is_file():
+        observation = " after being observed" if artifact_observed else ""
+        raise SmokeFailure(f"application capture artifact '{args.output}' is missing{observation}")
+    if partial_path.exists():
+        raise SmokeFailure(f"application capture left incomplete artifact '{partial_path}'")
+
+    result = read_bmp_24(args.output)
+    validate_capture_for_args(args, result)
+    return result
+
+
 def parse_args(argv):
-    parser = argparse.ArgumentParser(description="Launch an NWB executable and capture its native window handle.")
+    parser = argparse.ArgumentParser(description="Launch an NWB executable and capture its rendered output.")
     parser.add_argument("--executable", help="Path to the executable. Optional when --window-handle is used.")
     parser.add_argument("--working-directory", type=Path, default=Path.cwd(), help="Working directory for launched processes.")
     parser.add_argument("--output", type=Path, required=True, help="Screenshot output path. The script writes a 24-bit BMP.")
@@ -1940,6 +2147,17 @@ def parse_args(argv):
     parser.add_argument("--window-title", default="", help="Expected window title when matching a launched testbed window.")
     parser.add_argument("--timeout", type=float, default=45.0, help="Seconds to wait for logserver and the testbed window.")
     parser.add_argument("--settle-seconds", type=float, default=2.0, help="Seconds to wait after the window becomes visible.")
+    parser.add_argument(
+        "--application-capture",
+        action="store_true",
+        help="Use the application's Vulkan framebuffer readback instead of desktop window capture.",
+    )
+    parser.add_argument(
+        "--application-capture-frame-count",
+        type=int,
+        default=360,
+        help="Positive rendered frame count at which application capture is requested. Defaults to 360.",
+    )
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
     parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver; launch with standalone log output.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an available localhost port.")
@@ -1991,9 +2209,16 @@ def parse_args(argv):
     )
     args = parser.parse_args(argv)
 
+    if args.application_capture and args.window_handle is not None:
+        parser.error("--application-capture cannot be combined with --window-handle")
     if args.window_handle is None and not args.executable:
         parser.error("--executable is required unless --window-handle is provided")
     require_positive_arg(parser, "--timeout", args.timeout)
+    require_positive_arg(
+        parser,
+        "--application-capture-frame-count",
+        args.application_capture_frame_count,
+    )
     require_non_negative_arg(parser, "--settle-seconds", args.settle_seconds)
 
     args.working_directory = args.working_directory.resolve()
@@ -2005,13 +2230,19 @@ def main(argv):
     args = parse_args(argv)
     backend = None
     try:
-        backend = create_capture_backend()
-        if args.window_handle is not None:
-            result = capture_existing_handle(args, backend)
+        if args.application_capture:
+            result = launch_and_capture_application(args)
         else:
-            result = launch_and_capture(args, backend)
+            backend = create_capture_backend()
+            if args.window_handle is not None:
+                result = capture_existing_handle(args, backend)
+            else:
+                result = launch_and_capture(args, backend)
 
-        status = f"captured window 0x{result.handle:x} ({result.width}x{result.height}) -> {args.output}"
+        if args.application_capture:
+            status = f"captured application framebuffer ({result.width}x{result.height}) -> {args.output}"
+        else:
+            status = f"captured window 0x{result.handle:x} ({result.width}x{result.height}) -> {args.output}"
         if args.expect_transparent_multi:
             analysis = result.transparent_multi
             status = (

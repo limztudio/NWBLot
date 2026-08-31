@@ -15,7 +15,7 @@
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_model/module.h>
 #include <impl/ecs_model_renderer/model_renderer.h>
-#include <impl/ecs_render/kernel/module.h>
+#include <impl/ecs_render/module.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
@@ -135,13 +135,6 @@ private:
 
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("GiTestSmokeProject"));
-
-        // Force ray-tracing emulation so the SOFTWARE GI path runs even on RT-capable hardware -- the SW path is
-        // the one that runs the surfel trace and temporal-accumulation path, so the _sw_smoke build
-        // is the intended way to see the indirect bounce. Default OFF: the HW (hybrid) path.
-#if defined(NWB_GI_TEST_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
-        NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
-#endif
 
         AddSmokeRenderSystems(*world, context);
         return world;

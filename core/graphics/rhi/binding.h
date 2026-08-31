@@ -104,18 +104,17 @@ struct BindingLayoutDesc{
     BindingLayoutDesc& addItem(const BindingLayoutItem& value){ bindings.push_back(value); return *this; }
 };
 
-// BindlessLayoutType describes the SPIR-V bindings DXC emits for the renderer's global ResourceDescriptorHeap and
-// SamplerDescriptorHeap layouts. The shader must use the same reserved descriptor-set index as the heap layout.
-// https://github.com/microsoft/DirectXShaderCompiler/blob/main/docs/SPIR-V.rst#resourcedescriptorheaps-samplerdescriptorheaps
+// BindlessLayoutType describes the descriptor classes exposed through the renderer's global heap. Authored Slang
+// bindings and host layouts must use the same explicit Vulkan descriptor-set and binding indices.
 namespace BindlessLayoutType{
     enum Enum : u8{
         Immutable = 0,      // Must use registerSpaces to define a fixed descriptor type
 
-        MutableSrvUavCbv,   // Corresponds to SPIRV binding -fvk-bind-resource-heap (Counter resources ResourceDescriptorHeap)
+        MutableSrvUavCbv,   // Global non-sampler resource table
                             // Valid descriptor types: Texture_SRV, Texture_UAV, TypedBuffer_SRV, TypedBuffer_UAV,
                             // StructuredBuffer_SRV, StructuredBuffer_UAV, RawBuffer_SRV, RawBuffer_UAV, ConstantBuffer
 
-        MutableSampler,     // Corresponds to SPIRV binding -fvk-bind-sampler-heap (SamplerDescriptorHeap)
+        MutableSampler,     // Global sampler table
                             // Valid descriptor types: Sampler
     };
 };
@@ -126,8 +125,8 @@ struct BindlessLayoutDesc{
     FixedVector<BindingLayoutItem, s_MaxBindlessRegisterSpaces> registerSpaces;
     u32 maxCapacity = 0;
 
-    // This resource-bearing layout occupies an explicit SPIR-V descriptor set in a multi-layout pipeline. The global
-    // bindless heap uses reserved high sets so it cannot collide with push-constant-only pipeline-local sets.
+    // This resource-bearing layout occupies an explicit SPIR-V descriptor set in a multi-layout pipeline. Pipeline-
+    // local BindingLayout objects carry push constants only and do not consume descriptor sets.
     u32 descriptorSetIndex = Limit<u32>::s_Max;
 
     ShaderType::Mask visibility = ShaderType::None;

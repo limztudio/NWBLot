@@ -56,6 +56,9 @@ half4 nwbShadowMergeGeomCurr(const int2 halfTexel){
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [numthreads(NWB_SHADOW_REPROJECT_MERGE_GROUP_SIZE, NWB_SHADOW_REPROJECT_MERGE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint2 h = dispatchThreadID.xy;

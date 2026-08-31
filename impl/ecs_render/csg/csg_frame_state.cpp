@@ -2,7 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include "csg_system.h"
+
+#include <impl/ecs_render/material/material_surface_lookup.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/csg/renderer_csg_state.h>
+
+#include <core/ecs/world.h>
+#include <impl/ecs_csg/module.h>
+#include <impl/ecs_mesh/module.h>
+#include <impl/ecs_scene/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -98,43 +107,46 @@ namespace __hidden_csg_frame_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scratchArena){
+CsgFrameState RendererCsgSystem::buildFrameState(
+    Core::Alloc::ScratchArena& scratchArena,
+    IMaterialSurfaceLookup& materialSurfaceLookup
+){
     CsgFrameStateCacheSignature signature;
-    const bool cacheable = __hidden_csg_frame_state::BuildCsgFrameStateCacheSignature(world(), csgShapeRegistry(), signature);
-    if(cacheable && csgState().m_frameStateCacheValid && csgState().m_frameStateCacheSignature == signature)
-        return csgState().m_frameStateCache;
+    const bool cacheable = __hidden_csg_frame_state::BuildCsgFrameStateCacheSignature(m_world, m_csgShapeRegistry, signature);
+    if(cacheable && m_csgState.m_frameStateCacheValid && m_csgState.m_frameStateCacheSignature == signature)
+        return m_csgState.m_frameStateCache;
 
     bool frameStateCacheable = cacheable;
     CsgFrameState state;
     auto finishFrameState = [&](const CsgFrameState& frameState) -> CsgFrameState{
         if(frameStateCacheable){
-            csgState().m_frameStateCacheSignature = signature;
-            csgState().m_frameStateCache = frameState;
-            csgState().m_frameStateCacheValid = true;
+            m_csgState.m_frameStateCacheSignature = signature;
+            m_csgState.m_frameStateCache = frameState;
+            m_csgState.m_frameStateCacheValid = true;
         }
         else{
-            csgState().m_frameStateCacheValid = false;
+            m_csgState.m_frameStateCacheValid = false;
         }
         return frameState;
     };
 
-    CsgFrameReceiverLookup receiverLookup(world(), scratchArena);
+    CsgFrameReceiverLookup receiverLookup(m_world, scratchArena);
     if(receiverLookup.empty())
         return finishFrameState(state);
 
-    auto* ecsMeshSystem = world().getSystem<NWB::Impl::MeshSystem>();
+    auto* ecsMeshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
     if(!ecsMeshSystem){
         frameStateCacheable = false;
         return finishFrameState(state);
     }
 
-    auto rendererView = world().view<RendererComponent>();
+    auto rendererView = m_world.view<RendererComponent>();
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible)
             continue;
 
         CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
-        const CsgReceiverComponent* receiver = ResolveCsgReceiverComponent(world(), entity, receiverKind);
+        const CsgReceiverComponent* receiver = ResolveCsgReceiverComponent(m_world, entity, receiverKind);
         if(!receiver || !receiver->enabled)
             continue;
 
@@ -147,21 +159,21 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
         MeshResources* mesh = nullptr;
         if(resolvedMesh.runtime){
             frameStateCacheable = false;
-            if(!m_renderer.meshSystem().createRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh))
+            if(!m_meshSystem.createRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh))
                 continue;
         }
-        else if(!m_renderer.meshSystem().createMeshResources(resolvedMesh.mesh, mesh)){
+        else if(!m_meshSystem.createMeshResources(resolvedMesh.mesh, mesh)){
             frameStateCacheable = false;
             continue;
         }
 
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(!m_renderer.materialSystem().findMaterialSurfaceInfo(renderer.material, materialInfo)){
+        if(!materialSurfaceLookup.findMaterialSurfaceInfo(renderer.material, materialInfo)){
             frameStateCacheable = false;
             continue;
         }
 
-        const Scene::TransformComponent* transform = world().tryGetComponent<Scene::TransformComponent>(entity);
+        const Scene::TransformComponent* transform = m_world.tryGetComponent<Scene::TransformComponent>(entity);
 
         auto countPassCutters = [&](const CsgReceiverPass::Enum pass) -> u32{
             CsgReceiverDrawState drawState;

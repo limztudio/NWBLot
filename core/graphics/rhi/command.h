@@ -17,6 +17,9 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class GpuNativePacketRecorder;
+
+
 // Command lists and state handoffs need this queue identity without pulling in device.h (which itself includes
 // command.h through the public graphics API).
 namespace CommandQueue{
@@ -68,25 +71,104 @@ struct GpuPhysicalQueueInfo{
     GpuQueueCapability::Mask capabilities = GpuQueueCapability::None;
     u32 familyIndex = Limit<u32>::s_Max;
     u32 queueIndex = 0u;
+    u32 timestampValidBits = 0u;
     bool dedicated = false;
 };
 
-// Borrowed immutable registry view. The producing Device owns the storage for its entire lifetime.
+// Borrowed immutable topology view; its producer owns the storage. A compiled-graph view becomes invalid at
+// reset/recompile.
 struct GpuPhysicalQueueTopology{
     const GpuPhysicalQueueInfo* queues = nullptr;
     usize queueCount = 0u;
 };
 
+// Current backend-native command storage for one physical queue. Counts cover the direct worker-zero path and
+// every explicit recording-worker shard. A snapshot is sampled from thread-safe counters, so fields may advance
+// independently while recording/submission is concurrent. nativeHandleStorageLowerBoundBytes counts only the
+// client-visible native pool and command-buffer handle objects; opaque driver allocations and wrapper/container
+// capacity are deliberately excluded.
+struct GpuCommandArenaStatistics{
+    GpuPhysicalQueueId queue;
+    u64 workerArenaCount = 0u;
+    u64 commandPoolEpochCount = 0u;
+    u64 pendingCommandPoolEpochCount = 0u;
+    u64 currentCommandBufferCount = 0u;
+    u64 highWaterCommandBufferCount = 0u;
+    u64 reusableCommandBufferCount = 0u;
+    u64 leasedCommandBufferCount = 0u;
+    u64 pendingCommandBufferCount = 0u;
+    u64 growthEventCount = 0u;
+    u64 resetEventCount = 0u;
+    u64 nativeHandleStorageLowerBoundBytes = 0u;
+
+
+    [[nodiscard]] bool valid()const noexcept{ return queue.valid(); }
+};
+
+// Immutable snapshot for one logical recording worker on one physical queue. Direct recording is always queryable
+// as domain/index {0,0}; explicit shards use the exact domain/index retained by GpuRecordedPacket. Fields are
+// sampled independently from thread-safe counters and may advance during the query. The native-storage estimate is
+// a lower bound over VkCommandPool/VkCommandBuffer handle objects only; opaque driver memory is deliberately absent.
+struct GpuCommandArenaWorkerStatistics{
+    GpuPhysicalQueueId queue;
+    u64 recordingWorkerDomain = 0u;
+    u32 recordingWorkerIndex = 0u;
+    u64 commandPoolEpochCount = 0u;
+    u64 pendingCommandPoolEpochCount = 0u;
+    u64 currentCommandBufferCount = 0u;
+    u64 highWaterCommandBufferCount = 0u;
+    u64 reusableCommandBufferCount = 0u;
+    u64 leasedCommandBufferCount = 0u;
+    u64 pendingCommandBufferCount = 0u;
+    u64 growthEventCount = 0u;
+    u64 resetEventCount = 0u;
+    u64 nativeHandleStorageLowerBoundBytes = 0u;
+
+
+    [[nodiscard]] bool valid()const noexcept{ return queue.valid(); }
+};
+
 typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
 typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 
-// Absolute device-timestamp values for one timer query. GPU timing uses the duration for ordinary scopes and the
-// endpoints to derive cross-queue packet overlap without summing concurrent work.
+// Raw device-timestamp values for one timer query. Vulkan exposes only the low timestampValidBits from one physical
+// queue family, so ordinary durations use modular tick arithmetic. Absolute endpoints are available only when the
+// logical device enabled and successfully probed calibrated timestamps and the exact queue exposes all 64 bits.
 struct TimerQueryResult{
-    f64 beginSeconds = 0.0;
-    f64 endSeconds = 0.0;
+    u64 beginTicks = 0u;
+    u64 endTicks = 0u;
+    f64 secondsPerTick = 0.0;
+    u32 timestampValidBits = 0u;
+    GpuPhysicalQueueId physicalQueue;
+    bool comparableAcrossSubmissions = false;
 
-    [[nodiscard]] f64 durationSeconds()const{ return endSeconds - beginSeconds; }
+    [[nodiscard]] bool valid()const{
+        return timestampValidBits > 0u && timestampValidBits <= 64u && secondsPerTick > 0.0;
+    }
+    [[nodiscard]] u64 timestampMask()const{
+        if(!valid())
+            return 0u;
+        return timestampValidBits == 64u ? Limit<u64>::s_Max : (static_cast<u64>(1u) << timestampValidBits) - 1u;
+    }
+    [[nodiscard]] u64 maskedBeginTicks()const{ return beginTicks & timestampMask(); }
+    [[nodiscard]] u64 durationTicks()const{
+        const u64 mask = timestampMask();
+        if(mask == 0u)
+            return 0u;
+
+        const u64 duration = (endTicks & mask) - (beginTicks & mask);
+        return timestampValidBits == 64u ? duration : duration & mask;
+    }
+    [[nodiscard]] f64 durationSeconds()const{ return static_cast<f64>(durationTicks()) * secondsPerTick; }
+    [[nodiscard]] bool hasComparableRange()const{
+        return
+            valid()
+            && comparableAcrossSubmissions
+            && timestampValidBits == 64u
+            && physicalQueue.valid()
+            && beginTicks <= endTicks
+        ;
+    }
 };
 
 
@@ -96,9 +178,11 @@ struct TimerQueryResult{
 // owned by the caller: every referenced texture and buffer must stay alive until the consumer has opened.
 //
 // It carries both transient and permanent state. UAV-barrier policy remains local to each command list, while
-// keepInitialState resources are captured after their close-time restore barriers.
+// keepInitialState resources are captured after their close-time restore barriers. Before the producer is accepted,
+// this handoff is the only valid cross-list source for that restored native state.
 class CommandListResourceStateHandoff final : NoCopy{
     friend class GraphicsBackend::CommandList;
+    friend class GpuNativePacketRecorder;
 
 private:
     struct TextureState{
@@ -145,9 +229,16 @@ public:
         m_bufferStates.clear();
         m_permanentTextureStates.clear();
         m_permanentBufferStates.clear();
+        m_deviceGeneration = 0u;
         m_valid = false;
     }
     [[nodiscard]] bool valid()const{ return m_valid; }
+    [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
+    // State snapshots retain raw backend-resource pointers.  Preserve the producer Device identity so a stale
+    // snapshot can be rejected before any of those pointers are inspected after device recreation.
+    [[nodiscard]] bool validForDeviceGeneration(const u16 deviceGeneration)const noexcept{
+        return m_valid && deviceGeneration != 0u && m_deviceGeneration == deviceGeneration;
+    }
 
     // Builds a post-branch state snapshot from a normalized base snapshot and the final states exported by
     // independently recorded branches. Every branch must have been opened from base, and the caller must submit
@@ -188,12 +279,28 @@ private:
     GraphicsVector<BufferState> m_bufferStates;
     GraphicsVector<PermanentTextureState> m_permanentTextureStates;
     GraphicsVector<BufferState> m_permanentBufferStates;
+    u16 m_deviceGeneration = 0u;
     bool m_valid = false;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+struct RenderPassParameters{
+    Color colorClearValues[s_MaxRenderTargets]{};
+    f32 depthClearValue = s_DepthClearValue;
+    bool clearColorTargets = false;
+    u8 colorClearMask = static_cast<u8>((1u << s_MaxRenderTargets) - 1u);
+    bool clearDepthTarget = false;
+    bool clearStencilTarget = false;
+    u8 stencilClearValue = 0;
+
+
+    [[nodiscard]] constexpr bool clearColorTarget(const u32 index)const{
+        return index < s_MaxRenderTargets && (colorClearMask & (1u << index)) != 0u;
+    }
+};
 
 struct VertexBufferBinding{
     Buffer* buffer = nullptr;
@@ -371,6 +478,7 @@ struct RayTracingPipelineDesc{
     u32 maxRecursionDepth = 1;
     i32 hlslExtensionsUAV = -1;
     bool allowOpacityMicromaps = false;
+    bool allowClusterAccelerationStructures = false;
     bool allowSpheres = false;
     bool allowLinearSweptSpheres = false;
 
@@ -388,12 +496,15 @@ struct RayTracingPipelineDesc{
     constexpr RayTracingPipelineDesc& setMaxRecursionDepth(u32 value){ maxRecursionDepth = value; return *this; }
     constexpr RayTracingPipelineDesc& setHlslExtensionsUAV(i32 value){ hlslExtensionsUAV = value; return *this; }
     constexpr RayTracingPipelineDesc& setAllowOpacityMicromaps(bool value){ allowOpacityMicromaps = value; return *this; }
+    constexpr RayTracingPipelineDesc& setAllowClusterAccelerationStructures(bool value){ allowClusterAccelerationStructures = value; return *this; }
     constexpr RayTracingPipelineDesc& setAllowSpheres(bool value){ allowSpheres = value; return *this; }
     constexpr RayTracingPipelineDesc& setAllowLinearSweptSpheres(bool value){ allowLinearSweptSpheres = value; return *this; }
 };
 
 typedef GraphicsBackend::Handle<RayTracingShaderTable> RayTracingShaderTableHandle;
 typedef GraphicsBackend::Handle<RayTracingPipeline> RayTracingPipelineHandle;
+
+inline constexpr u32 s_InvalidRayTracingShaderTableRecordIndex = Limit<u32>::s_Max;
 
 struct RayTracingState{
     RayTracingShaderTable* shaderTable = nullptr;

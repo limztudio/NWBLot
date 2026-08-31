@@ -4,6 +4,18 @@
 
 #include <impl/ecs_render/csg/csg_interval_private.h>
 
+#include <impl/ecs_render/csg/csg_system.h>
+#include <impl/ecs_render/material/renderer_render_state_private.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/shader/shader_system.h>
+#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/csg/renderer_csg_state.h>
+
+#include <core/common/log.h>
+#include <core/graphics/backend_selection.h>
+#include <core/graphics/module.h>
+#include <core/graphics/shader_archive.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -150,14 +162,14 @@ namespace CsgIntervalDetail{
 
 
 bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& targets, const bool capFillRequired){
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     if(!createCsgClipResources())
         return false;
-    if(!csgState().m_clipBindingLayout){
+    if(!m_csgState.m_clipBindingLayout){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval peel requires a CSG clip binding layout"));
         return false;
     }
-    if(!drawState().m_meshViewBuffer){
+    if(!m_meshSystem.meshViewBufferSnapshot().valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval peel requires a mesh view buffer"));
         return false;
     }
@@ -186,9 +198,9 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         return false;
 
     if(!CsgIntervalDetail::CreateCsgIntervalBindingLayout(
-        arena(),
+        m_arena,
         device,
-        csgState().m_intervalPeelBindingLayout,
+        m_csgState.m_intervalPeelBindingLayout,
         Core::ShaderType::Compute
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval peel binding layout"));
@@ -196,9 +208,9 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     }
 
     if(!CsgIntervalDetail::CreateCsgIntervalBindingLayout(
-        arena(),
+        m_arena,
         device,
-        csgState().m_receiverSpanBuildBindingLayout,
+        m_csgState.m_receiverSpanBuildBindingLayout,
         Core::ShaderType::Compute
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG receiver span build binding layout"));
@@ -206,18 +218,18 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     }
 
     if(!CsgIntervalDetail::CreateCsgIntervalBindingLayout(
-        arena(),
+        m_arena,
         device,
-        csgState().m_intervalCombineBindingLayout,
+        m_csgState.m_intervalCombineBindingLayout,
         Core::ShaderType::Compute
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval combine binding layout"));
         return false;
     }
 
-    if(!csgState().m_intervalPeelComputeShader){
-        if(!m_renderer.shaderSystem().loadShader(
-            csgState().m_intervalPeelComputeShader,
+    if(!m_csgState.m_intervalPeelComputeShader){
+        if(!m_shaderSystem.loadShader(
+            m_csgState.m_intervalPeelComputeShader,
             AssetsGraphicsCsg::s_IntervalPeelComputeShaderName,
             Core::ShaderArchive::s_DefaultVariant,
             Core::ShaderType::Compute,
@@ -226,9 +238,9 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
             return false;
     }
 
-    if(!csgState().m_receiverSpanBuildComputeShader){
-        if(!m_renderer.shaderSystem().loadShader(
-            csgState().m_receiverSpanBuildComputeShader,
+    if(!m_csgState.m_receiverSpanBuildComputeShader){
+        if(!m_shaderSystem.loadShader(
+            m_csgState.m_receiverSpanBuildComputeShader,
             AssetsGraphicsCsg::s_ReceiverSpanBuildComputeShaderName,
             Core::ShaderArchive::s_DefaultVariant,
             Core::ShaderType::Compute,
@@ -237,9 +249,9 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
             return false;
     }
 
-    if(!csgState().m_intervalCombineComputeShader){
-        if(!m_renderer.shaderSystem().loadShader(
-            csgState().m_intervalCombineComputeShader,
+    if(!m_csgState.m_intervalCombineComputeShader){
+        if(!m_shaderSystem.loadShader(
+            m_csgState.m_intervalCombineComputeShader,
             AssetsGraphicsCsg::s_IntervalCombineComputeShaderName,
             Core::ShaderArchive::s_DefaultVariant,
             Core::ShaderType::Compute,
@@ -249,12 +261,12 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     }
 
     if(capFillRequired){
-        if(!m_renderer.shaderSystem().loadDeferredCompositeVertexShader())
+        if(!m_shaderSystem.loadDeferredCompositeVertexShader())
             return false;
 
-        if(!csgState().m_intervalCapFillPixelShader){
-            if(!m_renderer.shaderSystem().loadShader(
-                csgState().m_intervalCapFillPixelShader,
+        if(!m_csgState.m_intervalCapFillPixelShader){
+            if(!m_shaderSystem.loadShader(
+                m_csgState.m_intervalCapFillPixelShader,
                 AssetsGraphicsCsg::s_IntervalCapFillPixelShaderName,
                 Core::ShaderArchive::s_DefaultVariant,
                 Core::ShaderType::Pixel,
@@ -266,9 +278,9 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
 
     if(!CsgIntervalDetail::CreateIntervalPeelPipeline(
         device,
-        csgState().m_intervalPeelPipeline,
-        csgState().m_intervalPeelComputeShader,
-        csgState().m_intervalPeelBindingLayout
+        m_csgState.m_intervalPeelPipeline,
+        m_csgState.m_intervalPeelComputeShader,
+        m_csgState.m_intervalPeelBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval peel pipeline"));
         return false;
@@ -276,9 +288,9 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
 
     if(!CsgIntervalDetail::CreateReceiverSpanBuildPipeline(
         device,
-        csgState().m_receiverSpanBuildPipeline,
-        csgState().m_receiverSpanBuildComputeShader,
-        csgState().m_receiverSpanBuildBindingLayout
+        m_csgState.m_receiverSpanBuildPipeline,
+        m_csgState.m_receiverSpanBuildComputeShader,
+        m_csgState.m_receiverSpanBuildBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG receiver span build pipeline"));
         return false;
@@ -286,9 +298,9 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
 
     if(!CsgIntervalDetail::CreateIntervalCombinePipeline(
         device,
-        csgState().m_intervalCombinePipeline,
-        csgState().m_intervalCombineComputeShader,
-        csgState().m_intervalCombineBindingLayout
+        m_csgState.m_intervalCombinePipeline,
+        m_csgState.m_intervalCombineComputeShader,
+        m_csgState.m_intervalCombineBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval combine pipeline"));
         return false;
@@ -296,10 +308,10 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
 
     if(capFillRequired && !CsgIntervalDetail::CreateIntervalCapFillPipeline(
         device,
-        csgState().m_intervalCapFillPipeline,
-        deferredState().m_compositeVertexShader,
-        csgState().m_intervalCapFillPixelShader,
-        csgState().m_clipBindingLayout,
+        m_csgState.m_intervalCapFillPipeline,
+        m_shaderSystem.deferredCompositeVertexShader(),
+        m_csgState.m_intervalCapFillPixelShader,
+        m_csgState.m_clipBindingLayout,
         targets.framebuffer->getFramebufferInfo()
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval cap fill pipeline"));
@@ -313,7 +325,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
 }
 
 bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& targets){
-    if(!drawState().m_meshViewBuffer){
+    if(!m_meshSystem.meshViewBufferSnapshot().valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval sampling requires a mesh view buffer"));
         return false;
     }
@@ -338,19 +350,20 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
 }
 
 bool RendererCsgSystem::createCsgIntervalSampleStateBuffer(){
-    if(csgState().m_intervalSampleStateBuffer)
+    if(m_csgState.m_intervalSampleStateBuffer)
         return true;
 
     Core::BufferDesc bufferDesc;
     bufferDesc
         .setByteSize(sizeof(CsgIntervalSampleStateGpuData))
         .setIsConstantBuffer(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName("engine/csg/interval_sample_state")
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
 
-    csgState().m_intervalSampleStateBuffer = graphics().createBuffer(bufferDesc);
-    if(!csgState().m_intervalSampleStateBuffer){
+    m_csgState.m_intervalSampleStateBuffer = m_graphics.createBuffer(bufferDesc);
+    if(!m_csgState.m_intervalSampleStateBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval sample state buffer"));
         return false;
     }

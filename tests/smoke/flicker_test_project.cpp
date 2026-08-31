@@ -13,7 +13,7 @@
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_model/module.h>
 #include <impl/ecs_model_renderer/model_renderer.h>
-#include <impl/ecs_render/kernel/module.h>
+#include <impl/ecs_render/module.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
@@ -112,12 +112,6 @@ class FlickerTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("FlickerTestSmokeProject"));
-
-        // Force ray-tracing emulation so the SOFTWARE shadow path runs even on RT-capable hardware -- the A/B sibling of
-        // the hardware path. Default OFF: the demo runs the hardware (hybrid) path.
-#if defined(NWB_FLICKER_TEST_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
-        NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
-#endif
 
         AddSmokeSkinnedRenderSystems(*world, context);
         return world;

@@ -25,6 +25,10 @@
 #include "../bindless/bindless_heap_rt.slangi"
 #include "surfel/surfel_heap_resources.slangi"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // The shared scene-shading CB + light list are target-generation heap entries. The surfel trace push block selects the
 // deferred target-generation payload itself from the global UniformBuffer table, so this shader has no local CBV.
 #define g_NwbGiSwBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbSurfelHeapPushConstants.deferredResourcesHeapSlot]
@@ -122,72 +126,118 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
     const float3 invDir = nwbBvhSafeInvDir(direction);
 
     uint stack[NWB_GI_SW_MESH_STACK_SIZE];
-    uint stackPointer = 0u;
-    NwbBvhNode node = NwbHeapBvhNodes(material.nodeSlot)[0u];
-    bool active = nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0);
+    stack[0u] = 0u;
+    uint stackPointer = 1u;
 
-    [loop] while(active){
-        if(nwbBvhNodeIsLeaf(node)){
-            const uint triangle = nwbBvhLeafPrimitive(node);
-            const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-            const uint3 triIndices = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
-            const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-            const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-            const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-            const NwbRayTriangleHit triHit = nwbRayTriangleMollerTrumbore(origin, direction, tMin, closest.t, v0, v1, v2);
-            if(triHit.hit){
-                const uint attributeBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-                const NwbRayTraceVertexAttrib a0 = nwbGiSwLoadVertexAttrib(material.attributeSlot, attributeBase);
-                const NwbRayTraceVertexAttrib a1 = nwbGiSwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
-                const NwbRayTraceVertexAttrib a2 = nwbGiSwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
-                const float3 objectShadingNormal = float3(a0.normal) * triHit.w + float3(a1.normal) * triHit.u + float3(a2.normal) * triHit.v;
+    [loop] while(stackPointer > 0u){
+        --stackPointer;
+        NwbBvhNode node = NwbHeapBvhNodes(material.nodeSlot)[stack[stackPointer]];
+        if(!nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0))
+            continue;
 
-                NwbShadowHit surfaceHit;
-                surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
-                surfaceHit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
-                surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
-                surfaceHit.uv0 = a0.uv0 * triHit.w + a1.uv0 * triHit.u + a2.uv0 * triHit.v;
-                surfaceHit.worldNormal = nwbSafeNormalize(nwbSwBvhTransformNormal(instance, objectShadingNormal), float3(0.0, 0.0, 1.0));
-                surfaceHit.worldPosition = worldOrigin + worldDirection * triHit.t;
-                surfaceHit.rayDirection = worldDirection;
+        [loop] while(true){
+            if(nwbBvhNodeIsLeaf(node)){
+                const uint triangle = nwbBvhLeafPrimitive(node);
+                const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+                const uint3 triIndices = NwbHeapRawBuffer(material.indexSlot).Load3(
+                    indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES
+                );
+                const float3 v0 = asfloat(
+                    NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
+                );
+                const float3 v1 = asfloat(
+                    NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
+                );
+                const float3 v2 = asfloat(
+                    NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
+                );
+                const NwbRayTriangleHit triHit = nwbRayTriangleMollerTrumbore(origin, direction, tMin, closest.t, v0, v1, v2);
+                if(triHit.hit){
+                    const uint attributeBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+                    const NwbRayTraceVertexAttrib a0 = nwbGiSwLoadVertexAttrib(
+                        material.attributeSlot,
+                        attributeBase
+                    );
+                    const NwbRayTraceVertexAttrib a1 = nwbGiSwLoadVertexAttrib(
+                        material.attributeSlot,
+                        attributeBase + 1u
+                    );
+                    const NwbRayTraceVertexAttrib a2 = nwbGiSwLoadVertexAttrib(
+                        material.attributeSlot,
+                        attributeBase + 2u
+                    );
+                    const float3 objectShadingNormal =
+                        float3(a0.normal) * triHit.w
+                        + float3(a1.normal) * triHit.u
+                        + float3(a2.normal) * triHit.v
+                    ;
 
-                const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, surfaceHit);
-                closest.hit = true;
-                closest.t = triHit.t;
-                closest.worldPos = surfaceHit.worldPosition;
-                closest.normal = nwbSafeNormalize(nwbSwBvhTransformNormal(instance, triHit.normal), float3(0.0, 0.0, 1.0));
-                closest.albedo = surface.baseColor;
-            }
-            active = false;
-        }
-        else{
-            const NwbBvhNode leftNode = NwbHeapBvhNodes(material.nodeSlot)[node.leftChild];
-            const uint right = nwbBvhNodeRightChildIndex(node);
-            const NwbBvhNode rightNode = NwbHeapBvhNodes(material.nodeSlot)[right];
-            float tLeft;
-            const bool hitLeft = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, 0.0, tLeft);
-            float tRight;
-            const bool hitRight = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, 0.0, tRight);
-            if(hitLeft && hitRight){
-                if(tLeft <= tRight){
-                    if(stackPointer < NWB_GI_SW_MESH_STACK_SIZE) stack[stackPointer++] = right;
-                    node = leftNode;
+                    NwbShadowHit surfaceHit;
+                    surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
+                    surfaceHit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+                    surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
+                    surfaceHit.uv0 = a0.uv0 * triHit.w + a1.uv0 * triHit.u + a2.uv0 * triHit.v;
+                    surfaceHit.worldNormal = nwbSafeNormalize(
+                        nwbSwBvhTransformNormal(instance, objectShadingNormal),
+                        float3(0.0, 0.0, 1.0)
+                    );
+                    surfaceHit.worldPosition = worldOrigin + worldDirection * triHit.t;
+                    surfaceHit.rayDirection = worldDirection;
+
+                    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, surfaceHit);
+                    closest.hit = true;
+                    closest.t = triHit.t;
+                    closest.worldPos = surfaceHit.worldPosition;
+                    closest.normal = nwbSafeNormalize(nwbSwBvhTransformNormal(instance, triHit.normal), float3(0.0, 0.0, 1.0));
+                    closest.albedo = surface.baseColor;
                 }
-                else{
-                    if(stackPointer < NWB_GI_SW_MESH_STACK_SIZE) stack[stackPointer++] = node.leftChild;
-                    node = rightNode;
-                }
-                continue;
+                break;
             }
-            if(hitLeft){ node = leftNode; continue; }
-            if(hitRight){ node = rightNode; continue; }
-            active = false;
-        }
-
-        [loop] while(stackPointer > 0u){
-            node = NwbHeapBvhNodes(material.nodeSlot)[stack[--stackPointer]];
-            if(nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0)){
-                active = true;
+            else{
+                const NwbBvhNode leftNode = NwbHeapBvhNodes(material.nodeSlot)[node.leftChild];
+                const uint right = nwbBvhNodeRightChildIndex(node);
+                const NwbBvhNode rightNode = NwbHeapBvhNodes(material.nodeSlot)[right];
+                float tLeft;
+                const bool hitLeft = nwbBvhRayAabbT(
+                    origin,
+                    invDir,
+                    tMin,
+                    closest.t,
+                    leftNode.aabbMin,
+                    leftNode.aabbMax,
+                    0.0,
+                    tLeft
+                );
+                float tRight;
+                const bool hitRight = nwbBvhRayAabbT(
+                    origin,
+                    invDir,
+                    tMin,
+                    closest.t,
+                    rightNode.aabbMin,
+                    rightNode.aabbMax,
+                    0.0,
+                    tRight
+                );
+                if(hitLeft && hitRight){
+                    if(tLeft <= tRight){
+                        if(stackPointer < NWB_GI_SW_MESH_STACK_SIZE){
+                            stack[stackPointer] = right;
+                            ++stackPointer;
+                        }
+                        node = leftNode;
+                    }
+                    else{
+                        if(stackPointer < NWB_GI_SW_MESH_STACK_SIZE){
+                            stack[stackPointer] = node.leftChild;
+                            ++stackPointer;
+                        }
+                        node = rightNode;
+                    }
+                    continue;
+                }
+                if(hitLeft){ node = leftNode; continue; }
+                if(hitRight){ node = rightNode; continue; }
                 break;
             }
         }
@@ -206,43 +256,65 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     const float3 invDir = nwbBvhSafeInvDir(direction);
 
     uint stack[NWB_GI_SW_SCENE_STACK_SIZE];
-    uint stackPointer = 0u;
-    NwbBvhNode node = NwbHeapBvhNodes(g_NwbGiSwMaterialContextSlots.sceneSlots.x)[0u];
-    bool active = nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0);
+    stack[0u] = 0u;
+    uint stackPointer = 1u;
 
-    [loop] while(active){
-        if(nwbBvhNodeIsLeaf(node)){
-            nwbGiSwInstanceClosest(nwbBvhLeafPrimitive(node), origin, direction, tMin, closest);
-            active = false;
-        }
-        else{
-            const NwbBvhNode leftNode = NwbHeapBvhNodes(g_NwbGiSwMaterialContextSlots.sceneSlots.x)[node.leftChild];
-            const uint right = nwbBvhNodeRightChildIndex(node);
-            const NwbBvhNode rightNode = NwbHeapBvhNodes(g_NwbGiSwMaterialContextSlots.sceneSlots.x)[right];
-            float tLeft;
-            const bool hitLeft = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, 0.0, tLeft);
-            float tRight;
-            const bool hitRight = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, 0.0, tRight);
-            if(hitLeft && hitRight){
-                if(tLeft <= tRight){
-                    if(stackPointer < NWB_GI_SW_SCENE_STACK_SIZE) stack[stackPointer++] = right;
-                    node = leftNode;
-                }
-                else{
-                    if(stackPointer < NWB_GI_SW_SCENE_STACK_SIZE) stack[stackPointer++] = node.leftChild;
-                    node = rightNode;
-                }
-                continue;
+    [loop] while(stackPointer > 0u){
+        --stackPointer;
+        NwbBvhNode node = NwbHeapBvhNodes(g_NwbGiSwMaterialContextSlots.sceneSlots.x)[stack[stackPointer]];
+        if(!nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0))
+            continue;
+
+        [loop] while(true){
+            if(nwbBvhNodeIsLeaf(node)){
+                nwbGiSwInstanceClosest(nwbBvhLeafPrimitive(node), origin, direction, tMin, closest);
+                break;
             }
-            if(hitLeft){ node = leftNode; continue; }
-            if(hitRight){ node = rightNode; continue; }
-            active = false;
-        }
-
-        [loop] while(stackPointer > 0u){
-            node = NwbHeapBvhNodes(g_NwbGiSwMaterialContextSlots.sceneSlots.x)[stack[--stackPointer]];
-            if(nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0)){
-                active = true;
+            else{
+                const NwbBvhNode leftNode = NwbHeapBvhNodes(g_NwbGiSwMaterialContextSlots.sceneSlots.x)[node.leftChild];
+                const uint right = nwbBvhNodeRightChildIndex(node);
+                const NwbBvhNode rightNode = NwbHeapBvhNodes(g_NwbGiSwMaterialContextSlots.sceneSlots.x)[right];
+                float tLeft;
+                const bool hitLeft = nwbBvhRayAabbT(
+                    origin,
+                    invDir,
+                    tMin,
+                    closest.t,
+                    leftNode.aabbMin,
+                    leftNode.aabbMax,
+                    0.0,
+                    tLeft
+                );
+                float tRight;
+                const bool hitRight = nwbBvhRayAabbT(
+                    origin,
+                    invDir,
+                    tMin,
+                    closest.t,
+                    rightNode.aabbMin,
+                    rightNode.aabbMax,
+                    0.0,
+                    tRight
+                );
+                if(hitLeft && hitRight){
+                    if(tLeft <= tRight){
+                        if(stackPointer < NWB_GI_SW_SCENE_STACK_SIZE){
+                            stack[stackPointer] = right;
+                            ++stackPointer;
+                        }
+                        node = leftNode;
+                    }
+                    else{
+                        if(stackPointer < NWB_GI_SW_SCENE_STACK_SIZE){
+                            stack[stackPointer] = node.leftChild;
+                            ++stackPointer;
+                        }
+                        node = rightNode;
+                    }
+                    continue;
+                }
+                if(hitLeft){ node = leftNode; continue; }
+                if(hitRight){ node = rightNode; continue; }
                 break;
             }
         }

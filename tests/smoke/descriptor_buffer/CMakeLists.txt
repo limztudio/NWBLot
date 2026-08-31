@@ -10,7 +10,17 @@
 # descriptor-buffer-only contract coverage; a skipped run is an environment limitation, not a renderer queue-routing test.
 nwb_declare_gtest_executable(nwb_descriptor_buffer_tests)
 target_sources(nwb_descriptor_buffer_tests PRIVATE
+    "${CMAKE_SOURCE_DIR}/tests/common/vulkan_test_sync.h"
+    "${CMAKE_CURRENT_LIST_DIR}/cooperative_vector_query_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/descriptor_heap_bind_ingress_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/descriptor_heap_bind_liveness_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/descriptor_buffer_manager_ingress_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/descriptor_buffer_round_trip_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/extension_command_ingress_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/native_mesh_policy_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/ray_tracing_build_ingress_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/ray_tracing_dispatch_ingress_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/ray_tracing_shader_table_ingress_tests.cpp"
 )
 target_link_libraries(nwb_descriptor_buffer_tests PRIVATE
     nwb_frame
@@ -47,3 +57,4 @@ target_link_libraries(nwb_command_ir_profile PRIVATE
     nwb_alloc
     nwb_common
 )
+

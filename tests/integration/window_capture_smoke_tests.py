@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import os
 import subprocess
+import struct
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 
@@ -12,11 +14,15 @@ SMOKE_DIRECTORY = Path(__file__).resolve().parents[1] / "smoke"
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 
 import window_capture_smoke  # noqa: E402
+import runtime_log_smoke  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
+    ensure_process_running,
     launch_captured_process,
     read_process_tail,
-    require_normal_testbed_exit,
+    require_normal_process_exit,
+    shutdown_logserver_and_collect,
     terminate_process,
+    validate_expected_log_messages,
 )
 
 
@@ -79,6 +85,145 @@ class ProcessOutputCaptureTests(unittest.TestCase):
             self.assertFalse(capture.path.exists())
 
 
+class BmpReadbackTests(unittest.TestCase):
+    @staticmethod
+    def write_top_down_bmp(path, rows):
+        height = len(rows)
+        width = len(rows[0])
+        row_stride = ((width * 3 + 3) // 4) * 4
+        image_size = row_stride * height
+        pixel_offset = 54
+        padding = b"\0" * (row_stride - width * 3)
+        with path.open("wb") as output:
+            output.write(struct.pack("<2sIHHI", b"BM", pixel_offset + image_size, 0, 0, pixel_offset))
+            output.write(struct.pack("<IiiHHIIiiII", 40, width, -height, 1, 24, 0, image_size, 0, 0, 0, 0))
+            for row in rows:
+                for red, green, blue in row:
+                    output.write(bytes((blue, green, red)))
+                output.write(padding)
+
+    def test_bottom_up_bmp_honors_bgr_channels_padding_and_row_order(self):
+        rows = [
+            [(1, 2, 3), (4, 5, 6), (7, 8, 9)],
+            [(10, 11, 12), (13, 14, 15), (16, 17, 18)],
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "bottom_up.bmp"
+            window_capture_smoke.write_bmp_24(path, 3, 2, rows)
+            with mock.patch.object(
+                window_capture_smoke,
+                "capture_result_from_rgb_rows",
+                return_value="capture",
+            ) as analyze:
+                self.assertEqual(window_capture_smoke.read_bmp_24(path), "capture")
+
+        analyze.assert_called_once_with(0, 3, 2, rows)
+
+    def test_top_down_bmp_preserves_stored_row_order(self):
+        rows = [
+            [(21, 22, 23), (24, 25, 26)],
+            [(31, 32, 33), (34, 35, 36)],
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "top_down.bmp"
+            self.write_top_down_bmp(path, rows)
+            with mock.patch.object(
+                window_capture_smoke,
+                "capture_result_from_rgb_rows",
+                return_value="capture",
+            ) as analyze:
+                self.assertEqual(window_capture_smoke.read_bmp_24(path), "capture")
+
+        analyze.assert_called_once_with(0, 2, 2, rows)
+
+    def test_bmp_parser_rejects_declared_size_and_compression_mismatches(self):
+        rows = [[(1, 2, 3), (4, 5, 6)]]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "invalid.bmp"
+            window_capture_smoke.write_bmp_24(path, 2, 1, rows)
+            data = bytearray(path.read_bytes())
+
+            struct.pack_into("<I", data, 2, len(data) + 1)
+            path.write_bytes(data)
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "declares .* but contains"):
+                window_capture_smoke.read_bmp_24(path)
+
+            struct.pack_into("<I", data, 2, len(data))
+            struct.pack_into("<I", data, 30, 1)
+            path.write_bytes(data)
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "must be uncompressed 24-bit"):
+                window_capture_smoke.read_bmp_24(path)
+
+
+class ApplicationCaptureConfigurationTests(unittest.TestCase):
+    def test_environment_removes_stale_final_and_partial_artifacts(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "capture.bmp"
+            partial = window_capture_smoke.application_capture_partial_path(output)
+            output.write_bytes(b"stale-final")
+            partial.write_bytes(b"stale-partial")
+            args = SimpleNamespace(output=output, application_capture_frame_count=27)
+            base_environment = {"PRESERVED": "yes"}
+
+            env = window_capture_smoke.prepare_application_capture_environment(args, base_environment)
+
+            self.assertFalse(output.exists())
+            self.assertFalse(partial.exists())
+            self.assertEqual(env[window_capture_smoke.FRAMEBUFFER_CAPTURE_PATH_ENV], str(output))
+            self.assertEqual(env[window_capture_smoke.FRAMEBUFFER_CAPTURE_FRAME_COUNT_ENV], "27")
+            self.assertEqual(env["PRESERVED"], "yes")
+            self.assertEqual(base_environment, {"PRESERVED": "yes"})
+
+    def test_application_capture_frame_count_defaults_to_360_and_must_be_positive(self):
+        args = window_capture_smoke.parse_args(
+            ["--application-capture", "--executable", sys.executable, "--output", "capture.bmp"]
+        )
+        self.assertEqual(args.application_capture_frame_count, 360)
+
+        with self.assertRaises(SystemExit):
+            window_capture_smoke.parse_args(
+                [
+                    "--application-capture",
+                    "--application-capture-frame-count",
+                    "0",
+                    "--executable",
+                    sys.executable,
+                    "--output",
+                    "capture.bmp",
+                ]
+            )
+
+    def test_application_capture_main_never_creates_a_desktop_capture_backend(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "capture.bmp"
+            capture = SimpleNamespace(width=3, height=2)
+            with mock.patch.object(window_capture_smoke, "launch_and_capture_application", return_value=capture), \
+                 mock.patch.object(window_capture_smoke, "create_capture_backend") as create_backend, \
+                 mock.patch.object(window_capture_smoke, "write_status"):
+                exit_code = window_capture_smoke.main(
+                    ["--application-capture", "--executable", sys.executable, "--output", str(output)]
+                )
+
+        self.assertEqual(exit_code, 0)
+        create_backend.assert_not_called()
+
+    def test_application_capture_skip_reaches_process_exit_code_77_without_desktop_capture(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "capture.bmp"
+            with mock.patch.object(
+                window_capture_smoke,
+                "launch_and_capture_application",
+                side_effect=window_capture_smoke.SmokeSkip(window_capture_smoke.FRAMEBUFFER_CAPTURE_SKIP_MESSAGE),
+            ), mock.patch.object(window_capture_smoke, "create_capture_backend") as create_backend, \
+                 mock.patch.object(window_capture_smoke, "write_status"):
+                exit_code = window_capture_smoke.main(
+                    ["--application-capture", "--executable", sys.executable, "--output", str(output)]
+                )
+
+        self.assertEqual(exit_code, window_capture_smoke.SKIP_EXIT_CODE)
+        create_backend.assert_not_called()
+
+
 class TextureSmokeAnalysisTests(unittest.TestCase):
     def test_texture_smoke_analysis_requires_each_primary_hue(self):
         rows = [
@@ -92,15 +237,604 @@ class TextureSmokeAnalysisTests(unittest.TestCase):
         self.assertEqual(analysis.blue_pixels, 2)
 
     def test_texture_smoke_analysis_isolates_red_bounce_on_the_white_receiver(self):
-        rows = [[(210, 210, 210) for _ in range(100)] for _ in range(100)]
-        for y in range(68, 76):
-            for x in range(54, 62):
+        rows = [[(210, 210, 210) for _ in range(200)] for _ in range(200)]
+        for y in range(40, 45):
+            for x in range(97, 100):
+                rows[y][x] = (104, 70, 68)
+        for y in range(126, 131):
+            for x in range(97, 100):
                 rows[y][x] = (104, 70, 68)
 
         analysis = window_capture_smoke.analyze_texture_smoke_rows(rows)
 
-        self.assertEqual(analysis.receiver_pixel_count, 15 * 14)
-        self.assertEqual(analysis.receiver_red_pixels, 8 * 8)
+        self.assertEqual(analysis.red_pixels, 2 * 3 * 5)
+        self.assertEqual(analysis.receiver_pixel_count, 5 * 7)
+        self.assertEqual(analysis.receiver_red_pixels, 3 * 5)
+
+    def test_texture_smoke_validation_requires_dense_receiver_only_red_coverage(self):
+        result = SimpleNamespace(
+            width=1280,
+            height=900,
+            texture_smoke=window_capture_smoke.TextureSmokeAnalysis(300, 300, 300, 256, 1024),
+        )
+
+        window_capture_smoke.validate_texture_smoke_result(result)
+
+        result.texture_smoke = window_capture_smoke.TextureSmokeAnalysis(300, 300, 300, 255, 1024)
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "receiver_red=255"):
+            window_capture_smoke.validate_texture_smoke_result(result)
+
+
+class TransparentCsgAnalysisTests(unittest.TestCase):
+    def test_transparent_csg_analysis_finds_sky_void_and_retained_lower_half_in_client_pixels(self):
+        background = (75, 85, 101)
+        rows = [[background for _ in range(100)] for _ in range(100)]
+        for y in range(52, 68):
+            for x in range(40, 56):
+                rows[y][x] = (83, 115, 123)
+        for y in range(75, 100):
+            for x in range(100):
+                rows[y][x] = (140, 144, 150)
+
+        analysis = window_capture_smoke.analyze_transparent_csg_rows(rows)
+
+        self.assertEqual(analysis.cut_void_pixels, analysis.cut_region_pixels)
+        self.assertEqual(analysis.remaining_center_pixels, analysis.remaining_region_pixels)
+
+
+class RuntimeLogValidationTests(unittest.TestCase):
+    def test_command_line_defaults_reject_every_strict_runtime_failure(self):
+        args = window_capture_smoke.parse_args(["--window-handle", "1", "--output", "capture.bmp"])
+
+        self.assertEqual(args.reject_log_message, list(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES))
+        self.assertEqual(args.skip_blocking_log_message, list(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES))
+
+    def test_capability_marker_is_classified_before_required_log_validation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_directory = Path(temp_dir)
+            marker = "benchmark skipped because required hardware is unavailable"
+            (log_directory / "test.log").write_text(marker, encoding="utf-8")
+
+            self.assertEqual(
+                validate_expected_log_messages(
+                    log_directory,
+                    {},
+                    "*.log",
+                    ["required route marker"],
+                    [],
+                    [marker],
+                ),
+                marker,
+            )
+
+    def test_missing_required_marker_is_not_a_capability_skip(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_directory = Path(temp_dir)
+            (log_directory / "test.log").write_text("ordinary startup", encoding="utf-8")
+
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "missing log message"):
+                validate_expected_log_messages(
+                    log_directory,
+                    {},
+                    "*.log",
+                    ["required route marker"],
+                    [],
+                    ["benchmark skipped"],
+                )
+
+    def test_capability_marker_preempts_supported_route_rejection(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_directory = Path(temp_dir)
+            marker = "benchmark skipped because required hardware is unavailable"
+            (log_directory / "test.log").write_text(
+                f"{marker}\nsoftware traversal route",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                validate_expected_log_messages(
+                    log_directory,
+                    {},
+                    "*.log",
+                    ["required hardware route"],
+                    ["software traversal route"],
+                    [marker],
+                    ["[ERROR]"],
+                ),
+                marker,
+            )
+
+    def test_rejected_error_takes_precedence_over_capability_skip(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_directory = Path(temp_dir)
+            marker = "benchmark skipped because required hardware is unavailable"
+            (log_directory / "test.log").write_text(f"{marker}\n[ERROR] device failure", encoding="utf-8")
+
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "blocking log message"):
+                validate_expected_log_messages(
+                    log_directory,
+                    {},
+                    "*.log",
+                    ["required route marker"],
+                    ["[ERROR]"],
+                    [marker],
+                    ["[ERROR]"],
+                )
+
+    def test_reject_only_validation_requires_runtime_log_evidence(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "captured no output"):
+                validate_expected_log_messages(
+                    Path(temp_dir),
+                    {},
+                    "*.log",
+                    [],
+                    ["[ERROR]"],
+                )
+
+
+class ProcessLivenessTests(unittest.TestCase):
+    def test_named_process_exit_before_validation_fails(self):
+        process = SimpleNamespace(poll=lambda: 7, returncode=7)
+
+        with self.assertRaisesRegex(
+            window_capture_smoke.SmokeFailure,
+            r"logserver exited before log validation \(exit 7\)",
+        ):
+            ensure_process_running(process, "before log validation", "logserver")
+
+    def test_named_process_abnormal_graceful_exit_fails(self):
+        with self.assertRaisesRegex(
+            window_capture_smoke.SmokeFailure,
+            r"logserver exited during graceful shutdown \(exit 7\)",
+        ):
+            require_normal_process_exit(7, "", "logserver")
+
+
+class LogserverCollectionTests(unittest.TestCase):
+    def test_shutdown_happens_before_drain_and_collection(self):
+        process = SimpleNamespace(poll=lambda: None)
+        events = []
+
+        def terminate(_process, _name):
+            events.append("shutdown")
+            return 0, ""
+
+        def drain(*_args):
+            events.append("drain")
+
+        def collect(*_args):
+            events.append("collect")
+            return "[WARNING] shutdown-only warning"
+
+        with mock.patch.object(window_capture_smoke, "terminate_process", side_effect=terminate), \
+             mock.patch.object(window_capture_smoke, "wait_for_log_drain", side_effect=drain), \
+             mock.patch.object(window_capture_smoke, "collect_log_delta", side_effect=collect):
+            log_text = shutdown_logserver_and_collect(process, Path("logs"), {}, "*.log")
+
+        self.assertEqual(events, ["shutdown", "drain", "collect"])
+        self.assertEqual(log_text, "[WARNING] shutdown-only warning")
+
+    def test_abnormal_logserver_exit_fails_before_collection(self):
+        process = SimpleNamespace(poll=lambda: None)
+        with mock.patch.object(window_capture_smoke, "terminate_process", return_value=(7, "logserver tail")), \
+             mock.patch.object(window_capture_smoke, "wait_for_log_drain") as drain, \
+             mock.patch.object(window_capture_smoke, "collect_log_delta") as collect:
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "logserver.*exit 7"):
+                shutdown_logserver_and_collect(process, Path("logs"), {}, "*.log")
+
+        drain.assert_not_called()
+        collect.assert_not_called()
+
+
+class RuntimeLogSmokeTests(unittest.TestCase):
+    def test_runtime_validation_follows_logserver_shutdown_collection(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_directory = Path(temp_dir)
+            runtime_process = SimpleNamespace(poll=lambda: 0)
+            logserver_process = SimpleNamespace(poll=lambda: None)
+            args = SimpleNamespace(
+                executable=sys.executable,
+                expect_log_message=["shutdown marker"],
+                reject_log_message=["[WARNING]"],
+                timeout=1.0,
+            )
+            events = []
+
+            def wait_for_exit(_process, _timeout):
+                events.append("runtime exit")
+                return 0
+
+            def shutdown_and_collect(*_args):
+                events.append("logserver shutdown and collect")
+                return "shutdown marker"
+
+            def validate(*_args):
+                events.append("validate")
+
+            with mock.patch.object(runtime_log_smoke, "build_launch_environment", return_value={}), \
+                 mock.patch.object(
+                     runtime_log_smoke,
+                     "launch_logserver",
+                     return_value=(logserver_process, 49152, log_directory, {}, "*.log"),
+                 ), \
+                 mock.patch.object(runtime_log_smoke, "launch_testbed", return_value=runtime_process), \
+                 mock.patch.object(runtime_log_smoke, "wait_for_process_exit", side_effect=wait_for_exit), \
+                 mock.patch.object(runtime_log_smoke, "read_process_tail", return_value=""), \
+                 mock.patch.object(
+                     runtime_log_smoke,
+                     "shutdown_logserver_and_collect",
+                     side_effect=shutdown_and_collect,
+                 ), \
+                 mock.patch.object(runtime_log_smoke, "validate_expected_log_messages", side_effect=validate), \
+                 mock.patch.object(runtime_log_smoke, "terminate_process", return_value=(0, "")), \
+                 mock.patch.object(runtime_log_smoke, "write_status"):
+                self.assertEqual(runtime_log_smoke.run(args), 0)
+
+            self.assertEqual(events, ["runtime exit", "logserver shutdown and collect", "validate"])
+
+
+class ShutdownLogValidationTests(unittest.TestCase):
+    def run_capture_with_shutdown_log(self, shutdown_log, required=(), rejected=()):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_directory = Path(temp_dir)
+            log_path = log_directory / "test.log"
+            args = SimpleNamespace(
+                application_arg=[],
+                executable=sys.executable,
+                expect_log_message=list(required),
+                expect_texture_smoke=False,
+                expect_transparent_csg=False,
+                expect_transparent_multi=False,
+                log_port=0,
+                logserver_executable=None,
+                no_logserver=False,
+                output=log_directory / "capture.bmp",
+                reject_log_message=list(rejected),
+                settle_seconds=0.0,
+                skip_blocking_log_message=[],
+                skip_log_message=[],
+                software_vulkan="off",
+                timeout=1.0,
+                window_title="NWB Test",
+                working_directory=log_directory,
+            )
+            backend = mock.Mock()
+            backend.wait_for_window.return_value = 0x4A
+            testbed_process = SimpleNamespace(pid=4321, poll=lambda: None)
+            logserver_process = SimpleNamespace(poll=lambda: None)
+            events = []
+
+            def terminate(process, name, _window_handle=None):
+                if process is testbed_process:
+                    events.append("testbed shutdown")
+                else:
+                    events.append("logserver shutdown")
+                    log_path.write_text(shutdown_log, encoding="utf-8")
+                return 0, ""
+
+            def drain(*_args):
+                events.append("log drain")
+
+            with mock.patch.object(window_capture_smoke, "build_launch_environment", return_value={}), \
+                 mock.patch.object(
+                     window_capture_smoke,
+                     "launch_logserver",
+                     return_value=(logserver_process, 49152, log_directory, {}, "*.log"),
+                 ), \
+                 mock.patch.object(window_capture_smoke, "launch_testbed", return_value=testbed_process), \
+                 mock.patch.object(window_capture_smoke, "capture_checked_window", return_value="capture"), \
+                 mock.patch.object(window_capture_smoke, "terminate_process", side_effect=terminate), \
+                 mock.patch.object(window_capture_smoke, "wait_for_log_drain", side_effect=drain):
+                result = window_capture_smoke.launch_and_capture(args, backend)
+
+            self.assertEqual(events, ["testbed shutdown", "logserver shutdown", "log drain"])
+            return result
+
+    def test_shutdown_marker_is_validated_after_graceful_exit(self):
+        self.assertEqual(
+            self.run_capture_with_shutdown_log("ProjectTestbed: shutdown", required=("ProjectTestbed: shutdown",)),
+            "capture",
+        )
+
+    def test_teardown_warning_fails_after_graceful_exit(self):
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "rejected log message"):
+            self.run_capture_with_shutdown_log("[WARNING] teardown failure", rejected=("[WARNING]",))
+
+
+class ApplicationCaptureLifecycleTests(unittest.TestCase):
+    @staticmethod
+    def make_args(directory):
+        return SimpleNamespace(
+            application_capture_frame_count=12,
+            executable=sys.executable,
+            expect_log_message=[],
+            expect_texture_smoke=False,
+            expect_transparent_csg=False,
+            expect_transparent_multi=False,
+            output=directory / "capture.bmp",
+            reject_log_message=list(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES),
+            skip_blocking_log_message=list(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES),
+            skip_log_message=[],
+            timeout=1.0,
+        )
+
+    def test_normal_capture_collects_shutdown_logs_before_marker_and_pixel_validation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            args = self.make_args(directory)
+            logserver_process = object()
+            testbed_process = object()
+            capture = SimpleNamespace(width=3, height=2)
+            events = []
+
+            def launch_logserver(*_args):
+                events.append("logserver launch")
+                return logserver_process, 49152, directory, {}, "*.log"
+
+            def launch_testbed(_args, _executable, env, _log_port):
+                events.append("application launch")
+                self.assertEqual(env[window_capture_smoke.FRAMEBUFFER_CAPTURE_PATH_ENV], str(args.output))
+                self.assertEqual(env[window_capture_smoke.FRAMEBUFFER_CAPTURE_FRAME_COUNT_ENV], "12")
+                return testbed_process
+
+            def wait_for_exit(*_args):
+                events.append("application wait")
+                args.output.write_bytes(b"engine-bmp")
+                return 0, True
+
+            def terminate(process, name):
+                self.assertIs(process, testbed_process)
+                self.assertEqual(name, "testbed")
+                events.append("application output collect")
+                return 0, ""
+
+            def shutdown_and_collect(*_args):
+                events.append("logserver shutdown and log collect")
+                return window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE
+
+            def validate_logs(log_text, _args):
+                events.append("log validation")
+                self.assertEqual(log_text, window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE)
+
+            def read_bmp(path):
+                events.append("BMP parse")
+                self.assertEqual(path, args.output)
+                return capture
+
+            def validate_pixels(_args, result):
+                events.append("pixel validation")
+                self.assertIs(result, capture)
+
+            with mock.patch.object(window_capture_smoke, "build_launch_environment", return_value={}), \
+                 mock.patch.object(window_capture_smoke, "launch_logserver", side_effect=launch_logserver), \
+                 mock.patch.object(window_capture_smoke, "launch_testbed", side_effect=launch_testbed), \
+                 mock.patch.object(window_capture_smoke, "wait_for_application_capture_exit", side_effect=wait_for_exit), \
+                 mock.patch.object(window_capture_smoke, "terminate_process", side_effect=terminate), \
+                 mock.patch.object(
+                     window_capture_smoke,
+                     "shutdown_logserver_and_collect",
+                     side_effect=shutdown_and_collect,
+                 ), \
+                 mock.patch.object(
+                     window_capture_smoke,
+                     "validate_application_capture_log_text",
+                     side_effect=validate_logs,
+                 ), \
+                 mock.patch.object(window_capture_smoke, "read_bmp_24", side_effect=read_bmp), \
+                 mock.patch.object(window_capture_smoke, "validate_capture_for_args", side_effect=validate_pixels):
+                result = window_capture_smoke.launch_and_capture_application(args)
+
+        self.assertIs(result, capture)
+        self.assertEqual(
+            events,
+            [
+                "logserver launch",
+                "application launch",
+                "application wait",
+                "application output collect",
+                "logserver shutdown and log collect",
+                "log validation",
+                "BMP parse",
+                "pixel validation",
+            ],
+        )
+
+    def test_nonzero_application_exit_fails_after_shutdown_log_collection(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            args = self.make_args(Path(temp_dir))
+            events = []
+            with mock.patch.object(window_capture_smoke, "build_launch_environment", return_value={}), \
+                 mock.patch.object(
+                     window_capture_smoke,
+                     "launch_logserver",
+                     return_value=(object(), 49152, Path(temp_dir), {}, "*.log"),
+                 ), \
+                 mock.patch.object(window_capture_smoke, "launch_testbed", return_value=object()), \
+                 mock.patch.object(window_capture_smoke, "wait_for_application_capture_exit", return_value=(9, False)), \
+                 mock.patch.object(window_capture_smoke, "terminate_process", return_value=(9, "application tail")), \
+                 mock.patch.object(
+                     window_capture_smoke,
+                     "shutdown_logserver_and_collect",
+                     side_effect=lambda *_args: events.append("logs collected") or window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE,
+                 ), \
+                 mock.patch.object(window_capture_smoke, "read_bmp_24") as read_bmp:
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, r"self-exited.*exit 9"):
+                    window_capture_smoke.launch_and_capture_application(args)
+
+        self.assertEqual(events, ["logs collected"])
+        read_bmp.assert_not_called()
+
+    def test_application_timeout_terminates_then_collects_logs_before_failing(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            args = self.make_args(Path(temp_dir))
+            events = []
+
+            def terminate(*_args):
+                events.append("application terminated")
+                return -15, ""
+
+            def shutdown_and_collect(*_args):
+                events.append("logs collected")
+                return "ordinary startup"
+
+            with mock.patch.object(window_capture_smoke, "build_launch_environment", return_value={}), \
+                 mock.patch.object(
+                     window_capture_smoke,
+                     "launch_logserver",
+                     return_value=(object(), 49152, Path(temp_dir), {}, "*.log"),
+                 ), \
+                 mock.patch.object(window_capture_smoke, "launch_testbed", return_value=object()), \
+                 mock.patch.object(
+                     window_capture_smoke,
+                     "wait_for_application_capture_exit",
+                     side_effect=window_capture_smoke.SmokeFailure("timed out waiting for self-exit"),
+                 ), \
+                 mock.patch.object(window_capture_smoke, "terminate_process", side_effect=terminate), \
+                 mock.patch.object(
+                     window_capture_smoke,
+                     "shutdown_logserver_and_collect",
+                     side_effect=shutdown_and_collect,
+                 ):
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "timed out waiting for self-exit"):
+                    window_capture_smoke.launch_and_capture_application(args)
+
+        self.assertEqual(events, ["application terminated", "logs collected"])
+
+    def test_capture_ready_marker_is_required_after_normal_exit(self):
+        args = self.make_args(Path("capture-root"))
+        self.assertIsNone(
+            window_capture_smoke.validate_application_capture_log_text(
+                window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE,
+                args,
+            )
+        )
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "missing log message"):
+            window_capture_smoke.validate_application_capture_log_text("ordinary shutdown", args)
+
+    def test_capability_skip_requires_no_strict_blocking_diagnostics(self):
+        args = self.make_args(Path("capture-root"))
+        marker = window_capture_smoke.FRAMEBUFFER_CAPTURE_SKIP_MESSAGE
+        self.assertEqual(window_capture_smoke.validate_application_capture_log_text(marker, args), marker)
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "blocking log message"):
+            window_capture_smoke.validate_application_capture_log_text(f"{marker}\n[WARNING] teardown failure", args)
+
+    def test_capability_skip_does_not_require_a_capture_artifact(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            args = self.make_args(Path(temp_dir))
+            with mock.patch.object(window_capture_smoke, "build_launch_environment", return_value={}), \
+                 mock.patch.object(
+                     window_capture_smoke,
+                     "launch_logserver",
+                     return_value=(object(), 49152, Path(temp_dir), {}, "*.log"),
+                 ), \
+                 mock.patch.object(window_capture_smoke, "launch_testbed", return_value=object()), \
+                 mock.patch.object(window_capture_smoke, "wait_for_application_capture_exit", return_value=(0, False)), \
+                 mock.patch.object(window_capture_smoke, "terminate_process", return_value=(0, "")), \
+                 mock.patch.object(
+                     window_capture_smoke,
+                     "shutdown_logserver_and_collect",
+                     return_value=window_capture_smoke.FRAMEBUFFER_CAPTURE_SKIP_MESSAGE,
+                 ):
+                with self.assertRaisesRegex(window_capture_smoke.SmokeSkip, "transfer-source usage is unavailable"):
+                    window_capture_smoke.launch_and_capture_application(args)
+
+
+class WindowsCaptureOrderingTests(unittest.TestCase):
+    def test_capture_window_prepares_before_querying_the_client_screen_rect(self):
+        hwnd = 0x4A
+        output_path = Path("capture.bmp")
+        calls = []
+        expected_rect = object()
+        capture = object.__new__(window_capture_smoke.WindowsCapture)
+
+        def prepare(window):
+            calls.append(("prepare", window))
+
+        def client_rect(window):
+            self.assertEqual(calls, [("prepare", hwnd)])
+            calls.append(("post-prepare-client-rect", window))
+            return expected_rect
+
+        def screen_bitblt(window, rect, path):
+            calls.append(("BitBlt", window, rect, path))
+            return "capture"
+
+        capture._prepare_capture_window = prepare
+        capture._client_rect = client_rect
+        capture._capture_screen_rect = screen_bitblt
+
+        self.assertEqual(capture.capture_window(hwnd, output_path), "capture")
+        self.assertEqual(
+            calls,
+            [
+                ("prepare", hwnd),
+                ("post-prepare-client-rect", hwnd),
+                ("BitBlt", hwnd, expected_rect, output_path),
+            ],
+        )
+
+
+class CaptureFocusTests(unittest.TestCase):
+    def test_linux_focus_window_raises_sets_input_focus_and_flushes(self):
+        window = 0x4A
+        display = object()
+        calls = []
+        capture = object.__new__(window_capture_smoke.LinuxX11Capture)
+
+        class FakeX11:
+            def XRaiseWindow(self, received_display, received_window):
+                calls.append(("raise", received_display, received_window))
+
+            def XSetInputFocus(self, received_display, received_window, revert_to, timestamp):
+                calls.append(("focus", received_display, received_window, revert_to, timestamp))
+
+            def XFlush(self, received_display):
+                calls.append(("flush", received_display))
+
+        capture.x11 = FakeX11()
+        capture.display = display
+
+        capture.focus_window(window)
+
+        self.assertEqual(
+            calls,
+            [
+                ("raise", display, window),
+                ("focus", display, window, capture.REVERT_TO_PARENT, capture.CURRENT_TIME),
+                ("flush", display),
+            ],
+        )
+
+    def test_windows_focus_window_foregrounds_the_captured_hwnd(self):
+        window = 0x4A
+        calls = []
+        capture = object.__new__(window_capture_smoke.WindowsCapture)
+
+        class FakeUser32:
+            def SetForegroundWindow(self, hwnd):
+                calls.append(hwnd.value)
+                return 1
+
+        capture.user32 = FakeUser32()
+
+        capture.focus_window(window)
+
+        self.assertEqual(calls, [window])
+
+    def test_windows_prepare_window_uses_the_capture_preparation_path(self):
+        window = 0x4A
+        calls = []
+        capture = object.__new__(window_capture_smoke.WindowsCapture)
+
+        def prepare(received_window):
+            calls.append(received_window)
+
+        capture._prepare_capture_window = prepare
+
+        capture.prepare_window(window)
+
+        self.assertEqual(calls, [window])
 
 
 class GracefulTerminationTests(unittest.TestCase):
@@ -182,13 +916,12 @@ class GracefulTerminationTests(unittest.TestCase):
         self.assertEqual(exit_code, -6)
         self.assertEqual(tail, "")
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "exit -6"):
-            require_normal_testbed_exit(exit_code, tail)
+            require_normal_process_exit(exit_code, tail, "testbed")
 
     def test_missing_shutdown_exit_code_is_reported_to_the_smoke_runner(self):
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "did not exit"):
-            require_normal_testbed_exit(None, "")
+            require_normal_process_exit(None, "", "testbed")
 
 
 if __name__ == "__main__":
     unittest.main()
-

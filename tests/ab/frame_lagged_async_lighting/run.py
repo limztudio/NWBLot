@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import argparse
 import sys
+import tempfile
 import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Mapping, Sequence
+from unittest import mock
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -22,6 +24,7 @@ sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
 from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE,
+    STRICT_LOG_FAILURE_MESSAGES,
     SmokeFailure,
     SmokeSkip,
     build_launch_environment,
@@ -30,22 +33,23 @@ from window_capture_smoke import (  # noqa: E402
     ensure_process_running,
     launch_logserver,
     launch_testbed,
-    require_normal_testbed_exit,
+    require_normal_process_exit,
+    shutdown_logserver_and_collect,
     terminate_process,
 )
 
 
-NO_DEDICATED_ASYNC_COMPUTE = "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated AsyncCompute lane"
+NO_DEDICATED_ASYNC_COMPUTE = "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue"
 BOOTSTRAP_ACCEPTED = "RendererSystem: frame-lagged async lighting bootstrap accepted"
 ACTIVE_HISTORY_ACCEPTED = "RendererSystem: frame-lagged async lighting active history accepted"
 CURRENT_FRAME_ACCEPTED = "RendererSystem: frame-lagged async lighting current-frame path accepted"
 FORBIDDEN_LOG_MESSAGES = (
-    "[ERROR]",
-    "VUID-",
-    "Validation Error",
+    *STRICT_LOG_FAILURE_MESSAGES,
     "cannot safely continue after an unresolved frame recovery submission",
-    "failed to record lagged lighting-history capture",
-    "lagged lighting-history capture submission was rejected",
+    "deferred graph build with optional lagged lighting-history capture failed",
+    "deferred lagged lighting-history tail was unavailable",
+    "lagged lighting-history capture skipped because its source state was unavailable",
+    "graph-owned lagged lighting-history capture record/submission was rejected",
 )
 
 # A successful target run has exactly this accepted lifecycle.  Keep the sequence as data so the live poller and
@@ -117,6 +121,18 @@ def reject_forbidden_messages(log_text: str) -> None:
         raise SmokeFailure(f"frame-lagged async-lighting smoke found forbidden log messages: {rejected}")
 
 
+def require_final_run_verdict(log_text: str, app_exit_code: int | None, app_exit_tail: str) -> None:
+    """Validate shutdown and complete diagnostics before classifying an unavailable async topology."""
+    require_normal_process_exit(app_exit_code, app_exit_tail, "testbed")
+    reject_forbidden_messages(log_text)
+    if NO_DEDICATED_ASYNC_COMPUTE in log_text:
+        raise DedicatedComputeUnavailable(
+            "frame-lagged async-lighting smoke skipped: the requested feature accepted the Graphics queue route "
+            "because this adapter has no dedicated Compute queue"
+        )
+    require_lifecycle_stage(log_text, len(LAGGED_LIGHTING_LIFECYCLE))
+
+
 def wait_for_lifecycle_stage(
     process,
     log_directory: Path,
@@ -131,12 +147,9 @@ def wait_for_lifecycle_stage(
     while time.monotonic() < deadline:
         ensure_process_running(process, stage)
         latest_log = collect_log_delta(log_directory, log_baseline, log_pattern)
-        if NO_DEDICATED_ASYNC_COMPUTE in latest_log:
-            raise DedicatedComputeUnavailable(
-                "frame-lagged async-lighting smoke skipped: the requested feature accepted the Graphics queue route "
-                "because this adapter has no dedicated AsyncCompute lane"
-            )
         reject_forbidden_messages(latest_log)
+        if NO_DEDICATED_ASYNC_COMPUTE in latest_log:
+            return latest_log
         events = validate_lifecycle_order(latest_log)
         if len(events) >= expected_event_count:
             return latest_log
@@ -226,6 +239,8 @@ def run(args: argparse.Namespace) -> int:
         window = capture_backend.wait_for_window(app_process.pid, args.startup_timeout, args.window_title)
         if not window:
             raise SmokeFailure(f"lagged-lighting smoke did not expose the expected window '{args.window_title}'")
+        capture_backend.prepare_window(window)
+        time.sleep(0.1)
 
         final_log = wait_for_lifecycle_stage(
             app_process,
@@ -236,70 +251,71 @@ def run(args: argparse.Namespace) -> int:
             args.startup_timeout,
             "while waiting for the first accepted bootstrap",
         )
-        final_log = wait_for_lifecycle_stage(
-            app_process,
+        if NO_DEDICATED_ASYNC_COMPUTE not in final_log:
+            final_log = wait_for_lifecycle_stage(
+                app_process,
+                log_directory,
+                log_baseline,
+                log_pattern,
+                2,
+                args.transition_timeout,
+                "while waiting for the first accepted history use",
+            )
+        if NO_DEDICATED_ASYNC_COMPUTE not in final_log:
+            capture_backend.send_named_key(window, "F1")
+            final_log = wait_for_lifecycle_stage(
+                app_process,
+                log_directory,
+                log_baseline,
+                log_pattern,
+                3,
+                args.transition_timeout,
+                "while waiting for the accepted current-frame path",
+            )
+        if NO_DEDICATED_ASYNC_COMPUTE not in final_log:
+            capture_backend.send_named_key(window, "F1")
+            final_log = wait_for_lifecycle_stage(
+                app_process,
+                log_directory,
+                log_baseline,
+                log_pattern,
+                4,
+                args.transition_timeout,
+                "while waiting for the second accepted bootstrap",
+            )
+        if NO_DEDICATED_ASYNC_COMPUTE not in final_log:
+            final_log = wait_for_lifecycle_stage(
+                app_process,
+                log_directory,
+                log_baseline,
+                log_pattern,
+                5,
+                args.transition_timeout,
+                "while waiting for the second accepted history use",
+            )
+        app_exit_code, app_exit_tail = terminate_process(app_process, "lagged-lighting smoke", window)
+        app_process = None
+        final_log = shutdown_logserver_and_collect(
+            logserver_process,
             log_directory,
             log_baseline,
             log_pattern,
-            2,
-            args.transition_timeout,
-            "while waiting for the first accepted history use",
+            "lagged-lighting smoke logserver",
         )
-
-        capture_backend.send_named_key(window, "F1")
-        final_log = wait_for_lifecycle_stage(
-            app_process,
-            log_directory,
-            log_baseline,
-            log_pattern,
-            3,
-            args.transition_timeout,
-            "while waiting for the accepted current-frame path",
-        )
-
-        capture_backend.send_named_key(window, "F1")
-        final_log = wait_for_lifecycle_stage(
-            app_process,
-            log_directory,
-            log_baseline,
-            log_pattern,
-            4,
-            args.transition_timeout,
-            "while waiting for the second accepted bootstrap",
-        )
-        final_log = wait_for_lifecycle_stage(
-            app_process,
-            log_directory,
-            log_baseline,
-            log_pattern,
-            5,
-            args.transition_timeout,
-            "while waiting for the second accepted history use",
-        )
+        logserver_process = None
     finally:
-        if app_process:
-            app_exit_code, app_exit_tail = terminate_process(app_process, "lagged-lighting smoke", window)
-        # Let the graceful window close send its last logger records before observing the delta one final time.
-        time.sleep(0.25)
-        if log_directory:
-            final_log = collect_log_delta(log_directory, log_baseline, log_pattern)
+        terminate_process(app_process, "lagged-lighting smoke", window)
         terminate_process(logserver_process, "lagged-lighting smoke logserver")
         if capture_backend:
             capture_backend.close()
 
-    require_normal_testbed_exit(app_exit_code, app_exit_tail)
-    if NO_DEDICATED_ASYNC_COMPUTE in final_log:
-        raise DedicatedComputeUnavailable(
-            "frame-lagged async-lighting smoke skipped: the requested feature accepted the Graphics queue route "
-            "because this adapter has no dedicated AsyncCompute lane"
-        )
-    reject_forbidden_messages(final_log)
-    require_lifecycle_stage(final_log, len(LAGGED_LIGHTING_LIFECYCLE))
+    require_final_run_verdict(final_log, app_exit_code, app_exit_tail)
     print("frame-lagged async-lighting smoke passed: bootstrap -> active history -> current frame -> bootstrap -> active history")
     return 0
 
 
 def run_self_test() -> int:
+    assert FORBIDDEN_LOG_MESSAGES[:len(STRICT_LOG_FAILURE_MESSAGES)] == STRICT_LOG_FAILURE_MESSAGES
     log = "\n".join((
         f"{BOOTSTRAP_ACCEPTED} (target generation 7)",
         f"{ACTIVE_HISTORY_ACCEPTED} (target generation 7)",
@@ -342,6 +358,101 @@ def run_self_test() -> int:
     assert NO_DEDICATED_ASYNC_COMPUTE not in log
     graphics_route_log = f"{NO_DEDICATED_ASYNC_COMPUTE}, target generation 3)"
     assert NO_DEDICATED_ASYNC_COMPUTE in graphics_route_log
+    try:
+        require_final_run_verdict(f"{graphics_route_log}\n[ERROR] simulated validation failure", 0, "")
+    except SmokeFailure:
+        pass
+    else:
+        raise AssertionError("a forbidden error accompanying the Graphics queue route was incorrectly skipped")
+    current_history_warnings = (
+        "deferred graph build with optional lagged lighting-history capture failed; retrying without the tail",
+        "deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting",
+        "lagged lighting-history capture skipped because its source state was unavailable",
+        "graph-owned lagged lighting-history capture record/submission was rejected; reverting to current-frame lighting",
+    )
+    for warning in current_history_warnings:
+        try:
+            require_final_run_verdict(f"{log}\n{warning}", 0, "")
+        except SmokeFailure:
+            pass
+        else:
+            raise AssertionError(f"current lagged lighting-history warning was not rejected: {warning}")
+    try:
+        require_final_run_verdict(graphics_route_log, 0, "")
+    except DedicatedComputeUnavailable:
+        pass
+    else:
+        raise AssertionError("a clean Graphics queue route was not classified as a topology skip")
+    try:
+        require_final_run_verdict(graphics_route_log, 9, "simulated abnormal exit after the topology marker")
+    except SmokeFailure:
+        pass
+    else:
+        raise AssertionError("an abnormal exit after the Graphics queue route was incorrectly skipped")
+
+    module = sys.modules[__name__]
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        executable = root / "orchestration.exe"
+        executable.write_bytes(b"exe")
+        args = parse_args(["--self-test"])
+        args.executable = executable
+        args.runtime_dir = root
+        app = SimpleNamespace(pid=4321, poll=lambda: None)
+        logserver = object()
+        baseline = {root / "old.log": 7}
+        backend = mock.Mock()
+        backend.wait_for_window.return_value = 17
+        events = []
+
+        def terminate(process, name, window_handle=None):
+            if process is app:
+                events.append(("app-stop", name, window_handle))
+                return 7, "simulated abnormal exit"
+            assert process is None
+            events.append(("cleanup-none", name, window_handle))
+            return None, ""
+
+        def shutdown(process, log_directory, received_baseline, pattern, shutdown_name="logserver"):
+            assert process is logserver
+            assert log_directory == root
+            assert received_baseline == baseline
+            assert pattern == "logserver_*.log"
+            assert events == [("app-stop", "lagged-lighting smoke", 17)]
+            events.append(("logserver-helper", shutdown_name))
+            return NO_DEDICATED_ASYNC_COMPUTE
+
+        with mock.patch.object(module, "build_launch_environment", return_value={}), \
+             mock.patch.object(module, "create_capture_backend", return_value=backend), \
+             mock.patch.object(module, "launch_logserver", return_value=(logserver, 49152, root, baseline, "logserver_*.log")), \
+             mock.patch.object(module, "launch_testbed", return_value=app), \
+             mock.patch.object(module, "wait_for_lifecycle_stage", return_value=NO_DEDICATED_ASYNC_COMPUTE), \
+             mock.patch.object(module.time, "sleep"), \
+             mock.patch.object(module, "terminate_process", side_effect=terminate) as terminate_mock, \
+             mock.patch.object(module, "shutdown_logserver_and_collect", side_effect=shutdown) as shutdown_mock:
+            try:
+                run(args)
+            except SmokeFailure as error:
+                assert "exit 7" in str(error)
+            else:
+                raise AssertionError("lagged-lighting orchestration accepted an abnormal Testbed exit")
+
+        assert events == [
+            ("app-stop", "lagged-lighting smoke", 17),
+            ("logserver-helper", "lagged-lighting smoke logserver"),
+            ("cleanup-none", "lagged-lighting smoke", 17),
+            ("cleanup-none", "lagged-lighting smoke logserver", None),
+        ]
+        assert terminate_mock.mock_calls == [
+            mock.call(app, "lagged-lighting smoke", 17),
+            mock.call(None, "lagged-lighting smoke", 17),
+            mock.call(None, "lagged-lighting smoke logserver"),
+        ]
+        shutdown_mock.assert_called_once_with(
+            logserver, root, baseline, "logserver_*.log", "lagged-lighting smoke logserver"
+        )
+        backend.close.assert_called_once_with()
+
     print("frame-lagged async-lighting harness self-test passed")
     return 0
 

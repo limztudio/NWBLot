@@ -25,6 +25,9 @@
 #include "../scene/buffer.slangi"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // True where this texel is the cleared background (no geometry): fully lit, casts no candidate ray. The passes treat a
 // background texel specially (store white / leave the pristine mask), so this test is centralised here rather than the
 // bare depth literal repeated at every trace/resolve site.

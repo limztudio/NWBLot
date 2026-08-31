@@ -27,7 +27,6 @@
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
-#include <impl/ecs_render/shared/renderer_state.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skin_types.h>
@@ -47,6 +46,8 @@ namespace __hidden_ecs_graphics_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 using CapturingLogger = NWB::Tests::CapturingLogger;
 using NWB::Tests::MakeTriangleIndices;
 using NWB::Tests::NearlyEqual;
@@ -67,14 +68,27 @@ TEST(EcsGraphics, DeprecatedFeatureSlotsKeepUnsupportedAbiGaps){
     EXPECT_EQ(static_cast<u32>(NWB::Core::Feature::kCount), 23u);
 }
 
-TEST(EcsGraphics, RayTracingStateInvalidationClearsSurfelAgeFreePipelineFailureLatch){
+TEST(EcsGraphics, RayTraceMaterialSnapshotOwnsClassificationAndDispatchMetadata){
     NWB::Tests::TestArena<> testArena;
-    NWB::Impl::RendererRayTracingState state(testArena.arena);
-    state.m_surfelAgeFreePipelineFailed = true;
+    NWB::Impl::MaterialSurfaceInfo materialInfo(testArena.arena);
+    materialInfo.shadowTransmittanceModelId = 17u;
+    materialInfo.transparent = true;
+    materialInfo.refractive = true;
 
-    state.invalidateResources();
+    const NWB::Impl::NwbRtInstanceMaterialGpu frozen =
+        NWB::Impl::RayTracingDetail::ResolveInstanceShadowMaterial(materialInfo, 64u, 3u)
+    ;
+    materialInfo.shadowTransmittanceModelId = 29u;
+    materialInfo.transparent = false;
+    materialInfo.refractive = false;
 
-    EXPECT_FALSE(state.m_surfelAgeFreePipelineFailed);
+    EXPECT_EQ(frozen.shadowTransmittanceModelId, 17u);
+    EXPECT_EQ(
+        frozen.flags,
+        NWB::Impl::RtInstanceMaterialFlag::Transparent | NWB::Impl::RtInstanceMaterialFlag::Refractive
+    );
+    EXPECT_EQ(frozen.materialConstantByteOffset, 64u);
+    EXPECT_EQ(frozen.meshInstanceIndex, 3u);
 }
 
 TEST(EcsGraphics, AvboitPushConstantsCarryHdrPolicyWithoutChangingCoverageData){
@@ -812,8 +826,6 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
 
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

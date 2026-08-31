@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/renderer_types.h>
+#include <impl/ecs_render/mesh/renderer_mesh_types.h>
 
 #include <core/common/log.h>
 #include <impl/assets/graphics/mesh/material_typed_constants.h>

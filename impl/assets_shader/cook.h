@@ -26,6 +26,21 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ShaderOptimizationLevel{
+    enum Enum : u8{
+        None,
+        Default,
+        High,
+        Maximal,
+
+        kCount,
+    };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class ShaderCook{
 public:
     using CookArena = Core::Alloc::GlobalArena;
@@ -58,6 +73,7 @@ public:
         const CookVector<Path>& dependencies;
         const Path& sourcePath;
         const Path& outputPath;
+        ShaderOptimizationLevel::Enum optimizationLevel = ShaderOptimizationLevel::Default;
     };
 
     class IShaderCompiler : NoCopy{
@@ -118,6 +134,7 @@ public:
         ACompactString stage;
         ACompactString archiveStage;
         ACompactString targetProfile;
+        ShaderOptimizationLevel::Enum optimizationLevel = ShaderOptimizationLevel::Default;
         CookString entryPoint;
         CookString source;
 

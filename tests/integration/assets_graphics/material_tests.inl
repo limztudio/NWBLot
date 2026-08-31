@@ -1497,23 +1497,32 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
     EXPECT_TRUE(RemoveAllIfExists(halfRoot, errorCode));
 
-#if defined(NWB_FINAL)
     auto expectParseFailure = [&](
         const AStringView bindText,
         const AStringView caseName,
-        const tchar* expectedError
+        const TStringView expectedError
     ){
+        SCOPED_TRACE(caseName.data());
+
         Path invalidRoot(testArena.arena);
         NWB::Impl::MaterialBindEntry invalidEntry(testArena.arena);
-        EXPECT_FALSE(ParseMaterialBindFromText(
-            testArena,
-            bindText,
-            caseName,
-            invalidEntry,
-            invalidRoot,
-            scratchArena
-        ));
-        EXPECT_TRUE(logger.sawErrorContaining(expectedError));
+        {
+            CapturingLogger failureLogger;
+            NWB::Core::Common::LoggerRegistrationGuard failureLoggerRegistrationGuard(
+                failureLogger,
+                NWB::Core::Common::LoggerBreakPolicy::ReportOnly
+            );
+
+            EXPECT_FALSE(ParseMaterialBindFromText(
+                testArena,
+                bindText,
+                caseName,
+                invalidEntry,
+                invalidRoot,
+                scratchArena
+            ));
+            EXPECT_TRUE(failureLogger.sawErrorContaining(expectedError));
+        }
 
         ErrorCode removeErrorCode;
         EXPECT_TRUE(RemoveAllIfExists(invalidRoot, removeErrorCode));
@@ -1532,7 +1541,7 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
     expectParseFailure(
         s_InvalidDefaultMaterialBindSource,
         "material_bind_invalid_default",
-        NWB_TEXT("default attribute requires one non-empty string argument")
+        NWB_TEXT("attribute 'default' requires one non-empty string argument")
     );
     expectParseFailure(
         s_MissingDefaultMaterialBindSource,
@@ -1566,25 +1575,46 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
         scratchArena
     ));
     float1DefaultEntry.virtualPath = "project/material_interfaces/test_surface";
-    NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
-    EXPECT_FALSE(NWB::Impl::BuildMaterialBindIncludeSource(
-        testArena.arena,
-        float1DefaultEntry,
-        generatedSource,
-        scratchArena
-    ));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("default 'float1(1.0)'")));
+    {
+        SCOPED_TRACE("material_bind_float1_default_include");
+
+        CapturingLogger failureLogger;
+        NWB::Core::Common::LoggerRegistrationGuard failureLoggerRegistrationGuard(
+            failureLogger,
+            NWB::Core::Common::LoggerBreakPolicy::ReportOnly
+        );
+
+        NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
+        EXPECT_FALSE(NWB::Impl::BuildMaterialBindIncludeSource(
+            testArena.arena,
+            float1DefaultEntry,
+            generatedSource,
+            scratchArena
+        ));
+        EXPECT_TRUE(failureLogger.sawErrorContaining(NWB_TEXT("default 'float1(1.0)'")));
+    }
 
     const Name cacheInterface("project/material_interfaces/test_surface");
     NWB::Impl::MaterialBindTypedLayoutCache layoutCache(testArena.arena);
     const NWB::Impl::MaterialBindTypedLayout* cachedLayout = nullptr;
-    EXPECT_FALSE(NWB::Impl::FindOrBuildMaterialBindTypedLayout(
-        cacheInterface,
-        float1DefaultEntry,
-        layoutCache,
-        cachedLayout,
-        scratchArena
-    ));
+    {
+        SCOPED_TRACE("material_bind_float1_default_cache");
+
+        CapturingLogger failureLogger;
+        NWB::Core::Common::LoggerRegistrationGuard failureLoggerRegistrationGuard(
+            failureLogger,
+            NWB::Core::Common::LoggerBreakPolicy::ReportOnly
+        );
+
+        EXPECT_FALSE(NWB::Impl::FindOrBuildMaterialBindTypedLayout(
+            cacheInterface,
+            float1DefaultEntry,
+            layoutCache,
+            cachedLayout,
+            scratchArena
+        ));
+        EXPECT_TRUE(failureLogger.sawErrorContaining(NWB_TEXT("default 'float1(1.0)'")));
+    }
     EXPECT_EQ(cachedLayout, nullptr);
     EXPECT_TRUE(layoutCache.entries.empty());
     EXPECT_TRUE(layoutCache.lookup.empty());
@@ -1610,11 +1640,11 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
     EXPECT_NE(cachedLayout, nullptr);
     EXPECT_EQ(layoutCache.entries.size(), 1u);
     EXPECT_EQ(layoutCache.lookup.size(), 1u);
+    EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode removeErrorCode;
     EXPECT_TRUE(RemoveAllIfExists(float1DefaultRoot, removeErrorCode));
     EXPECT_TRUE(RemoveAllIfExists(validCacheRoot, removeErrorCode));
-#endif
 }
 
 TEST(AssetsGraphics, MaterialBindGeneratedSlangText){

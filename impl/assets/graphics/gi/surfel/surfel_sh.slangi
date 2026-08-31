@@ -22,6 +22,10 @@
 
 #include "../constants.h"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Real two-band SH basis and cosine-convolution coefficients shared by every surfel projection/reconstruction path.
 #define NWB_SURFEL_SH_Y00_SCALE 0.2820947918
 #define NWB_SURFEL_SH_Y1_SCALE 0.4886025119

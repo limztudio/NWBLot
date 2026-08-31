@@ -177,7 +177,7 @@ def run_self_test() -> int:
     )
     paths = resolve_paths(args, settings)
     command = [str(item) for item in runner_command(args, paths)]
-    assert str(paths.runtime_directory).endswith("Testing/skinning_culling_benchmark_runtime/dbg")
+    assert paths.runtime_directory.as_posix().endswith("Testing/skinning_culling_benchmark_runtime/dbg")
     assert command[command.index("--sync-executable") + 1].endswith("async_shadow_m4_sync_benchmark.exe")
     assert command[command.index("--async-executable") + 1].endswith("async_shadow_m4_async_benchmark.exe")
     assert "--gpu-validation" in command

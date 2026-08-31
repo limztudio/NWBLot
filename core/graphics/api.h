@@ -8,8 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// api.h explodes into rhi/*.h (concern-grouped, chained). Include this umbrella (unchanged) or a narrow rhi/<concern>.h.
-
 #include "rhi/foundation.h"
 #include "rhi/primitives.h"
 #include "rhi/format.h"
@@ -17,6 +15,7 @@
 #include "rhi/shader.h"
 #include "rhi/pipeline_state.h"
 #include "rhi/framebuffer.h"
+#include "rhi/presentation.h"
 #include "rhi/raytracing.h"
 #include "rhi/binding.h"
 #include "rhi/gpu_descriptor_heap.h"

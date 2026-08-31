@@ -39,6 +39,9 @@ ConstantBuffer<NwbShadowRqPushConstants> g_NwbShadowRqPushConstants;
 #include "shadow_rayquery.slangi"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [numthreads(NWB_SHADOW_RT_GROUP_SIZE, NWB_SHADOW_RT_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // FULL-RESOLUTION: one inline-RayQuery occlusion ray per output pixel, written straight into the full-res

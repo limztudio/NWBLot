@@ -65,6 +65,24 @@ namespace GpuTaskResourceAccess{
     };
 };
 
+namespace GpuGraphResourceVersionOrigin{
+    enum Enum : u8{
+        TaskProduced,
+        ImportedRoot,
+
+        kCount,
+    };
+};
+
+namespace GpuTaskResourceVersionRole{
+    enum Enum : u8{
+        Produce,
+        Consume,
+
+        kCount,
+    };
+};
+
 namespace GpuTaskHazardType{
     enum Enum : u8{
         Unknown,
@@ -72,6 +90,8 @@ namespace GpuTaskHazardType{
         ReadAfterWrite,
         WriteAfterRead,
         WriteAfterWrite,
+        VersionDependency,
+        VersionLifetime,
 
         kCount,
     };
@@ -84,6 +104,8 @@ namespace GpuTaskGraphTelemetryEdgeFlag{
         None = 0u,
         ExplicitDependency = 1u << 0u,
         InferredDependency = 1u << 1u,
+        VersionDependency = 1u << 2u,
+        VersionLifetime = 1u << 3u,
     };
 };
 
@@ -96,7 +118,10 @@ namespace GpuTaskGraphTelemetryNodeFlag{
         AssignedComputeQueue = 1u << 1u,
         AssignedDedicatedQueue = 1u << 2u,
         QueueAssignmentFallback = 1u << 3u,
+        QueueAssignmentCompilerOverride = 1u << 4u,
         AssignedTransferQueue = 1u << 5u,
+        QueueAssignmentSameClassRouting = 1u << 6u,
+        QueueAssignmentTimingRouting = 1u << 7u,
     };
 };
 
@@ -127,6 +152,19 @@ inline constexpr bool operator==(const GpuGraphResourceId& lhs, const GpuGraphRe
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
 inline constexpr bool operator!=(const GpuGraphResourceId& lhs, const GpuGraphResourceId& rhs)noexcept{ return !(lhs == rhs); }
+
+struct GpuGraphResourceVersionId{
+    u32 index = Limit<u32>::s_Max;
+    u64 generation = 0u;
+
+    [[nodiscard]] constexpr bool valid()const{ return index != Limit<u32>::s_Max && generation != 0u; }
+};
+inline constexpr bool operator==(const GpuGraphResourceVersionId& lhs, const GpuGraphResourceVersionId& rhs)noexcept{
+    return lhs.index == rhs.index && lhs.generation == rhs.generation;
+}
+inline constexpr bool operator!=(const GpuGraphResourceVersionId& lhs, const GpuGraphResourceVersionId& rhs)noexcept{
+    return !(lhs == rhs);
+}
 
 // A resource set is a graph-owned immutable collection of imported resources. Task declarations may apply one
 // uniform access contract to every member; the graph freezes that declaration into ordinary per-resource uses before
@@ -197,8 +235,9 @@ inline constexpr bool operator!=(const GpuExternalCompletionId& lhs, const GpuEx
     return !(lhs == rhs);
 }
 
-// A packet is the compiler-generated unit of native recording and queue submission.  Like graph handles, packet
-// IDs are tied to one graph generation so a recorded or accepted packet can never be reused after reset().
+// A packet is the compiler-generated unit of native recording and queue submission.  Its generation identifies one
+// immutable compiled plan rather than the declared graph, so recompiling one unchanged graph still invalidates
+// packet-local recording, submission, timing, hook, and capture handles.
 struct GpuSubmissionPacketId{
     u32 index = Limit<u32>::s_Max;
     u64 generation = 0u;
@@ -243,6 +282,13 @@ struct GpuTaskResourceUse{
     bool hasIndependentStateSource = false;
 };
 
+// Resource versions provide semantic producer/consumer ordering without changing the physical state/access contract
+// above. Every version declaration remains distinct even when multiple declarations name the same physical range.
+struct GpuTaskResourceVersionUse{
+    GpuGraphResourceVersionId version;
+    GpuTaskResourceVersionRole::Enum role = GpuTaskResourceVersionRole::kCount;
+};
+
 // The range/state/access contract applies to every member of `resourceSet`. Sets deliberately do not retain an
 // independent pseudo-resource: GpuTaskGraph expands them in declaration order into concrete GpuTaskResourceUse
 // records, preserving the normal exact-resource hazard and barrier machinery.
@@ -260,6 +306,8 @@ struct GpuTaskDependencyEdge{
     // Explicit edges intentionally carry no resource. Inferred edges preserve the first resource that established
     // the dependency; resource-use telemetry retains any additional overlapping uses.
     GpuGraphResourceId resource;
+    // Version-derived dependencies retain the semantic version that established the edge. Other types leave it empty.
+    GpuGraphResourceVersionId resourceVersion;
     GpuTaskHazardType::Enum hazard = GpuTaskHazardType::Unknown;
 };
 
@@ -307,9 +355,16 @@ struct GpuCompiledBarrier{
     GpuPhysicalQueueId sourceQueue;
     GpuPhysicalQueueId destinationQueue;
     GpuCompiledBarrierType::Enum type = GpuCompiledBarrierType::TextureTransition;
+    // A first-use marker. A known graph declaration initializes an otherwise unknown native tracker from `before`.
+    // An Unknown Read/ReadWrite first use instead requires an explicit native source at recording time; an imported
+    // packet state handoff remains authoritative when CommandList::open already supplied one.
+    bool isGraphInitialState = false;
     // Only the first use of an imported external ownership handoff consumes the descriptor-owned state source.
     // Later graph-internal ownership acquires use their producer packet snapshot instead.
     bool isInitialOwnerHandoff = false;
+    // A same-state write hazard still requires native execution and memory dependencies even when the ordinary
+    // mutable UAV-barrier policy is disabled. Initial-state, ownership, and export records never set this flag.
+    bool forceMemoryDependency = false;
 };
 static_assert(sizeof(GpuCompiledBarrier) == 72u, "GpuCompiledBarrier should keep its compact runtime layout");
 

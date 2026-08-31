@@ -28,6 +28,10 @@
 #error "material pixel shaders require NWB_MATERIAL_TYPED_BINDING to match NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE"
 #endif
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // gbuffer_ps.slangi pulls gbuffer_io.slangi (the G-buffer write + the per-draw instance / material-offset
 // accessors + the typed buffer declarations). material_typed_accessors.slangi then provides the typed-word
 // load families the generated .bind accessors build on -- usable here because the pixel shader has the

@@ -9,14 +9,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE,
+    STRICT_LOG_FAILURE_MESSAGES,
     SmokeFailure,
     SmokeSkip,
     build_launch_environment,
-    collect_log_delta,
     launch_logserver,
     launch_testbed,
     read_process_tail,
+    shutdown_logserver_and_collect,
     terminate_process,
+    validate_expected_log_messages,
     write_status,
 )
 
@@ -41,6 +43,12 @@ def parse_args(argv):
     parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver; launch with standalone log output.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an available localhost port.")
     parser.add_argument("--expect-log-message", action="append", default=[], help="Required substring in the logserver output.")
+    parser.add_argument(
+        "--reject-log-message",
+        action="append",
+        default=list(STRICT_LOG_FAILURE_MESSAGES),
+        help="Forbidden substring in the runtime log.",
+    )
     parser.add_argument("--application-arg", action="append", default=[], help="Extra argument to pass to the launched application.")
     parser.add_argument("--software-vulkan", choices=("auto", "on", "off"), default="off", help="Linux Vulkan ICD selection.")
     args = parser.parse_args(argv)
@@ -63,21 +71,32 @@ def run(args):
         runtime_process = launch_testbed(args, executable, env, log_port)
         exit_code = wait_for_process_exit(runtime_process, args.timeout)
         tail = read_process_tail(runtime_process)
-        log_text = collect_log_delta(log_directory, log_baseline, log_pattern) if log_directory else tail
+        log_text = shutdown_logserver_and_collect(
+            logserver_process,
+            log_directory,
+            log_baseline,
+            log_pattern,
+        )
+        logserver_process = None
 
         if exit_code != 0:
             raise SmokeFailure(f"runtime exited with {exit_code}\n{tail}\n{log_text[-4000:]}")
 
-        for needle in args.expect_log_message:
-            if needle not in log_text:
-                raise SmokeFailure(f"missing log message '{needle}'\n{log_text[-4000:]}")
+        validate_expected_log_messages(
+            log_directory,
+            log_baseline,
+            log_pattern,
+            args.expect_log_message,
+            args.reject_log_message,
+        )
 
         benchmark_lines = [line for line in log_text.splitlines() if "SkinningCullingBenchmark:" in line]
         write_status("\n".join(benchmark_lines[-32:]) if benchmark_lines else "runtime completed")
         return 0
     finally:
         terminate_process(runtime_process, "runtime")
-        terminate_process(logserver_process, "logserver")
+        if logserver_process is not None:
+            terminate_process(logserver_process, "logserver")
 
 
 def main(argv):

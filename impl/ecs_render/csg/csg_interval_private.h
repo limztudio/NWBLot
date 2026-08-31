@@ -5,8 +5,9 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include <impl/ecs_render/csg/renderer_csg_types.h>
 
+#include <impl/assets/graphics/csg/constants.h>
 #include <impl/assets/graphics/csg/names.h>
 
 

@@ -55,6 +55,12 @@ target_compile_definitions(nwb_vendor_basis_universal PRIVATE
     BASISU_SUPPORT_ASTCENC=0
     BASISU_DISABLE_ANDROID_ASTC_DECOMP=1
 )
+if(NWB_COMPILER_FRONTEND_GNU)
+    # Upstream requires relaxed aliasing for the library and inline transcoder code in its public headers.
+    target_compile_options(nwb_vendor_basis_universal PUBLIC
+        -fno-strict-aliasing
+    )
+endif()
 if(UNIX)
     find_package(Threads REQUIRED)
     target_link_libraries(nwb_vendor_basis_universal PRIVATE Threads::Threads m)

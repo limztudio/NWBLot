@@ -22,7 +22,7 @@ namespace __hidden_vulkan_queries{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr f32 s_TimestampNanosecondsToSeconds = 1e-9f;
+inline constexpr f64 s_TimestampNanosecondsToSeconds = 1e-9;
 
 inline VkResult GetTimerQueryResults(const VulkanContext& context, const VkQueryPool queryPool, u64 (&timestamps)[s_TimerQueryTimestampCount]){
     return vkGetQueryPoolResults(
@@ -174,7 +174,15 @@ TimerQueryHandle Device::createTimerQuery(){
 
 bool Device::pollTimerQuery(TimerQuery* queryResource){
     auto* query = queryResource;
-    if(!query || query->m_queryPool == VK_NULL_HANDLE)
+    if(!query || query->m_queryPool == VK_NULL_HANDLE || &query->m_context != &m_context)
+        return false;
+
+    const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(query->m_timestampQueue);
+    if(
+        !queueInfo
+        || query->m_timestampValidBits == 0u
+        || queueInfo->timestampValidBits != query->m_timestampValidBits
+    )
         return false;
 
     u64 timestamps[s_TimerQueryTimestampCount] = {};
@@ -186,7 +194,15 @@ bool Device::getTimerQueryResult(TimerQuery* queryResource, TimerQueryResult& ou
     outResult = TimerQueryResult{};
 
     auto* query = queryResource;
-    if(!query || query->m_queryPool == VK_NULL_HANDLE)
+    if(!query || query->m_queryPool == VK_NULL_HANDLE || &query->m_context != &m_context)
+        return false;
+
+    const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(query->m_timestampQueue);
+    if(
+        !queueInfo
+        || query->m_timestampValidBits == 0u
+        || queueInfo->timestampValidBits != query->m_timestampValidBits
+    )
         return false;
 
     u64 timestamps[s_TimerQueryTimestampCount] = {};
@@ -197,12 +213,16 @@ bool Device::getTimerQueryResult(TimerQuery* queryResource, TimerQueryResult& ou
         return false;
     }
 
-    const f64 timestampSeconds = static_cast<f64>(m_context.physicalDeviceProperties.limits.timestampPeriod)
-        * static_cast<f64>(__hidden_vulkan_queries::s_TimestampNanosecondsToSeconds)
+    const f64 secondsPerTick = static_cast<f64>(m_context.physicalDeviceProperties.limits.timestampPeriod)
+        * __hidden_vulkan_queries::s_TimestampNanosecondsToSeconds
     ;
-    outResult.beginSeconds = static_cast<f64>(timestamps[s_TimerQueryBeginIndex]) * timestampSeconds;
-    outResult.endSeconds = static_cast<f64>(timestamps[s_TimerQueryEndIndex]) * timestampSeconds;
-    return true;
+    outResult.beginTicks = timestamps[s_TimerQueryBeginIndex];
+    outResult.endTicks = timestamps[s_TimerQueryEndIndex];
+    outResult.secondsPerTick = secondsPerTick;
+    outResult.timestampValidBits = query->m_timestampValidBits;
+    outResult.physicalQueue = query->m_timestampQueue;
+    outResult.comparableAcrossSubmissions = supportsComparableGpuTimestamps(query->m_timestampQueue);
+    return outResult.valid();
 }
 
 f32 Device::getTimerQueryTime(TimerQuery* queryResource){
@@ -212,11 +232,12 @@ f32 Device::getTimerQueryTime(TimerQuery* queryResource){
     return static_cast<f32>(result.durationSeconds());
 }
 
-void Device::resetTimerQuery(TimerQuery* queryResource){
+bool Device::resetTimerQuery(TimerQuery* queryResource){
     auto* query = queryResource;
-    if(!query || query->m_queryPool == VK_NULL_HANDLE)
-        return;
+    if(!query || query->m_queryPool == VK_NULL_HANDLE || &query->m_context != &m_context)
+        return false;
     vkResetQueryPool(m_context.device, query->m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
+    return true;
 }
 
 
@@ -225,23 +246,83 @@ void Device::resetTimerQuery(TimerQuery* queryResource){
 
 void CommandList::resetTimerQuery(TimerQuery* queryResource){
     auto* query = queryResource;
-    if(!query || query->m_queryPool == VK_NULL_HANDLE)
+    if(!query || query->m_queryPool == VK_NULL_HANDLE || &query->m_context != &m_context){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot reset an invalid or foreign timer query"));
+        invalidateCommandRecording();
         return;
+    }
+
+    if(!validateCommandRecordingScope(NWB_TEXT("reset timer query")))
+        return;
+    if(!canResetTimerQueryHere()){
+        NWB_LOGGER_CRITICAL_WARNING(
+            NWB_TEXT("Vulkan: Cannot reset a timer query outside recording or on an exact physical queue without Graphics or Compute capability")
+        );
+        invalidateCommandRecording();
+        return;
+    }
 
     // Device-timeline reset: recorded into the command buffer so the validation layer can order it before the
     // timestamp writes issued later this frame. MUST be recorded OUTSIDE any dynamic render pass, because
     // vkCmdResetQueryPool is illegal inside a render pass instance -- the caller guarantees that.
     vkCmdResetQueryPool(m_currentCmdBuf->m_cmdBuf, query->m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
+    retainResource(query);
+}
+
+bool CommandList::canRecordTimerQueryHere()const{
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Graphics)
+        | static_cast<u8>(GpuQueueCapability::Compute)
+        | static_cast<u8>(GpuQueueCapability::Transfer)
+    ;
+    return
+        !m_commandRecordingFailed
+        && matchesActiveNativeLeaseIdentity()
+        && m_creationDesc.physicalQueue.valid()
+        && queueInfo
+        && queueInfo->id == m_creationDesc.physicalQueue
+        && queueInfo->queueClass == m_creationDesc.queueType
+        && (static_cast<u8>(queueInfo->capabilities) & s_KnownCapabilityBits) != 0u
+        && queueInfo->timestampValidBits > 0u
+        && queueInfo->timestampValidBits <= 64u
+    ;
 }
 
 bool CommandList::canResetTimerQueryHere()const{
-    return !m_renderPassActive;
+    if(m_renderPassActive || !canRecordTimerQueryHere())
+        return false;
+
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    constexpr u8 s_ResetCapableBits = static_cast<u8>(GpuQueueCapability::Graphics)
+        | static_cast<u8>(GpuQueueCapability::Compute)
+    ;
+    return (static_cast<u8>(queueInfo->capabilities) & s_ResetCapableBits) != 0u;
 }
 
-void CommandList::beginTimerQuery(TimerQuery* queryResource){
+bool CommandList::beginTimerQuery(TimerQuery* queryResource){
     auto* query = queryResource;
-    if(!query || query->m_queryPool == VK_NULL_HANDLE)
-        return;
+    if(!query || query->m_queryPool == VK_NULL_HANDLE || &query->m_context != &m_context){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to begin an invalid or foreign timer query"));
+        invalidateCommandRecording();
+        return false;
+    }
+    if(!validateCommandRecordingScope(NWB_TEXT("begin timer query")))
+        return false;
+
+    if(!m_renderPassActive && !canResetTimerQueryHere()){
+        NWB_LOGGER_CRITICAL_WARNING(
+            NWB_TEXT("Vulkan: Cannot begin a timer query outside rendering on an exact physical queue without Graphics or Compute capability")
+        );
+        invalidateCommandRecording();
+        return false;
+    }
+
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    if(!queueInfo || queueInfo->timestampValidBits == 0u || queueInfo->timestampValidBits > 64u){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to begin timer query on a queue without timestamp support"));
+        invalidateCommandRecording();
+        return false;
+    }
 
     // If no dynamic render pass is open, reset the pool on the device timeline right here so it is defined and
     // correctly ordered before this write -- this makes compute / outside-pass scopes (the shadow trace, caustics,
@@ -252,17 +333,45 @@ void CommandList::beginTimerQuery(TimerQuery* queryResource){
         vkCmdResetQueryPool(m_currentCmdBuf->m_cmdBuf, query->m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
 
     vkCmdWriteTimestamp(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query->m_queryPool, s_TimerQueryBeginIndex);
+    retainResource(query);
+    query->m_timestampQueue = queueInfo->id;
+    query->m_timestampValidBits = queueInfo->timestampValidBits;
+    return true;
 }
 
-void CommandList::endTimerQuery(TimerQuery* queryResource){
+bool CommandList::endTimerQuery(TimerQuery* queryResource){
     auto* query = queryResource;
-    if(!query || query->m_queryPool == VK_NULL_HANDLE)
-        return;
+    if(!query || query->m_queryPool == VK_NULL_HANDLE || &query->m_context != &m_context){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to end an invalid or foreign timer query"));
+        invalidateCommandRecording();
+        return false;
+    }
+    if(!validateCommandRecordingScope(NWB_TEXT("end timer query")))
+        return false;
+
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    if(
+        !queueInfo
+        || query->m_timestampQueue != queueInfo->id
+        || query->m_timestampValidBits == 0u
+        || query->m_timestampValidBits != queueInfo->timestampValidBits
+    ){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to end timer query on a different physical queue"));
+        invalidateCommandRecording();
+        return false;
+    }
 
     vkCmdWriteTimestamp(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query->m_queryPool, s_TimerQueryEndIndex);
+    retainResource(query);
+    return true;
 }
 
 void CommandList::beginMarker(const AStringView name){
+    if(!validateCommandRecordingScope(NWB_TEXT("begin command-list marker")))
+        return;
+
+    ++m_markerDepth;
+
     const bool useDebugUtils = m_context.extensions.EXT_debug_utils;
     const bool useNvCheckpoint = m_device.isGpuCrashDiagnosticsEnabled();
     const bool useAmdBreadcrumb = m_device.isAmdBreadcrumbEnabled();
@@ -284,19 +393,36 @@ void CommandList::beginMarker(const AStringView name){
         if(useNvCheckpoint)
             vkCmdSetCheckpointNV(m_currentCmdBuf->m_cmdBuf, reinterpret_cast<const void*>(gpuCrashMarker));
         if(useAmdBreadcrumb){
-            const Device::AmdBreadcrumbWrite breadcrumb = m_device.reserveAmdBreadcrumb(gpuCrashMarker);
-            if(breadcrumb.valid)
+            const Device::AmdBreadcrumbWrite breadcrumb = m_device.reserveAmdBreadcrumb(
+                m_creationDesc.physicalQueue,
+                gpuCrashMarker
+            );
+            if(breadcrumb.valid){
+                m_hostReadbackBarrierTracker.registerDeviceOwnedBuffer(breadcrumb.buffer);
                 vkCmdWriteBufferMarkerAMD(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, breadcrumb.buffer, breadcrumb.offset, breadcrumb.marker);
+            }
         }
     }
 }
 
 void CommandList::endMarker(){
-    if(m_context.extensions.EXT_debug_utils)
+    if(m_markerDepth == 0u){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring an unmatched command-list marker end"));
+        return;
+    }
+    if(!validateCommandRecordingScope(NWB_TEXT("end command-list marker")))
+        return;
+
+    const bool useDebugUtils = m_context.extensions.EXT_debug_utils;
+    const bool useGpuMarkers = m_device.isAnyGpuMarkerEnabled();
+
+    if(useDebugUtils)
         vkCmdEndDebugUtilsLabelEXT(m_currentCmdBuf->m_cmdBuf);
 
-    if(m_device.isAnyGpuMarkerEnabled())
+    if(useGpuMarkers)
         m_gpuCrashMarkerTracker.popEvent();
+
+    --m_markerDepth;
 }
 
 

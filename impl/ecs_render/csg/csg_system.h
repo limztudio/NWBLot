@@ -5,7 +5,29 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/subsystem_base.h>
+#include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
+#include <impl/ecs_render/csg/renderer_csg_types.h>
+#include <impl/ecs_render/shared/renderer_frame_types.h>
+
+#include <impl/ecs_csg/frame_state.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Graphics;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,6 +44,7 @@ namespace Scene{
 };
 
 namespace ECSRenderDetail{
+    struct MeshFrameBindingSnapshot;
     struct MeshViewGpuData;
 };
 
@@ -29,14 +52,32 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererCsgSystem final : public RendererSystemSubsystemBase<RendererSystem>{
+class CsgShapeRegistry;
+class IMaterialSurfaceLookup;
+class RendererCsgState;
+class RendererShaderSystem;
+class RendererMeshSystem;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererCsgSystem final : NoCopy{
 public:
-    explicit RendererCsgSystem(RendererSystem& renderer);
+    RendererCsgSystem(
+        Core::Alloc::GlobalArena& arena,
+        Core::ECS::World& world,
+        Core::Graphics& graphics,
+        CsgShapeRegistry& csgShapeRegistry,
+        RendererCsgState& csgState,
+        RendererShaderSystem& shaderSystem,
+        RendererMeshSystem& meshSystem
+    );
 
 public:
-    [[nodiscard]] CsgFrameState buildFrameState(Core::Alloc::ScratchArena& scratchArena);
+    void invalidateResources();
+    [[nodiscard]] CsgFrameState buildFrameState(Core::Alloc::ScratchArena& scratchArena, IMaterialSurfaceLookup& materialSurfaceLookup);
     [[nodiscard]] bool createCsgClipResources();
-    void releaseCsgClipContextHeapHandles();
     [[nodiscard]] bool createCsgPeelTargets(DeferredFrameTargets& targets);
     [[nodiscard]] bool createCsgIntervalPeelResources(DeferredFrameTargets& targets, bool capFillRequired);
     [[nodiscard]] bool createCsgIntervalSampleResources(DeferredFrameTargets& targets);
@@ -45,6 +86,8 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         bool intervalPeelTargetStatesGraphOwned = false,
         bool csgClipBufferStatesGraphOwned = false,
         bool materialFrameStatesGraphOwned = false
@@ -53,6 +96,7 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         bool receiverSpanOutputImageStatesGraphOwned = false,
         bool receiverSpanInputImageStatesGraphOwned = false
     );
@@ -60,6 +104,7 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         bool removedIntervalOutputImageStatesGraphOwned = false,
         bool intervalCombineInputImageStatesGraphOwned = false
     );
@@ -67,6 +112,8 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         bool intervalSampleImageStatesGraphOwned = false,
         bool csgClipBufferStatesGraphOwned = false,
         bool materialFrameStatesGraphOwned = false
@@ -77,19 +124,26 @@ public:
     // Renderer preparation owns CSG buffer growth and descriptor registration.  Material/draw paths only verify and
     // consume these resources after this prepass has completed.
     [[nodiscard]] bool prepareCsgFrameResources(usize receiverRangeCount, usize cutterCount);
-    [[nodiscard]] bool csgFrameBuffersReady(const CsgFrameGpuData& csgFrameData)const;
+    [[nodiscard]] ECSRenderDetail::CsgGraphResourceSnapshot csgGraphResourceSnapshot()const;
     // Capture all descriptor-derived CSG uniform bytes while preflight has frozen the current buffer and target
     // generations. The deferred graph retains these values as immutable blobs before native recording begins.
     [[nodiscard]] bool prepareCsgClipContextSlotData(
+        const DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         CsgClipContextSlots& outContextSlots
     )const;
     [[nodiscard]] bool prepareCsgIntervalSampleStateData(
         const DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         CsgIntervalSampleStateGpuData& outState
     )const;
-    void setCsgClipBufferStates(Core::CommandList& commandList);
+    void setCsgReceiverSurfaceImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets);
+    void setCsgIntervalSampleImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets);
+    void setCsgClipBufferStates(Core::CommandList& commandList, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
     [[nodiscard]] bool resolveCsgReceiverClipDrawInfo(
         const CsgFrameReceiverLookup& receiverLookup,
         const CsgReceiverDrawState& receiverDrawState,
@@ -106,8 +160,20 @@ public:
         u32 frameHeight,
         CsgFrameGpuData& csgFrameData,
         CsgReceiverRangeGpuData& outRange,
-        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState = nullptr
+        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState
     )const;
+
+private:
+    void releaseCsgClipContextHeapHandles();
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    Core::ECS::World& m_world;
+    Core::Graphics& m_graphics;
+    CsgShapeRegistry& m_csgShapeRegistry;
+    RendererCsgState& m_csgState;
+    RendererShaderSystem& m_shaderSystem;
+    RendererMeshSystem& m_meshSystem;
 };
 
 

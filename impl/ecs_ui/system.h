@@ -22,6 +22,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct GpuTaskRecordContext;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ASSETS_BEGIN
 
 
@@ -76,11 +94,11 @@ public:
 
     // The renderer asks this optional contributor to turn the finished ImGui draw list and its upload payloads into
     // terminal graph work. Direct IRenderPass rendering remains available for worlds without a graph-owning renderer.
-    virtual bool prepareTaskGraphPresentation(Core::Framebuffer* framebuffer)override;
+    virtual bool prepareTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame)override;
     [[nodiscard]] virtual bool hasTaskGraphPresentationWork()const override;
     [[nodiscard]] virtual Core::GpuTaskId declareTaskGraphPresentation(
         Core::GpuTaskGraph& graph,
-        Core::Framebuffer* framebuffer,
+        const Core::AcquiredPresentationFrame& frame,
         Core::GpuGraphResourceId backbuffer,
         Core::GpuTaskId previousTask
     )override;
@@ -109,6 +127,9 @@ private:
         // heap entry. The heap retains the texture through its deferred-free quarantine, so this handle must be
         // retired before the owning resource leaves m_textures.
         Core::GpuDescriptorHandle sampledImageHeapHandle = Core::GpuDescriptorHandle::invalid();
+        // Newly-created retained textures have a native Unknown origin. Only an accepted full upload can publish
+        // their descriptor ShaderResource state for a later first read.
+        bool initialUploadAccepted = false;
         // A texture can be imported once per graph generation and then shared by its upload and UI draw resource
         // declarations.  The generation check rejects an ID retained across a graph rebuild.
         Core::GpuGraphResourceId taskGraphResource;
@@ -134,6 +155,7 @@ private:
     // texture handle keeps the declared sampled resource alive independently of the next ImGui frame.
     struct TaskGraphDrawCommand{
         Core::TextureHandle texture;
+        bool textureInitialUploadAccepted = false;
         Core::GpuDescriptorHandle textureHeapHandle = Core::GpuDescriptorHandle::invalid();
         f32 clipMinX = 0.0f;
         f32 clipMinY = 0.0f;
@@ -161,34 +183,46 @@ private:
     void setCurrentContext()const;
     void beginFrame(f32 delta);
     void finishFrame();
-    [[nodiscard]] bool prepareFrameResources(Core::Framebuffer* framebuffer, bool graphOwnsUploads);
-    [[nodiscard]] bool submitStandaloneTaskGraphPresentation(Core::Framebuffer* framebuffer);
-    [[nodiscard]] bool submitStandaloneLegacyTaskGraphPresentation(Core::Framebuffer* framebuffer);
+    [[nodiscard]] bool prepareFrameResources(const Core::AcquiredPresentationFrame& frame, bool graphOwnsUploads);
+    [[nodiscard]] bool submitStandaloneTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame);
+    [[nodiscard]] bool submitStandaloneLegacyTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame);
     [[nodiscard]] Core::GpuTaskId declareStandaloneLegacyTaskGraphPresentation(
         Core::GpuTaskGraph& graph,
-        Core::Framebuffer* framebuffer,
+        const Core::AcquiredPresentationFrame& frame,
         ImDrawData* drawData,
         u64 frameGeneration
     );
-    [[nodiscard]] bool recordTaskGraphPresentation(Core::CommandList& commandList, Core::Framebuffer* framebuffer);
+    [[nodiscard]] bool recordTaskGraphPresentation(
+        Core::CommandList& commandList,
+        const Core::AcquiredPresentationFrame& frame,
+        Core::GpuGraphResourceId backbuffer,
+        const Core::GpuTaskRecordContext& context
+    );
     [[nodiscard]] bool recordStandaloneLegacyTaskGraphPresentation(
         Core::CommandList& commandList,
-        Core::Framebuffer* framebuffer,
+        const Core::AcquiredPresentationFrame& frame,
+        Core::GpuGraphResourceId backbuffer,
         ImDrawData* drawData,
-        u64 frameGeneration
+        u64 frameGeneration,
+        const Core::GpuTaskRecordContext& context
     );
     [[nodiscard]] bool recordTaskGraphUploadCompletion()const;
     void confirmTaskGraphPresentationSubmission()noexcept;
+    void retainTaskGraphPresentationForRetry()noexcept;
     void discardStandaloneLegacyTaskGraphPresentation()noexcept;
     void clearTaskGraphDrawSnapshot()noexcept;
-    [[nodiscard]] bool ensureRenderCommandList();
     [[nodiscard]] bool ensureRenderResources(Core::Framebuffer* framebuffer);
     [[nodiscard]] bool ensureShadersLoaded();
     [[nodiscard]] bool ensureInputLayout();
     [[nodiscard]] bool ensureBuffers(usize vertexCount, usize indexCount);
     [[nodiscard]] bool drawBuffersReady(usize vertexCount, usize indexCount)const;
     [[nodiscard]] bool prepareTaskGraphDrawUploads(ImDrawData& drawData);
-    [[nodiscard]] bool recordTaskGraphDrawSnapshot(Core::CommandList& commandList, Core::Framebuffer* framebuffer);
+    [[nodiscard]] bool recordTaskGraphDrawSnapshot(
+        Core::CommandList& commandList,
+        const Core::AcquiredPresentationFrame& frame,
+        Core::GpuGraphResourceId backbuffer,
+        const Core::GpuTaskRecordContext& context
+    );
     [[nodiscard]] bool declareTaskGraphDrawUploads(
         Core::GpuTaskGraph& graph,
         const Core::GpuGraphResourceId& vertexBuffer,
@@ -242,7 +276,6 @@ private:
     Core::GraphicsPipelineHandle m_pipeline;
     Core::BufferHandle m_vertexBuffer;
     Core::BufferHandle m_indexBuffer;
-    Core::CommandListHandle m_renderCommandList;
     UiTextureResourceVector m_textures;
     UiTextureUploadBatch m_textureUploadBatch;
     UiTextureUploadVector m_textureUploadScratch;
@@ -252,14 +285,17 @@ private:
     UiTextureUploadVector m_taskGraphIndexUpload;
     TaskGraphDrawCommandVector m_taskGraphDrawCommands;
     TaskGraphDrawSnapshot m_taskGraphDrawSnapshot;
+    Core::AcquiredPresentationFrame m_taskGraphPresentationFrame;
     usize m_vertexBufferCapacity = 0;
     usize m_indexBufferCapacity = 0;
     f32 m_deltaSeconds = 0.0f;
     bool m_inputRegistered = false;
     bool m_frameStarted = false;
     bool m_frameFinished = false;
-    // These frame-local flags keep one graph-generation claim for the draw list and retained uploads. The accepted
-    // terminal packet ends the ImGui frame; a non-graph renderer may still use the ordinary direct fallback.
+    // A rejected callback-free graph retains the live ImGui arrays until a later acquired frame can rebuild their
+    // graph-owned snapshot. The accepted terminal is the only healthy path that consumes that retained frame.
+    bool m_taskGraphPresentationRetryPending = false;
+    // These frame-local flags keep one graph-generation claim for the draw list and retained uploads.
     bool m_taskGraphPresentationPrepared = false;
     bool m_taskGraphPresentationHasWork = false;
     bool m_taskGraphPresentationClaimed = false;

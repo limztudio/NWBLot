@@ -16,7 +16,7 @@
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_model/module.h>
 #include <impl/ecs_model_renderer/model_renderer.h>
-#include <impl/ecs_render/kernel/module.h>
+#include <impl/ecs_render/module.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
 #include <impl/ecs_mesh/skinning/module.h>
@@ -143,12 +143,6 @@ private:
             NWB_LOGGER_FATAL(NWB_TEXT("SkinnedCausticSmokeProject initialization failed: shader path resolver callback is null"));
             throw RuntimeException("SkinnedCausticSmokeProject initialization failed");
         }
-
-        // Force ray-tracing emulation so the SOFTWARE shadow + caustic path runs even on RT-capable hardware -- the
-        // A/B sibling of the hardware ray-traced path. Default OFF: the demo runs the hardware path.
-#if defined(NWB_SKINNED_CAUSTIC_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
-        NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
-#endif
 
         AddSmokeSkinnedRenderSystems(*world, context);
         return MakeNotNullUnique(Move(world));

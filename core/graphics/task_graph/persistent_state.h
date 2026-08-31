@@ -40,9 +40,7 @@ public:
     public:
         [[nodiscard]] bool valid()const noexcept{ return m_states.valid(); }
         [[nodiscard]] bool empty()const noexcept{ return !m_states.valid() || m_states.empty(); }
-        [[nodiscard]] const CommandListResourceStateHandoff* source()const noexcept{
-            return m_states.valid() ? &m_states : nullptr;
-        }
+        [[nodiscard]] const CommandListResourceStateHandoff* source()const noexcept{ return m_states.valid() ? &m_states : nullptr; }
 
 
     private:
@@ -55,6 +53,8 @@ public:
         GraphicsVector<BufferHandle> m_buffers;
     };
 
+
+public:
     explicit GpuPersistentResourceStateCache(GraphicsArena& arena)
         : m_arena(arena)
         , m_states(arena)
@@ -68,9 +68,7 @@ public:
 
     [[nodiscard]] bool valid()const noexcept{ return m_states.valid(); }
     [[nodiscard]] bool empty()const noexcept{ return !m_states.valid() || m_states.empty(); }
-    [[nodiscard]] const CommandListResourceStateHandoff* source()const noexcept{
-        return m_states.valid() ? &m_states : nullptr;
-    }
+    [[nodiscard]] const CommandListResourceStateHandoff* source()const noexcept{ return m_states.valid() ? &m_states : nullptr; }
     [[nodiscard]] usize retainedTextureCount()const noexcept{ return m_textures.size(); }
     [[nodiscard]] usize retainedBufferCount()const noexcept{ return m_buffers.size(); }
 

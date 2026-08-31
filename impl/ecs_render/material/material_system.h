@@ -5,8 +5,48 @@
 #pragma once
 
 
+#include <impl/ecs_render/material/material_surface_lookup.h>
 #include <impl/ecs_render/material/material_typed_private.h>
-#include <impl/ecs_render/kernel/subsystem_base.h>
+#include <impl/ecs_render/material/renderer_draw_types.h>
+#include <impl/ecs_render/shared/renderer_frame_types.h>
+
+#include <core/graphics/gpu_timing.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Graphics;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSETS_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class AssetManager;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,12 +66,39 @@ namespace RendererResourceLookupMode{
 };
 
 namespace ECSRenderDetail{
+    struct CsgGraphResourceSnapshot;
     struct MeshViewGpuData;
 };
 
-class RendererMaterialSystem final : public RendererSystemSubsystemBase<RendererSystem>{
+struct MaterialInstanceOverrideField{
+    const MaterialTypedLayoutField* field = nullptr;
+    u32 blockByteBegin = 0u;
+    bool mutableBlock = false;
+};
+
+class CsgShapeRegistry;
+class RendererMaterialState;
+class RendererShaderSystem;
+class RendererMeshSystem;
+class RendererCsgSystem;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererMaterialSystem final : public IMaterialSurfaceLookup, NoCopy{
 public:
-    explicit RendererMaterialSystem(RendererSystem& renderer);
+    RendererMaterialSystem(
+        Core::Alloc::GlobalArena& arena,
+        Core::ECS::World& world,
+        Core::Graphics& graphics,
+        Core::Assets::AssetManager& assetManager,
+        CsgShapeRegistry& csgShapeRegistry,
+        RendererMaterialState& materialState,
+        RendererShaderSystem& shaderSystem,
+        RendererMeshSystem& meshSystem,
+        RendererCsgSystem& csgSystem
+    );
 
 public:
     [[nodiscard]] static bool splitMaterialTypedBytesByClass(
@@ -40,15 +107,19 @@ public:
         MaterialTypedByteVector& outConstantTypedBytes,
         MaterialTypedByteVector& outMutableDefaultTypedBytes
     );
+
+public:
+    void invalidateResources();
     [[nodiscard]] bool createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
     // Prepared-only lookup: creation and descriptor-backed resource resolution belong to preparation.
-    [[nodiscard]] bool findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
+    [[nodiscard]] virtual bool findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo)override;
     [[nodiscard]] bool resolveMaterialResourceReferences(MaterialSurfaceInfo& materialInfo);
-    void releaseMaterialResourceReferences();
     [[nodiscard]] bool prepareVisibleMaterialSurfaceInfos();
     void prepareVisibleMaterialInstanceMutableCache();
+    [[nodiscard]] bool prepareMaterialPassBindingLayout(Core::BindingLayoutHandle& outBindingLayout);
     [[nodiscard]] bool createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer* framebuffer, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool findRendererPipeline(const MaterialPipelineKey& pipelineKey, MaterialPipelineResources*& outResources);
+    void invalidateRendererPipelines();
     [[nodiscard]] bool hasTransparentRenderers(RendererResourceLookupMode::Enum lookupMode);
     void logMaterialRenderPathDecision(const Name& materialKey, RenderPath::Enum renderPath, bool meshSupported);
     [[nodiscard]] bool createComputeEmulationResources();
@@ -56,11 +127,14 @@ public:
     // deliberately performs no mutable mesh-view or material/CSG buffer updates.
     void renderPreparedMaterialPass(
         Core::CommandList& commandList,
+        const DeferredFrameTargets& deferredTargets,
         Core::Framebuffer* framebuffer,
         MaterialPipelinePass::Enum pass,
         const AvboitFrameTargets* avboitTargets,
         const MaterialPassDrawItemPartitions& drawItems,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         usize instanceCount,
         usize materialTypedByteCount,
         // The graph can declare the removed-interval StorageImage reads at a producer/consumer boundary. Direct
@@ -106,13 +180,13 @@ public:
         RendererResourceLookupMode::Enum lookupMode,
         // Graph declaration can supply the exact immutable view payload that will be uploaded before this CSG
         // work records. Compatibility paths retain the accepted CPU mirror fallback.
-        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState = nullptr
+        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState
     );
     [[nodiscard]] static bool findMaterialInstanceOverrideField(
         Core::ECS::EntityID entity,
         const MaterialSurfaceInfo& materialInfo,
         const MaterialInstanceParameter& parameter,
-        RendererMaterialInstanceOverrideField& outField
+        MaterialInstanceOverrideField& outField
     );
     [[nodiscard]] static bool applyMaterialInstanceOverrides(
         Core::ECS::EntityID entity,
@@ -151,10 +225,22 @@ public:
         u32& outConstantByteOffset
     );
     void pruneMaterialInstanceMutableCache();
-    [[nodiscard]] bool materialPassDrawResourcesReady(const MeshResources& mesh)const;
-    [[nodiscard]] bool materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems);
-    [[nodiscard]] bool meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems);
-    [[nodiscard]] bool computeMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems);
+    [[nodiscard]] bool materialPassDrawResourcesReady(
+        const MaterialPassMeshResourceSnapshot& mesh,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+    )const;
+    [[nodiscard]] bool materialPassDrawResourcesReady(
+        const MaterialPassDrawItems& drawItems,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+    );
+    [[nodiscard]] bool meshMaterialPassDrawResourcesReady(
+        const MaterialPassDrawItemVector& drawItems,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+    );
+    [[nodiscard]] bool computeMaterialPassDrawResourcesReady(
+        const MaterialPassDrawItemVector& drawItems,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+    );
     // Resolves the exact persistent sampled textures selected by frozen prepared draw streams. It never creates
     // assets or descriptors: a missing or unresolved cached resource makes the collection unavailable so callers
     // can retain their existing compatibility route.
@@ -170,31 +256,26 @@ public:
     [[nodiscard]] bool prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems);
     [[nodiscard]] bool prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
-    [[nodiscard]] u32 meshDispatchFlags(const MeshResources& mesh, MaterialPipelinePass::Enum pass, bool twoSided, bool meshletConeCullScaleSafe)const;
-    [[nodiscard]] u32 materialPassDrawDispatchFlags(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MeshResources& mesh)const;
-    void setMaterialPassCommonBufferStates(
-        Core::CommandList& commandList,
-        const MeshResources& mesh,
-        bool materialFrameStatesGraphOwned,
-        bool materialGeometryStatesGraphOwned
-    );
+    [[nodiscard]] u32 meshDispatchFlags(const MaterialPassMeshResourceSnapshot& mesh, MaterialPipelinePass::Enum pass, bool twoSided, bool meshletConeCullScaleSafe)const;
+    [[nodiscard]] u32 materialPassDrawDispatchFlags(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh)const;
+    void setMaterialPassCommonBufferStates(const MaterialPassDrawContext& context, const MaterialPassMeshResourceSnapshot& mesh);
     void setMaterialPassDrawItemResourceStates(
         const MaterialPassDrawContext& context,
         const MaterialPassDrawItem& drawItem,
-        const MeshResources& mesh
+        const MaterialPassMeshResourceSnapshot& mesh
     );
-    void setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MeshResources& mesh);
+    [[nodiscard]] bool setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh);
     void dispatchComputeMaterialPassDrawItem(
         const MaterialPassDrawContext& context,
         const MaterialPassDrawItem& drawItem,
-        const MeshResources& mesh,
-        MaterialPipelineResources& pipelineResources
+        const MaterialPassMeshResourceSnapshot& mesh,
+        const MaterialPassPipelineResourceSnapshot& pipelineResources
     );
     void drawComputeMaterialPassDrawItem(
         const MaterialPassDrawContext& context,
         const MaterialPassDrawItem& drawItem,
-        const MeshResources& mesh,
-        MaterialPipelineResources& pipelineResources
+        const MaterialPassMeshResourceSnapshot& mesh,
+        const MaterialPassPipelineResourceSnapshot& pipelineResources
     );
     void renderMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItems& drawItems);
     void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
@@ -220,29 +301,31 @@ public:
         usize instanceCount,
         usize materialTypedByteCount
     )const;
+    [[nodiscard]] ECSRenderDetail::MaterialPassBufferSnapshot materialPassBufferSnapshot()const;
     // The CSG context descriptor is selected through every instance's retained heap-slot lane. Graph declaration
     // patches the immutable upload copy before the packet is recorded so every prepared phase keeps the same ABI.
-    void prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData);
-    [[nodiscard]] bool findMaterialPassDrawItemResources(
-        const MaterialPassDrawItem& drawItem,
-        MeshResources*& outMesh,
-        MaterialPipelineResources*& outPipelineResources
+    void prepareMaterialPassInstanceUploadData(
+        InstanceGpuDataVector& instanceData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
     );
     [[nodiscard]] bool prepareMaterialPassResourceBindingsImpl(
         const MaterialPassDrawItemVector& drawItems,
         bool computeEmulation
     );
-    template<typename DrawItemHandler>
-    void forEachMaterialPassDrawItemResources(const MaterialPassDrawItemVector& drawItems, DrawItemHandler&& handler){
-        for(const MaterialPassDrawItem& drawItem : drawItems){
-            MeshResources* mesh = nullptr;
-            MaterialPipelineResources* pipelineResources = nullptr;
-            if(!findMaterialPassDrawItemResources(drawItem, mesh, pipelineResources))
-                continue;
 
-            handler(drawItem, *mesh, *pipelineResources);
-        }
-    }
+private:
+    void releaseMaterialResourceReferences();
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    Core::ECS::World& m_world;
+    Core::Graphics& m_graphics;
+    Core::Assets::AssetManager& m_assetManager;
+    CsgShapeRegistry& m_csgShapeRegistry;
+    RendererMaterialState& m_materialState;
+    RendererShaderSystem& m_shaderSystem;
+    RendererMeshSystem& m_meshSystem;
+    RendererCsgSystem& m_csgSystem;
 };
 
 

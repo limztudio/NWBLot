@@ -128,13 +128,16 @@ static bool BuildUploadPixels(ImTextureData& textureData, ByteVector& scratch, c
     return scheduling;
 }
 
-[[nodiscard]] static Core::GpuGraphResourceDesc TextureResourceDesc(const Core::TextureDesc& textureDesc){
+[[nodiscard]] static Core::GpuGraphResourceDesc TextureResourceDesc(
+    const Core::TextureDesc& textureDesc,
+    const bool initialUploadAccepted
+){
     Core::GpuGraphResourceDesc desc;
     desc
         .setIdentity(textureDesc.name)
         .setMarkerLabel("ImGui Texture")
         .setType(Core::GpuGraphResourceType::Texture)
-        .setInitialState(textureDesc.initialState)
+        .setInitialState(initialUploadAccepted ? textureDesc.initialState : Core::ResourceStates::Unknown)
         .setQueueSharing(textureDesc.queueSharing)
     ;
     return desc;
@@ -343,7 +346,7 @@ Core::GpuGraphResourceId UiSystem::importTaskGraphTexture(
 
     const Core::GpuGraphResourceId imported = graph.importTexture(
         resource.texture,
-        __hidden_ui::TextureResourceDesc(resource.texture->getDescription())
+        __hidden_ui::TextureResourceDesc(resource.texture->getCreationDescription(), resource.initialUploadAccepted)
     );
     if(imported.valid()){
         resource.taskGraphResource = imported;
@@ -421,7 +424,7 @@ bool UiSystem::declareTaskGraphTextureUploads(
             m_textureUploadBatch.reset();
             return false;
         }
-        m_textureUploadBatch.add(*textureData);
+        m_textureUploadBatch.add(*textureData, &resource->initialUploadAccepted);
         outTasks.push_back(task);
         outResources.push_back(destination);
     }

@@ -7,6 +7,7 @@
 
 #include "compiled_graph.h"
 #include "task_graph.h"
+#include "timing_feedback.h"
 
 #include <core/alloc/scratch.h>
 
@@ -30,7 +31,13 @@ namespace GpuTaskGraphAnalysisStatus{
         InvalidTaskDependency,
         InvalidExternalCompletionDependency,
         InvalidResourceUse,
+        InvalidResourceVersion,
+        InvalidResourceVersionUse,
+        MissingResourceVersionProducer,
+        DuplicateResourceVersionProducer,
+        InvalidAcceptedQueueFrontierTask,
         Cycle,
+        InvalidPresentationEndpoint,
     };
 };
 
@@ -39,6 +46,7 @@ struct GpuTaskGraphAnalysisDiagnostic{
     GpuTaskId task;
     GpuTaskId relatedTask;
     GpuGraphResourceId resource;
+    GpuGraphResourceVersionId resourceVersion;
 };
 
 namespace GpuTaskQueueAssignmentReason{
@@ -51,9 +59,25 @@ namespace GpuTaskQueueAssignmentReason{
         Fallback,
         ConservativeAny,
         SameClassRouting,
+        CompilerOverride,
+        ScoredAny,
 
         kCount,
     };
+};
+
+namespace GpuTaskQueueAssignmentModifier{
+    enum Mask : u8{
+        None = 0u,
+        DirectDependencyAffinity = 1u << 0u,
+        SameClassLoadBalance = 1u << 1u,
+        NonPrimaryPreference = 1u << 2u,
+        DebugTimingOverride = 1u << 3u,
+        TimingCalibration = 1u << 4u,
+        TimingFeedback = 1u << 5u,
+    };
+
+    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
 namespace GpuTaskGraphQueueAssignmentStatus{
@@ -62,6 +86,7 @@ namespace GpuTaskGraphQueueAssignmentStatus{
         Success,
         InvalidGraphAnalysis,
         InvalidQueueTopology,
+        InvalidTimingFeedback,
         NoCompatibleQueue,
     };
 };
@@ -74,9 +99,12 @@ struct GpuTaskQueueAssignmentDiagnostic{
 
 struct GpuTaskQueueAssignment{
     GpuTaskId task;
+    GpuPhysicalQueueId initialQueue;
     GpuPhysicalQueueId queue;
+    GpuQueueAssignmentScore score;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     GpuTaskQueueAssignmentReason::Enum reason = GpuTaskQueueAssignmentReason::Unknown;
+    GpuTaskQueueAssignmentModifier::Mask modifiers = GpuTaskQueueAssignmentModifier::None;
     bool dedicated = false;
 };
 
@@ -96,11 +124,37 @@ namespace GpuTaskGraphPacketizationPolicy{
     };
 };
 
+// The timing system owns these immutable observations. Queue assignment only consumes a snapshot, so graph
+// validation and packet/barrier correctness remain independent from late query completion and history mutation.
+struct GpuTaskGraphQueueAssignmentOptions{
+    const GpuTaskTimingHistorySnapshot* timingHistory = nullptr;
+    const GpuTaskTimingFeedbackPolicy* timingFeedbackPolicy = nullptr;
+    const GpuTaskTimingQueueOverride* timingQueueOverrides = nullptr;
+    usize timingQueueOverrideCount = 0u;
+    u64 timingFrameIndex = 0u;
+};
+
+// Optional semantic anchors for one compiler-owned normal-execution packet timing envelope. Both omitted disables
+// the envelope; a partial pair is invalid. Configured endpoints must belong to this graph, occur in compiler order,
+// and resolve before every accepted-queue-frontier recovery packet. The resolved range includes each endpoint's
+// complete containing packet, so explicitly merged neighbors share the same packet timing scope.
+struct GpuTaskGraphPacketTimingEnvelopeOptions{
+    GpuTaskId firstTask;
+    GpuTaskId lastTask;
+
+    [[nodiscard]] bool enabled()const noexcept{ return firstTask.valid() && lastTask.valid(); }
+};
+
 struct GpuTaskGraphCompileOptions{
     GpuTaskGraphPacketizationPolicy::Enum packetizationPolicy = GpuTaskGraphPacketizationPolicy::ExplicitMerge;
+    GpuTaskGraphQueueAssignmentOptions queueAssignmentOptions;
+    GpuTaskGraphPacketTimingEnvelopeOptions packetTimingEnvelope;
     // Native packet recording requires every task to retain a payload and record thunk. Tooling-only callers that
     // compile metadata graphs may opt out explicitly; executable graph paths must retain the default.
     bool allowMetadataOnlyTasks = false;
+    // Caller-owned wall time spent declaring/building the graph before this compiler begins. Accepted plans retain
+    // finite nonnegative values separately from the compiler-only total duration; other values normalize to zero.
+    f64 declarationSeconds = 0.0;
 };
 
 
@@ -113,6 +167,7 @@ class GpuTaskGraphAnalysis final : NoCopy{
 public:
     explicit GpuTaskGraphAnalysis(GraphicsArena& arena)
         : m_edges(arena)
+        , m_schedulingEdges(arena)
         , m_inferredEdges(arena)
         , m_externalDependencies(arena)
         , m_topologicalOrder(arena)
@@ -127,7 +182,14 @@ public:
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
     [[nodiscard]] bool validFor(const GpuTaskGraph& graph)const noexcept;
     [[nodiscard]] const GpuTaskGraphAnalysisDiagnostic& diagnostic()const noexcept{ return m_diagnostic; }
+    // Raw dependency pairs retain direct declarations and hazard reasons for validation and diagnostics, including
+    // edges that are transitively redundant for scheduling.
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& edges()const noexcept{ return m_edges; }
+    // Scheduling consumers use the stable transitive reduction so redundant raw relationships do not add queue
+    // crossings, signal frontiers, or packet waits.
+    [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& schedulingEdges()const noexcept{
+        return m_schedulingEdges;
+    }
     // Every resource reason remains available even when it shares one scheduling edge with an explicit dependency.
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& inferredEdges()const noexcept{ return m_inferredEdges; }
     [[nodiscard]] const GraphicsVector<GpuTaskExternalDependencyEdge>& externalDependencies()const noexcept{
@@ -140,22 +202,31 @@ public:
     [[nodiscard]] bool hasInferredEdge(const GpuTaskId& producer, const GpuTaskId& consumer)const noexcept;
     [[nodiscard]] usize explicitEdgeCount()const noexcept{ return m_explicitEdgeCount; }
     [[nodiscard]] usize inferredEdgeCount()const noexcept{ return m_inferredEdgeCount; }
+    [[nodiscard]] usize resourceVersionEdgeCount()const noexcept{ return m_resourceVersionEdgeCount; }
 
 
 private:
     GraphicsVector<GpuTaskDependencyEdge> m_edges;
+    GraphicsVector<GpuTaskDependencyEdge> m_schedulingEdges;
     GraphicsVector<GpuTaskDependencyEdge> m_inferredEdges;
     GraphicsVector<GpuTaskExternalDependencyEdge> m_externalDependencies;
     GraphicsVector<GpuTaskId> m_topologicalOrder;
     GraphicsVector<GpuTaskId> m_cyclePath;
     GraphicsVector<GpuTaskDependencyEdge> m_cycleEdges;
     GpuTaskGraphAnalysisDiagnostic m_diagnostic;
+    f64 m_validationSeconds = 0.0;
+    f64 m_dependencyAnalysisSeconds = 0.0;
+    f64 m_hazardAnalysisSeconds = 0.0;
+    f64 m_topologicalOrderSeconds = 0.0;
     u64 m_generation = 0u;
+    u64 m_declarationRevision = 0u;
     usize m_taskCount = 0u;
     usize m_resourceCount = 0u;
+    usize m_resourceVersionCount = 0u;
     usize m_externalCompletionCount = 0u;
     usize m_explicitEdgeCount = 0u;
     usize m_inferredEdgeCount = 0u;
+    usize m_resourceVersionEdgeCount = 0u;
     bool m_valid = false;
 };
 
@@ -175,6 +246,10 @@ public:
 
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
     [[nodiscard]] bool validFor(const GpuTaskGraph& graph)const noexcept;
+    [[nodiscard]] bool validFor(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph
+    )const noexcept;
     [[nodiscard]] const GpuTaskQueueAssignmentDiagnostic& diagnostic()const noexcept{ return m_diagnostic; }
     [[nodiscard]] const GpuTaskQueueAssignment* find(const GpuTaskId& task)const noexcept;
 
@@ -183,6 +258,8 @@ private:
     GraphicsVector<GpuTaskQueueAssignment> m_assignments;
     GpuTaskQueueAssignmentDiagnostic m_diagnostic;
     u64 m_generation = 0u;
+    u64 m_declarationRevision = 0u;
+    u64 m_compiledPlanGeneration = 0u;
     usize m_taskCount = 0u;
     bool m_valid = false;
 };
@@ -207,7 +284,9 @@ public:
         const GpuTaskGraph& graph,
         const GpuTaskGraphAnalysis& analysis,
         const GpuTaskGraphQueueTopology& topology,
-        GpuTaskGraphQueueAssignments& outAssignments
+        GpuTaskGraphQueueAssignments& outAssignments,
+        Alloc::ScratchArena& scratchArena,
+        const GpuTaskGraphQueueAssignmentOptions& options = {}
     )const;
 
     // The packet compiler reuses the independently exposed analysis and queue-assignment results so telemetry and

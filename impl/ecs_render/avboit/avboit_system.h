@@ -5,7 +5,46 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/subsystem_base.h>
+#include <impl/ecs_render/avboit/task_graph_stage.h>
+#include <impl/ecs_render/shared/renderer_frame_types.h>
+
+#include <core/alloc/global.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ALLOC_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GlobalArena;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ALLOC_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Graphics;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,27 +56,75 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererAvboitSystem final : public RendererSystemSubsystemBase<RendererSystem>{
+class RendererCsgSystem;
+class RendererMaterialSystem;
+class RendererShaderSystem;
+class RendererAvboitState;
+struct CsgFrameGpuData;
+struct CsgFrameState;
+struct MaterialPassDrawItemPartitions;
+struct MaterialPassDrawItems;
+namespace ECSRenderDetail{
+    struct CsgGraphResourceSnapshot;
+    struct MeshFrameBindingSnapshot;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererAvboitSystem final : NoCopy{
 public:
-    explicit RendererAvboitSystem(RendererSystem& renderer);
+    RendererAvboitSystem(
+        Core::Alloc::GlobalArena& arena,
+        Core::Graphics& graphics,
+        RendererAvboitState& avboitState,
+        RendererShaderSystem& shaderSystem,
+        RendererMaterialSystem& materialSystem,
+        RendererCsgSystem& csgSystem
+    );
+
+public:
+    [[nodiscard]] bool shouldClearTargets(bool hasTransparentRenderers)const noexcept;
+    [[nodiscard]] bool captureTargetClearState()const noexcept;
+    void restoreTargetClearState(bool targetsNeedClear)noexcept;
+    void markFrameTargetUsage(bool hasTransparentRenderers)noexcept;
+    void invalidateResources();
+
+public:
+    // The graph host owns the shared graph artifact; AVBOIT owns every graph-local identifier required by its
+    // transparency stage. Cross-domain users consume the typed stage boundary instead of those local identifiers.
+    void resetTaskGraphStage()noexcept;
+    [[nodiscard]] RendererAvboitTaskGraphStageState& taskGraphStage()noexcept{ return m_taskGraphStage; }
+    [[nodiscard]] RendererAvboitTaskGraphValidation validateTaskGraphStage(
+        const Core::GpuCompiledGraph& compiledGraph,
+        bool clearTargets,
+        bool hasTransparentRenderers
+    )const;
+    [[nodiscard]] bool appendTaskGraphTimingTickets(
+        const RendererAvboitTaskGraphValidation& validation,
+        RendererAvboitTaskGraphTimingTickets& timingTickets,
+        Core::GpuTaskGraphTaskTimingTicket* bindings,
+        usize bindingCapacity,
+        usize& bindingCount
+    )const;
+
 
 public:
     [[nodiscard]] bool createAvboitResources();
     [[nodiscard]] bool createAvboitPipelines();
-    [[nodiscard]] bool createAvboitFrameTargets(
-        DeferredFrameTargets& createdTargets,
-        Core::Format::Enum lowRasterFormat,
-        Core::Format::Enum accumColorFormat,
-        Core::Format::Enum accumExtinctionFormat,
-        Core::Format::Enum transmittanceFormat
-    );
+    void resetAvboitFrameTargets(AvboitFrameTargets& targets);
+    [[nodiscard]] bool createAvboitFrameTargets(DeferredFrameTargets& createdTargets);
     [[nodiscard]] bool registerAvboitFrameTargetDescriptors(DeferredFrameTargets& createdTargets, AvboitFrameTargets& avboitTargets);
+    [[nodiscard]] Core::Sampler& linearSampler()const noexcept;
     [[nodiscard]] bool prepareAvboitPassResources(DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
     void renderAvboitTransparentCsgIntervals(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const MaterialPassDrawItems* preparedTransparentCsgReceiverSurfaceDrawItems = nullptr,
         const CsgFrameGpuData* preparedTransparentCsgFrameData = nullptr,
+        const ECSRenderDetail::CsgGraphResourceSnapshot* preparedTransparentCsgResources = nullptr,
+        const ECSRenderDetail::MeshFrameBindingSnapshot* preparedFrameBindings = nullptr,
         usize preparedTransparentCsgInstanceCount = 0u,
         usize preparedTransparentCsgMaterialTypedByteCount = 0u,
         bool preparedTransparentCsgIntervalTargetsGraphOwned = false,
@@ -64,6 +151,8 @@ public:
         DeferredFrameTargets& targets,
         const MaterialPassDrawItemPartitions* preparedOccupancyDrawItems = nullptr,
         const CsgFrameGpuData* preparedOccupancyCsgFrameData = nullptr,
+        const ECSRenderDetail::CsgGraphResourceSnapshot* preparedOccupancyCsgResources = nullptr,
+        const ECSRenderDetail::MeshFrameBindingSnapshot* preparedOccupancyFrameBindings = nullptr,
         usize preparedOccupancyInstanceCount = 0u,
         usize preparedOccupancyMaterialTypedByteCount = 0u,
         // The normal task-graph path declares depth as ShaderResource and coverage as UnorderedAccess before this
@@ -86,9 +175,11 @@ public:
     );
     void renderAvboitExtinctionPass(
         Core::CommandList& commandList,
-        AvboitFrameTargets& targets,
+        DeferredFrameTargets& targets,
         const MaterialPassDrawItemPartitions* preparedExtinctionDrawItems = nullptr,
         const CsgFrameGpuData* preparedExtinctionCsgFrameData = nullptr,
+        const ECSRenderDetail::CsgGraphResourceSnapshot* preparedExtinctionCsgResources = nullptr,
+        const ECSRenderDetail::MeshFrameBindingSnapshot* preparedExtinctionFrameBindings = nullptr,
         usize preparedExtinctionInstanceCount = 0u,
         usize preparedExtinctionMaterialTypedByteCount = 0u,
         bool extinctionCsgIntervalSampleImageStatesGraphOwned = false,
@@ -106,6 +197,8 @@ public:
         DeferredFrameTargets& targets,
         const MaterialPassDrawItemPartitions* preparedAccumulationDrawItems = nullptr,
         const CsgFrameGpuData* preparedAccumulationCsgFrameData = nullptr,
+        const ECSRenderDetail::CsgGraphResourceSnapshot* preparedAccumulationCsgResources = nullptr,
+        const ECSRenderDetail::MeshFrameBindingSnapshot* preparedAccumulationFrameBindings = nullptr,
         usize preparedAccumulationInstanceCount = 0u,
         usize preparedAccumulationMaterialTypedByteCount = 0u,
         // The normal task-graph path declares the two accumulation attachments and read-only deferred depth as
@@ -124,8 +217,18 @@ public:
         // mixed CSG streams retain their local dispatch/raster interleaving.
         bool accumulationCsgComputeEmulationOutputStatesGraphOwned = false
     );
-    void dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets);
-    void dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets);
+    void dispatchAvboitDepthWarp(
+        Core::CommandList& commandList,
+        AvboitFrameTargets& targets,
+        Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution,
+        bool* timingRecorded = nullptr
+    );
+    void dispatchAvboitIntegration(
+        Core::CommandList& commandList,
+        AvboitFrameTargets& targets,
+        Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution,
+        bool* timingRecorded = nullptr
+    );
 
 private:
     void renderPreparedTransparentCsgIntervals(
@@ -133,6 +236,8 @@ private:
         DeferredFrameTargets& targets,
         const MaterialPassDrawItems& receiverSurfaceDrawItems,
         const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         usize instanceCount,
         usize materialTypedByteCount,
         bool intervalTargetsGraphOwned,
@@ -146,6 +251,16 @@ private:
         bool deferIntervalCombine,
         Optional<Core::GpuTimingMeasure>* deferredIntervalTiming
     );
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    Core::Graphics& m_graphics;
+    RendererAvboitState& m_avboitState;
+    RendererShaderSystem& m_shaderSystem;
+    RendererMaterialSystem& m_materialSystem;
+    RendererCsgSystem& m_csgSystem;
+    RendererAvboitTaskGraphStageState m_taskGraphStage;
 };
 
 

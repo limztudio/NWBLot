@@ -5,6 +5,7 @@
 #include "crash_test_helpers.h"
 
 #include <global/filesystem/utility.h>
+#include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
@@ -38,7 +39,10 @@ namespace __hidden_logger_server_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 using TestArena = NWB::Tests::TestArena<struct LoggerServerCrashTestsTag>;
+using CapturingLogger = NWB::Tests::CapturingLogger;
 using ::WaitForDirectory;
 using namespace NWB::Tests::LoggerServerCrash;
 namespace CrashNames = NWB::Core::Crash::PackageNames;
@@ -52,6 +56,19 @@ inline constexpr Name s_RecoverableErrorInstallArena("tests/integration/logger_s
 #else
 #define NWB_LOGSERVER_TEST_NOINLINE
 #endif
+
+
+class LoggerServerCrash : public ::testing::Test{
+public:
+    LoggerServerCrash()
+        : m_loggerRegistration(m_logger)
+    {}
+
+
+private:
+    CapturingLogger m_logger;
+    NWB::Core::Common::LoggerRegistrationGuard m_loggerRegistration;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -257,7 +274,7 @@ static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(LoggerServerCrash, LinuxCrashPackageMapsInstructionPointer){
+TEST_F(LoggerServerCrash, LinuxCrashPackageMapsInstructionPointer){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("logger_server_linux_crash_test");
@@ -305,7 +322,7 @@ TEST(LoggerServerCrash, LinuxCrashPackageMapsInstructionPointer){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST(LoggerServerCrash, LinuxCrashPackageSymbolicatesSelfFrame){
+TEST_F(LoggerServerCrash, LinuxCrashPackageSymbolicatesSelfFrame){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -359,7 +376,7 @@ TEST(LoggerServerCrash, LinuxCrashPackageSymbolicatesSelfFrame){
 #endif
 }
 
-TEST(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
+TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -451,7 +468,7 @@ TEST(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
 #endif
 }
 
-TEST(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerReport){
+TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerReport){
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -524,7 +541,7 @@ TEST(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerReport
 #endif
 }
 
-TEST(LoggerServerCrash, AndroidCrashPackageCopiesTombstoneFrames){
+TEST_F(LoggerServerCrash, AndroidCrashPackageCopiesTombstoneFrames){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("logger_server_android_crash_test");
@@ -555,7 +572,7 @@ TEST(LoggerServerCrash, AndroidCrashPackageCopiesTombstoneFrames){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST(LoggerServerCrash, LinuxCrashPackageReportsMissingProcMaps){
+TEST_F(LoggerServerCrash, LinuxCrashPackageReportsMissingProcMaps){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("logger_server_linux_missing_maps_test");
@@ -579,7 +596,7 @@ TEST(LoggerServerCrash, LinuxCrashPackageReportsMissingProcMaps){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST(LoggerServerCrash, LinuxCrashPackageReportsUnmappedInstructionPointer){
+TEST_F(LoggerServerCrash, LinuxCrashPackageReportsUnmappedInstructionPointer){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("logger_server_linux_unmapped_ip_test");
@@ -604,7 +621,7 @@ TEST(LoggerServerCrash, LinuxCrashPackageReportsUnmappedInstructionPointer){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST(LoggerServerCrash, AndroidCrashPackageReportsTombstoneWithoutFrames){
+TEST_F(LoggerServerCrash, AndroidCrashPackageReportsTombstoneWithoutFrames){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("logger_server_android_no_frames_test");
@@ -629,7 +646,7 @@ TEST(LoggerServerCrash, AndroidCrashPackageReportsTombstoneWithoutFrames){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST(LoggerServerCrash, WindowsCrashPackageReportsMissingMinidump){
+TEST_F(LoggerServerCrash, WindowsCrashPackageReportsMissingMinidump){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("logger_server_windows_missing_dump_test");
@@ -662,7 +679,7 @@ TEST(LoggerServerCrash, WindowsCrashPackageReportsMissingMinidump){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST(LoggerServerCrash, WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess){
+TEST_F(LoggerServerCrash, WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("logger_server_gpu_detective_test");
@@ -688,7 +705,7 @@ TEST(LoggerServerCrash, WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST(LoggerServerCrash, AssertCrashPackageUsesAssertLogType){
+TEST_F(LoggerServerCrash, AssertCrashPackageUsesAssertLogType){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("logger_server_assert_log_type_test");
@@ -729,7 +746,7 @@ TEST(LoggerServerCrash, AssertCrashPackageUsesAssertLogType){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST(LoggerServerCrash, FatalCrashPackageUsesFatalLogType){
+TEST_F(LoggerServerCrash, FatalCrashPackageUsesFatalLogType){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("logger_server_fatal_log_type_test");
@@ -772,7 +789,7 @@ TEST(LoggerServerCrash, FatalCrashPackageUsesFatalLogType){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST(LoggerServerCrash, InvalidCrashPackageIsRejected){
+TEST_F(LoggerServerCrash, InvalidCrashPackageIsRejected){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("logger_server_invalid_crash_test");
@@ -793,7 +810,7 @@ TEST(LoggerServerCrash, InvalidCrashPackageIsRejected){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST(LoggerServerCrash, CrashManifestWithoutEventIsRejected){
+TEST_F(LoggerServerCrash, CrashManifestWithoutEventIsRejected){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("logger_server_missing_event_manifest_crash_test");
@@ -821,7 +838,7 @@ TEST(LoggerServerCrash, CrashManifestWithoutEventIsRejected){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST(LoggerServerCrash, CrashRetentionPrunesOldestAcceptedUploads){
+TEST_F(LoggerServerCrash, CrashRetentionPrunesOldestAcceptedUploads){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("logger_server_retention_accepted_test");
@@ -864,7 +881,7 @@ TEST(LoggerServerCrash, CrashRetentionPrunesOldestAcceptedUploads){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST(LoggerServerCrash, AcceptedCrashWarnsWhenRawArchiveCannotBeRetained){
+TEST_F(LoggerServerCrash, AcceptedCrashWarnsWhenRawArchiveCannotBeRetained){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("logger_server_raw_archive_failed_test");
@@ -890,7 +907,7 @@ TEST(LoggerServerCrash, AcceptedCrashWarnsWhenRawArchiveCannotBeRetained){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST(LoggerServerCrash, CrashRetentionPrunesOldestInvalidUploads){
+TEST_F(LoggerServerCrash, CrashRetentionPrunesOldestInvalidUploads){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("logger_server_retention_invalid_test");
@@ -922,7 +939,7 @@ TEST(LoggerServerCrash, CrashRetentionPrunesOldestInvalidUploads){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST(LoggerServerCrash, CrashUploadAuthorizationMatchesBearerToken){
+TEST_F(LoggerServerCrash, CrashUploadAuthorizationMatchesBearerToken){
     EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(AStringView(), nullptr));
     EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(AStringView(), "bad"));
     EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches("secret-token", "Bearer secret-token"));
@@ -934,6 +951,8 @@ TEST(LoggerServerCrash, CrashUploadAuthorizationMatchesBearerToken){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #undef NWB_LOGSERVER_TEST_NOINLINE
 
 
@@ -942,8 +961,6 @@ TEST(LoggerServerCrash, CrashUploadAuthorizationMatchesBearerToken){
 
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

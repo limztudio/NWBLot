@@ -4,7 +4,7 @@
 
 #include "mesh_system.h"
 
-#include <impl/ecs_render/kernel/system.h>
+#include <impl/ecs_render/mesh/renderer_mesh_state.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,9 +16,26 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererMeshSystem::RendererMeshSystem(RendererSystem& renderer)
-    : RendererSystemSubsystemBase<RendererSystem>(renderer)
+RendererMeshSystem::RendererMeshSystem(
+    Core::Alloc::GlobalArena& arena,
+    Core::ECS::World& world,
+    Core::Graphics& graphics,
+    Core::Assets::AssetManager& assetManager,
+    RendererMeshState& meshState
+)
+    : m_arena(arena)
+    , m_world(world)
+    , m_graphics(graphics)
+    , m_assetManager(assetManager)
+    , m_meshState(meshState)
 {}
+
+
+void RendererMeshSystem::invalidateResources(){
+    releaseAllMeshGeometryHeapHandles();
+    releaseMeshFrameHeapHandles();
+    m_meshState.invalidateResources();
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

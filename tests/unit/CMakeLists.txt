@@ -17,6 +17,34 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_LIST_DIR}/repository_launcher_tests.py"
     )
+    add_test(
+        NAME nwb_command_ir_harness_unit
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tests/ab/command_ir/run.py"
+            "--self-test"
+    )
+    add_test(
+        NAME nwb_command_ir_launcher_unit
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tests/ab/command_ir/launch.py"
+            "--self-test"
+    )
+    add_test(
+        NAME nwb_renderer_baseline_harness_unit
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tests/ab/renderer_baseline/run.py"
+            "--self-test"
+    )
+    add_test(
+        NAME nwb_renderer_baseline_launcher_unit
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tests/ab/renderer_baseline/launch.py"
+            "--self-test"
+    )
     # Pure-Python parser/verdict coverage for the manual M4 runner. The actual benchmark deliberately remains an
     # opt-in target-hardware workflow because it requires a distinct Vulkan compute family and a visible window.
     add_test(
@@ -33,20 +61,20 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "${CMAKE_SOURCE_DIR}/tests/ab/async_shadow_m4/launch.py"
             "--self-test"
     )
-    # Keep the graph-owned soft-transparent fold's paired timing/verdict parser and its launcher contract under
-    # ordinary CTest. The visual/timestamp comparison remains an opt-in target-hardware workflow.
+    # Keep the natural hybrid-versus-opaque report schema, route diagnostics, and shared-binary launcher contract
+    # under ordinary CTest. The window/timestamp capture remains an opt-in target-hardware workflow.
     add_test(
-        NAME nwb_soft_transparent_shadow_fold_harness_unit
+        NAME nwb_hybrid_shadow_boundary_harness_unit
         COMMAND
             "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/soft_transparent_shadow_fold/run.py"
+            "${CMAKE_SOURCE_DIR}/tests/ab/hybrid_shadow_boundary/run.py"
             "--self-test"
     )
     add_test(
-        NAME nwb_soft_transparent_shadow_fold_launcher_unit
+        NAME nwb_hybrid_shadow_boundary_launcher_unit
         COMMAND
             "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/soft_transparent_shadow_fold/launch.py"
+            "${CMAKE_SOURCE_DIR}/tests/ab/hybrid_shadow_boundary/launch.py"
             "--self-test"
     )
     # Parser/state-machine coverage for the opt-in target-hardware lagged-lighting smoke. The actual run remains
@@ -63,13 +91,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         COMMAND
             "${Python3_EXECUTABLE}"
             "${CMAKE_SOURCE_DIR}/tests/ab/frame_lagged_async_lighting/launch.py"
-            "--self-test"
-    )
-    add_test(
-        NAME nwb_bindless_parity_harness_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/bindless_parity/launch.py"
             "--self-test"
     )
     # The transfer-upload A/B stays opt-in because a meaningful run needs a distinct Transfer-only family and an

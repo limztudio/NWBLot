@@ -405,7 +405,7 @@ private:
                 break;
             }
 
-            if(self->m_exit.load(MemoryOrder::acquire))
+            if(self->m_exit.load(MemoryOrder::acquire) && self->workerCanExit())
                 break;
         }
     }
@@ -419,6 +419,7 @@ public:
 
 
 protected:
+    [[nodiscard]] inline bool workerCanExit()const{ return true; }
     void internalDestroy(){ m_semaphore.release(); }
 
 protected:

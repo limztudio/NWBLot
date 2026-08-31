@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/raytrace/rt_private.h>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,16 +39,13 @@ bool ResolveRenderableMeshResources(
     RendererMeshSystem& rendererMeshSystem,
     const Core::ECS::EntityID entity,
     RenderableMeshDesc& outResolvedMesh,
-    MeshResources*& outMesh
+    ECSRenderDetail::MeshRayTracingResourceSnapshot& outMesh
 ){
-    outMesh = nullptr;
+    outMesh = {};
     if(!meshSystem.resolveRenderableMesh(entity, outResolvedMesh))
         return false;
 
-    return outResolvedMesh.runtime
-        ? rendererMeshSystem.findRuntimeMeshResources(outResolvedMesh.runtimeMesh, outMesh)
-        : rendererMeshSystem.findMeshResources(outResolvedMesh.mesh, outMesh)
-    ;
+    return rendererMeshSystem.findRenderableRayTracingResourceSnapshot(outResolvedMesh, outMesh);
 }
 
 [[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass){
@@ -342,17 +340,17 @@ void RendererRayTracingSystem::transitionSwShadowTraversalResources(Core::Comman
     // The software traversal selects every mesh, scene, and material-context input through the descriptor heap. Keep
     // their common state staging in one place so shadow, soft-shadow, surfel GI, and caustics cannot drift as the
     // shared ABI grows.
-    for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){
-        commandList.setBufferState(rayTracingState().m_swShadowMeshNodeBuffers[slot], Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_swShadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_swShadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_swShadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
+    for(u32 slot = 0u; slot < m_rayTracingState.m_swShadowMeshCount; ++slot){
+        commandList.setBufferState(m_rayTracingState.m_swShadowMeshNodeBuffers[slot], Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(m_rayTracingState.m_swShadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(m_rayTracingState.m_swShadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(m_rayTracingState.m_swShadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
     }
-    commandList.setBufferState(rayTracingState().m_sceneBvhNodeBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(rayTracingState().m_sceneInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(rayTracingState().m_shadowInstanceMaterialBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    commandList.setBufferState(m_rayTracingState.m_sceneBvhNodeBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(m_rayTracingState.m_sceneInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(m_rayTracingState.m_shadowInstanceMaterialBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(m_rayTracingState.m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

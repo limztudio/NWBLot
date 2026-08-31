@@ -70,6 +70,26 @@ function(nwb_apply_debug_symbols target)
     endif()
 endfunction()
 
+function(nwb_configure_optimization)
+    # Optimization belongs to the build configuration, not to an engine-target helper. Keeping it on the root
+    # directory makes every compiled C/C++ target, including vendored source libraries, inherit the same policy.
+    if(NWB_COMPILER_FRONTEND_MSVC)
+        add_compile_options(
+            $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:dbg>>:/Od>
+            $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:opt>>:/O2>
+            $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:fin>>:/O2>
+        )
+    elseif(NWB_COMPILER_IS_CLANG)
+        add_compile_options(
+            $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:dbg>>:-O0>
+            $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:opt>>:-O2>
+            $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:fin>>:-O3>
+        )
+    else()
+        message(FATAL_ERROR "NWBLot now requires a Clang-based toolchain.")
+    endif()
+endfunction()
+
 function(nwb_apply_codegen target)
     set_target_properties(${target} PROPERTIES
         C_STANDARD 17
@@ -108,13 +128,10 @@ function(nwb_apply_codegen target)
             /permissive-
             /GR-
             /wd4201
-            $<$<CONFIG:dbg>:/Od>
             $<$<CONFIG:dbg>:/Ob0>
             $<$<CONFIG:dbg>:/Oy->
-            $<$<CONFIG:opt>:/O2>
             $<$<CONFIG:opt>:/Ob1>
             $<$<CONFIG:opt>:/Oy->
-            $<$<CONFIG:fin>:/O2>
             $<$<CONFIG:fin>:/Ob2>
             $<$<CONFIG:fin>:/Oy>
         )
@@ -142,13 +159,10 @@ function(nwb_apply_codegen target)
             # exist in every config: a fault can interrupt mid-instruction, and final builds omit the frame
             # pointer so the unwinder cannot rely on a frame-pointer chain.
             -fasynchronous-unwind-tables
-            $<$<CONFIG:dbg>:-O0>
             $<$<CONFIG:dbg>:-g>
             $<$<CONFIG:dbg>:-fno-omit-frame-pointer>
-            $<$<CONFIG:opt>:-O2>
             $<$<CONFIG:opt>:-g>
             $<$<CONFIG:opt>:-fno-omit-frame-pointer>
-            $<$<CONFIG:fin>:-O3>
             $<$<CONFIG:fin>:-g>
             $<$<CONFIG:fin>:-fomit-frame-pointer>
         )

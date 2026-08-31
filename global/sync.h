@@ -10,7 +10,9 @@
 #endif
 
 #if defined(_MSC_VER)
+#if defined(_M_IX86) || defined(_M_X64)
 #pragma intrinsic(__rdtsc)
+#endif
 
 #include <float.h>
 #endif
@@ -44,7 +46,7 @@ inline void YieldThread(){ std::this_thread::yield(); }
 inline void MachinePause(i32 delay){
 #if defined(__ARM_ARCH_7A__) || defined(__aarch64__)
     while(delay > 0){
-        __asm__ __volatile__("isb sy" ::: "memory");
+        __asm__ __volatile__("yield");
         --delay;
     }
 #elif defined(__SSE__)

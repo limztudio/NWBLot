@@ -22,6 +22,10 @@
 #include "../raytrace/constants.h"
 #include "shadow_heap_resources.slangi"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // The deferred selector itself is a global UniformBuffer heap entry supplied by the dispatch push block.  The opaque
 // trace therefore has no local cbuffer even though scene/buffer.slangi still exposes its familiar light helpers.
 #ifndef NWB_SHADOW_RQ_DEFERRED_RESOURCES_HEAP_SLOT

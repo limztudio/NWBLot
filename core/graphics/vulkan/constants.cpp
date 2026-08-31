@@ -220,13 +220,13 @@ VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states){
     if(states & (ResourceStates::AccelStructWrite | ResourceStates::AccelStructBuildBlas))
         flags |= VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
     if(states & ResourceStates::AccelStructBuildInput)
-        flags |= VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+        flags |= VK_ACCESS_2_SHADER_READ_BIT;
     if(states & ResourceStates::ShadingRateSurface)
         flags |= VK_ACCESS_2_FRAGMENT_SHADING_RATE_ATTACHMENT_READ_BIT_KHR;
     if(states & ResourceStates::OpacityMicromapWrite)
         flags |= VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT;
     if(states & ResourceStates::OpacityMicromapBuildInput)
-        flags |= VK_ACCESS_2_MICROMAP_READ_BIT_EXT;
+        flags |= VK_ACCESS_2_SHADER_READ_BIT;
     if(states & ResourceStates::ConvertCoopVecMatrixInput)
         flags |= VK_ACCESS_2_TRANSFER_READ_BIT;
     if(states & ResourceStates::ConvertCoopVecMatrixOutput)
@@ -260,8 +260,19 @@ VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, bool 
         flags |= VK_PIPELINE_STAGE_2_TRANSFORM_FEEDBACK_BIT_EXT;
     if(states & (ResourceStates::CopyDest | ResourceStates::CopySource | ResourceStates::ResolveDest | ResourceStates::ResolveSource))
         flags |= VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-    if(states & (ResourceStates::AccelStructRead | ResourceStates::AccelStructWrite | ResourceStates::AccelStructBuildInput | ResourceStates::AccelStructBuildBlas))
-        flags |= VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
+    if(states & ResourceStates::AccelStructRead){
+        flags |=
+            VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
+            | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT
+            | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
+        ;
+        if(rayTracingStageAvailable)
+            flags |= VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
+    }
+    if(states & (ResourceStates::AccelStructWrite | ResourceStates::AccelStructBuildBlas))
+        flags |= VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+    if(states & ResourceStates::AccelStructBuildInput)
+        flags |= VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
     if(states & ResourceStates::ShadingRateSurface)
         flags |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR;
     if(states & (ResourceStates::OpacityMicromapWrite | ResourceStates::OpacityMicromapBuildInput))

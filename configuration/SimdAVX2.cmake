@@ -1,7 +1,7 @@
 include_guard(GLOBAL)
 
 function(nwb_apply_simd_avx2 target)
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+    if(NWB_TARGET_ARCH STREQUAL "x64")
         if(NWB_COMPILER_FRONTEND_MSVC)
             target_compile_options(${target} PRIVATE /arch:AVX2)
         else()

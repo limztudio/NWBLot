@@ -423,7 +423,7 @@ BufferRange BufferRange::resolve(const BufferDesc& desc)const{
 }
 
 DescriptorWriteItem DescriptorWriteItem::ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range){
-    const bool isVolatile = buffer && buffer->getDescription().isVolatile;
+    const bool isVolatile = buffer && buffer->getCreationDescription().isVolatile;
 
     DescriptorWriteItem result = Base(
         slot,
@@ -456,6 +456,9 @@ bool BlendState::usesConstantColor(u32 numTargets)const{
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_graphics_api{
 
 
@@ -463,7 +466,7 @@ namespace __hidden_graphics_api{
 
 
 bool ResolveFramebufferAttachmentExtent(const FramebufferAttachment& attachment, u32& outWidth, u32& outHeight, u32& outArraySize){
-    const TextureDesc& textureDesc = attachment.texture->getDescription();
+    const TextureDesc& textureDesc = attachment.texture->getCreationDescription();
     const TextureSubresourceSet subresources = attachment.subresources.resolve(textureDesc, TextureSubresourceMipResolve::Single);
     if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
         outWidth = 0;
@@ -491,17 +494,21 @@ FramebufferInfo::FramebufferInfo(const FramebufferDesc& desc){
     const usize colorAttachmentCount = desc.colorAttachments.size();
     for(usize i = 0; i < colorAttachmentCount; ++i){
         const FramebufferAttachment& attachment = desc.colorAttachments[i];
-        colorFormats.push_back(attachment.format == Format::UNKNOWN && attachment.texture ? attachment.texture->getDescription().format : attachment.format);
+        const Format::Enum attachmentFormat = attachment.format == Format::UNKNOWN && attachment.texture
+            ? attachment.texture->getCreationDescription().format
+            : attachment.format
+        ;
+        colorFormats.push_back(attachmentFormat);
     }
 
     if(desc.depthAttachment.valid()){
-        const TextureDesc& textureDesc = desc.depthAttachment.texture->getDescription();
+        const TextureDesc& textureDesc = desc.depthAttachment.texture->getCreationDescription();
         depthFormat = textureDesc.format;
         sampleCount = textureDesc.sampleCount;
         sampleQuality = textureDesc.sampleQuality;
     }
     else if(!desc.colorAttachments.empty() && desc.colorAttachments[0].valid()){
-        const TextureDesc& textureDesc = desc.colorAttachments[0].texture->getDescription();
+        const TextureDesc& textureDesc = desc.colorAttachments[0].texture->getCreationDescription();
         sampleCount = textureDesc.sampleCount;
         sampleQuality = textureDesc.sampleQuality;
     }
@@ -557,18 +564,31 @@ usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type){
 }
 
 usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, u32 rows, u32 columns){
-    const usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
+    if(type > CooperativeVectorDataType::Float64 || rows == 0u || columns == 0u)
+        return 0;
 
+    usize minorElementCount = 0u;
     switch(layout){
     case CooperativeVectorMatrixLayout::RowMajor:
-        return dataTypeSize * columns;
+        minorElementCount = static_cast<usize>(columns);
+        break;
     case CooperativeVectorMatrixLayout::ColumnMajor:
-        return dataTypeSize * rows;
+        minorElementCount = static_cast<usize>(rows);
+        break;
     case CooperativeVectorMatrixLayout::InferencingOptimal:
     case CooperativeVectorMatrixLayout::TrainingOptimal:
         return 0;
+    default:
+        return 0;
     }
-    return 0;
+
+    const usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
+    usize minorByteSize = 0u;
+    if(!TryMultiply<usize>(minorElementCount, dataTypeSize, minorByteSize))
+        return 0;
+    if(AddOverflows<usize>(minorByteSize, dataTypeSize))
+        return 0;
+    return minorByteSize + dataTypeSize;
 }
 
 
@@ -614,6 +634,11 @@ void GpuCrashMarkerTracker::popEvent(){
 
     m_eventStack.resize(m_eventStackOffsets.back());
     m_eventStackOffsets.pop_back();
+}
+
+void GpuCrashMarkerTracker::resetEventStack(){
+    m_eventStack.clear();
+    m_eventStackOffsets.clear();
 }
 
 ResolvedMarker GpuCrashMarkerTracker::getEventString(usize hash){

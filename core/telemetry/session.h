@@ -63,6 +63,36 @@ public:
     [[nodiscard]] bool recordFrameGraph(const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges){
         return RecordFrameGraph(m_recorder, m_frameIndex, nodes, edges, m_streamId);
     }
+    [[nodiscard]] bool recordFrameGraph(
+        const FrameGraphNodeDescs& nodes,
+        const FrameGraphEdgeDescs& edges,
+        const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics
+    ){
+        return RecordFrameGraph(
+            m_recorder,
+            m_frameIndex,
+            nodes,
+            edges,
+            physicalQueueRuntimeStatistics,
+            m_streamId
+        );
+    }
+    [[nodiscard]] bool recordFrameGraph(
+        const FrameGraphNodeDescs& nodes,
+        const FrameGraphEdgeDescs& edges,
+        const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+        const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics
+    ){
+        return RecordFrameGraph(
+            m_recorder,
+            m_frameIndex,
+            nodes,
+            edges,
+            physicalQueueRuntimeStatistics,
+            packetSubmissionStatistics,
+            m_streamId
+        );
+    }
     [[nodiscard]] PerfSessionRecordResult recordPerfReport(const Perf::SessionReport& report, const u32 streamId = 0u){
         return RecordPerfSessionReport(m_recorder, report, streamId);
     }

@@ -4,6 +4,7 @@
 
 #include "backend.h"
 #include "arena_names.h"
+#include "device_detail.h"
 
 #include <core/common/log.h>
 
@@ -18,18 +19,29 @@ NWB_VULKAN_BEGIN
 
 
 TrackedCommandBuffer::TrackedCommandBuffer(
+    Queue& queue,
     const VulkanContext& context,
     const u32 queueFamilyIndex,
     const VkCommandPool commandPool,
-    const bool ownsCommandPool
+    const bool ownsCommandPool,
+    Futex* const sharedCommandPoolMutex
 )
     : RefCounter<GraphicsResource>(context.threadPool)
     , m_cmdPool(commandPool)
     , m_ownsCmdPool(ownsCommandPool)
+    , m_sharedCommandPoolMutex(sharedCommandPoolMutex)
     , m_referencedResources(context.objectArena)
+    , m_referencedBuffers(context.objectArena)
+    , m_referencedTextures(context.objectArena)
     , m_referencedStagingBuffers(context.objectArena)
     , m_referencedDescriptorHeaps(context.objectArena)
+    , m_retainedBufferStateCommits(context.objectArena)
+    , m_retainedTextureStateCommits(context.objectArena)
+    , m_pendingAccelStructBuildCommits(context.objectArena)
+    , m_pendingAccelStructBuildSignatures(context.objectArena)
+    , m_pendingOpacityMicromapBuildCommits(context.objectArena)
     , m_context(context)
+    , m_queue(queue)
 {
     if(m_ownsCmdPool){
         auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
@@ -71,7 +83,13 @@ TrackedCommandBuffer::TrackedCommandBuffer(
 
 TrackedCommandBuffer::~TrackedCommandBuffer(){
     if(m_cmdBuf && m_cmdPool){
-        vkFreeCommandBuffers(m_context.device, m_cmdPool, 1, &m_cmdBuf);
+        if(m_sharedCommandPoolMutex){
+            ScopedLock lock(*m_sharedCommandPoolMutex);
+
+            vkFreeCommandBuffers(m_context.device, m_cmdPool, 1, &m_cmdBuf);
+        }
+        else
+            vkFreeCommandBuffers(m_context.device, m_cmdPool, 1, &m_cmdBuf);
         m_cmdBuf = VK_NULL_HANDLE;
     }
 
@@ -82,15 +100,235 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
     m_ownsCmdPool = false;
 
     clearTrackedReferences();
+    m_queue.unregisterCommandBuffer(*this);
+}
+
+void TrackedCommandBuffer::retainResource(GraphicsResource& resource){
+    for(const Handle<GraphicsResource>& retainedResource : m_referencedResources){
+        if(retainedResource.get() == &resource)
+            return;
+    }
+
+    m_referencedResources.emplace_back(&resource, Handle<GraphicsResource>::deleter_type(&m_context.objectArena));
+}
+
+void TrackedCommandBuffer::retainBuffer(Buffer& buffer){
+    retainResource(buffer);
+    trackRetainedBuffer(buffer);
+}
+
+void TrackedCommandBuffer::trackRetainedBuffer(Buffer& buffer){
+    for(Buffer* const retainedBuffer : m_referencedBuffers){
+        if(retainedBuffer == &buffer)
+            return;
+    }
+
+    m_referencedBuffers.push_back(&buffer);
+}
+
+void TrackedCommandBuffer::appendRetainedBufferStateCommit(Buffer& buffer){
+    retainBuffer(buffer);
+    for(const RetainedBufferStateCommit& commit : m_retainedBufferStateCommits){
+        if(commit.buffer == &buffer)
+            return;
+    }
+    m_retainedBufferStateCommits.push_back(RetainedBufferStateCommit{ .buffer = &buffer });
+}
+
+void TrackedCommandBuffer::commitRetainedBufferStateCommits(){
+    for(const RetainedBufferStateCommit& commit : m_retainedBufferStateCommits){
+        if(commit.buffer)
+            commit.buffer->setRetainedStateKnown(true);
+    }
+    m_retainedBufferStateCommits.clear();
+}
+
+void TrackedCommandBuffer::discardRetainedBufferStateCommits(){
+    m_retainedBufferStateCommits.clear();
+}
+
+void TrackedCommandBuffer::retainTexture(Texture& texture){
+    retainResource(texture);
+    trackRetainedTexture(texture);
+}
+
+void TrackedCommandBuffer::trackRetainedTexture(Texture& texture){
+    for(Texture* const retainedTexture : m_referencedTextures){
+        if(retainedTexture == &texture)
+            return;
+    }
+
+    m_referencedTextures.push_back(&texture);
+}
+
+void TrackedCommandBuffer::appendRetainedTextureStateCommit(
+    Texture& texture,
+    const MipLevel mipLevel,
+    const ArraySlice arraySlice
+){
+    // The closing barrier and its deferred state publication outlive CommandList::clearState(). Keep the texture
+    // alive with the command buffer until Queue::submit accepts or discards the command buffer.
+    retainTexture(texture);
+
+    m_retainedTextureStateCommits.push_back(RetainedTextureStateCommit{
+        .texture = &texture,
+        .mipLevel = mipLevel,
+        .arraySlice = arraySlice,
+    });
+}
+
+void TrackedCommandBuffer::commitRetainedTextureStateCommits(){
+    for(const RetainedTextureStateCommit& commit : m_retainedTextureStateCommits){
+        if(commit.texture)
+            commit.texture->setRetainedSubresourceStateKnown(commit.arraySlice, commit.mipLevel, true);
+    }
+    m_retainedTextureStateCommits.clear();
+}
+
+void TrackedCommandBuffer::discardRetainedTextureStateCommits(){
+    m_retainedTextureStateCommits.clear();
+}
+
+void TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
+    AccelStruct& accelStruct,
+    const VkAccelerationStructureTypeKHR accelStructType,
+    const VkBuildAccelerationStructureFlagsKHR buildFlags,
+    const AccelStructGeometryBuildSignature* const geometrySignatures,
+    const usize geometrySignatureCount
+){
+    NWB_ASSERT(geometrySignatureCount <= UINT32_MAX);
+    NWB_ASSERT(geometrySignatureCount == 0u || geometrySignatures);
+    if(geometrySignatureCount > UINT32_MAX || (geometrySignatureCount != 0u && !geometrySignatures))
+        return;
+
+    retainResource(accelStruct);
+
+    const usize geometrySignatureOffset = m_pendingAccelStructBuildSignatures.size();
+    for(usize geometryIndex = 0u; geometryIndex < geometrySignatureCount; ++geometryIndex)
+        m_pendingAccelStructBuildSignatures.push_back(geometrySignatures[geometryIndex]);
+
+    m_pendingAccelStructBuildCommits.push_back(PendingAccelStructBuildCommit{
+        .accelStruct = &accelStruct,
+        .accelStructType = accelStructType,
+        .buildFlags = buildFlags,
+        .geometrySignatureOffset = geometrySignatureOffset,
+        .geometrySignatureCount = static_cast<u32>(geometrySignatureCount),
+    });
+}
+
+bool TrackedCommandBuffer::getPendingAccelStructBuildSignature(
+    const AccelStruct& accelStruct,
+    VkAccelerationStructureTypeKHR& outAccelStructType,
+    VkBuildAccelerationStructureFlagsKHR& outBuildFlags,
+    const AccelStructGeometryBuildSignature*& outGeometrySignatures,
+    usize& outGeometrySignatureCount
+)const{
+    for(usize commitIndex = m_pendingAccelStructBuildCommits.size(); commitIndex > 0u; --commitIndex){
+        const PendingAccelStructBuildCommit& commit = m_pendingAccelStructBuildCommits[commitIndex - 1u];
+        if(commit.accelStruct == &accelStruct){
+            NWB_ASSERT(
+                commit.geometrySignatureOffset <= m_pendingAccelStructBuildSignatures.size()
+                && commit.geometrySignatureCount <= m_pendingAccelStructBuildSignatures.size() - commit.geometrySignatureOffset
+            );
+            if(
+                commit.geometrySignatureOffset > m_pendingAccelStructBuildSignatures.size()
+                || commit.geometrySignatureCount > m_pendingAccelStructBuildSignatures.size() - commit.geometrySignatureOffset
+            )
+                return false;
+
+            outAccelStructType = commit.accelStructType;
+            outBuildFlags = commit.buildFlags;
+            outGeometrySignatures = commit.geometrySignatureCount != 0u
+                ? m_pendingAccelStructBuildSignatures.data() + commit.geometrySignatureOffset
+                : nullptr
+            ;
+            outGeometrySignatureCount = commit.geometrySignatureCount;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void TrackedCommandBuffer::commitPendingAccelStructBuildCommits(){
+    for(const PendingAccelStructBuildCommit& commit : m_pendingAccelStructBuildCommits){
+        if(!commit.accelStruct)
+            continue;
+        if(
+            commit.geometrySignatureOffset > m_pendingAccelStructBuildSignatures.size()
+            || commit.geometrySignatureCount > m_pendingAccelStructBuildSignatures.size() - commit.geometrySignatureOffset
+        ){
+            NWB_ASSERT(false);
+            continue;
+        }
+
+        AccelStruct& accelStruct = *commit.accelStruct;
+        ScopedLock lock(accelStruct.m_acceptedBuildSignatureMutex);
+        if(commit.geometrySignatureCount != 0u){
+            const AccelStructGeometryBuildSignature* const signatures =
+                m_pendingAccelStructBuildSignatures.data() + commit.geometrySignatureOffset
+            ;
+            accelStruct.m_acceptedBuildGeometrySignatures.assign(signatures, signatures + commit.geometrySignatureCount);
+        }
+        else
+            accelStruct.m_acceptedBuildGeometrySignatures.clear();
+        accelStruct.m_acceptedBuildType = commit.accelStructType;
+        accelStruct.m_acceptedBuildFlags = commit.buildFlags;
+        accelStruct.m_hasAcceptedBuild = true;
+    }
+    m_pendingAccelStructBuildCommits.clear();
+    m_pendingAccelStructBuildSignatures.clear();
+}
+
+void TrackedCommandBuffer::discardPendingAccelStructBuildCommits(){
+    m_pendingAccelStructBuildCommits.clear();
+    m_pendingAccelStructBuildSignatures.clear();
+}
+
+void TrackedCommandBuffer::appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap){
+    retainResource(opacityMicromap);
+    m_pendingOpacityMicromapBuildCommits.push_back(PendingOpacityMicromapBuildCommit{
+        .opacityMicromap = &opacityMicromap,
+    });
+}
+
+bool TrackedCommandBuffer::hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const{
+    for(usize commitIndex = m_pendingOpacityMicromapBuildCommits.size(); commitIndex > 0u; --commitIndex){
+        if(m_pendingOpacityMicromapBuildCommits[commitIndex - 1u].opacityMicromap == &opacityMicromap)
+            return true;
+    }
+
+    return false;
+}
+
+void TrackedCommandBuffer::commitPendingOpacityMicromapBuildCommits(){
+    for(const PendingOpacityMicromapBuildCommit& commit : m_pendingOpacityMicromapBuildCommits){
+        if(commit.opacityMicromap)
+            commit.opacityMicromap->m_acceptedConstructed.store(true, MemoryOrder::release);
+    }
+    m_pendingOpacityMicromapBuildCommits.clear();
+}
+
+void TrackedCommandBuffer::discardPendingOpacityMicromapBuildCommits(){
+    m_pendingOpacityMicromapBuildCommits.clear();
 }
 
 void TrackedCommandBuffer::clearTrackedReferences(){
+    discardRetainedBufferStateCommits();
+    discardRetainedTextureStateCommits();
+    discardPendingAccelStructBuildCommits();
+    discardPendingOpacityMicromapBuildCommits();
+
     for(GpuDescriptorHeap* heap : m_referencedDescriptorHeaps){
         if(heap)
             heap->discardCommandBufferUse(*this);
     }
     m_referencedDescriptorHeaps.clear();
+    m_descriptorBufferManager = nullptr;
+    m_descriptorBufferGeneration = 0u;
 
+    m_referencedBuffers.clear();
+    m_referencedTextures.clear();
     m_referencedResources.clear();
     m_referencedStagingBuffers.clear();
 }
@@ -115,7 +353,7 @@ Queue::Queue(
     , m_waitSemaphoreValues(context.objectArena)
     , m_signalSemaphores(context.objectArena)
     , m_signalSemaphoreValues(context.objectArena)
-    , m_lastRecordingID(0)
+    , m_lastRecordingID(0u)
     , m_lastSubmittedID(0)
     , m_lastFinishedID(0)
     , m_commandBuffersInFlight(context.objectArena)
@@ -157,81 +395,396 @@ Queue::~Queue(){
     }
 }
 
-VkCommandPool Queue::getOrCreateWorkerCommandPool(const u32 recordingWorkerIndex){
+GpuCommandArenaStatistics Queue::commandArenaStatistics()const noexcept{
+    const u64 directCommandBufferCount = m_directCommandBufferCount.load(MemoryOrder::relaxed);
+    const u64 explicitWorkerArenaCount = m_explicitWorkerArenaCount.load(MemoryOrder::relaxed);
+    const u64 currentCommandBufferCount = m_currentCommandBufferCount.load(MemoryOrder::relaxed);
+    const u64 commandPoolEpochCount = directCommandBufferCount + explicitWorkerArenaCount;
+
+    return GpuCommandArenaStatistics{
+        .queue = m_physicalQueue,
+        .workerArenaCount = explicitWorkerArenaCount + (directCommandBufferCount > 0u ? 1u : 0u),
+        .commandPoolEpochCount = commandPoolEpochCount,
+        .pendingCommandPoolEpochCount =
+            m_pendingDirectCommandBufferCount.load(MemoryOrder::relaxed)
+            + m_pendingWorkerEpochCount.load(MemoryOrder::relaxed),
+        .currentCommandBufferCount = currentCommandBufferCount,
+        .highWaterCommandBufferCount = m_highWaterCommandBufferCount.load(MemoryOrder::relaxed),
+        .reusableCommandBufferCount = m_reusableCommandBufferCount.load(MemoryOrder::relaxed),
+        .leasedCommandBufferCount = m_leasedCommandBufferCount.load(MemoryOrder::relaxed),
+        .pendingCommandBufferCount = m_pendingCommandBufferCount.load(MemoryOrder::relaxed),
+        .growthEventCount = m_commandBufferGrowthEventCount.load(MemoryOrder::relaxed),
+        .resetEventCount = m_commandBufferResetEventCount.load(MemoryOrder::relaxed),
+        .nativeHandleStorageLowerBoundBytes =
+            commandPoolEpochCount * sizeof(VkCommandPool)
+            + currentCommandBufferCount * sizeof(VkCommandBuffer),
+    };
+}
+
+GpuCommandArenaWorkerStatistics Queue::commandArenaWorkerStatistics(
+    const u64 recordingWorkerDomain,
+    const u32 recordingWorkerIndex
+)const noexcept{
+    if(recordingWorkerIndex == 0u){
+        if(recordingWorkerDomain != 0u)
+            return {};
+
+        const u64 currentCommandBufferCount = m_directCommandBufferCount.load(MemoryOrder::relaxed);
+        const u64 pendingCommandBufferCount = m_pendingDirectCommandBufferCount.load(MemoryOrder::relaxed);
+        return GpuCommandArenaWorkerStatistics{
+            .queue = m_physicalQueue,
+            .recordingWorkerDomain = 0u,
+            .recordingWorkerIndex = 0u,
+            .commandPoolEpochCount = currentCommandBufferCount,
+            .pendingCommandPoolEpochCount = pendingCommandBufferCount,
+            .currentCommandBufferCount = currentCommandBufferCount,
+            .highWaterCommandBufferCount = m_directHighWaterCommandBufferCount.load(MemoryOrder::relaxed),
+            .reusableCommandBufferCount = m_directReusableCommandBufferCount.load(MemoryOrder::relaxed),
+            .leasedCommandBufferCount = m_directLeasedCommandBufferCount.load(MemoryOrder::relaxed),
+            .pendingCommandBufferCount = pendingCommandBufferCount,
+            .growthEventCount = m_directCommandBufferGrowthEventCount.load(MemoryOrder::relaxed),
+            .resetEventCount = m_directCommandBufferResetEventCount.load(MemoryOrder::relaxed),
+            .nativeHandleStorageLowerBoundBytes =
+                currentCommandBufferCount * (sizeof(VkCommandPool) + sizeof(VkCommandBuffer)),
+        };
+    }
+
+    const WorkerCommandArena* const arena = findWorkerCommandArena(recordingWorkerDomain, recordingWorkerIndex);
+    if(!arena)
+        return {};
+    const u64 currentCommandBufferCount = arena->currentCommandBufferCount.load(MemoryOrder::relaxed);
+    const u64 pendingCommandBufferCount = arena->pendingCommandBufferCount.load(MemoryOrder::relaxed);
+    return GpuCommandArenaWorkerStatistics{
+        .queue = m_physicalQueue,
+        .recordingWorkerDomain = recordingWorkerDomain,
+        .recordingWorkerIndex = recordingWorkerIndex,
+        .commandPoolEpochCount = 1u,
+        .pendingCommandPoolEpochCount = pendingCommandBufferCount > 0u ? 1u : 0u,
+        .currentCommandBufferCount = currentCommandBufferCount,
+        .highWaterCommandBufferCount = arena->highWaterCommandBufferCount.load(MemoryOrder::relaxed),
+        .reusableCommandBufferCount = arena->reusableCommandBufferCount.load(MemoryOrder::relaxed),
+        .leasedCommandBufferCount = arena->leasedCommandBufferCount.load(MemoryOrder::relaxed),
+        .pendingCommandBufferCount = pendingCommandBufferCount,
+        .growthEventCount = arena->growthEventCount.load(MemoryOrder::relaxed),
+        .resetEventCount = arena->resetEventCount.load(MemoryOrder::relaxed),
+        .nativeHandleStorageLowerBoundBytes =
+            sizeof(VkCommandPool) + currentCommandBufferCount * sizeof(VkCommandBuffer),
+    };
+}
+
+void Queue::updateCommandBufferHighWater(Atomic<u64>& highWaterCount, const u64 currentCount)noexcept{
+    u64 highWater = highWaterCount.load(MemoryOrder::relaxed);
+    while(highWater < currentCount){
+        if(highWaterCount.compare_exchange_weak(highWater, currentCount, MemoryOrder::relaxed))
+            return;
+    }
+}
+
+u64 Queue::nextRecordingID()noexcept{
+    u64 recordingID = m_lastRecordingID.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+    while(recordingID == 0u)
+        recordingID = m_lastRecordingID.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+    return recordingID;
+}
+
+void Queue::registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
+    if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot register a command buffer with a foreign queue or context"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Command buffer registration owner mismatch"));
+        return;
+    }
+    NWB_ASSERT(commandBuffer.m_arenaState == TrackedCommandBufferArenaState::Untracked);
+    commandBuffer.m_arenaState = TrackedCommandBufferArenaState::Leased;
+    const u64 currentCount = m_currentCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+    m_leasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+    m_commandBufferGrowthEventCount.fetch_add(1u, MemoryOrder::relaxed);
+    if(commandBuffer.m_recordingWorkerIndex == 0u){
+        const u64 directCurrentCount = m_directCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+        m_directLeasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+        m_directCommandBufferGrowthEventCount.fetch_add(1u, MemoryOrder::relaxed);
+        updateCommandBufferHighWater(m_directHighWaterCommandBufferCount, directCurrentCount);
+    }
+    else{
+        WorkerCommandArena* const arena = findWorkerCommandArena(
+            commandBuffer.m_recordingWorkerDomain,
+            commandBuffer.m_recordingWorkerIndex
+        );
+        NWB_ASSERT(arena);
+        if(arena){
+            const u64 workerCurrentCount = arena->currentCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+            arena->leasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+            arena->growthEventCount.fetch_add(1u, MemoryOrder::relaxed);
+            updateCommandBufferHighWater(arena->highWaterCommandBufferCount, workerCurrentCount);
+        }
+    }
+    updateCommandBufferHighWater(m_highWaterCommandBufferCount, currentCount);
+}
+
+void Queue::transitionCommandBufferState(
+    TrackedCommandBuffer& commandBuffer,
+    const TrackedCommandBufferArenaState::Enum nextState
+)noexcept{
+    if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot transition a command buffer through a foreign queue"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Command buffer arena transition owner mismatch"));
+        return;
+    }
+    const TrackedCommandBufferArenaState::Enum previousState = commandBuffer.m_arenaState;
+    if(previousState == nextState)
+        return;
+    WorkerCommandArena* const workerArena = commandBuffer.m_recordingWorkerIndex == 0u
+        ? nullptr
+        : findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex)
+    ;
+    NWB_ASSERT(commandBuffer.m_recordingWorkerIndex == 0u || workerArena);
+
+    switch(previousState){
+    case TrackedCommandBufferArenaState::Leased:{
+        const u64 previousLeasedCount = m_leasedCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+        if(previousLeasedCount == 0u)
+            NWB_ASSERT_MSG(false, NWB_TEXT("Command arena leased-buffer count underflow"));
+        if(commandBuffer.m_recordingWorkerIndex == 0u){
+            const u64 previousDirectLeasedCount = m_directLeasedCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+            if(previousDirectLeasedCount == 0u)
+                NWB_ASSERT_MSG(false, NWB_TEXT("Direct command arena leased-buffer count underflow"));
+        }
+        else if(workerArena){
+            const u64 previousWorkerLeasedCount = workerArena->leasedCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+            if(previousWorkerLeasedCount == 0u)
+                NWB_ASSERT_MSG(false, NWB_TEXT("Worker command arena leased-buffer count underflow"));
+        }
+        break;
+    }
+    case TrackedCommandBufferArenaState::Reusable:{
+        const u64 previousReusableCount = m_reusableCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+        if(previousReusableCount == 0u)
+            NWB_ASSERT_MSG(false, NWB_TEXT("Command arena reusable-buffer count underflow"));
+        if(commandBuffer.m_recordingWorkerIndex == 0u){
+            const u64 previousDirectReusableCount = m_directReusableCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+            if(previousDirectReusableCount == 0u)
+                NWB_ASSERT_MSG(false, NWB_TEXT("Direct command arena reusable-buffer count underflow"));
+        }
+        else if(workerArena){
+            const u64 previousWorkerReusableCount = workerArena->reusableCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+            if(previousWorkerReusableCount == 0u)
+                NWB_ASSERT_MSG(false, NWB_TEXT("Worker command arena reusable-buffer count underflow"));
+        }
+        break;
+    }
+    case TrackedCommandBufferArenaState::Pending:{
+        const u64 previousPendingCommandBufferCount = m_pendingCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+        if(previousPendingCommandBufferCount == 0u)
+            NWB_ASSERT_MSG(false, NWB_TEXT("Command arena pending-buffer count underflow"));
+        if(commandBuffer.m_recordingWorkerIndex == 0u){
+            const u64 previousDirectPendingCount = m_pendingDirectCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+            if(previousDirectPendingCount == 0u)
+                NWB_ASSERT_MSG(false, NWB_TEXT("Command arena direct pending-buffer count underflow"));
+        }
+        else{
+            if(workerArena){
+                const u64 previousPendingCount = workerArena->pendingCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+                NWB_ASSERT(previousPendingCount > 0u);
+                if(previousPendingCount == 1u){
+                    const u64 previousPendingEpochCount = m_pendingWorkerEpochCount.fetch_sub(1u, MemoryOrder::relaxed);
+                    if(previousPendingEpochCount == 0u)
+                        NWB_ASSERT_MSG(false, NWB_TEXT("Command arena pending worker-epoch count underflow"));
+                }
+            }
+        }
+        break;
+    }
+    default:
+        break;
+    }
+
+    switch(nextState){
+    case TrackedCommandBufferArenaState::Leased:
+        m_leasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+        if(commandBuffer.m_recordingWorkerIndex == 0u)
+            m_directLeasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+        else if(workerArena)
+            workerArena->leasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+        break;
+    case TrackedCommandBufferArenaState::Reusable:
+        m_reusableCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+        if(commandBuffer.m_recordingWorkerIndex == 0u)
+            m_directReusableCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+        else if(workerArena)
+            workerArena->reusableCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+        break;
+    case TrackedCommandBufferArenaState::Pending:
+        m_pendingCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+        if(commandBuffer.m_recordingWorkerIndex == 0u)
+            m_pendingDirectCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+        else{
+            if(workerArena && workerArena->pendingCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) == 0u)
+                m_pendingWorkerEpochCount.fetch_add(1u, MemoryOrder::relaxed);
+        }
+        break;
+    default:
+        break;
+    }
+    commandBuffer.m_arenaState = nextState;
+}
+
+void Queue::unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
+    if(commandBuffer.m_arenaState == TrackedCommandBufferArenaState::Untracked)
+        return;
+
+    transitionCommandBufferState(commandBuffer, TrackedCommandBufferArenaState::Untracked);
+    const u64 previousCurrentCount = m_currentCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+    if(previousCurrentCount == 0u)
+        NWB_ASSERT_MSG(false, NWB_TEXT("Command arena current-buffer count underflow"));
+    if(commandBuffer.m_recordingWorkerIndex == 0u){
+        const u64 previousDirectCount = m_directCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+        if(previousDirectCount == 0u)
+            NWB_ASSERT_MSG(false, NWB_TEXT("Command arena direct-buffer count underflow"));
+    }
+    else{
+        WorkerCommandArena* const arena = findWorkerCommandArena(
+            commandBuffer.m_recordingWorkerDomain,
+            commandBuffer.m_recordingWorkerIndex
+        );
+        if(arena){
+            const u64 previousWorkerCount = arena->currentCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+            if(previousWorkerCount == 0u)
+                NWB_ASSERT_MSG(false, NWB_TEXT("Worker command arena current-buffer count underflow"));
+        }
+    }
+}
+
+TrackedCommandBufferPtr Queue::createCommandBuffer(
+    const VkCommandPool commandPool,
+    Futex* const sharedCommandPoolMutex,
+    const u64 recordingWorkerDomain,
+    const u32 recordingWorkerIndex
+){
+    const bool ownsCommandPool = recordingWorkerIndex == 0u;
+    if(!ownsCommandPool && commandPool == VK_NULL_HANDLE){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Cannot create a worker command buffer without a command pool for physical queue {} worker {}"),
+            m_physicalQueue.index,
+            recordingWorkerIndex
+        );
+        return nullptr;
+    }
+
+    auto* cmdBuf = NewArenaObject<TrackedCommandBuffer>(
+        m_context.objectArena,
+        *this,
+        m_context,
+        m_queueFamilyIndex,
+        commandPool,
+        ownsCommandPool,
+        sharedCommandPoolMutex
+    );
+    if(!cmdBuf){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to allocate command-buffer tracking storage for physical queue {} worker {}"),
+            m_physicalQueue.index,
+            recordingWorkerIndex
+        );
+        return nullptr;
+    }
+    if(!cmdBuf->m_cmdBuf){
+        DestroyArenaObject(m_context.objectArena, cmdBuf);
+        return nullptr;
+    }
+
+    cmdBuf->m_recordingID = nextRecordingID();
+    cmdBuf->m_recordingWorkerDomain = recordingWorkerDomain;
+    cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
+    registerCommandBuffer(*cmdBuf);
+    return TrackedCommandBufferPtr(cmdBuf, TrackedCommandBufferPtr::deleter_type(&m_context.objectArena), AdoptRef);
+}
+
+
+Queue::WorkerCommandArena* Queue::findWorkerCommandArena(
+    const u64 recordingWorkerDomain,
+    const u32 recordingWorkerIndex
+)const{
     NWB_ASSERT(recordingWorkerIndex != 0u);
     if(recordingWorkerIndex == 0u)
-        return VK_NULL_HANDLE;
+        return nullptr;
 
-    for(const WorkerCommandArena& arena : m_workerCommandArenas){
-        if(arena.recordingWorkerIndex == recordingWorkerIndex)
-            return arena.commandPool;
+    for(
+        WorkerCommandArena* arena = m_workerCommandArenaHead.load(MemoryOrder::acquire);
+        arena;
+        arena = arena->next.load(MemoryOrder::acquire)
+    ){
+        if(
+            arena
+            && arena->recordingWorkerDomain == recordingWorkerDomain
+            && arena->recordingWorkerIndex == recordingWorkerIndex
+        )
+            return arena;
+    }
+    return nullptr;
+}
+
+
+Queue::WorkerCommandArena* Queue::getOrCreateWorkerCommandArena(
+    const u64 recordingWorkerDomain,
+    const u32 recordingWorkerIndex
+){
+    NWB_ASSERT(recordingWorkerIndex != 0u);
+    if(recordingWorkerIndex == 0u)
+        return nullptr;
+
+    if(WorkerCommandArena* const arena = findWorkerCommandArena(recordingWorkerDomain, recordingWorkerIndex))
+        return arena;
+
+    ScopedLock lock(m_workerCommandArenasMutex);
+    if(WorkerCommandArena* const arena = findWorkerCommandArena(recordingWorkerDomain, recordingWorkerIndex))
+        return arena;
+
+    auto* const arena = NewArenaObject<WorkerCommandArena>(
+        m_context.objectArena,
+        m_context.objectArena,
+        recordingWorkerDomain,
+        recordingWorkerIndex
+    );
+    if(!arena){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to allocate command-arena storage for physical queue {} worker {}:{}"),
+            m_physicalQueue.index,
+            recordingWorkerDomain,
+            recordingWorkerIndex
+        );
+        return nullptr;
     }
 
     auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
     poolInfo.queueFamilyIndex = m_queueFamilyIndex;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
 
-    VkCommandPool commandPool = VK_NULL_HANDLE;
     const VkResult createResult = vkCreateCommandPool(
         m_context.device,
         &poolInfo,
         m_context.allocationCallbacks,
-        &commandPool
+        &arena->commandPool
     );
     if(createResult != VK_SUCCESS){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to create command pool for physical queue {} worker {}: {}"),
+            NWB_TEXT("Vulkan: Failed to create command pool for physical queue {} worker {}:{}: {}"),
             m_physicalQueue.index,
+            recordingWorkerDomain,
             recordingWorkerIndex,
             ResultToString(createResult)
         );
-        return VK_NULL_HANDLE;
-    }
-
-    m_workerCommandArenas.push_back(WorkerCommandArena{
-        .recordingWorkerIndex = recordingWorkerIndex,
-        .commandPool = commandPool,
-    });
-    return commandPool;
-}
-
-void Queue::destroyWorkerCommandArenas(){
-    for(WorkerCommandArena& arena : m_workerCommandArenas){
-        if(arena.commandPool){
-            vkDestroyCommandPool(m_context.device, arena.commandPool, m_context.allocationCallbacks);
-            arena.commandPool = VK_NULL_HANDLE;
-        }
-    }
-    m_workerCommandArenas.clear();
-}
-
-TrackedCommandBufferPtr Queue::createCommandBuffer(const u32 recordingWorkerIndex){
-    const bool usesWorkerArena = recordingWorkerIndex != 0u;
-    const VkCommandPool commandPool = usesWorkerArena
-        ? getOrCreateWorkerCommandPool(recordingWorkerIndex)
-        : VK_NULL_HANDLE
-    ;
-    if(usesWorkerArena && commandPool == VK_NULL_HANDLE)
-        return nullptr;
-
-    auto* cmdBuf = NewArenaObject<TrackedCommandBuffer>(
-        m_context.objectArena,
-        m_context,
-        m_queueFamilyIndex,
-        commandPool,
-        !usesWorkerArena
-    );
-    if(!cmdBuf->m_cmdBuf){
-        DestroyArenaObject(m_context.objectArena, cmdBuf);
+        DestroyArenaObject(m_context.objectArena, arena);
         return nullptr;
     }
 
-    cmdBuf->m_recordingID = ++m_lastRecordingID;
-    cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
-    return TrackedCommandBufferPtr(cmdBuf, TrackedCommandBufferPtr::deleter_type(&m_context.objectArena), AdoptRef);
+    m_workerCommandArenas.push_back(arena);
+    arena->next.store(m_workerCommandArenaHead.load(MemoryOrder::relaxed), MemoryOrder::relaxed);
+    m_workerCommandArenaHead.store(arena, MemoryOrder::release);
+    m_explicitWorkerArenaCount.fetch_add(1u, MemoryOrder::relaxed);
+    return arena;
 }
 
-TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(const u32 recordingWorkerIndex){
+
+TrackedCommandBufferPtr Queue::getOrCreateDirectCommandBuffer(){
     ScopedLock lock(m_mutex);
 
     updateLastFinishedID();
@@ -239,7 +792,7 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(const u32 recordingWorke
 
     auto available = m_commandBuffersPool.end();
     for(auto it = m_commandBuffersPool.begin(); it != m_commandBuffersPool.end(); ++it){
-        if(*it && (*it)->m_recordingWorkerIndex == recordingWorkerIndex){
+        if(*it && (*it)->m_recordingWorkerIndex == 0u){
             available = it;
             break;
         }
@@ -249,21 +802,113 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(const u32 recordingWorke
         m_commandBuffersPool.erase(available);
 
         if(!cmdBuf || cmdBuf->m_cmdBuf == VK_NULL_HANDLE)
-            return createCommandBuffer(recordingWorkerIndex);
+            return createCommandBuffer(VK_NULL_HANDLE, nullptr, 0u, 0u);
 
         const VkResult res = vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
         if(res != VK_SUCCESS){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset command buffer, creating a new one: {}"), ResultToString(res));
-            return createCommandBuffer(recordingWorkerIndex);
+            return createCommandBuffer(VK_NULL_HANDLE, nullptr, 0u, 0u);
         }
 
-        cmdBuf->m_recordingID = ++m_lastRecordingID;
-        cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
+        transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Leased);
+        m_commandBufferResetEventCount.fetch_add(1u, MemoryOrder::relaxed);
+        m_directCommandBufferResetEventCount.fetch_add(1u, MemoryOrder::relaxed);
+        cmdBuf->m_recordingID = nextRecordingID();
+        cmdBuf->m_recordingWorkerDomain = 0u;
+        cmdBuf->m_recordingWorkerIndex = 0u;
 
         return cmdBuf;
     }
 
-    return createCommandBuffer(recordingWorkerIndex);
+    return createCommandBuffer(VK_NULL_HANDLE, nullptr, 0u, 0u);
+}
+
+
+TrackedCommandBufferPtr Queue::getOrCreateWorkerCommandBuffer(
+    const u64 recordingWorkerDomain,
+    const u32 recordingWorkerIndex
+){
+    WorkerCommandArena* const arena = getOrCreateWorkerCommandArena(recordingWorkerDomain, recordingWorkerIndex);
+    if(!arena)
+        return nullptr;
+
+    // Each explicit worker owns this native pool shard. Do not take m_mutex here: submission/timeline retirement
+    // remains serialized there, while allocation and reset stay independent for ready-frontier recording workers.
+    ScopedLock lock(arena->mutex);
+
+    if(!arena->commandBuffersPool.empty()){
+        auto available = arena->commandBuffersPool.begin();
+        TrackedCommandBufferPtr cmdBuf = Move(*available);
+        arena->commandBuffersPool.erase(available);
+
+        if(!cmdBuf || cmdBuf->m_cmdBuf == VK_NULL_HANDLE)
+            return createCommandBuffer(arena->commandPool, &arena->mutex, recordingWorkerDomain, recordingWorkerIndex);
+
+        const VkResult res = vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset worker command buffer, creating a new one: {}"), ResultToString(res));
+            vkFreeCommandBuffers(m_context.device, arena->commandPool, 1u, &cmdBuf->m_cmdBuf);
+            cmdBuf->m_cmdBuf = VK_NULL_HANDLE;
+            cmdBuf.reset();
+            return createCommandBuffer(arena->commandPool, &arena->mutex, recordingWorkerDomain, recordingWorkerIndex);
+        }
+
+        transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Leased);
+        m_commandBufferResetEventCount.fetch_add(1u, MemoryOrder::relaxed);
+        arena->resetEventCount.fetch_add(1u, MemoryOrder::relaxed);
+        cmdBuf->m_recordingID = nextRecordingID();
+        cmdBuf->m_recordingWorkerDomain = recordingWorkerDomain;
+        cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
+        return cmdBuf;
+    }
+
+    // Queue timeline polling/reclamation occurs in Device::runGarbageCollection(). An empty worker shard grows
+    // instead of taking the queue submission lock and serializing parallel ready-frontier recording.
+    return createCommandBuffer(arena->commandPool, &arena->mutex, recordingWorkerDomain, recordingWorkerIndex);
+}
+
+
+TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(
+    const u64 recordingWorkerDomain,
+    const u32 recordingWorkerIndex
+){
+    if(recordingWorkerIndex == 0u)
+        return getOrCreateDirectCommandBuffer();
+
+    return getOrCreateWorkerCommandBuffer(recordingWorkerDomain, recordingWorkerIndex);
+}
+
+
+void Queue::destroyWorkerCommandArenas(){
+    ScopedLock workerArenasLock(m_workerCommandArenasMutex);
+    for(WorkerCommandArena* const arena : m_workerCommandArenas){
+        if(!arena)
+            continue;
+
+        {
+            ScopedLock arenaLock(arena->mutex);
+            for(TrackedCommandBufferPtr& commandBuffer : arena->commandBuffersPool){
+                if(!commandBuffer)
+                    continue;
+                commandBuffer->m_cmdBuf = VK_NULL_HANDLE;
+                commandBuffer->m_cmdPool = VK_NULL_HANDLE;
+                commandBuffer->m_sharedCommandPoolMutex = nullptr;
+            }
+            arena->commandBuffersPool.clear();
+            if(arena->commandPool){
+                vkDestroyCommandPool(m_context.device, arena->commandPool, m_context.allocationCallbacks);
+                arena->commandPool = VK_NULL_HANDLE;
+            }
+        }
+    }
+
+    m_workerCommandArenaHead.store(nullptr, MemoryOrder::release);
+    for(WorkerCommandArena* const arena : m_workerCommandArenas){
+        if(!arena)
+            continue;
+        DestroyArenaObject(m_context.objectArena, arena);
+    }
+    m_workerCommandArenas.clear();
 }
 
 void Queue::collectCompletedCommandBuffers(){
@@ -299,27 +944,39 @@ void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
 u64 Queue::submit(
     CommandList* const* ppCmd,
     const usize numCmd,
+    const SubmissionCommandListIdentity* const expectedCommandLists,
     const SubmissionWait* const localWaits,
     const usize localWaitCount,
     bool* const outSubmissionAccepted,
     const SubmissionSignal* const localSignals,
-    const usize localSignalCount
+    const usize localSignalCount,
+    const bool forceNativeSubmission
 ){
     ScopedLock lock(m_mutex);
+    DescriptorBufferManager* const descriptorBufferManager = m_context.descriptorBufferManager;
+    UniqueLock<Futex> descriptorBufferLifecycleLock;
     if(outSubmissionAccepted)
         *outSubmissionAccepted = false;
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_QueueSubmitArena);
 
-    const bool hasCommands = ppCmd && numCmd > 0;
+    if(numCmd > 0u && !ppCmd){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list array is null"));
+        return m_lastSubmittedID;
+    }
+    const bool hasCommands = numCmd > 0u;
+    if(hasCommands && !expectedCommandLists){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: expected command-list identity array is null"));
+        return m_lastSubmittedID;
+    }
+    // Queue-global synchronization belongs to the next accepted native submission. Validation and injected
+    // pre-driver rejection must leave it pending, especially when it contains the acquired swap-chain semaphore.
     if(localWaitCount > 0u && !localWaits){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait array is null"));
-        clearPendingSemaphores();
         return m_lastSubmittedID;
     }
     if(localSignalCount > 0u && !localSignals){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local signal array is null"));
-        clearPendingSemaphores();
         return m_lastSubmittedID;
     }
 
@@ -328,10 +985,10 @@ u64 Queue::submit(
         || !m_waitSemaphores.empty()
         || !m_signalSemaphores.empty()
     ;
+    const bool requiresNativeSubmission = forceNativeSubmission || hasCommands || hasPendingSemaphores;
 
     if(hasCommands && numCmd > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list count exceeds Vulkan limit"));
-        clearPendingSemaphores();
         return m_lastSubmittedID;
     }
     if(
@@ -341,27 +998,92 @@ u64 Queue::submit(
         || m_signalSemaphores.size() >= static_cast<usize>(Limit<u32>::s_Max) - localSignalCount
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queued semaphore count exceeds Vulkan limit"));
-        clearPendingSemaphores();
         return m_lastSubmittedID;
     }
-    if((hasCommands || hasPendingSemaphores) && m_lastSubmittedID == Limit<u64>::s_Max){
+    if(requiresNativeSubmission && m_lastSubmittedID == Limit<u64>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queue submission ID exhausted"));
-        clearPendingSemaphores();
         return m_lastSubmittedID;
     }
     if(hasCommands){
         for(usize i = 0; i < numCmd; ++i){
             auto* cmdList = ppCmd[i];
+            for(usize previous = 0u; previous < i; ++previous){
+                if(ppCmd[previous] == cmdList){
+                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is duplicated"), i);
+                    return m_lastSubmittedID;
+                }
+            }
             if(
-                cmdList
-                && cmdList->m_currentCmdBuf
-                && (
-                    cmdList->m_desc.queueType != m_queueID
-                    || cmdList->m_desc.physicalQueue != m_physicalQueue
+                !cmdList
+                || &cmdList->m_device != &m_device
+                || !cmdList->m_currentCmdBuf
+                || cmdList->m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE
+            ){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is null, foreign, or has no native command buffer"), i);
+                return m_lastSubmittedID;
+            }
+            if(cmdList->commandRecordingFailed()){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: a command list has a sticky native recording failure"));
+                return m_lastSubmittedID;
+            }
+            if(cmdList->m_isRecording){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is still recording"), i);
+                return m_lastSubmittedID;
+            }
+            if(!cmdList->matchesSubmissionLease(m_physicalQueue, m_queueID)){
+                NWB_LOGGER_CRITICAL_WARNING(
+                    NWB_TEXT("Vulkan: Command-list lease provenance does not match execution queue")
+                );
+                return m_lastSubmittedID;
+            }
+            const SubmissionCommandListIdentity& expected = expectedCommandLists[i];
+            if(
+                !expected.owner
+                || expected.owner.get() != cmdList->m_currentCmdBuf.get()
+                || expected.recordingLeaseSerial == 0u
+                || expected.recordingLeaseSerial != cmdList->m_recordingLeaseSerial
+                || expected.nativeRecordingID == 0u
+                || expected.nativeRecordingID != cmdList->m_nativeRecordingID
+                || expected.nativeRecordingID != cmdList->m_currentCmdBuf->m_recordingID
+                || expected.recordingWorkerDomain != cmdList->m_creationDesc.recordingWorkerDomain
+                || expected.recordingWorkerDomain != cmdList->m_currentCmdBuf->m_recordingWorkerDomain
+                || expected.recordingWorkerIndex != cmdList->m_creationDesc.recordingWorkerIndex
+                || expected.recordingWorkerIndex != cmdList->m_currentCmdBuf->m_recordingWorkerIndex
+            ){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} replaced its validated native recording lease"), i);
+                return m_lastSubmittedID;
+            }
+            if(!cmdList->validateTrackedResourcesReadyForSubmission())
+                return m_lastSubmittedID;
+        }
+    }
+
+    if(descriptorBufferManager)
+        descriptorBufferLifecycleLock = UniqueLock<Futex>(descriptorBufferManager->m_lifecycleMutex);
+
+    if(hasCommands){
+        for(usize i = 0; i < numCmd; ++i){
+            CommandList* const cmdList = ppCmd[i];
+            TrackedCommandBuffer* const tracked = cmdList->m_currentCmdBuf.get();
+            if(
+                (cmdList->m_descriptorBuffersBound && !tracked->m_descriptorBufferManager)
+                || (!tracked->m_descriptorBufferManager && tracked->m_descriptorBufferGeneration != 0u)
+                || (tracked->m_descriptorBufferManager && tracked->m_descriptorBufferGeneration == 0u)
+                || (
+                    tracked->m_descriptorBufferManager
+                    && (
+                        tracked->m_descriptorBufferManager != descriptorBufferManager
+                        || descriptorBufferManager != &m_device.m_descriptorBufferManager
+                        || !descriptorBufferManager->m_enabled
+                        || descriptorBufferManager->m_lifecycleTransitioning
+                        || descriptorBufferManager->m_bindingGeneration == 0u
+                        || tracked->m_descriptorBufferGeneration != descriptorBufferManager->m_bindingGeneration
+                    )
                 )
             ){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list physical queue does not match the execution queue"));
-                clearPendingSemaphores();
+                NWB_LOGGER_CRITICAL_WARNING(
+                    NWB_TEXT("Vulkan: Failed to submit command lists: descriptor-buffer binding generation is stale")
+                );
                 return m_lastSubmittedID;
             }
         }
@@ -369,7 +1091,6 @@ u64 Queue::submit(
     for(usize i = 0u; i < localSignalCount; ++i){
         if(localSignals[i].semaphore == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local signal semaphore is null"));
-            clearPendingSemaphores();
             return m_lastSubmittedID;
         }
     }
@@ -383,25 +1104,38 @@ u64 Queue::submit(
 
         for(usize i = 0; i < numCmd; ++i){
             auto* cmdList = ppCmd[i];
-            if(!cmdList || !cmdList->m_currentCmdBuf)
-                continue;
-
             auto cmdBufInfo = VulkanDetail::MakeVkStruct<VkCommandBufferSubmitInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO);
             cmdBufInfo.commandBuffer = cmdList->m_currentCmdBuf->m_cmdBuf;
             cmdBufInfos.push_back(cmdBufInfo);
 
             cmdList->m_currentCmdBuf->m_submissionID = m_lastSubmittedID + 1;
             trackedBuffers.push_back(Move(cmdList->m_currentCmdBuf));
+            cmdList->m_nativeRecordingID = 0u;
         }
     }
 
-    if(cmdBufInfos.empty() && !hasPendingSemaphores)
+    const auto finalizeDetachedRecordingAttempts = [&](const bool accepted){
+        for(usize i = 0u; i < numCmd; ++i){
+            CommandList* const commandList = ppCmd[i];
+            if(!commandList || commandList->m_recordingLeaseSerial != expectedCommandLists[i].recordingLeaseSerial)
+                continue;
+
+            if(accepted)
+                commandList->m_stateTracker.commitRecordingAttempt();
+            else
+                commandList->m_stateTracker.rollbackRecordingAttempt();
+        }
+    };
+
+    if(!requiresNativeSubmission)
         return m_lastSubmittedID;
 
     if(m_trackingSemaphore == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Queue submission skipped because timeline semaphore is unavailable."));
-        clearPendingSemaphores();
 
+        if(descriptorBufferLifecycleLock.owns_lock())
+            descriptorBufferLifecycleLock.unlock();
+        finalizeDetachedRecordingAttempts(false);
         for(auto& tracked : trackedBuffers)
             recycleCommandBuffer(Move(tracked));
         return m_lastSubmittedID;
@@ -420,7 +1154,9 @@ u64 Queue::submit(
         if(localWaits[i].semaphore == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait semaphore is null"));
             m_lastSubmittedID = submissionID - 1;
-            clearPendingSemaphores();
+            if(descriptorBufferLifecycleLock.owns_lock())
+                descriptorBufferLifecycleLock.unlock();
+            finalizeDetachedRecordingAttempts(false);
             for(auto& tracked : trackedBuffers)
                 recycleCommandBuffer(Move(tracked));
             return m_lastSubmittedID;
@@ -468,40 +1204,38 @@ u64 Queue::submit(
     submitInfo.signalSemaphoreInfoCount = static_cast<uint32_t>(signalInfos.size());
     submitInfo.pSignalSemaphoreInfos = signalInfos.data();
 
-#if !defined(NWB_FINAL)
-    if(m_device.consumeSubmissionRejectionForTesting(m_queueID)){
-        // Match the real vkQueueSubmit2 rejection path exactly: the detached command buffers return to this queue's
-        // pool, the tentative timeline value is rolled back, and Device::executeCommandLists performs its normal
-        // upload/scratch cleanup after observing outSubmissionAccepted=false.
-        clearPendingSemaphores();
-        m_lastSubmittedID = submissionID - 1;
-        for(auto& tracked : trackedBuffers)
-            recycleCommandBuffer(Move(tracked));
-        return m_lastSubmittedID;
-    }
-#endif
-
     const VkResult res = vkQueueSubmit2(m_queue, 1, &submitInfo, VK_NULL_HANDLE);
-
-    clearPendingSemaphores();
 
     if(res != VK_SUCCESS){
         m_lastSubmittedID = submissionID - 1;
 
+        if(descriptorBufferLifecycleLock.owns_lock())
+            descriptorBufferLifecycleLock.unlock();
+
         if(res == VK_ERROR_DEVICE_LOST){
+            clearPendingSemaphores();
             m_device.captureGpuCrash("queue submit");
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Device was lost during queue submission."));
+        }
+        else if(res == VK_ERROR_OUT_OF_HOST_MEMORY || res == VK_ERROR_OUT_OF_DEVICE_MEMORY){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Queue submission was rejected: {}"), ResultToString(res));
         }
         else{
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command buffers to queue: {}"), ResultToString(res));
         }
 
+        finalizeDetachedRecordingAttempts(false);
         for(auto& tracked : trackedBuffers){
             recycleCommandBuffer(Move(tracked));
         }
 
         return m_lastSubmittedID;
     }
+
+    if(descriptorBufferLifecycleLock.owns_lock())
+        descriptorBufferLifecycleLock.unlock();
+    clearPendingSemaphores();
+    finalizeDetachedRecordingAttempts(true);
 
     const QueueSubmissionToken submissionToken{
         .queue = m_queueID,
@@ -510,6 +1244,11 @@ u64 Queue::submit(
         .deviceGeneration = m_physicalQueue.deviceGeneration,
     };
     for(auto& tracked : trackedBuffers){
+        tracked->commitRetainedBufferStateCommits();
+        tracked->commitRetainedTextureStateCommits();
+        tracked->commitPendingAccelStructBuildCommits();
+        tracked->commitPendingOpacityMicromapBuildCommits();
+        transitionCommandBufferState(*tracked, TrackedCommandBufferArenaState::Pending);
         for(GpuDescriptorHeap* heap : tracked->m_referencedDescriptorHeaps){
             if(heap)
                 heap->submitCommandBufferUse(*tracked, submissionToken);
@@ -531,7 +1270,9 @@ void Queue::updateLastFinishedID(){
     u64 completedValue = 0;
     const VkResult res = vkGetSemaphoreCounterValue(m_context.device, m_trackingSemaphore, &completedValue);
     if(res == VK_SUCCESS)
-        m_lastFinishedID = completedValue;
+        // vkQueueWaitIdle() establishes a stronger completion fact than a later timeline query. Never let a stale
+        // driver value make already-retired command buffers or descriptor uses appear in flight again.
+        m_lastFinishedID = Max(m_lastFinishedID, completedValue);
     else{
         if(res == VK_ERROR_DEVICE_LOST)
             m_device.captureGpuCrash("queue timeline query");
@@ -564,9 +1305,40 @@ void Queue::clearPendingSemaphores(){
 void Queue::recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf){
     if(!cmdBuf)
         return;
+    if(&cmdBuf->m_queue != this || &cmdBuf->m_context != &m_context){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot recycle a command buffer through a foreign queue"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Command buffer recycle owner mismatch"));
+        return;
+    }
 
     cmdBuf->clearTrackedReferences();
-    m_commandBuffersPool.push_back(Move(cmdBuf));
+    transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Reusable);
+    if(cmdBuf->m_recordingWorkerIndex == 0u){
+        m_commandBuffersPool.push_back(Move(cmdBuf));
+        return;
+    }
+
+    WorkerCommandArena* const workerArena = findWorkerCommandArena(
+        cmdBuf->m_recordingWorkerDomain,
+        cmdBuf->m_recordingWorkerIndex
+    );
+    if(!workerArena){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Cannot recycle command buffer because physical queue {} worker {}:{} no longer has a command arena"),
+            m_physicalQueue.index,
+            cmdBuf->m_recordingWorkerDomain,
+            cmdBuf->m_recordingWorkerIndex
+        );
+        NWB_ASSERT_MSG(false, NWB_TEXT("Worker command buffer lost its owning command arena"));
+        m_commandBuffersPool.push_back(Move(cmdBuf));
+        return;
+    }
+
+    // Queue submission/timeline retirement holds m_mutex before arriving here. It may take a worker arena lock,
+    // but worker recording never takes m_mutex, so the lock order cannot form a cycle.
+    ScopedLock lock(workerArena->mutex);
+
+    workerArena->commandBuffersPool.push_back(Move(cmdBuf));
 }
 
 
@@ -612,11 +1384,6 @@ void Device::queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue:
     if(wait && exec)
         wait->addWaitSemaphore(exec->m_trackingSemaphore, instance);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -7,6 +7,8 @@
 
 #include "types.h"
 
+#include <core/graphics/rhi/presentation.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,16 +34,17 @@ public:
 public:
     // Called during ordinary renderer preparation, before graph compilation and native recording. A false return
     // leaves this frame's scene presentation usable without the optional contributor.
-    [[nodiscard]] virtual bool prepareTaskGraphPresentation(Framebuffer* framebuffer) = 0;
+    [[nodiscard]] virtual bool prepareTaskGraphPresentation(const AcquiredPresentationFrame& frame) = 0;
     // Preparation may succeed while there is no visible overlay work (for example, an empty ImGui draw list).
     // Such a frame deliberately skips declaration instead of manufacturing an empty presentation packet.
     [[nodiscard]] virtual bool hasTaskGraphPresentationWork()const = 0;
-    // `previousTask` is the scene-output endpoint and `backbuffer` is its graph-owned presentation hazard domain.
-    // The returned task must be Graphics-capable and ordered after that endpoint. A task that writes the backbuffer
-    // must declare the same domain; an upload-only contributor may instead return a terminal completion packet.
+    // `previousTask` is the scene-output endpoint and `backbuffer` is the exact typed acquired texture imported by
+    // the renderer. The returned task must be Graphics-capable and ordered after that endpoint. A task that writes
+    // the backbuffer must declare that same resource; an upload-only contributor may instead return a terminal
+    // completion packet.
     [[nodiscard]] virtual GpuTaskId declareTaskGraphPresentation(
         GpuTaskGraph& graph,
-        Framebuffer* framebuffer,
+        const AcquiredPresentationFrame& frame,
         GpuGraphResourceId backbuffer,
         GpuTaskId previousTask
     ) = 0;

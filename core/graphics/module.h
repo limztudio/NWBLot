@@ -84,6 +84,9 @@ public:
     // Uploads every listed region into an existing texture through a compiler-owned task graph.  This is the
     // multi-subresource companion to TextureSetupDesc for decoded/static assets.  `finalState` is explicit so a
     // caller cannot publish an opaque post-write layout; for keepInitialState textures it must equal initialState.
+    // Leave hasPhysicalInitialState false to preserve the legacy descriptor-state import.  Set it true to declare
+    // the actual native state of the destination before the upload; an explicit Unknown means a fresh Vulkan image
+    // begins in UNDEFINED rather than TextureDesc::initialState.
     struct TextureUploadBatchDesc{
         TextureHandle destination;
         const TextureUploadRegion* regions = nullptr;
@@ -91,6 +94,8 @@ public:
         ResourceStates::Mask finalState = ResourceStates::Unknown;
         CommandQueue::Enum queue = CommandQueue::kCount;
         QueueSubmissionToken* acceptedToken = nullptr;
+        ResourceStates::Mask physicalInitialState = ResourceStates::Unknown;
+        bool hasPhysicalInitialState = false;
     };
 
     struct MeshSetupDesc{
@@ -136,6 +141,10 @@ public:
 
 
 private:
+    // runFrame creates this on the stack only for a capture-enabled normal frame. It stages phase values without
+    // touching the TimingSink, so a failed frame cannot make a partial phase scope observable.
+    struct CpuTimingPhaseBatch;
+
     static void BackBufferResizingCallback(void* userData);
     static void BackBufferResizedCallback(void* userData);
 
@@ -147,6 +156,13 @@ public:
         Alloc::JobSystem& jobSystem,
         Perf::TimingSink& gpuTiming
     );
+    Graphics(
+        GraphicsAllocator& allocator,
+        Alloc::ThreadPool& threadPool,
+        Alloc::JobSystem& jobSystem,
+        Perf::TimingSink& gpuTiming,
+        Perf::TimingSink* cpuTiming
+    );
     ~Graphics();
 
 
@@ -155,6 +171,9 @@ public:
     bool createHeadlessDevice();
     bool createInstance(const InstanceParameters& params);
     bool setDebugRuntimeEnabled(bool enabled);
+    // Selects the native mesh-shader path when the backend supports it. Disabled configurations use the renderer's
+    // compute-emulation path. Must be configured before instance creation.
+    bool setNativeMeshShadersEnabled(bool enabled);
     // Must be configured before device creation. Unsupported adapters retain the Graphics-only path.
     bool setAsyncComputeLaneEnabled(bool enabled);
     // Must be configured before device creation. Unsupported adapters retain the Graphics/Compute copy fallback.
@@ -172,6 +191,9 @@ public:
     // Requests HDR10/PQ presentation where the current display surface supports it. Unsupported surfaces
     // automatically retain the normal SDR swap chain. Must be configured before device creation.
     bool setHDR10OutputEnabled(bool enabled);
+    // Requests transfer-source usage for presentation images. Unsupported surfaces retain the normal swap chain
+    // and report readback unavailable. Must be configured before device creation.
+    bool setSwapChainReadbackEnabled(bool enabled);
     bool setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi);
     void setPipelineCacheDirectory(const Path& directory);
     // Keeps the host update/event loop alive while preventing runFrame from recording, submitting, or presenting a
@@ -182,7 +204,7 @@ public:
     // A render pass uses this when an accepted cross-queue release cannot be recovered safely. The current graphics
     // generation then stops before another pass or presentation can use indeterminate ownership; its owner must
     // tear down and recreate the device/resources before resuming.
-    void requestDeviceRecreation();
+    void requestDeviceRecreation()const;
     [[nodiscard]] bool isDeviceRecreationRequested()const noexcept{ return m_deviceRecreationRequested; }
     void updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
     void destroy();
@@ -198,10 +220,6 @@ public:
     // Resolves the GPU wave/subgroup size, or returns a conservative fallback (64) when the device cannot report it.
     // Use the returned value to size groupshared reductions and wave-intrinsic shader specializations.
     [[nodiscard]] u32 queryWaveLaneCount()const noexcept;
-#if !defined(NWB_FINAL)
-    void setFeatureSupportDisabledForTesting(Feature::Enum feature, bool disabled);
-    void clearFeatureSupportDisabledForTesting();
-#endif
 
     void addRenderPassToFront(IRenderPass& pass);
     void addRenderPassToBack(IRenderPass& pass);
@@ -235,6 +253,7 @@ public:
     [[nodiscard]] const GpuTimingRecorder& gpuTiming()const{ return m_gpuTiming; }
     [[nodiscard]] bool isVsyncEnabled()const{ return m_swapChainState.vsyncEnabled; }
     [[nodiscard]] bool isHDR10OutputActive()const{ return m_swapChainState.outputMode == SwapChainOutputMode::HDR10; }
+    [[nodiscard]] bool isSwapChainReadbackAvailable()const{ return m_swapChainState.swapChainReadbackAvailable; }
     void setVSyncEnabled(bool enabled){ m_requestedVSync = enabled; }
     void reportLiveObjects()const;
 
@@ -244,11 +263,12 @@ public:
     void setWindowTitle(NotNull<const tchar*> title);
     void setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData);
 
-    [[nodiscard]] Texture* getCurrentBackBuffer()const;
+    // Valid only while Graphics is preparing, rendering, or presenting one successfully acquired frame. The
+    // snapshot owns the exact back buffer and its matching framebuffer so presentation consumers never infer WSI
+    // identity from mutable backend state.
+    [[nodiscard]] const AcquiredPresentationFrame& acquiredPresentationFrame()const noexcept{ return m_acquiredPresentationFrame; }
     [[nodiscard]] Texture* getBackBuffer(u32 index)const;
-    [[nodiscard]] u32 getCurrentBackBufferIndex()const;
     [[nodiscard]] u32 getBackBufferCount()const;
-    [[nodiscard]] Framebuffer* getCurrentFramebuffer()const{ return getFramebuffer(getCurrentBackBufferIndex()); }
     [[nodiscard]] Framebuffer* getFramebuffer(u32 index)const;
 
     [[nodiscard]] BufferHandle createBuffer(const BufferDesc& desc)const;
@@ -309,12 +329,19 @@ public:
 
 
 private:
+    bool animateRenderPresentInternal(CpuTimingPhaseBatch* phaseTiming);
+
+
+private:
     GraphicsAllocator& m_allocator;
     Alloc::ThreadPool& m_threadPool;
     Alloc::JobSystem& m_jobSystem;
     DeviceCreationParameters m_deviceCreationParams;
     SwapChainRuntimeState m_swapChainState;
     GpuTimingRecorder m_gpuTiming;
+    // Optional and non-owning: Frame's perf Session owns this sink and outlives Graphics. It is used only by the
+    // main-thread runFrame boundary; packet recording and setup workers intentionally remain outside this sink.
+    Perf::TimingSink* m_cpuTiming = nullptr;
 
 private:
     NotNullUniquePtr<Backend, BackendOwner::deleter_type> m_backend;
@@ -325,7 +352,7 @@ private:
     bool m_windowIsInFocus = true;
     bool m_requestedVSync = false;
     bool m_instanceCreated = false;
-    bool m_deviceRecreationRequested = false;
+    mutable bool m_deviceRecreationRequested = false;
     bool m_frameSubmissionSuspended = false;
 
     List<IRenderPass*, Alloc::GlobalArena> m_renderPasses;
@@ -343,11 +370,9 @@ private:
     i32 m_numberOfAccumulatedFrames = 0;
 
     u32 m_frameIndex = 0;
-#if !defined(NWB_FINAL)
-    u64 m_disabledFeatureSupportMask = 0u;
-#endif
 
     Vector<FramebufferHandle, Alloc::GlobalArena> m_swapChainFramebuffers;
+    AcquiredPresentationFrame m_acquiredPresentationFrame;
 
     GraphicsTString m_windowTitle;
     PointerScaleChangedCallback m_pointerScaleChangedCallback = nullptr;

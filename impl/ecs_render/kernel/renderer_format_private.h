@@ -5,10 +5,9 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/renderer_types.h>
-
 #include <core/graphics/module.h>
 #include <core/graphics/backend_selection.h>
+#include <impl/assets/graphics/csg/constants.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

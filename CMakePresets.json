@@ -15,6 +15,20 @@
       }
     },
     {
+      "name": "arch-x64",
+      "hidden": true,
+      "cacheVariables": {
+        "NWB_TARGET_ARCH": "x64"
+      }
+    },
+    {
+      "name": "arch-arm64",
+      "hidden": true,
+      "cacheVariables": {
+        "NWB_TARGET_ARCH": "arm64"
+      }
+    },
+    {
       "name": "variant-engine",
       "hidden": true,
       "cacheVariables": {
@@ -106,6 +120,7 @@
       "name": "windows-clang-x64",
       "inherits": [
         "windows-clang-base",
+        "arch-x64",
         "variant-full",
         "output-full"
       ]
@@ -114,6 +129,7 @@
       "name": "windows-clang-engine-x64",
       "inherits": [
         "windows-clang-base",
+        "arch-x64",
         "variant-engine",
         "output-engine"
       ]
@@ -122,6 +138,7 @@
       "name": "windows-clang-testbed-x64",
       "inherits": [
         "windows-clang-base",
+        "arch-x64",
         "variant-testbed",
         "output-testbed"
       ]
@@ -130,6 +147,43 @@
       "name": "windows-clang-namesym-x64",
       "inherits": [
         "windows-clang-base",
+        "arch-x64",
+        "variant-namesym",
+        "output-namesym"
+      ]
+    },
+    {
+      "name": "windows-clang-arm64",
+      "inherits": [
+        "windows-clang-base",
+        "arch-arm64",
+        "variant-full",
+        "output-full"
+      ]
+    },
+    {
+      "name": "windows-clang-engine-arm64",
+      "inherits": [
+        "windows-clang-base",
+        "arch-arm64",
+        "variant-engine",
+        "output-engine"
+      ]
+    },
+    {
+      "name": "windows-clang-testbed-arm64",
+      "inherits": [
+        "windows-clang-base",
+        "arch-arm64",
+        "variant-testbed",
+        "output-testbed"
+      ]
+    },
+    {
+      "name": "windows-clang-namesym-arm64",
+      "inherits": [
+        "windows-clang-base",
+        "arch-arm64",
         "variant-namesym",
         "output-namesym"
       ]
@@ -138,6 +192,7 @@
       "name": "linux-clang-x64",
       "inherits": [
         "linux-clang-base",
+        "arch-x64",
         "variant-full",
         "output-full"
       ]
@@ -146,6 +201,7 @@
       "name": "linux-clang-engine-x64",
       "inherits": [
         "linux-clang-base",
+        "arch-x64",
         "variant-engine",
         "output-engine"
       ]
@@ -154,6 +210,7 @@
       "name": "linux-clang-testbed-x64",
       "inherits": [
         "linux-clang-base",
+        "arch-x64",
         "variant-testbed",
         "output-testbed"
       ]
@@ -162,6 +219,7 @@
       "name": "linux-clang-namesym-x64",
       "inherits": [
         "linux-clang-base",
+        "arch-x64",
         "variant-namesym",
         "output-namesym"
       ]
@@ -229,6 +287,66 @@
       "configuration": "fin"
     },
     {
+      "name": "windows-clang-arm64-dbg",
+      "configurePreset": "windows-clang-arm64",
+      "configuration": "dbg"
+    },
+    {
+      "name": "windows-clang-arm64-opt",
+      "configurePreset": "windows-clang-arm64",
+      "configuration": "opt"
+    },
+    {
+      "name": "windows-clang-arm64-fin",
+      "configurePreset": "windows-clang-arm64",
+      "configuration": "fin"
+    },
+    {
+      "name": "windows-clang-engine-arm64-dbg",
+      "configurePreset": "windows-clang-engine-arm64",
+      "configuration": "dbg"
+    },
+    {
+      "name": "windows-clang-engine-arm64-opt",
+      "configurePreset": "windows-clang-engine-arm64",
+      "configuration": "opt"
+    },
+    {
+      "name": "windows-clang-engine-arm64-fin",
+      "configurePreset": "windows-clang-engine-arm64",
+      "configuration": "fin"
+    },
+    {
+      "name": "windows-clang-testbed-arm64-dbg",
+      "configurePreset": "windows-clang-testbed-arm64",
+      "configuration": "dbg"
+    },
+    {
+      "name": "windows-clang-testbed-arm64-opt",
+      "configurePreset": "windows-clang-testbed-arm64",
+      "configuration": "opt"
+    },
+    {
+      "name": "windows-clang-testbed-arm64-fin",
+      "configurePreset": "windows-clang-testbed-arm64",
+      "configuration": "fin"
+    },
+    {
+      "name": "windows-clang-namesym-arm64-dbg",
+      "configurePreset": "windows-clang-namesym-arm64",
+      "configuration": "dbg"
+    },
+    {
+      "name": "windows-clang-namesym-arm64-opt",
+      "configurePreset": "windows-clang-namesym-arm64",
+      "configuration": "opt"
+    },
+    {
+      "name": "windows-clang-namesym-arm64-fin",
+      "configurePreset": "windows-clang-namesym-arm64",
+      "configuration": "fin"
+    },
+    {
       "name": "linux-clang-dbg",
       "configurePreset": "linux-clang-x64",
       "configuration": "dbg"
@@ -287,6 +405,80 @@
       "name": "linux-clang-namesym-fin",
       "configurePreset": "linux-clang-namesym-x64",
       "configuration": "fin"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-clang-dbg",
+      "configurePreset": "windows-clang-x64",
+      "configuration": "dbg",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-clang-opt",
+      "configurePreset": "windows-clang-x64",
+      "configuration": "opt",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-clang-fin",
+      "configurePreset": "windows-clang-x64",
+      "configuration": "fin",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-clang-arm64-dbg",
+      "configurePreset": "windows-clang-arm64",
+      "configuration": "dbg",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-clang-arm64-opt",
+      "configurePreset": "windows-clang-arm64",
+      "configuration": "opt",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-clang-arm64-fin",
+      "configurePreset": "windows-clang-arm64",
+      "configuration": "fin",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-clang-dbg",
+      "configurePreset": "linux-clang-x64",
+      "configuration": "dbg",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-clang-opt",
+      "configurePreset": "linux-clang-x64",
+      "configuration": "opt",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-clang-fin",
+      "configurePreset": "linux-clang-x64",
+      "configuration": "fin",
+      "output": {
+        "outputOnFailure": true
+      }
     }
   ]
 }

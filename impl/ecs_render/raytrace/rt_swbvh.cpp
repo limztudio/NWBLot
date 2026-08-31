@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/raytrace/rt_private.h>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
 #include <global/algorithm.h>
 #include <global/hash_utils.h>
@@ -236,33 +237,6 @@ template<typename RayTracingState>
     ;
 }
 
-[[nodiscard]] bool UploadPreparedShadowMaterialContextBuffers(
-    Core::CommandList& commandList,
-    Core::Buffer& instanceBuffer,
-    Core::Buffer& materialTypedBuffer,
-    const InstanceGpuDataVector& instanceData,
-    const MaterialTypedByteDataVector& materialTypedBytes,
-    const usize materialTypedUploadBytes
-){
-    if(materialTypedUploadBytes == 0u || materialTypedUploadBytes > materialTypedBytes.size())
-        return false;
-
-    if(!instanceData.empty()){
-        commandList.setBufferState(&instanceBuffer, Core::ResourceStates::CopyDest);
-        commandList.commitBarriers();
-        commandList.writeBuffer(&instanceBuffer, instanceData.data(), instanceData.size() * sizeof(InstanceGpuData));
-        commandList.setBufferState(&instanceBuffer, Core::ResourceStates::ShaderResource);
-        commandList.commitBarriers();
-    }
-
-    commandList.setBufferState(&materialTypedBuffer, Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(&materialTypedBuffer, materialTypedBytes.data(), materialTypedUploadBytes);
-    commandList.setBufferState(&materialTypedBuffer, Core::ResourceStates::ShaderResource);
-    commandList.commitBarriers();
-    return true;
-}
-
 // Register writable scratch with its explicit owner.
 [[nodiscard]] bool RegisterWritableBvhBuffer(
     Core::GpuDescriptorHeap& heap,
@@ -279,7 +253,7 @@ template<typename RayTracingState>
 }
 
 [[nodiscard]] bool ResolvePreparedMeshBlasBuild(
-    const MeshResources& meshResources,
+    const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources,
     PreparedMeshBlasBuild& outBuild
 ){
     outBuild = {};
@@ -292,7 +266,7 @@ template<typename RayTracingState>
     )
         return false;
 
-    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getDescription();
+    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getCreationDescription();
     if(positionDesc.structStride == 0u || meshResources.meshletPrimitiveIndexCount == 0u)
         return false;
 
@@ -317,12 +291,13 @@ template<typename RayTracingState>
     outBuild.refitsAfterBuild = performRefit ? (meshResources.blasRefitsSinceRebuild + 1u) : 0u;
     outBuild.runtimeMesh = meshResources.runtimeMesh;
     outBuild.firstBuild = firstBuild;
+    outBuild.backingFresh = meshResources.blasBackingFresh;
     outBuild.performRefit = performRefit;
     return true;
 }
 
 [[nodiscard]] bool MatchesPreparedMeshBlasBuild(
-    const MeshResources& meshResources,
+    const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources,
     const PreparedMeshBlasBuild& build
 ){
     if(
@@ -336,11 +311,12 @@ template<typename RayTracingState>
         || meshResources.blas->getBackingBufferHandle().get() != build.blasBackingBuffer.get()
         || meshResources.meshletPrimitiveIndexCount != build.indexCount
         || meshResources.blasBuildPending != build.firstBuild
+        || meshResources.blasBackingFresh != build.backingFresh
         || meshResources.blasRefitsSinceRebuild != build.refitsBeforeBuild
     )
         return false;
 
-    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getDescription();
+    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getCreationDescription();
     return
         positionDesc.structStride == build.vertexStride
         && positionDesc.byteSize == build.positionByteSize
@@ -416,46 +392,63 @@ template<typename RayTracingState>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::buildPendingMeshBlas(Core::CommandList& commandList){
-    if(!graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+bool RendererRayTracingSystem::buildPendingMeshBlas(
+    Core::CommandList& commandList,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;
 
-    auto& meshes = meshState().m_meshes;
-    for(auto it = meshes.begin(); it != meshes.end(); ++it){
-        MeshResources& meshResources = it.value();
+    ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
+    m_meshSystem.collectRayTracingResourceSnapshots(meshes);
+    for(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
 
         if(meshResources.runtimeMesh){
             if(!buildMeshBlas(commandList, meshResources)){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: runtime mesh BLAS build failed"));
                 return false;
             }
-            else
-                meshResources.blasBuildPending = false;
+            meshResources.blasBuildPending = false;
+            if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
+                m_rayTracingState.m_tlasStaticSceneHashValid = false;
+                return false;
+            }
             continue;
         }
 
         if(!meshResources.blasBuildPending)
             continue;
-        if(buildMeshBlas(commandList, meshResources))
-            meshResources.blasBuildPending = false;
-        else
+        if(!buildMeshBlas(commandList, meshResources))
             return false;
+        meshResources.blasBuildPending = false;
+        if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
+            m_rayTracingState.m_tlasStaticSceneHashValid = false;
+            return false;
+        }
     }
     return true;
 }
 
-bool RendererRayTracingSystem::preparePendingMeshBlasResources(){
-    if(!graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+bool RendererRayTracingSystem::preparePendingMeshBlasResources(Core::Alloc::ScratchArena& scratchArena){
+    if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;
 
     bool allResourcesReady = true;
-    auto& meshes = meshState().m_meshes;
-    for(auto it = meshes.begin(); it != meshes.end(); ++it){
-        MeshResources& meshResources = it.value();
+    ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
+    m_meshSystem.collectRayTracingResourceSnapshots(meshes);
+    for(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
         if(!meshResources.runtimeMesh && !meshResources.blasBuildPending)
             continue;
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
         if(!prepareMeshBlasResources(meshResources)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: BLAS resource preflight failed for mesh '{}'")
+                , StringConvert(meshResources.meshName.c_str())
+            );
+            allResourcesReady = false;
+        }
+        else if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: BLAS resource preflight lost mesh '{}'")
                 , StringConvert(meshResources.meshName.c_str())
             );
             allResourcesReady = false;
@@ -469,14 +462,14 @@ void RendererRayTracingSystem::clearPreparedMeshBlasBuilds()noexcept{
     m_preparedMeshBlasBuildsReady = false;
 }
 
-bool RendererRayTracingSystem::capturePreparedMeshBlasBuilds(){
+bool RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::ScratchArena& scratchArena){
     clearPreparedMeshBlasBuilds();
-    if(!graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+    if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;
 
-    auto& meshes = meshState().m_meshes;
-    for(auto it = meshes.begin(); it != meshes.end(); ++it){
-        const MeshResources& meshResources = it.value();
+    ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
+    m_meshSystem.collectRayTracingResourceSnapshots(meshes);
+    for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
         // Runtime geometry refits every hardware frame; static geometry enters only when the preflight marked it
         // dirty. This deliberately includes off-screen meshes, matching the established native traversal.
         if(!meshResources.runtimeMesh && !meshResources.blasBuildPending)
@@ -504,12 +497,11 @@ bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(
     if(!m_preparedMeshBlasBuildsReady || m_preparedMeshBlasBuilds.empty())
         return false;
 
-    auto& meshes = meshState().m_meshes;
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
-        const auto found = meshes.find(build.meshName);
+        ECSRenderDetail::MeshRayTracingResourceSnapshot meshResources;
         if(
-            found == meshes.end()
-            || !__hidden_rt_swbvh::MatchesPreparedMeshBlasBuild(found.value(), build)
+            !m_meshSystem.findRayTracingResourceSnapshot(build.meshName, meshResources)
+            || !__hidden_rt_swbvh::MatchesPreparedMeshBlasBuild(meshResources, build)
         ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build no longer matches mesh '{}'")
                 , StringConvert(build.meshName.c_str())
@@ -546,20 +538,26 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds()noexcept{
         return;
 
     bool allPlansCurrent = true;
-    auto& meshes = meshState().m_meshes;
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
-        const auto found = meshes.find(build.meshName);
+        ECSRenderDetail::MeshRayTracingResourceSnapshot meshResources;
         if(
-            found == meshes.end()
-            || !__hidden_rt_swbvh::MatchesPreparedMeshBlasBuild(found.value(), build)
+            !m_meshSystem.findRayTracingResourceSnapshot(build.meshName, meshResources)
+            || !__hidden_rt_swbvh::MatchesPreparedMeshBlasBuild(meshResources, build)
         ){
             allPlansCurrent = false;
             continue;
         }
 
-        MeshResources& meshResources = found.value();
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
         meshResources.blasBuildPending = false;
+        // The accepted Shadow Preparation state handoff now owns this generation's native final state.
+        meshResources.blasBackingFresh = false;
+        meshResources.blasBackingStateHandoffPending = false;
         meshResources.blasRefitsSinceRebuild = build.refitsAfterBuild;
+        if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
+            allPlansCurrent = false;
+            continue;
+        }
         if(build.firstBuild){
             NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)")
                 , StringConvert(build.meshName.c_str())
@@ -572,16 +570,20 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds()noexcept{
     // An unexpected replacement after recording is not rolled into the accepted mesh cache. Force a future TLAS
     // rebuild rather than retaining a static-scene hash that may describe the retired generation.
     if(!allPlansCurrent)
-        rayTracingState().m_tlasStaticSceneHashValid = false;
+        m_rayTracingState.m_tlasStaticSceneHashValid = false;
     clearPreparedMeshBlasBuilds();
 }
 
-bool RendererRayTracingSystem::buildPendingMeshSwBvh(Core::CommandList& commandList){
+bool RendererRayTracingSystem::buildPendingMeshSwBvh(
+    Core::CommandList& commandList,
+    Core::Alloc::ScratchArena& scratchArena
+){
     // Record only prepared SW-BVH work; callers decide when software tracing is needed.
     bool allBuildsReady = true;
-    auto& meshes = meshState().m_meshes;
-    for(auto it = meshes.begin(); it != meshes.end(); ++it){
-        MeshResources& meshResources = it.value();
+    ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
+    m_meshSystem.collectRayTracingResourceSnapshots(meshes);
+    for(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
 
         if(meshResources.runtimeMesh){
             if(!updateMeshSwBvh(commandList, meshResources)){
@@ -590,29 +592,37 @@ bool RendererRayTracingSystem::buildPendingMeshSwBvh(Core::CommandList& commandL
                 );
                 allBuildsReady = false;
             }
+            else if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
+                m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
+                allBuildsReady = false;
+            }
             continue;
         }
 
         if(!meshResources.swBvhBuildPending)
             continue;
-        if(updateMeshSwBvh(commandList, meshResources))
-            meshResources.swBvhBuildPending = false;
-        else{
+        if(!updateMeshSwBvh(commandList, meshResources)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: static mesh '{}' software BVH build failed")
                 , StringConvert(meshResources.meshName.c_str())
             );
+            allBuildsReady = false;
+            continue;
+        }
+        meshResources.swBvhBuildPending = false;
+        if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
+            m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
             allBuildsReady = false;
         }
     }
     return allBuildsReady;
 }
 
-bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
+bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(Core::Alloc::ScratchArena& scratchArena){
     // Prepare resources before recording; runtime meshes prepare every frame.
     bool allResourcesReady = true;
-    auto& meshes = meshState().m_meshes;
-    for(auto it = meshes.begin(); it != meshes.end(); ++it){
-        MeshResources& meshResources = it.value();
+    ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
+    m_meshSystem.collectRayTracingResourceSnapshots(meshes);
+    for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
         if(!meshResources.runtimeMesh && !meshResources.swBvhBuildPending)
             continue;
 
@@ -626,21 +636,29 @@ bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
         }
 
         const u32 primitiveCount = meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
-        if(!m_renderer.meshSystem().ensureMeshSwBvhInputHeapHandles(meshResources)){
+        ECSRenderDetail::MeshRayTracingResourceSnapshot boundResources;
+        if(!m_meshSystem.ensureRayTracingInputHeapHandles(meshResources, boundResources)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH input heap registration failed for mesh '{}'")
                 , StringConvert(meshResources.meshName.c_str())
             );
             allResourcesReady = false;
             continue;
         }
+        ECSRenderDetail::MeshRayTracingResourceSnapshot preparedResources = boundResources;
         if(!ensureMeshSwBvhResources(
             primitiveCount,
-            meshResources.swBvhNodeBuffer,
-            meshResources.swBvhParentBuffer,
-            meshResources.swBvhNodeHeapHandle,
-            meshResources.swBvhParentHeapHandle
+            preparedResources.swBvhNodeBuffer,
+            preparedResources.swBvhParentBuffer,
+            preparedResources.swBvhNodeHeapHandle,
+            preparedResources.swBvhParentHeapHandle
         )){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preparation failed for mesh '{}'")
+                , StringConvert(meshResources.meshName.c_str())
+            );
+            allResourcesReady = false;
+        }
+        else if(!m_meshSystem.commitRayTracingResourceSnapshot(boundResources, preparedResources)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preflight lost mesh '{}'")
                 , StringConvert(meshResources.meshName.c_str())
             );
             allResourcesReady = false;
@@ -652,14 +670,16 @@ bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
 void RendererRayTracingSystem::clearPreparedMeshSwBvhBuilds()noexcept{
     m_preparedMeshSwBvhBuilds.clear();
     m_preparedMeshSwBvhBuildsReady = false;
+    m_preparedMeshSwBvhBuildPlanFrozen = false;
 }
 
-bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
+bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::ScratchArena& scratchArena){
     clearPreparedMeshSwBvhBuilds();
-    auto& state = rayTracingState();
+    auto& state = m_rayTracingState;
+    ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
+    m_meshSystem.collectRayTracingResourceSnapshots(meshes);
     bool hasCandidate = false;
-    for(auto it = meshState().m_meshes.begin(); it != meshState().m_meshes.end(); ++it){
-        const MeshResources& mesh = it.value();
+    for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh : meshes){
         if(mesh.runtimeMesh || mesh.swBvhBuildPending){
             hasCandidate = true;
             break;
@@ -667,8 +687,10 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
     }
     // A software-only frame can have no dirty/static or runtime mesh work. In that case the shared scratch has not
     // necessarily been allocated, and an authoritative empty plan must retain the established no-op path.
-    if(!hasCandidate)
+    if(!hasCandidate){
+        m_preparedMeshSwBvhBuildPlanFrozen = true;
         return true;
+    }
     const auto sharedResourcesReady = [&]{
         return
             state.m_bvhSortKeysBuffer
@@ -682,9 +704,7 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
     if(!sharedResourcesReady())
         return false;
 
-    auto& meshes = meshState().m_meshes;
-    for(auto it = meshes.begin(); it != meshes.end(); ++it){
-        const MeshResources& mesh = it.value();
+    for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh : meshes){
         // Runtime meshes update every software-only frame; static meshes enter exactly while their topology is
         // pending. This mirrors the direct loop, including off-screen mesh resources.
         if(!mesh.runtimeMesh && !mesh.swBvhBuildPending)
@@ -718,13 +738,13 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
             && !firstBuild
             && mesh.swBvhRefitsSinceRebuild < adaptiveRefitsBeforeRebuild(primitiveCount)
         ;
-        const Core::BufferDesc& positionDesc = mesh.positionBuffer->getDescription();
-        const Core::BufferDesc& indexDesc = mesh.triangleIndexBuffer->getDescription();
-        const Core::BufferDesc& nodeDesc = mesh.swBvhNodeBuffer->getDescription();
-        const Core::BufferDesc& parentDesc = mesh.swBvhParentBuffer->getDescription();
-        const Core::BufferDesc& keysDesc = state.m_bvhSortKeysBuffer->getDescription();
-        const Core::BufferDesc& payloadDesc = state.m_bvhSortPayloadBuffer->getDescription();
-        const Core::BufferDesc& counterDesc = state.m_bvhVisitCounterBuffer->getDescription();
+        const Core::BufferDesc& positionDesc = mesh.positionBuffer->getCreationDescription();
+        const Core::BufferDesc& indexDesc = mesh.triangleIndexBuffer->getCreationDescription();
+        const Core::BufferDesc& nodeDesc = mesh.swBvhNodeBuffer->getCreationDescription();
+        const Core::BufferDesc& parentDesc = mesh.swBvhParentBuffer->getCreationDescription();
+        const Core::BufferDesc& keysDesc = state.m_bvhSortKeysBuffer->getCreationDescription();
+        const Core::BufferDesc& payloadDesc = state.m_bvhSortPayloadBuffer->getCreationDescription();
+        const Core::BufferDesc& counterDesc = state.m_bvhVisitCounterBuffer->getCreationDescription();
         m_preparedMeshSwBvhBuilds.push_back(PreparedMeshSwBvhBuild{
             .meshName = mesh.meshName,
             .positionBuffer = mesh.positionBuffer,
@@ -761,16 +781,16 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
         });
     }
     m_preparedMeshSwBvhBuildsReady = !m_preparedMeshSwBvhBuilds.empty();
+    m_preparedMeshSwBvhBuildPlanFrozen = true;
     return true;
 }
 
 bool RendererRayTracingSystem::preparedMeshSwBvhBuildMatchesCurrent(const PreparedMeshSwBvhBuild& build){
-    const auto found = meshState().m_meshes.find(build.meshName);
-    if(found == meshState().m_meshes.end())
+    ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
+    if(!m_meshSystem.findRayTracingResourceSnapshot(build.meshName, mesh))
         return false;
 
-    const MeshResources& mesh = found.value();
-    const auto& state = rayTracingState();
+    const auto& state = m_rayTracingState;
     if(
         mesh.meshName != build.meshName
         || mesh.runtimeMesh != build.runtimeMesh
@@ -804,13 +824,13 @@ bool RendererRayTracingSystem::preparedMeshSwBvhBuildMatchesCurrent(const Prepar
     )
         return false;
     return
-        mesh.positionBuffer->getDescription().byteSize == build.positionByteSize
-        && mesh.triangleIndexBuffer->getDescription().byteSize == build.indexByteSize
-        && mesh.swBvhNodeBuffer->getDescription().byteSize == build.nodeByteSize
-        && mesh.swBvhParentBuffer->getDescription().byteSize == build.parentByteSize
-        && state.m_bvhSortKeysBuffer->getDescription().byteSize == build.sortKeysByteSize
-        && state.m_bvhSortPayloadBuffer->getDescription().byteSize == build.sortPayloadByteSize
-        && state.m_bvhVisitCounterBuffer->getDescription().byteSize == build.visitCounterByteSize
+        mesh.positionBuffer->getCreationDescription().byteSize == build.positionByteSize
+        && mesh.triangleIndexBuffer->getCreationDescription().byteSize == build.indexByteSize
+        && mesh.swBvhNodeBuffer->getCreationDescription().byteSize == build.nodeByteSize
+        && mesh.swBvhParentBuffer->getCreationDescription().byteSize == build.parentByteSize
+        && state.m_bvhSortKeysBuffer->getCreationDescription().byteSize == build.sortKeysByteSize
+        && state.m_bvhSortPayloadBuffer->getCreationDescription().byteSize == build.sortPayloadByteSize
+        && state.m_bvhVisitCounterBuffer->getCreationDescription().byteSize == build.visitCounterByteSize
     ;
 }
 
@@ -920,31 +940,34 @@ void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds()noexcept{
         return;
 
     bool allPlansCurrent = true;
-    auto& meshes = meshState().m_meshes;
     for(const PreparedMeshSwBvhBuild& build : m_preparedMeshSwBvhBuilds){
-        const auto found = meshes.find(build.meshName);
+        ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         if(
-            found == meshes.end()
-            || found.value().runtimeMesh != build.runtimeMesh
-            || found.value().runtimeMeshVersion != build.runtimeMeshVersion
-            || found.value().positionBuffer.get() != build.positionBuffer.get()
-            || found.value().triangleIndexBuffer.get() != build.triangleIndexBuffer.get()
-            || found.value().swBvhNodeBuffer.get() != build.nodeBuffer.get()
-            || found.value().swBvhParentBuffer.get() != build.parentBuffer.get()
-            || found.value().swBvhRefitsSinceRebuild != build.refitsBeforeBuild
-            || found.value().swBvhBuildPending != build.buildPending
-            || (!found.value().swBvhTopologyBuilt) != build.firstBuild
+            !m_meshSystem.findRayTracingResourceSnapshot(build.meshName, mesh)
+            || mesh.runtimeMesh != build.runtimeMesh
+            || mesh.runtimeMeshVersion != build.runtimeMeshVersion
+            || mesh.positionBuffer.get() != build.positionBuffer.get()
+            || mesh.triangleIndexBuffer.get() != build.triangleIndexBuffer.get()
+            || mesh.swBvhNodeBuffer.get() != build.nodeBuffer.get()
+            || mesh.swBvhParentBuffer.get() != build.parentBuffer.get()
+            || mesh.swBvhRefitsSinceRebuild != build.refitsBeforeBuild
+            || mesh.swBvhBuildPending != build.buildPending
+            || (!mesh.swBvhTopologyBuilt) != build.firstBuild
         ){
             allPlansCurrent = false;
             continue;
         }
 
-        MeshResources& mesh = found.value();
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = mesh;
         if(!mesh.runtimeMesh)
             mesh.swBvhBuildPending = false;
         if(!build.performRefit)
             mesh.swBvhTopologyBuilt = true;
         mesh.swBvhRefitsSinceRebuild = build.refitsAfterBuild;
+        if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, mesh)){
+            allPlansCurrent = false;
+            continue;
+        }
         if(build.firstBuild){
             NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built software BVH for mesh '{}' (runtime {}, {} triangles)")
                 , StringConvert(build.meshName.c_str())
@@ -954,11 +977,13 @@ void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds()noexcept{
         }
     }
     if(!allPlansCurrent)
-        rayTracingState().m_sceneSwBvhStaticSceneHashValid = false;
+        m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
     clearPreparedMeshSwBvhBuilds();
 }
 
-bool RendererRayTracingSystem::preparedMeshSwBvhBuildProducesTopology(const MeshResources& mesh)const noexcept{
+bool RendererRayTracingSystem::preparedMeshSwBvhBuildProducesTopology(
+    const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
+)const noexcept{
     if(!m_preparedMeshSwBvhBuildsReady)
         return false;
     for(const PreparedMeshSwBvhBuild& build : m_preparedMeshSwBvhBuilds){
@@ -997,14 +1022,14 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
 ){
     using namespace __hidden_rt_swbvh;
 
-    if(!graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+    if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;
 
-    auto* meshSystem = world().getSystem<NWB::Impl::MeshSystem>();
+    auto* meshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
     if(!meshSystem)
         return false;
 
-    auto rendererView = world().view<RendererComponent>();
+    auto rendererView = m_world.view<RendererComponent>();
     const usize candidateCount = rendererView.candidateCount();
     Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena> instances{ scratchArena };
     // RayTracingInstanceDesc contains only a raw BLAS pointer. The opaque graph-owned TLAS build retains this
@@ -1034,50 +1059,50 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     );
     meshSlotLookup.reserve(candidateCount);
 
-    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: hardware TLAS build requires the descriptor-buffer TLAS heap layout"));
         return false;
     }
-    BeginMeshHeapHandleGather(rayTracingState().m_hwMeshHeapHandleCache);
+    BeginMeshHeapHandleGather(m_rayTracingState.m_hwMeshHeapHandleCache);
     const auto resolveMeshHeapHandle = [&](const Core::BufferHandle& buffer, Core::GpuDescriptorHandle& outHandle){
         return commandList
-            ? FindPreparedMeshHeapHandle(rayTracingState().m_hwMeshHeapHandleCache, buffer, outHandle)
-            : AcquireMeshHeapHandle(heap, rayTracingState().m_hwMeshHeapHandleCache, buffer, outHandle)
+            ? FindPreparedMeshHeapHandle(m_rayTracingState.m_hwMeshHeapHandleCache, buffer, outHandle)
+            : AcquireMeshHeapHandle(heap, m_rayTracingState.m_hwMeshHeapHandleCache, buffer, outHandle)
         ;
     };
-    rayTracingState().m_shadowMeshIndexBuffers.clear();
-    rayTracingState().m_shadowMeshAttributeBuffers.clear();
-    rayTracingState().m_shadowMeshPositionBuffers.clear();
-    rayTracingState().m_shadowMeshIndexHandles.clear();
-    rayTracingState().m_shadowMeshAttributeHandles.clear();
-    rayTracingState().m_shadowMeshPositionHandles.clear();
-    rayTracingState().m_shadowMeshCount = 0u;
+    m_rayTracingState.m_shadowMeshIndexBuffers.clear();
+    m_rayTracingState.m_shadowMeshAttributeBuffers.clear();
+    m_rayTracingState.m_shadowMeshPositionBuffers.clear();
+    m_rayTracingState.m_shadowMeshIndexHandles.clear();
+    m_rayTracingState.m_shadowMeshAttributeHandles.clear();
+    m_rayTracingState.m_shadowMeshPositionHandles.clear();
+    m_rayTracingState.m_shadowMeshCount = 0u;
     // Gates hybrid software transparent-shadow work.
-    rayTracingState().m_sceneHasTransparentOccluder = false;
+    m_rayTracingState.m_sceneHasTransparentOccluder = false;
     bool staticScene = true;
 
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible)
             continue;
 
-        MeshResources* mesh = nullptr;
+        ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         RenderableMeshDesc resolvedMesh;
         const bool meshReady = RayTracingDetail::ResolveRenderableMeshResources(
             *meshSystem,
-            m_renderer.meshSystem(),
+            m_meshSystem,
             entity,
             resolvedMesh,
             mesh
         );
-        if(!meshReady || !mesh || !mesh->blas || !mesh->triangleIndexBuffer || !mesh->attributeBuffer || !mesh->positionBuffer)
+        if(!meshReady || !mesh.blas || !mesh.triangleIndexBuffer || !mesh.attributeBuffer || !mesh.positionBuffer)
             continue;
         // Runtime mesh updates disable static TLAS reuse.
-        if(resolvedMesh.runtime || mesh->runtimeMesh)
+        if(resolvedMesh.runtime || mesh.runtimeMesh)
             staticScene = false;
 
         // Reuse one table slot for instances sharing geometry.
-        Core::Buffer* meshIndexBuffer = mesh->triangleIndexBuffer.get();
+        Core::Buffer* meshIndexBuffer = mesh.triangleIndexBuffer.get();
         u32 meshSlot = 0u;
         const auto foundMeshSlot = meshSlotLookup.find(meshIndexBuffer);
         if(foundMeshSlot != meshSlotLookup.end())
@@ -1087,12 +1112,12 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             Core::GpuDescriptorHandle attributeHandle;
             Core::GpuDescriptorHandle positionHandle;
             if(
-                !resolveMeshHeapHandle(mesh->triangleIndexBuffer, indexHandle)
-                || !resolveMeshHeapHandle(mesh->attributeBuffer, attributeHandle)
-                || !resolveMeshHeapHandle(mesh->positionBuffer, positionHandle)
+                !resolveMeshHeapHandle(mesh.triangleIndexBuffer, indexHandle)
+                || !resolveMeshHeapHandle(mesh.attributeBuffer, attributeHandle)
+                || !resolveMeshHeapHandle(mesh.positionBuffer, positionHandle)
             ){
                 if(!commandList){
-                    SweepUnseenMeshHeapHandles(heap, rayTracingState().m_hwMeshHeapHandleCache);
+                    SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_hwMeshHeapHandleCache);
                     NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
                 }
                 else
@@ -1100,23 +1125,23 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
                 return false;
             }
 
-            meshSlot = rayTracingState().m_shadowMeshCount;
-            rayTracingState().m_shadowMeshIndexBuffers.push_back(meshIndexBuffer);
-            rayTracingState().m_shadowMeshAttributeBuffers.push_back(mesh->attributeBuffer.get());
-            rayTracingState().m_shadowMeshPositionBuffers.push_back(mesh->positionBuffer.get());
-            rayTracingState().m_shadowMeshIndexHandles.push_back(indexHandle);
-            rayTracingState().m_shadowMeshAttributeHandles.push_back(attributeHandle);
-            rayTracingState().m_shadowMeshPositionHandles.push_back(positionHandle);
+            meshSlot = m_rayTracingState.m_shadowMeshCount;
+            m_rayTracingState.m_shadowMeshIndexBuffers.push_back(meshIndexBuffer);
+            m_rayTracingState.m_shadowMeshAttributeBuffers.push_back(mesh.attributeBuffer.get());
+            m_rayTracingState.m_shadowMeshPositionBuffers.push_back(mesh.positionBuffer.get());
+            m_rayTracingState.m_shadowMeshIndexHandles.push_back(indexHandle);
+            m_rayTracingState.m_shadowMeshAttributeHandles.push_back(attributeHandle);
+            m_rayTracingState.m_shadowMeshPositionHandles.push_back(positionHandle);
             meshSlotLookup.emplace(meshIndexBuffer, meshSlot);
-            ++rayTracingState().m_shadowMeshCount;
+            ++m_rayTracingState.m_shadowMeshCount;
         }
 
         Core::RayTracingInstanceDesc instanceDesc;
-        instanceDesc.setBLAS(mesh->blas.get());
+        instanceDesc.setBLAS(mesh.blas.get());
         instanceDesc.setInstanceID(static_cast<u32>(instances.size()));
         instanceDesc.setInstanceMask(s_RayTracingAllInstanceMask);
 
-        const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
+        const NWB::Impl::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
         if(transform){
             const SIMDMatrix instanceWorld = MatrixAffineTransformation(
                 LoadFloat(transform->scale),
@@ -1132,9 +1157,9 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(m_renderer.materialSystem().findMaterialSurfaceInfo(renderer.material, materialInfo)){
+        if(m_materialSystem.findMaterialSurfaceInfo(renderer.material, materialInfo)){
             if(materialInfo->transparent)
-                rayTracingState().m_sceneHasTransparentOccluder = true;
+                m_rayTracingState.m_sceneHasTransparentOccluder = true;
             // The trace surface dispatcher reads this material's Texture2D fields through non-uniform bindless
             // slots. Retain the exact resolved handles during preflight; recording must never discover a texture
             // after the shared graph fixed its immutable resource set.
@@ -1145,7 +1170,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             )
                 return false;
             u32 materialConstantByteOffset = 0u;
-            if(!m_renderer.materialSystem().appendShadowOccluderMaterialContext(
+            if(!m_materialSystem.appendShadowOccluderMaterialContext(
                 entity,
                 *materialInfo,
                 transform,
@@ -1157,35 +1182,35 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
                 return false;
             instanceMaterial = RayTracingDetail::ResolveInstanceShadowMaterial(*materialInfo, materialConstantByteOffset, meshInstanceIndex);
         }
-        instanceMaterial.indexSlot = rayTracingState().m_shadowMeshIndexHandles[meshSlot].slot();
-        instanceMaterial.attributeSlot = rayTracingState().m_shadowMeshAttributeHandles[meshSlot].slot();
-        instanceMaterial.positionSlot = rayTracingState().m_shadowMeshPositionHandles[meshSlot].slot();
+        instanceMaterial.indexSlot = m_rayTracingState.m_shadowMeshIndexHandles[meshSlot].slot();
+        instanceMaterial.attributeSlot = m_rayTracingState.m_shadowMeshAttributeHandles[meshSlot].slot();
+        instanceMaterial.positionSlot = m_rayTracingState.m_shadowMeshPositionHandles[meshSlot].slot();
 
         // Opaque candidates terminate RayQuery; software handles transparent transmittance.
         if(!(materialInfo && materialInfo->transparent))
             instanceDesc.setFlags(Core::RayTracingInstanceFlags::ForceOpaque);
 
         instances.push_back(instanceDesc);
-        instanceBlases.push_back(mesh->blas);
+        instanceBlases.push_back(mesh.blas);
         instanceMaterials.push_back(instanceMaterial);
         shadowInstanceData.push_back(shadowInstance);
     }
 
-    if(rayTracingState().m_shadowMeshCount > rayTracingState().m_shadowMeshHeapHighWater){
-        rayTracingState().m_shadowMeshHeapHighWater = rayTracingState().m_shadowMeshCount;
+    if(m_rayTracingState.m_shadowMeshCount > m_rayTracingState.m_shadowMeshHeapHighWater){
+        m_rayTracingState.m_shadowMeshHeapHighWater = m_rayTracingState.m_shadowMeshCount;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: HW-shadow heap registration high-water: {} distinct meshes -> {} handles")
-            , static_cast<u64>(rayTracingState().m_shadowMeshCount)
-            , static_cast<u64>(rayTracingState().m_shadowMeshCount) * s_HardwareRayTracingMeshBufferCount
+            , static_cast<u64>(m_rayTracingState.m_shadowMeshCount)
+            , static_cast<u64>(m_rayTracingState.m_shadowMeshCount) * s_HardwareRayTracingMeshBufferCount
         );
     }
     if(!commandList)
-        SweepUnseenMeshHeapHandles(heap, rayTracingState().m_hwMeshHeapHandleCache);
+        SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_hwMeshHeapHandleCache);
 
-    rayTracingState().m_tlasInstanceCount = static_cast<u32>(instances.size());
+    m_rayTracingState.m_tlasInstanceCount = static_cast<u32>(instances.size());
     if(instances.empty()){
-        rayTracingState().m_tlasDeviceAddress = 0u;
-        rayTracingState().m_tlasStaticSceneHashValid = false;
-        rayTracingState().m_hwShadowMaterialContextHashValid = false;
+        m_rayTracingState.m_tlasDeviceAddress = 0u;
+        m_rayTracingState.m_tlasStaticSceneHashValid = false;
+        m_rayTracingState.m_hwShadowMaterialContextHashValid = false;
         return false;
     }
 
@@ -1193,41 +1218,41 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     const u64 tlasStaticSceneHash = staticScene ? ComputeTlasStaticSceneHash(instances) : 0u;
     const bool canReuseTlas =
         staticScene
-        && rayTracingState().m_tlasStaticSceneHashValid
-        && rayTracingState().m_tlasStaticSceneHash == tlasStaticSceneHash
-        && rayTracingState().m_tlas
-        && rayTracingState().m_tlasMaxInstances >= instances.size()
-        && IsAccelStructHeapHandle(rayTracingState().m_tlasHeapHandle)
+        && m_rayTracingState.m_tlasStaticSceneHashValid
+        && m_rayTracingState.m_tlasStaticSceneHash == tlasStaticSceneHash
+        && m_rayTracingState.m_tlas
+        && m_rayTracingState.m_tlasMaxInstances >= instances.size()
+        && IsAccelStructHeapHandle(m_rayTracingState.m_tlasHeapHandle)
     ;
     if(!staticScene || !canReuseTlas)
-        rayTracingState().m_tlasStaticSceneHashValid = false;
+        m_rayTracingState.m_tlasStaticSceneHashValid = false;
 
     if(
         commandList
         && (
-            !rayTracingState().m_tlas
-            || rayTracingState().m_tlasMaxInstances < instances.size()
-            || !IsAccelStructHeapHandle(rayTracingState().m_tlasHeapHandle)
+            !m_rayTracingState.m_tlas
+            || m_rayTracingState.m_tlasMaxInstances < instances.size()
+            || !IsAccelStructHeapHandle(m_rayTracingState.m_tlasHeapHandle)
         )
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: scene TLAS changed after preflight; skipping recording-time replacement"));
         return false;
     }
 
-    if(!canReuseTlas && (!rayTracingState().m_tlas || rayTracingState().m_tlasMaxInstances < instances.size())){
+    if(!canReuseTlas && (!m_rayTracingState.m_tlas || m_rayTracingState.m_tlasMaxInstances < instances.size())){
         const usize capacity = ::NextGrowingCapacity(
-            rayTracingState().m_tlasMaxInstances,
+            m_rayTracingState.m_tlasMaxInstances,
             instances.size(),
             s_TlasInitialInstanceCapacity
         );
 
-        Core::RayTracingAccelStructDesc accelStructDesc(arena());
+        Core::RayTracingAccelStructDesc accelStructDesc(m_arena);
         accelStructDesc.setTopLevelMaxInstances(capacity);
         accelStructDesc.setBuildFlags(Core::RayTracingAccelStructBuildFlags::PreferFastTrace);
         accelStructDesc.setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
         accelStructDesc.setDebugName(Name("scene_tlas"));
 
-        auto& device = graphics().getDevice();
+        auto& device = m_graphics.getDevice();
         Core::RayTracingAccelStructHandle tlas = device.createAccelStruct(accelStructDesc);
         if(!tlas){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene TLAS (capacity {})")
@@ -1236,12 +1261,14 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             return false;
         }
         // Retire the old heap block before replacing the TLAS generation.
-        if(rayTracingState().m_tlasHeapHandle.valid()){
-            heap.free(rayTracingState().m_tlasHeapHandle);
-            rayTracingState().m_tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
+        if(m_rayTracingState.m_tlasHeapHandle.valid()){
+            heap.free(m_rayTracingState.m_tlasHeapHandle);
+            m_rayTracingState.m_tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
         }
-        rayTracingState().m_tlas = Move(tlas);
-        rayTracingState().m_tlasMaxInstances = capacity;
+        m_rayTracingState.m_tlas = Move(tlas);
+        m_rayTracingState.m_tlasBackingFresh = true;
+        m_rayTracingState.m_tlasBackingStateHandoffPending = false;
+        m_rayTracingState.m_tlasMaxInstances = capacity;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created scene TLAS (capacity {} instances)")
             , static_cast<u64>(capacity)
         );
@@ -1250,47 +1277,48 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     if(!canReuseTlas && commandList){
         // The backend records the acceleration-structure build directly. Keep the task graph's declared
         // AccelStructRead boundary truthful by explicitly publishing the native build write and its final read.
-        commandList->setAccelStructState(rayTracingState().m_tlas.get(), Core::ResourceStates::AccelStructWrite);
+        commandList->setAccelStructState(m_rayTracingState.m_tlas.get(), Core::ResourceStates::AccelStructWrite);
         commandList->commitBarriers();
         commandList->buildTopLevelAccelStruct(
-            rayTracingState().m_tlas.get(),
+            m_rayTracingState.m_tlas.get(),
             instances.data(),
             instances.size(),
             Core::RayTracingAccelStructBuildFlags::PreferFastTrace
         );
-        commandList->setAccelStructState(rayTracingState().m_tlas.get(), Core::ResourceStates::AccelStructRead);
+        commandList->setAccelStructState(m_rayTracingState.m_tlas.get(), Core::ResourceStates::AccelStructRead);
         commandList->commitBarriers();
+        if(m_rayTracingState.m_tlasBackingFresh)
+            m_rayTracingState.m_tlasBackingStateHandoffPending = true;
     }
-    rayTracingState().m_tlasDeviceAddress = rayTracingState().m_tlas->getDeviceAddress();
+    m_rayTracingState.m_tlasDeviceAddress = m_rayTracingState.m_tlas->getDeviceAddress();
 
     // Allocate a heap block only for a new TLAS generation.
-    if(!IsAccelStructHeapHandle(rayTracingState().m_tlasHeapHandle)){
+    if(!IsAccelStructHeapHandle(m_rayTracingState.m_tlasHeapHandle)){
         if(commandList){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: scene TLAS heap view was absent after preflight"));
             return false;
         }
-        if(rayTracingState().m_tlasHeapHandle.valid()){
-            heap.free(rayTracingState().m_tlasHeapHandle);
-            rayTracingState().m_tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
+        if(m_rayTracingState.m_tlasHeapHandle.valid()){
+            heap.free(m_rayTracingState.m_tlasHeapHandle);
+            m_rayTracingState.m_tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
         }
         const Core::GpuDescriptorHandle tlasHeapHandle = heap.allocate(Core::GpuDescriptorClass::AccelStruct);
         if(
             !tlasHeapHandle.valid()
-            || !heap.write(tlasHeapHandle, Core::DescriptorWriteItem::RayTracingAccelStruct(0u, rayTracingState().m_tlas.get()))
+            || !heap.write(tlasHeapHandle, Core::DescriptorWriteItem::RayTracingAccelStruct(0u, m_rayTracingState.m_tlas.get()))
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register scene TLAS in the descriptor-buffer heap"));
             if(tlasHeapHandle.valid())
                 heap.free(tlasHeapHandle);
             return false;
         }
-        rayTracingState().m_tlasHeapHandle = tlasHeapHandle;
+        m_rayTracingState.m_tlasHeapHandle = tlasHeapHandle;
     }
 
     // A healthy hybrid packet publishes the software-compatible descriptor slots as the final shared material
     // context. The HW TLAS itself never reads that buffer; its caustic/surfel consumers run after the retained
     // software traversal table confirms the frozen graph context. Do not overwrite or validate it as a HW-only
-    // snapshot here. If that optional tail misses, recordPreflightShadowVisibilityResources clears the plan and
-    // calls this path again directly.
+    // snapshot here. If that optional tail misses, its declared callback restores the immutable HW fallback triple.
     const bool hybridSoftwareMaterialContextGraphOwned =
         commandList
         && shadowMaterialContextBatchGraphOwned
@@ -1308,7 +1336,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         if(
             commandList
             && !HasPreparedShadowMaterialContextBuffers(
-                rayTracingState(),
+                m_rayTracingState,
                 instanceMaterials.size(),
                 shadowInstanceData.size(),
                 materialTypedUploadBytes
@@ -1324,11 +1352,11 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         );
         const bool canReuseHwMaterialContext =
             staticScene
-            && !rayTracingState().m_sceneHasTransparentOccluder
-            && rayTracingState().m_hwShadowMaterialContextHashValid
-            && rayTracingState().m_hwShadowMaterialContextHash == hwMaterialContextHash
+            && !m_rayTracingState.m_sceneHasTransparentOccluder
+            && m_rayTracingState.m_hwShadowMaterialContextHashValid
+            && m_rayTracingState.m_hwShadowMaterialContextHash == hwMaterialContextHash
             && HasPreparedShadowMaterialContextBuffers(
-                rayTracingState(),
+                m_rayTracingState,
                 instanceMaterials.size(),
                 shadowInstanceData.size(),
                 materialTypedUploadBytes
@@ -1341,7 +1369,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
                     || !ensureShadowInstanceContextBuffer(shadowInstanceData.size())
                     || !ensureShadowMaterialTypedBuffer(materialTypedUploadBytes)
                     || !HasPreparedShadowMaterialContextBuffers(
-                        rayTracingState(),
+                        m_rayTracingState,
                         instanceMaterials.size(),
                         shadowInstanceData.size(),
                         materialTypedUploadBytes
@@ -1383,30 +1411,8 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
                     }
                 }
                 else{
-                    Core::Buffer* materialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
-                    commandList->setBufferState(materialBuffer, Core::ResourceStates::CopyDest);
-                    commandList->commitBarriers();
-                    commandList->writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
-                    commandList->setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
-                    commandList->commitBarriers();
-                    if(!UploadPreparedShadowMaterialContextBuffers(
-                        *commandList,
-                        *rayTracingState().m_shadowInstanceBuffer.get(),
-                        *rayTracingState().m_shadowMaterialTypedBuffer.get(),
-                        shadowInstanceData,
-                        shadowMaterialTypedBytes,
-                        materialTypedUploadBytes
-                    ))
-                        return false;
-
-                    if(staticScene){
-                        rayTracingState().m_hwShadowMaterialContextHash = hwMaterialContextHash;
-                        rayTracingState().m_hwShadowMaterialContextHashValid = true;
-                    }
-                    else
-                        rayTracingState().m_hwShadowMaterialContextHashValid = false;
-                    // HW context cannot represent SW node slots.
-                    rayTracingState().m_swShadowMaterialContextHashValid = false;
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: changed HW shadow material context has no graph-owned upload batch"));
+                    return false;
                 }
             }
         }
@@ -1426,7 +1432,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             instances,
             instanceBlases
         )){
-            if(!rayTracingState().m_sceneHasTransparentOccluder){
+            if(!m_rayTracingState.m_sceneHasTransparentOccluder){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: could not freeze opaque scene TLAS build after preflight"));
                 return false;
             }
@@ -1437,8 +1443,8 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     }
 
     if(staticScene && commandList){
-        rayTracingState().m_tlasStaticSceneHash = tlasStaticSceneHash;
-        rayTracingState().m_tlasStaticSceneHashValid = true;
+        m_rayTracingState.m_tlasStaticSceneHash = tlasStaticSceneHash;
+        m_rayTracingState.m_tlasStaticSceneHashValid = true;
     }
     return true;
 }
@@ -1463,24 +1469,6 @@ bool RendererRayTracingSystem::buildSceneSwBvh(
     );
 }
 
-bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallback(Core::CommandList& commandList){
-    if(m_preparedHybridHardwareFallbackBytes.empty()){
-        m_preparedHybridHardwareFallbackRecorded = false;
-        return false;
-    }
-    const u8* const bytes = m_preparedHybridHardwareFallbackBytes.data();
-    return recordPreparedHybridHardwareMaterialContextFallback(
-        commandList,
-        bytes,
-        m_preparedHybridHardwareFallbackInstanceMaterialByteCount,
-        bytes + m_preparedHybridHardwareFallbackInstanceMaterialByteCount,
-        m_preparedHybridHardwareFallbackInstanceByteCount,
-        bytes + m_preparedHybridHardwareFallbackInstanceMaterialByteCount
-            + m_preparedHybridHardwareFallbackInstanceByteCount,
-        m_preparedHybridHardwareFallbackMaterialTypedByteCount
-    );
-}
-
 bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallback(
     Core::CommandList& commandList,
     const void* const instanceMaterialData,
@@ -1491,18 +1479,10 @@ bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallba
     const usize sourceMaterialTypedByteCount
 ){
     m_preparedHybridHardwareFallbackRecorded = false;
-#if !defined(NWB_FINAL)
-    if(m_forceHybridHardwareFallbackSnapshotStaleForTesting){
-        m_forceHybridHardwareFallbackSnapshotStaleForTesting = false;
-        m_expectHybridHardwareFallbackDirectRetryForTesting = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test forced frozen hybrid hardware material context stale"));
-        return false;
-    }
-#endif
     const auto isStorageHandle = [](const Core::GpuDescriptorHandle handle){
         return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
     };
-    const auto& state = rayTracingState();
+    const auto& state = m_rayTracingState;
     const usize instanceMaterialByteCount = m_preparedHybridHardwareFallbackInstanceMaterialByteCount;
     const usize instanceByteCount = m_preparedHybridHardwareFallbackInstanceByteCount;
     const usize materialTypedByteCount = m_preparedHybridHardwareFallbackMaterialTypedByteCount;
@@ -1539,9 +1519,9 @@ bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallba
         return false;
     }
     if(
-        world().componentMutationVersion<RendererComponent>() != m_preparedHybridHardwareFallbackRendererMutationVersion
-        || world().componentMutationVersion<NWB::Impl::Scene::TransformComponent>() != m_preparedHybridHardwareFallbackTransformMutationVersion
-        || world().componentMutationVersion<MaterialInstanceComponent>() != m_preparedHybridHardwareFallbackMaterialMutationVersion
+        m_world.componentMutationVersion<RendererComponent>() != m_preparedHybridHardwareFallbackRendererMutationVersion
+        || m_world.componentMutationVersion<NWB::Impl::Scene::TransformComponent>() != m_preparedHybridHardwareFallbackTransformMutationVersion
+        || m_world.componentMutationVersion<MaterialInstanceComponent>() != m_preparedHybridHardwareFallbackMaterialMutationVersion
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid hardware fallback inputs changed after graph preflight"));
         return false;
@@ -1549,7 +1529,7 @@ bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallba
 
     // A graph-owned caller provides immutable declaration-time blobs. Verify they still equal the retained
     // preflight snapshot before recording, so a caller-side replacement cannot restore a context the compiled task
-    // did not declare. The compatibility overload above passes the same retained ranges directly.
+    // did not declare.
     if(
         NWB_MEMCMP(
             m_preparedHybridHardwareFallbackBytes.data(),
@@ -1589,15 +1569,7 @@ bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallba
     commandList.setBufferState(materialTypedBuffer, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
     m_preparedHybridHardwareFallbackRecorded = true;
-    bool reportHybridHardwareFallbackRestore = true;
-#if !defined(NWB_FINAL)
-    if(m_forceHybridSceneTraversalFallbackEveryFrameForTesting){
-        reportHybridHardwareFallbackRestore = !m_reportedHybridHardwareFallbackRestoreLoopForTesting;
-        m_reportedHybridHardwareFallbackRestoreLoopForTesting = true;
-    }
-#endif
-    if(reportHybridHardwareFallbackRestore)
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: restored frozen hybrid hardware material context"));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: restored frozen hybrid hardware material context"));
     return true;
 }
 
@@ -1611,11 +1583,11 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     using namespace __hidden_rt_swbvh;
 
     // Software scene BVH and material context share hardware instance ordering.
-    auto* meshSystem = world().getSystem<NWB::Impl::MeshSystem>();
+    auto* meshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
     if(!meshSystem)
         return false;
 
-    auto rendererView = world().view<RendererComponent>();
+    auto rendererView = m_world.view<RendererComponent>();
     const usize candidateCount = rendererView.candidateCount();
 
     // Parallel instance records and CPU BVH build values.
@@ -1647,88 +1619,87 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     );
     meshSlotLookup.reserve(candidateCount);
 
-    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software scene BVH requires the initialized global descriptor heap"));
         return false;
     }
-    BeginMeshHeapHandleGather(rayTracingState().m_swMeshHeapHandleCache);
+    BeginMeshHeapHandleGather(m_rayTracingState.m_swMeshHeapHandleCache);
     const auto resolveMeshAttributeHeapHandle = [&](const Core::BufferHandle& buffer, Core::GpuDescriptorHandle& outHandle){
         return commandList
-            ? FindPreparedMeshHeapHandle(rayTracingState().m_swMeshHeapHandleCache, buffer, outHandle)
-            : AcquireMeshHeapHandle(heap, rayTracingState().m_swMeshHeapHandleCache, buffer, outHandle)
+            ? FindPreparedMeshHeapHandle(m_rayTracingState.m_swMeshHeapHandleCache, buffer, outHandle)
+            : AcquireMeshHeapHandle(heap, m_rayTracingState.m_swMeshHeapHandleCache, buffer, outHandle)
         ;
     };
-    rayTracingState().m_swShadowMeshNodeBuffers.clear();
-    rayTracingState().m_swShadowMeshPositionBuffers.clear();
-    rayTracingState().m_swShadowMeshIndexBuffers.clear();
-    rayTracingState().m_swShadowMeshAttributeBuffers.clear();
-    rayTracingState().m_swShadowMeshNodeHandles.clear();
-    rayTracingState().m_swShadowMeshPositionHandles.clear();
-    rayTracingState().m_swShadowMeshIndexHandles.clear();
-    rayTracingState().m_swShadowMeshAttributeHandles.clear();
-    rayTracingState().m_swShadowMeshCount = 0u;
+    m_rayTracingState.m_swShadowMeshNodeBuffers.clear();
+    m_rayTracingState.m_swShadowMeshPositionBuffers.clear();
+    m_rayTracingState.m_swShadowMeshIndexBuffers.clear();
+    m_rayTracingState.m_swShadowMeshAttributeBuffers.clear();
+    m_rayTracingState.m_swShadowMeshNodeHandles.clear();
+    m_rayTracingState.m_swShadowMeshPositionHandles.clear();
+    m_rayTracingState.m_swShadowMeshIndexHandles.clear();
+    m_rayTracingState.m_swShadowMeshAttributeHandles.clear();
+    m_rayTracingState.m_swShadowMeshCount = 0u;
     bool staticScene = true;
 
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible)
             continue;
 
-        MeshResources* mesh = nullptr;
+        ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         RenderableMeshDesc resolvedMesh;
         const bool meshReady = RayTracingDetail::ResolveRenderableMeshResources(
             *meshSystem,
-            m_renderer.meshSystem(),
+            m_meshSystem,
             entity,
             resolvedMesh,
             mesh
         );
         // Preflight allocates storage before the first GPU topology build.  It may therefore gather a pending mesh
         // using the selected storage, while the recording path still requires the topology to have completed.
-        const bool topologyReady = mesh && (
-            mesh->swBvhTopologyBuilt
-            || (!commandList && (mesh->runtimeMesh || mesh->swBvhBuildPending))
+        const bool topologyReady = meshReady && (
+            mesh.swBvhTopologyBuilt
+            || (!commandList && (mesh.runtimeMesh || mesh.swBvhBuildPending))
             // A frozen software-only plan records before this scene gather but commits MeshResources only after the
             // packet accepts. Its exact full-build operation therefore authoritatively supplies topology for this
             // one recording pass without an optimistic CPU-side state mutation.
-            || (commandList && meshSwBvhBuildsGraphOwned && preparedMeshSwBvhBuildProducesTopology(*mesh))
+            || (commandList && meshSwBvhBuildsGraphOwned && preparedMeshSwBvhBuildProducesTopology(mesh))
         );
         if(
             !meshReady
-            || !mesh
             || !topologyReady
-            || !mesh->swBvhNodeBuffer
-            || !__hidden_rt_swbvh::IsStorageBufferHeapHandle(mesh->swBvhNodeHeapHandle)
-            || !mesh->positionBuffer
-            || !mesh->triangleIndexBuffer
-            || !mesh->attributeBuffer
-            || !mesh->csgLocalBounds.valid()
+            || !mesh.swBvhNodeBuffer
+            || !__hidden_rt_swbvh::IsStorageBufferHeapHandle(mesh.swBvhNodeHeapHandle)
+            || !mesh.positionBuffer
+            || !mesh.triangleIndexBuffer
+            || !mesh.attributeBuffer
+            || !mesh.csgLocalBounds.valid()
         )
             continue;
         // Runtime mesh updates disable static scene-BVH reuse.
-        if(resolvedMesh.runtime || mesh->runtimeMesh)
+        if(resolvedMesh.runtime || mesh.runtimeMesh)
             staticScene = false;
 
         // Reuse one table slot for instances sharing geometry.
-        Core::Buffer* meshNodeBuffer = mesh->swBvhNodeBuffer.get();
+        Core::Buffer* meshNodeBuffer = mesh.swBvhNodeBuffer.get();
         u32 meshSlot = 0u;
         const auto foundMeshSlot = meshSlotLookup.find(meshNodeBuffer);
         if(foundMeshSlot != meshSlotLookup.end())
             meshSlot = foundMeshSlot.value();
         else{
-            const Core::GpuDescriptorHandle nodeHandle = mesh->swBvhNodeHeapHandle;
+            const Core::GpuDescriptorHandle nodeHandle = mesh.swBvhNodeHeapHandle;
             Core::GpuDescriptorHandle attributeHandle;
-            const Core::GpuDescriptorHandle positionHandle = mesh->swBvhPositionHeapHandle;
-            const Core::GpuDescriptorHandle indexHandle = mesh->swBvhTriangleIndexHeapHandle;
+            const Core::GpuDescriptorHandle positionHandle = mesh.swBvhPositionHeapHandle;
+            const Core::GpuDescriptorHandle indexHandle = mesh.swBvhTriangleIndexHeapHandle;
             if(
                 !positionHandle.valid()
                 || positionHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
                 || !indexHandle.valid()
                 || indexHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-                || !resolveMeshAttributeHeapHandle(mesh->attributeBuffer, attributeHandle)
+                || !resolveMeshAttributeHeapHandle(mesh.attributeBuffer, attributeHandle)
             ){
                 if(!commandList){
-                    SweepUnseenMeshHeapHandles(heap, rayTracingState().m_swMeshHeapHandleCache);
+                    SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_swMeshHeapHandleCache);
                     NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap"));
                 }
                 else
@@ -1737,44 +1708,44 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             }
 
             if(!commandList){
-                const Core::BufferDesc& nodeDesc = mesh->swBvhNodeBuffer->getDescription();
-                const Core::BufferDesc& positionDesc = mesh->positionBuffer->getDescription();
-                const Core::BufferDesc& indexDesc = mesh->triangleIndexBuffer->getDescription();
-                const Core::BufferDesc& attributeDesc = mesh->attributeBuffer->getDescription();
+                const Core::BufferDesc& nodeDesc = mesh.swBvhNodeBuffer->getCreationDescription();
+                const Core::BufferDesc& positionDesc = mesh.positionBuffer->getCreationDescription();
+                const Core::BufferDesc& indexDesc = mesh.triangleIndexBuffer->getCreationDescription();
+                const Core::BufferDesc& attributeDesc = mesh.attributeBuffer->getCreationDescription();
                 preparedMeshes.push_back(PreparedSceneSwBvhMesh{
-                    .meshName = mesh->meshName,
-                    .nodeBuffer = mesh->swBvhNodeBuffer,
-                    .positionBuffer = mesh->positionBuffer,
-                    .triangleIndexBuffer = mesh->triangleIndexBuffer,
-                    .attributeBuffer = mesh->attributeBuffer,
+                    .meshName = mesh.meshName,
+                    .nodeBuffer = mesh.swBvhNodeBuffer,
+                    .positionBuffer = mesh.positionBuffer,
+                    .triangleIndexBuffer = mesh.triangleIndexBuffer,
+                    .attributeBuffer = mesh.attributeBuffer,
                     .nodeHeapHandle = nodeHandle,
                     .positionHeapHandle = positionHandle,
                     .triangleIndexHeapHandle = indexHandle,
                     .attributeHeapHandle = attributeHandle,
-                    .runtimeMeshVersion = mesh->runtimeMeshVersion,
+                    .runtimeMeshVersion = mesh.runtimeMeshVersion,
                     .nodeByteSize = nodeDesc.byteSize,
                     .positionByteSize = positionDesc.byteSize,
                     .triangleIndexByteSize = indexDesc.byteSize,
                     .attributeByteSize = attributeDesc.byteSize,
-                    .primitiveCount = mesh->meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount,
-                    .runtimeMesh = mesh->runtimeMesh,
+                    .primitiveCount = mesh.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount,
+                    .runtimeMesh = mesh.runtimeMesh,
                 });
             }
 
-            meshSlot = rayTracingState().m_swShadowMeshCount;
-            rayTracingState().m_swShadowMeshNodeBuffers.push_back(meshNodeBuffer);
-            rayTracingState().m_swShadowMeshPositionBuffers.push_back(mesh->positionBuffer.get());
-            rayTracingState().m_swShadowMeshIndexBuffers.push_back(mesh->triangleIndexBuffer.get());
-            rayTracingState().m_swShadowMeshAttributeBuffers.push_back(mesh->attributeBuffer.get());
-            rayTracingState().m_swShadowMeshNodeHandles.push_back(nodeHandle);
-            rayTracingState().m_swShadowMeshPositionHandles.push_back(positionHandle);
-            rayTracingState().m_swShadowMeshIndexHandles.push_back(indexHandle);
-            rayTracingState().m_swShadowMeshAttributeHandles.push_back(attributeHandle);
+            meshSlot = m_rayTracingState.m_swShadowMeshCount;
+            m_rayTracingState.m_swShadowMeshNodeBuffers.push_back(meshNodeBuffer);
+            m_rayTracingState.m_swShadowMeshPositionBuffers.push_back(mesh.positionBuffer.get());
+            m_rayTracingState.m_swShadowMeshIndexBuffers.push_back(mesh.triangleIndexBuffer.get());
+            m_rayTracingState.m_swShadowMeshAttributeBuffers.push_back(mesh.attributeBuffer.get());
+            m_rayTracingState.m_swShadowMeshNodeHandles.push_back(nodeHandle);
+            m_rayTracingState.m_swShadowMeshPositionHandles.push_back(positionHandle);
+            m_rayTracingState.m_swShadowMeshIndexHandles.push_back(indexHandle);
+            m_rayTracingState.m_swShadowMeshAttributeHandles.push_back(attributeHandle);
             meshSlotLookup.emplace(meshNodeBuffer, meshSlot);
-            ++rayTracingState().m_swShadowMeshCount;
+            ++m_rayTracingState.m_swShadowMeshCount;
         }
 
-        const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
+        const NWB::Impl::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
         const SIMDMatrix objectToWorld = transform
             ? MatrixAffineTransformation(
                 LoadFloat(transform->scale),
@@ -1787,8 +1758,8 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         SIMDVector determinant;
         const SIMDMatrix worldToObject = MatrixInverse(&determinant, objectToWorld);
 
-        const SIMDVector localMin = LoadFloatInt(mesh->csgLocalBounds.minBounds);
-        const SIMDVector localMax = LoadFloatInt(mesh->csgLocalBounds.maxBounds);
+        const SIMDVector localMin = LoadFloatInt(mesh.csgLocalBounds.minBounds);
+        const SIMDVector localMax = LoadFloatInt(mesh.csgLocalBounds.maxBounds);
         SIMDVector worldMin{};
         SIMDVector worldMax{};
         if(!AabbTests::Transform(objectToWorld, localMin, localMax, worldMin, worldMax))
@@ -1797,14 +1768,14 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
 
         SceneSwBvhInstanceGpu instance;
         StoreFloat(worldToObject, &instance.worldToObject);
-        instance.primitiveCount = mesh->meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
+        instance.primitiveCount = mesh.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
 
         // Build material context in scene-BVH leaf order; unresolved materials remain opaque.
         const u32 meshInstanceIndex = static_cast<u32>(instances.size());
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(m_renderer.materialSystem().findMaterialSurfaceInfo(renderer.material, materialInfo)){
+        if(m_materialSystem.findMaterialSurfaceInfo(renderer.material, materialInfo)){
             // Software shadow, caustic, and surfel traversal evaluate the same material surface dispatcher as the
             // hardware path. Freeze its sampled textures alongside the scene-BVH material context.
             if(
@@ -1814,7 +1785,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             )
                 return false;
             u32 materialConstantByteOffset = 0u;
-            if(!m_renderer.materialSystem().appendShadowOccluderMaterialContext(
+            if(!m_materialSystem.appendShadowOccluderMaterialContext(
                 entity,
                 *materialInfo,
                 transform,
@@ -1826,10 +1797,10 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                 return false;
             instanceMaterial = RayTracingDetail::ResolveInstanceShadowMaterial(*materialInfo, materialConstantByteOffset, meshInstanceIndex);
         }
-        instanceMaterial.indexSlot = rayTracingState().m_swShadowMeshIndexHandles[meshSlot].slot();
-        instanceMaterial.attributeSlot = rayTracingState().m_swShadowMeshAttributeHandles[meshSlot].slot();
-        instanceMaterial.positionSlot = rayTracingState().m_swShadowMeshPositionHandles[meshSlot].slot();
-        instanceMaterial.nodeSlot = rayTracingState().m_swShadowMeshNodeHandles[meshSlot].slot();
+        instanceMaterial.indexSlot = m_rayTracingState.m_swShadowMeshIndexHandles[meshSlot].slot();
+        instanceMaterial.attributeSlot = m_rayTracingState.m_swShadowMeshAttributeHandles[meshSlot].slot();
+        instanceMaterial.positionSlot = m_rayTracingState.m_swShadowMeshPositionHandles[meshSlot].slot();
+        instanceMaterial.nodeSlot = m_rayTracingState.m_swShadowMeshNodeHandles[meshSlot].slot();
         SceneBvhPrimitiveCalculation bvhPrimitive;
         bvhPrimitive.aabbMin = worldMin;
         bvhPrimitive.aabbMax = worldMax;
@@ -1842,15 +1813,15 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         shadowInstanceData.push_back(shadowInstance);
     }
 
-    if(rayTracingState().m_swShadowMeshCount > rayTracingState().m_swShadowMeshHeapHighWater){
-        rayTracingState().m_swShadowMeshHeapHighWater = rayTracingState().m_swShadowMeshCount;
+    if(m_rayTracingState.m_swShadowMeshCount > m_rayTracingState.m_swShadowMeshHeapHighWater){
+        m_rayTracingState.m_swShadowMeshHeapHighWater = m_rayTracingState.m_swShadowMeshCount;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW-shadow heap registration high-water: {} distinct meshes -> {} handles")
-            , static_cast<u64>(rayTracingState().m_swShadowMeshCount)
-            , static_cast<u64>(rayTracingState().m_swShadowMeshCount) * s_SoftwareRayTracingMeshBufferCount
+            , static_cast<u64>(m_rayTracingState.m_swShadowMeshCount)
+            , static_cast<u64>(m_rayTracingState.m_swShadowMeshCount) * s_SoftwareRayTracingMeshBufferCount
         );
     }
     if(!commandList)
-        SweepUnseenMeshHeapHandles(heap, rayTracingState().m_swMeshHeapHandleCache);
+        SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_swMeshHeapHandleCache);
 
     const u32 instanceCount = static_cast<u32>(instances.size());
     if(instanceCount == 0u){
@@ -1858,9 +1829,9 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software scene became empty after graph preflight; rejecting frozen trace uploads"));
             return false;
         }
-        rayTracingState().m_sceneBvhInstanceCount = 0u;
-        rayTracingState().m_sceneSwBvhStaticSceneHashValid = false;
-        rayTracingState().m_swShadowMaterialContextHashValid = false;
+        m_rayTracingState.m_sceneBvhInstanceCount = 0u;
+        m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
+        m_rayTracingState.m_swShadowMaterialContextHashValid = false;
         return true;
     }
 
@@ -1878,15 +1849,21 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     }
     const bool canReuseSceneBvh =
         staticScene
-        && rayTracingState().m_sceneSwBvhStaticSceneHashValid
-        && rayTracingState().m_sceneSwBvhStaticSceneHash == sceneStaticHash
-        && rayTracingState().m_sceneBvhInstanceCount == instanceCount
-        && HasPreparedSceneBvhBuffers(rayTracingState(), instanceCount)
+        && m_rayTracingState.m_sceneSwBvhStaticSceneHashValid
+        && m_rayTracingState.m_sceneSwBvhStaticSceneHash == sceneStaticHash
+        && m_rayTracingState.m_sceneBvhInstanceCount == instanceCount
+        && HasPreparedSceneBvhBuffers(m_rayTracingState, instanceCount)
     ;
     if(!staticScene || !canReuseSceneBvh)
-        rayTracingState().m_sceneSwBvhStaticSceneHashValid = false;
+        m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
+    if(
+        !commandList
+        && canReuseSceneBvh
+        && !capturePreparedSceneBvhCacheReuse(sceneStaticHash, instanceCount)
+    )
+        return false;
 
-    if(commandList && !HasPreparedSceneBvhBuffers(rayTracingState(), instanceCount)){
+    if(commandList && !HasPreparedSceneBvhBuffers(m_rayTracingState, instanceCount)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software scene BVH changed after preflight; skipping recording-time replacement"));
         return false;
     }
@@ -1896,7 +1873,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             !commandList
             && (
                 !ensureSceneBvhBuffers(instanceCount)
-                || !HasPreparedSceneBvhBuffers(rayTracingState(), instanceCount)
+                || !HasPreparedSceneBvhBuffers(m_rayTracingState, instanceCount)
             )
         )
             return false;
@@ -1963,16 +1940,8 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             }
         }
         else{
-            Core::Buffer* nodeBuffer = rayTracingState().m_sceneBvhNodeBuffer.get();
-            Core::Buffer* instanceBuffer = rayTracingState().m_sceneInstanceBuffer.get();
-            commandList->setBufferState(nodeBuffer, Core::ResourceStates::CopyDest);
-            commandList->setBufferState(instanceBuffer, Core::ResourceStates::CopyDest);
-            commandList->commitBarriers();
-            commandList->writeBuffer(nodeBuffer, nodes.data(), nodes.size() * sizeof(NwbBvhNodeGpu));
-            commandList->writeBuffer(instanceBuffer, instances.data(), instances.size() * sizeof(SceneSwBvhInstanceGpu));
-            commandList->setBufferState(nodeBuffer, Core::ResourceStates::ShaderResource);
-            commandList->setBufferState(instanceBuffer, Core::ResourceStates::ShaderResource);
-            commandList->commitBarriers();
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: changed software scene BVH has no graph-owned upload pair"));
+            return false;
         }
     }
     else if(commandList && sceneBvhBatchGraphOwned){
@@ -1989,7 +1958,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     if(
         commandList
         && !HasPreparedShadowMaterialContextBuffers(
-            rayTracingState(),
+            m_rayTracingState,
             instanceMaterials.size(),
             shadowInstanceData.size(),
             materialTypedUploadBytes
@@ -2003,17 +1972,33 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         shadowInstanceData,
         shadowMaterialTypedBytes
     );
+    const bool hybridSoftwareMaterialContextCaptureRequired =
+        m_shadowVisibilityHardwareSupported
+        && m_rayTracingState.m_sceneHasTransparentOccluder
+    ;
     const bool canReuseSwMaterialContext =
-        staticScene
-        && rayTracingState().m_swShadowMaterialContextHashValid
-        && rayTracingState().m_swShadowMaterialContextHash == swMaterialContextHash
+        !hybridSoftwareMaterialContextCaptureRequired
+        && staticScene
+        && m_rayTracingState.m_swShadowMaterialContextHashValid
+        && m_rayTracingState.m_swShadowMaterialContextHash == swMaterialContextHash
         && HasPreparedShadowMaterialContextBuffers(
-            rayTracingState(),
+            m_rayTracingState,
             instanceMaterials.size(),
             shadowInstanceData.size(),
             materialTypedUploadBytes
         )
     ;
+    if(
+        !commandList
+        && canReuseSwMaterialContext
+        && !capturePreparedShadowMaterialContextCacheReuse(
+            swMaterialContextHash,
+            instanceMaterials.size(),
+            shadowInstanceData.size(),
+            materialTypedUploadBytes
+        )
+    )
+        return false;
     if(!canReuseSwMaterialContext){
         if(!commandList){
             if(
@@ -2021,7 +2006,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                 || !ensureShadowInstanceContextBuffer(shadowInstanceData.size())
                 || !ensureShadowMaterialTypedBuffer(materialTypedUploadBytes)
                 || !HasPreparedShadowMaterialContextBuffers(
-                    rayTracingState(),
+                    m_rayTracingState,
                     instanceMaterials.size(),
                     shadowInstanceData.size(),
                     materialTypedUploadBytes
@@ -2032,11 +2017,16 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             // immutable context first, so an optional SW-tail miss can restore opaque consumers without regathering
             // renderer/material data while Shadow Preparation is recording.
             if(
-                m_preparedShadowMaterialContextReady
-                && m_preparedShadowMaterialContextRoute == PreparedShadowMaterialContextRoute::Hardware
-                && !capturePreparedHybridHardwareMaterialContextFallback()
-            )
+                hybridSoftwareMaterialContextCaptureRequired
+                && (
+                    !m_preparedShadowMaterialContextReady
+                    || m_preparedShadowMaterialContextRoute != PreparedShadowMaterialContextRoute::Hardware
+                    || !capturePreparedHybridHardwareMaterialContextFallback()
+                )
+            ){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain frozen hybrid hardware material fallback"));
+                return false;
+            }
             if(!capturePreparedShadowMaterialContext(
                 PreparedShadowMaterialContextRoute::Software,
                 staticScene,
@@ -2072,30 +2062,8 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                 }
             }
             else{
-                Core::Buffer* materialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
-                commandList->setBufferState(materialBuffer, Core::ResourceStates::CopyDest);
-                commandList->commitBarriers();
-                commandList->writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
-                commandList->setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
-                commandList->commitBarriers();
-                if(!UploadPreparedShadowMaterialContextBuffers(
-                    *commandList,
-                    *rayTracingState().m_shadowInstanceBuffer.get(),
-                    *rayTracingState().m_shadowMaterialTypedBuffer.get(),
-                    shadowInstanceData,
-                    shadowMaterialTypedBytes,
-                    materialTypedUploadBytes
-                ))
-                    return false;
-
-                if(staticScene){
-                    rayTracingState().m_swShadowMaterialContextHash = swMaterialContextHash;
-                    rayTracingState().m_swShadowMaterialContextHashValid = true;
-                }
-                else
-                    rayTracingState().m_swShadowMaterialContextHashValid = false;
-                // HW context cannot represent SW node slots.
-                rayTracingState().m_hwShadowMaterialContextHashValid = false;
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: changed SW shadow material context has no graph-owned upload batch"));
+                return false;
             }
         }
     }
@@ -2104,10 +2072,10 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         return false;
     }
 
-    rayTracingState().m_sceneBvhInstanceCount = instanceCount;
+    m_rayTracingState.m_sceneBvhInstanceCount = instanceCount;
     if(staticScene && commandList && !sceneBvhBatchGraphOwned){
-        rayTracingState().m_sceneSwBvhStaticSceneHash = sceneStaticHash;
-        rayTracingState().m_sceneSwBvhStaticSceneHashValid = true;
+        m_rayTracingState.m_sceneSwBvhStaticSceneHash = sceneStaticHash;
+        m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = true;
     }
     if(!commandList){
         const bool frozenGraphScene =
@@ -2121,10 +2089,12 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                 preparedMeshes.size(),
                 instanceCount
             )){
-                // The paired immutable uploads remain valid even when their traversal-table snapshot cannot be
-                // retained. The pure graph route keeps its existing direct recorder for this frame; the healthy
-                // hybrid route retains its later optional direct-retry boundary.
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software scene traversal; retaining direct compatibility recorder"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software scene traversal"));
+                if(hybridSoftwareMaterialContextCaptureRequired)
+                    return true;
+                clearPreparedSceneBvh();
+                clearPreparedShadowMaterialContext();
+                return false;
             }
         }
         else
@@ -2133,11 +2103,13 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     return true;
 }
 
-bool RendererRayTracingSystem::prepareMeshBlasResources(MeshResources& meshResources){
+bool RendererRayTracingSystem::prepareMeshBlasResources(
+    ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources
+){
     if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer)
         return false;
 
-    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getDescription();
+    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getCreationDescription();
     if(positionDesc.structStride == 0u || meshResources.meshletPrimitiveIndexCount == 0u)
         return false;
 
@@ -2164,12 +2136,12 @@ bool RendererRayTracingSystem::prepareMeshBlasResources(MeshResources& meshResou
     Core::RayTracingAccelStructBuildFlags::Mask buildFlags = Core::RayTracingAccelStructBuildFlags::PreferFastTrace;
     if(meshResources.runtimeMesh)
         buildFlags |= Core::RayTracingAccelStructBuildFlags::AllowUpdate;
-    Core::RayTracingAccelStructDesc accelStructDesc(arena());
+    Core::RayTracingAccelStructDesc accelStructDesc(m_arena);
     accelStructDesc.addBottomLevelGeometry(geometry);
     accelStructDesc.setBuildFlags(buildFlags);
     accelStructDesc.setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
     accelStructDesc.setDebugName(DeriveName(meshResources.meshName, AStringView(":blas")));
-    Core::RayTracingAccelStructHandle blas = graphics().getDevice().createAccelStruct(accelStructDesc);
+    Core::RayTracingAccelStructHandle blas = m_graphics.getDevice().createAccelStruct(accelStructDesc);
     if(!blas){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'")
             , StringConvert(meshResources.meshName.c_str())
@@ -2177,11 +2149,16 @@ bool RendererRayTracingSystem::prepareMeshBlasResources(MeshResources& meshResou
         return false;
     }
     meshResources.blas = Move(blas);
+    meshResources.blasBackingFresh = true;
+    meshResources.blasBackingStateHandoffPending = false;
     meshResources.blasRefitsSinceRebuild = 0u;
     return true;
 }
 
-bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources){
+bool RendererRayTracingSystem::buildMeshBlas(
+    Core::CommandList& commandList,
+    ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources
+){
     PreparedMeshBlasBuild build;
     if(
         !__hidden_rt_swbvh::ResolvePreparedMeshBlasBuild(meshResources, build)
@@ -2189,6 +2166,8 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
     )
         return false;
 
+    if(meshResources.blasBackingFresh)
+        meshResources.blasBackingStateHandoffPending = true;
     meshResources.blasRefitsSinceRebuild = build.refitsAfterBuild;
     if(build.firstBuild){
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)")
@@ -2202,91 +2181,91 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
 }
 
 void RendererRayTracingSystem::releaseSwBvhScratchHeapHandles(){
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(heap.isInitialized()){
-        RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_bvhSortKeysHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_bvhSortPayloadHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_bvhVisitCounterHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhSortKeysHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhSortPayloadHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhVisitCounterHeapHandle);
         return;
     }
-    rayTracingState().m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::invalid();
-    rayTracingState().m_bvhSortPayloadHeapHandle = Core::GpuDescriptorHandle::invalid();
-    rayTracingState().m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_bvhSortPayloadHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
 }
 
 bool RendererRayTracingSystem::ensureBvhSortPipeline(){
-    if(rayTracingState().m_bvhSortPipeline)
+    if(m_rayTracingState.m_bvhSortPipeline)
         return true;
-    if(rayTracingState().m_bvhSortPipelineFailed)
+    if(m_rayTracingState.m_bvhSortPipelineFailed)
         return false;
 
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software BVH sort requires the initialized global descriptor heap"));
-        rayTracingState().m_bvhSortPipelineFailed = true;
+        m_rayTracingState.m_bvhSortPipelineFailed = true;
         return false;
     }
 
-    if(!rayTracingState().m_bvhSortBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(arena());
+    if(!m_rayTracingState.m_bvhSortBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // Push-only layout; sort resources use the global heap.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhSortPushConstants)));
 
-        rayTracingState().m_bvhSortBindingLayout = device.createBindingLayout(layoutDesc);
-        if(!rayTracingState().m_bvhSortBindingLayout){
+        m_rayTracingState.m_bvhSortBindingLayout = device.createBindingLayout(layoutDesc);
+        if(!m_rayTracingState.m_bvhSortBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort binding layout"));
-            rayTracingState().m_bvhSortPipelineFailed = true;
+            m_rayTracingState.m_bvhSortPipelineFailed = true;
             return false;
         }
     }
 
-    if(!m_renderer.shaderSystem().loadShader(
-        rayTracingState().m_bvhSortShader,
+    if(!m_shaderSystem.loadShader(
+        m_rayTracingState.m_bvhSortShader,
         AssetsGraphicsBvh::s_BitonicSortShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
         "ECSRender_BvhBitonicSort"
     )){
-        rayTracingState().m_bvhSortPipelineFailed = true;
+        m_rayTracingState.m_bvhSortPipelineFailed = true;
         return false;
     }
 
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc
-        .setComputeShader(rayTracingState().m_bvhSortShader)
-        .addBindingLayout(rayTracingState().m_bvhSortBindingLayout)
+        .setComputeShader(m_rayTracingState.m_bvhSortShader)
+        .addBindingLayout(m_rayTracingState.m_bvhSortBindingLayout)
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    rayTracingState().m_bvhSortPipeline = device.createComputePipeline(pipelineDesc);
-    if(!rayTracingState().m_bvhSortPipeline){
+    m_rayTracingState.m_bvhSortPipeline = device.createComputePipeline(pipelineDesc);
+    if(!m_rayTracingState.m_bvhSortPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort compute pipeline"));
-        rayTracingState().m_bvhSortPipelineFailed = true;
+        m_rayTracingState.m_bvhSortPipelineFailed = true;
         return false;
     }
     return true;
 }
 
 bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
 
     const auto sortHandlesReady = [this](){
         return
-            __hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhSortKeysHeapHandle)
-            && __hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhSortPayloadHeapHandle)
+            __hidden_rt_swbvh::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle)
+            && __hidden_rt_swbvh::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle)
         ;
     };
 
     if(
-        rayTracingState().m_bvhSortKeysBuffer
-        && rayTracingState().m_bvhSortPayloadBuffer
-        && rayTracingState().m_bvhSortCapacity >= paddedCount
+        m_rayTracingState.m_bvhSortKeysBuffer
+        && m_rayTracingState.m_bvhSortPayloadBuffer
+        && m_rayTracingState.m_bvhSortCapacity >= paddedCount
     ){
         if(sortHandlesReady())
             return true;
@@ -2295,10 +2274,10 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
         Core::GpuDescriptorHandle acquiredKeys = Core::GpuDescriptorHandle::invalid();
         Core::GpuDescriptorHandle acquiredPayload = Core::GpuDescriptorHandle::invalid();
         if(
-            (!rayTracingState().m_bvhSortKeysHeapHandle.valid()
-                && !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *rayTracingState().m_bvhSortKeysBuffer.get(), acquiredKeys))
-            || (!rayTracingState().m_bvhSortPayloadHeapHandle.valid()
-                && !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *rayTracingState().m_bvhSortPayloadBuffer.get(), acquiredPayload))
+            (!m_rayTracingState.m_bvhSortKeysHeapHandle.valid()
+                && !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *m_rayTracingState.m_bvhSortKeysBuffer.get(), acquiredKeys))
+            || (!m_rayTracingState.m_bvhSortPayloadHeapHandle.valid()
+                && !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *m_rayTracingState.m_bvhSortPayloadBuffer.get(), acquiredPayload))
         ){
             RayTracingDetail::RetireHeapHandle(heap, acquiredKeys);
             RayTracingDetail::RetireHeapHandle(heap, acquiredPayload);
@@ -2306,14 +2285,14 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
             return false;
         }
         if(acquiredKeys.valid())
-            rayTracingState().m_bvhSortKeysHeapHandle = acquiredKeys;
+            m_rayTracingState.m_bvhSortKeysHeapHandle = acquiredKeys;
         if(acquiredPayload.valid())
-            rayTracingState().m_bvhSortPayloadHeapHandle = acquiredPayload;
+            m_rayTracingState.m_bvhSortPayloadHeapHandle = acquiredPayload;
         return sortHandlesReady();
     }
 
     const usize capacity = ::NextGrowingCapacity(
-        rayTracingState().m_bvhSortCapacity,
+        m_rayTracingState.m_bvhSortCapacity,
         paddedCount,
         s_BvhSortInitialCapacity
     );
@@ -2323,10 +2302,11 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
         .setByteSize(static_cast<u64>(sizeof(u32) * capacity))
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(Name("bvh_sort_keys"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle keysBuffer = graphics().createBuffer(keysBufferDesc);
+    Core::BufferHandle keysBuffer = m_graphics.createBuffer(keysBufferDesc);
     if(!keysBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort keys buffer"));
         return false;
@@ -2337,10 +2317,11 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
         .setByteSize(static_cast<u64>(sizeof(u32) * capacity))
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(Name("bvh_sort_payload"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle payloadBuffer = graphics().createBuffer(payloadBufferDesc);
+    Core::BufferHandle payloadBuffer = m_graphics.createBuffer(payloadBufferDesc);
     if(!payloadBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort payload buffer"));
         return false;
@@ -2358,29 +2339,29 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
         return false;
     }
 
-    RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_bvhSortKeysHeapHandle);
-    RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_bvhSortPayloadHeapHandle);
-    rayTracingState().m_bvhSortKeysBuffer = Move(keysBuffer);
-    rayTracingState().m_bvhSortPayloadBuffer = Move(payloadBuffer);
-    rayTracingState().m_bvhSortKeysHeapHandle = keysHeapHandle;
-    rayTracingState().m_bvhSortPayloadHeapHandle = payloadHeapHandle;
-    rayTracingState().m_bvhSortCapacity = capacity;
+    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhSortKeysHeapHandle);
+    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhSortPayloadHeapHandle);
+    m_rayTracingState.m_bvhSortKeysBuffer = Move(keysBuffer);
+    m_rayTracingState.m_bvhSortPayloadBuffer = Move(payloadBuffer);
+    m_rayTracingState.m_bvhSortKeysHeapHandle = keysHeapHandle;
+    m_rayTracingState.m_bvhSortPayloadHeapHandle = payloadHeapHandle;
+    m_rayTracingState.m_bvhSortCapacity = capacity;
     return true;
 }
 
 bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount){
-    NWB_ASSERT(rayTracingState().m_bvhSortPipeline);
-    NWB_ASSERT(rayTracingState().m_bvhSortKeysBuffer);
-    NWB_ASSERT(rayTracingState().m_bvhSortPayloadBuffer);
-    NWB_ASSERT(__hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhSortKeysHeapHandle));
-    NWB_ASSERT(__hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhSortPayloadHeapHandle));
+    NWB_ASSERT(m_rayTracingState.m_bvhSortPipeline);
+    NWB_ASSERT(m_rayTracingState.m_bvhSortKeysBuffer);
+    NWB_ASSERT(m_rayTracingState.m_bvhSortPayloadBuffer);
+    NWB_ASSERT(__hidden_rt_swbvh::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle));
+    NWB_ASSERT(__hidden_rt_swbvh::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle));
 
     // Padded count is power-of-two and group-aligned.
     if(paddedCount < static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE))
         return false;
 
-    Core::Buffer* keysBuffer = rayTracingState().m_bvhSortKeysBuffer.get();
-    Core::Buffer* payloadBuffer = rayTracingState().m_bvhSortPayloadBuffer.get();
+    Core::Buffer* keysBuffer = m_rayTracingState.m_bvhSortKeysBuffer.get();
+    Core::Buffer* payloadBuffer = m_rayTracingState.m_bvhSortPayloadBuffer.get();
 
     // Consecutive sort steps require UAV barriers.
     commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
@@ -2392,12 +2373,12 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
     const u32 groupCount = paddedCount / static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE);
 
     const auto dispatchSort = [this, &commandList](BvhSortPushConstants pushConstants, const u32 groups){
-        pushConstants.keysHeapSlot = rayTracingState().m_bvhSortKeysHeapHandle.slot();
-        pushConstants.payloadHeapSlot = rayTracingState().m_bvhSortPayloadHeapHandle.slot();
+        pushConstants.keysHeapSlot = m_rayTracingState.m_bvhSortKeysHeapHandle.slot();
+        pushConstants.payloadHeapSlot = m_rayTracingState.m_bvhSortPayloadHeapHandle.slot();
         Core::ComputeState computeState;
-        computeState.setPipeline(rayTracingState().m_bvhSortPipeline.get());
+        computeState.setPipeline(m_rayTracingState.m_bvhSortPipeline.get());
         commandList.setComputeState(computeState);
-        graphics().getDevice().getDescriptorHeap().bindCompute(commandList, *rayTracingState().m_bvhSortPipeline.get());
+        m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *m_rayTracingState.m_bvhSortPipeline.get());
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         commandList.dispatch(groups, 1u, 1u);
     };
@@ -2439,32 +2420,32 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
 
 bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
     if(
-        rayTracingState().m_bvhMortonPipeline
-        && rayTracingState().m_bvhTopologyPipeline
-        && rayTracingState().m_bvhFitPipeline
+        m_rayTracingState.m_bvhMortonPipeline
+        && m_rayTracingState.m_bvhTopologyPipeline
+        && m_rayTracingState.m_bvhFitPipeline
     )
         return true;
-    if(rayTracingState().m_bvhBuildPipelineFailed)
+    if(m_rayTracingState.m_bvhBuildPipelineFailed)
         return false;
 
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software BVH build requires the initialized global descriptor heap"));
-        rayTracingState().m_bvhBuildPipelineFailed = true;
+        m_rayTracingState.m_bvhBuildPipelineFailed = true;
         return false;
     }
 
-    if(!rayTracingState().m_bvhBuildBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(arena());
+    if(!m_rayTracingState.m_bvhBuildBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // Push-only layout; build resources use the global heap.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhBuildPushConstants)));
 
-        rayTracingState().m_bvhBuildBindingLayout = device.createBindingLayout(layoutDesc);
-        if(!rayTracingState().m_bvhBuildBindingLayout){
+        m_rayTracingState.m_bvhBuildBindingLayout = device.createBindingLayout(layoutDesc);
+        if(!m_rayTracingState.m_bvhBuildBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH build binding layout"));
-            rayTracingState().m_bvhBuildPipelineFailed = true;
+            m_rayTracingState.m_bvhBuildPipelineFailed = true;
             return false;
         }
     }
@@ -2477,13 +2458,13 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
     )->bool{
         if(pipeline)
             return true;
-        if(!m_renderer.shaderSystem().loadShader(shader, shaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Compute, debugLabel))
+        if(!m_shaderSystem.loadShader(shader, shaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Compute, debugLabel))
             return false;
 
         Core::ComputePipelineDesc pipelineDesc;
         pipelineDesc
             .setComputeShader(shader)
-            .addBindingLayout(rayTracingState().m_bvhBuildBindingLayout)
+            .addBindingLayout(m_rayTracingState.m_bvhBuildBindingLayout)
             .addBindingLayout(heap.getResourceLayout())
             .addBindingLayout(heap.getSamplerLayout())
         ;
@@ -2492,31 +2473,31 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
     };
 
     if(
-        !createBuildPipeline(rayTracingState().m_bvhMortonShader, rayTracingState().m_bvhMortonPipeline, AssetsGraphicsBvh::s_BvhMortonShaderName, "ECSRender_BvhMorton")
-        || !createBuildPipeline(rayTracingState().m_bvhTopologyShader, rayTracingState().m_bvhTopologyPipeline, AssetsGraphicsBvh::s_BvhTopologyShaderName, "ECSRender_BvhTopology")
-        || !createBuildPipeline(rayTracingState().m_bvhFitShader, rayTracingState().m_bvhFitPipeline, AssetsGraphicsBvh::s_BvhFitShaderName, "ECSRender_BvhFit")
+        !createBuildPipeline(m_rayTracingState.m_bvhMortonShader, m_rayTracingState.m_bvhMortonPipeline, AssetsGraphicsBvh::s_BvhMortonShaderName, "ECSRender_BvhMorton")
+        || !createBuildPipeline(m_rayTracingState.m_bvhTopologyShader, m_rayTracingState.m_bvhTopologyPipeline, AssetsGraphicsBvh::s_BvhTopologyShaderName, "ECSRender_BvhTopology")
+        || !createBuildPipeline(m_rayTracingState.m_bvhFitShader, m_rayTracingState.m_bvhFitPipeline, AssetsGraphicsBvh::s_BvhFitShaderName, "ECSRender_BvhFit")
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH build compute pipeline"));
-        rayTracingState().m_bvhBuildPipelineFailed = true;
+        m_rayTracingState.m_bvhBuildPipelineFailed = true;
         return false;
     }
     return true;
 }
 
 bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount){
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
 
-    if(rayTracingState().m_bvhVisitCounterBuffer && rayTracingState().m_bvhBuildCapacity >= primitiveCount){
-        if(__hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhVisitCounterHeapHandle))
+    if(m_rayTracingState.m_bvhVisitCounterBuffer && m_rayTracingState.m_bvhBuildCapacity >= primitiveCount){
+        if(__hidden_rt_swbvh::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhVisitCounterHeapHandle))
             return true;
 
         Core::GpuDescriptorHandle acquired = Core::GpuDescriptorHandle::invalid();
-        if(!rayTracingState().m_bvhVisitCounterHeapHandle.valid()
-            && __hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *rayTracingState().m_bvhVisitCounterBuffer.get(), acquired)){
-            rayTracingState().m_bvhVisitCounterHeapHandle = acquired;
+        if(!m_rayTracingState.m_bvhVisitCounterHeapHandle.valid()
+            && __hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *m_rayTracingState.m_bvhVisitCounterBuffer.get(), acquired)){
+            m_rayTracingState.m_bvhVisitCounterHeapHandle = acquired;
             return true;
         }
         RayTracingDetail::RetireHeapHandle(heap, acquired);
@@ -2525,7 +2506,7 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
     }
 
     const usize capacity = ::NextGrowingCapacity(
-        rayTracingState().m_bvhBuildCapacity,
+        m_rayTracingState.m_bvhBuildCapacity,
         primitiveCount,
         s_BvhBuildInitialCapacity
     );
@@ -2536,10 +2517,11 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
         .setByteSize(static_cast<u64>(sizeof(u32) * capacity))
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(Name("bvh_visit_counter"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle counterBuffer = graphics().createBuffer(counterBufferDesc);
+    Core::BufferHandle counterBuffer = m_graphics.createBuffer(counterBufferDesc);
     if(!counterBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH visit counter buffer"));
         return false;
@@ -2551,10 +2533,10 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
         return false;
     }
 
-    RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_bvhVisitCounterHeapHandle);
-    rayTracingState().m_bvhVisitCounterBuffer = Move(counterBuffer);
-    rayTracingState().m_bvhVisitCounterHeapHandle = counterHeapHandle;
-    rayTracingState().m_bvhBuildCapacity = capacity;
+    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhVisitCounterHeapHandle);
+    m_rayTracingState.m_bvhVisitCounterBuffer = Move(counterBuffer);
+    m_rayTracingState.m_bvhVisitCounterHeapHandle = counterHeapHandle;
+    m_rayTracingState.m_bvhBuildCapacity = capacity;
     return true;
 }
 
@@ -2565,7 +2547,7 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
     Core::GpuDescriptorHandle& nodeHeapHandle,
     Core::GpuDescriptorHandle& parentHeapHandle
 ){
-    auto& device = graphics().getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
@@ -2614,7 +2596,7 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
         .setDebugName(Name("bvh_mesh_nodes"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle newNodeBuffer = graphics().createBuffer(nodeBufferDesc);
+    Core::BufferHandle newNodeBuffer = m_graphics.createBuffer(nodeBufferDesc);
     if(!newNodeBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create per-mesh BVH node buffer"));
         return false;
@@ -2625,10 +2607,11 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
         .setByteSize(static_cast<u64>(sizeof(u32) * nodeCount))
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(Name("bvh_mesh_parent"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle newParentBuffer = graphics().createBuffer(parentBufferDesc);
+    Core::BufferHandle newParentBuffer = m_graphics.createBuffer(parentBufferDesc);
     if(!newParentBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create per-mesh BVH parent buffer"));
         return false;
@@ -2693,48 +2676,17 @@ bool RendererRayTracingSystem::meshSwBvhResourcesReady(
         && parentBuffer
         && __hidden_rt_swbvh::IsStorageBufferHeapHandle(nodeHeapHandle)
         && __hidden_rt_swbvh::IsStorageBufferHeapHandle(parentHeapHandle)
-        && rayTracingState().m_bvhSortPipeline
-        && rayTracingState().m_bvhSortKeysBuffer
-        && rayTracingState().m_bvhSortPayloadBuffer
-        && __hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhSortKeysHeapHandle)
-        && __hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhSortPayloadHeapHandle)
-        && rayTracingState().m_bvhMortonPipeline
-        && rayTracingState().m_bvhTopologyPipeline
-        && rayTracingState().m_bvhFitPipeline
-        && rayTracingState().m_bvhVisitCounterBuffer
-        && __hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhVisitCounterHeapHandle)
+        && m_rayTracingState.m_bvhSortPipeline
+        && m_rayTracingState.m_bvhSortKeysBuffer
+        && m_rayTracingState.m_bvhSortPayloadBuffer
+        && __hidden_rt_swbvh::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle)
+        && __hidden_rt_swbvh::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle)
+        && m_rayTracingState.m_bvhMortonPipeline
+        && m_rayTracingState.m_bvhTopologyPipeline
+        && m_rayTracingState.m_bvhFitPipeline
+        && m_rayTracingState.m_bvhVisitCounterBuffer
+        && __hidden_rt_swbvh::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhVisitCounterHeapHandle)
     ;
-}
-
-bool RendererRayTracingSystem::buildMeshSwBvh(
-    Core::CommandList& commandList,
-    const u32 positionHeapSlot,
-    const u32 triangleIndexHeapSlot,
-    u32 primitiveCount,
-    const SIMDVector aabbMin,
-    const SIMDVector aabbMax,
-    Core::BufferHandle& nodeBuffer,
-    Core::BufferHandle& parentBuffer,
-    Core::GpuDescriptorHandle& nodeHeapHandle,
-    Core::GpuDescriptorHandle& parentHeapHandle
-){
-    if(primitiveCount == 0u)
-        return false;
-    if(!meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
-        return false;
-
-    return buildMeshSwBvhPrepared(
-        commandList,
-        positionHeapSlot,
-        triangleIndexHeapSlot,
-        primitiveCount,
-        aabbMin,
-        aabbMax,
-        nodeBuffer,
-        parentBuffer,
-        nodeHeapHandle,
-        parentHeapHandle
-    );
 }
 
 bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
@@ -2763,9 +2715,9 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     while(paddedCount < primitiveCount)
         paddedCount <<= 1u;
 
-    Core::Buffer* keysBuffer = rayTracingState().m_bvhSortKeysBuffer.get();
-    Core::Buffer* payloadBuffer = rayTracingState().m_bvhSortPayloadBuffer.get();
-    Core::Buffer* visitCounterBuffer = rayTracingState().m_bvhVisitCounterBuffer.get();
+    Core::Buffer* keysBuffer = m_rayTracingState.m_bvhSortKeysBuffer.get();
+    Core::Buffer* payloadBuffer = m_rayTracingState.m_bvhSortPayloadBuffer.get();
+    Core::Buffer* visitCounterBuffer = m_rayTracingState.m_bvhVisitCounterBuffer.get();
     Core::Buffer* meshNodeBuffer = nodeBuffer.get();
     Core::Buffer* meshParentBuffer = parentBuffer.get();
 
@@ -2774,11 +2726,11 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     pushConstants.internalCount = primitiveCount - 1u;
     pushConstants.positionHeapSlot = positionHeapSlot;
     pushConstants.triangleIndexHeapSlot = triangleIndexHeapSlot;
-    pushConstants.keysHeapSlot = rayTracingState().m_bvhSortKeysHeapHandle.slot();
-    pushConstants.payloadHeapSlot = rayTracingState().m_bvhSortPayloadHeapHandle.slot();
+    pushConstants.keysHeapSlot = m_rayTracingState.m_bvhSortKeysHeapHandle.slot();
+    pushConstants.payloadHeapSlot = m_rayTracingState.m_bvhSortPayloadHeapHandle.slot();
     pushConstants.nodeHeapSlot = nodeHeapHandle.slot();
     pushConstants.parentHeapSlot = parentHeapHandle.slot();
-    pushConstants.visitCounterHeapSlot = rayTracingState().m_bvhVisitCounterHeapHandle.slot();
+    pushConstants.visitCounterHeapSlot = m_rayTracingState.m_bvhVisitCounterHeapHandle.slot();
     StoreFloat(VectorSetW(aabbMin, 0.0f), &pushConstants.aabbMin);
     StoreFloat(VectorSetW(aabbMax, 0.0f), &pushConstants.aabbMax);
 
@@ -2809,7 +2761,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
         commandList.commitBarriers();
     };
 
-    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     const auto dispatchBuildKernel = [&commandList, &pushConstants, &heap](Core::ComputePipeline* pipeline, const u32 groupCount){
         Core::ComputeState computeState;
         computeState.setPipeline(pipeline);
@@ -2824,55 +2776,28 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     if(!graphBoundaryStatesOwned)
         bvhBuildBarrier();
 
-    dispatchBuildKernel(rayTracingState().m_bvhMortonPipeline.get(), DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
+    dispatchBuildKernel(m_rayTracingState.m_bvhMortonPipeline.get(), DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
     bvhBuildBarrier();
 
     // Separates rebuild-sort timing from the one-shot self-test.
     {
-        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SwBvhSort, graphics().getDevice(), commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SwBvhSort, m_graphics.getDevice(), commandList);
         if(!bvhBitonicSort(commandList, primitiveCount, paddedCount))
             return false;
     }
     bvhBuildBarrier();
 
     if(primitiveCount > 1u){
-        dispatchBuildKernel(rayTracingState().m_bvhTopologyPipeline.get(), DivideUp(primitiveCount - 1u, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
+        dispatchBuildKernel(m_rayTracingState.m_bvhTopologyPipeline.get(), DivideUp(primitiveCount - 1u, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
         bvhBuildBarrier();
     }
 
-    dispatchBuildKernel(rayTracingState().m_bvhFitPipeline.get(), DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
+    dispatchBuildKernel(m_rayTracingState.m_bvhFitPipeline.get(), DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
     // Shadow Preparation's declared successor uses lower the final node UAV -> SRV and retained scratch UAV
     // handoffs for graph callers. Keep the direct/hybrid close fence for compatibility recorders.
     if(!graphBoundaryStatesOwned)
         bvhBuildBarrier();
     return true;
-}
-
-bool RendererRayTracingSystem::refitMeshSwBvh(
-    Core::CommandList& commandList,
-    const u32 positionHeapSlot,
-    const u32 triangleIndexHeapSlot,
-    u32 primitiveCount,
-    Core::BufferHandle& nodeBuffer,
-    Core::BufferHandle& parentBuffer,
-    Core::GpuDescriptorHandle& nodeHeapHandle,
-    Core::GpuDescriptorHandle& parentHeapHandle
-){
-    if(primitiveCount == 0u)
-        return false;
-    if(!meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
-        return false;
-
-    return refitMeshSwBvhPrepared(
-        commandList,
-        positionHeapSlot,
-        triangleIndexHeapSlot,
-        primitiveCount,
-        nodeBuffer,
-        parentBuffer,
-        nodeHeapHandle,
-        parentHeapHandle
-    );
 }
 
 bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
@@ -2895,11 +2820,11 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     )
         return false;
 
-    Core::Buffer* keysBuffer = rayTracingState().m_bvhSortKeysBuffer.get();
-    Core::Buffer* payloadBuffer = rayTracingState().m_bvhSortPayloadBuffer.get();
+    Core::Buffer* keysBuffer = m_rayTracingState.m_bvhSortKeysBuffer.get();
+    Core::Buffer* payloadBuffer = m_rayTracingState.m_bvhSortPayloadBuffer.get();
     Core::Buffer* meshNodeBuffer = nodeBuffer.get();
     Core::Buffer* meshParentBuffer = parentBuffer.get();
-    Core::Buffer* visitCounterBuffer = rayTracingState().m_bvhVisitCounterBuffer.get();
+    Core::Buffer* visitCounterBuffer = m_rayTracingState.m_bvhVisitCounterBuffer.get();
 
     BvhBuildPushConstants pushConstants;
     pushConstants.primitiveCount = primitiveCount;
@@ -2907,11 +2832,11 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     pushConstants.refitMode = NWB_BVH_BUILD_MODE_REFIT;
     pushConstants.positionHeapSlot = positionHeapSlot;
     pushConstants.triangleIndexHeapSlot = triangleIndexHeapSlot;
-    pushConstants.keysHeapSlot = rayTracingState().m_bvhSortKeysHeapHandle.slot();
-    pushConstants.payloadHeapSlot = rayTracingState().m_bvhSortPayloadHeapHandle.slot();
+    pushConstants.keysHeapSlot = m_rayTracingState.m_bvhSortKeysHeapHandle.slot();
+    pushConstants.payloadHeapSlot = m_rayTracingState.m_bvhSortPayloadHeapHandle.slot();
     pushConstants.nodeHeapSlot = nodeHeapHandle.slot();
     pushConstants.parentHeapSlot = parentHeapHandle.slot();
-    pushConstants.visitCounterHeapSlot = rayTracingState().m_bvhVisitCounterHeapHandle.slot();
+    pushConstants.visitCounterHeapSlot = m_rayTracingState.m_bvhVisitCounterHeapHandle.slot();
 
     // Refit retains topology and recomputes boxes. The pure-software graph route supplies this typed counter clear
     // immediately before the callback; hybrid and direct routes retain the native compatibility primitive.
@@ -2938,9 +2863,9 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     }
 
     Core::ComputeState computeState;
-    computeState.setPipeline(rayTracingState().m_bvhFitPipeline.get());
+    computeState.setPipeline(m_rayTracingState.m_bvhFitPipeline.get());
     commandList.setComputeState(computeState);
-    graphics().getDevice().getDescriptorHeap().bindCompute(commandList, *rayTracingState().m_bvhFitPipeline.get());
+    m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *m_rayTracingState.m_bvhFitPipeline.get());
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)), 1u, 1u);
 
@@ -2952,7 +2877,10 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     return true;
 }
 
-bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, MeshResources& meshResources){
+bool RendererRayTracingSystem::updateMeshSwBvh(
+    Core::CommandList& commandList,
+    ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources
+){
     if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer)
         return false;
     if(
@@ -3038,9 +2966,9 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
 bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
     // Binary scene BVH needs 2N-1 CPU-uploaded SRV nodes.
     const usize requiredNodes = static_cast<usize>(instanceCount) * 2u - 1u;
-    if(!rayTracingState().m_sceneBvhNodeBuffer || rayTracingState().m_sceneBvhNodeCapacity < requiredNodes){
+    if(!m_rayTracingState.m_sceneBvhNodeBuffer || m_rayTracingState.m_sceneBvhNodeCapacity < requiredNodes){
         const usize capacity = ::NextGrowingCapacity(
-            rayTracingState().m_sceneBvhNodeCapacity,
+            m_rayTracingState.m_sceneBvhNodeCapacity,
             requiredNodes,
             s_SceneBvhInitialInstanceCapacity * 2u - 1u
         );
@@ -3053,21 +2981,21 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
             .setDebugName(Name("scene_bvh_nodes"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        Core::BufferHandle nodeBuffer = graphics().createBuffer(nodeBufferDesc);
+        Core::BufferHandle nodeBuffer = m_graphics.createBuffer(nodeBufferDesc);
         if(!nodeBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene BVH node buffer"));
             return false;
         }
         // Register the new view before replacing ownership to keep the old pair retryable.
-        if(!replaceRayTraceMaterialContextHeapHandle(*nodeBuffer.get(), rayTracingState().m_sceneBvhNodeHeapHandle))
+        if(!replaceRayTraceMaterialContextHeapHandle(*nodeBuffer.get(), m_rayTracingState.m_sceneBvhNodeHeapHandle))
             return false;
-        rayTracingState().m_sceneBvhNodeBuffer = Move(nodeBuffer);
-        rayTracingState().m_sceneBvhNodeCapacity = capacity;
+        m_rayTracingState.m_sceneBvhNodeBuffer = Move(nodeBuffer);
+        m_rayTracingState.m_sceneBvhNodeCapacity = capacity;
     }
 
-    if(!rayTracingState().m_sceneInstanceBuffer || rayTracingState().m_sceneInstanceCapacity < instanceCount){
+    if(!m_rayTracingState.m_sceneInstanceBuffer || m_rayTracingState.m_sceneInstanceCapacity < instanceCount){
         const usize capacity = ::NextGrowingCapacity(
-            rayTracingState().m_sceneInstanceCapacity,
+            m_rayTracingState.m_sceneInstanceCapacity,
             instanceCount,
             s_SceneBvhInitialInstanceCapacity
         );
@@ -3080,25 +3008,25 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
             .setDebugName(Name("scene_bvh_instances"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        Core::BufferHandle instanceBuffer = graphics().createBuffer(instanceBufferDesc);
+        Core::BufferHandle instanceBuffer = m_graphics.createBuffer(instanceBufferDesc);
         if(!instanceBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene BVH instance buffer"));
             return false;
         }
-        if(!replaceRayTraceMaterialContextHeapHandle(*instanceBuffer.get(), rayTracingState().m_sceneInstanceHeapHandle))
+        if(!replaceRayTraceMaterialContextHeapHandle(*instanceBuffer.get(), m_rayTracingState.m_sceneInstanceHeapHandle))
             return false;
-        rayTracingState().m_sceneInstanceBuffer = Move(instanceBuffer);
-        rayTracingState().m_sceneInstanceCapacity = capacity;
+        m_rayTracingState.m_sceneInstanceBuffer = Move(instanceBuffer);
+        m_rayTracingState.m_sceneInstanceCapacity = capacity;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created software scene BVH buffers (capacity {} instances)")
             , static_cast<u64>(capacity)
         );
     }
     return ensureRayTraceMaterialContextHeapHandle(
-        *rayTracingState().m_sceneBvhNodeBuffer.get(),
-        rayTracingState().m_sceneBvhNodeHeapHandle
+        *m_rayTracingState.m_sceneBvhNodeBuffer.get(),
+        m_rayTracingState.m_sceneBvhNodeHeapHandle
     ) && ensureRayTraceMaterialContextHeapHandle(
-        *rayTracingState().m_sceneInstanceBuffer.get(),
-        rayTracingState().m_sceneInstanceHeapHandle
+        *m_rayTracingState.m_sceneInstanceBuffer.get(),
+        m_rayTracingState.m_sceneInstanceHeapHandle
     );
 }
 

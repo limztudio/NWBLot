@@ -1,4 +1,4 @@
-- Targets are x64 only; 32-bit targets are intentionally unsupported.
+- Targets support x64 and Windows ARM64; 32-bit targets are intentionally unsupported.
 
 - Supported build configurations are `dbg`, `opt`, and `fin`.
   - `dbg`: no optimization and no inlining.
@@ -16,7 +16,23 @@
   - full configure/test preset: `cmake --preset windows-clang-x64`
   - Visual Studio can open the repository root as a CMake project; builds use Ninja + `clang`/`clang++`.
 
+- Windows ARM64 quick start
+  - engine-only configure: `cmake --preset windows-clang-engine-arm64`
+  - engine-only build: `cmake --build --preset windows-clang-engine-arm64-dbg --target nwb_resource_cooker`
+  - testbed configure: `cmake --preset windows-clang-testbed-arm64`
+  - testbed build: `cmake --build --preset windows-clang-testbed-arm64-dbg --target testbed`
+  - full configure: `cmake --preset windows-clang-arm64`
+  - full debug build/test: `cmake --build --preset windows-clang-arm64-dbg`, then `ctest --preset windows-clang-arm64-dbg`
+  - Native mesh shaders default to the renderer's compute-emulation path on Windows ARM64 even when Vulkan advertises
+    `VK_EXT_mesh_shader`. A qualified adapter may opt in with `Graphics::setNativeMeshShadersEnabled(true)` before
+    graphics instance creation.
+
 - Windows requirements
+  - Install Visual Studio 2022 Build Tools (or Visual Studio 2022) with these native build components:
+    - `Microsoft.VisualStudio.Workload.VCTools` (`Desktop development with C++`).
+    - `Microsoft.VisualStudio.Component.VC.Tools.ARM64` (MSVC v143 ARM64 tools and libraries).
+    - `Microsoft.VisualStudio.Component.VC.CMake.Project` (CMake tools for Windows and the Visual Studio Ninja build).
+    - A Windows 11 SDK. `Microsoft.VisualStudio.Component.Windows11SDK.26100` / SDK `10.0.26100.0` is verified.
   - Ninja must be available, or discoverable through `NWB_NINJA` / `NWB_NINJA_ROOT`.
   - Clang/LLVM must be available, or discoverable through `NWB_LLVM_ROOT` / `LLVM_ROOT`.
   - `VULKAN_SDK` must be set.
@@ -47,10 +63,10 @@
   - Testbed directory launcher: `python launcher.py testbed --config dbg`
   - Generic executable target: `python launcher.py run nwb_resource_cooker -- --help`
   - Launch with profiling/logserver: `python launcher.py run testbed --with-profile`
-  - Smoke profile through root dispatch: `python launcher.py smoke transparent-multi --backend hw`
-  - Smoke profile with profiling/logserver: `python launcher.py smoke transparent-multi --backend hw --with-profile`
-  - Smoke-domain launcher script: `python tests/smoke/launch.py --scene transparent-multi --backend hw`
-  - A/B workflows through root dispatch: `python launcher.py async-shadow-m4`, `python launcher.py bindless-parity soft-shadows`, and `python launcher.py frame-lagged-async-lighting`
+  - Smoke profile through root dispatch: `python launcher.py smoke transparent-multi --backend native`
+  - Smoke profile with profiling/logserver: `python launcher.py smoke transparent-multi --backend native --with-profile`
+  - Smoke-domain launcher script: `python tests/smoke/launch.py --scene transparent-multi --backend native`
+  - A/B workflows through root dispatch include `python launcher.py async-shadow-m4` and `python launcher.py frame-lagged-async-lighting`
   - Root commands stay flat, but dispatch through every router in the directory hierarchy: `launcher.py` →
     `CoolStuff/launch.py`, `tests/launch.py`, or `utilities/launch.py` → any intermediate group launcher such as
     `tests/ab/launch.py` → the workflow's terminal `launch.py`. Every directory that groups child launchers must

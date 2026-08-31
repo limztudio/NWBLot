@@ -4,6 +4,10 @@ if(TARGET nwb_frame AND TARGET nwb_graphics)
     add_subdirectory(descriptor_buffer)
 endif()
 
+if(TARGET nwb_graphics AND TARGET nwb_assets_graphics)
+    add_subdirectory(placed_resource_memory)
+endif()
+
 if(TARGET rgd_backend)
     add_subdirectory(rgd_decode)
 endif()
@@ -19,20 +23,23 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
     set(_nwb_smoke_capture_late_settle_seconds "3.25")
     set(_nwb_caustic_sphere_capture_settle_seconds "3.0")
     set(_nwb_skinned_caustic_capture_late_settle_seconds "4.0")
-    # The texture smoke waits long enough for the persistent surfel field to pass its warm-up phases before its
-    # receiver-only colored-GI assertion samples the white plane.
-    set(_nwb_texture_smoke_capture_settle_seconds "6.0")
-
     # CTest budgets include process startup and orderly teardown around the script timeout.
     set(_nwb_window_capture_smoke_ctest_timeout_seconds 60)
     set(_nwb_skinning_culling_benchmark_script_timeout_seconds 240)
     set(_nwb_skinning_culling_benchmark_ctest_timeout_seconds 300)
 
     function(nwb_add_window_capture_smoke TEST_NAME OUTPUT_NAME EXECUTABLE_PATH WORKING_DIRECTORY WINDOW_TITLE)
+        cmake_parse_arguments(PARSE_ARGV 5 _nwb_smoke "" "" "CONFIGURATIONS")
+
         if(TARGET nwb_logserver)
             set(_nwb_smoke_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
         else()
             set(_nwb_smoke_logserver_args "--no-logserver")
+        endif()
+        if(_nwb_smoke_CONFIGURATIONS)
+            set(_nwb_smoke_configuration_args CONFIGURATIONS ${_nwb_smoke_CONFIGURATIONS})
+        else()
+            set(_nwb_smoke_configuration_args)
         endif()
         add_test(
             NAME "${TEST_NAME}"
@@ -44,7 +51,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
                 "--output" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/${OUTPUT_NAME}"
                 "--window-title" "${WINDOW_TITLE}"
                 ${_nwb_smoke_logserver_args}
-                ${ARGN}
+                ${_nwb_smoke_UNPARSED_ARGUMENTS}
+            ${_nwb_smoke_configuration_args}
         )
         set_tests_properties("${TEST_NAME}" PROPERTIES
             RESOURCE_LOCK nwb_display
@@ -94,6 +102,29 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "$<TARGET_FILE:testbed>"
             "${NWB_OUTPUT_ROOT}"
             "NWB Testbed"
+            "--expect-log-message" "ProjectTestbed: startup scene created"
+            "--expect-log-message" "Loader: project startup complete"
+            "--expect-log-message" "ProjectTestbed: shutdown"
+            "--reject-log-message" "software BVH build failed"
+            "--reject-log-message" "software BVH update failed"
+            "--reject-log-message" "Gpu task graph: rejecting task 'Shadow Preparation'"
+        )
+        nwb_add_window_capture_smoke(
+            nwb_testbed_gpudbg_window_capture_smoke
+            testbed_gpudbg_window_capture.bmp
+            "$<TARGET_FILE:testbed>"
+            "${NWB_OUTPUT_ROOT}"
+            "NWB Testbed"
+            "--application-arg=--gpudbg"
+            "--expect-log-message" "ProjectTestbed: startup scene created"
+            "--expect-log-message" "Loader: project startup complete"
+            "--expect-log-message" "Loader: GPU debug validation enabled"
+            "--expect-log-message" "Vulkan GPU debug: debug utils messenger installed."
+            "--expect-log-message" "ProjectTestbed: shutdown"
+            "--reject-log-message" "software BVH build failed"
+            "--reject-log-message" "software BVH update failed"
+            "--reject-log-message" "Gpu task graph: rejecting task 'Shadow Preparation'"
+            CONFIGURATIONS dbg
         )
     endif()
 
@@ -105,44 +136,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
         )
         nwb_configure_runtime_smoke_target(nwb_transparent_multi_smoke "${_nwb_transparent_multi_runtime_root}")
-
-        nwb_declare_executable(nwb_transparent_multi_sw_smoke)
-        target_sources(nwb_transparent_multi_sw_smoke PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
-        )
-        target_compile_definitions(nwb_transparent_multi_sw_smoke PRIVATE
-            NWB_TRANSPARENT_MULTI_FORCE_RT_EMULATION=1
-        )
-        nwb_configure_runtime_smoke_target(nwb_transparent_multi_sw_smoke "${_nwb_transparent_multi_runtime_root}")
-
-        # Test-only hardware route: force one healthy hybrid traversal tail to take the opaque-HW fallback, then
-        # continue into the ordinary transparent software path on the next frame.
-        nwb_declare_executable(nwb_transparent_multi_hybrid_fallback_smoke)
-        target_sources(nwb_transparent_multi_hybrid_fallback_smoke PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
-        )
-        target_compile_definitions(nwb_transparent_multi_hybrid_fallback_smoke PRIVATE
-            NWB_TRANSPARENT_MULTI_FORCE_HYBRID_TRAVERSAL_FALLBACK=1
-        )
-        nwb_configure_runtime_smoke_target(
-            nwb_transparent_multi_hybrid_fallback_smoke
-            "${_nwb_transparent_multi_runtime_root}"
-        )
-
-        # Test-only stale-snapshot route: the optional tail falls back, then the frozen HW context deliberately
-        # refuses validation so Shadow Preparation must use its direct compatibility retry.
-        nwb_declare_executable(nwb_transparent_multi_hybrid_fallback_stale_smoke)
-        target_sources(nwb_transparent_multi_hybrid_fallback_stale_smoke PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
-        )
-        target_compile_definitions(nwb_transparent_multi_hybrid_fallback_stale_smoke PRIVATE
-            NWB_TRANSPARENT_MULTI_FORCE_HYBRID_TRAVERSAL_FALLBACK=1
-            NWB_TRANSPARENT_MULTI_FORCE_HYBRID_HARDWARE_FALLBACK_STALE=1
-        )
-        nwb_configure_runtime_smoke_target(
-            nwb_transparent_multi_hybrid_fallback_stale_smoke
-            "${_nwb_transparent_multi_runtime_root}"
-        )
 
         # Opt-in target-hardware smoke. It intentionally shares the transparent-multi scene and cooked assets, but
         # turns on frame-lagged lighting at startup and exposes an F1 transition back to normal current-frame lighting.
@@ -187,9 +180,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         )
         add_custom_target(nwb_transparent_multi_smoke_assets DEPENDS "${_nwb_transparent_multi_asset_stamp}")
         add_dependencies(nwb_transparent_multi_smoke nwb_transparent_multi_smoke_assets)
-        add_dependencies(nwb_transparent_multi_sw_smoke nwb_transparent_multi_smoke_assets)
-        add_dependencies(nwb_transparent_multi_hybrid_fallback_smoke nwb_transparent_multi_smoke_assets)
-        add_dependencies(nwb_transparent_multi_hybrid_fallback_stale_smoke nwb_transparent_multi_smoke_assets)
         add_dependencies(nwb_frame_lagged_async_lighting_smoke nwb_transparent_multi_smoke_assets)
 
         nwb_declare_executable(nwb_transparent_csg_smoke)
@@ -213,50 +203,53 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "${_nwb_transparent_multi_runtime_root}"
             "NWB Transparent Multi Smoke"
             "--expect-transparent-multi"
+            "--expect-log-message" "TransparentMultiSmokeProject: natural hybrid shadow route selected on RayQuery-capable hardware"
+            "--expect-log-message" "TransparentMultiSmokeProject: renderer baseline capture ready after 6 rendered frames"
+            "--expect-log-message" "RendererSystem: dispatched software shadow traversal"
+            "--skip-log-message" "TransparentMultiSmokeProject: natural software-only shadow route selected because RayQuery-capable hardware is unavailable"
+            "--skip-blocking-log-message" "[ERROR]"
+            "--skip-blocking-log-message" "VUID-"
+            "--skip-blocking-log-message" "Validation Error"
+            "--skip-blocking-log-message" "failed to resolve shader"
+            "--reject-log-message" "RendererSystem: graph-owned SW shadow material context unexpectedly reused a native cache"
+            "--reject-log-message" "RendererSystem: hybrid transparent software shadow recording failed\; transparent shadows absent this frame"
+            "--reject-log-message" "RendererSystem: healthy hybrid tail requires a complete graph-owned hardware material fallback"
+            "--reject-log-message" "RendererSystem: changed HW shadow material context has no graph-owned upload batch"
+            "--reject-log-message" "RendererSystem: changed software scene BVH has no graph-owned upload pair"
+            "--reject-log-message" "RendererSystem: changed SW shadow material context has no graph-owned upload batch"
+            "--reject-log-message" "RendererSystem: frozen hybrid hardware material-context restore failed\; rejecting shadow preparation packet"
+            "--reject-log-message" "RendererSystem: hybrid hardware material-context fallback retried directly"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+        set_tests_properties(nwb_transparent_multi_capture_smoke PROPERTIES
+            ENVIRONMENT "NWB_TRANSPARENT_MULTI_SPIN_ANGLE=0.6;NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME=6"
         )
 
         nwb_add_window_capture_smoke(
             nwb_transparent_multi_sw_capture_smoke
             transparent_multi_sw_capture.bmp
-            "$<TARGET_FILE:nwb_transparent_multi_sw_smoke>"
+            "$<TARGET_FILE:nwb_transparent_multi_smoke>"
             "${_nwb_transparent_multi_runtime_root}"
             "NWB Transparent Multi Smoke"
             "--expect-transparent-multi"
+            "--expect-log-message" "TransparentMultiSmokeProject: natural software-only shadow route selected because RayQuery-capable hardware is unavailable"
+            "--expect-log-message" "TransparentMultiSmokeProject: renderer baseline capture ready after 6 rendered frames"
             "--expect-log-message" "RendererSystem: dispatched software shadow traversal"
+            "--skip-log-message" "TransparentMultiSmokeProject: natural hybrid shadow route selected on RayQuery-capable hardware"
+            "--skip-blocking-log-message" "[ERROR]"
+            "--skip-blocking-log-message" "VUID-"
+            "--skip-blocking-log-message" "Validation Error"
+            "--skip-blocking-log-message" "failed to resolve shader"
+            "--reject-log-message" "RendererSystem: frozen software material-context cache identity is no longer accepted"
+            "--reject-log-message" "RendererSystem: frozen software scene-BVH cache identity is no longer accepted"
+            "--reject-log-message" "RendererSystem: frozen software scene traversal no longer matches preflight storage"
+            "--reject-log-message" "RendererSystem: software shadow scene has no frozen preflight traversal"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
-
-        nwb_add_window_capture_smoke(
-            nwb_transparent_multi_hybrid_fallback_capture_smoke
-            transparent_multi_hybrid_fallback_capture.bmp
-            "$<TARGET_FILE:nwb_transparent_multi_hybrid_fallback_smoke>"
-            "${_nwb_transparent_multi_runtime_root}"
-            "NWB Transparent Multi Smoke"
-            "--expect-transparent-multi"
-            "--expect-log-message" "RendererSystem: test forced hybrid software traversal fallback"
-            "--expect-log-message" "RendererSystem: hybrid transparent software shadow recording failed\; transparent shadows absent this frame"
-            "--expect-log-message" "RendererSystem: restored frozen hybrid hardware material context"
-            "--expect-log-message" "RendererSystem: test hybrid software traversal recovered"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
-
-        nwb_add_window_capture_smoke(
-            nwb_transparent_multi_hybrid_fallback_stale_capture_smoke
-            transparent_multi_hybrid_fallback_stale_capture.bmp
-            "$<TARGET_FILE:nwb_transparent_multi_hybrid_fallback_stale_smoke>"
-            "${_nwb_transparent_multi_runtime_root}"
-            "NWB Transparent Multi Smoke"
-            "--expect-transparent-multi"
-            "--expect-log-message" "RendererSystem: test forced hybrid software traversal fallback"
-            "--expect-log-message" "RendererSystem: hybrid transparent software shadow recording failed\; transparent shadows absent this frame"
-            "--expect-log-message" "RendererSystem: test forced frozen hybrid hardware material context stale"
-            "--expect-log-message" "RendererSystem: test hybrid hardware material fallback retried directly"
-            "--expect-log-message" "RendererSystem: test hybrid software traversal recovered"
-            "--reject-log-message" "RendererSystem: restored frozen hybrid hardware material context"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
+        set_tests_properties(nwb_transparent_multi_sw_capture_smoke PROPERTIES
+            ENVIRONMENT "NWB_TRANSPARENT_MULTI_SPIN_ANGLE=0.6;NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME=6"
         )
 
         nwb_add_window_capture_smoke(
@@ -271,6 +264,9 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
+        set_tests_properties(nwb_transparent_csg_capture_early_smoke PROPERTIES
+            ENVIRONMENT "NWB_TRANSPARENT_MULTI_SPIN_ANGLE=0.0"
+        )
 
         nwb_add_window_capture_smoke(
             nwb_transparent_csg_capture_mid_smoke
@@ -284,6 +280,9 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
+        set_tests_properties(nwb_transparent_csg_capture_mid_smoke PROPERTIES
+            ENVIRONMENT "NWB_TRANSPARENT_MULTI_SPIN_ANGLE=1.0"
+        )
 
         nwb_add_window_capture_smoke(
             nwb_transparent_csg_capture_late_smoke
@@ -296,6 +295,9 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
+        )
+        set_tests_properties(nwb_transparent_csg_capture_late_smoke PROPERTIES
+            ENVIRONMENT "NWB_TRANSPARENT_MULTI_SPIN_ANGLE=2.0"
         )
 
         nwb_declare_executable(nwb_caustic_sphere_smoke)
@@ -319,20 +321,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "--reject-log-message" "failed to resolve shader"
         )
 
-        # Forced-software-emulation sibling of the caustic sphere demo: identical scene, but the SOFTWARE caustic
-        # producer runs even on RT hardware, so the two can be captured + diffed to verify the HW and SW producers
-        # converge to the same caustic (the byte-parallel parity gate).
-        nwb_declare_executable(nwb_caustic_sphere_sw_smoke)
-        target_sources(nwb_caustic_sphere_sw_smoke PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
-        )
-        target_compile_definitions(nwb_caustic_sphere_sw_smoke PRIVATE
-            NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE=1
-            NWB_TRANSPARENT_MULTI_FORCE_RT_EMULATION=1
-        )
-        nwb_configure_runtime_smoke_target(nwb_caustic_sphere_sw_smoke "${_nwb_transparent_multi_runtime_root}")
-        add_dependencies(nwb_caustic_sphere_sw_smoke nwb_transparent_multi_smoke_assets)
-
         unset(_nwb_transparent_multi_asset_stamp)
         unset(_nwb_transparent_multi_runtime_root)
         unset(_nwb_transparent_multi_asset_inputs)
@@ -351,7 +339,11 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
 
             nwb_declare_executable(nwb_texture_smoke)
             target_sources(nwb_texture_smoke PRIVATE
+                "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
                 "${CMAKE_CURRENT_LIST_DIR}/texture_smoke_project.cpp"
+            )
+            target_compile_definitions(nwb_texture_smoke PRIVATE
+                NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1
             )
             nwb_configure_runtime_smoke_target(nwb_texture_smoke "${_nwb_texture_smoke_runtime_root}")
 
@@ -412,8 +404,9 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
                 "$<TARGET_FILE:nwb_texture_smoke>"
                 "${_nwb_texture_smoke_runtime_root}"
                 "NWB Texture Smoke"
+                "--application-capture"
+                "--application-capture-frame-count" "360"
                 "--expect-texture-smoke"
-                "--settle-seconds" "${_nwb_texture_smoke_capture_settle_seconds}"
                 "--reject-log-message" "[ERROR]"
                 "--reject-log-message" "failed to resolve shader"
             )
@@ -479,31 +472,30 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "$<TARGET_FILE:nwb_csg_visible_smoke>"
             "${_nwb_csg_visible_runtime_root}"
             "NWB CSG Visible Smoke"
+            "--expect-log-message" "CsgVisibleSmokeProject: natural native mesh-shader route selected"
+            "--expect-log-message" "selected MeshShader + PS on this device"
+            "--skip-log-message" "CsgVisibleSmokeProject: natural compute-emulation route selected because Meshlets are unavailable"
+            "--skip-blocking-log-message" "[ERROR]"
+            "--skip-blocking-log-message" "VUID-"
+            "--skip-blocking-log-message" "Validation Error"
+            "--skip-blocking-log-message" "failed to resolve shader"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
 
-        nwb_declare_executable(nwb_csg_visible_compute_emulation_smoke)
-        target_sources(nwb_csg_visible_compute_emulation_smoke PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/csg_visible_project.cpp"
-        )
-        target_compile_definitions(nwb_csg_visible_compute_emulation_smoke PRIVATE
-            NWB_CSG_VISIBLE_FORCE_MESHLET_EMULATION=1
-        )
-        nwb_configure_runtime_smoke_target(
-            nwb_csg_visible_compute_emulation_smoke
-            "${_nwb_csg_visible_runtime_root}"
-            nwb_ecs_csg
-        )
-        add_dependencies(nwb_csg_visible_compute_emulation_smoke nwb_csg_visible_smoke_assets)
-
         nwb_add_window_capture_smoke(
             nwb_csg_visible_compute_emulation_capture_smoke
             csg_visible_compute_emulation_capture.bmp
-            "$<TARGET_FILE:nwb_csg_visible_compute_emulation_smoke>"
+            "$<TARGET_FILE:nwb_csg_visible_smoke>"
             "${_nwb_csg_visible_runtime_root}"
-            "NWB CSG Visible Compute Emulation Smoke"
+            "NWB CSG Visible Smoke"
+            "--expect-log-message" "CsgVisibleSmokeProject: natural compute-emulation route selected because Meshlets are unavailable"
             "--expect-log-message" "selected CS + PS by compiling its mesh shader for compute emulation"
+            "--skip-log-message" "CsgVisibleSmokeProject: natural native mesh-shader route selected"
+            "--skip-blocking-log-message" "[ERROR]"
+            "--skip-blocking-log-message" "VUID-"
+            "--skip-blocking-log-message" "Validation Error"
+            "--skip-blocking-log-message" "failed to resolve shader"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -756,6 +748,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
                 "--timeout" "${_nwb_skinning_culling_benchmark_script_timeout_seconds}"
                 ${_nwb_skinning_culling_logserver_args}
                 "--expect-log-message" "SkinningCullingBenchmark: completed"
+                "--expect-log-message" "Telemetry upload processed:"
         )
         set_tests_properties(nwb_skinning_culling_benchmark PROPERTIES
             RESOURCE_LOCK nwb_display
@@ -778,23 +771,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             nwb_ecs_mesh_skinning
         )
         add_dependencies(nwb_skinned_caustic_smoke nwb_skinning_culling_benchmark_assets)
-
-        # Forced-software-emulation sibling: the SW shadow + caustic path runs even on RT hardware, for the HW-vs-SW
-        # parity A/B (both paths read the same per-frame repacked attribute buffer).
-        nwb_declare_executable(nwb_skinned_caustic_sw_smoke)
-        target_sources(nwb_skinned_caustic_sw_smoke PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_project.cpp"
-        )
-        target_compile_definitions(nwb_skinned_caustic_sw_smoke PRIVATE
-            NWB_SKINNED_CAUSTIC_FORCE_RT_EMULATION=1
-        )
-        nwb_configure_runtime_smoke_target(
-            nwb_skinned_caustic_sw_smoke
-            "${_nwb_skinning_culling_runtime_root}"
-            nwb_ecs_model
-            nwb_ecs_mesh_skinning
-        )
-        add_dependencies(nwb_skinned_caustic_sw_smoke nwb_skinning_culling_benchmark_assets)
 
         nwb_add_window_capture_smoke(
             nwb_skinned_caustic_capture_early_smoke
@@ -843,25 +819,21 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         )
         add_dependencies(nwb_stress_test_smoke nwb_skinning_culling_benchmark_assets)
 
-        # Forced-software-emulation sibling: the SW shadow path runs even on RT hardware, for the HW-vs-SW parity A/B.
-        nwb_declare_executable(nwb_stress_test_sw_smoke)
-        target_sources(nwb_stress_test_sw_smoke PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
-        )
-        target_compile_definitions(nwb_stress_test_sw_smoke PRIVATE
-            NWB_STRESS_TEST_FORCE_RT_EMULATION=1
-        )
-        nwb_configure_runtime_smoke_target(
-            nwb_stress_test_sw_smoke
+        nwb_add_window_capture_smoke(
+            nwb_stress_test_capture_smoke
+            stress_test_capture.bmp
+            "$<TARGET_FILE:nwb_stress_test_smoke>"
             "${_nwb_skinning_culling_runtime_root}"
-            nwb_ecs_model
-            nwb_ecs_mesh_skinning
+            "NWB Stress Test Smoke"
+            "--expect-log-message" "StressTestSmokeProject: spawned 10 spinning characters (5 transparent + 5 opaque) over ground, directional + point light"
+            "--expect-log-message" "StressTestSmokeProject: shutdown"
         )
-        add_dependencies(nwb_stress_test_sw_smoke nwb_skinning_culling_benchmark_assets)
+        set_tests_properties(nwb_stress_test_capture_smoke PROPERTIES
+            ENVIRONMENT "NWB_STRESS_TEST_SPIN_ANGLE=0.6"
+        )
 
-        # Target-hardware A/B pair for the hybrid HW -> SW transparent-shadow safety boundary. The fallback arm
-        # intentionally takes the retained immutable hardware-context restore on every frame; it is not a visual
-        # parity mode, but a fixed-scene measurement of the safe opaque-HW degradation path.
+        # Target-hardware benchmark for the natural hybrid HW -> SW transparent-shadow boundary. The test-owned A/B
+        # harness launches this same binary twice, selecting an opaque-only scene for its hardware baseline arm.
         nwb_declare_executable(nwb_hybrid_shadow_boundary_healthy_benchmark)
         target_sources(nwb_hybrid_shadow_boundary_healthy_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
@@ -877,70 +849,106 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         )
         add_dependencies(nwb_hybrid_shadow_boundary_healthy_benchmark nwb_skinning_culling_benchmark_assets)
 
-        nwb_declare_executable(nwb_hybrid_shadow_boundary_fallback_benchmark)
-        target_sources(nwb_hybrid_shadow_boundary_fallback_benchmark PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
-        )
-        target_compile_definitions(nwb_hybrid_shadow_boundary_fallback_benchmark PRIVATE
-            NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK=1
-            NWB_HYBRID_SHADOW_BOUNDARY_FALLBACK_BENCHMARK=1
-        )
-        nwb_configure_runtime_smoke_target(
-            nwb_hybrid_shadow_boundary_fallback_benchmark
-            "${_nwb_skinning_culling_runtime_root}"
-            nwb_ecs_model
-            nwb_ecs_mesh_skinning
-        )
-        add_dependencies(nwb_hybrid_shadow_boundary_fallback_benchmark nwb_skinning_culling_benchmark_assets)
-
-        # Target-hardware A/B pair for the graph-owned opaque-to-transparent soft-shadow fold. Both arms run the
-        # same fixed-yaw stress scene: the graph arm exposes the new merged task boundary, while the monolithic arm
-        # retains the established callback as a performance baseline without changing visible shadow semantics.
-        nwb_declare_executable(nwb_soft_transparent_shadow_fold_graph_benchmark)
-        target_sources(nwb_soft_transparent_shadow_fold_graph_benchmark PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
-        )
-        target_compile_definitions(nwb_soft_transparent_shadow_fold_graph_benchmark PRIVATE
-            NWB_SOFT_TRANSPARENT_SHADOW_FOLD_BENCHMARK=1
-        )
-        nwb_configure_runtime_smoke_target(
-            nwb_soft_transparent_shadow_fold_graph_benchmark
-            "${_nwb_skinning_culling_runtime_root}"
-            nwb_ecs_model
-            nwb_ecs_mesh_skinning
-        )
-        add_dependencies(nwb_soft_transparent_shadow_fold_graph_benchmark nwb_skinning_culling_benchmark_assets)
-
-        nwb_declare_executable(nwb_soft_transparent_shadow_fold_monolithic_benchmark)
-        target_sources(nwb_soft_transparent_shadow_fold_monolithic_benchmark PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
-        )
-        target_compile_definitions(nwb_soft_transparent_shadow_fold_monolithic_benchmark PRIVATE
-            NWB_SOFT_TRANSPARENT_SHADOW_FOLD_BENCHMARK=1
-            NWB_SOFT_TRANSPARENT_SHADOW_FOLD_MONOLITHIC_BENCHMARK=1
-        )
-        nwb_configure_runtime_smoke_target(
-            nwb_soft_transparent_shadow_fold_monolithic_benchmark
-            "${_nwb_skinning_culling_runtime_root}"
-            nwb_ecs_model
-            nwb_ecs_mesh_skinning
-        )
-        add_dependencies(nwb_soft_transparent_shadow_fold_monolithic_benchmark nwb_skinning_culling_benchmark_assets)
-
         nwb_add_window_capture_smoke(
-            nwb_hybrid_shadow_boundary_fallback_capture_smoke
-            hybrid_shadow_boundary_fallback_capture.bmp
-            "$<TARGET_FILE:nwb_hybrid_shadow_boundary_fallback_benchmark>"
+            nwb_hybrid_shadow_boundary_healthy_capture_smoke
+            hybrid_shadow_boundary_healthy_capture.bmp
+            "$<TARGET_FILE:nwb_hybrid_shadow_boundary_healthy_benchmark>"
             "${_nwb_skinning_culling_runtime_root}"
             "NWB Hybrid Shadow Boundary Benchmark"
             "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}"
-            "--expect-log-message" "StressTestSmokeProject: enabled persistent hybrid transparent-shadow fallback benchmark"
-            "--expect-log-message" "RendererSystem: test forced hybrid software traversal fallback"
-            "--expect-log-message" "RendererSystem: hybrid transparent software shadow recording failed\\; transparent shadows absent this frame"
-            "--expect-log-message" "RendererSystem: restored frozen hybrid hardware material context"
-            "--reject-log-message" "RendererSystem: test hybrid software traversal recovered"
+            "--expect-log-message" "StressTestSmokeProject: enabled healthy hybrid transparent-shadow benchmark"
+            "--expect-log-message" "StressTestSmokeProject: RayQuery-capable hybrid shadow hardware available"
+            "--expect-log-message" "RendererSystem: dispatched software shadow traversal"
+            "--skip-log-message" "StressTestSmokeProject: hybrid shadow boundary skipped because RayQuery-capable hardware is unavailable"
+            "--skip-blocking-log-message" "[ERROR]"
+            "--skip-blocking-log-message" "VUID-"
+            "--skip-blocking-log-message" "Validation Error"
+            "--skip-blocking-log-message" "failed to resolve shader"
+            "--reject-log-message" "RendererSystem: split opaque soft-shadow producer failed\; retaining all-lit visibility"
+            "--reject-log-message" "RendererSystem: split opaque soft-shadow first wavelet failed\; retaining all-lit visibility"
+            "--reject-log-message" "RendererSystem: split opaque soft-shadow resolve tail failed\; retaining all-lit visibility"
+            "--reject-log-message" "RendererSystem: split transparent soft-shadow trace could not record\; preserving opaque visibility"
+            "--reject-log-message" "RendererSystem: split transparent soft-shadow temporal merge failed\; preserving opaque visibility"
+            "--reject-log-message" "RendererSystem: split transparent soft-shadow wavelet lost its temporal timing envelope\; preserving opaque visibility"
+            "--reject-log-message" "RendererSystem: split transparent soft-shadow first wavelet failed\; preserving opaque visibility"
+            "--reject-log-message" "RendererSystem: split transparent soft-shadow resolve failed\; preserving opaque visibility"
+            "--reject-log-message" "RendererSystem: split transparent soft-shadow trace or first wavelet failed\; preserving opaque visibility"
+            "--reject-log-message" "RendererSystem: ray-traced shadow visibility pass failed"
+            "--reject-log-message" "RendererSystem: healthy hybrid tail requires a complete graph-owned hardware material fallback"
+            "--reject-log-message" "RendererSystem: could not declare hybrid software shadow-preparation tail"
+            "--reject-log-message" "RendererSystem: changed HW shadow material context has no graph-owned upload batch"
+            "--reject-log-message" "RendererSystem: could not retain frozen hybrid hardware material fallback"
+            "--reject-log-message" "RendererSystem: changed software scene BVH has no graph-owned upload pair"
+            "--reject-log-message" "RendererSystem: changed SW shadow material context has no graph-owned upload batch"
+            "--reject-log-message" "RendererSystem: could not freeze hybrid transparent software BVH build plan"
+            "--reject-log-message" "RendererSystem: frozen hybrid hardware material fallback could not retain graph uploads"
+            "--reject-log-message" "RendererSystem: hybrid transparent shadow software BVH resource preparation failed"
+            "--reject-log-message" "RendererSystem: hybrid transparent software shadow preparation failed\; transparent shadows absent this frame"
+            "--reject-log-message" "RendererSystem: hybrid transparent shadow per-mesh software BVH build failed"
+            "--reject-log-message" "RendererSystem: hybrid transparent software shadow pass failed"
+            "--reject-log-message" "RendererSystem: hybrid transparent software shadow recording failed\; transparent shadows absent this frame"
+            "--reject-log-message" "RendererSystem: hybrid hardware fallback inputs changed after graph preflight"
+            "--reject-log-message" "RendererSystem: restored frozen hybrid hardware material context"
+            "--reject-log-message" "RendererSystem: frozen hybrid hardware material-context restore failed\; rejecting shadow preparation packet"
             "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "VUID-"
+            "--reject-log-message" "Validation Error"
             "--reject-log-message" "failed to resolve shader"
+            CONFIGURATIONS dbg opt
+        )
+        set_tests_properties(nwb_hybrid_shadow_boundary_healthy_capture_smoke PROPERTIES
+            ENVIRONMENT "NWB_HYBRID_SHADOW_BOUNDARY_OPAQUE_BASELINE=0;NWB_STRESS_TEST_SPIN_ANGLE=0.6"
+        )
+
+        nwb_add_window_capture_smoke(
+            nwb_hybrid_shadow_boundary_opaque_capture_smoke
+            hybrid_shadow_boundary_opaque_capture.bmp
+            "$<TARGET_FILE:nwb_hybrid_shadow_boundary_healthy_benchmark>"
+            "${_nwb_skinning_culling_runtime_root}"
+            "NWB Hybrid Shadow Boundary Benchmark"
+            "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}"
+            "--expect-log-message" "StressTestSmokeProject: enabled natural opaque hardware-shadow baseline"
+            "--expect-log-message" "StressTestSmokeProject: RayQuery-capable hybrid shadow hardware available"
+            "--skip-log-message" "StressTestSmokeProject: hybrid shadow boundary skipped because RayQuery-capable hardware is unavailable"
+            "--skip-blocking-log-message" "[ERROR]"
+            "--skip-blocking-log-message" "VUID-"
+            "--skip-blocking-log-message" "Validation Error"
+            "--skip-blocking-log-message" "failed to resolve shader"
+            "--reject-log-message" "RendererSystem: dispatched software shadow traversal"
+            "--reject-log-message" "RendererSystem: split opaque soft-shadow producer failed\; retaining all-lit visibility"
+            "--reject-log-message" "RendererSystem: split opaque soft-shadow first wavelet failed\; retaining all-lit visibility"
+            "--reject-log-message" "RendererSystem: split opaque soft-shadow resolve tail failed\; retaining all-lit visibility"
+            "--reject-log-message" "RendererSystem: split transparent soft-shadow trace could not record\; preserving opaque visibility"
+            "--reject-log-message" "RendererSystem: split transparent soft-shadow temporal merge failed\; preserving opaque visibility"
+            "--reject-log-message" "RendererSystem: split transparent soft-shadow wavelet lost its temporal timing envelope\; preserving opaque visibility"
+            "--reject-log-message" "RendererSystem: split transparent soft-shadow first wavelet failed\; preserving opaque visibility"
+            "--reject-log-message" "RendererSystem: split transparent soft-shadow resolve failed\; preserving opaque visibility"
+            "--reject-log-message" "RendererSystem: split transparent soft-shadow trace or first wavelet failed\; preserving opaque visibility"
+            "--reject-log-message" "RendererSystem: ray-traced shadow visibility pass failed"
+            "--reject-log-message" "RendererSystem: healthy hybrid tail requires a complete graph-owned hardware material fallback"
+            "--reject-log-message" "RendererSystem: could not declare hybrid software shadow-preparation tail"
+            "--reject-log-message" "RendererSystem: changed HW shadow material context has no graph-owned upload batch"
+            "--reject-log-message" "RendererSystem: could not retain frozen hybrid hardware material fallback"
+            "--reject-log-message" "RendererSystem: changed software scene BVH has no graph-owned upload pair"
+            "--reject-log-message" "RendererSystem: changed SW shadow material context has no graph-owned upload batch"
+            "--reject-log-message" "RendererSystem: could not freeze hybrid transparent software BVH build plan"
+            "--reject-log-message" "RendererSystem: frozen hybrid hardware material fallback could not retain graph uploads"
+            "--reject-log-message" "RendererSystem: hybrid transparent shadow software BVH resource preparation failed"
+            "--reject-log-message" "RendererSystem: hybrid transparent software shadow preparation failed\; transparent shadows absent this frame"
+            "--reject-log-message" "RendererSystem: hybrid transparent shadow per-mesh software BVH build failed"
+            "--reject-log-message" "RendererSystem: hybrid transparent software shadow pass failed"
+            "--reject-log-message" "RendererSystem: hybrid transparent software shadow recording failed\; transparent shadows absent this frame"
+            "--reject-log-message" "RendererSystem: hybrid hardware fallback inputs changed after graph preflight"
+            "--reject-log-message" "RendererSystem: restored frozen hybrid hardware material context"
+            "--reject-log-message" "RendererSystem: frozen hybrid hardware material-context restore failed\; rejecting shadow preparation packet"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "VUID-"
+            "--reject-log-message" "Validation Error"
+            "--reject-log-message" "failed to resolve shader"
+            CONFIGURATIONS dbg opt
+        )
+        set_tests_properties(nwb_hybrid_shadow_boundary_opaque_capture_smoke PROPERTIES
+            ENVIRONMENT "NWB_HYBRID_SHADOW_BOUNDARY_OPAQUE_BASELINE=1;NWB_STRESS_TEST_SPIN_ANGLE=0.6"
         )
 
         # M4 target-hardware A/B pair. Both binaries use the same fixed-friendly stress scene and cooked runtime
@@ -992,21 +1000,18 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         )
         add_dependencies(nwb_flicker_test_smoke nwb_skinning_culling_benchmark_assets)
 
-        # Forced-software-emulation sibling: the SW shadow path runs even on RT hardware, for the HW-vs-SW flicker A/B.
-        nwb_declare_executable(nwb_flicker_test_sw_smoke)
-        target_sources(nwb_flicker_test_sw_smoke PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/flicker_test_project.cpp"
-        )
-        target_compile_definitions(nwb_flicker_test_sw_smoke PRIVATE
-            NWB_FLICKER_TEST_FORCE_RT_EMULATION=1
-        )
-        nwb_configure_runtime_smoke_target(
-            nwb_flicker_test_sw_smoke
+        nwb_add_window_capture_smoke(
+            nwb_flicker_test_capture_smoke
+            flicker_test_capture.bmp
+            "$<TARGET_FILE:nwb_flicker_test_smoke>"
             "${_nwb_skinning_culling_runtime_root}"
-            nwb_ecs_model
-            nwb_ecs_mesh_skinning
+            "NWB Flicker Test"
+            "--expect-log-message" "FlickerTestSmokeProject: spawned one opaque + one transparent character over an opaque ground plane, directional + point light"
+            "--expect-log-message" "FlickerTestSmokeProject: shutdown"
         )
-        add_dependencies(nwb_flicker_test_sw_smoke nwb_skinning_culling_benchmark_assets)
+        set_tests_properties(nwb_flicker_test_capture_smoke PROPERTIES
+            ENVIRONMENT "NWB_FLICKER_TEST_SPIN_ANGLE=0.6"
+        )
 
         # Dedicated SOFT-SHADOW scene: opaque and glass `body` characters on an opaque ground plane under directional,
         # point, and spot lights with physical source sizes. It exercises their tinted penumbras, with arrow-key yaw
@@ -1023,22 +1028,18 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         )
         add_dependencies(nwb_soft_shadow_test_smoke nwb_skinning_culling_benchmark_assets)
 
-        # Forced-software-emulation sibling: runs the FULL soft pipeline (half-res jittered trace -> a-trous denoise ->
-        # bilateral upsample) even on RT hardware -- the intended way to see the denoised soft shadow.
-        nwb_declare_executable(nwb_soft_shadow_test_sw_smoke)
-        target_sources(nwb_soft_shadow_test_sw_smoke PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/soft_shadow_test_project.cpp"
-        )
-        target_compile_definitions(nwb_soft_shadow_test_sw_smoke PRIVATE
-            NWB_SOFT_SHADOW_TEST_FORCE_RT_EMULATION=1
-        )
-        nwb_configure_runtime_smoke_target(
-            nwb_soft_shadow_test_sw_smoke
+        nwb_add_window_capture_smoke(
+            nwb_soft_shadow_test_capture_smoke
+            soft_shadow_test_capture.bmp
+            "$<TARGET_FILE:nwb_soft_shadow_test_smoke>"
             "${_nwb_skinning_culling_runtime_root}"
-            nwb_ecs_model
-            nwb_ecs_mesh_skinning
+            "NWB Soft Shadow Test"
+            "--expect-log-message" "SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights"
+            "--expect-log-message" "SoftShadowTestSmokeProject: shutdown"
         )
-        add_dependencies(nwb_soft_shadow_test_sw_smoke nwb_skinning_culling_benchmark_assets)
+        set_tests_properties(nwb_soft_shadow_test_capture_smoke PROPERTIES
+            ENVIRONMENT "NWB_SOFT_SHADOW_TEST_SPIN_ANGLE=0.6"
+        )
 
         # Dedicated surfel-GI scene: an open-top box with saturated-red and saturated-blue walls, plus a directional light
         # aimed to leave the floor in direct shadow. The red-to-blue indirect bleed on that floor is the surfel-GI pass signal.
@@ -1053,20 +1054,15 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         )
         add_dependencies(nwb_gi_test_smoke nwb_skinning_culling_benchmark_assets)
 
-        # Forced-software-emulation sibling: the SW surfel trace and temporal-accumulation path runs even on RT
-        # hardware, for SW-first surfel-GI verification.
-        nwb_declare_executable(nwb_gi_test_sw_smoke)
-        target_sources(nwb_gi_test_sw_smoke PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/gi_test_project.cpp"
-        )
-        target_compile_definitions(nwb_gi_test_sw_smoke PRIVATE
-            NWB_GI_TEST_FORCE_RT_EMULATION=1
-        )
-        nwb_configure_runtime_smoke_target(
-            nwb_gi_test_sw_smoke
+        nwb_add_window_capture_smoke(
+            nwb_gi_test_capture_smoke
+            gi_test_capture.bmp
+            "$<TARGET_FILE:nwb_gi_test_smoke>"
             "${_nwb_skinning_culling_runtime_root}"
+            "NWB GI Test"
+            "--expect-log-message" "GiTestSmokeProject: open-top box + red/blue opposite walls, directional light -> indirect red+blue bleed on shadowed floor"
+            "--expect-log-message" "GiTestSmokeProject: shutdown"
         )
-        add_dependencies(nwb_gi_test_sw_smoke nwb_skinning_culling_benchmark_assets)
 
         unset(_nwb_skinning_culling_asset_stamp)
         unset(_nwb_skinning_culling_model_nwb)

@@ -79,11 +79,7 @@
 #endif
 
 #if defined(NWB_HAS_NEON)
-#if defined(_MSC_VER) && (defined(_M_ARM64) || defined(_M_ARM64EC))
-#include <arm64_neon.h>
-#else
 #include <arm_neon.h>
-#endif
 #endif
 
 

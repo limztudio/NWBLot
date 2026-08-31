@@ -82,6 +82,37 @@ namespace ResourceQueueSharing{
     };
 
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
+
+    [[nodiscard]] inline constexpr bool IsValid(const Mask sharing)noexcept{
+        return (static_cast<u8>(sharing) & ~static_cast<u8>(GraphicsAsyncComputeAndTransfer)) == 0u;
+    }
+};
+
+// Immutable physical admission facts for one resource. The backend owns the pointed-to family list; consumers that
+// retain this snapshot beyond the resource call boundary must copy it into their own storage.
+struct ResourceQueueAdmissionSnapshot{
+    ResourceQueueSharing::Mask admittedQueueClasses = ResourceQueueSharing::Exclusive;
+    const u32* queueFamilyIndices = nullptr;
+    u32 queueFamilyIndexCount = 0u;
+    bool usesConcurrentSharing = false;
+
+    [[nodiscard]] constexpr bool valid()const noexcept{
+        return ResourceQueueSharing::IsValid(admittedQueueClasses)
+            && (
+                (
+                    !usesConcurrentSharing
+                    && queueFamilyIndexCount == 0u
+                    && !queueFamilyIndices
+                )
+                || (
+                    usesConcurrentSharing
+                    && admittedQueueClasses != ResourceQueueSharing::Exclusive
+                    && queueFamilyIndexCount >= 2u
+                    && queueFamilyIndices
+                )
+            )
+        ;
+    }
 };
 
 namespace ResourceStates{
@@ -115,6 +146,10 @@ namespace ResourceStates{
     };
 
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
+
+    [[nodiscard]] constexpr bool HasUnorderedAccess(const Mask states)noexcept{
+        return (states & UnorderedAccess) != Unknown;
+    }
 };
 
 typedef u32 MipLevel;
@@ -147,9 +182,9 @@ struct TextureDesc{
 
     bool useClearValue = false;
 
-    // If keepInitialState is true, command lists that use the texture will automatically
-    // begin tracking the texture from the initial state and transition it to the initial state
-    // on command list close.
+    // If keepInitialState is true, command lists restore each used subresource to initialState before close. That
+    // retained native state becomes globally known only after the restoring command buffer is successfully
+    // submitted; a pre-submit cross-list consumer must import CommandListResourceStateHandoff instead.
     bool keepInitialState = false;
 
     constexpr TextureDesc& setWidth(u32 v)noexcept{ width = v; return *this; }

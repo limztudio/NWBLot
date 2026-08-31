@@ -115,6 +115,13 @@ private:
 
 
 private:
+    static inline u64 allocateDomainIdentity()noexcept{
+        static Atomic<u64> nextDomainIdentity{ 1u };
+        const u64 domainIdentity = nextDomainIdentity.fetch_add(1u, MemoryOrder::relaxed);
+        NWB_ASSERT_MSG(domainIdentity != 0u, NWB_TEXT("ThreadPool domain identity exhausted"));
+        return domainIdentity;
+    }
+
     static inline usize defaultArenaSize(u32 threadCount){
         const usize workerCount = AddSize(static_cast<usize>(threadCount), 1);
         const usize workerBytes = SizeOf<sizeof(JoiningThread)>(workerCount);
@@ -157,7 +164,8 @@ private:
 
 public:
     inline explicit ThreadPool(u32 threadCount, u64 affinityMask = 0, usize arenaSize = 0)
-        : m_arena(ArenaScope::s_ThreadPool, arenaSize > 0 ? arenaSize : defaultArenaSize(threadCount))
+        : m_domainIdentity(allocateDomainIdentity())
+        , m_arena(ArenaScope::s_ThreadPool, arenaSize > 0 ? arenaSize : defaultArenaSize(threadCount))
         , m_tasks(TaskQueue::allocator_type(m_arena))
         , m_threadCount(threadCount)
         , m_workers(WorkerList::allocator_type(m_arena))
@@ -259,6 +267,7 @@ public:
     inline void wait(){ waitPending(); }
 
 public:
+    [[nodiscard]] inline u64 domainIdentity()const noexcept{ return m_domainIdentity; }
     [[nodiscard]] inline u32 workerThreadCount()const{ return m_threadCount; }
     inline bool isParallelEnabled()const{ return m_threadCount > 0; }
     // The caller thread is logical worker zero. Worker threads receive stable nonzero IDs for the lifetime of this
@@ -387,6 +396,7 @@ private:
 
 
 private:
+    u64 m_domainIdentity;
     Atomic<ParallelForDesc*> m_pfWork{ nullptr };
     PersistentArena m_arena;
     TaskQueue m_tasks;

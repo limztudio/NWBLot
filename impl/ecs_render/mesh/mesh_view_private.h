@@ -5,8 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/system.h>
-
+#include <impl/global.h>
 #include <core/ecs/world.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/ecs_scene/module.h>

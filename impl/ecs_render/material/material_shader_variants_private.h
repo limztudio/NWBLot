@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/renderer_types.h>
+#include <impl/global.h>
 
 #include <core/graphics/shader_archive.h>
 

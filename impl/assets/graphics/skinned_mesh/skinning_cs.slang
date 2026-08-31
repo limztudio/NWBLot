@@ -345,6 +345,10 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     nwbSkinnedMeshMain(groupID.x, groupThreadID.x);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #undef g_NwbSkinnedMeshBindlessResources
 
 

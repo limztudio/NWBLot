@@ -3,9 +3,9 @@
 
 
 #include "module.h"
+#include "module_internal.h"
+
 #include "backend_selection.h"
-#include "task_graph/compiler.h"
-#include "task_graph/packet_runtime.h"
 
 #include <core/common/log.h>
 #include <core/telemetry/session.h>
@@ -20,887 +20,34 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_graphics{
+namespace __hidden_graphics_lifecycle{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using UploadBytes = Vector<u8, Alloc::GlobalArena>;
-constexpr u32 s_DefaultWaveLaneCount = 64u;
-// Before per-upload timing exists, retain small setup copies on Graphics. Large asset payloads are the first
-// Transfer migration target; callers that know a small upload benefits from a dedicated transport can still request
-// CommandQueue::Transfer explicitly.
-constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
-
-
-[[nodiscard]] static ResourceQueueSharing::Mask QueueSharingBitForQueue(const CommandQueue::Enum queue)noexcept{
-    switch(queue){
-    case CommandQueue::Graphics:
-        return ResourceQueueSharing::Graphics;
-    case CommandQueue::Compute:
-        return ResourceQueueSharing::AsyncCompute;
-    case CommandQueue::Transfer:
-        return ResourceQueueSharing::Transfer;
-    default:
-        return ResourceQueueSharing::Exclusive;
-    }
-}
-
-[[nodiscard]] static bool QueueSharingIncludesQueue(
-    const ResourceQueueSharing::Mask sharing,
-    const CommandQueue::Enum queue
-)noexcept{
-    const u8 queueBit = static_cast<u8>(QueueSharingBitForQueue(queue));
-    return queueBit != 0u && (static_cast<u8>(sharing) & queueBit) != 0u;
-}
-
-// The graph and Vulkan lowerer deliberately keep raw depth/stencil plane copies on Graphics. Vulkan permits
-// non-Graphics depth/stencil copies only when optional per-format queue features have been enabled and queried;
-// this backend does neither, so choosing a Graphics transport is the portable, fail-closed public contract.
-[[nodiscard]] static bool TextureUploadRequiresGraphicsQueue(const TextureDesc& textureDesc)noexcept{
-    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
-    return formatInfo.hasDepth || formatInfo.hasStencil;
-}
-
-struct SetupUploadSameClassRouting{
-    GpuPhysicalQueueId primaryQueue;
-    bool enabled = false;
-    bool crossesQueueFamily = false;
-};
-
-// Public setup calls compile an isolated graph. Ordinary load balancing therefore has no previous packet to make an
-// auxiliary queue attractive, so opt in only when a compatible alternate physical transport actually exists and the
-// payload is large enough to amortize its readiness bridge. The compiler keeps the final choice deterministic.
-[[nodiscard]] static SetupUploadSameClassRouting ResolveSetupUploadSameClassRouting(
-    GraphicsBackend::Device& device,
-    const CommandQueue::Enum uploadQueue,
-    const usize uploadBytes
-)noexcept{
-    SetupUploadSameClassRouting result;
-    if(uploadBytes < s_TransferPreferredUploadMinimumBytes)
-        return result;
-
-    result.primaryQueue = device.getPrimaryPhysicalQueue(uploadQueue);
-    const GpuPhysicalQueueInfo* const primaryInfo = device.getPhysicalQueueInfo(result.primaryQueue);
-    if(!primaryInfo)
-        return result;
-
-    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
-    const GpuPhysicalQueueInfo* alternateInfo = nullptr;
-    const u8 requiredCapabilities = static_cast<u8>(GpuQueueCapability::Transfer);
-    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
-        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
-        if(
-            candidate.id == result.primaryQueue
-            || candidate.queueClass != uploadQueue
-            || (static_cast<u8>(candidate.capabilities) & requiredCapabilities) != requiredCapabilities
-            || (alternateInfo && candidate.id.index >= alternateInfo->id.index)
-        )
-            continue;
-        alternateInfo = &candidate;
-    }
-    if(!alternateInfo)
-        return result;
-
-    result.enabled = true;
-    result.crossesQueueFamily = alternateInfo->familyIndex != primaryInfo->familyIndex;
-    return result;
-}
-
-// The public setup descriptors predate physical Transfer transport. When an upload moves away from Graphics, retain
-// the descriptor's declared consumers and add the producer family. An otherwise-exclusive setup resource keeps its
-// established Graphics consumer contract, which lets the returned handle remain immediately usable by legacy code.
-[[nodiscard]] static ResourceQueueSharing::Mask ResolveSetupUploadQueueSharing(
-    const ResourceQueueSharing::Mask requestedSharing,
-    const CommandQueue::Enum uploadQueue,
-    const bool crossFamilySameClassRouting = false
-)noexcept{
-    if(crossFamilySameClassRouting){
-        const ResourceQueueSharing::Mask baseSharing = requestedSharing == ResourceQueueSharing::Exclusive
-            ? QueueSharingBitForQueue(uploadQueue)
-            : requestedSharing
-        ;
-        return static_cast<ResourceQueueSharing::Mask>(
-            static_cast<u8>(baseSharing) | static_cast<u8>(QueueSharingBitForQueue(uploadQueue))
-        );
-    }
-
-    if(uploadQueue == CommandQueue::Graphics)
-        return requestedSharing;
-
-    const ResourceQueueSharing::Mask baseSharing = requestedSharing == ResourceQueueSharing::Exclusive
-        ? ResourceQueueSharing::Graphics
-        : requestedSharing
-    ;
-    return static_cast<ResourceQueueSharing::Mask>(
-        static_cast<u8>(baseSharing) | static_cast<u8>(QueueSharingBitForQueue(uploadQueue))
-    );
-}
-
-[[nodiscard]] static CommandQueue::Enum ResolveTransferPreferredQueue(GraphicsBackend::Device& device)noexcept{
-    if(device.getQueue(CommandQueue::Transfer))
-        return CommandQueue::Transfer;
-    if(device.getQueue(CommandQueue::Compute))
-        return CommandQueue::Compute;
-    return CommandQueue::Graphics;
-}
-
-[[nodiscard]] static CommandQueue::Enum ResolveSetupUploadQueue(
-    GraphicsBackend::Device& device,
-    const CommandQueue::Enum requestedQueue,
-    const usize uploadBytes,
-    const bool hasKnownFinalState,
-    const bool requiresGraphicsQueue = false
-)noexcept{
-    if(requiresGraphicsQueue)
-        return CommandQueue::Graphics;
-
-    switch(requestedQueue){
-    case CommandQueue::kCount:
-        if(uploadBytes < s_TransferPreferredUploadMinimumBytes || !hasKnownFinalState)
-            return CommandQueue::Graphics;
-        return ResolveTransferPreferredQueue(device);
-    case CommandQueue::Transfer:
-        return hasKnownFinalState ? ResolveTransferPreferredQueue(device) : CommandQueue::Graphics;
-    case CommandQueue::Compute:
-        return hasKnownFinalState && device.getQueue(CommandQueue::Compute)
-            ? CommandQueue::Compute
-            : CommandQueue::Graphics
-        ;
-    case CommandQueue::Graphics:
-        return CommandQueue::Graphics;
-    default:
-        NWB_ASSERT_MSG(false, NWB_TEXT("Graphics: setup upload requested an invalid command queue"));
-        return CommandQueue::Graphics;
-    }
-}
-
-// The synchronous setup APIs predate frame-owned graph declaration, but their ordinary buffer/texture uploads
-// have all of the information a graph task needs: an immutable source blob, one destination resource, an exact
-// final state, and an already-resolved physical transport. Keep the public API synchronous while using the same
-// compiler/recorder/transaction path as graph-owned frame uploads. Because callers receive only a resource handle,
-// graph-owned no-op consumer packets retain the legacy same-queue readiness guarantee before the call returns.
-[[nodiscard]] static GpuQueueRequest SetupUploadGraphQueueRequest(
-    const CommandQueue::Enum uploadQueue,
-    const bool requiresGraphicsQueue = false
-)noexcept{
-    GpuQueueRequest request;
-    request.requiredCapabilities = requiresGraphicsQueue
-        ? static_cast<GpuQueueCapability::Mask>(
-            static_cast<u8>(GpuQueueCapability::Transfer)
-            | static_cast<u8>(GpuQueueCapability::Graphics)
-        )
-        : GpuQueueCapability::Transfer
-    ;
-    request.allowFallback = false;
-    request.compilerMayOverridePreference = false;
-    if(requiresGraphicsQueue){
-        request.preferredQueue = GpuQueuePreference::Graphics;
-        return request;
-    }
-    switch(uploadQueue){
-    case CommandQueue::Graphics:
-        request.preferredQueue = GpuQueuePreference::Graphics;
-        break;
-    case CommandQueue::Compute:
-        request.preferredQueue = GpuQueuePreference::Compute;
-        break;
-    case CommandQueue::Transfer:
-        request.preferredQueue = GpuQueuePreference::Transfer;
-        break;
-    default:
-        request.requiredCapabilities = GpuQueueCapability::None;
-        request.preferredQueue = GpuQueuePreference::Any;
-        break;
-    }
-    return request;
-}
-
-[[nodiscard]] static GpuTaskSchedulingHint SetupUploadGraphScheduling(
-    const usize byteCount,
-    const bool sameClassRouting = false,
-    const bool crossFamilySameClassRouting = false
-)noexcept{
-    GpuTaskSchedulingHint scheduling;
-    scheduling.cost = byteCount >= s_TransferPreferredUploadMinimumBytes
-        ? GpuTaskCostHint::Large
-        : GpuTaskCostHint::Tiny
-    ;
-    // A public setup call returns one accepted producer token, so retain a distinct explicit packet.
-    scheduling.forceSubmissionBoundary = true;
-    scheduling.allowPacketMerge = false;
-    scheduling.allowSameClassQueueRouting = sameClassRouting;
-    scheduling.preferNonPrimarySameClassQueue = sameClassRouting;
-    scheduling.allowCrossFamilySameClassQueueRouting = crossFamilySameClassRouting;
-    return scheduling;
-}
-
-[[nodiscard]] static ResourceStates::Mask SetupUploadGraphFinalState(
-    const ResourceStates::Mask declaredInitialState
-)noexcept{
-    // Unknown is a valid legacy descriptor state. The graph still needs a concrete post-write state; CopyDest is
-    // exactly what the native write leaves behind when the old setup path has no declared final transition.
-    return declaredInitialState == ResourceStates::Unknown
-        ? ResourceStates::CopyDest
-        : declaredInitialState
-    ;
-}
-
-// A returned setup resource has no external-completion object that a later direct consumer can wait on. Retain the
-// historical readiness rule by recording one explicit graph packet on every declared consumer queue. Its dependency
-// on the producer lowers the exact timeline wait, and later native work on that queue follows it in queue order.
-struct SetupUploadReadinessBridgeGraphTask{
-    struct Payload{};
-
-    [[nodiscard]] static bool record(
-        const Payload& payload,
-        CommandList& commandList,
-        const GpuTaskRecordContext& context
-    ){
-        static_cast<void>(payload);
-        static_cast<void>(commandList);
-        static_cast<void>(context);
-        return true;
-    }
-};
-
-[[nodiscard]] static GpuTaskId DeclareSetupUploadReadinessBridgeTasks(
-    GpuTaskGraph& graph,
-    GraphicsBackend::Device& device,
-    const ResourceQueueSharing::Mask queueSharing,
-    const CommandQueue::Enum uploadQueue,
-    const GpuTaskId uploadTask,
-    const bool bridgePrimaryUploadQueue = false
-){
-    if(!uploadTask.valid())
-        return {};
-
-    GpuTaskId terminalTask = uploadTask;
-    constexpr CommandQueue::Enum consumerQueues[] = {
-        CommandQueue::Graphics,
-        CommandQueue::Compute,
-        CommandQueue::Transfer,
-    };
-    const auto appendBridge = [&graph, uploadTask, &terminalTask](const CommandQueue::Enum consumerQueue){
-        GpuTaskSchedulingHint scheduling = SetupUploadGraphScheduling(0u);
-        scheduling.overlapPreferred = false;
-        GpuTaskDesc bridgeDesc;
-        bridgeDesc
-            .setIdentity(Name("graphics.setup_upload.readiness_bridge"))
-            .setMarkerLabel("Setup Upload Readiness Bridge")
-            .setQueue(SetupUploadGraphQueueRequest(consumerQueue))
-            .setScheduling(scheduling)
-            .setDependencies(&uploadTask, 1u)
-        ;
-        const GpuTaskId bridgeTask = graph.addTask<SetupUploadReadinessBridgeGraphTask>(
-            bridgeDesc,
-            SetupUploadReadinessBridgeGraphTask::Payload{}
-        );
-        if(!bridgeTask.valid())
-            return false;
-        terminalTask = bridgeTask;
-        return true;
-    };
-    for(const CommandQueue::Enum consumerQueue : consumerQueues){
-        if(
-            consumerQueue == uploadQueue
-            || !QueueSharingIncludesQueue(queueSharing, consumerQueue)
-            || !device.getQueue(consumerQueue)
-        )
-            continue;
-        if(!appendBridge(consumerQueue))
-            return {};
-    }
-    // Append this last so the synchronous standalone caller can verify that the returned-handle bridge resolved to
-    // the exact primary physical upload queue even when the descriptor names additional consumer classes.
-    if(bridgePrimaryUploadQueue && (!device.getQueue(uploadQueue) || !appendBridge(uploadQueue)))
-        return {};
-    return terminalTask;
-}
-
-template<typename DeclareTask>
-[[nodiscard]] static bool SubmitGraphOwnedStandaloneTask(
-    GraphicsBackend::Device& device,
-    GraphicsArena& graphArena,
-    DeclareTask&& declareTask,
-    QueueSubmissionToken& outSubmissionToken,
-    const GpuPhysicalQueueId requiredTerminalQueue = {}
-){
-    outSubmissionToken = {};
-
-    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
-    if(!topology.queues || topology.queueCount == 0u)
-        return false;
-
-    GpuTaskGraph graph(graphArena);
-    const GpuTaskId terminalTask = declareTask(graph);
-    if(!terminalTask.valid())
-        return false;
-
-    GpuTaskGraphAnalysis analysis(graphArena);
-    GpuTaskGraphQueueAssignments assignments(graphArena);
-    GpuCompiledGraph compiledGraph(graphArena);
-    GpuRecordedGraph recordedGraph(graphArena);
-    GpuGraphSubmissionTransaction transaction(graphArena);
-    Alloc::ScratchArena scratchArena(Name("graphics.standalone_task_graph_scratch"));
-    const GpuTaskGraphCompiler compiler;
-    if(!compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena))
-        return false;
-
-    const GpuSubmissionPacketId terminalPacket = compiledGraph.packetForTask(terminalTask);
-    if(!terminalPacket.valid())
-        return false;
-    if(requiredTerminalQueue.valid() && compiledGraph.packet(terminalPacket).queue != requiredTerminalQueue)
-        return false;
-
-    transaction.reset(compiledGraph);
-    const GpuNativePacketRecorder recorder(device);
-    if(!recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
-        recordedGraph
-    )){
-        transaction.discardUnaccepted(graph, compiledGraph);
-        return false;
-    }
-
-    const GpuTaskGraphSubmitter submitter(device);
-    if(!submitter.submitPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        recordedGraph,
-        compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
-        nullptr,
-        0u,
-        transaction,
-        scratchArena
-    )){
-        transaction.discardUnaccepted(graph, compiledGraph);
-        outSubmissionToken = {};
-        return false;
-    }
-
-    outSubmissionToken = transaction.packetToken(terminalPacket);
-    return outSubmissionToken.valid();
-}
-
-template<typename DeclareTask>
-[[nodiscard]] static bool SubmitGraphOwnedSetupUpload(
-    GraphicsBackend::Device& device,
-    GraphicsArena& graphArena,
-    const ResourceQueueSharing::Mask queueSharing,
-    const CommandQueue::Enum uploadQueue,
-    DeclareTask&& declareTask,
-    QueueSubmissionToken& outUploadToken,
-    const bool bridgePrimaryUploadQueue = false,
-    const GpuPhysicalQueueId requiredTerminalQueue = {}
-){
-    outUploadToken = {};
-    QueueSubmissionToken terminalToken;
-    if(!SubmitGraphOwnedStandaloneTask(
-        device,
-        graphArena,
-        [&device, queueSharing, uploadQueue, bridgePrimaryUploadQueue, &declareTask](GpuTaskGraph& graph){
-            const GpuTaskId uploadTask = declareTask(graph);
-            return DeclareSetupUploadReadinessBridgeTasks(
-                graph,
-                device,
-                queueSharing,
-                uploadQueue,
-                uploadTask,
-                bridgePrimaryUploadQueue
-            );
-        },
-        terminalToken,
-        requiredTerminalQueue
-    ))
-        return false;
-
-    if(!outUploadToken.valid()){
-        // The producer's accepted callback supplies the public token. A successful bridge graph without that token
-        // would weaken the existing setup API contract, so reject it rather than returning a falsely ready handle.
-        return false;
-    }
-    return true;
-}
-
-
-struct FrameTimingResetGraphTask{
-    struct Payload{
-        GpuTimingRecorder* timing = nullptr;
-    };
-
-    [[nodiscard]] static bool record(
-        const Payload& payload,
-        CommandList& commandList,
-        const GpuTaskRecordContext& context
-    ){
-        static_cast<void>(context);
-        if(!payload.timing)
-            return false;
-
-        payload.timing->recordFrameReset(commandList);
-        return true;
-    }
-
-    static void accepted(Payload& payload, const QueueSubmissionToken& token){
-        if(payload.timing && token.valid())
-            payload.timing->confirmFrameReset();
-    }
-
-    static void discarded(Payload& payload){
-        if(payload.timing)
-            payload.timing->discardFrameReset();
-    }
-};
-
-[[nodiscard]] static GpuQueueRequest FrameTimingResetQueueRequest()noexcept{
-    return GpuQueueRequest{
-        GpuQueueCapability::Graphics,
-        GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-}
-
-[[nodiscard]] static GpuTaskSchedulingHint FrameTimingResetScheduling()noexcept{
-    GpuTaskSchedulingHint scheduling;
-    scheduling.cost = GpuTaskCostHint::Tiny;
-    // The reset is a complete, CPU-visible preamble boundary. Later renderer submissions may only reserve their
-    // timestamp scopes after this packet accepts, so it must not merge with unrelated graph work.
-    scheduling.forceSubmissionBoundary = true;
-    scheduling.allowPacketMerge = false;
-    scheduling.overlapPreferred = false;
-    return scheduling;
-}
-
-[[nodiscard]] static bool SubmitGraphOwnedFrameTimingReset(
-    GraphicsBackend::Device& device,
-    GraphicsArena& graphArena,
-    GpuTimingRecorder& timing
-){
-    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
-    if(!graphicsQueue.valid())
-        return false;
-
-    QueueSubmissionToken acceptedToken;
-    if(!SubmitGraphOwnedStandaloneTask(
-        device,
-        graphArena,
-        [&timing](GpuTaskGraph& graph){
-            GpuTaskDesc resetDesc;
-            resetDesc
-                .setIdentity(Name("graphics.frame_timing.reset"))
-                .setMarkerLabel("Frame GPU-Timing Reset")
-                .setQueue(FrameTimingResetQueueRequest())
-                .setScheduling(FrameTimingResetScheduling())
-            ;
-            return graph.addTask<FrameTimingResetGraphTask>(
-                resetDesc,
-                FrameTimingResetGraphTask::Payload{
-                    .timing = &timing,
-                }
-            );
-        },
-        acceptedToken,
-        graphicsQueue
-    ))
-        return false;
-
-    return acceptedToken.queue == CommandQueue::Graphics
-        && acceptedToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration)
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static bool ComputeTextureUploadByteSize(const Graphics::TextureSetupDesc& desc, usize& outRequiredBytes){
-    outRequiredBytes = 0;
-
-    const TextureDesc& textureDesc = desc.textureDesc;
-    if(textureDesc.width == 0 || textureDesc.height == 0 || textureDesc.depth == 0 || textureDesc.mipLevels == 0 || textureDesc.arraySize == 0)
-        return false;
-    if(textureDesc.sampleCount != 1)
-        return false;
-    if(desc.mipLevel >= textureDesc.mipLevels || desc.arraySlice >= textureDesc.arraySize)
-        return false;
-    if(static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::kCount))
-        return false;
-
-    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
-    TextureUploadAspectLayout aspectLayout;
-    if(!GetTextureUploadAspectLayout(formatInfo, desc.aspect, aspectLayout))
-        return false;
-
-    const u32 width = Max<u32>(1u, textureDesc.width >> desc.mipLevel);
-    const u32 height = Max<u32>(1u, textureDesc.height >> desc.mipLevel);
-    const u32 depth = Max<u32>(1u, textureDesc.depth >> desc.mipLevel);
-
-    const u64 blockCountX = DivideUp(static_cast<u64>(width), static_cast<u64>(aspectLayout.blockWidth));
-    const u64 blockCountY = DivideUp(static_cast<u64>(height), static_cast<u64>(aspectLayout.blockHeight));
-    if(blockCountX > Limit<u64>::s_Max / aspectLayout.bytesPerBlock)
-        return false;
-
-    const u64 naturalRowPitch = blockCountX * aspectLayout.bytesPerBlock;
-    const u64 effectiveRowPitch = desc.rowPitch != 0 ? static_cast<u64>(desc.rowPitch) : naturalRowPitch;
-    if(effectiveRowPitch == 0 || effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % aspectLayout.bytesPerBlock) != 0)
-        return false;
-    if(blockCountY > Limit<u64>::s_Max / effectiveRowPitch)
-        return false;
-
-    const u64 packedSlicePitch = effectiveRowPitch * blockCountY;
-    const u64 effectiveDepthPitch = desc.depthPitch != 0 ? static_cast<u64>(desc.depthPitch) : packedSlicePitch;
-    if(effectiveDepthPitch == 0 || effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0)
-        return false;
-
-    if(depth > 1 && static_cast<u64>(depth - 1) > (Limit<u64>::s_Max - packedSlicePitch) / effectiveDepthPitch)
-        return false;
-
-    const u64 requiredBytes = depth > 1
-        ? effectiveDepthPitch * static_cast<u64>(depth - 1) + packedSlicePitch
-        : packedSlicePitch
-    ;
-    if(requiredBytes > static_cast<u64>(Limit<usize>::s_Max))
-        return false;
-
-    outRequiredBytes = static_cast<usize>(requiredBytes);
-    return true;
-}
-
-static bool ValidateBufferSetupUpload(const Graphics::BufferSetupDesc& desc){
-    if(desc.dataSize == 0)
-        return true;
-    if(!desc.data){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up buffer '{}': upload data is null"), StringConvert(desc.bufferDesc.debugName.c_str()));
-        return false;
-    }
-    if(desc.destOffsetBytes > desc.bufferDesc.byteSize || static_cast<u64>(desc.dataSize) > desc.bufferDesc.byteSize - desc.destOffsetBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up buffer '{}': upload range offset {} size {} exceeds buffer size {}")
-            , StringConvert(desc.bufferDesc.debugName.c_str())
-            , desc.destOffsetBytes
-            , static_cast<u64>(desc.dataSize)
-            , desc.bufferDesc.byteSize
-        );
-        return false;
-    }
-    // Both the legacy CommandList staging path and the graph-owned upload task lower to VkBufferCopy.  The API
-    // cannot truthfully report a successful upload for a region Vulkan rejects, so fail before creating either
-    // a native command list or a graph packet.
-    if((desc.destOffsetBytes & (sizeof(u32) - 1u)) != 0u || (desc.dataSize & (sizeof(u32) - 1u)) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up buffer '{}': upload offset and size must be 4-byte aligned")
-            , StringConvert(desc.bufferDesc.debugName.c_str())
-        );
-        return false;
-    }
-    // A retained buffer must publish a concrete state.  Unknown would be restored at native close without a
-    // graph-visible final-state contract for the next consumer.
-    if(desc.bufferDesc.keepInitialState && desc.bufferDesc.initialState == ResourceStates::Unknown){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up buffer '{}': keep-initial-state uploads require a concrete initial state")
-            , StringConvert(desc.bufferDesc.debugName.c_str())
-        );
-        return false;
-    }
-
-    return true;
-}
-
-static bool ValidateTextureSetupUpload(const Graphics::TextureSetupDesc& desc){
-    if(!desc.data && desc.uploadDataSize == 0)
-        return true;
-    if(!desc.data || desc.uploadDataSize == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up texture '{}': upload data and size must both be provided"), StringConvert(desc.textureDesc.name.c_str()));
-        return false;
-    }
-
-    usize requiredBytes = 0;
-    if(!ComputeTextureUploadByteSize(desc, requiredBytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up texture '{}': invalid upload layout"), StringConvert(desc.textureDesc.name.c_str()));
-        return false;
-    }
-
-    const FormatInfo& formatInfo = GetFormatInfo(desc.textureDesc.format);
-    TextureUploadAspect::Enum resolvedAspect;
-    if(!ResolveTextureUploadAspect(formatInfo, desc.aspect, resolvedAspect)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Graphics: failed to set up texture '{}': upload aspect must name one aspect present in the texture format; D24S8/D32S8 require Depth or Stencil")
-            , StringConvert(desc.textureDesc.name.c_str())
-        );
-        return false;
-    }
-    // A retained texture must publish a concrete state. Leaving it Unknown makes command-list close restore an
-    // untracked layout, so no graph task or later consumer can safely describe the uploaded contents.
-    if(desc.textureDesc.keepInitialState && desc.textureDesc.initialState == ResourceStates::Unknown){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up texture '{}': keep-initial-state uploads require a concrete initial state"), StringConvert(desc.textureDesc.name.c_str()));
-        return false;
-    }
-    if(desc.uploadDataSize < requiredBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up texture '{}': upload data size {} is smaller than required size {}")
-            , StringConvert(desc.textureDesc.name.c_str())
-            , desc.uploadDataSize
-            , requiredBytes
-        );
-        return false;
-    }
-
-    return true;
-}
-
-[[nodiscard]] static bool ValidateTextureUploadBatch(
-    const Graphics::TextureUploadBatchDesc& desc,
-    usize& outTotalByteCount
-){
-    outTotalByteCount = 0u;
-    if(!desc.destination){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch: destination texture is null"));
-        return false;
-    }
-    if(!desc.regions || desc.regionCount == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch '{}': regions are empty")
-            , StringConvert(desc.destination->getDescription().name.c_str())
-        );
-        return false;
-    }
-    if(desc.finalState == ResourceStates::Unknown){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch '{}': final state is unknown")
-            , StringConvert(desc.destination->getDescription().name.c_str())
-        );
-        return false;
-    }
-
-    const TextureDesc& textureDesc = desc.destination->getDescription();
-    if(textureDesc.keepInitialState && textureDesc.initialState == ResourceStates::Unknown){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch '{}': keep-initial-state uploads require a concrete initial state")
-            , StringConvert(textureDesc.name.c_str())
-        );
-        return false;
-    }
-    if(static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::kCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch '{}': texture format is invalid")
-            , StringConvert(textureDesc.name.c_str())
-        );
-        return false;
-    }
-    if(textureDesc.keepInitialState && desc.finalState != textureDesc.initialState){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch '{}': keep-initial-state requires final state {}")
-            , StringConvert(textureDesc.name.c_str())
-            , static_cast<u32>(textureDesc.initialState)
-        );
-        return false;
-    }
-
-    for(usize regionIndex = 0u; regionIndex < desc.regionCount; ++regionIndex){
-        const Graphics::TextureUploadRegion& region = desc.regions[regionIndex];
-        Graphics::TextureSetupDesc regionDesc;
-        regionDesc.textureDesc = textureDesc;
-        regionDesc.data = region.data;
-        regionDesc.uploadDataSize = region.dataSize;
-        regionDesc.rowPitch = region.rowPitch;
-        regionDesc.depthPitch = region.depthPitch;
-        regionDesc.arraySlice = region.arraySlice;
-        regionDesc.mipLevel = region.mipLevel;
-        regionDesc.aspect = region.aspect;
-        if(!ValidateTextureSetupUpload(regionDesc))
-            return false;
-        if(AddOverflows<usize>(outTotalByteCount, region.dataSize)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch '{}': byte count overflows")
-                , StringConvert(textureDesc.name.c_str())
-            );
-            return false;
-        }
-        outTotalByteCount += region.dataSize;
-    }
-    return true;
-}
-
-[[nodiscard]] static CommandQueue::Enum ResolveTextureUploadBatchQueue(
-    GraphicsBackend::Device& device,
-    const CommandQueue::Enum requestedQueue,
-    const usize uploadBytes,
-    const TextureDesc& textureDesc
-)noexcept{
-    if(TextureUploadRequiresGraphicsQueue(textureDesc))
-        return CommandQueue::Graphics;
-
-    const auto canUse = [&](const CommandQueue::Enum queue){
-        return queue == CommandQueue::Graphics
-            || (device.getQueue(queue) && QueueSharingIncludesQueue(textureDesc.queueSharing, queue))
-        ;
-    };
-    const auto transferPreferred = [&](){
-        if(canUse(CommandQueue::Transfer))
-            return CommandQueue::Transfer;
-        if(canUse(CommandQueue::Compute))
-            return CommandQueue::Compute;
-        return CommandQueue::Graphics;
-    };
-
-    switch(requestedQueue){
-    case CommandQueue::kCount:
-        return uploadBytes < s_TransferPreferredUploadMinimumBytes
-            ? CommandQueue::Graphics
-            : transferPreferred()
-        ;
-    case CommandQueue::Transfer:
-        return transferPreferred();
-    case CommandQueue::Compute:
-        return canUse(CommandQueue::Compute)
-            ? CommandQueue::Compute
-            : CommandQueue::Graphics
-        ;
-    case CommandQueue::Graphics:
-        return CommandQueue::Graphics;
-    default:
-        NWB_ASSERT_MSG(false, NWB_TEXT("Graphics: texture batch upload requested an invalid command queue"));
-        return CommandQueue::Graphics;
-    }
-}
-
-static bool ValidateMeshSetupDesc(const Graphics::MeshSetupDesc& desc){
-    if(!desc.vertexData || desc.vertexDataSize == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up mesh '{}': vertex data is missing"), StringConvert(desc.vertexBufferName.c_str()));
-        return false;
-    }
-    if(desc.vertexStride == 0 || (desc.vertexDataSize % static_cast<usize>(desc.vertexStride)) != 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up mesh '{}': vertex data size is not aligned to vertex stride"), StringConvert(desc.vertexBufferName.c_str()));
-        return false;
-    }
-
-    const usize vertexCount = desc.vertexDataSize / static_cast<usize>(desc.vertexStride);
-    if(vertexCount > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up mesh '{}': vertex count exceeds u32 range"), StringConvert(desc.vertexBufferName.c_str()));
-        return false;
-    }
-
-    if((desc.indexData == nullptr) != (desc.indexDataSize == 0)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up mesh '{}': index data and size must both be provided"), StringConvert(desc.indexBufferName.c_str()));
-        return false;
-    }
-    if(desc.indexDataSize > 0){
-        const usize indexStride = desc.use32BitIndices ? sizeof(u32) : sizeof(u16);
-        if((desc.indexDataSize % indexStride) != 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up mesh '{}': index data size is not aligned to index stride"), StringConvert(desc.indexBufferName.c_str()));
-            return false;
-        }
-        const usize indexCount = desc.indexDataSize / indexStride;
-        if(indexCount > static_cast<usize>(Limit<u32>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up mesh '{}': index count exceeds u32 range"), StringConvert(desc.indexBufferName.c_str()));
-            return false;
-        }
-    }
-
-    return true;
-}
-
-struct BufferSetupJobData{
-    Graphics::BufferSetupDesc setupDesc;
-    UploadBytes uploadBytes;
-    BufferHandle& outBuffer;
-
-
-    BufferSetupJobData(Alloc::GlobalArena& arena, const Graphics::BufferSetupDesc& desc, BufferHandle& output)
-        : setupDesc(desc)
-        , uploadBytes(arena)
-        , outBuffer(output)
+class ScopedAcquiredPresentationFrameReset final : NoCopy{
+public:
+    explicit ScopedAcquiredPresentationFrameReset(AcquiredPresentationFrame& frame)
+        : m_frame(frame)
     {}
-};
+    ~ScopedAcquiredPresentationFrameReset(){ m_frame = {}; }
 
-struct TextureSetupJobData{
-    Graphics::TextureSetupDesc setupDesc;
-    UploadBytes uploadBytes;
-    TextureHandle& outTexture;
-
-
-    TextureSetupJobData(Alloc::GlobalArena& arena, const Graphics::TextureSetupDesc& desc, TextureHandle& output)
-        : setupDesc(desc)
-        , uploadBytes(arena)
-        , outTexture(output)
-    {}
-};
-
-struct MeshSetupJobData{
-    Graphics::MeshSetupDesc setupDesc;
-    UploadBytes vertexBytes;
-    UploadBytes indexBytes;
-    Graphics::MeshResource& outMesh;
-
-
-    MeshSetupJobData(Alloc::GlobalArena& arena, const Graphics::MeshSetupDesc& desc, Graphics::MeshResource& output)
-        : setupDesc(desc)
-        , vertexBytes(arena)
-        , indexBytes(arena)
-        , outMesh(output)
-    {}
+private:
+    AcquiredPresentationFrame& m_frame;
 };
 
 
-static UploadBytes CopyBytes(Alloc::GlobalArena& arena, const void* data, usize dataSize){
-    UploadBytes bytes{arena};
-    if(!data || dataSize == 0)
-        return bytes;
+inline constexpr Name s_GraphicsFrameCpuTimingScope("graphics.frame");
+inline constexpr Name s_GraphicsAnimateCpuTimingScope("graphics.animate");
+inline constexpr Name s_GraphicsBeginFrameCpuTimingScope("graphics.begin_frame");
+inline constexpr Name s_GraphicsFramePreambleCpuTimingScope("graphics.frame_preamble");
+inline constexpr Name s_GraphicsRenderCpuTimingScope("graphics.render");
+inline constexpr Name s_GraphicsPresentCpuTimingScope("graphics.present");
+inline constexpr Name s_GraphicsGarbageCollectCpuTimingScope("graphics.garbage_collect");
 
-    const u8* const byteData = static_cast<const u8*>(data);
-    bytes.assign(byteData, byteData + dataSize);
 
-    return bytes;
-}
-
-template<typename JobData, typename Desc, typename Output, typename Validate, typename ConfigurePayload, typename ExecutePayload>
-static Graphics::JobHandle SubmitSetupUploadJob(
-    Graphics& graphics,
-    Alloc::GlobalArena& arena,
-    Alloc::JobSystem& jobSystem,
-    const Desc& desc,
-    Output& output,
-    Validate&& validate,
-    ConfigurePayload&& configurePayload,
-    ExecutePayload&& executePayload
-){
-    if(!validate(desc)){
-        output = nullptr;
-        return {};
-    }
-
-    auto payload = MakeGlobalUnique<JobData>(arena, arena, desc, output);
-    configurePayload(*payload, arena);
-
-    return jobSystem.submit([&graphics, payload = Move(payload), executePayload = Forward<ExecutePayload>(executePayload)]() mutable{
-        executePayload(graphics, *payload);
-    });
-}
-
-static void ConfigureBufferSetupPayload(BufferSetupJobData& payload, Alloc::GlobalArena& arena){
-    payload.uploadBytes = CopyBytes(arena, payload.setupDesc.data, payload.setupDesc.dataSize);
-    payload.setupDesc.data = nullptr;
-    payload.setupDesc.dataSize = payload.uploadBytes.size();
-}
-
-static void ExecuteBufferSetupPayload(Graphics& graphics, BufferSetupJobData& payload){
-    payload.setupDesc.data = payload.uploadBytes.empty() ? nullptr : payload.uploadBytes.data();
-    payload.setupDesc.dataSize = payload.uploadBytes.size();
-    payload.outBuffer = graphics.setupBuffer(payload.setupDesc);
-}
-
-static void ConfigureTextureSetupPayload(TextureSetupJobData& payload, Alloc::GlobalArena& arena){
-    payload.uploadBytes = CopyBytes(arena, payload.setupDesc.data, payload.setupDesc.uploadDataSize);
-    payload.setupDesc.data = nullptr;
-    payload.setupDesc.uploadDataSize = payload.uploadBytes.size();
-}
-
-static void ExecuteTextureSetupPayload(Graphics& graphics, TextureSetupJobData& payload){
-    payload.setupDesc.data = payload.uploadBytes.empty() ? nullptr : payload.uploadBytes.data();
-    payload.setupDesc.uploadDataSize = payload.uploadBytes.size();
-    payload.outTexture = graphics.setupTexture(payload.setupDesc);
-}
-
-static bool CopyInstanceParameters(DeviceCreationParameters& dst, const InstanceParameters& src){
+[[nodiscard]] static bool CopyInstanceParameters(DeviceCreationParameters& dst, const InstanceParameters& src){
     if(src.enableDebugRuntime && !CanEnableDebugRuntime())
         return false;
 
@@ -908,19 +55,50 @@ static bool CopyInstanceParameters(DeviceCreationParameters& dst, const Instance
     return true;
 }
 
-constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& combo){
-    return
-        combo.inputType == CooperativeVectorDataType::Float16
-        && combo.inputInterpretation == CooperativeVectorDataType::Float16
-        && combo.matrixInterpretation == CooperativeVectorDataType::Float16
-        && combo.outputType == CooperativeVectorDataType::Float16
-    ;
-}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct Graphics::CpuTimingPhaseBatch final : NoCopy{
+private:
+    struct PhaseTiming{
+        Name scopeName = NAME_NONE;
+        f64 seconds = 0.0;
+    };
+
+    static constexpr u32 s_MaxPhaseCount = 6u;
+    Array<PhaseTiming, s_MaxPhaseCount> m_phases = {};
+    u32 m_phaseCount = 0u;
+
+
+public:
+    void stage(const Name& scopeName, const Timer begin){
+        NWB_ASSERT(m_phaseCount < s_MaxPhaseCount);
+        if(m_phaseCount >= s_MaxPhaseCount)
+            return;
+
+        PhaseTiming& phase = m_phases[m_phaseCount];
+        phase.scopeName = scopeName;
+        phase.seconds = DurationInSeconds<f64>(TimerNow(), begin);
+        ++m_phaseCount;
+    }
+
+    void flush(Perf::TimingSink& timing, const u64 sampleFrameIndex)const{
+        if(!timing.enabled())
+            return;
+
+        for(u32 phaseIndex = 0u; phaseIndex < m_phaseCount; ++phaseIndex){
+            const PhaseTiming& phase = m_phases[phaseIndex];
+            const Perf::TimingScopeId scope = timing.registerScope(phase.scopeName);
+            timing.recordSample(scope, phase.seconds, sampleFrameIndex);
+        }
+    }
 };
 
 
@@ -944,11 +122,22 @@ Graphics::Graphics(
     Alloc::JobSystem& jobSystem,
     Perf::TimingSink& gpuTiming
 )
+    : Graphics(allocator, threadPool, jobSystem, gpuTiming, nullptr)
+{}
+
+Graphics::Graphics(
+    GraphicsAllocator& allocator,
+    Alloc::ThreadPool& threadPool,
+    Alloc::JobSystem& jobSystem,
+    Perf::TimingSink& gpuTiming,
+    Perf::TimingSink* const cpuTiming
+)
     : m_allocator(allocator)
     , m_threadPool(threadPool)
     , m_jobSystem(jobSystem)
     , m_deviceCreationParams(m_allocator.getObjectArena())
     , m_gpuTiming(m_allocator.getObjectArena(), gpuTiming)
+    , m_cpuTiming(cpuTiming)
     , m_backend(MakeNotNullUnique(MakeGlobalUnique<Backend>(m_allocator.getObjectArena(), m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool)))
     , m_renderPasses(m_allocator.getObjectArena())
     , m_swapChainFramebuffers(m_allocator.getObjectArena())
@@ -962,6 +151,7 @@ Graphics::~Graphics(){
 }
 
 bool Graphics::init(const Common::FrameData& data){
+    m_acquiredPresentationFrame = {};
     m_deviceCreationParams.headlessDevice = false;
     m_hasPresentedFrame = false;
 
@@ -999,6 +189,7 @@ bool Graphics::init(const Common::FrameData& data){
 }
 
 bool Graphics::createHeadlessDevice(){
+    m_acquiredPresentationFrame = {};
     m_deviceCreationParams.headlessDevice = true;
     m_hasPresentedFrame = false;
 
@@ -1020,7 +211,7 @@ bool Graphics::createHeadlessDevice(){
 }
 
 bool Graphics::createInstance(const InstanceParameters& params){
-    if(!__hidden_graphics::CopyInstanceParameters(m_deviceCreationParams, params)){
+    if(!__hidden_graphics_lifecycle::CopyInstanceParameters(m_deviceCreationParams, params)){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: debug runtime is only available in non-final builds"));
         return false;
     }
@@ -1039,6 +230,14 @@ bool Graphics::setDebugRuntimeEnabled(bool enabled){
         return false;
 
     m_deviceCreationParams.enableDebugRuntime = enabled;
+    return true;
+}
+
+bool Graphics::setNativeMeshShadersEnabled(const bool enabled){
+    if(m_instanceCreated)
+        return false;
+
+    m_deviceCreationParams.enableNativeMeshShaders = enabled;
     return true;
 }
 
@@ -1090,6 +289,14 @@ bool Graphics::setHDR10OutputEnabled(const bool enabled){
     return true;
 }
 
+bool Graphics::setSwapChainReadbackEnabled(const bool enabled){
+    if(m_backend->getDevice())
+        return false;
+
+    m_deviceCreationParams.enableSwapChainReadback = enabled;
+    return true;
+}
+
 bool Graphics::setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi){
     if(!abi.valid() || m_backend->getDevice())
         return false;
@@ -1102,7 +309,7 @@ void Graphics::setPipelineCacheDirectory(const Path& directory){
     m_deviceCreationParams.pipelineCacheDirectory = directory;
 }
 
-void Graphics::requestDeviceRecreation(){
+void Graphics::requestDeviceRecreation()const{
     if(m_deviceRecreationRequested)
         return;
 
@@ -1148,6 +355,7 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
 }
 
 void Graphics::destroy(){
+    m_acquiredPresentationFrame = {};
     waitAllJobs();
     waitForIdle();
 
@@ -1255,16 +463,8 @@ void Graphics::setPointerScaleChangedCallback(PointerScaleChangedCallback callba
     notifyPointerScaleChanged();
 }
 
-Texture* Graphics::getCurrentBackBuffer()const{
-    return m_backend->getCurrentBackBuffer();
-}
-
 Texture* Graphics::getBackBuffer(u32 index)const{
     return m_backend->getBackBuffer(index);
-}
-
-u32 Graphics::getCurrentBackBufferIndex()const{
-    return m_backend->getCurrentBackBufferIndex();
 }
 
 u32 Graphics::getBackBufferCount()const{
@@ -1286,6 +486,7 @@ TextureHandle Graphics::createTexture(const TextureDesc& desc)const{
 }
 
 void Graphics::backBufferResizing(){
+    m_acquiredPresentationFrame = {};
     waitAllJobs();
     waitForIdle();
 
@@ -1358,15 +559,15 @@ bool Graphics::prepareFramePreamble(){
     // Materialize and reset every declared timer-query pool before any pass preparation can record a timestamp.
     // Per-pass preparation submits skinning and shadow packets, so this must remain ahead of it as well as every
     // later render packet on the same GPU timeline.
-    if(m_gpuTiming.queryCollectionEnabled()){
+    if(m_gpuTiming.collectionActive()){
         if(!m_gpuTiming.materializeRequestedQueries(device))
             NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to materialize one or more requested GPU-timing query pools"));
 
         // Do not allow render-pass scopes to reuse a prior frame's reset if graph recording or submission fails.
         // The task's accepted callback reenables only the pools covered by the successfully submitted packet.
         m_gpuTiming.discardFrameReset();
-        if(!__hidden_graphics::SubmitGraphOwnedFrameTimingReset(
-            device,
+        if(!GraphicsModuleDetail::SubmitGraphOwnedFrameTimingReset(
+            *this,
             m_allocator.getObjectArena(),
             m_gpuTiming
         )){
@@ -1384,7 +585,7 @@ bool Graphics::prepareFramePreamble(){
 }
 
 void Graphics::render(){
-    Framebuffer* framebuffer = getCurrentFramebuffer();
+    Framebuffer* const framebuffer = m_acquiredPresentationFrame.framebuffer.get();
     auto& device = getDevice();
     if(device.isDeviceLost()){
         requestDeviceRecreation();
@@ -1447,8 +648,34 @@ bool Graphics::shouldRenderUnfocused()const{
 }
 
 bool Graphics::runFrame(){
-    if(!m_frameSubmissionSuspended)
-        return animateRenderPresent();
+    // This deliberately spans the complete logical graphics frame: normal presentation, headless no-window work,
+    // and submission-suspended maintenance. Detailed phase scopes sit within this aggregate, so consumers must not
+    // sum them with it. Record only a successful call so a failed frame can never be published with a later one.
+    const bool recordFrameTiming = m_cpuTiming && m_cpuTiming->enabled();
+    Perf::TimingScopeId frameTimingScope;
+    Timer frameTimingBegin;
+    const u64 sampleFrameIndex = m_frameIndex;
+    if(recordFrameTiming){
+        frameTimingScope = m_cpuTiming->registerScope(__hidden_graphics_lifecycle::s_GraphicsFrameCpuTimingScope);
+        frameTimingBegin = TimerNow();
+    }
+
+    if(!m_frameSubmissionSuspended){
+        if(!recordFrameTiming)
+            return animateRenderPresent();
+
+        CpuTimingPhaseBatch phaseTiming;
+        const bool rendered = animateRenderPresentInternal(&phaseTiming);
+        if(rendered){
+            m_cpuTiming->recordSample(
+                frameTimingScope,
+                DurationInSeconds<f64>(TimerNow(), frameTimingBegin),
+                sampleFrameIndex
+            );
+            phaseTiming.flush(*m_cpuTiming, sampleFrameIndex);
+        }
+        return rendered;
+    }
 
     // Do not let a capture hold hide a device-loss/recreation request. No backend beginFrame, render, or present call
     // is made here, so the last completed frame stays on screen while the platform loop remains responsive.
@@ -1462,10 +689,21 @@ bool Graphics::runFrame(){
     }
 
     YieldThread();
+    if(recordFrameTiming)
+        m_cpuTiming->recordSample(
+            frameTimingScope,
+            DurationInSeconds<f64>(TimerNow(), frameTimingBegin),
+            sampleFrameIndex
+        );
     return true;
 }
 
 bool Graphics::animateRenderPresent(){
+    return animateRenderPresentInternal(nullptr);
+}
+
+bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTiming){
+    m_acquiredPresentationFrame = {};
     if(m_deviceRecreationRequested)
         return false;
 
@@ -1486,7 +724,12 @@ bool Graphics::animateRenderPresent(){
             m_prevDPIScaleFactorY = m_dpiScaleFactorY;
         }
 
+        Timer animateBegin;
+        if(phaseTiming)
+            animateBegin = TimerNow();
         animate(elapsedTime);
+        if(phaseTiming)
+            phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsAnimateCpuTimingScope, animateBegin);
 
         if(m_frameIndex > 0 || !m_skipRenderOnFirstFrame){
             const BackBufferResizeCallbacks resizeCallbacks = {
@@ -1494,24 +737,84 @@ bool Graphics::animateRenderPresent(){
                 &Graphics::BackBufferResizingCallback,
                 &Graphics::BackBufferResizedCallback,
             };
-            if(m_backend->beginFrame(resizeCallbacks)){
-                if(!prepareFramePreamble()){
-                    if(device.isDeviceLost())
-                        requestDeviceRecreation();
+            Timer beginFrameBegin;
+            if(phaseTiming)
+                beginFrameBegin = TimerNow();
+            AcquiredBackBuffer acquiredBackBuffer = m_backend->beginFrame(resizeCallbacks);
+            if(phaseTiming)
+                phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsBeginFrameCpuTimingScope, beginFrameBegin);
+            if(acquiredBackBuffer.valid()){
+                const u32 acquiredBackBufferIndex = acquiredBackBuffer.index;
+                if(
+                    acquiredBackBufferIndex >= m_swapChainFramebuffers.size()
+                    || !m_swapChainFramebuffers[acquiredBackBufferIndex]
+                ){
+                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: acquired swap-chain image has no matching framebuffer; requesting recreation."));
+                    if(!m_backend->abandonAcquiredFrame())
+                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: failed to drain the abandoned acquired-frame wait; device teardown is required."));
+                    requestDeviceRecreation();
                     return false;
                 }
 
+                Framebuffer* const acquiredFramebuffer = m_swapChainFramebuffers[acquiredBackBufferIndex].get();
+                const FramebufferDesc& acquiredFramebufferDesc = acquiredFramebuffer->getDescription();
+                if(
+                    acquiredFramebufferDesc.colorAttachments.size() != 1u
+                    || acquiredFramebufferDesc.colorAttachments[0].texture != acquiredBackBuffer.texture.get()
+                ){
+                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: acquired swap-chain image mismatches its framebuffer attachment; requesting recreation."));
+                    if(!m_backend->abandonAcquiredFrame())
+                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: failed to drain the abandoned acquired-frame wait; device teardown is required."));
+                    requestDeviceRecreation();
+                    return false;
+                }
+
+                m_acquiredPresentationFrame = {
+                    .backBuffer = Move(acquiredBackBuffer),
+                    .framebuffer = m_swapChainFramebuffers[acquiredBackBufferIndex],
+                };
+                const __hidden_graphics_lifecycle::ScopedAcquiredPresentationFrameReset acquiredFrameReset(m_acquiredPresentationFrame);
+
+                Timer framePreambleBegin;
+                if(phaseTiming)
+                    framePreambleBegin = TimerNow();
+                const bool preamblePrepared = prepareFramePreamble();
+                if(phaseTiming)
+                    phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsFramePreambleCpuTimingScope, framePreambleBegin);
+                if(!preamblePrepared){
+                    // prepareFramePreamble() returns false only after terminal device loss. Do not issue recovery
+                    // GPU work; required device teardown owns the unresolved acquired image and synchronization.
+                    requestDeviceRecreation();
+                    return false;
+                }
+
+                Timer renderBegin;
+                if(phaseTiming)
+                    renderBegin = TimerNow();
                 render();
+                if(phaseTiming)
+                    phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsRenderCpuTimingScope, renderBegin);
 
                 if(m_deviceRecreationRequested || device.isDeviceLost()){
                     if(device.isDeviceLost())
                         requestDeviceRecreation();
+                    else if(!m_backend->abandonAcquiredFrame())
+                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: failed to quarantine the aborted acquired frame; device teardown is required."));
                     return false;
                 }
 
-                if(!m_backend->present()){
-                    if(device.isDeviceLost())
-                        requestDeviceRecreation();
+                Timer presentBegin;
+                if(phaseTiming)
+                    presentBegin = TimerNow();
+                const bool presented = m_backend->present();
+                if(phaseTiming)
+                    phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsPresentCpuTimingScope, presentBegin);
+                if(!presented){
+                    // A consumed presentation already cleared acquisition and makes abandonment a no-op. Every
+                    // healthy unconsumed failure is drained and quarantined before recreation.
+                    if(!device.isDeviceLost() && !m_backend->abandonAcquiredFrame())
+                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: failed to quarantine the unpresented acquired frame; device teardown is required."));
+                    requestDeviceRecreation();
                     return false;
                 }
 
@@ -1527,7 +830,12 @@ bool Graphics::animateRenderPresent(){
 
     YieldThread();
 
+    Timer garbageCollectionBegin;
+    if(phaseTiming)
+        garbageCollectionBegin = TimerNow();
     device.runGarbageCollection();
+    if(phaseTiming)
+        phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsGarbageCollectCpuTimingScope, garbageCollectionBegin);
     if(device.isDeviceLost()){
         requestDeviceRecreation();
         return false;
@@ -1540,524 +848,6 @@ bool Graphics::animateRenderPresent(){
     return true;
 }
 
-BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
-    auto& device = getDevice();
-    if(desc.acceptedToken)
-        *desc.acceptedToken = {};
-    if(!__hidden_graphics::ValidateBufferSetupUpload(desc))
-        return {};
-
-    if(!desc.data || desc.dataSize == 0)
-        return device.createBuffer(desc.bufferDesc);
-
-    const CommandQueue::Enum uploadQueue = __hidden_graphics::ResolveSetupUploadQueue(
-        device,
-        desc.queue,
-        desc.dataSize,
-        desc.bufferDesc.initialState != ResourceStates::Unknown
-    );
-    const __hidden_graphics::SetupUploadSameClassRouting sameClassRouting =
-        __hidden_graphics::ResolveSetupUploadSameClassRouting(device, uploadQueue, desc.dataSize)
-    ;
-    BufferDesc uploadDesc = desc.bufferDesc;
-    uploadDesc.queueSharing = __hidden_graphics::ResolveSetupUploadQueueSharing(
-        uploadDesc.queueSharing,
-        uploadQueue,
-        sameClassRouting.crossesQueueFamily
-    );
-    BufferHandle buffer = device.createBuffer(uploadDesc);
-    if(!buffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create setup buffer '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
-        return {};
-    }
-
-    QueueSubmissionToken uploadToken;
-    const bool submitted = __hidden_graphics::SubmitGraphOwnedSetupUpload(
-        device,
-        m_allocator.getObjectArena(),
-        uploadDesc.queueSharing,
-        uploadQueue,
-        [&buffer, &desc, &uploadDesc, uploadQueue, sameClassRouting, &uploadToken](GpuTaskGraph& graph){
-            const GpuGraphResourceId destination = graph.importBuffer(
-                buffer,
-                GpuGraphResourceDesc{}
-                    .setIdentity(Name("graphics.setup_buffer.resource"))
-                    .setMarkerLabel("Setup Buffer")
-                    .setType(GpuGraphResourceType::Buffer)
-                    .setInitialState(uploadDesc.initialState)
-                    .setQueueSharing(uploadDesc.queueSharing)
-            );
-            const GpuUploadBlobId source = graph.copyUploadData(
-                desc.data,
-                desc.dataSize,
-                alignof(u32)
-            );
-            if(!destination.valid() || !source.valid())
-                return GpuTaskId{};
-
-            GpuTaskDesc uploadTaskDesc;
-            uploadTaskDesc
-                .setIdentity(Name("graphics.setup_buffer.upload"))
-                .setMarkerLabel("Setup Buffer Upload")
-                .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue))
-                .setScheduling(__hidden_graphics::SetupUploadGraphScheduling(
-                    desc.dataSize,
-                    sameClassRouting.enabled,
-                    sameClassRouting.crossesQueueFamily
-                ))
-            ;
-            return graph.addUploadBufferTask(
-                uploadTaskDesc,
-                GpuUploadBufferTaskDesc{
-                    .source = source,
-                    .destination = destination,
-                    .destinationOffsetBytes = desc.destOffsetBytes,
-                    .finalState = __hidden_graphics::SetupUploadGraphFinalState(uploadDesc.initialState),
-                    .acceptedToken = &uploadToken,
-                }
-            );
-        },
-        uploadToken,
-        sameClassRouting.enabled,
-        sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
-    );
-    if(!submitted){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit graph-owned setup buffer upload '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
-        return {};
-    }
-    if(desc.acceptedToken)
-        *desc.acceptedToken = uploadToken;
-
-    return buffer;
-}
-
-TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
-    auto& device = getDevice();
-    if(desc.acceptedToken)
-        *desc.acceptedToken = {};
-    if(!__hidden_graphics::ValidateTextureSetupUpload(desc))
-        return {};
-
-    if(!desc.data || desc.uploadDataSize == 0)
-        return device.createTexture(desc.textureDesc);
-
-    const bool requiresGraphicsQueue = __hidden_graphics::TextureUploadRequiresGraphicsQueue(desc.textureDesc);
-    const CommandQueue::Enum uploadQueue = __hidden_graphics::ResolveSetupUploadQueue(
-        device,
-        desc.queue,
-        desc.uploadDataSize,
-        desc.textureDesc.initialState != ResourceStates::Unknown,
-        requiresGraphicsQueue
-    );
-    const __hidden_graphics::SetupUploadSameClassRouting sameClassRouting =
-        __hidden_graphics::ResolveSetupUploadSameClassRouting(device, uploadQueue, desc.uploadDataSize)
-    ;
-    TextureDesc uploadDesc = desc.textureDesc;
-    uploadDesc.queueSharing = __hidden_graphics::ResolveSetupUploadQueueSharing(
-        uploadDesc.queueSharing,
-        uploadQueue,
-        sameClassRouting.crossesQueueFamily
-    );
-    TextureHandle texture = device.createTexture(uploadDesc);
-    if(!texture){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create setup texture '{}'"), StringConvert(desc.textureDesc.name.c_str()));
-        return {};
-    }
-
-    QueueSubmissionToken uploadToken;
-    const bool submitted = __hidden_graphics::SubmitGraphOwnedSetupUpload(
-        device,
-        m_allocator.getObjectArena(),
-        uploadDesc.queueSharing,
-        uploadQueue,
-        [&texture, &desc, &uploadDesc, uploadQueue, requiresGraphicsQueue, sameClassRouting, &uploadToken](GpuTaskGraph& graph){
-            const GpuGraphResourceId destination = graph.importTexture(
-                texture,
-                GpuGraphResourceDesc{}
-                    .setIdentity(Name("graphics.setup_texture.resource"))
-                    .setMarkerLabel("Setup Texture")
-                    .setType(GpuGraphResourceType::Texture)
-                    .setInitialState(uploadDesc.initialState)
-                    .setQueueSharing(uploadDesc.queueSharing)
-            );
-            const GpuUploadBlobId source = graph.copyUploadData(desc.data, desc.uploadDataSize, alignof(u32));
-            if(!destination.valid() || !source.valid())
-                return GpuTaskId{};
-
-            GpuTaskDesc uploadTaskDesc;
-            uploadTaskDesc
-                .setIdentity(Name("graphics.setup_texture.upload"))
-                .setMarkerLabel("Setup Texture Upload")
-                .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue, requiresGraphicsQueue))
-                .setScheduling(__hidden_graphics::SetupUploadGraphScheduling(
-                    desc.uploadDataSize,
-                    sameClassRouting.enabled,
-                    sameClassRouting.crossesQueueFamily
-                ))
-            ;
-            return graph.addUploadTextureTask(
-                uploadTaskDesc,
-                GpuUploadTextureTaskDesc{
-                    .source = source,
-                    .destination = destination,
-                    .arraySlice = desc.arraySlice,
-                    .mipLevel = desc.mipLevel,
-                    .rowPitch = desc.rowPitch,
-                    .depthPitch = desc.depthPitch,
-                    .finalState = __hidden_graphics::SetupUploadGraphFinalState(uploadDesc.initialState),
-                    .acceptedToken = &uploadToken,
-                    .aspect = desc.aspect,
-                }
-            );
-        },
-        uploadToken,
-        sameClassRouting.enabled,
-        sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
-    );
-    if(!submitted){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit graph-owned setup texture upload '{}'"), StringConvert(desc.textureDesc.name.c_str()));
-        return {};
-    }
-    if(desc.acceptedToken)
-        *desc.acceptedToken = uploadToken;
-
-    return texture;
-}
-
-bool Graphics::submitStandaloneTaskGraph(
-    void* const userData,
-    const StandaloneTaskGraphDeclaration declareTask,
-    QueueSubmissionToken& outSubmissionToken,
-    const GpuPhysicalQueueId requiredTerminalQueue
-)const{
-    outSubmissionToken = {};
-    if(!declareTask)
-        return false;
-
-    return __hidden_graphics::SubmitGraphOwnedStandaloneTask(
-        getDevice(),
-        m_allocator.getObjectArena(),
-        [userData, declareTask](GpuTaskGraph& graph){
-            return declareTask(userData, graph);
-        },
-        outSubmissionToken,
-        requiredTerminalQueue
-    );
-}
-
-bool Graphics::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
-    auto& device = getDevice();
-    if(desc.acceptedToken)
-        *desc.acceptedToken = {};
-
-    usize totalByteCount = 0u;
-    if(!__hidden_graphics::ValidateTextureUploadBatch(desc, totalByteCount))
-        return false;
-
-    const TextureDesc& textureDesc = desc.destination->getDescription();
-    const bool requiresGraphicsQueue = __hidden_graphics::TextureUploadRequiresGraphicsQueue(textureDesc);
-    const CommandQueue::Enum uploadQueue = __hidden_graphics::ResolveTextureUploadBatchQueue(
-        device,
-        desc.queue,
-        totalByteCount,
-        textureDesc
-    );
-    __hidden_graphics::SetupUploadSameClassRouting sameClassRouting =
-        __hidden_graphics::ResolveSetupUploadSameClassRouting(device, uploadQueue, totalByteCount)
-    ;
-    // Existing batch destinations cannot be recreated with a wider sharing contract. A cross-family producer is
-    // therefore valid only when the texture was already created for that broad queue class; same-family offload
-    // retains ordinary exclusive sharing.
-    if(
-        sameClassRouting.crossesQueueFamily
-        && !__hidden_graphics::QueueSharingIncludesQueue(textureDesc.queueSharing, uploadQueue)
-    )
-        sameClassRouting = {};
-    QueueSubmissionToken uploadToken;
-    const bool submitted = __hidden_graphics::SubmitGraphOwnedSetupUpload(
-        device,
-        m_allocator.getObjectArena(),
-        textureDesc.queueSharing,
-        uploadQueue,
-        [&desc, &textureDesc, uploadQueue, requiresGraphicsQueue, sameClassRouting, &uploadToken](GpuTaskGraph& graph){
-            const GpuGraphResourceId destination = graph.importTexture(
-                desc.destination,
-                GpuGraphResourceDesc{}
-                    .setIdentity(Name("graphics.upload_texture_batch.resource"))
-                    .setMarkerLabel("Texture Upload Batch")
-                    .setType(GpuGraphResourceType::Texture)
-                    .setInitialState(textureDesc.initialState)
-                    .setQueueSharing(textureDesc.queueSharing)
-            );
-            if(!destination.valid())
-                return GpuTaskId{};
-
-            GpuTaskId previousTask;
-            for(usize regionIndex = 0u; regionIndex < desc.regionCount; ++regionIndex){
-                const TextureUploadRegion& region = desc.regions[regionIndex];
-                const GpuUploadBlobId source = graph.copyUploadData(
-                    region.data,
-                    region.dataSize,
-                    alignof(u32)
-                );
-                if(!source.valid())
-                    return GpuTaskId{};
-
-                GpuTaskSchedulingHint scheduling = __hidden_graphics::SetupUploadGraphScheduling(
-                    region.dataSize,
-                    sameClassRouting.enabled,
-                    sameClassRouting.crossesQueueFamily
-                );
-                scheduling.forceSubmissionBoundary = false;
-                scheduling.allowPacketMerge = true;
-                scheduling.mergeWithPrevious = previousTask.valid();
-                scheduling.preserveSameClassQueueWithDirectDependency = previousTask.valid();
-                GpuTaskDesc uploadTaskDesc;
-                uploadTaskDesc
-                    .setIdentity(Name("graphics.upload_texture_batch.upload"))
-                    .setMarkerLabel("Texture Upload Batch")
-                    .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue, requiresGraphicsQueue))
-                    .setScheduling(scheduling)
-                ;
-                if(previousTask.valid())
-                    uploadTaskDesc.setDependencies(&previousTask, 1u);
-
-                const GpuTaskId uploadTask = graph.addUploadTextureTask(
-                    uploadTaskDesc,
-                    GpuUploadTextureTaskDesc{
-                        .source = source,
-                        .destination = destination,
-                        .arraySlice = region.arraySlice,
-                        .mipLevel = region.mipLevel,
-                        .rowPitch = region.rowPitch,
-                        .depthPitch = region.depthPitch,
-                        .finalState = desc.finalState,
-                        .acceptedToken = regionIndex + 1u == desc.regionCount ? &uploadToken : nullptr,
-                        .aspect = region.aspect,
-                    }
-                );
-                if(!uploadTask.valid())
-                    return GpuTaskId{};
-                previousTask = uploadTask;
-            }
-            return previousTask;
-        },
-        uploadToken,
-        sameClassRouting.enabled,
-        sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
-    );
-    if(!submitted){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit graph-owned texture upload batch '{}'"), StringConvert(textureDesc.name.c_str()));
-        return false;
-    }
-
-    if(desc.acceptedToken)
-        *desc.acceptedToken = uploadToken;
-    return uploadToken.valid();
-}
-
-Graphics::MeshResource Graphics::setupMesh(const MeshSetupDesc& desc)const{
-    if(!__hidden_graphics::ValidateMeshSetupDesc(desc))
-        return {};
-
-    MeshResource output;
-    output.vertexStride = desc.vertexStride;
-
-    if(desc.vertexData && desc.vertexDataSize > 0){
-        BufferDesc vertexBufferDesc;
-        vertexBufferDesc.setByteSize(static_cast<u64>(desc.vertexDataSize));
-        vertexBufferDesc.setIsVertexBuffer(true);
-        vertexBufferDesc.setDebugName(desc.vertexBufferName);
-        vertexBufferDesc.enableAutomaticStateTracking(ResourceStates::VertexBuffer);
-
-        BufferSetupDesc vertexSetup;
-        vertexSetup.bufferDesc = vertexBufferDesc;
-        vertexSetup.data = desc.vertexData;
-        vertexSetup.dataSize = desc.vertexDataSize;
-        vertexSetup.queue = desc.queue;
-
-        output.vertexBuffer = setupBuffer(vertexSetup);
-        if(!output.vertexBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up mesh vertex buffer '{}'"), StringConvert(desc.vertexBufferName.c_str()));
-            return MeshResource{};
-        }
-    }
-
-    if(desc.indexData && desc.indexDataSize > 0){
-        BufferDesc indexBufferDesc;
-        indexBufferDesc.setByteSize(static_cast<u64>(desc.indexDataSize));
-        indexBufferDesc.setIsIndexBuffer(true);
-        indexBufferDesc.setDebugName(desc.indexBufferName);
-        indexBufferDesc.enableAutomaticStateTracking(ResourceStates::IndexBuffer);
-
-        BufferSetupDesc indexSetup;
-        indexSetup.bufferDesc = indexBufferDesc;
-        indexSetup.data = desc.indexData;
-        indexSetup.dataSize = desc.indexDataSize;
-        indexSetup.queue = desc.queue;
-
-        output.indexBuffer = setupBuffer(indexSetup);
-        if(!output.indexBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up mesh index buffer '{}'"), StringConvert(desc.indexBufferName.c_str()));
-            return MeshResource{};
-        }
-    }
-
-    if(output.vertexStride > 0 && desc.vertexDataSize > 0)
-        output.vertexCount = static_cast<u32>(desc.vertexDataSize / static_cast<usize>(output.vertexStride));
-
-    if(desc.indexDataSize > 0){
-        const usize indexStride = desc.use32BitIndices ? sizeof(u32) : sizeof(u16);
-        output.indexFormat = desc.use32BitIndices ? Format::R32_UINT : Format::R16_UINT;
-        output.indexCount = static_cast<u32>(desc.indexDataSize / indexStride);
-    }
-
-    return output;
-}
-
-Graphics::JobHandle Graphics::setupBufferAsync(const BufferSetupDesc& desc, BufferHandle& outBuffer){
-    return __hidden_graphics::SubmitSetupUploadJob<__hidden_graphics::BufferSetupJobData>(
-        *this,
-        m_allocator.getObjectArena(),
-        m_jobSystem,
-        desc,
-        outBuffer,
-        __hidden_graphics::ValidateBufferSetupUpload,
-        __hidden_graphics::ConfigureBufferSetupPayload,
-        __hidden_graphics::ExecuteBufferSetupPayload
-    );
-}
-
-Graphics::JobHandle Graphics::setupTextureAsync(const TextureSetupDesc& desc, TextureHandle& outTexture){
-    return __hidden_graphics::SubmitSetupUploadJob<__hidden_graphics::TextureSetupJobData>(
-        *this,
-        m_allocator.getObjectArena(),
-        m_jobSystem,
-        desc,
-        outTexture,
-        __hidden_graphics::ValidateTextureSetupUpload,
-        __hidden_graphics::ConfigureTextureSetupPayload,
-        __hidden_graphics::ExecuteTextureSetupPayload
-    );
-}
-
-Graphics::JobHandle Graphics::setupMeshAsync(const MeshSetupDesc& desc, MeshResource& outMesh){
-    if(!__hidden_graphics::ValidateMeshSetupDesc(desc)){
-        outMesh = {};
-        return {};
-    }
-
-    auto payload = MakeGlobalUnique<__hidden_graphics::MeshSetupJobData>(
-        m_allocator.getObjectArena(),
-        m_allocator.getObjectArena(),
-        desc,
-        outMesh
-    );
-    payload->vertexBytes = __hidden_graphics::CopyBytes(m_allocator.getObjectArena(), desc.vertexData, desc.vertexDataSize);
-    payload->indexBytes = __hidden_graphics::CopyBytes(m_allocator.getObjectArena(), desc.indexData, desc.indexDataSize);
-    payload->setupDesc.vertexData = nullptr;
-    payload->setupDesc.vertexDataSize = payload->vertexBytes.size();
-    payload->setupDesc.indexData = nullptr;
-    payload->setupDesc.indexDataSize = payload->indexBytes.size();
-
-    return m_jobSystem.submit([this, payload = Move(payload)]() mutable{
-        payload->setupDesc.vertexData = payload->vertexBytes.empty() ? nullptr : payload->vertexBytes.data();
-        payload->setupDesc.vertexDataSize = payload->vertexBytes.size();
-        payload->setupDesc.indexData = payload->indexBytes.empty() ? nullptr : payload->indexBytes.data();
-        payload->setupDesc.indexDataSize = payload->indexBytes.size();
-        payload->outMesh = setupMesh(payload->setupDesc);
-    });
-}
-
-Graphics::CoopVectorSupport Graphics::queryCoopVecSupport()const{
-    CoopVectorSupport output;
-
-    output.inferencingSupported = queryFeatureSupport(Feature::CooperativeVectorInferencing);
-    output.trainingSupported = queryFeatureSupport(Feature::CooperativeVectorTraining);
-
-    auto& device = getDevice();
-    const CooperativeVectorDeviceFeatures features = device.queryCoopVecFeatures();
-    output.fp32TrainingSupported = output.trainingSupported && features.trainingFloat32;
-
-    for(const auto& combo : features.matMulFormats){
-        if(__hidden_graphics::IsFp16CoopVecFormat(combo)){
-            output.fp16InferencingSupported = output.inferencingSupported;
-            output.fp16TrainingSupported = output.trainingSupported && features.trainingFloat16;
-            break;
-        }
-    }
-
-    return output;
-}
-
-bool Graphics::queryFeatureSupport(const Feature::Enum feature, void* featureInfo, const usize featureInfoSize)const{
-#if !defined(NWB_FINAL)
-    if((m_disabledFeatureSupportMask & BitMask<u64>(static_cast<u32>(feature))) != 0u)
-        return false;
-#endif
-
-    auto& device = getDevice();
-    return device.queryFeatureSupport(feature, featureInfo, featureInfoSize);
-}
-
-u32 Graphics::queryWaveLaneCount()const noexcept{
-    WaveLaneCountMinMaxFeatureInfo info{};
-    if(queryFeatureSupport(Feature::WaveLaneCountMinMax, &info, sizeof(info)) && info.maxWaveLaneCount > 0u)
-        return info.maxWaveLaneCount;
-    // Conservative fallback for backends/paths that cannot report a wave size: 64 lanes is the safe upper
-    // bound across all desktop GPUs and keeps groupshared reductions correct without wave intrinsics.
-    return __hidden_graphics::s_DefaultWaveLaneCount;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if !defined(NWB_FINAL)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void Graphics::setFeatureSupportDisabledForTesting(const Feature::Enum feature, const bool disabled){
-    const u64 featureBit = BitMask<u64>(static_cast<u32>(feature));
-    if(disabled)
-        m_disabledFeatureSupportMask |= featureBit;
-    else
-        m_disabledFeatureSupportMask &= ~featureBit;
-}
-
-void Graphics::clearFeatureSupportDisabledForTesting(){
-    m_disabledFeatureSupportMask = 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-CooperativeVectorDeviceFeatures Graphics::queryCoopVecFeatures()const{
-    auto& device = getDevice();
-    return device.queryCoopVecFeatures();
-}
-
-usize Graphics::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const{
-    auto& device = getDevice();
-    return device.getCoopVecMatrixSize(type, layout, rows, columns);
-}
-
-void Graphics::waitJob(JobHandle handle)const{
-    if(!handle.valid())
-        return;
-
-    m_jobSystem.wait(handle);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -2066,4 +856,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

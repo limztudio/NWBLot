@@ -17,9 +17,9 @@
 
 // Active component masks for vector helpers that consume only a subset of SIMD lanes.
 namespace VectorComponentMask{
-inline constexpr u32 s_XY = 0x3u;
-inline constexpr u32 s_XYZ = 0x7u;
-inline constexpr u32 s_XYZW = 0xFu;
+    inline constexpr u32 s_XY = 0x3u;
+    inline constexpr u32 s_XYZ = 0x7u;
+    inline constexpr u32 s_XYZW = 0xFu;
 };
 
 

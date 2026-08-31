@@ -21,7 +21,11 @@ if(WIN32)
 
     # The vendored decoder relies on MSVC's implicit transitive std includes (std::wstring_view, std::optional);
     # clang needs them explicit, so force-include a small header ahead of every TU (no vendored-source edit).
-    target_compile_options(pix_events_decoder PRIVATE "SHELL:-include ${PROJECT_SOURCE_DIR}/nwb_force_std_includes.h")
+    if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+        target_compile_options(pix_events_decoder PRIVATE "/FI${PROJECT_SOURCE_DIR}/nwb_force_std_includes.h")
+    else()
+        target_compile_options(pix_events_decoder PRIVATE "SHELL:-include ${PROJECT_SOURCE_DIR}/nwb_force_std_includes.h")
+    endif()
     # windows.h defines min/max macros that collide with std::min/std::max in the decoder.
     target_compile_definitions(pix_events_decoder PRIVATE NOMINMAX)
 

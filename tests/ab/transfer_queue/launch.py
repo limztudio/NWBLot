@@ -163,7 +163,7 @@ def run_self_test() -> int:
     paths = resolve_paths(args, settings)
     command = [str(item) for item in runner_command(args, paths)]
     assert command[command.index("--executable") + 1].endswith("transfer_upload_profile.exe")
-    assert "/.cozter/out/ab-results/transfer-queue/" in str(paths.output_directory)
+    assert "/.cozter/out/ab-results/transfer-queue/" in paths.output_directory.as_posix()
     assert "--gpu-validation" in command
     assert command[command.index("--adapter-index") + 1] == "1"
     assert command[command.index("--in-flight") + 1] == "3"

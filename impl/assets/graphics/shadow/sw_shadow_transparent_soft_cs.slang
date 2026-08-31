@@ -19,6 +19,10 @@
 
 #include "sw_binding_slots.h"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // TRANSPARENT occluder class: the soft transparent trace skips opaque blockers and integrates the colored crossings only.
 #define NWB_SW_SHADOW_OCCLUDER NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
 
@@ -26,6 +30,10 @@
 
 // sw_shadow_ray.slangi pulls shadow_sampling.slangi (nwbShadowLowDiscrepancy2D + the cone jitter) transitively.
 #include "sw_shadow_ray.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 // The half-res soft TRANSPARENT transmittance buffer (one layer per shadow slot) this pass writes the cone-jittered
 // colored sample into; the separate RGB shadow_resolve pipeline denoises + fold-multiplies it onto the full-res

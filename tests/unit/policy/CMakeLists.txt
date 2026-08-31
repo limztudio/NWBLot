@@ -69,6 +69,230 @@ add_test(
         --self-test
 )
 add_test(
+    NAME nwb_no_render_lane_facade
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_render_lane_facade.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_render_lane_facade_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_render_lane_facade.py"
+        --self-test
+)
+add_test(
+    NAME nwb_no_manual_packet_transaction_facade
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_manual_packet_transaction_facade.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_manual_packet_transaction_facade_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_manual_packet_transaction_facade.py"
+        --self-test
+)
+add_test(
+    NAME nwb_no_packet_anchored_submission_bindings
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_packet_anchored_submission_bindings.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_packet_anchored_submission_bindings_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_packet_anchored_submission_bindings.py"
+        --self-test
+)
+add_test(
+    NAME nwb_no_recording_time_packet_state_overrides
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_recording_time_packet_state_overrides.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_recording_time_packet_state_overrides_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_recording_time_packet_state_overrides.py"
+        --self-test
+)
+add_test(
+    NAME nwb_no_public_single_packet_recording
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_public_single_packet_recording.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_public_single_packet_recording_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_public_single_packet_recording.py"
+        --self-test
+)
+add_test(
+    NAME nwb_no_packet_final_state_query
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_packet_final_state_query.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_packet_final_state_query_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_packet_final_state_query.py"
+        --self-test
+)
+add_test(
+    NAME nwb_no_public_single_packet_submission
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_public_single_packet_submission.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_public_single_packet_submission_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_public_single_packet_submission.py"
+        --self-test
+)
+add_test(
+    NAME nwb_no_vulkan_submission_test_sync
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_vulkan_submission_test_sync.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_vulkan_submission_test_sync_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_vulkan_submission_test_sync.py"
+        --self-test
+)
+add_test(
+    NAME nwb_no_buffer_native_identity_test_facade
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_buffer_native_identity_test_facade.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_buffer_native_identity_test_facade_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_buffer_native_identity_test_facade.py"
+        --self-test
+)
+add_test(
+    NAME nwb_no_texture_native_identity_test_facade
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_texture_native_identity_test_facade.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_texture_native_identity_test_facade_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_texture_native_identity_test_facade.py"
+        --self-test
+)
+add_test(
+    NAME nwb_no_gpu_timing_diagnostic_peer
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_gpu_timing_diagnostic_peer.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_gpu_timing_diagnostic_peer_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_gpu_timing_diagnostic_peer.py"
+        --self-test
+)
+add_test(
+    NAME nwb_no_telemetry_diagnostic_test_hook
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_telemetry_diagnostic_test_hook.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_telemetry_diagnostic_test_hook_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_telemetry_diagnostic_test_hook.py"
+        --self-test
+)
+add_test(
+    NAME nwb_no_staging_texture_test_facade
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_staging_texture_test_facade.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_staging_texture_test_facade_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_staging_texture_test_facade.py"
+        --self-test
+)
+add_test(
+    NAME nwb_no_shader_table_dispatch_buffer_capture
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_shader_table_dispatch_buffer_capture.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_shader_table_dispatch_buffer_capture_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_shader_table_dispatch_buffer_capture.py"
+        --self-test
+)
+add_test(
+    NAME nwb_no_upload_pool_diagnostic_facade
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_upload_pool_diagnostic_facade.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_upload_pool_diagnostic_facade_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_upload_pool_diagnostic_facade.py"
+        --self-test
+)
+add_test(
+    NAME nwb_no_grouped_device_desc_queue_fallback
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_grouped_device_desc_queue_fallback.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_grouped_device_desc_queue_fallback_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_grouped_device_desc_queue_fallback.py"
+        --self-test
+)
+add_test(
     NAME nwb_no_hidden_namespaces_in_headers
     COMMAND
         "${Python3_EXECUTABLE}"

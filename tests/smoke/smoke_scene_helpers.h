@@ -21,7 +21,7 @@
 #include <impl/assets_mesh/asset.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_render/material/material_instance.h>
-#include <impl/ecs_render/kernel/module.h>
+#include <impl/ecs_render/module.h>
 #include <impl/ecs_scene/module.h>
 
 
@@ -127,18 +127,6 @@ struct SmokeRenderSystems{
         context.shaderPathResolver
     );
     return { meshSystem, rendererSystem };
-}
-
-inline void DisableSmokeRayTracingForTesting(ProjectRuntimeContext& context){
-#if !defined(NWB_FINAL)
-    context.graphics.setFeatureSupportDisabledForTesting(Core::Feature::RayTracingAccelStruct, true);
-    context.graphics.setFeatureSupportDisabledForTesting(Core::Feature::RayTracingPipeline, true);
-    context.graphics.setFeatureSupportDisabledForTesting(Core::Feature::RayQuery, true);
-#else
-    // Production final builds deliberately exclude the hook; their smoke executable keeps the
-    // platform's native feature selection.
-    static_cast<void>(context);
-#endif
 }
 
 inline Impl::RendererSystem& AddSmokeRenderSystems(

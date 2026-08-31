@@ -25,7 +25,7 @@ struct NwbDeferredCompositePixelInput{
 };
 
 struct NwbDeferredCompositePixelOutput{
-    [[vk::location(NWB_DEFERRED_COLOR_TARGET_LOCATION)]] half4 color : SV_Target0;
+    [[vk::location(NWB_DEFERRED_COLOR_TARGET_LOCATION)]] float4 color : SV_Target0;
 };
 
 
@@ -50,6 +50,10 @@ NwbDeferredCompositePixelOutput main(NwbDeferredCompositePixelInput input){
     output.color = half4(half3(presentationColor), half(1.0h));
     return output;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #undef g_NwbDeferredBindlessResources
 

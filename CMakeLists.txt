@@ -34,11 +34,6 @@ option(NWB_BUILDMODE "Generate build-mode Name symbol sidecars next to each vari
 if((WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NWB_BUILD_TESTBED AND NOT NWB_BUILD_LOADER)
     message(FATAL_ERROR "NWB_BUILD_TESTBED requires NWB_BUILD_LOADER because Testbed uses the loader project-entry API.")
 endif()
-# DEBUG / TEST ONLY: compiles the deliberate GPU fault-injection hook (Device::debugTriggerGpuFault). At runtime,
-# NWB_DEBUG_GPU_FAULT_INJECTION=0 or unset disables it; any nonzero value is used as the faulting GPU address.
-# Off by default; never enable in shipping builds.
-option(NWB_ENABLE_GPU_FAULT_INJECTION "Compile the debug GPU fault-injection hook (off in normal builds)." OFF)
-
 add_subdirectory(3rd_parties)
 nwb_configure_external_dependencies()
 nwb_configure_internal_headers()
@@ -78,7 +73,7 @@ if((WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NWB_BUILD_TESTBED)
 endif()
 
 if(NWB_BUILD_TESTS)
-    enable_testing()
+    include(CTest)
     add_subdirectory(tests)
 endif()
 

@@ -408,6 +408,10 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     nwbSkinnedMeshBoundsStore(meshletIndex, float4(g_NwbSkinnedMeshBoundsCenter, radius), conePacked);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #undef g_NwbSkinnedMeshBoundsBindlessResources
 
 

@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
+#include <impl/ecs_render/shared/renderer_frame_bindings.h>
 
 #include <core/graphics/api.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
@@ -19,6 +20,12 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+struct DeferredFrameTargets;
+
+namespace ECSRenderDetail{
+    struct CsgGraphResourceSnapshot;
+};
 
 struct AvboitFrameTargets{
     u32 fullWidth = 0;
@@ -92,6 +99,7 @@ static_assert(sizeof(AvboitFrameTargets) == 232u, "AvboitFrameTargets should kee
 
 struct MaterialPassDrawContext{
     Core::CommandList& commandList;
+    const DeferredFrameTargets& deferredTargets;
     Core::Framebuffer* framebuffer = nullptr;
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
     const AvboitFrameTargets* avboitTargets = nullptr;
@@ -115,6 +123,34 @@ struct MaterialPassDrawContext{
     // entry state from the graph (UAV for the producer and VertexBuffer for the raster consumer). Compatibility
     // callers leave this false and retain the per-item native UAV-to-VertexBuffer handoff.
     bool emulationOutputEntryStateGraphOwned = false;
+    // Prepared CSG draws consume the root-captured descriptor/buffer tuple. Regular paths leave this null because
+    // no CSG heap binding is part of their draw contract.
+    const ECSRenderDetail::CsgGraphResourceSnapshot* csgResources = nullptr;
+    // Every material recording path consumes one immutable Mesh-published frame binding generation.
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+};
+
+
+// Ray tracing gathers refractive emission targets before Deferred ranks the current scene lights. The root module
+// brokers this compact per-frame contract so neither feature reaches into the other's private state.
+struct RayTracingLightingClassificationInput{
+    u32 refractiveInstanceCount = 0u;
+};
+static_assert(sizeof(RayTracingLightingClassificationInput) == sizeof(u32));
+
+struct RayTracingLightingClassification{
+    u32 causticLightCount = 0u;
+    u32 softShadowSlotMask = 0u;
+};
+static_assert(sizeof(RayTracingLightingClassification) == sizeof(u32) * 2u);
+
+// Deferred owns these buffers, while the root module freezes their current generation for all later graph imports
+// and ray-tracing task payloads. Owning handles keep deferred replacement from invalidating an accepted packet.
+struct DeferredLightingGraphResources{
+    Core::BufferHandle sceneShadingBuffer;
+    Core::BufferHandle lightBuffer;
+
+    [[nodiscard]] bool valid()const noexcept{ return sceneShadingBuffer && lightBuffer; }
 };
 
 

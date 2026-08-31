@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -18,6 +19,12 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertEqual("linux", launcher.host_platform_name("Linux"))
         self.assertEqual("darwin", launcher.host_platform_name("Darwin"))
 
+    def test_host_architecture_names_match_cmake_output_names(self):
+        self.assertEqual("x64", launcher.host_arch_name("AMD64"))
+        self.assertEqual("x64", launcher.host_arch_name("x86_64"))
+        self.assertEqual("arm64", launcher.host_arch_name("ARM64"))
+        self.assertEqual("arm64", launcher.host_arch_name("aarch64"))
+
     def test_default_build_dirs_follow_platform_domain_and_arch(self):
         root = Path(os.sep) / "repo"
         self.assertEqual(
@@ -28,17 +35,27 @@ class LauncherPlatformTests(unittest.TestCase):
             root / "__cmake" / "build" / "linux-clang-x64",
             launcher.default_build_dir(root, "linux", "full", "x64"),
         )
+        self.assertEqual(
+            root / "__cmake" / "build" / "windows-clang-arm64",
+            launcher.default_build_dir(root, "windows", "full", "arm64"),
+        )
 
     def test_default_build_presets_follow_platform_domain_and_config(self):
         self.assertEqual("linux-clang-dbg", launcher.default_build_preset_name("linux", "full", "dbg"))
         self.assertEqual("linux-clang-engine-fin", launcher.default_build_preset_name("linux", "engine", "fin"))
+        self.assertEqual("windows-clang-arm64-dbg", launcher.default_build_preset_name("windows", "full", "dbg", "arm64"))
+        self.assertEqual(
+            "windows-clang-engine-arm64-fin",
+            launcher.default_build_preset_name("windows", "engine", "fin", "arm64"),
+        )
 
     def test_explicit_configure_preset_selects_matching_build_directory(self):
         root = Path(os.sep) / "repo"
+        resolved_root = root.resolve()
         args = argparse.Namespace(
             repo_root=root,
             platform="linux",
-            arch="x64",
+            arch=None,
             domain=None,
             configure_preset="linux-clang-engine-x64",
             build_dir=None,
@@ -46,8 +63,23 @@ class LauncherPlatformTests(unittest.TestCase):
             cmake=None,
         )
         settings = launcher.resolve_launch_settings(args, "full")
-        self.assertEqual(root / "__cmake" / "build" / "linux-clang-engine-x64", settings.build_dir)
+        self.assertEqual(resolved_root / "__cmake" / "build" / "linux-clang-engine-x64", settings.build_dir)
         self.assertEqual("engine", settings.domain)
+        self.assertEqual("x64", settings.arch)
+
+    def test_explicit_architecture_must_match_configure_preset(self):
+        args = argparse.Namespace(
+            repo_root=Path(os.sep) / "repo",
+            platform="windows",
+            arch="arm64",
+            domain=None,
+            configure_preset="windows-clang-x64",
+            build_dir=None,
+            config="dbg",
+            cmake=None,
+        )
+        with self.assertRaisesRegex(SystemExit, "conflicts with configure preset"):
+            launcher.resolve_launch_settings(args, "full")
 
     def test_output_root_matches_engine_and_domain_layouts(self):
         root = Path(os.sep) / "repo"
@@ -111,13 +143,11 @@ class LauncherPlatformTests(unittest.TestCase):
                 root / "tests" / "smoke" / "launcher.py",
                 root / "tests" / "ab" / "launch.py",
                 root / "tests" / "ab" / "async_shadow_m4" / "launch.py",
-                root / "tests" / "ab" / "bindless_parity" / "launch.py",
                 root / "tests" / "ab" / "command_ir" / "launch.py",
                 root / "tests" / "ab" / "frame_lagged_async_lighting" / "launch.py",
                 root / "tests" / "ab" / "frame_lagged_async_lighting" / "run.py",
                 root / "tests" / "ab" / "frame_lagged_async_lighting" / "helper.py",
                 root / "tests" / "ab" / "hybrid_shadow_boundary" / "launch.py",
-                root / "tests" / "ab" / "soft_transparent_shadow_fold" / "launch.py",
                 root / "tests" / "ab" / "transfer_queue" / "launch.py",
                 root / "utilities" / "launch.py",
                 root / "utilities" / "tex_conv" / "launch.py",
@@ -131,11 +161,9 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertEqual(
             {
                 "async-shadow-m4": Path("tests/ab/async_shadow_m4/launch.py"),
-                "bindless-parity": Path("tests/ab/bindless_parity/launch.py"),
                 "command-ir": Path("tests/ab/command_ir/launch.py"),
                 "frame-lagged-async-lighting": Path("tests/ab/frame_lagged_async_lighting/launch.py"),
                 "hybrid-shadow-boundary": Path("tests/ab/hybrid_shadow_boundary/launch.py"),
-                "soft-transparent-shadow-fold": Path("tests/ab/soft_transparent_shadow_fold/launch.py"),
                 "transfer-queue": Path("tests/ab/transfer_queue/launch.py"),
                 "smoke": Path("tests/smoke/launch.py"),
                 "testbed": Path("CoolStuff/Testbed/launch.py"),
@@ -146,11 +174,9 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertEqual(
             {
                 "async-shadow-m4": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
-                "bindless-parity": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
                 "command-ir": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
                 "frame-lagged-async-lighting": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
                 "hybrid-shadow-boundary": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
-                "soft-transparent-shadow-fold": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
                 "transfer-queue": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
                 "smoke": (Path("tests/launch.py"),),
                 "testbed": (Path("CoolStuff/launch.py"),),
@@ -182,11 +208,9 @@ class LauncherPlatformTests(unittest.TestCase):
                 root / "tests" / "launch.py",
                 root / "tests" / "ab" / "launch.py",
                 root / "tests" / "ab" / "async_shadow_m4" / "launch.py",
-                root / "tests" / "ab" / "bindless_parity" / "launch.py",
                 root / "tests" / "ab" / "command_ir" / "launch.py",
                 root / "tests" / "ab" / "frame_lagged_async_lighting" / "launch.py",
                 root / "tests" / "ab" / "hybrid_shadow_boundary" / "launch.py",
-                root / "tests" / "ab" / "soft_transparent_shadow_fold" / "launch.py",
                 root / "tests" / "ab" / "transfer_queue" / "launch.py",
                 root / "tests" / "smoke" / "launch.py",
             )
@@ -208,11 +232,9 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertEqual(
             {
                 "async-shadow-m4": Path("tests/ab/async_shadow_m4/launch.py"),
-                "bindless-parity": Path("tests/ab/bindless_parity/launch.py"),
                 "command-ir": Path("tests/ab/command_ir/launch.py"),
                 "frame-lagged-async-lighting": Path("tests/ab/frame_lagged_async_lighting/launch.py"),
                 "hybrid-shadow-boundary": Path("tests/ab/hybrid_shadow_boundary/launch.py"),
-                "soft-transparent-shadow-fold": Path("tests/ab/soft_transparent_shadow_fold/launch.py"),
                 "transfer-queue": Path("tests/ab/transfer_queue/launch.py"),
             },
             {command: discovered.script for command, discovered in ab_launchers.items()},
@@ -241,7 +263,10 @@ class LauncherPlatformTests(unittest.TestCase):
             path.parent.mkdir(parents=True)
             path.write_text("", encoding="utf-8")
 
-            with self.assertRaisesRegex(SystemExit, "missing category launcher: utilities/launch.py"):
+            with self.assertRaisesRegex(
+                SystemExit,
+                r"\A" + re.escape(f"missing category launcher: {Path('utilities') / 'launch.py'}") + r"\Z",
+            ):
                 launcher.discover_repo_launchers(root)
 
     def test_nested_leaf_requires_an_intermediate_router(self):
@@ -254,7 +279,10 @@ class LauncherPlatformTests(unittest.TestCase):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("", encoding="utf-8")
 
-            with self.assertRaisesRegex(SystemExit, "missing directory launcher: tests/ab/launch.py"):
+            with self.assertRaisesRegex(
+                SystemExit,
+                r"\A" + re.escape(f"missing directory launcher: {Path('tests') / 'ab' / 'launch.py'}") + r"\Z",
+            ):
                 launcher.discover_repo_launchers(root)
 
     def test_discovered_launcher_forwards_its_arguments(self):

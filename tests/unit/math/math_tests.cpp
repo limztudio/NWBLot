@@ -20,6 +20,8 @@ namespace __hidden_math_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 using NWB::Tests::NearlyEqual;
 using NWB::Tests::NearlyEqual3;
 using NWB::Tests::NearlyEqual4;
@@ -100,6 +102,29 @@ TEST(Math, ProjectionBuildersKeepTermsSimd){
     const SIMDMatrix centeredOrthographic = MatrixOrthographicOffCenterLH(-1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 11.0f);
     EXPECT_TRUE(SignBit(VectorGetW(centeredOrthographic.v[0])));
     EXPECT_TRUE(SignBit(VectorGetW(centeredOrthographic.v[1])));
+}
+
+TEST(Math, Float33UStorageConversion){
+    Float33U source = {};
+    source._11 = 1.25f;
+    source._12 = -2.5f;
+    source._13 = 3.75f;
+    source._21 = -4.5f;
+    source._22 = 5.25f;
+    source._23 = -6.75f;
+    source._31 = 7.5f;
+    source._32 = -8.25f;
+    source._33 = -9.75f;
+
+    const SIMDMatrix loaded = LoadFloat(source);
+    EXPECT_TRUE(NearlyEqual4(loaded.v[0], 1.25f, -2.5f, 3.75f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(loaded.v[1], -4.5f, 5.25f, -6.75f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(loaded.v[2], 7.5f, -8.25f, -9.75f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(loaded.v[3], 0.0f, 0.0f, 0.0f, 1.0f));
+
+    Float33U roundTrip = {};
+    StoreFloat(loaded, &roundTrip);
+    EXPECT_EQ(roundTrip, source);
 }
 
 TEST(Math, ScalarInterpolationUsesVectorCoefficients){
@@ -767,13 +792,8 @@ TEST(Math, MathStorageHashAndEquality){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

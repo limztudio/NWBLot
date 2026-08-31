@@ -22,6 +22,8 @@ namespace __hidden_telemetry_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 using TestArena = NWB::Tests::TestArena<struct TelemetryTestsTag>;
 namespace Telemetry = NWB::Core::Telemetry;
 namespace Log = NWB::Log;
@@ -31,27 +33,6 @@ static u32 s_ExistingDiagnosticCallbackCount = 0u;
 static void ExistingDiagnosticCallback(const DiagnosticEventRecord&)noexcept{
     ++s_ExistingDiagnosticCallbackCount;
 }
-
-#if !defined(NWB_FINAL)
-static AtomicFlag s_DiagnosticCaptureGuardLoaded;
-static AtomicFlag s_DiagnosticCaptureRelease;
-static AtomicFlag s_DiagnosticCaptureGuardDestructionWaiting;
-
-static void DiagnosticCaptureGuardLifetimeHook(const Telemetry::DiagnosticCaptureTestHookStage::Enum stage)noexcept{
-    switch(stage){
-    case Telemetry::DiagnosticCaptureTestHookStage::AfterGuardLoad:
-        s_DiagnosticCaptureGuardLoaded.test_and_set(MemoryOrder::release);
-        s_DiagnosticCaptureGuardLoaded.notify_all();
-        while(!s_DiagnosticCaptureRelease.test(MemoryOrder::acquire))
-            s_DiagnosticCaptureRelease.wait(false, MemoryOrder::acquire);
-        return;
-    case Telemetry::DiagnosticCaptureTestHookStage::WaitingForActiveCallback:
-        s_DiagnosticCaptureGuardDestructionWaiting.test_and_set(MemoryOrder::release);
-        s_DiagnosticCaptureGuardDestructionWaiting.notify_all();
-        return;
-    }
-}
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -626,55 +607,75 @@ TEST(Telemetry, DiagnosticCaptureGuardDoesNotReplaceExistingCallback){
     EXPECT_EQ(recorder.eventCount(), 0u);
 }
 
-#if !defined(NWB_FINAL)
-TEST(Telemetry, DiagnosticCaptureGuardDestructionWaitsForActiveCallback){
+TEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
-    auto guard = NWB::Core::MakeGlobalUnique<Telemetry::DiagnosticCaptureGuard>(testArena.arena, recorder);
-    ASSERT_NE(guard, nullptr);
-    ASSERT_TRUE(guard->installed());
-
-    s_DiagnosticCaptureGuardLoaded.clear(MemoryOrder::release);
-    s_DiagnosticCaptureRelease.clear(MemoryOrder::release);
-    s_DiagnosticCaptureGuardDestructionWaiting.clear(MemoryOrder::release);
-    Telemetry::SetDiagnosticCaptureTestHook(DiagnosticCaptureGuardLifetimeHook);
-
-    Thread captureThread([](){
-        CaptureDiagnosticEvent(DiagnosticEventRecord{
-            .event = DiagnosticEventName::s_Error.data(),
-            .category = "telemetry_guard",
-            .message = "capture during destruction",
-        });
+    AtomicFlag captureThreadStarted;
+    AtomicFlag stopCaptureThread;
+    Thread captureThread([&captureThreadStarted, &stopCaptureThread](){
+        captureThreadStarted.test_and_set(MemoryOrder::release);
+        captureThreadStarted.notify_all();
+        while(!stopCaptureThread.test(MemoryOrder::acquire)){
+            CaptureDiagnosticEvent(DiagnosticEventRecord{
+                .event = DiagnosticEventName::s_Error.data(),
+                .category = "telemetry_guard",
+                .message = "capture during destruction",
+            });
+            YieldThread();
+        }
     });
 
-    while(!s_DiagnosticCaptureGuardLoaded.test(MemoryOrder::acquire))
-        s_DiagnosticCaptureGuardLoaded.wait(false, MemoryOrder::acquire);
+    while(!captureThreadStarted.test(MemoryOrder::acquire))
+        captureThreadStarted.wait(false, MemoryOrder::acquire);
 
-    AtomicFlag destructionFinished;
-    Thread destructionThread([&guard, &destructionFinished](){
-        guard.reset();
-        destructionFinished.test_and_set(MemoryOrder::release);
-        destructionFinished.notify_all();
-    });
+    constexpr u32 s_IterationCount = 64u;
+    bool allGuardsInstalled = true;
+    for(u32 iteration = 0u; iteration < s_IterationCount; ++iteration){
+        {
+            Telemetry::DiagnosticCaptureGuard guard(recorder);
+            if(!guard.installed()){
+                allGuardsInstalled = false;
+                break;
+            }
 
-    while(!s_DiagnosticCaptureGuardDestructionWaiting.test(MemoryOrder::acquire))
-        s_DiagnosticCaptureGuardDestructionWaiting.wait(false, MemoryOrder::acquire);
+            const usize eventCountBeforeCapture = recorder.eventCount();
+            while(recorder.eventCount() == eventCountBeforeCapture)
+                YieldThread();
+        }
+    }
 
-    EXPECT_FALSE(destructionFinished.test(MemoryOrder::acquire));
-
-    s_DiagnosticCaptureRelease.test_and_set(MemoryOrder::release);
-    s_DiagnosticCaptureRelease.notify_all();
-
+    stopCaptureThread.test_and_set(MemoryOrder::release);
     captureThread.join();
-    destructionThread.join();
-    Telemetry::SetDiagnosticCaptureTestHook(nullptr);
+    EXPECT_TRUE(allGuardsInstalled);
+    EXPECT_GE(recorder.eventCount(), s_IterationCount);
 
-    EXPECT_TRUE(destructionFinished.test(MemoryOrder::acquire));
-    EXPECT_EQ(recorder.eventCount(), 1u);
+    {
+        Telemetry::DiagnosticCaptureGuard finalGuard(recorder);
+        EXPECT_TRUE(finalGuard.installed());
+    }
+
+    const usize eventCountAfterFinalDestruction = recorder.eventCount();
+    CaptureDiagnosticEvent(DiagnosticEventRecord{
+        .event = DiagnosticEventName::s_Error.data(),
+        .category = "telemetry_guard",
+        .message = "ignored after destruction",
+    });
+    EXPECT_EQ(recorder.eventCount(), eventCountAfterFinalDestruction);
+
+    const Telemetry::EventView events = recorder.view();
+    for(usize eventIndex = 0u; eventIndex < events.eventCount(); ++eventIndex){
+        const Telemetry::EventRecord* const event = events.eventAt(eventIndex);
+        ASSERT_NE(event, nullptr);
+
+        Telemetry::DiagnosticPayload parsed(testArena.arena);
+        ASSERT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+        EXPECT_EQ(parsed.event, DiagnosticEventName::s_Error);
+        EXPECT_EQ(parsed.category, "telemetry_guard");
+        EXPECT_EQ(parsed.message, "capture during destruction");
+    }
 }
-#endif
 
 TEST(Telemetry, RecorderAcceptsConcurrentRecords){
     TestArena testArena;
@@ -718,16 +719,27 @@ static void BuildTestFrameGraph(
         .label = AStringView("GBuffer Pass"),
         .kind = Telemetry::FrameGraphNodeKind::Pass,
         .flags = 1u,
+        .queueAssignment = {},
+        .compiledTask = {},
+        .runtimeStatistics = {},
     });
     nodes.push_back(Telemetry::FrameGraphNodeDesc{
         .name = Name("albedo"),
         .label = AStringView("Albedo Texture"),
         .kind = Telemetry::FrameGraphNodeKind::Resource,
+        .flags = 0u,
+        .queueAssignment = {},
+        .compiledTask = {},
+        .runtimeStatistics = {},
     });
     nodes.push_back(Telemetry::FrameGraphNodeDesc{
         .name = Name("lighting"),
         .label = AStringView("Lighting Pass"),
         .kind = Telemetry::FrameGraphNodeKind::Pass,
+        .flags = 0u,
+        .queueAssignment = {},
+        .compiledTask = {},
+        .runtimeStatistics = {},
     });
 
     edges.push_back(Telemetry::FrameGraphEdgeDesc{
@@ -740,6 +752,1111 @@ static void BuildTestFrameGraph(
         .toNodeIndex = 2u,
         .kind = Telemetry::FrameGraphEdgeKind::Reads,
         .flags = 2u,
+    });
+}
+
+static Telemetry::FrameGraphQueueAssignment MakeChangedFrameGraphQueueAssignment(){
+    Telemetry::FrameGraphQueueAssignment assignment;
+    assignment.initialQueue = { .index = 1u, .deviceGeneration = 17u };
+    assignment.plannedQueue = { .index = 3u, .deviceGeneration = 17u };
+    assignment.acceptedQueue = assignment.plannedQueue;
+    assignment.previousAcceptedQueue = { .index = 2u, .deviceGeneration = 17u };
+    assignment.score = {
+        .preference = 11,
+        .overlap = 7,
+        .queueLoad = 3,
+        .incomingCrossings = 2,
+        .outgoingCrossings = 1,
+        .ownershipTransfers = 4,
+        .total = 8,
+    };
+    assignment.queueClass = Telemetry::FrameGraphQueueClass::Compute;
+    assignment.reason = Telemetry::FrameGraphQueueAssignmentReason::Fallback;
+    assignment.modifiers = Telemetry::FrameGraphQueueAssignmentModifier::All;
+    assignment.acceptance = Telemetry::FrameGraphQueueAssignmentAcceptance::Changed;
+    assignment.dedicated = true;
+    assignment.present = true;
+    return assignment;
+}
+
+static Telemetry::FrameGraphQueueAssignment MakeNotAcceptedFrameGraphQueueAssignment(){
+    Telemetry::FrameGraphQueueAssignment assignment;
+    assignment.initialQueue = { .index = 4u, .deviceGeneration = 17u };
+    assignment.plannedQueue = { .index = 5u, .deviceGeneration = 17u };
+    assignment.previousAcceptedQueue = { .index = 2u, .deviceGeneration = 17u };
+    assignment.score = {
+        .preference = 5,
+        .overlap = 6,
+        .queueLoad = 1,
+        .incomingCrossings = 2,
+        .outgoingCrossings = 3,
+        .ownershipTransfers = 4,
+        .total = 1,
+    };
+    assignment.queueClass = Telemetry::FrameGraphQueueClass::Transfer;
+    assignment.reason = Telemetry::FrameGraphQueueAssignmentReason::ScoredAny;
+    assignment.modifiers = Telemetry::FrameGraphQueueAssignmentModifier::TimingFeedback;
+    assignment.acceptance = Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted;
+    assignment.present = true;
+    return assignment;
+}
+
+static Telemetry::FrameGraphCompiledTask MakeFrameGraphCompiledTask(
+    const u64 planGeneration,
+    const u32 packetIndex,
+    const Telemetry::FrameGraphTaskPacketizationDecision::Enum packetizationDecision
+){
+    return Telemetry::FrameGraphCompiledTask{
+        .planGeneration = planGeneration,
+        .packetIndex = packetIndex,
+        .packetizationDecision = packetizationDecision,
+        .present = true,
+    };
+}
+
+static Telemetry::EncodedFrameGraphRuntimeStatistics EncodeTestFrameGraphRuntimeStatistics(
+    const Telemetry::FrameGraphRuntimeStatistics& statistics,
+    const u32 nodeIndex,
+    const u16 reserved
+){
+    return Telemetry::EncodedFrameGraphRuntimeStatistics{
+        .nodeIndex = nodeIndex,
+        .deviceGeneration = statistics.deviceGeneration,
+        .reserved = reserved,
+        .graphGeneration = statistics.graphGeneration,
+        .planGeneration = statistics.planGeneration,
+        .recordingAttemptGeneration = statistics.recordingAttemptGeneration,
+        .compile = {
+            .taskCount = statistics.compile.taskCount,
+            .resourceCount = statistics.compile.resourceCount,
+            .resourceUseCount = statistics.compile.resourceUseCount,
+            .explicitDependencyCount = statistics.compile.explicitDependencyCount,
+            .inferredDependencyCount = statistics.compile.inferredDependencyCount,
+            .packetCount = statistics.compile.packetCount,
+            .packetDependencyCount = statistics.compile.packetDependencyCount,
+            .mergedTaskCount = statistics.compile.mergedTaskCount,
+            .transitionBarrierCount = statistics.compile.transitionBarrierCount,
+            .uavBarrierCount = statistics.compile.uavBarrierCount,
+            .ownershipReleaseBarrierCount = statistics.compile.ownershipReleaseBarrierCount,
+            .ownershipAcquireBarrierCount = statistics.compile.ownershipAcquireBarrierCount,
+            .stateExportBarrierCount = statistics.compile.stateExportBarrierCount,
+            .logicalOwnershipTransferCount = statistics.compile.logicalOwnershipTransferCount,
+            .logicalOwnershipTransferSignatureCount = statistics.compile.logicalOwnershipTransferSignatureCount,
+            .repeatedOwnershipTransferSignatureCount = statistics.compile.repeatedOwnershipTransferSignatureCount,
+            .concurrentSharingCouldAvoidTransferCount = statistics.compile.concurrentSharingCouldAvoidTransferCount,
+            .concurrentSharingAdviceResourceCount = statistics.compile.concurrentSharingAdviceResourceCount,
+            .logicalOwnershipTransferInternalCount = statistics.compile.logicalOwnershipTransferInternalCount,
+            .logicalOwnershipTransferExternalImportCount = statistics.compile.logicalOwnershipTransferExternalImportCount,
+            .logicalOwnershipTransferExternalExportCount = statistics.compile.logicalOwnershipTransferExternalExportCount,
+            .resourceSetCount = statistics.compile.resourceSetCount,
+            .resourceSetMemberCount = statistics.compile.resourceSetMemberCount,
+            .directResourceUseCount = statistics.compile.directResourceUseCount,
+            .declaredResourceSetUseCount = statistics.compile.declaredResourceSetUseCount,
+            .expandedResourceSetMemberUseCount = statistics.compile.expandedResourceSetMemberUseCount,
+            .payloadObjectCount = statistics.compile.payloadObjectCount,
+            .payloadObjectBytes = statistics.compile.payloadObjectBytes,
+            .uploadBlobCount = statistics.compile.uploadBlobCount,
+            .uploadBlobBytes = statistics.compile.uploadBlobBytes,
+            .declarationSeconds = statistics.compile.declarationSeconds,
+            .analysisSeconds = statistics.compile.analysisSeconds,
+            .validationSeconds = statistics.compile.validationSeconds,
+            .dependencyAnalysisSeconds = statistics.compile.dependencyAnalysisSeconds,
+            .hazardAnalysisSeconds = statistics.compile.hazardAnalysisSeconds,
+            .topologicalOrderSeconds = statistics.compile.topologicalOrderSeconds,
+            .queueAssignmentSeconds = statistics.compile.queueAssignmentSeconds,
+            .planningSeconds = statistics.compile.planningSeconds,
+            .packetizationSeconds = statistics.compile.packetizationSeconds,
+            .resourceStatePlanningSeconds = statistics.compile.resourceStatePlanningSeconds,
+            .packetDependencyPlanningSeconds = statistics.compile.packetDependencyPlanningSeconds,
+            .totalSeconds = statistics.compile.totalSeconds,
+        },
+        .recording = {
+            .packetCount = statistics.recording.packetCount,
+            .taskCount = statistics.recording.taskCount,
+            .commandListCount = statistics.recording.commandListCount,
+            .barrierCount = statistics.recording.barrierCount,
+            .workerRoutedPacketCount = statistics.recording.workerRoutedPacketCount,
+            .parallelPacketCount = statistics.recording.parallelPacketCount,
+            .commandListAcquisitionSeconds = statistics.recording.commandListAcquisitionSeconds,
+            .graphBarrierRecordingSeconds = statistics.recording.graphBarrierRecordingSeconds,
+            .taskRecordSeconds = statistics.recording.taskRecordSeconds,
+            .recordingSeconds = statistics.recording.recordingSeconds,
+            .recordingElapsedSeconds = statistics.recording.recordingElapsedSeconds,
+            .readyFrontierElapsedSeconds = statistics.recording.readyFrontierElapsedSeconds,
+            .readyFrontierWorkerBusySeconds = statistics.recording.readyFrontierWorkerBusySeconds,
+            .readyFrontierWorkerCapacitySeconds = statistics.recording.readyFrontierWorkerCapacitySeconds,
+        },
+        .submission = {
+            .acceptedPacketCount = statistics.submission.acceptedPacketCount,
+            .acceptedTaskCount = statistics.submission.acceptedTaskCount,
+            .rejectedPacketCount = statistics.submission.rejectedPacketCount,
+            .rejectedTaskCount = statistics.submission.rejectedTaskCount,
+            .nativeSubmissionCount = statistics.submission.nativeSubmissionCount,
+            .rejectedSubmissionCount = statistics.submission.rejectedSubmissionCount,
+            .nativeCommandListCount = statistics.submission.nativeCommandListCount,
+            .plannedWaitTokenCount = statistics.submission.plannedWaitTokenCount,
+            .sameQueueWaitElisionCount = statistics.submission.sameQueueWaitElisionCount,
+            .timelineWaitCount = statistics.submission.timelineWaitCount,
+            .mergedTimelineWaitCount = statistics.submission.mergedTimelineWaitCount,
+            .acceptedFrontierSubmissionCount = statistics.submission.acceptedFrontierSubmissionCount,
+            .submissionSeconds = statistics.submission.submissionSeconds,
+        },
+    };
+}
+
+static Telemetry::EncodedFrameGraphRuntimeStatisticsV6 EncodeTestFrameGraphRuntimeStatisticsV6(
+    const Telemetry::FrameGraphRuntimeStatistics& statistics,
+    const u32 nodeIndex,
+    const u16 reserved
+){
+    const Telemetry::EncodedFrameGraphRuntimeStatistics legacy = EncodeTestFrameGraphRuntimeStatistics(
+        statistics,
+        nodeIndex,
+        reserved
+    );
+    return Telemetry::EncodedFrameGraphRuntimeStatisticsV6{
+        .nodeIndex = legacy.nodeIndex,
+        .deviceGeneration = legacy.deviceGeneration,
+        .reserved = legacy.reserved,
+        .graphGeneration = legacy.graphGeneration,
+        .planGeneration = legacy.planGeneration,
+        .recordingAttemptGeneration = legacy.recordingAttemptGeneration,
+        .compile = legacy.compile,
+        .recording = legacy.recording,
+        .submission = {
+            .acceptedPacketCount = legacy.submission.acceptedPacketCount,
+            .acceptedTaskCount = legacy.submission.acceptedTaskCount,
+            .rejectedPacketCount = legacy.submission.rejectedPacketCount,
+            .rejectedTaskCount = legacy.submission.rejectedTaskCount,
+            .nativeSubmissionCount = legacy.submission.nativeSubmissionCount,
+            .rejectedSubmissionCount = legacy.submission.rejectedSubmissionCount,
+            .nativeCommandListCount = legacy.submission.nativeCommandListCount,
+            .plannedWaitTokenCount = legacy.submission.plannedWaitTokenCount,
+            .sameQueueWaitElisionCount = legacy.submission.sameQueueWaitElisionCount,
+            .timelineWaitCount = legacy.submission.timelineWaitCount,
+            .mergedTimelineWaitCount = legacy.submission.mergedTimelineWaitCount,
+            .acceptedFrontierSubmissionCount = legacy.submission.acceptedFrontierSubmissionCount,
+            .submissionSeconds = legacy.submission.submissionSeconds,
+            .recoverySubmissionCount = statistics.submission.recoverySubmissionCount,
+        },
+    };
+}
+
+static Telemetry::EncodedFrameGraphRuntimeStatisticsV8 EncodeTestFrameGraphRuntimeStatisticsV8(
+    const Telemetry::FrameGraphRuntimeStatistics& statistics,
+    const u32 nodeIndex,
+    const u16 reserved
+){
+    const Telemetry::EncodedFrameGraphRuntimeStatisticsV6 legacy = EncodeTestFrameGraphRuntimeStatisticsV6(
+        statistics,
+        nodeIndex,
+        reserved
+    );
+    Telemetry::EncodedFrameGraphRuntimeStatisticsV8 encoded;
+    encoded.nodeIndex = legacy.nodeIndex;
+    encoded.deviceGeneration = legacy.deviceGeneration;
+    encoded.reserved = legacy.reserved;
+    encoded.graphGeneration = legacy.graphGeneration;
+    encoded.planGeneration = legacy.planGeneration;
+    encoded.recordingAttemptGeneration = legacy.recordingAttemptGeneration;
+    NWB_MEMCPY(&encoded.compile, sizeof(encoded.compile), &legacy.compile, sizeof(legacy.compile));
+    encoded.compile.resourceVersionCount = statistics.compile.resourceVersionCount;
+    encoded.compile.resourceVersionEdgeCount = statistics.compile.resourceVersionEdgeCount;
+    encoded.recording = legacy.recording;
+    encoded.submission = legacy.submission;
+    return encoded;
+}
+
+static Telemetry::EncodedFrameGraphRuntimeStatisticsV6 DowngradeFrameGraphRuntimeStatisticsV8(
+    const Telemetry::EncodedFrameGraphRuntimeStatisticsV8& statistics
+){
+    Telemetry::EncodedFrameGraphRuntimeStatisticsV6 legacy;
+    legacy.nodeIndex = statistics.nodeIndex;
+    legacy.deviceGeneration = statistics.deviceGeneration;
+    legacy.reserved = statistics.reserved;
+    legacy.graphGeneration = statistics.graphGeneration;
+    legacy.planGeneration = statistics.planGeneration;
+    legacy.recordingAttemptGeneration = statistics.recordingAttemptGeneration;
+    NWB_MEMCPY(&legacy.compile, sizeof(legacy.compile), &statistics.compile, sizeof(legacy.compile));
+    legacy.recording = statistics.recording;
+    legacy.submission = statistics.submission;
+    return legacy;
+}
+
+static Telemetry::EncodedFrameGraphRuntimeStatistics DowngradeFrameGraphRuntimeStatisticsV6(
+    const Telemetry::EncodedFrameGraphRuntimeStatisticsV6& statistics
+){
+    return Telemetry::EncodedFrameGraphRuntimeStatistics{
+        .nodeIndex = statistics.nodeIndex,
+        .deviceGeneration = statistics.deviceGeneration,
+        .reserved = statistics.reserved,
+        .graphGeneration = statistics.graphGeneration,
+        .planGeneration = statistics.planGeneration,
+        .recordingAttemptGeneration = statistics.recordingAttemptGeneration,
+        .compile = statistics.compile,
+        .recording = statistics.recording,
+        .submission = {
+            .acceptedPacketCount = statistics.submission.acceptedPacketCount,
+            .acceptedTaskCount = statistics.submission.acceptedTaskCount,
+            .rejectedPacketCount = statistics.submission.rejectedPacketCount,
+            .rejectedTaskCount = statistics.submission.rejectedTaskCount,
+            .nativeSubmissionCount = statistics.submission.nativeSubmissionCount,
+            .rejectedSubmissionCount = statistics.submission.rejectedSubmissionCount,
+            .nativeCommandListCount = statistics.submission.nativeCommandListCount,
+            .plannedWaitTokenCount = statistics.submission.plannedWaitTokenCount,
+            .sameQueueWaitElisionCount = statistics.submission.sameQueueWaitElisionCount,
+            .timelineWaitCount = statistics.submission.timelineWaitCount,
+            .mergedTimelineWaitCount = statistics.submission.mergedTimelineWaitCount,
+            .acceptedFrontierSubmissionCount = statistics.submission.acceptedFrontierSubmissionCount,
+            .submissionSeconds = statistics.submission.submissionSeconds,
+        },
+    };
+}
+
+static Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics
+DowngradeFrameGraphPhysicalQueueRuntimeStatisticsV6(
+    const Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics
+){
+    return Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics{
+        .ownerNodeIndex = statistics.ownerNodeIndex,
+        .queue = statistics.queue,
+        .queueClass = statistics.queueClass,
+        .reserved = {
+            statistics.reserved[0u],
+            statistics.reserved[1u],
+            statistics.reserved[2u],
+            statistics.reserved[3u],
+            statistics.reserved[4u],
+            statistics.reserved[5u],
+            statistics.reserved[6u],
+        },
+        .compile = statistics.compile,
+        .recording = statistics.recording,
+        .submission = {
+            .acceptedPacketCount = statistics.submission.acceptedPacketCount,
+            .acceptedTaskCount = statistics.submission.acceptedTaskCount,
+            .rejectedPacketCount = statistics.submission.rejectedPacketCount,
+            .rejectedTaskCount = statistics.submission.rejectedTaskCount,
+            .nativeSubmissionCount = statistics.submission.nativeSubmissionCount,
+            .rejectedSubmissionCount = statistics.submission.rejectedSubmissionCount,
+            .nativeCommandListCount = statistics.submission.nativeCommandListCount,
+            .plannedWaitTokenCount = statistics.submission.plannedWaitTokenCount,
+            .sameQueueWaitElisionCount = statistics.submission.sameQueueWaitElisionCount,
+            .timelineWaitCount = statistics.submission.timelineWaitCount,
+            .mergedTimelineWaitCount = statistics.submission.mergedTimelineWaitCount,
+            .acceptedFrontierSubmissionCount = statistics.submission.acceptedFrontierSubmissionCount,
+            .submissionSeconds = statistics.submission.submissionSeconds,
+        },
+    };
+}
+
+static bool ConvertFrameGraphPayloadV8ToLegacy(
+    const Telemetry::TelemetryBytes& source,
+    const u16 legacyVersion,
+    Telemetry::TelemetryBytes& outPayload
+){
+    if(
+        source.size() < sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
+        || (
+            legacyVersion != Telemetry::s_FrameGraphRuntimeStatisticsPayloadVersion
+            && legacyVersion != Telemetry::s_FrameGraphPhysicalQueueRuntimeStatisticsPayloadVersion
+            && legacyVersion != Telemetry::s_FrameGraphRecoverySubmissionCountPayloadVersion
+            && legacyVersion != Telemetry::s_FrameGraphPacketSubmissionStatisticsPayloadVersion
+        )
+    )
+        return false;
+
+    Telemetry::EncodedFrameGraphPayloadHeaderV8 sourceHeader;
+    NWB_MEMCPY(&sourceHeader, sizeof(sourceHeader), source.data(), sizeof(sourceHeader));
+    if(
+        sourceHeader.version != Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion
+        || sourceHeader.packetSubmissionStatisticsCount != 0u
+        || (
+            legacyVersion == Telemetry::s_FrameGraphRuntimeStatisticsPayloadVersion
+            && sourceHeader.physicalQueueRuntimeStatisticsCount != 0u
+        )
+    )
+        return false;
+
+    usize runtimeStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8);
+    if(
+        !AddBinaryRepeatedReserveBytes(
+            runtimeStatisticsOffset,
+            sourceHeader.nodeCount,
+            sizeof(Telemetry::EncodedFrameGraphNode)
+        )
+        || !AddBinaryRepeatedReserveBytes(
+            runtimeStatisticsOffset,
+            sourceHeader.edgeCount,
+            sizeof(Telemetry::EncodedFrameGraphEdge)
+        )
+        || !AddBinaryRepeatedReserveBytes(
+            runtimeStatisticsOffset,
+            sourceHeader.queueAssignmentCount,
+            sizeof(Telemetry::EncodedFrameGraphQueueAssignment)
+        )
+        || !AddBinaryRepeatedReserveBytes(
+            runtimeStatisticsOffset,
+            sourceHeader.compiledTaskCount,
+            sizeof(Telemetry::EncodedFrameGraphCompiledTask)
+        )
+    )
+        return false;
+
+    usize physicalQueueRuntimeStatisticsOffset = runtimeStatisticsOffset;
+    if(!AddBinaryRepeatedReserveBytes(
+        physicalQueueRuntimeStatisticsOffset,
+        sourceHeader.runtimeStatisticsCount,
+        sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8)
+    ))
+        return false;
+    usize stringTableOffset = physicalQueueRuntimeStatisticsOffset;
+    if(!AddBinaryRepeatedReserveBytes(
+        stringTableOffset,
+        sourceHeader.physicalQueueRuntimeStatisticsCount,
+        sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6)
+    ))
+        return false;
+    usize expectedSourceBytes = stringTableOffset;
+    if(
+        !AddBinaryReserveBytes(expectedSourceBytes, sourceHeader.stringTableBytes)
+        || expectedSourceBytes != source.size()
+    )
+        return false;
+
+    outPayload.clear();
+    outPayload.reserve(source.size());
+    if(legacyVersion == Telemetry::s_FrameGraphRuntimeStatisticsPayloadVersion){
+        Telemetry::EncodedFrameGraphPayloadHeaderV4 header;
+        header.frameIndex = sourceHeader.frameIndex;
+        header.nodeCount = sourceHeader.nodeCount;
+        header.edgeCount = sourceHeader.edgeCount;
+        header.stringTableBytes = sourceHeader.stringTableBytes;
+        header.queueAssignmentCount = sourceHeader.queueAssignmentCount;
+        header.compiledTaskCount = sourceHeader.compiledTaskCount;
+        header.runtimeStatisticsCount = sourceHeader.runtimeStatisticsCount;
+        AppendPOD(outPayload, header);
+    }
+    else if(legacyVersion == Telemetry::s_FrameGraphPhysicalQueueRuntimeStatisticsPayloadVersion){
+        Telemetry::EncodedFrameGraphPayloadHeaderV5 header;
+        header.frameIndex = sourceHeader.frameIndex;
+        header.nodeCount = sourceHeader.nodeCount;
+        header.edgeCount = sourceHeader.edgeCount;
+        header.stringTableBytes = sourceHeader.stringTableBytes;
+        header.queueAssignmentCount = sourceHeader.queueAssignmentCount;
+        header.compiledTaskCount = sourceHeader.compiledTaskCount;
+        header.runtimeStatisticsCount = sourceHeader.runtimeStatisticsCount;
+        header.physicalQueueRuntimeStatisticsCount = sourceHeader.physicalQueueRuntimeStatisticsCount;
+        AppendPOD(outPayload, header);
+    }
+    else if(legacyVersion == Telemetry::s_FrameGraphRecoverySubmissionCountPayloadVersion){
+        Telemetry::EncodedFrameGraphPayloadHeaderV6 header;
+        header.frameIndex = sourceHeader.frameIndex;
+        header.nodeCount = sourceHeader.nodeCount;
+        header.edgeCount = sourceHeader.edgeCount;
+        header.stringTableBytes = sourceHeader.stringTableBytes;
+        header.queueAssignmentCount = sourceHeader.queueAssignmentCount;
+        header.compiledTaskCount = sourceHeader.compiledTaskCount;
+        header.runtimeStatisticsCount = sourceHeader.runtimeStatisticsCount;
+        header.physicalQueueRuntimeStatisticsCount = sourceHeader.physicalQueueRuntimeStatisticsCount;
+        AppendPOD(outPayload, header);
+    }
+    else{
+        Telemetry::EncodedFrameGraphPayloadHeaderV7 header;
+        header.frameIndex = sourceHeader.frameIndex;
+        header.nodeCount = sourceHeader.nodeCount;
+        header.edgeCount = sourceHeader.edgeCount;
+        header.stringTableBytes = sourceHeader.stringTableBytes;
+        header.queueAssignmentCount = sourceHeader.queueAssignmentCount;
+        header.compiledTaskCount = sourceHeader.compiledTaskCount;
+        header.runtimeStatisticsCount = sourceHeader.runtimeStatisticsCount;
+        header.physicalQueueRuntimeStatisticsCount = sourceHeader.physicalQueueRuntimeStatisticsCount;
+        header.packetSubmissionStatisticsCount = 0u;
+        AppendPOD(outPayload, header);
+    }
+    BinaryDetail::AppendBytesNoReserveUnchecked(
+        outPayload,
+        source.data() + sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8),
+        runtimeStatisticsOffset - sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
+    );
+
+    for(u32 statisticsIndex = 0u; statisticsIndex < sourceHeader.runtimeStatisticsCount; ++statisticsIndex){
+        Telemetry::EncodedFrameGraphRuntimeStatisticsV8 statistics;
+        const usize statisticsOffset = runtimeStatisticsOffset
+            + sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8) * statisticsIndex
+        ;
+        NWB_MEMCPY(
+            &statistics,
+            sizeof(statistics),
+            source.data() + statisticsOffset,
+            sizeof(statistics)
+        );
+        const Telemetry::EncodedFrameGraphRuntimeStatisticsV6 legacyStatistics =
+            DowngradeFrameGraphRuntimeStatisticsV8(statistics)
+        ;
+        if(legacyVersion >= Telemetry::s_FrameGraphRecoverySubmissionCountPayloadVersion)
+            AppendPOD(outPayload, legacyStatistics);
+        else
+            AppendPOD(outPayload, DowngradeFrameGraphRuntimeStatisticsV6(legacyStatistics));
+    }
+    if(legacyVersion != Telemetry::s_FrameGraphRuntimeStatisticsPayloadVersion){
+        for(
+            u32 statisticsIndex = 0u;
+            statisticsIndex < sourceHeader.physicalQueueRuntimeStatisticsCount;
+            ++statisticsIndex
+        ){
+            Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6 statistics;
+            const usize statisticsOffset = physicalQueueRuntimeStatisticsOffset
+                + sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6) * statisticsIndex
+            ;
+            NWB_MEMCPY(
+                &statistics,
+                sizeof(statistics),
+                source.data() + statisticsOffset,
+                sizeof(statistics)
+            );
+            if(legacyVersion >= Telemetry::s_FrameGraphRecoverySubmissionCountPayloadVersion)
+                AppendPOD(outPayload, statistics);
+            else
+                AppendPOD(outPayload, DowngradeFrameGraphPhysicalQueueRuntimeStatisticsV6(statistics));
+        }
+    }
+    BinaryDetail::AppendBytesNoReserveUnchecked(
+        outPayload,
+        source.data() + stringTableOffset,
+        sourceHeader.stringTableBytes
+    );
+    return true;
+}
+
+static Telemetry::FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics(){
+    return Telemetry::FrameGraphRuntimeStatistics{
+        .graphGeneration = 51u,
+        .planGeneration = 52u,
+        .recordingAttemptGeneration = 53u,
+        .deviceGeneration = 17u,
+        .compile = {
+            .taskCount = 78u,
+            .resourceCount = 2u,
+            .resourceVersionCount = 3u,
+            .resourceVersionEdgeCount = 6u,
+            .resourceUseCount = 50u,
+            .explicitDependencyCount = 4u,
+            .inferredDependencyCount = 5u,
+            .packetCount = 76u,
+            .packetDependencyCount = 7u,
+            .mergedTaskCount = 2u,
+            .transitionBarrierCount = 9u,
+            .uavBarrierCount = 10u,
+            .ownershipReleaseBarrierCount = 11u,
+            .ownershipAcquireBarrierCount = 12u,
+            .stateExportBarrierCount = 13u,
+            .logicalOwnershipTransferCount = 60u,
+            .logicalOwnershipTransferSignatureCount = 15u,
+            .repeatedOwnershipTransferSignatureCount = 14u,
+            .concurrentSharingCouldAvoidTransferCount = 17u,
+            .concurrentSharingAdviceResourceCount = 2u,
+            .logicalOwnershipTransferInternalCount = 19u,
+            .logicalOwnershipTransferExternalImportCount = 20u,
+            .logicalOwnershipTransferExternalExportCount = 21u,
+            .resourceSetCount = 22u,
+            .resourceSetMemberCount = 23u,
+            .directResourceUseCount = 24u,
+            .declaredResourceSetUseCount = 25u,
+            .expandedResourceSetMemberUseCount = 26u,
+            .payloadObjectCount = 27u,
+            .payloadObjectBytes = 28u,
+            .uploadBlobCount = 29u,
+            .uploadBlobBytes = 30u,
+            .declarationSeconds = 0.001,
+            .analysisSeconds = 0.002,
+            .validationSeconds = 0.003,
+            .dependencyAnalysisSeconds = 0.004,
+            .hazardAnalysisSeconds = 0.005,
+            .topologicalOrderSeconds = 0.006,
+            .queueAssignmentSeconds = 0.007,
+            .planningSeconds = 0.008,
+            .packetizationSeconds = 0.009,
+            .resourceStatePlanningSeconds = 0.010,
+            .packetDependencyPlanningSeconds = 0.011,
+            .totalSeconds = 0.012,
+        },
+        .recording = {
+            .packetCount = 31u,
+            .taskCount = 32u,
+            .commandListCount = 33u,
+            .barrierCount = 34u,
+            .workerRoutedPacketCount = 30u,
+            .parallelPacketCount = 29u,
+            .commandListAcquisitionSeconds = 0.013,
+            .graphBarrierRecordingSeconds = 0.014,
+            .taskRecordSeconds = 0.015,
+            .recordingSeconds = 0.016,
+            .recordingElapsedSeconds = 0.017,
+            .readyFrontierElapsedSeconds = 0.018,
+            .readyFrontierWorkerBusySeconds = 0.019,
+            .readyFrontierWorkerCapacitySeconds = 0.020,
+        },
+        .submission = {
+            .acceptedPacketCount = 37u,
+            .acceptedTaskCount = 38u,
+            .rejectedPacketCount = 39u,
+            .rejectedTaskCount = 40u,
+            .nativeSubmissionCount = 30u,
+            .rejectedSubmissionCount = 38u,
+            .nativeCommandListCount = 32u,
+            .plannedWaitTokenCount = 44u,
+            .sameQueueWaitElisionCount = 12u,
+            .timelineWaitCount = 14u,
+            .mergedTimelineWaitCount = 18u,
+            .acceptedFrontierSubmissionCount = 28u,
+            .recoverySubmissionCount = 8u,
+            .submissionSeconds = 0.021,
+        },
+        .present = true,
+    };
+}
+
+static Telemetry::FrameGraphPhysicalQueueRuntimeStatistics MakeFrameGraphPhysicalQueueRuntimeStatistics(
+    const u16 queueIndex
+){
+    if(queueIndex == 1u){
+        return Telemetry::FrameGraphPhysicalQueueRuntimeStatistics{
+            .graphGeneration = 51u,
+            .planGeneration = 52u,
+            .recordingAttemptGeneration = 53u,
+            .deviceGeneration = 17u,
+            .queue = { .index = 1u, .deviceGeneration = 17u },
+            .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
+            .compile = {
+                .taskCount = 50u,
+                .packetCount = 49u,
+                .mergedTaskCount = 1u,
+                .prologueBarrierCount = 11u,
+                .epilogueBarrierCount = 12u,
+                .ownershipReleaseBarrierCount = 6u,
+                .ownershipAcquireBarrierCount = 7u,
+                .incomingLogicalOwnershipTransferCount = 30u,
+                .outgoingLogicalOwnershipTransferCount = 31u,
+                .incomingLogicalOwnershipTransferSignatureCount = 8u,
+                .outgoingLogicalOwnershipTransferSignatureCount = 9u,
+                .incomingRepeatedOwnershipTransferSignatureCount = 7u,
+                .outgoingRepeatedOwnershipTransferSignatureCount = 8u,
+                .concurrentSharingAdviceResourceCount = 1u,
+            },
+            .recording = {
+                .packetCount = 20u,
+                .taskCount = 21u,
+                .commandListCount = 21u,
+                .barrierCount = 23u,
+                .workerRoutedPacketCount = 19u,
+                .parallelPacketCount = 18u,
+                .commandListAcquisitionSeconds = 0.005,
+                .graphBarrierRecordingSeconds = 0.006,
+                .taskRecordSeconds = 0.007,
+                .recordingSeconds = 0.008,
+            },
+            .submission = {
+                .acceptedPacketCount = 25u,
+                .acceptedTaskCount = 26u,
+                .rejectedPacketCount = 24u,
+                .rejectedTaskCount = 24u,
+                .nativeSubmissionCount = 19u,
+                .rejectedSubmissionCount = 23u,
+                .nativeCommandListCount = 20u,
+                .plannedWaitTokenCount = 20u,
+                .sameQueueWaitElisionCount = 5u,
+                .timelineWaitCount = 8u,
+                .mergedTimelineWaitCount = 7u,
+                .acceptedFrontierSubmissionCount = 18u,
+                .recoverySubmissionCount = 5u,
+                .submissionSeconds = 0.011,
+            },
+        };
+    }
+
+    return Telemetry::FrameGraphPhysicalQueueRuntimeStatistics{
+        .graphGeneration = 51u,
+        .planGeneration = 52u,
+        .recordingAttemptGeneration = 53u,
+        .deviceGeneration = 17u,
+        .queue = { .index = 3u, .deviceGeneration = 17u },
+        .queueClass = Telemetry::FrameGraphQueueClass::Compute,
+        .compile = {
+            .taskCount = 28u,
+            .packetCount = 27u,
+            .mergedTaskCount = 1u,
+            .prologueBarrierCount = 5u,
+            .epilogueBarrierCount = 6u,
+            .ownershipReleaseBarrierCount = 5u,
+            .ownershipAcquireBarrierCount = 5u,
+            .incomingLogicalOwnershipTransferCount = 30u,
+            .outgoingLogicalOwnershipTransferCount = 29u,
+            .incomingLogicalOwnershipTransferSignatureCount = 7u,
+            .outgoingLogicalOwnershipTransferSignatureCount = 6u,
+            .incomingRepeatedOwnershipTransferSignatureCount = 7u,
+            .outgoingRepeatedOwnershipTransferSignatureCount = 6u,
+            .concurrentSharingAdviceResourceCount = 1u,
+        },
+        .recording = {
+            .packetCount = 11u,
+            .taskCount = 11u,
+            .commandListCount = 12u,
+            .barrierCount = 11u,
+            .workerRoutedPacketCount = 11u,
+            .parallelPacketCount = 11u,
+            .commandListAcquisitionSeconds = 0.008,
+            .graphBarrierRecordingSeconds = 0.008,
+            .taskRecordSeconds = 0.008,
+            .recordingSeconds = 0.008,
+        },
+        .submission = {
+            .acceptedPacketCount = 12u,
+            .acceptedTaskCount = 12u,
+            .rejectedPacketCount = 15u,
+            .rejectedTaskCount = 16u,
+            .nativeSubmissionCount = 11u,
+            .rejectedSubmissionCount = 15u,
+            .nativeCommandListCount = 12u,
+            .plannedWaitTokenCount = 24u,
+            .sameQueueWaitElisionCount = 7u,
+            .timelineWaitCount = 6u,
+            .mergedTimelineWaitCount = 11u,
+            .acceptedFrontierSubmissionCount = 10u,
+            .recoverySubmissionCount = 3u,
+            .submissionSeconds = 0.010,
+        },
+    };
+}
+
+static void BuildTestPhysicalQueueRuntimeStatistics(
+    Telemetry::TelemetryArena& arena,
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& records
+){
+    records = Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords(arena);
+    records.push_back(Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord{
+        .ownerNodeIndex = 0u,
+        .statistics = MakeFrameGraphPhysicalQueueRuntimeStatistics(3u),
+    });
+    records.push_back(Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord{
+        .ownerNodeIndex = 0u,
+        .statistics = MakeFrameGraphPhysicalQueueRuntimeStatistics(1u),
+    });
+}
+
+using EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation = void(*)(
+    Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6&
+);
+
+static constexpr EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation
+s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutations[] = {
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.reserved[6u] = 1u;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.ownerNodeIndex = 1u;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.queue.deviceGeneration = 18u;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.queueClass = Telemetry::FrameGraphQueueClass::Unknown;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.recording.recordingSeconds = -1.0;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.submission.submissionSeconds = Limit<f64>::s_QuietNaN;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.submission.recoverySubmissionCount =
+            statistics.submission.acceptedFrontierSubmissionCount + 1u
+        ;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.compile.taskCount = 79u;
+        statistics.compile.packetCount = 78u;
+        statistics.compile.mergedTaskCount = 1u;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.compile.taskCount = 51u;
+        statistics.compile.packetCount = 50u;
+        statistics.compile.mergedTaskCount = 1u;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.compile.prologueBarrierCount = 0u;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.recording.barrierCount = 24u;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.recording.taskCount = 22u;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.submission.rejectedPacketCount = 23u;
+        statistics.submission.rejectedTaskCount = 24u;
+        statistics.submission.rejectedSubmissionCount = 23u;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.compile.incomingLogicalOwnershipTransferSignatureCount = 0u;
+        statistics.compile.outgoingLogicalOwnershipTransferSignatureCount = 0u;
+        statistics.compile.incomingRepeatedOwnershipTransferSignatureCount = 0u;
+        statistics.compile.outgoingRepeatedOwnershipTransferSignatureCount = 0u;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.recording = {};
+        statistics.recording.commandListCount = 1u;
+        statistics.submission = {};
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.submission.nativeSubmissionCount = 0u;
+        statistics.submission.nativeCommandListCount = 0u;
+        statistics.submission.plannedWaitTokenCount = 1u;
+        statistics.submission.sameQueueWaitElisionCount = 0u;
+        statistics.submission.timelineWaitCount = 1u;
+        statistics.submission.mergedTimelineWaitCount = 0u;
+        statistics.submission.acceptedFrontierSubmissionCount = 0u;
+        statistics.submission.recoverySubmissionCount = 0u;
+        statistics.submission.submissionSeconds = 0.0;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.submission.acceptedPacketCount = 0u;
+        statistics.submission.acceptedTaskCount = 1u;
+        statistics.submission.nativeSubmissionCount = 0u;
+        statistics.submission.nativeCommandListCount = 0u;
+        statistics.submission.plannedWaitTokenCount = 0u;
+        statistics.submission.sameQueueWaitElisionCount = 0u;
+        statistics.submission.timelineWaitCount = 0u;
+        statistics.submission.mergedTimelineWaitCount = 0u;
+        statistics.submission.acceptedFrontierSubmissionCount = 0u;
+        statistics.submission.recoverySubmissionCount = 0u;
+        statistics.submission.submissionSeconds = 0.0;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.submission.rejectedPacketCount = 0u;
+        statistics.submission.rejectedTaskCount = 1u;
+        statistics.submission.rejectedSubmissionCount = 0u;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics){
+        statistics.compile.taskCount = 0u;
+        statistics.compile.packetCount = 0u;
+        statistics.compile.mergedTaskCount = 0u;
+        statistics.compile.prologueBarrierCount = 1u;
+        statistics.compile.epilogueBarrierCount = 0u;
+        statistics.compile.ownershipReleaseBarrierCount = 0u;
+        statistics.compile.ownershipAcquireBarrierCount = 0u;
+        statistics.recording = {};
+        statistics.submission = {};
+    },
+};
+
+using FrameGraphRuntimeStatisticsMutation = void(*)(Telemetry::FrameGraphRuntimeStatistics&);
+
+static constexpr FrameGraphRuntimeStatisticsMutation s_FrameGraphRuntimeStatisticsCountMutations[] = {
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.compile.packetCount = statistics.compile.taskCount + 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        ++statistics.compile.mergedTaskCount;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.compile.resourceVersionCount = 0u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.compile.directResourceUseCount = statistics.compile.resourceUseCount + 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        ++statistics.compile.expandedResourceSetMemberUseCount;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.compile.payloadObjectCount = statistics.compile.taskCount + 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.compile.logicalOwnershipTransferSignatureCount =
+            statistics.compile.logicalOwnershipTransferCount + 1u
+        ;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.compile.repeatedOwnershipTransferSignatureCount =
+            statistics.compile.logicalOwnershipTransferSignatureCount + 1u
+        ;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.compile.concurrentSharingCouldAvoidTransferCount =
+            statistics.compile.logicalOwnershipTransferCount + 1u
+        ;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.compile.concurrentSharingAdviceResourceCount = statistics.compile.resourceCount + 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.compile.logicalOwnershipTransferInternalCount =
+            statistics.compile.logicalOwnershipTransferCount + 1u
+        ;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.compile.logicalOwnershipTransferExternalImportCount =
+            statistics.compile.logicalOwnershipTransferCount
+            - statistics.compile.logicalOwnershipTransferInternalCount
+            + 1u
+        ;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        ++statistics.compile.logicalOwnershipTransferExternalExportCount;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.recording.packetCount = statistics.compile.packetCount + 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.recording.taskCount = statistics.compile.taskCount + 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.recording.taskCount = statistics.recording.packetCount - 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.recording.commandListCount = statistics.recording.packetCount - 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.recording.workerRoutedPacketCount = statistics.recording.packetCount + 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.recording.parallelPacketCount = statistics.recording.packetCount + 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.submission.acceptedPacketCount = statistics.compile.packetCount + 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.submission.rejectedPacketCount = statistics.compile.packetCount
+            - statistics.submission.acceptedPacketCount + 1u
+        ;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.submission.acceptedTaskCount = statistics.compile.taskCount + 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.submission.rejectedTaskCount = statistics.compile.taskCount
+            - statistics.submission.acceptedTaskCount + 1u
+        ;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.submission.acceptedTaskCount = statistics.submission.acceptedPacketCount - 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.submission.rejectedTaskCount = statistics.submission.rejectedPacketCount - 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.submission.acceptedPacketCount = statistics.submission.nativeSubmissionCount - 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.submission.rejectedSubmissionCount = statistics.submission.rejectedPacketCount + 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.submission.acceptedFrontierSubmissionCount = statistics.submission.nativeSubmissionCount + 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.submission.recoverySubmissionCount = statistics.submission.acceptedFrontierSubmissionCount + 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.submission.nativeSubmissionCount = statistics.recording.packetCount + 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.submission.nativeCommandListCount = statistics.submission.nativeSubmissionCount - 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.submission.nativeCommandListCount = statistics.recording.commandListCount + 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.submission.sameQueueWaitElisionCount = statistics.submission.plannedWaitTokenCount + 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        statistics.submission.mergedTimelineWaitCount = statistics.submission.plannedWaitTokenCount
+            - statistics.submission.sameQueueWaitElisionCount + 1u
+        ;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+        ++statistics.submission.timelineWaitCount;
+    },
+};
+
+static void BuildTestAssignedFrameGraph(
+    Telemetry::TelemetryArena& arena,
+    Telemetry::FrameGraphNodeDescs& nodes,
+    Telemetry::FrameGraphEdgeDescs& edges
+){
+    BuildTestFrameGraph(arena, nodes, edges);
+    nodes[0u].queueAssignment = MakeChangedFrameGraphQueueAssignment();
+    nodes[2u].queueAssignment = MakeNotAcceptedFrameGraphQueueAssignment();
+}
+
+static void BuildTestCompiledFrameGraph(
+    Telemetry::TelemetryArena& arena,
+    Telemetry::FrameGraphNodeDescs& nodes,
+    Telemetry::FrameGraphEdgeDescs& edges
+){
+    BuildTestAssignedFrameGraph(arena, nodes, edges);
+    nodes[0u].compiledTask = MakeFrameGraphCompiledTask(
+        41u,
+        7u,
+        Telemetry::FrameGraphTaskPacketizationDecision::FirstTask
+    );
+    nodes[2u].compiledTask = MakeFrameGraphCompiledTask(
+        41u,
+        7u,
+        Telemetry::FrameGraphTaskPacketizationDecision::MergedExplicit
+    );
+}
+
+static void BuildTestRuntimeFrameGraph(
+    Telemetry::TelemetryArena& arena,
+    Telemetry::FrameGraphNodeDescs& nodes,
+    Telemetry::FrameGraphEdgeDescs& edges
+){
+    BuildTestCompiledFrameGraph(arena, nodes, edges);
+    nodes[0u].runtimeStatistics = MakeFrameGraphRuntimeStatistics();
+    nodes[2u].runtimeStatistics = MakeFrameGraphRuntimeStatistics();
+    nodes[2u].runtimeStatistics.graphGeneration = 61u;
+    nodes[2u].runtimeStatistics.planGeneration = 62u;
+    nodes[2u].runtimeStatistics.recordingAttemptGeneration = 63u;
+}
+
+static void BuildTestPacketSubmissionFrameGraph(
+    Telemetry::TelemetryArena& arena,
+    Telemetry::FrameGraphNodeDescs& nodes,
+    Telemetry::FrameGraphEdgeDescs& edges,
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    Telemetry::FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics
+){
+    nodes = Telemetry::FrameGraphNodeDescs(arena);
+    edges = Telemetry::FrameGraphEdgeDescs(arena);
+    physicalQueueRuntimeStatistics = Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords(arena);
+    packetSubmissionStatistics = Telemetry::FrameGraphPacketSubmissionStatisticsRecords(arena);
+
+    Telemetry::FrameGraphRuntimeStatistics runtimeStatistics;
+    runtimeStatistics.graphGeneration = 71u;
+    runtimeStatistics.planGeneration = 72u;
+    runtimeStatistics.recordingAttemptGeneration = 73u;
+    runtimeStatistics.deviceGeneration = 17u;
+    runtimeStatistics.compile.taskCount = 5u;
+    runtimeStatistics.compile.packetCount = 3u;
+    runtimeStatistics.compile.mergedTaskCount = 2u;
+    runtimeStatistics.recording.packetCount = 3u;
+    runtimeStatistics.recording.taskCount = 5u;
+    runtimeStatistics.recording.commandListCount = 4u;
+    runtimeStatistics.submission.acceptedPacketCount = 3u;
+    runtimeStatistics.submission.acceptedTaskCount = 5u;
+    runtimeStatistics.submission.nativeSubmissionCount = 3u;
+    runtimeStatistics.submission.nativeCommandListCount = 4u;
+    runtimeStatistics.submission.plannedWaitTokenCount = 6u;
+    runtimeStatistics.submission.sameQueueWaitElisionCount = 2u;
+    runtimeStatistics.submission.timelineWaitCount = 2u;
+    runtimeStatistics.submission.mergedTimelineWaitCount = 2u;
+    runtimeStatistics.submission.acceptedFrontierSubmissionCount = 2u;
+    runtimeStatistics.submission.recoverySubmissionCount = 1u;
+    runtimeStatistics.submission.submissionSeconds = 0.75;
+    runtimeStatistics.present = true;
+
+    Telemetry::FrameGraphNodeDesc owner;
+    owner.name = Name("packet_submission_pass");
+    owner.label = "Packet Submission Pass";
+    owner.kind = Telemetry::FrameGraphNodeKind::Pass;
+    owner.runtimeStatistics = runtimeStatistics;
+    nodes.push_back(owner);
+
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics graphicsStatistics;
+    graphicsStatistics.graphGeneration = 71u;
+    graphicsStatistics.planGeneration = 72u;
+    graphicsStatistics.recordingAttemptGeneration = 73u;
+    graphicsStatistics.deviceGeneration = 17u;
+    graphicsStatistics.queue = { .index = 1u, .deviceGeneration = 17u };
+    graphicsStatistics.queueClass = Telemetry::FrameGraphQueueClass::Graphics;
+    graphicsStatistics.compile.taskCount = 4u;
+    graphicsStatistics.compile.packetCount = 2u;
+    graphicsStatistics.compile.mergedTaskCount = 2u;
+    graphicsStatistics.recording.packetCount = 2u;
+    graphicsStatistics.recording.taskCount = 4u;
+    graphicsStatistics.recording.commandListCount = 2u;
+    graphicsStatistics.submission.acceptedPacketCount = 2u;
+    graphicsStatistics.submission.acceptedTaskCount = 4u;
+    graphicsStatistics.submission.nativeSubmissionCount = 2u;
+    graphicsStatistics.submission.nativeCommandListCount = 2u;
+    graphicsStatistics.submission.plannedWaitTokenCount = 3u;
+    graphicsStatistics.submission.sameQueueWaitElisionCount = 2u;
+    graphicsStatistics.submission.timelineWaitCount = 1u;
+    graphicsStatistics.submission.acceptedFrontierSubmissionCount = 1u;
+    graphicsStatistics.submission.recoverySubmissionCount = 1u;
+    graphicsStatistics.submission.submissionSeconds = 0.5;
+
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics computeStatistics;
+    computeStatistics.graphGeneration = 71u;
+    computeStatistics.planGeneration = 72u;
+    computeStatistics.recordingAttemptGeneration = 73u;
+    computeStatistics.deviceGeneration = 17u;
+    computeStatistics.queue = { .index = 3u, .deviceGeneration = 17u };
+    computeStatistics.queueClass = Telemetry::FrameGraphQueueClass::Compute;
+    computeStatistics.compile.taskCount = 1u;
+    computeStatistics.compile.packetCount = 1u;
+    computeStatistics.recording.packetCount = 1u;
+    computeStatistics.recording.taskCount = 1u;
+    computeStatistics.recording.commandListCount = 2u;
+    computeStatistics.submission.acceptedPacketCount = 1u;
+    computeStatistics.submission.acceptedTaskCount = 1u;
+    computeStatistics.submission.nativeSubmissionCount = 1u;
+    computeStatistics.submission.nativeCommandListCount = 2u;
+    computeStatistics.submission.plannedWaitTokenCount = 3u;
+    computeStatistics.submission.timelineWaitCount = 1u;
+    computeStatistics.submission.mergedTimelineWaitCount = 2u;
+    computeStatistics.submission.acceptedFrontierSubmissionCount = 1u;
+    computeStatistics.submission.submissionSeconds = 0.25;
+
+    physicalQueueRuntimeStatistics.push_back(Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord{
+        .ownerNodeIndex = 0u,
+        .statistics = computeStatistics,
+    });
+    physicalQueueRuntimeStatistics.push_back(Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord{
+        .ownerNodeIndex = 0u,
+        .statistics = graphicsStatistics,
+    });
+
+    packetSubmissionStatistics.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
+        .ownerNodeIndex = 0u,
+        .packetIndex = 2u,
+        .packetGeneration = 72u,
+        .queue = { .index = 1u, .deviceGeneration = 17u },
+        .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
+        .taskCount = 2u,
+        .commandListCount = 1u,
+        .plannedWaitTokenCount = 1u,
+        .sameQueueWaitElisionCount = 1u,
+        .joinsAcceptedQueueFrontier = true,
+        .recoverySubmission = true,
+        .submissionSeconds = 0.375,
+    });
+    packetSubmissionStatistics.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
+        .ownerNodeIndex = 0u,
+        .packetIndex = 0u,
+        .packetGeneration = 72u,
+        .queue = { .index = 1u, .deviceGeneration = 17u },
+        .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
+        .taskCount = 2u,
+        .commandListCount = 1u,
+        .plannedWaitTokenCount = 2u,
+        .sameQueueWaitElisionCount = 1u,
+        .timelineWaitCount = 1u,
+        .submissionSeconds = 0.125,
+    });
+    packetSubmissionStatistics.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
+        .ownerNodeIndex = 0u,
+        .packetIndex = 1u,
+        .packetGeneration = 72u,
+        .queue = { .index = 3u, .deviceGeneration = 17u },
+        .queueClass = Telemetry::FrameGraphQueueClass::Compute,
+        .taskCount = 1u,
+        .commandListCount = 2u,
+        .plannedWaitTokenCount = 3u,
+        .timelineWaitCount = 1u,
+        .mergedTimelineWaitCount = 2u,
+        .joinsAcceptedQueueFrontier = true,
+        .submissionSeconds = 0.25,
     });
 }
 
@@ -756,6 +1873,125 @@ public:
         builder.dependsOnByName(source, Name("missing"), 9u);
         return true;
     }
+};
+
+class QueueAssignmentFrameGraphContributor final : public Telemetry::IFrameGraphContributor{
+public:
+    virtual bool appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
+        return builder.addPass(
+            Name("assigned_pass"),
+            "Assigned Pass",
+            MakeChangedFrameGraphQueueAssignment(),
+            5u
+        ).valid();
+    }
+};
+
+[[nodiscard]] static bool AddRuntimeStatisticsPacketSubmissions(
+    Telemetry::FrameGraphBuilder& builder,
+    const Telemetry::FrameGraphNodeHandle owner
+){
+    for(u32 packetIndex = 0u; packetIndex < 19u; ++packetIndex){
+        Telemetry::FrameGraphPacketSubmissionStatisticsRecord statistics{
+            .ownerNodeIndex = owner.index,
+            .packetIndex = packetIndex,
+            .packetGeneration = 52u,
+            .queue = { .index = 1u, .deviceGeneration = 17u },
+            .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
+            .taskCount = packetIndex == 0u ? 2u : 1u,
+            .commandListCount = packetIndex == 0u ? 2u : 1u,
+            .joinsAcceptedQueueFrontier = packetIndex != 18u,
+            .recoverySubmission = packetIndex < 5u,
+            .submissionSeconds = packetIndex == 0u ? 0.011 : 0.0,
+        };
+        if(packetIndex < 5u){
+            statistics.plannedWaitTokenCount = 1u;
+            statistics.sameQueueWaitElisionCount = 1u;
+        }
+        else if(packetIndex < 13u){
+            statistics.plannedWaitTokenCount = 1u;
+            statistics.timelineWaitCount = 1u;
+        }
+        else{
+            statistics.mergedTimelineWaitCount = packetIndex == 13u ? 2u : 1u;
+            statistics.plannedWaitTokenCount = statistics.mergedTimelineWaitCount;
+        }
+        if(!builder.addPacketSubmissionStatistics(owner, statistics))
+            return false;
+    }
+
+    for(u32 queuePacketIndex = 0u; queuePacketIndex < 11u; ++queuePacketIndex){
+        Telemetry::FrameGraphPacketSubmissionStatisticsRecord statistics{
+            .ownerNodeIndex = owner.index,
+            .packetIndex = 19u + queuePacketIndex,
+            .packetGeneration = 52u,
+            .queue = { .index = 3u, .deviceGeneration = 17u },
+            .queueClass = Telemetry::FrameGraphQueueClass::Compute,
+            .taskCount = 1u,
+            .commandListCount = queuePacketIndex == 0u ? 2u : 1u,
+            .joinsAcceptedQueueFrontier = queuePacketIndex != 10u,
+            .recoverySubmission = queuePacketIndex < 3u,
+            .submissionSeconds = queuePacketIndex == 0u ? 0.010 : 0.0,
+        };
+        if(queuePacketIndex == 0u){
+            statistics.plannedWaitTokenCount = 7u;
+            statistics.sameQueueWaitElisionCount = 7u;
+        }
+        else if(queuePacketIndex == 1u){
+            statistics.plannedWaitTokenCount = 6u;
+            statistics.timelineWaitCount = 6u;
+        }
+        else if(queuePacketIndex == 2u){
+            statistics.plannedWaitTokenCount = 11u;
+            statistics.mergedTimelineWaitCount = 11u;
+        }
+        if(!builder.addPacketSubmissionStatistics(owner, statistics))
+            return false;
+    }
+    return true;
+}
+
+class RuntimeStatisticsFrameGraphContributor final : public Telemetry::IFrameGraphContributor{
+public:
+    virtual bool appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
+        const Telemetry::FrameGraphNodeHandle owner = builder.addPass(
+            Name("runtime_pass"),
+            "Runtime Pass",
+            Telemetry::FrameGraphPassMetadata{
+                .queueAssignment = MakeChangedFrameGraphQueueAssignment(),
+                .compiledTask = MakeFrameGraphCompiledTask(
+                    52u,
+                    9u,
+                    Telemetry::FrameGraphTaskPacketizationDecision::FirstTask
+                ),
+                .runtimeStatistics = MakeFrameGraphRuntimeStatistics(),
+            },
+            6u
+        );
+        if(!owner.valid())
+            return false;
+        if(!builder.addPhysicalQueueRuntimeStatistics(
+            owner,
+            MakeFrameGraphPhysicalQueueRuntimeStatistics(3u)
+        ) || !builder.addPhysicalQueueRuntimeStatistics(
+            owner,
+            MakeFrameGraphPhysicalQueueRuntimeStatistics(1u)
+        ))
+            return false;
+        return AddRuntimeStatisticsPacketSubmissions(builder, owner);
+    }
+};
+
+class CaptureFrameIndexFrameGraphContributor final : public Telemetry::IFrameGraphContributor{
+public:
+    virtual bool appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
+        m_frameIndex = builder.frameIndex();
+        return builder.addPass(Name("capture_frame_index"), "Capture Frame Index").valid();
+    }
+    [[nodiscard]] u64 frameIndex()const{ return m_frameIndex; }
+
+private:
+    u64 m_frameIndex = Limit<u64>::s_Max;
 };
 
 TEST(Telemetry, FrameGraphRegistryResolvesPendingNameEdges){
@@ -783,7 +2019,148 @@ TEST(Telemetry, FrameGraphRegistryResolvesPendingNameEdges){
     EXPECT_EQ(parsed.edges[0u].flags, 7u);
 }
 
-TEST(Telemetry, FrameGraphPayloadRoundTrip){
+TEST(Telemetry, FrameGraphRegistryPreservesQueueAssignments){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
+
+    Telemetry::FrameGraphRegistry registry(testArena.arena);
+    QueueAssignmentFrameGraphContributor contributor;
+    registry.registerContributor(contributor);
+
+    ASSERT_TRUE(registry.record(session));
+    const Telemetry::EventRecord* event = session.view().eventAt(0u);
+    ASSERT_NE(event, nullptr);
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+    ASSERT_EQ(parsed.nodes.size(), 1u);
+    EXPECT_EQ(parsed.nodes[0u].flags, 5u);
+    EXPECT_EQ(parsed.nodes[0u].queueAssignment.acceptance, Telemetry::FrameGraphQueueAssignmentAcceptance::Changed);
+    EXPECT_EQ(parsed.nodes[0u].queueAssignment.acceptedQueue.index, 3u);
+    EXPECT_EQ(parsed.nodes[0u].queueAssignment.acceptedQueue.deviceGeneration, 17u);
+}
+
+TEST(Telemetry, FrameGraphRegistryPreservesRuntimeStatistics){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
+
+    Telemetry::FrameGraphRegistry registry(testArena.arena);
+    RuntimeStatisticsFrameGraphContributor contributor;
+    registry.registerContributor(contributor);
+
+    ASSERT_TRUE(registry.record(session));
+    const Telemetry::EventRecord* event = session.view().eventAt(0u);
+    ASSERT_NE(event, nullptr);
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+    ASSERT_EQ(parsed.nodes.size(), 1u);
+    EXPECT_EQ(parsed.nodes[0u].flags, 6u);
+    EXPECT_TRUE(parsed.nodes[0u].runtimeStatistics.present);
+    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.graphGeneration, 51u);
+    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.compile.resourceVersionCount, 3u);
+    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.compile.resourceVersionEdgeCount, 6u);
+    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.compile.uploadBlobBytes, 30u);
+    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.recording.parallelPacketCount, 29u);
+    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.submission.acceptedFrontierSubmissionCount, 28u);
+    ASSERT_EQ(parsed.physicalQueueRuntimeStatistics.size(), 2u);
+    EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[0u].ownerNodeIndex, 0u);
+    EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[0u].statistics.queue.index, 1u);
+    EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[1u].statistics.queue.index, 3u);
+    EXPECT_TRUE(parsed.packetSubmissionStatisticsPresent);
+    ASSERT_EQ(parsed.packetSubmissionStatistics.size(), 30u);
+    EXPECT_EQ(parsed.packetSubmissionStatistics[0u].queue.index, 1u);
+    EXPECT_EQ(parsed.packetSubmissionStatistics[18u].queue.index, 1u);
+    EXPECT_EQ(parsed.packetSubmissionStatistics[19u].queue.index, 3u);
+    EXPECT_EQ(parsed.packetSubmissionStatistics[29u].queue.index, 3u);
+}
+
+TEST(Telemetry, FrameGraphBuilderCopiesPhysicalQueueRuntimeStatistics){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    Telemetry::FrameGraphPendingNameEdges pendingNameEdges(testArena.arena);
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords records(testArena.arena);
+    Telemetry::FrameGraphBuilder builder(nodes, edges, pendingNameEdges, records, 915u);
+
+    const Telemetry::FrameGraphNodeHandle owner = builder.addPass(
+        Name("runtime_owner"),
+        "Runtime owner",
+        Telemetry::FrameGraphPassMetadata{
+            .queueAssignment = {},
+            .compiledTask = {},
+            .runtimeStatistics = MakeFrameGraphRuntimeStatistics(),
+        }
+    );
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics statistics =
+        MakeFrameGraphPhysicalQueueRuntimeStatistics(1u)
+    ;
+    ASSERT_TRUE(builder.addPhysicalQueueRuntimeStatistics(owner, statistics));
+    statistics.compile.taskCount = 0u;
+
+    ASSERT_EQ(records.size(), 1u);
+    EXPECT_EQ(records[0u].ownerNodeIndex, owner.index);
+    EXPECT_EQ(records[0u].statistics.compile.taskCount, 50u);
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics outOfBounds =
+        MakeFrameGraphPhysicalQueueRuntimeStatistics(3u)
+    ;
+    outOfBounds.compile.taskCount = 79u;
+    outOfBounds.compile.packetCount = 78u;
+    outOfBounds.compile.mergedTaskCount = 1u;
+    EXPECT_FALSE(builder.addPhysicalQueueRuntimeStatistics(owner, outOfBounds));
+    EXPECT_EQ(records.size(), 1u);
+
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics derivedOutOfBounds =
+        MakeFrameGraphPhysicalQueueRuntimeStatistics(3u)
+    ;
+    derivedOutOfBounds.compile.taskCount = 29u;
+    derivedOutOfBounds.compile.mergedTaskCount = 2u;
+    derivedOutOfBounds.recording.taskCount = 13u;
+    EXPECT_TRUE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(derivedOutOfBounds));
+    EXPECT_FALSE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(
+        derivedOutOfBounds,
+        MakeFrameGraphRuntimeStatistics()
+    ));
+    EXPECT_FALSE(builder.addPhysicalQueueRuntimeStatistics(owner, derivedOutOfBounds));
+    EXPECT_EQ(records.size(), 1u);
+
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics reorderedSubmissionDuration =
+        MakeFrameGraphPhysicalQueueRuntimeStatistics(3u)
+    ;
+    reorderedSubmissionDuration.submission.submissionSeconds = 0.021000000000000004;
+    EXPECT_TRUE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(
+        reorderedSubmissionDuration,
+        MakeFrameGraphRuntimeStatistics()
+    ));
+    EXPECT_FALSE(builder.addPhysicalQueueRuntimeStatistics(
+        owner,
+        MakeFrameGraphPhysicalQueueRuntimeStatistics(1u)
+    ));
+}
+
+TEST(Telemetry, FrameGraphRegistryPropagatesCaptureFrameIndexToBuilder){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
+    session.setFrameIndex(914u);
+
+    Telemetry::FrameGraphRegistry registry(testArena.arena);
+    CaptureFrameIndexFrameGraphContributor contributor;
+    registry.registerContributor(contributor);
+
+    ASSERT_TRUE(registry.record(session));
+    EXPECT_EQ(contributor.frameIndex(), 914u);
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    Telemetry::FrameGraphPendingNameEdges pendingNameEdges(testArena.arena);
+    Telemetry::FrameGraphBuilder directBuilder(nodes, edges, pendingNameEdges);
+    EXPECT_EQ(directBuilder.frameIndex(), 0u);
+}
+
+TEST(Telemetry, FrameGraphLegacyV1PayloadRoundTrip){
     TestArena testArena;
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
@@ -800,6 +2177,7 @@ TEST(Telemetry, FrameGraphPayloadRoundTrip){
 
     Telemetry::FrameGraphPayload parsed(testArena.arena);
     EXPECT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphLegacyPayloadVersion);
     EXPECT_EQ(parsed.frameIndex, 905u);
     ASSERT_EQ(parsed.nodes.size(), 3u);
     ASSERT_EQ(parsed.edges.size(), 2u);
@@ -819,9 +2197,1404 @@ TEST(Telemetry, FrameGraphPayloadRoundTrip){
     EXPECT_EQ(parsed.edges[1u].toNodeIndex, 2u);
     EXPECT_EQ(parsed.edges[1u].kind, Telemetry::FrameGraphEdgeKind::Reads);
     EXPECT_EQ(parsed.edges[1u].flags, 2u);
+    EXPECT_FALSE(parsed.nodes[0u].queueAssignment.present);
+    EXPECT_FALSE(parsed.nodes[1u].queueAssignment.present);
+    EXPECT_FALSE(parsed.nodes[2u].queueAssignment.present);
+    EXPECT_TRUE(parsed.physicalQueueRuntimeStatistics.empty());
+
+    Telemetry::EncodedFrameGraphPayloadHeader legacyHeader;
+    NWB_MEMCPY(&legacyHeader, sizeof(legacyHeader), payload.data(), sizeof(legacyHeader));
+    EXPECT_EQ(legacyHeader.version, Telemetry::s_FrameGraphLegacyPayloadVersion);
 
     payload[0u] = 0u;
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+}
+
+TEST(Telemetry, FrameGraphQueueAssignmentPayloadRoundTrip){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestAssignedFrameGraph(testArena.arena, nodes, edges);
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 906u, nodes, edges, payload));
+    EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV2)
+            + (sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size())
+            + (sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size())
+            + (sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u)
+            + sizeof("GBuffer Pass")
+            + sizeof("Albedo Texture")
+            + sizeof("Lighting Pass"));
+
+    Telemetry::EncodedFrameGraphPayloadHeaderV2 header;
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    EXPECT_EQ(header.version, Telemetry::s_FrameGraphQueueAssignmentPayloadVersion);
+    EXPECT_EQ(header.queueAssignmentCount, 2u);
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    ASSERT_EQ(parsed.nodes.size(), 3u);
+    EXPECT_TRUE(parsed.physicalQueueRuntimeStatistics.empty());
+    const Telemetry::FrameGraphQueueAssignment& changed = parsed.nodes[0u].queueAssignment;
+    EXPECT_TRUE(changed.present);
+    EXPECT_EQ(changed.initialQueue.index, 1u);
+    EXPECT_EQ(changed.initialQueue.deviceGeneration, 17u);
+    EXPECT_EQ(changed.plannedQueue.index, 3u);
+    EXPECT_EQ(changed.acceptedQueue, changed.plannedQueue);
+    EXPECT_EQ(changed.previousAcceptedQueue.index, 2u);
+    EXPECT_EQ(changed.previousAcceptedQueue.deviceGeneration, 17u);
+    EXPECT_EQ(changed.queueClass, Telemetry::FrameGraphQueueClass::Compute);
+    EXPECT_EQ(changed.reason, Telemetry::FrameGraphQueueAssignmentReason::Fallback);
+    EXPECT_EQ(changed.modifiers, Telemetry::FrameGraphQueueAssignmentModifier::All);
+    EXPECT_TRUE(changed.dedicated);
+    EXPECT_EQ(changed.score.preference, 11);
+    EXPECT_EQ(changed.score.overlap, 7);
+    EXPECT_EQ(changed.score.queueLoad, 3);
+    EXPECT_EQ(changed.score.incomingCrossings, 2);
+    EXPECT_EQ(changed.score.outgoingCrossings, 1);
+    EXPECT_EQ(changed.score.ownershipTransfers, 4);
+    EXPECT_EQ(changed.score.total, 8);
+    EXPECT_EQ(changed.acceptance, Telemetry::FrameGraphQueueAssignmentAcceptance::Changed);
+
+    EXPECT_FALSE(parsed.nodes[1u].queueAssignment.present);
+    const Telemetry::FrameGraphQueueAssignment& notAccepted = parsed.nodes[2u].queueAssignment;
+    EXPECT_TRUE(notAccepted.present);
+    EXPECT_EQ(notAccepted.initialQueue.index, 4u);
+    EXPECT_EQ(notAccepted.plannedQueue.index, 5u);
+    EXPECT_FALSE(notAccepted.acceptedQueue.valid());
+    EXPECT_EQ(notAccepted.previousAcceptedQueue.index, 2u);
+    EXPECT_EQ(notAccepted.queueClass, Telemetry::FrameGraphQueueClass::Transfer);
+    EXPECT_EQ(notAccepted.reason, Telemetry::FrameGraphQueueAssignmentReason::ScoredAny);
+    EXPECT_EQ(notAccepted.modifiers, Telemetry::FrameGraphQueueAssignmentModifier::TimingFeedback);
+    EXPECT_FALSE(notAccepted.dedicated);
+    EXPECT_EQ(notAccepted.score.total, 1);
+    EXPECT_EQ(notAccepted.acceptance, Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted);
+}
+
+TEST(Telemetry, FrameGraphCompiledTaskPayloadRoundTrip){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 907u, nodes, edges, payload));
+    EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV3)
+            + (sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size())
+            + (sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size())
+            + (sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u)
+            + (sizeof(Telemetry::EncodedFrameGraphCompiledTask) * 2u)
+            + sizeof("GBuffer Pass")
+            + sizeof("Albedo Texture")
+            + sizeof("Lighting Pass"));
+
+    Telemetry::EncodedFrameGraphPayloadHeaderV3 header;
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    EXPECT_EQ(header.version, Telemetry::s_FrameGraphCompiledTaskPayloadVersion);
+    EXPECT_EQ(header.queueAssignmentCount, 2u);
+    EXPECT_EQ(header.compiledTaskCount, 2u);
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    ASSERT_EQ(parsed.nodes.size(), 3u);
+    EXPECT_TRUE(parsed.physicalQueueRuntimeStatistics.empty());
+    EXPECT_TRUE(parsed.nodes[0u].compiledTask.present);
+    EXPECT_EQ(parsed.nodes[0u].compiledTask.planGeneration, 41u);
+    EXPECT_EQ(parsed.nodes[0u].compiledTask.packetIndex, 7u);
+    EXPECT_EQ(
+        parsed.nodes[0u].compiledTask.packetizationDecision,
+        Telemetry::FrameGraphTaskPacketizationDecision::FirstTask
+    );
+    EXPECT_FALSE(parsed.nodes[1u].compiledTask.present);
+    EXPECT_TRUE(parsed.nodes[2u].compiledTask.present);
+    EXPECT_EQ(parsed.nodes[2u].compiledTask.planGeneration, 41u);
+    EXPECT_EQ(parsed.nodes[2u].compiledTask.packetIndex, 7u);
+    EXPECT_EQ(
+        parsed.nodes[2u].compiledTask.packetizationDecision,
+        Telemetry::FrameGraphTaskPacketizationDecision::MergedExplicit
+    );
+}
+
+TEST(Telemetry, FrameGraphRuntimeStatisticsPayloadRoundTrip){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 910u, nodes, edges, payload));
+    EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
+            + (sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size())
+            + (sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size())
+            + (sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u)
+            + (sizeof(Telemetry::EncodedFrameGraphCompiledTask) * 2u)
+            + (sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8) * 2u)
+            + sizeof("GBuffer Pass")
+            + sizeof("Albedo Texture")
+            + sizeof("Lighting Pass"));
+
+    Telemetry::EncodedFrameGraphPayloadHeaderV8 header;
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    EXPECT_EQ(header.version, Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion);
+    EXPECT_EQ(header.queueAssignmentCount, 2u);
+    EXPECT_EQ(header.compiledTaskCount, 2u);
+    EXPECT_EQ(header.runtimeStatisticsCount, 2u);
+    EXPECT_EQ(header.physicalQueueRuntimeStatisticsCount, 0u);
+    EXPECT_EQ(header.packetSubmissionStatisticsPresent, 0u);
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion);
+    ASSERT_EQ(parsed.nodes.size(), 3u);
+    EXPECT_TRUE(parsed.physicalQueueRuntimeStatistics.empty());
+    EXPECT_FALSE(parsed.physicalQueueRuntimeStatisticsPresent);
+    EXPECT_TRUE(parsed.packetSubmissionStatistics.empty());
+    EXPECT_FALSE(parsed.packetSubmissionStatisticsPresent);
+    const Telemetry::FrameGraphRuntimeStatistics expected = MakeFrameGraphRuntimeStatistics();
+    const Telemetry::FrameGraphRuntimeStatistics& first = parsed.nodes[0u].runtimeStatistics;
+    EXPECT_TRUE(first.present);
+    EXPECT_EQ(first.graphGeneration, 51u);
+    EXPECT_EQ(first.planGeneration, 52u);
+    EXPECT_EQ(first.recordingAttemptGeneration, 53u);
+    EXPECT_EQ(first.deviceGeneration, 17u);
+    EXPECT_EQ(NWB_MEMCMP(&first.compile, &expected.compile, sizeof(expected.compile)), 0);
+    EXPECT_EQ(NWB_MEMCMP(&first.recording, &expected.recording, sizeof(expected.recording)), 0);
+    EXPECT_EQ(NWB_MEMCMP(&first.submission, &expected.submission, sizeof(expected.submission)), 0);
+    EXPECT_EQ(first.submission.recoverySubmissionCount, 8u);
+    EXPECT_FALSE(parsed.nodes[1u].runtimeStatistics.present);
+    EXPECT_TRUE(parsed.nodes[2u].runtimeStatistics.present);
+    EXPECT_EQ(parsed.nodes[2u].runtimeStatistics.graphGeneration, 61u);
+    EXPECT_EQ(parsed.nodes[2u].runtimeStatistics.planGeneration, 62u);
+    EXPECT_EQ(parsed.nodes[2u].runtimeStatistics.recordingAttemptGeneration, 63u);
+}
+
+TEST(Telemetry, FrameGraphRuntimeStatisticsV8WireFieldOrderIsStable){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 912u, nodes, edges, payload));
+    const usize runtimeStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
+        + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
+        + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
+        + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u
+        + sizeof(Telemetry::EncodedFrameGraphCompiledTask) * 2u
+    ;
+    ASSERT_GE(payload.size(), runtimeStatisticsOffset + sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8));
+
+    const auto readU16 = [&payload, runtimeStatisticsOffset](const usize wireOffset){
+        u16 value = 0u;
+        NWB_MEMCPY(&value, sizeof(value), payload.data() + runtimeStatisticsOffset + wireOffset, sizeof(value));
+        return value;
+    };
+    const auto readU32 = [&payload, runtimeStatisticsOffset](const usize wireOffset){
+        u32 value = 0u;
+        NWB_MEMCPY(&value, sizeof(value), payload.data() + runtimeStatisticsOffset + wireOffset, sizeof(value));
+        return value;
+    };
+    const auto readU64 = [&payload, runtimeStatisticsOffset](const usize wireOffset){
+        u64 value = 0u;
+        NWB_MEMCPY(&value, sizeof(value), payload.data() + runtimeStatisticsOffset + wireOffset, sizeof(value));
+        return value;
+    };
+    const auto readF64 = [&payload, runtimeStatisticsOffset](const usize wireOffset){
+        f64 value = 0.0;
+        NWB_MEMCPY(&value, sizeof(value), payload.data() + runtimeStatisticsOffset + wireOffset, sizeof(value));
+        return value;
+    };
+
+    EXPECT_EQ(readU32(0u), 0u);
+    EXPECT_EQ(readU16(4u), 17u);
+    EXPECT_EQ(readU16(6u), 0u);
+    EXPECT_EQ(readU64(8u), 51u);
+    EXPECT_EQ(readU64(16u), 52u);
+    EXPECT_EQ(readU64(24u), 53u);
+
+    const u64 expectedCompileCounts[] = {
+        78u, 2u, 50u, 4u, 5u, 76u, 7u, 2u, 9u, 10u,
+        11u, 12u, 13u, 60u, 15u, 14u, 17u, 2u, 19u, 20u,
+        21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u,
+    };
+    for(
+        usize fieldIndex = 0u;
+        fieldIndex < LengthOf(expectedCompileCounts);
+        ++fieldIndex
+    )
+        EXPECT_EQ(readU64(32u + fieldIndex * sizeof(u64)), expectedCompileCounts[fieldIndex]);
+    const f64 expectedCompileSeconds[] = {
+        0.001, 0.002, 0.003, 0.004, 0.005, 0.006,
+        0.007, 0.008, 0.009, 0.010, 0.011, 0.012,
+    };
+    for(
+        usize fieldIndex = 0u;
+        fieldIndex < LengthOf(expectedCompileSeconds);
+        ++fieldIndex
+    )
+        EXPECT_DOUBLE_EQ(readF64(272u + fieldIndex * sizeof(f64)), expectedCompileSeconds[fieldIndex]);
+    EXPECT_EQ(readU64(368u), 3u);
+    EXPECT_EQ(readU64(376u), 6u);
+
+    const u64 expectedRecordingCounts[] = { 31u, 32u, 33u, 34u, 30u, 29u };
+    for(
+        usize fieldIndex = 0u;
+        fieldIndex < LengthOf(expectedRecordingCounts);
+        ++fieldIndex
+    )
+        EXPECT_EQ(readU64(384u + fieldIndex * sizeof(u64)), expectedRecordingCounts[fieldIndex]);
+    const f64 expectedRecordingSeconds[] = {
+        0.013, 0.014, 0.015, 0.016, 0.017, 0.018, 0.019, 0.020,
+    };
+    for(
+        usize fieldIndex = 0u;
+        fieldIndex < LengthOf(expectedRecordingSeconds);
+        ++fieldIndex
+    )
+        EXPECT_DOUBLE_EQ(readF64(432u + fieldIndex * sizeof(f64)), expectedRecordingSeconds[fieldIndex]);
+
+    const u64 expectedSubmissionCounts[] = {
+        37u, 38u, 39u, 40u, 30u, 38u, 32u, 44u, 12u, 14u, 18u, 28u,
+    };
+    for(
+        usize fieldIndex = 0u;
+        fieldIndex < LengthOf(expectedSubmissionCounts);
+        ++fieldIndex
+    )
+        EXPECT_EQ(readU64(496u + fieldIndex * sizeof(u64)), expectedSubmissionCounts[fieldIndex]);
+    EXPECT_DOUBLE_EQ(readF64(592u), 0.021);
+    EXPECT_EQ(readU64(600u), 8u);
+}
+
+TEST(Telemetry, FrameGraphRuntimeStatisticsV4PayloadDefaultsRecoverySubmissionCountToZero){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+
+    Telemetry::TelemetryBytes currentPayload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 912u, nodes, edges, currentPayload));
+    Telemetry::TelemetryBytes legacyPayload(testArena.arena);
+    ASSERT_TRUE(ConvertFrameGraphPayloadV8ToLegacy(
+        currentPayload,
+        Telemetry::s_FrameGraphRuntimeStatisticsPayloadVersion,
+        legacyPayload
+    ));
+
+    Telemetry::EncodedFrameGraphPayloadHeaderV4 header;
+    NWB_MEMCPY(&header, sizeof(header), legacyPayload.data(), sizeof(header));
+    EXPECT_EQ(header.version, Telemetry::s_FrameGraphRuntimeStatisticsPayloadVersion);
+    EXPECT_EQ(header.runtimeStatisticsCount, 2u);
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(
+        testArena.arena,
+        legacyPayload.data(),
+        legacyPayload.size(),
+        parsed
+    ));
+    EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphRuntimeStatisticsPayloadVersion);
+    EXPECT_FALSE(parsed.physicalQueueRuntimeStatisticsPresent);
+    ASSERT_TRUE(parsed.nodes[0u].runtimeStatistics.present);
+    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.compile.resourceVersionCount, 0u);
+    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.compile.resourceVersionEdgeCount, 0u);
+    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.submission.recoverySubmissionCount, 0u);
+    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.submission.acceptedFrontierSubmissionCount, 28u);
+    EXPECT_DOUBLE_EQ(parsed.nodes[0u].runtimeStatistics.submission.submissionSeconds, 0.021);
+}
+
+TEST(Telemetry, FrameGraphRuntimeStatisticsV7PayloadDefaultsResourceVersionStatisticsToZero){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+    nodes[0u].runtimeStatistics.submission = {};
+    nodes[2u].runtimeStatistics.submission = {};
+
+    Telemetry::TelemetryBytes currentPayload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 913u, nodes, edges, currentPayload));
+    Telemetry::TelemetryBytes legacyPayload(testArena.arena);
+    ASSERT_TRUE(ConvertFrameGraphPayloadV8ToLegacy(
+        currentPayload,
+        Telemetry::s_FrameGraphPacketSubmissionStatisticsPayloadVersion,
+        legacyPayload
+    ));
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(
+        testArena.arena,
+        legacyPayload.data(),
+        legacyPayload.size(),
+        parsed
+    ));
+    EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphPacketSubmissionStatisticsPayloadVersion);
+    EXPECT_TRUE(parsed.packetSubmissionStatisticsPresent);
+    EXPECT_TRUE(parsed.packetSubmissionStatistics.empty());
+    ASSERT_TRUE(parsed.nodes[0u].runtimeStatistics.present);
+    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.compile.resourceVersionCount, 0u);
+    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.compile.resourceVersionEdgeCount, 0u);
+    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.submission.recoverySubmissionCount, 0u);
+}
+
+TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRoundTripAndWireOrderIsStable){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords records(testArena.arena);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 916u, nodes, edges, records, payload));
+    EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
+            + (sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size())
+            + (sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size())
+            + (sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u)
+            + (sizeof(Telemetry::EncodedFrameGraphCompiledTask) * 2u)
+            + (sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8) * 2u)
+            + (sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6) * 2u)
+            + sizeof("GBuffer Pass")
+            + sizeof("Albedo Texture")
+            + sizeof("Lighting Pass"));
+
+    Telemetry::EncodedFrameGraphPayloadHeaderV8 header;
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    EXPECT_EQ(header.version, Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion);
+    EXPECT_EQ(header.runtimeStatisticsCount, 2u);
+    EXPECT_EQ(header.physicalQueueRuntimeStatisticsCount, 2u);
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion);
+    EXPECT_TRUE(parsed.physicalQueueRuntimeStatisticsPresent);
+    EXPECT_TRUE(parsed.packetSubmissionStatistics.empty());
+    EXPECT_FALSE(parsed.packetSubmissionStatisticsPresent);
+    ASSERT_EQ(parsed.physicalQueueRuntimeStatistics.size(), 2u);
+    const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& first =
+        parsed.physicalQueueRuntimeStatistics[0u].statistics
+    ;
+    const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics expected =
+        MakeFrameGraphPhysicalQueueRuntimeStatistics(1u)
+    ;
+    EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[0u].ownerNodeIndex, 0u);
+    EXPECT_EQ(first.queue.index, 1u);
+    EXPECT_EQ(first.graphGeneration, 51u);
+    EXPECT_EQ(first.planGeneration, 52u);
+    EXPECT_EQ(first.recordingAttemptGeneration, 53u);
+    EXPECT_EQ(first.deviceGeneration, 17u);
+    EXPECT_EQ(NWB_MEMCMP(&first.compile, &expected.compile, sizeof(expected.compile)), 0);
+    EXPECT_EQ(NWB_MEMCMP(&first.recording, &expected.recording, sizeof(expected.recording)), 0);
+    EXPECT_EQ(NWB_MEMCMP(&first.submission, &expected.submission, sizeof(expected.submission)), 0);
+    EXPECT_EQ(first.submission.recoverySubmissionCount, 5u);
+    const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& second =
+        parsed.physicalQueueRuntimeStatistics[1u].statistics
+    ;
+    const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics expectedSecond =
+        MakeFrameGraphPhysicalQueueRuntimeStatistics(3u)
+    ;
+    EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[1u].ownerNodeIndex, 0u);
+    EXPECT_EQ(second.queue.index, 3u);
+    EXPECT_EQ(second.queue.deviceGeneration, 17u);
+    EXPECT_EQ(second.queueClass, Telemetry::FrameGraphQueueClass::Compute);
+    EXPECT_EQ(second.graphGeneration, 51u);
+    EXPECT_EQ(second.planGeneration, 52u);
+    EXPECT_EQ(second.recordingAttemptGeneration, 53u);
+    EXPECT_EQ(second.deviceGeneration, 17u);
+    EXPECT_EQ(NWB_MEMCMP(&second.compile, &expectedSecond.compile, sizeof(expectedSecond.compile)), 0);
+    EXPECT_EQ(NWB_MEMCMP(&second.recording, &expectedSecond.recording, sizeof(expectedSecond.recording)), 0);
+    EXPECT_EQ(NWB_MEMCMP(&second.submission, &expectedSecond.submission, sizeof(expectedSecond.submission)), 0);
+    EXPECT_EQ(second.submission.recoverySubmissionCount, 3u);
+
+    const usize physicalQueueRuntimeStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
+        + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
+        + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
+        + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u
+        + sizeof(Telemetry::EncodedFrameGraphCompiledTask) * 2u
+        + sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8) * 2u
+    ;
+    const auto readU8 = [&payload, physicalQueueRuntimeStatisticsOffset](const usize wireOffset){
+        u8 value = 0u;
+        NWB_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
+        return value;
+    };
+    const auto readU16 = [&payload, physicalQueueRuntimeStatisticsOffset](const usize wireOffset){
+        u16 value = 0u;
+        NWB_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
+        return value;
+    };
+    const auto readU32 = [&payload, physicalQueueRuntimeStatisticsOffset](const usize wireOffset){
+        u32 value = 0u;
+        NWB_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
+        return value;
+    };
+    const auto readU64 = [&payload, physicalQueueRuntimeStatisticsOffset](const usize wireOffset){
+        u64 value = 0u;
+        NWB_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
+        return value;
+    };
+    const auto readF64 = [&payload, physicalQueueRuntimeStatisticsOffset](const usize wireOffset){
+        f64 value = 0.0;
+        NWB_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
+        return value;
+    };
+
+    EXPECT_EQ(readU32(0u), 0u);
+    EXPECT_EQ(readU16(4u), 1u);
+    EXPECT_EQ(readU16(6u), 17u);
+    EXPECT_EQ(readU8(8u), Telemetry::FrameGraphQueueClass::Graphics);
+    for(usize reservedIndex = 0u; reservedIndex < 7u; ++reservedIndex)
+        EXPECT_EQ(readU8(9u + reservedIndex), 0u);
+
+    const u64 expectedCompileCounts[] = {
+        50u, 49u, 1u, 11u, 12u, 6u, 7u, 30u, 31u, 8u, 9u, 7u, 8u, 1u,
+    };
+    for(usize fieldIndex = 0u; fieldIndex < LengthOf(expectedCompileCounts); ++fieldIndex)
+        EXPECT_EQ(readU64(16u + fieldIndex * sizeof(u64)), expectedCompileCounts[fieldIndex]);
+    const u64 expectedRecordingCounts[] = { 20u, 21u, 21u, 23u, 19u, 18u };
+    for(usize fieldIndex = 0u; fieldIndex < LengthOf(expectedRecordingCounts); ++fieldIndex)
+        EXPECT_EQ(readU64(128u + fieldIndex * sizeof(u64)), expectedRecordingCounts[fieldIndex]);
+    const f64 expectedRecordingSeconds[] = { 0.005, 0.006, 0.007, 0.008 };
+    for(usize fieldIndex = 0u; fieldIndex < LengthOf(expectedRecordingSeconds); ++fieldIndex)
+        EXPECT_DOUBLE_EQ(readF64(176u + fieldIndex * sizeof(f64)), expectedRecordingSeconds[fieldIndex]);
+    const u64 expectedSubmissionCounts[] = {
+        25u, 26u, 24u, 24u, 19u, 23u, 20u, 20u, 5u, 8u, 7u, 18u,
+    };
+    for(usize fieldIndex = 0u; fieldIndex < LengthOf(expectedSubmissionCounts); ++fieldIndex)
+        EXPECT_EQ(readU64(208u + fieldIndex * sizeof(u64)), expectedSubmissionCounts[fieldIndex]);
+    EXPECT_DOUBLE_EQ(readF64(304u), 0.011);
+    EXPECT_EQ(readU64(312u), 5u);
+
+    records.resize(1u);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 916u, nodes, edges, records, payload));
+    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    ASSERT_EQ(parsed.physicalQueueRuntimeStatistics.size(), 1u);
+    EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[0u].statistics.queue.index, 3u);
+}
+
+TEST(Telemetry, FrameGraphPacketSubmissionStatisticsValidation){
+    Telemetry::FrameGraphPacketSubmissionStatisticsRecord statistics{
+        .ownerNodeIndex = 0u,
+        .packetIndex = 1u,
+        .packetGeneration = 72u,
+        .queue = { .index = 3u, .deviceGeneration = 17u },
+        .queueClass = Telemetry::FrameGraphQueueClass::Compute,
+        .taskCount = 2u,
+        .commandListCount = 1u,
+        .plannedWaitTokenCount = 3u,
+        .sameQueueWaitElisionCount = 1u,
+        .timelineWaitCount = 1u,
+        .mergedTimelineWaitCount = 1u,
+        .joinsAcceptedQueueFrontier = true,
+        .recoverySubmission = true,
+        .submissionSeconds = 0.125,
+    };
+    EXPECT_TRUE(Telemetry::IsValidFrameGraphPacketSubmissionStatistics(statistics));
+
+    statistics.joinsAcceptedQueueFrontier = false;
+    EXPECT_FALSE(Telemetry::IsValidFrameGraphPacketSubmissionStatistics(statistics));
+    statistics.joinsAcceptedQueueFrontier = true;
+    ++statistics.timelineWaitCount;
+    EXPECT_FALSE(Telemetry::IsValidFrameGraphPacketSubmissionStatistics(statistics));
+    --statistics.timelineWaitCount;
+    statistics.commandListCount = 0u;
+    EXPECT_FALSE(Telemetry::IsValidFrameGraphPacketSubmissionStatistics(statistics));
+    statistics.commandListCount = 1u;
+    statistics.submissionSeconds = Limit<f64>::s_QuietNaN;
+    EXPECT_FALSE(Telemetry::IsValidFrameGraphPacketSubmissionStatistics(statistics));
+}
+
+TEST(Telemetry, FrameGraphPacketSubmissionStatisticsV8RoundTripAndWireOrderIsStable){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics(testArena.arena);
+    Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics(testArena.arena);
+    BuildTestPacketSubmissionFrameGraph(
+        testArena.arena,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics
+    );
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        918u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        payload
+    ));
+    Telemetry::EncodedFrameGraphPayloadHeaderV8 header;
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    EXPECT_EQ(header.version, Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion);
+    EXPECT_EQ(header.runtimeStatisticsCount, 1u);
+    EXPECT_EQ(header.physicalQueueRuntimeStatisticsCount, 2u);
+    EXPECT_EQ(header.packetSubmissionStatisticsCount, 3u);
+    EXPECT_EQ(header.packetSubmissionStatisticsPresent, 1u);
+
+    const usize packetSubmissionStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
+        + sizeof(Telemetry::EncodedFrameGraphNode)
+        + sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8)
+        + sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6) * 2u
+    ;
+    Telemetry::EncodedFrameGraphPacketSubmissionStatistics firstEncodedStatistics;
+    NWB_MEMCPY(
+        &firstEncodedStatistics,
+        sizeof(firstEncodedStatistics),
+        payload.data() + packetSubmissionStatisticsOffset,
+        sizeof(firstEncodedStatistics)
+    );
+    EXPECT_EQ(firstEncodedStatistics.ownerNodeIndex, 0u);
+    EXPECT_EQ(firstEncodedStatistics.packetIndex, 0u);
+    EXPECT_EQ(firstEncodedStatistics.packetGeneration, 72u);
+    EXPECT_EQ(firstEncodedStatistics.queue.index, 1u);
+    EXPECT_EQ(firstEncodedStatistics.queue.deviceGeneration, 17u);
+    EXPECT_EQ(firstEncodedStatistics.queueClass, Telemetry::FrameGraphQueueClass::Graphics);
+    EXPECT_EQ(firstEncodedStatistics.joinsAcceptedQueueFrontier, 0u);
+    EXPECT_EQ(firstEncodedStatistics.recoverySubmission, 0u);
+    EXPECT_EQ(firstEncodedStatistics.reserved, 0u);
+    EXPECT_EQ(firstEncodedStatistics.taskCount, 2u);
+    EXPECT_EQ(firstEncodedStatistics.commandListCount, 1u);
+    EXPECT_EQ(firstEncodedStatistics.plannedWaitTokenCount, 2u);
+    EXPECT_EQ(firstEncodedStatistics.sameQueueWaitElisionCount, 1u);
+    EXPECT_EQ(firstEncodedStatistics.timelineWaitCount, 1u);
+    EXPECT_EQ(firstEncodedStatistics.mergedTimelineWaitCount, 0u);
+    EXPECT_DOUBLE_EQ(firstEncodedStatistics.submissionSeconds, 0.125);
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion);
+    EXPECT_TRUE(parsed.packetSubmissionStatisticsPresent);
+    ASSERT_EQ(parsed.packetSubmissionStatistics.size(), 3u);
+    EXPECT_EQ(parsed.packetSubmissionStatistics[0u].packetIndex, 0u);
+    EXPECT_EQ(parsed.packetSubmissionStatistics[1u].packetIndex, 1u);
+    EXPECT_EQ(parsed.packetSubmissionStatistics[2u].packetIndex, 2u);
+    EXPECT_EQ(parsed.packetSubmissionStatistics[1u].queue.index, 3u);
+    EXPECT_EQ(parsed.packetSubmissionStatistics[1u].queueClass, Telemetry::FrameGraphQueueClass::Compute);
+    EXPECT_EQ(parsed.packetSubmissionStatistics[1u].commandListCount, 2u);
+    EXPECT_EQ(parsed.packetSubmissionStatistics[1u].mergedTimelineWaitCount, 2u);
+    EXPECT_TRUE(parsed.packetSubmissionStatistics[2u].joinsAcceptedQueueFrontier);
+    EXPECT_TRUE(parsed.packetSubmissionStatistics[2u].recoverySubmission);
+
+    const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord firstPhysicalQueue =
+        physicalQueueRuntimeStatistics[0u]
+    ;
+    physicalQueueRuntimeStatistics[0u] = physicalQueueRuntimeStatistics[1u];
+    physicalQueueRuntimeStatistics[1u] = firstPhysicalQueue;
+    const Telemetry::FrameGraphPacketSubmissionStatisticsRecord packetZero = packetSubmissionStatistics[1u];
+    const Telemetry::FrameGraphPacketSubmissionStatisticsRecord packetOne = packetSubmissionStatistics[2u];
+    const Telemetry::FrameGraphPacketSubmissionStatisticsRecord packetTwo = packetSubmissionStatistics[0u];
+    packetSubmissionStatistics[0u] = packetZero;
+    packetSubmissionStatistics[1u] = packetOne;
+    packetSubmissionStatistics[2u] = packetTwo;
+
+    Telemetry::TelemetryBytes reorderedPayload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        918u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        reorderedPayload
+    ));
+    ASSERT_EQ(payload.size(), reorderedPayload.size());
+    EXPECT_EQ(NWB_MEMCMP(payload.data(), reorderedPayload.data(), payload.size()), 0);
+}
+
+TEST(Telemetry, FrameGraphPacketSubmissionStatisticsV8PreservesExactEmptyAndAbsent){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics(testArena.arena);
+    Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics(testArena.arena);
+    BuildTestPacketSubmissionFrameGraph(
+        testArena.arena,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics
+    );
+    nodes[0u].runtimeStatistics.submission = {};
+    physicalQueueRuntimeStatistics.clear();
+    packetSubmissionStatistics.clear();
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        919u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        payload
+    ));
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion);
+    EXPECT_TRUE(parsed.packetSubmissionStatisticsPresent);
+    EXPECT_TRUE(parsed.packetSubmissionStatistics.empty());
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 919u, nodes, edges, payload));
+    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion);
+    EXPECT_FALSE(parsed.packetSubmissionStatisticsPresent);
+    EXPECT_TRUE(parsed.packetSubmissionStatistics.empty());
+}
+
+TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecords){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics(testArena.arena);
+    Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics(testArena.arena);
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    BuildTestPacketSubmissionFrameGraph(
+        testArena.arena,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics
+    );
+
+    packetSubmissionStatistics[0u].joinsAcceptedQueueFrontier = false;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        920u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        payload
+    ));
+    BuildTestPacketSubmissionFrameGraph(
+        testArena.arena,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics
+    );
+    packetSubmissionStatistics[1u].packetGeneration = 99u;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        920u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        payload
+    ));
+    BuildTestPacketSubmissionFrameGraph(
+        testArena.arena,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics
+    );
+    packetSubmissionStatistics[1u].packetIndex = packetSubmissionStatistics[2u].packetIndex;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        920u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        payload
+    ));
+    BuildTestPacketSubmissionFrameGraph(
+        testArena.arena,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics
+    );
+    packetSubmissionStatistics[2u].commandListCount = 1u;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        920u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        payload
+    ));
+    BuildTestPacketSubmissionFrameGraph(
+        testArena.arena,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics
+    );
+    packetSubmissionStatistics[1u].submissionSeconds += 0.01;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        920u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        payload
+    ));
+    BuildTestPacketSubmissionFrameGraph(
+        testArena.arena,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics
+    );
+    packetSubmissionStatistics[1u].queue = { .index = 3u, .deviceGeneration = 17u };
+    packetSubmissionStatistics[1u].queueClass = Telemetry::FrameGraphQueueClass::Compute;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        920u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        payload
+    ));
+
+    BuildTestPacketSubmissionFrameGraph(
+        testArena.arena,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics
+    );
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        920u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        payload
+    ));
+    const usize packetSubmissionStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
+        + sizeof(Telemetry::EncodedFrameGraphNode)
+        + sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8)
+        + sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6) * 2u
+    ;
+    Telemetry::EncodedFrameGraphPacketSubmissionStatistics encodedStatistics;
+    NWB_MEMCPY(
+        &encodedStatistics,
+        sizeof(encodedStatistics),
+        payload.data() + packetSubmissionStatisticsOffset,
+        sizeof(encodedStatistics)
+    );
+    encodedStatistics.reserved = 1u;
+    NWB_MEMCPY(
+        payload.data() + packetSubmissionStatisticsOffset,
+        payload.size() - packetSubmissionStatisticsOffset,
+        &encodedStatistics,
+        sizeof(encodedStatistics)
+    );
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        920u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        payload
+    ));
+    NWB_MEMCPY(
+        &encodedStatistics,
+        sizeof(encodedStatistics),
+        payload.data() + packetSubmissionStatisticsOffset,
+        sizeof(encodedStatistics)
+    );
+    encodedStatistics.submissionSeconds += 0.01;
+    NWB_MEMCPY(
+        payload.data() + packetSubmissionStatisticsOffset,
+        payload.size() - packetSubmissionStatisticsOffset,
+        &encodedStatistics,
+        sizeof(encodedStatistics)
+    );
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        920u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        payload
+    ));
+    const usize secondPacketSubmissionStatisticsOffset = packetSubmissionStatisticsOffset
+        + sizeof(Telemetry::EncodedFrameGraphPacketSubmissionStatistics)
+    ;
+    NWB_MEMCPY(
+        &encodedStatistics,
+        sizeof(encodedStatistics),
+        payload.data() + secondPacketSubmissionStatisticsOffset,
+        sizeof(encodedStatistics)
+    );
+    encodedStatistics.packetIndex = 0u;
+    NWB_MEMCPY(
+        payload.data() + secondPacketSubmissionStatisticsOffset,
+        payload.size() - secondPacketSubmissionStatisticsOffset,
+        &encodedStatistics,
+        sizeof(encodedStatistics)
+    );
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        920u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        payload
+    ));
+    Telemetry::EncodedFrameGraphPayloadHeaderV8 header;
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    ++header.packetSubmissionStatisticsCount;
+    NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        920u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        payload
+    ));
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    header.packetSubmissionStatisticsPresent = 0u;
+    NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        920u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        payload
+    ));
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    header.reservedTail[1u] = 1u;
+    NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        920u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        payload
+    ));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size() - 1u, parsed));
+}
+
+TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsV5PayloadDefaultsRecoverySubmissionCountsToZero){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords records(testArena.arena);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+
+    Telemetry::TelemetryBytes currentPayload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        916u,
+        nodes,
+        edges,
+        records,
+        currentPayload
+    ));
+    Telemetry::TelemetryBytes legacyPayload(testArena.arena);
+    ASSERT_TRUE(ConvertFrameGraphPayloadV8ToLegacy(
+        currentPayload,
+        Telemetry::s_FrameGraphPhysicalQueueRuntimeStatisticsPayloadVersion,
+        legacyPayload
+    ));
+
+    Telemetry::EncodedFrameGraphPayloadHeaderV5 header;
+    NWB_MEMCPY(&header, sizeof(header), legacyPayload.data(), sizeof(header));
+    EXPECT_EQ(header.version, Telemetry::s_FrameGraphPhysicalQueueRuntimeStatisticsPayloadVersion);
+    EXPECT_EQ(header.runtimeStatisticsCount, 2u);
+    EXPECT_EQ(header.physicalQueueRuntimeStatisticsCount, 2u);
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(
+        testArena.arena,
+        legacyPayload.data(),
+        legacyPayload.size(),
+        parsed
+    ));
+    EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphPhysicalQueueRuntimeStatisticsPayloadVersion);
+    EXPECT_TRUE(parsed.physicalQueueRuntimeStatisticsPresent);
+    ASSERT_EQ(parsed.physicalQueueRuntimeStatistics.size(), 2u);
+    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.submission.recoverySubmissionCount, 0u);
+    EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[0u].statistics.submission.recoverySubmissionCount, 0u);
+    EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[1u].statistics.submission.recoverySubmissionCount, 0u);
+    EXPECT_EQ(
+        parsed.physicalQueueRuntimeStatistics[0u].statistics.submission.acceptedFrontierSubmissionCount,
+        18u
+    );
+    EXPECT_EQ(
+        parsed.physicalQueueRuntimeStatistics[1u].statistics.submission.acceptedFrontierSubmissionCount,
+        10u
+    );
+}
+
+TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedRecords){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords records(testArena.arena);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    Telemetry::TelemetryBytes payload(testArena.arena);
+
+    records[0u].statistics.graphGeneration = 99u;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    records[0u].ownerNodeIndex = 1u;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    records[0u].statistics.queue.deviceGeneration = 18u;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    records[0u].statistics.queueClass = Telemetry::FrameGraphQueueClass::Unknown;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    records[0u].statistics.recording.recordingSeconds = -1.0;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    records[0u].statistics.submission.submissionSeconds = Limit<f64>::s_QuietNaN;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    records[0u].statistics.submission.recoverySubmissionCount =
+        records[0u].statistics.submission.acceptedFrontierSubmissionCount + 1u
+    ;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    ++records[0u].statistics.submission.recoverySubmissionCount;
+    EXPECT_TRUE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(records[0u].statistics));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    ++records[0u].statistics.compile.mergedTaskCount;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    ++records[0u].statistics.submission.timelineWaitCount;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    records[0u].statistics.compile.taskCount = 79u;
+    records[0u].statistics.compile.packetCount = 78u;
+    records[0u].statistics.compile.mergedTaskCount = 1u;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    records[0u].statistics.recording.recordingSeconds = 0.017;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    records[0u].statistics.compile.taskCount = 29u;
+    records[0u].statistics.compile.mergedTaskCount = 2u;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    ++records[0u].statistics.submission.plannedWaitTokenCount;
+    ++records[0u].statistics.submission.timelineWaitCount;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    records[0u].statistics.compile.epilogueBarrierCount = 4u;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    records[0u].statistics.recording.barrierCount = 12u;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    records[0u].statistics.recording.taskCount = 13u;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    records[0u].statistics.submission.acceptedTaskCount = 13u;
+    records[0u].statistics.submission.rejectedPacketCount = 14u;
+    records[0u].statistics.submission.rejectedTaskCount = 15u;
+    records[0u].statistics.submission.rejectedSubmissionCount = 14u;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    records[0u].statistics.compile.incomingLogicalOwnershipTransferSignatureCount = 0u;
+    records[0u].statistics.compile.outgoingLogicalOwnershipTransferSignatureCount = 0u;
+    records[0u].statistics.compile.incomingRepeatedOwnershipTransferSignatureCount = 0u;
+    records[0u].statistics.compile.outgoingRepeatedOwnershipTransferSignatureCount = 0u;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    records.push_back(records[0u]);
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    const usize statisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
+        + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
+        + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
+        + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u
+        + sizeof(Telemetry::EncodedFrameGraphCompiledTask) * 2u
+        + sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8) * 2u
+    ;
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    for(
+        usize mutationIndex = 0u;
+        mutationIndex < LengthOf(s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutations);
+        ++mutationIndex
+    ){
+        SCOPED_TRACE(mutationIndex);
+        ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+        Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6 encodedStatistics;
+        NWB_MEMCPY(
+            &encodedStatistics,
+            sizeof(encodedStatistics),
+            payload.data() + statisticsOffset,
+            sizeof(encodedStatistics)
+        );
+        s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutations[mutationIndex](encodedStatistics);
+        NWB_MEMCPY(
+            payload.data() + statisticsOffset,
+            payload.size() - statisticsOffset,
+            &encodedStatistics,
+            sizeof(encodedStatistics)
+        );
+        EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    }
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    const usize secondStatisticsOffset = statisticsOffset
+        + sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6)
+    ;
+    Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6 encodedStatistics;
+    NWB_MEMCPY(
+        &encodedStatistics,
+        sizeof(encodedStatistics),
+        payload.data() + secondStatisticsOffset,
+        sizeof(encodedStatistics)
+    );
+    encodedStatistics.queue.index = 1u;
+    NWB_MEMCPY(
+        payload.data() + secondStatisticsOffset,
+        payload.size() - secondStatisticsOffset,
+        &encodedStatistics,
+        sizeof(encodedStatistics)
+    );
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    Telemetry::EncodedFrameGraphPayloadHeaderV8 header;
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    ++header.physicalQueueRuntimeStatisticsCount;
+    NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size() - 1u, parsed));
+}
+
+TEST(Telemetry, FrameGraphPayloadRejectsUnknownVersion){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestFrameGraph(testArena.arena, nodes, edges);
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 907u, nodes, edges, payload));
+    Telemetry::EncodedFrameGraphPayloadHeader header;
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    header.version = 99u;
+    NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+}
+
+TEST(Telemetry, FrameGraphQueueAssignmentPayloadRejectsMalformedRecords){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestAssignedFrameGraph(testArena.arena, nodes, edges);
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 908u, nodes, edges, payload));
+    const usize assignmentOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV2)
+        + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
+        + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
+    ;
+    Telemetry::EncodedFrameGraphQueueAssignment first;
+    Telemetry::EncodedFrameGraphQueueAssignment second;
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + assignmentOffset, sizeof(first));
+    NWB_MEMCPY(
+        &second,
+        sizeof(second),
+        payload.data() + assignmentOffset + sizeof(first),
+        sizeof(second)
+    );
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    second.nodeIndex = first.nodeIndex;
+    NWB_MEMCPY(
+        payload.data() + assignmentOffset + sizeof(first),
+        payload.size() - assignmentOffset - sizeof(first),
+        &second,
+        sizeof(second)
+    );
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 908u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + assignmentOffset, sizeof(first));
+    NWB_MEMCPY(
+        &second,
+        sizeof(second),
+        payload.data() + assignmentOffset + sizeof(first),
+        sizeof(second)
+    );
+    first.nodeIndex = 2u;
+    second.nodeIndex = 0u;
+    NWB_MEMCPY(payload.data() + assignmentOffset, payload.size() - assignmentOffset, &first, sizeof(first));
+    NWB_MEMCPY(
+        payload.data() + assignmentOffset + sizeof(first),
+        payload.size() - assignmentOffset - sizeof(first),
+        &second,
+        sizeof(second)
+    );
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 908u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + assignmentOffset, sizeof(first));
+    first.nodeIndex = 1u;
+    NWB_MEMCPY(payload.data() + assignmentOffset, payload.size() - assignmentOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 908u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + assignmentOffset, sizeof(first));
+    first.modifiers = static_cast<u8>(1u << 7u);
+    NWB_MEMCPY(payload.data() + assignmentOffset, payload.size() - assignmentOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 908u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + assignmentOffset, sizeof(first));
+    ++first.scoreTotal;
+    NWB_MEMCPY(payload.data() + assignmentOffset, payload.size() - assignmentOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 908u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + assignmentOffset, sizeof(first));
+    first.acceptedQueue.deviceGeneration = 0u;
+    NWB_MEMCPY(payload.data() + assignmentOffset, payload.size() - assignmentOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 908u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + assignmentOffset, sizeof(first));
+    first.previousAcceptedQueue.index = Limit<u16>::s_Max;
+    NWB_MEMCPY(payload.data() + assignmentOffset, payload.size() - assignmentOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+}
+
+TEST(Telemetry, FrameGraphCompiledTaskPayloadRejectsMalformedRecords){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 909u, nodes, edges, payload));
+    const usize compiledTaskOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV3)
+        + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
+        + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
+        + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u
+    ;
+    Telemetry::EncodedFrameGraphCompiledTask first;
+    Telemetry::EncodedFrameGraphCompiledTask second;
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
+    NWB_MEMCPY(
+        &second,
+        sizeof(second),
+        payload.data() + compiledTaskOffset + sizeof(first),
+        sizeof(second)
+    );
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    second.nodeIndex = first.nodeIndex;
+    NWB_MEMCPY(
+        payload.data() + compiledTaskOffset + sizeof(first),
+        payload.size() - compiledTaskOffset - sizeof(first),
+        &second,
+        sizeof(second)
+    );
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 909u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
+    first.nodeIndex = 1u;
+    NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 909u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
+    first.planGeneration = 0u;
+    NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 909u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
+    first.packetIndex = Limit<u32>::s_Max;
+    NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 909u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
+    first.packetizationDecision = Telemetry::FrameGraphTaskPacketizationDecision::Unknown;
+    NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 909u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
+    first.packetizationDecision = Telemetry::FrameGraphTaskPacketizationDecision::kCount;
+    NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 909u, nodes, edges, payload));
+    NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
+    first.reserved[0u] = 1u;
+    NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+}
+
+TEST(Telemetry, FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    const usize runtimeStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
+        + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
+        + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
+        + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u
+        + sizeof(Telemetry::EncodedFrameGraphCompiledTask) * 2u
+    ;
+    Telemetry::EncodedFrameGraphRuntimeStatisticsV8 first;
+    Telemetry::EncodedFrameGraphRuntimeStatisticsV8 second;
+    const auto loadRuntimeStatistics = [&]()->bool{
+        if(!Telemetry::BuildFrameGraphPayload(testArena.arena, 911u, nodes, edges, payload))
+            return false;
+        NWB_MEMCPY(
+            &first,
+            sizeof(first),
+            payload.data() + runtimeStatisticsOffset,
+            sizeof(first)
+        );
+        NWB_MEMCPY(
+            &second,
+            sizeof(second),
+            payload.data() + runtimeStatisticsOffset + sizeof(first),
+            sizeof(second)
+        );
+        return true;
+    };
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+
+    ASSERT_TRUE(loadRuntimeStatistics());
+    second.nodeIndex = first.nodeIndex;
+    NWB_MEMCPY(
+        payload.data() + runtimeStatisticsOffset + sizeof(first),
+        payload.size() - runtimeStatisticsOffset - sizeof(first),
+        &second,
+        sizeof(second)
+    );
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(loadRuntimeStatistics());
+    first.nodeIndex = 2u;
+    second.nodeIndex = 0u;
+    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    NWB_MEMCPY(
+        payload.data() + runtimeStatisticsOffset + sizeof(first),
+        payload.size() - runtimeStatisticsOffset - sizeof(first),
+        &second,
+        sizeof(second)
+    );
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(loadRuntimeStatistics());
+    first.nodeIndex = 1u;
+    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(loadRuntimeStatistics());
+    first.nodeIndex = 3u;
+    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(loadRuntimeStatistics());
+    first.reserved = 1u;
+    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(loadRuntimeStatistics());
+    first.graphGeneration = 0u;
+    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(loadRuntimeStatistics());
+    first.planGeneration = 0u;
+    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(loadRuntimeStatistics());
+    first.recordingAttemptGeneration = 0u;
+    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(loadRuntimeStatistics());
+    first.deviceGeneration = 0u;
+    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(loadRuntimeStatistics());
+    first.compile.declarationSeconds = -1.0;
+    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(loadRuntimeStatistics());
+    first.recording.recordingSeconds = Limit<f64>::s_Infinity;
+    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(loadRuntimeStatistics());
+    first.submission.submissionSeconds = Limit<f64>::s_QuietNaN;
+    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    for(usize mutationIndex = 0u; mutationIndex < LengthOf(s_FrameGraphRuntimeStatisticsCountMutations); ++mutationIndex){
+        SCOPED_TRACE(mutationIndex);
+        ASSERT_TRUE(loadRuntimeStatistics());
+        Telemetry::FrameGraphRuntimeStatistics malformed = MakeFrameGraphRuntimeStatistics();
+        s_FrameGraphRuntimeStatisticsCountMutations[mutationIndex](malformed);
+        first = EncodeTestFrameGraphRuntimeStatisticsV8(malformed, first.nodeIndex, first.reserved);
+        NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+        EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    }
+
+    ASSERT_TRUE(loadRuntimeStatistics());
+    Telemetry::EncodedFrameGraphPayloadHeaderV8 header;
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    header.runtimeStatisticsCount = 4u;
+    NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    ASSERT_TRUE(loadRuntimeStatistics());
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size() - 1u, parsed));
 }
 
 TEST(Telemetry, FrameGraphPayloadRejectsInvalidInput){
@@ -841,6 +3614,46 @@ TEST(Telemetry, FrameGraphPayloadRejectsInvalidInput){
     BuildTestFrameGraph(testArena.arena, nodes, edges);
     edges[0u].toNodeIndex = 99u;
     EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
+
+    BuildTestAssignedFrameGraph(testArena.arena, nodes, edges);
+    nodes[0u].queueAssignment.acceptance = Telemetry::FrameGraphQueueAssignmentAcceptance::First;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
+
+    BuildTestAssignedFrameGraph(testArena.arena, nodes, edges);
+    nodes[1u].queueAssignment = MakeChangedFrameGraphQueueAssignment();
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
+
+    BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
+    nodes[1u].compiledTask = MakeFrameGraphCompiledTask(
+        41u,
+        7u,
+        Telemetry::FrameGraphTaskPacketizationDecision::FirstTask
+    );
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
+
+    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    nodes[1u].runtimeStatistics = MakeFrameGraphRuntimeStatistics();
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
+
+    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+    nodes[0u].runtimeStatistics.graphGeneration = 0u;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
+
+    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+    nodes[0u].runtimeStatistics.compile.totalSeconds = -1.0;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
+
+    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+    nodes[0u].runtimeStatistics.recording.recordingElapsedSeconds = Limit<f64>::s_QuietNaN;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
+
+    for(usize mutationIndex = 0u; mutationIndex < LengthOf(s_FrameGraphRuntimeStatisticsCountMutations); ++mutationIndex){
+        SCOPED_TRACE(mutationIndex);
+        BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+        s_FrameGraphRuntimeStatisticsCountMutations[mutationIndex](nodes[0u].runtimeStatistics);
+        EXPECT_FALSE(Telemetry::IsValidFrameGraphRuntimeStatistics(nodes[0u].runtimeStatistics));
+        EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
+    }
 }
 
 TEST(Telemetry, RecordFrameGraphUsesTelemetryEvent){
@@ -1300,7 +4113,10 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
     ));
 
     const Name cpuScopeName("gbuffer");
-    const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
+    NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
+    stats.sampleCount = 1u;
+    stats.firstSampleFrameIndex = stats.publishFrameIndex;
+    stats.lastSampleFrameIndex = stats.publishFrameIndex;
     EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, "gbuffer", stats, 2u));
 
     const Name memoryScopeName("memory/project_arena");
@@ -1311,7 +4127,7 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
-    EXPECT_TRUE(Telemetry::RecordFrameGraph(recorder, 909u, nodes, edges, 4u));
+    EXPECT_TRUE(Telemetry::RecordFrameGraph(recorder, stats.publishFrameIndex, nodes, edges, 4u));
 
     Log::TelemetryReport report(testArena.arena);
     EXPECT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
@@ -1324,7 +4140,7 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
     EXPECT_TRUE(report.summary.hasFrameRange);
     EXPECT_EQ(report.summary.minFrameIndex, 4u);
-    EXPECT_EQ(report.summary.maxFrameIndex, 909u);
+    EXPECT_EQ(report.summary.maxFrameIndex, snapshot.frameIndex);
     EXPECT_EQ(report.summary.cpuTimingEventCount, 1u);
     EXPECT_EQ(report.summary.cpuTimingSampleCount, stats.sampleCount);
     EXPECT_EQ(report.summary.cpuTimingSeconds, stats.seconds);
@@ -1338,6 +4154,690 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
     EXPECT_TRUE(ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "source,scope,publish_frame"));
     EXPECT_TRUE(ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "cpu,gbuffer"));
     EXPECT_TRUE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "GBuffer Pass\\n125.000 ms"));
+}
+
+TEST(Telemetry, TelemetryReportPreservesEveryFrameGraphAndCorrelatesTimingByFrame){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    const Name gbufferScopeName("gbuffer");
+    NWB::Core::Perf::TimingStats firstTiming = MakeTestTimingStats();
+    firstTiming.seconds = 0.041;
+    firstTiming.sampleCount = 1u;
+    firstTiming.publishFrameIndex = 41u;
+    firstTiming.firstSampleFrameIndex = 40u;
+    firstTiming.lastSampleFrameIndex = 40u;
+    ASSERT_TRUE(Telemetry::RecordPerfTiming(
+        recorder,
+        Telemetry::PerfTimingSource::Gpu,
+        gbufferScopeName,
+        "gbuffer",
+        firstTiming,
+        70u
+    ));
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 40u, nodes, edges, 7u));
+
+    NWB::Core::Perf::TimingStats secondTiming = MakeTestTimingStats();
+    secondTiming.seconds = 0.042;
+    secondTiming.sampleCount = 1u;
+    secondTiming.publishFrameIndex = 42u;
+    secondTiming.firstSampleFrameIndex = 41u;
+    secondTiming.lastSampleFrameIndex = 41u;
+    ASSERT_TRUE(Telemetry::RecordPerfTiming(
+        recorder,
+        Telemetry::PerfTimingSource::Gpu,
+        gbufferScopeName,
+        "gbuffer",
+        secondTiming,
+        80u
+    ));
+
+    nodes[0u].label = "Second GBuffer Pass";
+    nodes[0u].flags = 129u;
+    edges[0u].flags = 64u;
+    edges[1u].flags = 3u;
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 41u, nodes, edges, 8u));
+
+    nodes[0u].label = "Unmatched GBuffer Pass";
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 42u, nodes, edges, 9u));
+
+    Log::TelemetryReport report(testArena.arena);
+    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    EXPECT_EQ(report.summary.frameGraphFrameCount, 3u);
+
+    const AStringView json(report.json.data(), report.json.size());
+    const usize firstJsonGraph = json.find("\"frameIndex\": 40");
+    const usize secondJsonGraph = json.find("\"frameIndex\": 41");
+    const usize thirdJsonGraph = json.find("\"frameIndex\": 42");
+    ASSERT_NE(firstJsonGraph, AStringView::npos);
+    ASSERT_NE(secondJsonGraph, AStringView::npos);
+    ASSERT_NE(thirdJsonGraph, AStringView::npos);
+    EXPECT_LT(firstJsonGraph, secondJsonGraph);
+    EXPECT_LT(secondJsonGraph, thirdJsonGraph);
+    const AStringView firstJsonRecord = json.substr(firstJsonGraph, secondJsonGraph - firstJsonGraph);
+    const AStringView secondJsonRecord = json.substr(secondJsonGraph, thirdJsonGraph - secondJsonGraph);
+    const AStringView thirdJsonRecord = json.substr(thirdJsonGraph);
+    EXPECT_TRUE(ContainsText(firstJsonRecord, "\"streamId\": 7"));
+    EXPECT_TRUE(ContainsText(secondJsonRecord, "\"streamId\": 8"));
+    EXPECT_TRUE(ContainsText(thirdJsonRecord, "\"streamId\": 9"));
+    EXPECT_TRUE(ContainsText(firstJsonRecord, "\"label\": \"GBuffer Pass\", \"kind\": \"pass\", \"flags\": 1"));
+    EXPECT_TRUE(ContainsText(secondJsonRecord, "\"label\": \"Second GBuffer Pass\", \"kind\": \"pass\", \"flags\": 129"));
+    EXPECT_TRUE(ContainsText(thirdJsonRecord, "\"label\": \"Unmatched GBuffer Pass\", \"kind\": \"pass\", \"flags\": 129"));
+    EXPECT_TRUE(ContainsText(firstJsonRecord, "\"from\": 1, \"to\": 2, \"kind\": \"reads\", \"flags\": 2"));
+    EXPECT_TRUE(ContainsText(secondJsonRecord, "\"from\": 1, \"to\": 2, \"kind\": \"reads\", \"flags\": 3"));
+    EXPECT_TRUE(ContainsText(firstJsonRecord, "\"from\": 0, \"to\": 1, \"kind\": \"writes\", \"flags\": 0"));
+    EXPECT_TRUE(ContainsText(secondJsonRecord, "\"from\": 0, \"to\": 1, \"kind\": \"writes\", \"flags\": 64"));
+
+    char gbufferIdentityText[NameDetail::s_DebugHashTextLength + 1u] = {};
+    NameDetail::HashToDebugString(Name("gbuffer").hash(), gbufferIdentityText, sizeof(gbufferIdentityText));
+    constexpr AStringView identityPrefix = "\"identity\": \"";
+    const usize identityOffset = json.find(identityPrefix);
+    ASSERT_NE(identityOffset, AStringView::npos);
+    EXPECT_EQ(
+        json.substr(identityOffset + identityPrefix.size(), NameDetail::s_DebugHashTextLength),
+        AStringView(gbufferIdentityText, NameDetail::s_DebugHashTextLength)
+    );
+
+    const AStringView dot(report.graph.data(), report.graph.size());
+    const usize firstDotGraph = dot.find("digraph frame_graph_40_7_0");
+    const usize secondDotGraph = dot.find("digraph frame_graph_41_8_1");
+    const usize thirdDotGraph = dot.find("digraph frame_graph_42_9_2");
+    ASSERT_NE(firstDotGraph, AStringView::npos);
+    ASSERT_NE(secondDotGraph, AStringView::npos);
+    ASSERT_NE(thirdDotGraph, AStringView::npos);
+    EXPECT_LT(firstDotGraph, secondDotGraph);
+    EXPECT_LT(secondDotGraph, thirdDotGraph);
+    EXPECT_EQ(dot.find("digraph frame_graph_", thirdDotGraph + 1u), AStringView::npos);
+    const AStringView firstDotRecord = dot.substr(firstDotGraph, secondDotGraph - firstDotGraph);
+    const AStringView secondDotRecord = dot.substr(secondDotGraph, thirdDotGraph - secondDotGraph);
+    const AStringView thirdDotRecord = dot.substr(thirdDotGraph);
+    EXPECT_TRUE(ContainsText(firstDotRecord, AStringView(gbufferIdentityText, NameDetail::s_DebugHashTextLength)));
+    EXPECT_TRUE(ContainsText(secondDotRecord, AStringView(gbufferIdentityText, NameDetail::s_DebugHashTextLength)));
+    EXPECT_TRUE(ContainsText(thirdDotRecord, AStringView(gbufferIdentityText, NameDetail::s_DebugHashTextLength)));
+    EXPECT_TRUE(ContainsText(firstDotRecord, "GBuffer Pass\\n41.000 ms"));
+    EXPECT_TRUE(ContainsText(secondDotRecord, "Second GBuffer Pass\\n42.000 ms"));
+    EXPECT_TRUE(ContainsText(thirdDotRecord, "Unmatched GBuffer Pass"));
+    EXPECT_FALSE(ContainsText(thirdDotRecord, " ms"));
+    EXPECT_TRUE(ContainsText(firstDotRecord, "kind=\"pass\", flags=1"));
+    EXPECT_TRUE(ContainsText(secondDotRecord, "kind=\"pass\", flags=129"));
+    EXPECT_TRUE(ContainsText(firstDotRecord, "label=\"reads\", flags=2"));
+    EXPECT_TRUE(ContainsText(secondDotRecord, "label=\"reads\", flags=3"));
+    EXPECT_TRUE(ContainsText(firstDotRecord, "label=\"writes\", flags=0"));
+    EXPECT_TRUE(ContainsText(secondDotRecord, "label=\"writes\", flags=64"));
+}
+
+TEST(Telemetry, TelemetryReportDoesNotAttachAggregatedTimingToOneGraph){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    NWB::Core::Perf::TimingStats aggregatedTiming = MakeTestTimingStats();
+    aggregatedTiming.seconds = 0.043;
+    aggregatedTiming.sampleCount = 2u;
+    aggregatedTiming.publishFrameIndex = 44u;
+    aggregatedTiming.firstSampleFrameIndex = 43u;
+    aggregatedTiming.lastSampleFrameIndex = 43u;
+    ASSERT_TRUE(Telemetry::RecordPerfTiming(
+        recorder,
+        Telemetry::PerfTimingSource::Gpu,
+        Name("gbuffer"),
+        "gbuffer",
+        aggregatedTiming,
+        70u
+    ));
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 43u, nodes, edges, 7u));
+    nodes[0u].label = "Publish Frame GBuffer Pass";
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 44u, nodes, edges, 8u));
+
+    Log::TelemetryReport report(testArena.arena);
+    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    const AStringView dot(report.graph.data(), report.graph.size());
+    EXPECT_TRUE(ContainsText(dot, "digraph frame_graph_43_7_0"));
+    EXPECT_TRUE(ContainsText(dot, "digraph frame_graph_44_8_1"));
+    EXPECT_FALSE(ContainsText(dot, " ms"));
+    EXPECT_EQ(report.summary.gpuTimingEventCount, 1u);
+    EXPECT_EQ(report.summary.gpuTimingSampleCount, aggregatedTiming.sampleCount);
+    EXPECT_EQ(report.summary.gpuTimingSeconds, aggregatedTiming.seconds);
+    EXPECT_TRUE(ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "gpu,gbuffer"));
+}
+
+TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+    nodes[2u].queueAssignment.previousAcceptedQueue = {};
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 52u, nodes, edges, 12u));
+
+    Log::TelemetryReport report(testArena.arena);
+    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+
+    const AStringView json(report.json.data(), report.json.size());
+    const usize changedJsonOffset = json.find("\"label\": \"GBuffer Pass\"");
+    const usize unassignedJsonOffset = json.find("\"label\": \"Albedo Texture\"");
+    const usize rejectedJsonOffset = json.find("\"label\": \"Lighting Pass\"");
+    const usize jsonEdgesOffset = json.find("\"edges\": [", rejectedJsonOffset);
+    ASSERT_NE(changedJsonOffset, AStringView::npos);
+    ASSERT_NE(unassignedJsonOffset, AStringView::npos);
+    ASSERT_NE(rejectedJsonOffset, AStringView::npos);
+    ASSERT_NE(jsonEdgesOffset, AStringView::npos);
+    ASSERT_LT(changedJsonOffset, unassignedJsonOffset);
+    ASSERT_LT(unassignedJsonOffset, rejectedJsonOffset);
+    ASSERT_LT(rejectedJsonOffset, jsonEdgesOffset);
+
+    const AStringView changedJson = json.substr(changedJsonOffset, unassignedJsonOffset - changedJsonOffset);
+    const AStringView unassignedJson = json.substr(unassignedJsonOffset, rejectedJsonOffset - unassignedJsonOffset);
+    const AStringView rejectedJson = json.substr(rejectedJsonOffset, jsonEdgesOffset - rejectedJsonOffset);
+    EXPECT_TRUE(ContainsText(
+        changedJson,
+        "\"queueAssignment\": {\"initialQueue\": {\"index\": 1, \"deviceGeneration\": 17}, "
+        "\"plannedQueue\": {\"index\": 3, \"deviceGeneration\": 17}, "
+        "\"acceptedQueue\": {\"index\": 3, \"deviceGeneration\": 17}, "
+        "\"previousAcceptedQueue\": {\"index\": 2, \"deviceGeneration\": 17}, \"queueClass\": \"compute\", "
+        "\"reason\": \"fallback\", \"modifierMask\": 63, \"acceptance\": \"changed\", \"dedicated\": true, "
+        "\"score\": {\"preference\": 11, \"overlap\": 7, \"queueLoad\": 3, \"incomingCrossings\": 2, "
+        "\"outgoingCrossings\": 1, \"ownershipTransfers\": 4, \"total\": 8}}"
+    ));
+    EXPECT_TRUE(ContainsText(unassignedJson, "\"queueAssignment\": null"));
+    EXPECT_TRUE(ContainsText(
+        changedJson,
+        "\"compiledTask\": {\"planGeneration\": 41, \"packetIndex\": 7, "
+        "\"packetizationDecision\": \"firstTask\"}"
+    ));
+    EXPECT_TRUE(ContainsText(unassignedJson, "\"compiledTask\": null"));
+    EXPECT_TRUE(ContainsText(
+        rejectedJson,
+        "\"compiledTask\": {\"planGeneration\": 41, \"packetIndex\": 7, "
+        "\"packetizationDecision\": \"mergedExplicit\"}"
+    ));
+    EXPECT_TRUE(ContainsText(
+        rejectedJson,
+        "\"queueAssignment\": {\"initialQueue\": {\"index\": 4, \"deviceGeneration\": 17}, "
+        "\"plannedQueue\": {\"index\": 5, \"deviceGeneration\": 17}, \"acceptedQueue\": null, "
+        "\"previousAcceptedQueue\": null, \"queueClass\": \"transfer\", \"reason\": \"scoredAny\", "
+        "\"modifierMask\": 32, \"acceptance\": \"notAccepted\", \"dedicated\": false, "
+        "\"score\": {\"preference\": 5, \"overlap\": 6, \"queueLoad\": 1, \"incomingCrossings\": 2, "
+        "\"outgoingCrossings\": 3, \"ownershipTransfers\": 4, \"total\": 1}}"
+    ));
+    EXPECT_TRUE(ContainsText(
+        changedJson,
+        "\"runtimeStatistics\": {\"graphGeneration\": 51, \"planGeneration\": 52, "
+        "\"recordingAttemptGeneration\": 53, \"deviceGeneration\": 17"
+    ));
+    EXPECT_TRUE(ContainsText(
+        changedJson,
+        "\"compile\": {\"taskCount\": 78, \"resourceCount\": 2, \"resourceVersionCount\": 3, "
+        "\"resourceVersionEdgeCount\": 6, \"resourceUseCount\": 50, "
+        "\"explicitDependencyCount\": 4, \"inferredDependencyCount\": 5, \"packetCount\": 76, "
+        "\"packetDependencyCount\": 7, \"mergedTaskCount\": 2, \"transitionBarrierCount\": 9, "
+        "\"uavBarrierCount\": 10, \"ownershipReleaseBarrierCount\": 11, \"ownershipAcquireBarrierCount\": 12, "
+        "\"stateExportBarrierCount\": 13, \"logicalOwnershipTransferCount\": 60, "
+        "\"logicalOwnershipTransferSignatureCount\": 15, \"repeatedOwnershipTransferSignatureCount\": 14, "
+        "\"concurrentSharingCouldAvoidTransferCount\": 17, \"concurrentSharingAdviceResourceCount\": 2, "
+        "\"logicalOwnershipTransferInternalCount\": 19, \"logicalOwnershipTransferExternalImportCount\": 20, "
+        "\"logicalOwnershipTransferExternalExportCount\": 21, \"resourceSetCount\": 22, "
+        "\"resourceSetMemberCount\": 23, \"directResourceUseCount\": 24, \"declaredResourceSetUseCount\": 25, "
+        "\"expandedResourceSetMemberUseCount\": 26, \"payloadObjectCount\": 27, \"payloadObjectBytes\": 28, "
+        "\"uploadBlobCount\": 29, \"uploadBlobBytes\": 30, \"declarationSeconds\": 0.001, "
+        "\"analysisSeconds\": 0.002, \"validationSeconds\": 0.003, \"dependencyAnalysisSeconds\": 0.004, "
+        "\"hazardAnalysisSeconds\": 0.005, \"topologicalOrderSeconds\": 0.006, "
+        "\"queueAssignmentSeconds\": 0.007, \"planningSeconds\": 0.008, \"packetizationSeconds\": 0.009, "
+        "\"resourceStatePlanningSeconds\": 0.01, \"packetDependencyPlanningSeconds\": 0.011, "
+        "\"totalSeconds\": 0.012}"
+    ));
+    EXPECT_TRUE(ContainsText(
+        changedJson,
+        "\"recording\": {\"packetCount\": 31, \"taskCount\": 32, \"commandListCount\": 33, "
+        "\"barrierCount\": 34, \"workerRoutedPacketCount\": 30, \"parallelPacketCount\": 29, "
+        "\"commandListAcquisitionSeconds\": 0.013, \"graphBarrierRecordingSeconds\": 0.014, "
+        "\"taskRecordSeconds\": 0.015, \"recordingSeconds\": 0.016, \"recordingElapsedSeconds\": 0.017, "
+        "\"readyFrontierElapsedSeconds\": 0.018, \"readyFrontierWorkerBusySeconds\": 0.019, "
+        "\"readyFrontierWorkerCapacitySeconds\": 0.02}"
+    ));
+    EXPECT_TRUE(ContainsText(
+        changedJson,
+        "\"submission\": {\"acceptedPacketCount\": 37, \"acceptedTaskCount\": 38, "
+        "\"rejectedPacketCount\": 39, \"rejectedTaskCount\": 40, \"nativeSubmissionCount\": 30, "
+        "\"rejectedSubmissionCount\": 38, \"nativeCommandListCount\": 32, \"plannedWaitTokenCount\": 44, "
+        "\"sameQueueWaitElisionCount\": 12, \"timelineWaitCount\": 14, \"mergedTimelineWaitCount\": 18, "
+        "\"acceptedFrontierSubmissionCount\": 28, \"recoverySubmissionCount\": 8, \"submissionSeconds\": 0.021}"
+    ));
+    EXPECT_TRUE(ContainsText(changedJson, "\"physicalQueues\": null"));
+    EXPECT_TRUE(ContainsText(
+        unassignedJson,
+        "\"kind\": \"resource\", \"flags\": 0, \"queueAssignment\": null, \"compiledTask\": null, "
+        "\"runtimeStatistics\": null"
+    ));
+    EXPECT_FALSE(ContainsText(unassignedJson, "\"runtimeStatistics\": {"));
+    EXPECT_TRUE(ContainsText(
+        rejectedJson,
+        "\"runtimeStatistics\": {\"graphGeneration\": 61, \"planGeneration\": 62, "
+        "\"recordingAttemptGeneration\": 63, \"deviceGeneration\": 17"
+    ));
+    EXPECT_TRUE(ContainsText(rejectedJson, "\"physicalQueues\": null"));
+
+    const AStringView dot(report.graph.data(), report.graph.size());
+    const usize changedDotOffset = dot.find("  n0 [");
+    const usize unassignedDotOffset = dot.find("  n1 [");
+    const usize rejectedDotOffset = dot.find("  n2 [");
+    const usize dotEdgesOffset = dot.find("  n0 ->", rejectedDotOffset);
+    ASSERT_NE(changedDotOffset, AStringView::npos);
+    ASSERT_NE(unassignedDotOffset, AStringView::npos);
+    ASSERT_NE(rejectedDotOffset, AStringView::npos);
+    ASSERT_NE(dotEdgesOffset, AStringView::npos);
+    ASSERT_LT(changedDotOffset, unassignedDotOffset);
+    ASSERT_LT(unassignedDotOffset, rejectedDotOffset);
+    ASSERT_LT(rejectedDotOffset, dotEdgesOffset);
+
+    const AStringView changedDot = dot.substr(changedDotOffset, unassignedDotOffset - changedDotOffset);
+    const AStringView unassignedDot = dot.substr(unassignedDotOffset, rejectedDotOffset - unassignedDotOffset);
+    const AStringView rejectedDot = dot.substr(rejectedDotOffset, dotEdgesOffset - rejectedDotOffset);
+    EXPECT_TRUE(ContainsText(
+        changedDot,
+        "queue_assignment=\"present\", queue_initial_index=1, queue_initial_device_generation=17, "
+        "queue_planned_index=3, queue_planned_device_generation=17, queue_accepted_index=3, "
+        "queue_accepted_device_generation=17, queue_previous_accepted_index=2, "
+        "queue_previous_accepted_device_generation=17, queue_class=\"compute\", queue_reason=\"fallback\", "
+        "queue_modifier_mask=63, queue_acceptance=\"changed\", queue_dedicated=true, queue_score_preference=11, "
+        "queue_score_overlap=7, queue_score_queue_load=3, queue_score_incoming_crossings=2, "
+        "queue_score_outgoing_crossings=1, queue_score_ownership_transfers=4, queue_score_total=8"
+    ));
+    EXPECT_TRUE(ContainsText(unassignedDot, "queue_assignment=\"none\""));
+    EXPECT_TRUE(ContainsText(
+        changedDot,
+        "compiled_task=\"present\", compiled_plan_generation=41, compiled_packet_index=7, "
+        "packetization_decision=\"firstTask\""
+    ));
+    EXPECT_TRUE(ContainsText(unassignedDot, "compiled_task=\"none\""));
+    EXPECT_TRUE(ContainsText(
+        rejectedDot,
+        "compiled_task=\"present\", compiled_plan_generation=41, compiled_packet_index=7, "
+        "packetization_decision=\"mergedExplicit\""
+    ));
+    EXPECT_TRUE(ContainsText(
+        rejectedDot,
+        "queue_assignment=\"present\", queue_initial_index=4, queue_initial_device_generation=17, "
+        "queue_planned_index=5, queue_planned_device_generation=17, queue_accepted_index=\"none\", "
+        "queue_accepted_device_generation=\"none\", queue_previous_accepted_index=\"none\", "
+        "queue_previous_accepted_device_generation=\"none\", queue_class=\"transfer\", queue_reason=\"scoredAny\", "
+        "queue_modifier_mask=32, queue_acceptance=\"notAccepted\", queue_dedicated=false, queue_score_preference=5, "
+        "queue_score_overlap=6, queue_score_queue_load=1, queue_score_incoming_crossings=2, "
+        "queue_score_outgoing_crossings=3, queue_score_ownership_transfers=4, queue_score_total=1"
+    ));
+    EXPECT_TRUE(ContainsText(
+        changedDot,
+        "runtime_statistics=\"present\", runtime_graph_generation=51, runtime_plan_generation=52, "
+        "runtime_recording_attempt_generation=53, runtime_device_generation=17"
+    ));
+    EXPECT_TRUE(ContainsText(unassignedDot, "runtime_statistics=\"none\""));
+    EXPECT_TRUE(ContainsText(
+        rejectedDot,
+        "runtime_statistics=\"present\", runtime_graph_generation=61, runtime_plan_generation=62, "
+        "runtime_recording_attempt_generation=63, runtime_device_generation=17"
+    ));
+    EXPECT_TRUE(ContainsText(changedDot, "runtime_physical_queue_count=\"unknown\""));
+    EXPECT_TRUE(ContainsText(rejectedDot, "runtime_physical_queue_count=\"unknown\""));
+}
+
+TEST(Telemetry, TelemetryReportPreservesExactPhysicalQueueRuntimeStatistics){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords records(testArena.arena);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 54u, nodes, edges, records, 14u));
+
+    Log::TelemetryReport report(testArena.arena);
+    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    const AStringView json(report.json.data(), report.json.size());
+    const usize firstPassOffset = json.find("\"label\": \"GBuffer Pass\"");
+    const usize resourceOffset = json.find("\"label\": \"Albedo Texture\"");
+    const usize secondPassOffset = json.find("\"label\": \"Lighting Pass\"");
+    const usize edgesOffset = json.find("\"edges\": [", secondPassOffset);
+    ASSERT_NE(firstPassOffset, AStringView::npos);
+    ASSERT_NE(resourceOffset, AStringView::npos);
+    ASSERT_NE(secondPassOffset, AStringView::npos);
+    ASSERT_NE(edgesOffset, AStringView::npos);
+    const AStringView firstPass = json.substr(firstPassOffset, resourceOffset - firstPassOffset);
+    const AStringView secondPass = json.substr(secondPassOffset, edgesOffset - secondPassOffset);
+    const usize graphicsQueueOffset = firstPass.find("\"queue\": {\"index\": 1");
+    const usize computeQueueOffset = firstPass.find("\"queue\": {\"index\": 3");
+    ASSERT_NE(graphicsQueueOffset, AStringView::npos);
+    ASSERT_NE(computeQueueOffset, AStringView::npos);
+    EXPECT_LT(graphicsQueueOffset, computeQueueOffset);
+    EXPECT_TRUE(ContainsText(
+        firstPass,
+        "\"compile\": {\"taskCount\": 50, \"packetCount\": 49, \"mergedTaskCount\": 1, "
+        "\"prologueBarrierCount\": 11, \"epilogueBarrierCount\": 12, \"ownershipReleaseBarrierCount\": 6, "
+        "\"ownershipAcquireBarrierCount\": 7, \"incomingLogicalOwnershipTransferCount\": 30, "
+        "\"outgoingLogicalOwnershipTransferCount\": 31, "
+        "\"incomingLogicalOwnershipTransferSignatureCount\": 8, "
+        "\"outgoingLogicalOwnershipTransferSignatureCount\": 9, "
+        "\"incomingRepeatedOwnershipTransferSignatureCount\": 7, "
+        "\"outgoingRepeatedOwnershipTransferSignatureCount\": 8, "
+        "\"concurrentSharingAdviceResourceCount\": 1}"
+    ));
+    EXPECT_TRUE(ContainsText(
+        firstPass,
+        "\"recording\": {\"packetCount\": 20, \"taskCount\": 21, \"commandListCount\": 21, "
+        "\"barrierCount\": 23, \"workerRoutedPacketCount\": 19, \"parallelPacketCount\": 18, "
+        "\"commandListAcquisitionSeconds\": 0.005, \"graphBarrierRecordingSeconds\": 0.006, "
+        "\"taskRecordSeconds\": 0.007, \"recordingSeconds\": 0.008}"
+    ));
+    EXPECT_TRUE(ContainsText(
+        firstPass,
+        "\"submission\": {\"acceptedPacketCount\": 25, \"acceptedTaskCount\": 26, "
+        "\"rejectedPacketCount\": 24, \"rejectedTaskCount\": 24, \"nativeSubmissionCount\": 19, "
+        "\"rejectedSubmissionCount\": 23, \"nativeCommandListCount\": 20, \"plannedWaitTokenCount\": 20, "
+        "\"sameQueueWaitElisionCount\": 5, \"timelineWaitCount\": 8, \"mergedTimelineWaitCount\": 7, "
+        "\"acceptedFrontierSubmissionCount\": 18, \"recoverySubmissionCount\": 5, \"submissionSeconds\": 0.011}"
+    ));
+    EXPECT_TRUE(ContainsText(firstPass, "\"recoverySubmissionCount\": 3"));
+    EXPECT_TRUE(ContainsText(secondPass, "\"physicalQueues\": null"));
+
+    const AStringView dot(report.graph.data(), report.graph.size());
+    const usize firstPassDotOffset = dot.find("  n0 [");
+    const usize secondPassDotOffset = dot.find("  n2 [");
+    const usize dotEdgesOffset = dot.find("  n0 ->", secondPassDotOffset);
+    ASSERT_NE(firstPassDotOffset, AStringView::npos);
+    ASSERT_NE(secondPassDotOffset, AStringView::npos);
+    ASSERT_NE(dotEdgesOffset, AStringView::npos);
+    const AStringView firstPassDot = dot.substr(firstPassDotOffset, secondPassDotOffset - firstPassDotOffset);
+    const AStringView secondPassDot = dot.substr(secondPassDotOffset, dotEdgesOffset - secondPassDotOffset);
+    EXPECT_TRUE(ContainsText(firstPassDot, "runtime_physical_queue_count=2"));
+    EXPECT_TRUE(ContainsText(secondPassDot, "runtime_physical_queue_count=\"unknown\""));
+}
+
+TEST(Telemetry, TelemetryReportPreservesExactPacketSubmissionStatistics){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics(testArena.arena);
+    Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics(testArena.arena);
+    BuildTestPacketSubmissionFrameGraph(
+        testArena.arena,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics
+    );
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(
+        recorder,
+        57u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        17u
+    ));
+
+    Log::TelemetryReport report(testArena.arena);
+    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    const AStringView json(report.json.data(), report.json.size());
+    const usize packetZeroOffset = json.find("\"packet\": {\"index\": 0, \"generation\": 72}");
+    const usize packetOneOffset = json.find("\"packet\": {\"index\": 1, \"generation\": 72}");
+    const usize packetTwoOffset = json.find("\"packet\": {\"index\": 2, \"generation\": 72}");
+    ASSERT_NE(packetZeroOffset, AStringView::npos);
+    ASSERT_NE(packetOneOffset, AStringView::npos);
+    ASSERT_NE(packetTwoOffset, AStringView::npos);
+    EXPECT_LT(packetZeroOffset, packetOneOffset);
+    EXPECT_LT(packetOneOffset, packetTwoOffset);
+    EXPECT_TRUE(ContainsText(
+        json,
+        "\"packetSubmissions\": [{\"packet\": {\"index\": 0, \"generation\": 72}, "
+        "\"queue\": {\"index\": 1, \"deviceGeneration\": 17}, \"queueClass\": \"graphics\", "
+        "\"taskCount\": 2, \"commandListCount\": 1, \"plannedWaitTokenCount\": 2, "
+        "\"sameQueueWaitElisionCount\": 1, \"timelineWaitCount\": 1, \"mergedTimelineWaitCount\": 0, "
+        "\"joinsAcceptedQueueFrontier\": false, \"recoverySubmission\": false, "
+        "\"submissionSeconds\": 0.125}"
+    ));
+    EXPECT_TRUE(ContainsText(
+        json,
+        "\"packet\": {\"index\": 1, \"generation\": 72}, "
+        "\"queue\": {\"index\": 3, \"deviceGeneration\": 17}, \"queueClass\": \"compute\", "
+        "\"taskCount\": 1, \"commandListCount\": 2, \"plannedWaitTokenCount\": 3, "
+        "\"sameQueueWaitElisionCount\": 0, \"timelineWaitCount\": 1, \"mergedTimelineWaitCount\": 2, "
+        "\"joinsAcceptedQueueFrontier\": true, \"recoverySubmission\": false, "
+        "\"submissionSeconds\": 0.25}"
+    ));
+    EXPECT_TRUE(ContainsText(
+        json,
+        "\"packet\": {\"index\": 2, \"generation\": 72}, "
+        "\"queue\": {\"index\": 1, \"deviceGeneration\": 17}, \"queueClass\": \"graphics\", "
+        "\"taskCount\": 2, \"commandListCount\": 1, \"plannedWaitTokenCount\": 1, "
+        "\"sameQueueWaitElisionCount\": 1, \"timelineWaitCount\": 0, \"mergedTimelineWaitCount\": 0, "
+        "\"joinsAcceptedQueueFrontier\": true, \"recoverySubmission\": true"
+    ));
+
+    const AStringView dot(report.graph.data(), report.graph.size());
+    EXPECT_TRUE(ContainsText(dot, "runtime_packet_submission_count=3"));
+}
+
+TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromLegacyUnknown){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics(testArena.arena);
+    Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics(testArena.arena);
+    BuildTestPacketSubmissionFrameGraph(
+        testArena.arena,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics
+    );
+    nodes[0u].runtimeStatistics.submission = {};
+    physicalQueueRuntimeStatistics.clear();
+    packetSubmissionStatistics.clear();
+
+    Telemetry::Recorder exactRecorder(testArena.arena);
+    exactRecorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(
+        exactRecorder,
+        58u,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        18u
+    ));
+    Log::TelemetryReport exactReport(testArena.arena);
+    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, exactRecorder.view(), exactReport));
+    const AStringView exactJson(exactReport.json.data(), exactReport.json.size());
+    const AStringView exactDot(exactReport.graph.data(), exactReport.graph.size());
+    EXPECT_TRUE(ContainsText(exactJson, "\"packetSubmissions\": []"));
+    EXPECT_TRUE(ContainsText(exactDot, "runtime_packet_submission_count=0"));
+
+    Telemetry::Recorder legacyRecorder(testArena.arena);
+    legacyRecorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(legacyRecorder, 59u, nodes, edges, 19u));
+    Log::TelemetryReport legacyReport(testArena.arena);
+    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, legacyRecorder.view(), legacyReport));
+    const AStringView legacyJson(legacyReport.json.data(), legacyReport.json.size());
+    const AStringView legacyDot(legacyReport.graph.data(), legacyReport.graph.size());
+    EXPECT_TRUE(ContainsText(legacyJson, "\"packetSubmissions\": null"));
+    EXPECT_TRUE(ContainsText(legacyDot, "runtime_packet_submission_count=\"unknown\""));
+}
+
+TEST(Telemetry, TelemetryReportMarksV4RecoverySubmissionCountUnknown){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+
+    Telemetry::TelemetryBytes currentPayload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 55u, nodes, edges, currentPayload));
+    Telemetry::TelemetryBytes legacyPayload(testArena.arena);
+    ASSERT_TRUE(ConvertFrameGraphPayloadV8ToLegacy(
+        currentPayload,
+        Telemetry::s_FrameGraphRuntimeStatisticsPayloadVersion,
+        legacyPayload
+    ));
+
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+    ASSERT_TRUE(recorder.recordBinary(
+        Telemetry::EventKind::FrameGraphFrame,
+        55u,
+        legacyPayload.data(),
+        legacyPayload.size(),
+        15u
+    ));
+
+    Log::TelemetryReport report(testArena.arena);
+    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    const AStringView json(report.json.data(), report.json.size());
+    EXPECT_TRUE(ContainsText(
+        json,
+        "\"resourceVersionCount\": null, \"resourceVersionEdgeCount\": null"
+    ));
+    EXPECT_TRUE(ContainsText(
+        json,
+        "\"acceptedFrontierSubmissionCount\": 28, \"recoverySubmissionCount\": null, "
+        "\"submissionSeconds\": 0.021}"
+    ));
+    EXPECT_TRUE(ContainsText(json, "\"physicalQueues\": null"));
+    EXPECT_FALSE(ContainsText(json, "\"recoverySubmissionCount\": 0"));
+
+    const AStringView dot(report.graph.data(), report.graph.size());
+    EXPECT_TRUE(ContainsText(dot, "runtime_physical_queue_count=\"unknown\""));
+}
+
+TEST(Telemetry, TelemetryReportMarksV5RecoverySubmissionCountsUnknown){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords records(testArena.arena);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+
+    Telemetry::TelemetryBytes currentPayload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena,
+        56u,
+        nodes,
+        edges,
+        records,
+        currentPayload
+    ));
+    Telemetry::TelemetryBytes legacyPayload(testArena.arena);
+    ASSERT_TRUE(ConvertFrameGraphPayloadV8ToLegacy(
+        currentPayload,
+        Telemetry::s_FrameGraphPhysicalQueueRuntimeStatisticsPayloadVersion,
+        legacyPayload
+    ));
+
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+    ASSERT_TRUE(recorder.recordBinary(
+        Telemetry::EventKind::FrameGraphFrame,
+        56u,
+        legacyPayload.data(),
+        legacyPayload.size(),
+        16u
+    ));
+
+    Log::TelemetryReport report(testArena.arena);
+    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    const AStringView json(report.json.data(), report.json.size());
+    const usize firstPassOffset = json.find("\"label\": \"GBuffer Pass\"");
+    const usize resourceOffset = json.find("\"label\": \"Albedo Texture\"");
+    ASSERT_NE(firstPassOffset, AStringView::npos);
+    ASSERT_NE(resourceOffset, AStringView::npos);
+    const AStringView firstPass = json.substr(firstPassOffset, resourceOffset - firstPassOffset);
+    EXPECT_TRUE(ContainsText(
+        firstPass,
+        "\"acceptedFrontierSubmissionCount\": 28, \"recoverySubmissionCount\": null"
+    ));
+    EXPECT_TRUE(ContainsText(
+        firstPass,
+        "\"acceptedFrontierSubmissionCount\": 18, \"recoverySubmissionCount\": null"
+    ));
+    EXPECT_TRUE(ContainsText(
+        firstPass,
+        "\"acceptedFrontierSubmissionCount\": 10, \"recoverySubmissionCount\": null"
+    ));
+    EXPECT_TRUE(ContainsText(firstPass, "\"physicalQueues\": [{"));
+    EXPECT_FALSE(ContainsText(json, "\"recoverySubmissionCount\": 0"));
+}
+
+TEST(Telemetry, TelemetryReportMarksLegacyRuntimeStatisticsAbsent){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 53u, nodes, edges, 13u));
+
+    Log::TelemetryReport report(testArena.arena);
+    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+
+    const AStringView json(report.json.data(), report.json.size());
+    const usize firstPassJsonOffset = json.find("\"label\": \"GBuffer Pass\"");
+    const usize resourceJsonOffset = json.find("\"label\": \"Albedo Texture\"");
+    const usize secondPassJsonOffset = json.find("\"label\": \"Lighting Pass\"");
+    const usize jsonEdgesOffset = json.find("\"edges\": [", secondPassJsonOffset);
+    ASSERT_NE(firstPassJsonOffset, AStringView::npos);
+    ASSERT_NE(resourceJsonOffset, AStringView::npos);
+    ASSERT_NE(secondPassJsonOffset, AStringView::npos);
+    ASSERT_NE(jsonEdgesOffset, AStringView::npos);
+    ASSERT_LT(firstPassJsonOffset, resourceJsonOffset);
+    ASSERT_LT(resourceJsonOffset, secondPassJsonOffset);
+    ASSERT_LT(secondPassJsonOffset, jsonEdgesOffset);
+
+    const AStringView firstPassJson = json.substr(firstPassJsonOffset, resourceJsonOffset - firstPassJsonOffset);
+    const AStringView resourceJson = json.substr(resourceJsonOffset, secondPassJsonOffset - resourceJsonOffset);
+    const AStringView secondPassJson = json.substr(secondPassJsonOffset, jsonEdgesOffset - secondPassJsonOffset);
+    EXPECT_TRUE(ContainsText(firstPassJson, "\"kind\": \"pass\""));
+    EXPECT_TRUE(ContainsText(firstPassJson, "\"runtimeStatistics\": null"));
+    EXPECT_TRUE(ContainsText(
+        resourceJson,
+        "\"kind\": \"resource\", \"flags\": 0, \"queueAssignment\": null, \"compiledTask\": null, "
+        "\"runtimeStatistics\": null"
+    ));
+    EXPECT_TRUE(ContainsText(secondPassJson, "\"kind\": \"pass\""));
+    EXPECT_TRUE(ContainsText(secondPassJson, "\"runtimeStatistics\": null"));
+
+    const AStringView dot(report.graph.data(), report.graph.size());
+    const usize firstPassDotOffset = dot.find("  n0 [");
+    const usize resourceDotOffset = dot.find("  n1 [");
+    const usize secondPassDotOffset = dot.find("  n2 [");
+    const usize dotEdgesOffset = dot.find("  n0 ->", secondPassDotOffset);
+    ASSERT_NE(firstPassDotOffset, AStringView::npos);
+    ASSERT_NE(resourceDotOffset, AStringView::npos);
+    ASSERT_NE(secondPassDotOffset, AStringView::npos);
+    ASSERT_NE(dotEdgesOffset, AStringView::npos);
+    ASSERT_LT(firstPassDotOffset, resourceDotOffset);
+    ASSERT_LT(resourceDotOffset, secondPassDotOffset);
+    ASSERT_LT(secondPassDotOffset, dotEdgesOffset);
+
+    const AStringView firstPassDot = dot.substr(firstPassDotOffset, resourceDotOffset - firstPassDotOffset);
+    const AStringView resourceDot = dot.substr(resourceDotOffset, secondPassDotOffset - resourceDotOffset);
+    const AStringView secondPassDot = dot.substr(secondPassDotOffset, dotEdgesOffset - secondPassDotOffset);
+    EXPECT_TRUE(ContainsText(firstPassDot, "runtime_statistics=\"none\""));
+    EXPECT_TRUE(ContainsText(resourceDot, "runtime_statistics=\"none\""));
+    EXPECT_TRUE(ContainsText(secondPassDot, "runtime_statistics=\"none\""));
 }
 
 TEST(Telemetry, TelemetryIngestStoresRawAndReports){
@@ -1395,8 +4895,6 @@ TEST(Telemetry, TelemetryIngestStoresRawAndReports){
 
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -20,11 +20,19 @@ struct NwbSceneShadingBuffer{
     float4 g_NwbSceneCameraPosition;
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Scene shading and the light list are renderer-global heap resources. Every consumer provides the two uniform
 // heap-slot expressions before including this header; local scene descriptor bindings are intentionally unsupported.
 #if !defined(NWB_SCENE_SHADING_HEAP_SLOT) || !defined(NWB_SCENE_LIGHT_LIST_HEAP_SLOT)
 #error "Renderer scene buffers require shading and light-list heap slots"
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct NwbSceneLight{
     // xyz = world position (point/spot), w = spot inner cone cosine.
@@ -40,12 +48,20 @@ struct NwbSceneLight{
     float4 params2;
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Typed views of the shared heap StorageBuffer / UniformBuffer descriptor tables, exactly like the BVH-node and
 // mesh-stream aliases (bindless_heap_bvh.slangi / bindless_heap_mesh.slangi): the element type/stride is a per-view
 // SPIR-V decoration over the one Vulkan descriptor, so the scene-shading CB and light list are legible through the
 // heap without a second registration. The selecting slot is uniform across the draw (one per frame), so no
 // NonUniformResourceIndex() wrap is needed (mirrors the deferred image/sampler accessors).
 #include "../bindless/bindless_heap.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed views of the storage/uniform-buffer descriptor tables in bindless_heap.

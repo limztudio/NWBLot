@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Build and run the hybrid transparent-shadow fallback boundary A/B benchmark.
+"""Build and run the natural hybrid-versus-opaque shadow-boundary A/B benchmark.
 
 From the repository root:
 
     python launcher.py hybrid-shadow-boundary
 
-The launcher builds two fixed-yaw stress-scene executables: a healthy hybrid-shadow arm and
-an intentionally persistent software-traversal miss that retains opaque hardware shadows.
+The launcher builds one fixed-yaw stress-scene executable and runs it twice: the normal hybrid-shadow arm and
+a test-owned opaque-only scene baseline that naturally uses hardware shadows without a transparent software tail.
 It writes timestamped artifacts beneath ``.cozter/out/ab-results/hybrid-shadow-boundary``.
 Pass options for ``run.py`` after ``--``, for example:
 
@@ -33,7 +33,6 @@ import launcher as ROOT_LAUNCHER  # noqa: E402
 
 RUNNER_SCRIPT = Path("tests") / "ab" / "hybrid_shadow_boundary" / "run.py"
 HEALTHY_TARGET = "nwb_hybrid_shadow_boundary_healthy_benchmark"
-FALLBACK_TARGET = "nwb_hybrid_shadow_boundary_fallback_benchmark"
 RUNTIME_DIRECTORY = Path("Testing") / "skinning_culling_benchmark_runtime"
 REQUIRED_DEFINES = {
     "NWB_BUILD_LOADER": "ON",
@@ -41,12 +40,13 @@ REQUIRED_DEFINES = {
     "NWB_BUILD_RESOURCE_COOKER": "ON",
     "NWB_BUILD_TESTS": "ON",
 }
+DIAGNOSTIC_CONFIGURATIONS = ("dbg", "opt")
 
 
 @dataclass(frozen=True)
 class BoundaryPaths:
     healthy_executable: Path
-    fallback_executable: Path
+    baseline_executable: Path
     runtime_directory: Path
     output_directory: Path
 
@@ -60,6 +60,14 @@ def default_output_directory(root: Path) -> Path:
     return root / ".cozter" / "out" / "ab-results" / "hybrid-shadow-boundary" / stamp
 
 
+def require_diagnostic_configuration(config: str) -> None:
+    if config not in DIAGNOSTIC_CONFIGURATIONS:
+        raise SystemExit(
+            "hybrid-shadow-boundary requires --config dbg or --config opt because fin omits the warning "
+            "diagnostics used to reject transient hybrid-route degradation"
+        )
+
+
 def resolve_paths(args: argparse.Namespace, settings) -> BoundaryPaths:
     healthy_executable = ROOT_LAUNCHER.resolve_executable_path(
         settings,
@@ -68,13 +76,17 @@ def resolve_paths(args: argparse.Namespace, settings) -> BoundaryPaths:
         None,
         args.dry_run,
     )
-    fallback_executable = ROOT_LAUNCHER.resolve_executable_path(
-        settings,
-        FALLBACK_TARGET,
-        args.fallback_executable,
-        None,
-        args.dry_run,
-    )
+    baseline_executable = args.baseline_executable
+    if baseline_executable is None:
+        baseline_executable = healthy_executable
+    else:
+        baseline_executable = ROOT_LAUNCHER.resolve_executable_path(
+            settings,
+            HEALTHY_TARGET,
+            baseline_executable,
+            None,
+            args.dry_run,
+        )
     runtime_directory = (
         resolve_path(settings.root, args.runtime_dir)
         if args.runtime_dir is not None
@@ -85,7 +97,7 @@ def resolve_paths(args: argparse.Namespace, settings) -> BoundaryPaths:
         if args.output_dir is not None
         else default_output_directory(settings.root)
     )
-    return BoundaryPaths(healthy_executable, fallback_executable, runtime_directory, output_directory)
+    return BoundaryPaths(healthy_executable, baseline_executable, runtime_directory, output_directory)
 
 
 def build_benchmark_targets(args: argparse.Namespace, settings, environment) -> None:
@@ -97,7 +109,6 @@ def build_benchmark_targets(args: argparse.Namespace, settings, environment) -> 
         str(settings.build_dir),
         "--target",
         HEALTHY_TARGET,
-        FALLBACK_TARGET,
         "--config",
         settings.config,
     ]
@@ -112,8 +123,8 @@ def runner_command(args: argparse.Namespace, paths: BoundaryPaths) -> List[objec
         REPO / RUNNER_SCRIPT,
         "--healthy-executable",
         paths.healthy_executable,
-        "--fallback-executable",
-        paths.fallback_executable,
+        "--baseline-executable",
+        paths.baseline_executable,
         "--runtime-dir",
         paths.runtime_directory,
         "--output-dir",
@@ -150,7 +161,12 @@ def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     ROOT_LAUNCHER.add_build_options(parser)
     parser.add_argument("--healthy-executable", type=Path, help="Override the healthy hybrid-shadow executable.")
-    parser.add_argument("--fallback-executable", type=Path, help="Override the persistent-fallback executable.")
+    parser.add_argument(
+        "--baseline-executable",
+        dest="baseline_executable",
+        type=Path,
+        help="Override the executable reused for the opaque baseline arm.",
+    )
     parser.add_argument("--runtime-dir", type=Path, help="Override the cooked stress-scene runtime directory.")
     parser.add_argument("--output-dir", type=Path, help="Directory for boundary timing, logs, captures, and reports.")
     parser.add_argument("--logserver-executable", type=Path, help="Override the logserver executable.")
@@ -194,7 +210,7 @@ def run_self_test() -> int:
     )
     args = SimpleNamespace(
         healthy_executable=None,
-        fallback_executable=None,
+        baseline_executable=None,
         runtime_dir=None,
         output_dir=root / ".cozter" / "out" / "ab-results" / "hybrid-shadow-boundary" / "self-test",
         dry_run=True,
@@ -205,12 +221,20 @@ def run_self_test() -> int:
     )
     paths = resolve_paths(args, settings)
     command = [str(item) for item in runner_command(args, paths)]
-    assert str(paths.runtime_directory).endswith("Testing/skinning_culling_benchmark_runtime/dbg")
+    assert paths.runtime_directory.as_posix().endswith("Testing/skinning_culling_benchmark_runtime/dbg")
     assert command[command.index("--healthy-executable") + 1].endswith("hybrid_shadow_boundary_healthy_benchmark.exe")
-    assert command[command.index("--fallback-executable") + 1].endswith("hybrid_shadow_boundary_fallback_benchmark.exe")
+    assert command[command.index("--baseline-executable") + 1].endswith("hybrid_shadow_boundary_healthy_benchmark.exe")
     assert "--gpu-validation" in command
     assert command[-2:] == ["--measure-seconds", "30"]
     assert parse_args(["--self-test"]).gpu_validation is False
+    require_diagnostic_configuration("dbg")
+    require_diagnostic_configuration("opt")
+    try:
+        require_diagnostic_configuration("fin")
+    except SystemExit as error:
+        assert "requires --config dbg or --config opt" in str(error)
+    else:
+        raise AssertionError("fin must not claim the warning-based semantic verdict")
     print("hybrid-shadow boundary launcher self-test passed")
     return 0
 
@@ -218,6 +242,7 @@ def run_self_test() -> int:
 def run(args: argparse.Namespace) -> int:
     environment = ROOT_LAUNCHER.build_environment(args)
     settings = ROOT_LAUNCHER.resolve_launch_settings(args, ROOT_LAUNCHER.DEFAULT_DOMAIN)
+    require_diagnostic_configuration(settings.config)
     ROOT_LAUNCHER.maybe_configure(args, settings, REQUIRED_DEFINES, environment)
     settings = ROOT_LAUNCHER.refresh_launch_settings(settings, args.domain)
     build_benchmark_targets(args, settings, environment)

@@ -25,6 +25,7 @@ GpuCompiledGraph::GpuCompiledGraph(GraphicsArena& arena)
     , m_prologueStateSeeds(arena)
     , m_prologueBarriers(arena)
     , m_epilogueBarriers(arena)
+    , m_ownershipTransfers(arena)
     , m_externalResourceExports(arena)
     , m_externalResourceExportSources(arena)
     , m_queueTopology(arena)
@@ -40,18 +41,27 @@ void GpuCompiledGraph::reset(){
     m_prologueStateSeeds.clear();
     m_prologueBarriers.clear();
     m_epilogueBarriers.clear();
+    m_ownershipTransfers.clear();
     m_externalResourceExports.clear();
     m_externalResourceExportSources.clear();
     m_queueTopology.clear();
+    m_presentEndpoint = {};
+    m_packetTimingEnvelopeRange = {};
     m_generation = 0u;
+    m_declarationRevision = 0u;
+    m_planGeneration = 0u;
     m_deviceGeneration = 0u;
     m_graphTaskCount = 0u;
+    m_compileStatistics = {};
+    m_hasPresentEndpoint = false;
     m_valid = false;
 }
 
 bool GpuCompiledGraph::validFor(const GpuTaskGraph& graph)const noexcept{
-    return m_valid
+    const GpuPresentEndpoint* const graphEndpoint = graph.presentEndpoint();
+    return valid()
         && m_generation == graph.generation()
+        && m_declarationRevision == graph.declarationRevision()
         && m_graphTaskCount == graph.taskCount()
         && m_tasks.size() == m_graphTaskCount
         && m_packetTasks.size() == m_graphTaskCount
@@ -59,11 +69,25 @@ bool GpuCompiledGraph::validFor(const GpuTaskGraph& graph)const noexcept{
             (m_graphTaskCount == 0u && m_packets.empty())
             || (m_graphTaskCount > 0u && !m_packets.empty() && m_packets.size() <= m_graphTaskCount)
         )
+        && (m_hasPresentEndpoint == (graphEndpoint != nullptr))
+        && (
+            !graphEndpoint
+            || (
+                m_presentEndpoint.valid()
+                && m_presentEndpoint.producer == graphEndpoint->producer
+                && m_presentEndpoint.backBuffer == graphEndpoint->backBuffer
+                && m_presentEndpoint.producer.generation == m_generation
+                && m_presentEndpoint.backBuffer.generation == m_generation
+                && validPacket(m_presentEndpoint.packet)
+                && m_presentEndpoint.packet == packetForTask(m_presentEndpoint.producer)
+                && queueInfo(m_presentEndpoint.queue) != nullptr
+            )
+        )
     ;
 }
 
 bool GpuCompiledGraph::validPacket(const GpuSubmissionPacketId& packetID)const noexcept{
-    return packetID.valid() && packetID.generation == m_generation && packetID.index < m_packets.size();
+    return valid() && packetID.valid() && packetID.generation == m_planGeneration && packetID.index < m_packets.size();
 }
 
 bool GpuCompiledGraph::validPacketRange(const GpuSubmissionPacketRange& range)const noexcept{
@@ -75,7 +99,7 @@ bool GpuCompiledGraph::validPacketRange(const GpuSubmissionPacketRange& range)co
 
 GpuSubmissionPacketId GpuCompiledGraph::packetIdAt(const usize index)const noexcept{
     return index < m_packets.size()
-        ? GpuSubmissionPacketId{ static_cast<u32>(index), m_generation }
+        ? GpuSubmissionPacketId{ static_cast<u32>(index), m_planGeneration }
         : GpuSubmissionPacketId{}
     ;
 }
@@ -121,6 +145,11 @@ const GpuCompiledTask* GpuCompiledGraph::findTask(const GpuTaskId& task)const no
 GpuSubmissionPacketId GpuCompiledGraph::packetForTask(const GpuTaskId& task)const noexcept{
     const GpuCompiledTask* const compiledTask = findTask(task);
     return compiledTask ? compiledTask->packet : GpuSubmissionPacketId{};
+}
+
+GpuTaskPacketizationDecision::Enum GpuCompiledGraph::packetizationDecisionForTask(const GpuTaskId& task)const noexcept{
+    const GpuCompiledTask* const compiledTask = findTask(task);
+    return compiledTask ? compiledTask->packetizationDecision : GpuTaskPacketizationDecision::Unknown;
 }
 
 bool GpuCompiledGraph::tasksSharePacket(
@@ -290,6 +319,14 @@ const GpuCompiledBarrier* GpuCompiledGraph::taskEpilogueBarriers(const GpuTaskId
     return m_epilogueBarriers.data() + compiledTask->epilogueBarrierOffset;
 }
 
+const GpuCompiledOwnershipTransfer* GpuCompiledGraph::logicalOwnershipTransfers()const noexcept{
+    return valid() && !m_ownershipTransfers.empty() ? m_ownershipTransfers.data() : nullptr;
+}
+
+const GpuCompiledOwnershipTransfer* GpuCompiledGraph::logicalOwnershipTransferAt(const usize index)const noexcept{
+    return valid() && index < m_ownershipTransfers.size() ? &m_ownershipTransfers[index] : nullptr;
+}
+
 const GpuCompiledExternalResourceExport* GpuCompiledGraph::externalResourceExport(
     const GpuGraphResourceId& resource
 )const noexcept{
@@ -320,6 +357,157 @@ const GpuCompiledExternalResourceExportSource* GpuCompiledGraph::externalResourc
     return m_externalResourceExportSources.data() + exportInfo.sourceOffset;
 }
 
+GpuTaskGraphPhysicalQueueCompileStatistics GpuCompiledGraph::physicalQueueCompileStatistics(
+    const GpuPhysicalQueueId& queue
+)const noexcept{
+    if(!valid())
+        return {};
+
+    const GpuPhysicalQueueInfo* const queueInfo = this->queueInfo(queue);
+    if(!queueInfo || queueInfo->queueClass >= CommandQueue::kCount)
+        return {};
+
+    GpuTaskGraphPhysicalQueueCompileStatistics statistics{
+        .graphGeneration = m_generation,
+        .planGeneration = m_planGeneration,
+        .deviceGeneration = m_deviceGeneration,
+        .queue = queue,
+        .queueClass = queueInfo->queueClass,
+    };
+    const auto countOwnershipBarriers = [&statistics](
+        const GraphicsVector<GpuCompiledBarrier>& barriers,
+        const u32 barrierOffset,
+        const u32 barrierCount
+    ){
+        if(
+            barrierCount == 0u
+            || barrierOffset > barriers.size()
+            || barrierCount > barriers.size() - barrierOffset
+        )
+            return;
+
+        const GpuCompiledBarrier* const taskBarriers = barriers.data() + barrierOffset;
+        for(u32 barrierIndex = 0u; barrierIndex < barrierCount; ++barrierIndex){
+            switch(taskBarriers[barrierIndex].type){
+            case GpuCompiledBarrierType::TextureOwnershipRelease:
+            case GpuCompiledBarrierType::BufferOwnershipRelease:
+            case GpuCompiledBarrierType::AccelStructOwnershipRelease:
+                ++statistics.ownershipReleaseBarrierCount;
+                break;
+            case GpuCompiledBarrierType::TextureOwnershipAcquire:
+            case GpuCompiledBarrierType::BufferOwnershipAcquire:
+            case GpuCompiledBarrierType::AccelStructOwnershipAcquire:
+                ++statistics.ownershipAcquireBarrierCount;
+                break;
+            default:
+                break;
+            }
+        }
+    };
+    for(const GpuCompiledTask& task : m_tasks){
+        if(task.queue != queue)
+            continue;
+
+        ++statistics.taskCount;
+        statistics.prologueBarrierCount += task.prologueBarrierCount;
+        statistics.epilogueBarrierCount += task.epilogueBarrierCount;
+        countOwnershipBarriers(m_prologueBarriers, task.prologueBarrierOffset, task.prologueBarrierCount);
+        countOwnershipBarriers(m_epilogueBarriers, task.epilogueBarrierOffset, task.epilogueBarrierCount);
+    }
+    for(const GpuSubmissionPacket& packet : m_packets){
+        if(packet.queue != queue)
+            continue;
+
+        ++statistics.packetCount;
+        if(packet.taskCount > 1u)
+            statistics.mergedTaskCount += packet.taskCount - 1u;
+    }
+    const auto sameTransferSignature = [](const GpuCompiledOwnershipTransfer& lhs, const GpuCompiledOwnershipTransfer& rhs){
+        return lhs.resource == rhs.resource
+            && lhs.route == rhs.route
+            && lhs.sourceTask == rhs.sourceTask
+            && lhs.destinationTask == rhs.destinationTask
+            && lhs.sourceQueue == rhs.sourceQueue
+            && lhs.destinationQueue == rhs.destinationQueue
+        ;
+    };
+    for(usize transferIndex = 0u; transferIndex < m_ownershipTransfers.size(); ++transferIndex){
+        const GpuCompiledOwnershipTransfer& transfer = m_ownershipTransfers[transferIndex];
+        if(transfer.sourceQueue == queue)
+            ++statistics.outgoingLogicalOwnershipTransferCount;
+        if(transfer.destinationQueue == queue)
+            ++statistics.incomingLogicalOwnershipTransferCount;
+
+        bool signatureAlreadyCounted = false;
+        bool hasEarlierDistinctSignature = false;
+        for(usize previousIndex = 0u; previousIndex < transferIndex; ++previousIndex){
+            const GpuCompiledOwnershipTransfer& previous = m_ownershipTransfers[previousIndex];
+            if(sameTransferSignature(transfer, previous)){
+                signatureAlreadyCounted = true;
+                break;
+            }
+            if(previous.resource == transfer.resource)
+                hasEarlierDistinctSignature = true;
+        }
+        if(signatureAlreadyCounted)
+            continue;
+
+        if(transfer.sourceQueue == queue){
+            ++statistics.outgoingLogicalOwnershipTransferSignatureCount;
+            if(hasEarlierDistinctSignature)
+                ++statistics.outgoingRepeatedOwnershipTransferSignatureCount;
+        }
+        if(transfer.destinationQueue == queue){
+            ++statistics.incomingLogicalOwnershipTransferSignatureCount;
+            if(hasEarlierDistinctSignature)
+                ++statistics.incomingRepeatedOwnershipTransferSignatureCount;
+        }
+    }
+    for(usize transferIndex = 0u; transferIndex < m_ownershipTransfers.size(); ++transferIndex){
+        const GpuCompiledOwnershipTransfer& transfer = m_ownershipTransfers[transferIndex];
+        if(
+            !transfer.concurrentSharingCouldAvoid
+            || (transfer.sourceQueue != queue && transfer.destinationQueue != queue)
+        )
+            continue;
+
+        bool resourceAlreadyCounted = false;
+        for(usize previousIndex = 0u; previousIndex < transferIndex; ++previousIndex){
+            const GpuCompiledOwnershipTransfer& previous = m_ownershipTransfers[previousIndex];
+            if(
+                previous.resource == transfer.resource
+                && previous.concurrentSharingCouldAvoid
+                && (previous.sourceQueue == queue || previous.destinationQueue == queue)
+            ){
+                resourceAlreadyCounted = true;
+                break;
+            }
+        }
+        if(resourceAlreadyCounted)
+            continue;
+
+        usize distinctSignatureCount = 0u;
+        for(usize candidateIndex = 0u; candidateIndex < m_ownershipTransfers.size(); ++candidateIndex){
+            const GpuCompiledOwnershipTransfer& candidate = m_ownershipTransfers[candidateIndex];
+            if(candidate.resource != transfer.resource || !candidate.concurrentSharingCouldAvoid)
+                continue;
+
+            bool signatureAlreadyCounted = false;
+            for(usize previousIndex = 0u; previousIndex < candidateIndex; ++previousIndex){
+                if(sameTransferSignature(candidate, m_ownershipTransfers[previousIndex])){
+                    signatureAlreadyCounted = true;
+                    break;
+                }
+            }
+            if(!signatureAlreadyCounted)
+                ++distinctSignatureCount;
+        }
+        if(distinctSignatureCount > 1u)
+            ++statistics.concurrentSharingAdviceResourceCount;
+    }
+    return statistics;
+}
+
 const GpuPhysicalQueueInfo* GpuCompiledGraph::queueInfo(const GpuPhysicalQueueId& queue)const noexcept{
     if(!queue.valid() || queue.deviceGeneration != m_deviceGeneration)
         return nullptr;
@@ -328,6 +516,15 @@ const GpuPhysicalQueueInfo* GpuCompiledGraph::queueInfo(const GpuPhysicalQueueId
             return &info;
     }
     return nullptr;
+}
+
+GpuPhysicalQueueTopology GpuCompiledGraph::queueTopology()const noexcept{
+    if(!valid())
+        return {};
+    return GpuPhysicalQueueTopology{
+        .queues = m_queueTopology.empty() ? nullptr : m_queueTopology.data(),
+        .queueCount = m_queueTopology.size(),
+    };
 }
 
 

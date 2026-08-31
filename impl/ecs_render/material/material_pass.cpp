@@ -2,11 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include "material_system.h"
 
 #include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/csg/csg_system.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
 
-
+#include <core/common/log.h>
+#include <core/ecs/world.h>
+#include <core/graphics/backend_selection.h>
+#include <core/graphics/module.h>
+#include <impl/ecs_mesh/module.h>
+#include <impl/ecs_scene/module.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -33,6 +41,31 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
     const SIMDVector maxScale = Vector3MaxComponent(scale);
     const SIMDVector tolerance = VectorScale(VectorMax(maxScale, s_SIMDOne), s_MeshletConeCullUniformScaleEpsilon);
     return Vector3LessOrEqual(VectorSubtract(maxScale, minScale), tolerance);
+}
+
+[[nodiscard]] static MaterialPassMeshResourceSnapshot CaptureMeshResourceSnapshot(const MeshResources& mesh){
+    MaterialPassMeshResourceSnapshot snapshot;
+    snapshot.sourceBuffers = mesh;
+    for(u32 slotIndex = 0u; slotIndex < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++slotIndex)
+        snapshot.geometryHeapHandles[slotIndex] = mesh.geometryHeapHandles[slotIndex];
+    snapshot.emulationVertexBuffer = mesh.emulationVertexBuffer;
+    snapshot.emulationVertexHeapHandle = mesh.emulationVertexHeapHandle;
+    snapshot.meshletCount = mesh.meshletCount;
+    snapshot.meshletPrimitiveIndexCount = mesh.meshletPrimitiveIndexCount;
+    snapshot.runtimeMesh = mesh.runtimeMesh;
+    snapshot.dynamicMeshletBoundsFresh = mesh.dynamicMeshletBoundsFresh;
+    snapshot.dynamicMeshletConesFresh = mesh.dynamicMeshletConesFresh;
+    return snapshot;
+}
+
+[[nodiscard]] static MaterialPassPipelineResourceSnapshot CapturePipelineResourceSnapshot(
+    const MaterialPipelineResources& pipelineResources
+){
+    return {
+        .emulationPipeline = pipelineResources.emulationPipeline,
+        .meshletPipeline = pipelineResources.meshletPipeline,
+        .computePipeline = pipelineResources.computePipeline,
+    };
 }
 
 struct MaterialTypedByteRangeKey{
@@ -129,7 +162,8 @@ bool RendererMaterialSystem::prepareMaterialPassResources(
         materialTypedRanges,
 #endif
         materialTypedBytes,
-        RendererResourceLookupMode::CreateMissing
+        RendererResourceLookupMode::CreateMissing,
+        nullptr
     );
     if(drawItems.empty())
         return true;
@@ -151,11 +185,14 @@ bool RendererMaterialSystem::prepareMaterialPassResources(
 
 void RendererMaterialSystem::renderPreparedMaterialPass(
     Core::CommandList& commandList,
+    const DeferredFrameTargets& deferredTargets,
     Core::Framebuffer* framebuffer,
     const MaterialPipelinePass::Enum pass,
     const AvboitFrameTargets* const avboitTargets,
     const MaterialPassDrawItemPartitions& drawItems,
     const CsgFrameGpuData& csgFrameData,
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const usize instanceCount,
     const usize materialTypedByteCount,
     const bool csgIntervalSampleImageStatesGraphOwned,
@@ -198,20 +235,20 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
 
     // Graph declaration froze the draw ordering and published all stream bytes before this task records. Keep this
     // consumer side-effect free: in particular, never replace its mesh-view, material, or CSG buffer contents.
-    if(!materialPassDrawBuffersReady(instanceCount, materialTypedByteCount)){
+    if(!frameBindings.frameReady(instanceCount, materialTypedByteCount)){
         discardEmulationOutputTiming();
         return;
     }
-    const bool regularDrawResourcesReady = materialPassDrawResourcesReady(drawItems.regular);
+    const bool regularDrawResourcesReady = materialPassDrawResourcesReady(drawItems.regular, frameBindings);
     // An active output handoff covers every regular compute draw. If a late resource check disagrees with the
     // producer, reject this prepared raster rather than consuming a buffer the current packet did not generate.
     if(emulationOutputEntryStateGraphOwned && !regularDrawResourcesReady){
         discardEmulationOutputTiming();
         return;
     }
-    const bool csgResourcesReady = !csgFrameData.hasWork() || m_renderer.csgSystem().csgFrameBuffersReady(csgFrameData);
+    const bool csgResourcesReady = csgResources.frameReady(csgFrameData);
     const bool csgDrawResourcesReady = csgResourcesReady
-        && (drawItems.csg.empty() || materialPassDrawResourcesReady(drawItems.csg))
+        && (drawItems.csg.empty() || materialPassDrawResourcesReady(drawItems.csg, frameBindings))
     ;
     if(csgEmulationOutputEntryStateGraphOwned && !csgDrawResourcesReady){
         discardEmulationOutputTiming();
@@ -222,6 +259,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
     const MaterialPassDrawContext regularDrawContext{
         commandList,
+        deferredTargets,
         framebuffer,
         pass,
         avboitTargets,
@@ -231,12 +269,15 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         csgClipBufferStatesGraphOwned,
         materialFrameStatesGraphOwned,
         materialGeometryStatesGraphOwned,
-        emulationOutputEntryStateGraphOwned
+        emulationOutputEntryStateGraphOwned,
+        nullptr,
+        frameBindings
     };
     // CSG may opt in only through its own frozen alias-free producer. This remains separate from the regular flag
     // so mixed streams cannot suppress the local interleaving required by an unowned CSG output.
     const MaterialPassDrawContext csgDrawContext{
         commandList,
+        deferredTargets,
         framebuffer,
         pass,
         avboitTargets,
@@ -246,7 +287,9 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         csgClipBufferStatesGraphOwned,
         materialFrameStatesGraphOwned,
         materialGeometryStatesGraphOwned,
-        csgEmulationOutputEntryStateGraphOwned
+        csgEmulationOutputEntryStateGraphOwned,
+        &csgResources,
+        frameBindings
     };
     const auto recordPreparedDraws = [&](){
         if(regularDrawResourcesReady)
@@ -261,9 +304,9 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     }
     else{
         Core::GpuTimingMeasure timing(
-            graphics().gpuTiming(),
+            m_graphics.gpuTiming(),
             __hidden_material_pass::MaterialPassGpuTimingScope(pass),
-            graphics().getDevice(),
+            m_graphics.getDevice(),
             commandList
         );
         recordPreparedDraws();
@@ -288,8 +331,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     if(!framebuffer)
         return;
 
-    auto rendererView = world().view<RendererComponent>();
-    auto* ecsMeshSystem = world().getSystem<NWB::Impl::MeshSystem>();
+    auto rendererView = m_world.view<RendererComponent>();
+    auto* ecsMeshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
     const usize rendererCapacity = rendererView.candidateCount();
     drawItems.reserve(rendererCapacity);
     instanceData.reserve(rendererCapacity);
@@ -334,7 +377,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     Optional<CsgFrameReceiverLookup> csgReceiverLookup;
     const CsgFrameReceiverLookup* csgReceiverLookupPtr = nullptr;
     if(csgPassActive){
-        csgReceiverLookup.emplace(world(), materialTypedBytes.get_allocator().arena());
+        csgReceiverLookup.emplace(m_world, materialTypedBytes.get_allocator().arena());
         if(!csgReceiverLookup->empty()){
             csgReceiverLookupPtr = &*csgReceiverLookup;
             csgFrameData.reserve(rendererCapacity, csgReceiverLookupPtr->cutterCount());
@@ -397,7 +440,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         const MaterialSurfaceInfo& materialInfo,
         ECSRenderDetail::MaterialTypedByteRange& outRange
     ) -> bool{
-        const MaterialInstanceComponent* materialInstance = world().tryGetComponent<MaterialInstanceComponent>(entity);
+        const MaterialInstanceComponent* materialInstance = m_world.tryGetComponent<MaterialInstanceComponent>(entity);
         if(!materialInstance || materialInstance->overrides.empty())
             return appendDefaultMutableMaterialTypedBytes(materialInfo, outRange);
 
@@ -428,10 +471,10 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
         // Mesh resource creation establishes every persistent source-stream descriptor.  Preparation and render
         // merely validate those bindings, keeping descriptor allocation outside material-pass hot paths.
-        if(!m_renderer.meshSystem().meshGeometryHeapHandlesReady(mesh))
+        if(!m_meshSystem.meshGeometryHeapHandlesReady(mesh))
             return false;
 
-        const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
+        const NWB::Impl::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
 
         MaterialSurfaceInfo* materialInfo = nullptr;
         const bool materialInfoReady = lookupMode == RendererResourceLookupMode::CreateMissing
@@ -465,7 +508,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         CsgReceiverClipDrawInfo csgClipInfo;
         const bool csgClipInfoReady =
             csgClipCandidate
-            && m_renderer.csgSystem().resolveCsgReceiverClipDrawInfo(
+            && m_csgSystem.resolveCsgReceiverClipDrawInfo(
                 *csgReceiverLookupPtr,
                 csgReceiverState,
                 mesh.csgLocalBounds,
@@ -490,7 +533,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
             InstanceGpuData instance = ECSRenderDetail::BuildInstanceGpuData(transform, typedRanges);
-            m_renderer.meshSystem().populateMeshGeometryHeapSlots(instance, mesh);
+            m_meshSystem.populateMeshGeometryHeapSlots(instance, mesh);
             instanceData.push_back(Move(instance));
             if(csgReceiverLookupPtr)
                 csgFrameData.receiverRanges.push_back(CsgReceiverRangeGpuData{});
@@ -516,6 +559,11 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         if(!pipelineReady)
             return false;
         const RenderPath::Enum renderPath = pipelineResources->renderPath;
+        // Freeze the primary handles before the receiver-surface lookup below; creating its sibling cache entry can
+        // grow the pipeline map and invalidate this lookup pointer.
+        const MaterialPassPipelineResourceSnapshot pipelineResourceSnapshot =
+            __hidden_material_pass::CapturePipelineResourceSnapshot(*pipelineResources)
+        ;
 
         const bool passDrawItemActive = pass != MaterialPipelinePass::CsgReceiverSurface;
         const bool csgReceiverSurfaceActive =
@@ -568,7 +616,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
         CsgReceiverRangeGpuData csgRange;
         if(csgClipActive){
-            if(!m_renderer.csgSystem().appendCsgReceiverClipData(
+            if(!m_csgSystem.appendCsgReceiverClipData(
                 *csgReceiverLookupPtr,
                 csgReceiverState,
                 mesh.csgLocalBounds,
@@ -593,6 +641,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         MaterialPassDrawItem drawItem;
         drawItem.meshKey = mesh.meshName;
         drawItem.pipelineKey = pipelineKey;
+        drawItem.meshResources = __hidden_material_pass::CaptureMeshResourceSnapshot(mesh);
+        drawItem.pipelineResources = pipelineResourceSnapshot;
         drawItem.instanceIndex = instanceIndex;
         drawItem.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
         drawItem.shadingModelId = materialInfo->shadingModelId;
@@ -609,6 +659,9 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         if(csgReceiverSurfaceActive){
             MaterialPassDrawItem csgReceiverSurfaceDrawItem = drawItem;
             csgReceiverSurfaceDrawItem.pipelineKey = csgReceiverSurfacePipelineKey;
+            csgReceiverSurfaceDrawItem.pipelineResources =
+                __hidden_material_pass::CapturePipelineResourceSnapshot(*csgReceiverSurfacePipelineResources)
+            ;
             appendDrawItemForRenderPath(
                 csgReceiverSurfaceRenderPath,
                 csgReceiverSurfaceDrawItem,
@@ -635,16 +688,16 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         MeshResources* mesh = nullptr;
         if(resolvedMesh.runtime){
             const bool meshReady = lookupMode == RendererResourceLookupMode::CreateMissing
-                ? m_renderer.meshSystem().createRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
-                : m_renderer.meshSystem().findRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
+                ? m_meshSystem.createRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
+                : m_meshSystem.findRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
             ;
             if(!meshReady)
                 continue;
         }
         else{
             const bool meshReady = lookupMode == RendererResourceLookupMode::CreateMissing
-                ? m_renderer.meshSystem().createMeshResources(resolvedMesh.mesh, mesh)
-                : m_renderer.meshSystem().findMeshResources(resolvedMesh.mesh, mesh)
+                ? m_meshSystem.createMeshResources(resolvedMesh.mesh, mesh)
+                : m_meshSystem.findMeshResources(resolvedMesh.mesh, mesh)
             ;
             if(!meshReady)
                 continue;

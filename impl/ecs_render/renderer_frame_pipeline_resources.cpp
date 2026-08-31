@@ -1,0 +1,469 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/renderer_frame_pipeline.h>
+
+#include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_render/kernel/timing_names.h>
+
+#include <impl/ecs_scene/components.h>
+
+#include <core/graphics/backend_selection.h>
+#include <core/graphics/gpu_timing.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RendererFramePipeline::validateResources(const u32 width, const u32 height, const u32 sampleCount){
+    static_cast<void>(sampleCount);
+    m_raytracingSystem.logCapabilityOnce();
+    if(width == 0 || height == 0)
+        return true;
+
+    if(!prepareGpuTimingScopes())
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU timing scope preparation failed; timing samples may be skipped"));
+
+    DeferredFrameTargets* deferredTargets = m_frameTargets.valid() ? &m_frameTargets : nullptr;
+    bool targetsReady = deferredTargets && deferredTargets->width == width && deferredTargets->height == height;
+    if(!targetsReady){
+        // New targets invalidate stale compute scratch and visibility returns.
+        resetTargetGenerationStateHandoffs();
+        resetLaggedLightingHistoryTracking();
+        resetFrameTargets();
+        m_materialSystem.invalidateRendererPipelines();
+
+        DeferredFrameTargets createdTargets;
+        const auto resetCreatedTargets = [this, &createdTargets](){
+            m_avboitSystem.resetAvboitFrameTargets(createdTargets.avboit);
+            m_deferredSystem.resetDeferredFrameTargets(createdTargets);
+        };
+        if(!m_deferredSystem.createDeferredFrameTargets(createdTargets, width, height)){
+            resetCreatedTargets();
+            return false;
+        }
+        if(!m_avboitSystem.createAvboitResources()){
+            resetCreatedTargets();
+            return false;
+        }
+        if(!m_avboitSystem.createAvboitFrameTargets(createdTargets)){
+            resetCreatedTargets();
+            return false;
+        }
+        if(!m_csgSystem.createCsgPeelTargets(createdTargets)){
+            resetCreatedTargets();
+            return false;
+        }
+        if(!m_raytracingSystem.createShadowVisibilityTarget(createdTargets)){
+            resetCreatedTargets();
+            return false;
+        }
+        if(!m_raytracingSystem.createCausticTargets(createdTargets)){
+            resetCreatedTargets();
+            return false;
+        }
+        if(!m_deferredSystem.createDeferredFrameTargetResources(createdTargets, m_avboitSystem.linearSampler())){
+            resetCreatedTargets();
+            return false;
+        }
+        if(!m_avboitSystem.registerAvboitFrameTargetDescriptors(createdTargets, createdTargets.avboit)){
+            resetCreatedTargets();
+            return false;
+        }
+
+        commitFrameTargets(Move(createdTargets));
+        deferredTargets = &m_frameTargets;
+        targetsReady = m_deferredSystem.createDeferredLightingPipeline() && m_deferredSystem.createDeferredCompositePipeline();
+        if(!targetsReady){
+            NWB_ASSERT(deferredTargets);
+            resetFrameTargets();
+        }
+    }
+    if(!targetsReady || !deferredTargets)
+        return false;
+
+    // Pipeline compatibility setup uses the stable framebuffer-zero prototype, not a currently acquired image.
+    if(Core::Framebuffer* presentationFramebuffer = m_graphics.getFramebuffer(0u)){
+        if(!m_deferredSystem.createDeferredPresentPipeline(presentationFramebuffer))
+            return false;
+    }
+
+    if(!m_avboitSystem.createAvboitPipelines())
+        return false;
+
+    if(!m_graphics.queryFeatureSupport(Core::Feature::Meshlets)){
+        if(!m_materialSystem.createComputeEmulationResources())
+            return false;
+    }
+
+    if(!m_meshSystem.createMeshViewBuffer())
+        return false;
+
+    if(!m_csgSystem.createCsgIntervalPeelResources(*deferredTargets, true))
+        return false;
+
+    return true;
+}
+
+void RendererFramePipeline::invalidateResources(){
+    m_deferredTaskTimingFeedback.reset();
+    m_deferredLightingTaskGraphQueueAssignmentTelemetry.reset();
+    m_preparedCsgFrameState = CsgFrameState{};
+    m_preparedCsgFrameStateValid = false;
+    m_preparedHasTransparentRenderers = false;
+    m_shadowPreparationOutcome.resourcesValid = false;
+    m_shadowPreparationOutcome.ready = false;
+    m_deferredBindlessSlotsUploadTask = {};
+    m_rayTraceMaterialContextSlotsUploadTask = {};
+    m_causticEmissionTargetsUploadTask = {};
+    m_surfelFrameConstantsUploadTask = {};
+    m_shadowInstanceMaterialUploadTask = {};
+    m_shadowInstanceUploadTask = {};
+    m_shadowMaterialTypedUploadTask = {};
+    m_sceneBvhNodesUploadTask = {};
+    m_sceneBvhInstancesUploadTask = {};
+    m_deferredLaggedLightingHistorySlotsUploadTask = {};
+    m_deferredShadowPrepareTask = {};
+    m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
+    m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
+    m_deferredShadowPrepareHybridSoftwareTailTask = {};
+    m_deferredShadowPrepareAccelStructFinalizeTask = {};
+    m_graphicsPrefixMeshViewSetupTask = {};
+    m_graphicsPrefixSceneShadingSetupTask = {};
+    m_graphicsPrefixDeferredClearTask = {};
+    m_graphicsPrefixOpaqueComputeEmulationTask = {};
+    for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
+        task = {};
+    m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
+    m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
+    m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask = {};
+    m_graphicsPrefixGbufferTask = {};
+    m_graphicsPrefixCsgReceiverSpanTask = {};
+    m_graphicsPrefixCsgIntervalCombineTask = {};
+    m_graphicsPrefixCsgIntervalSampleTask = {};
+    m_graphicsPrefixTask = {};
+    m_graphicsPrefixMeshViewSetupReady = false;
+    m_graphicsPrefixSceneShadingSetupReady = false;
+    m_deferredLightingTaskGraphValid = false;
+    m_deferredShadowPrepareTask = {};
+    m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
+    m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
+    m_deferredShadowPrepareHybridSoftwareTailTask = {};
+    m_deferredShadowPrepareAccelStructFinalizeTask = {};
+    m_deferredShadowVisibilityOpaqueTask = {};
+    m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
+    m_deferredShadowVisibilityOpaqueResolveTask = {};
+    m_deferredShadowVisibilityTransparentTraceTask = {};
+    m_deferredShadowVisibilityTransparentTemporalMergeTask = {};
+    m_deferredShadowVisibilityTransparentFirstWaveletTask = {};
+    m_deferredShadowVisibilityAdaptiveStatsClearTask = {};
+    m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
+    m_deferredShadowVisibilityAdaptiveStatsReadbackTask = {};
+    m_deferredShadowVisibilityAllLitClearTask = {};
+    m_deferredShadowVisibilityTask = {};
+    m_deferredSoftwareCausticsTask = {};
+    m_deferredCausticIrradianceClearTask = {};
+    m_deferredCausticAccumulatorBootstrapClearTask = {};
+    m_deferredCausticAccumulatorNonTemporalClearTask = {};
+    m_deferredCausticAccumulatorDecayTask = {};
+    m_deferredCausticPhotonTask = {};
+    m_deferredCausticGeometryTask = {};
+    m_deferredCausticResolvePrepareTask = {};
+    m_deferredCausticResolveWaveletTask = {};
+    m_deferredCausticResolveSecondWaveletTask = {};
+    m_deferredCausticResolveThirdWaveletTask = {};
+    m_deferredCausticResolveFourthWaveletTask = {};
+    m_deferredCausticResolveFifthWaveletTask = {};
+    m_deferredCausticResolveUpsampleTask = {};
+    m_deferredCausticProducerDispatched = false;
+    m_deferredSurfelGiPreparationTask = {};
+    m_deferredSurfelGiInitializationLifecycleTask = {};
+    m_deferredSurfelGiSnapshotCopyTask = {};
+    m_deferredSurfelGiIrradianceClearTask = {};
+    m_deferredSurfelGiAgeFreeTask = {};
+    m_deferredSurfelGiCellHeadClearTask = {};
+    m_deferredSurfelGiHashBuildTask = {};
+    m_deferredSurfelGiSpawnTask = {};
+    m_deferredSurfelGiTraceBuildArgsTask = {};
+    m_deferredSurfelGiTraceTask = {};
+    m_deferredSurfelGiResolveTask = {};
+    m_deferredSurfelGiTask = {};
+    m_deferredSurfelGiCounterReadbackTask = {};
+    m_deferredHardwareCausticsTask = {};
+    m_avboitSystem.resetTaskGraphStage();
+    m_deferredLightingTask = {};
+    m_deferredCompositeTask = {};
+    m_deferredPresentationOverlayTask = {};
+    m_deferredPresentTask = {};
+    m_deferredFrameTimingEndTask = {};
+    m_deferredLaggedLightingHistoryTask = {};
+    m_deferredFrameRecoveryTask = {};
+    m_deferredSurfelGiCounterReadbackCompletion = {};
+    m_deferredLightingHistoryReadReadyCompletion = {};
+    m_deferredLightingHistoryWriterDrainCompletion = {};
+    m_deferredFrameRecoveryArmed = false;
+    m_deferredFrameRecoveryRetiresTiming = false;
+    m_preparedTaskGraphPresentationContributor = nullptr;
+    m_deferredPresentationOverlayRequired = false;
+    m_deferredLightingTaskGraph.reset();
+    m_deferredLightingTaskGraphAnalysis.reset();
+    m_deferredLightingTaskGraphQueueAssignments.reset();
+    m_deferredLightingCompiledGraph.reset();
+    m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
+    m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
+    resetInvalidatedResourceStateHandoffs();
+    resetLaggedLightingHistoryTracking();
+    m_frameRenderRecoveryFailed = false;
+    m_raytracingSystem.invalidateResources();
+    resetFrameTargets();
+    // AVBOIT pipelines also consume Material's shared push layout, so release those pipelines before Material
+    // clears the layout owner.
+    m_avboitSystem.invalidateResources();
+    m_shaderSystem.invalidateResources();
+    m_meshSystem.invalidateResources();
+    m_materialSystem.invalidateResources();
+    m_csgSystem.invalidateResources();
+    m_deferredSystem.invalidateResources();
+}
+
+void RendererFramePipeline::update(Core::ECS::World& world, f32 delta){
+    static_cast<void>(world);
+    static_cast<void>(delta);
+}
+
+bool RendererFramePipeline::prepareGpuTimingScopes(){
+    auto& device = m_graphics.getDevice();
+    // A timestamp range consumes a begin/end query pair. High-frequency raster/mesh scopes may emit many ranges;
+    // the sort and interval-clear scopes each emit two ranges.
+    static constexpr u32 s_GpuTimingQueriesPerRange = 2u;
+    static constexpr u32 s_GpuTimingQueriesPerTwoRangeScope = 2u * s_GpuTimingQueriesPerRange;
+    static constexpr u32 s_GpuTimingHighFrequencyScopeQueryBudget = 128u;
+
+    struct ScopeReservation{
+        const Core::GpuTimingScopeDefinition* scope;
+        u32 queryCount;
+    };
+    const ScopeReservation scopeReservations[] = {
+        { &RendererGpuTimingScope::s_MeshDispatch, s_GpuTimingHighFrequencyScopeQueryBudget },
+        { &RendererGpuTimingScope::s_Raster, s_GpuTimingHighFrequencyScopeQueryBudget },
+        { &RendererGpuTimingScope::s_Frame, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_AsyncPrefix, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_AsyncShadow, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_AsyncSurfelGi, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_AsyncFinal, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_DeferredClear, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_ShadowVisibility, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_ShadowOpaqueTrace, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_ShadowGeometryDownsample, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_ShadowOpaqueTemporal, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_ShadowOpaqueResolve, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_ShadowTransparentTrace, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_ShadowTransparentTemporal, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_ShadowTransparentResolve, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_SwBvhSort, s_GpuTimingQueriesPerTwoRangeScope },
+        { &RendererGpuTimingScope::s_CausticPhotons, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_CausticResolve, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_DeferredLighting, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_DeferredComposite, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_DeferredPresent, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_MaterialUpload, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_OpaqueRegular, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_OpaqueCsgReceiverSurface, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_OpaqueCsg, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_CsgUpload, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_CsgSampleStateUpload, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_CsgIntervalClear, s_GpuTimingQueriesPerTwoRangeScope },
+        { &RendererGpuTimingScope::s_CsgIntervalPeel, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_CsgReceiverSpanBuild, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_CsgIntervalCombine, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_CsgCapFill, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_TransparentCsgIntervals, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_AvboitClear, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_AvboitOccupancy, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_AvboitDepthWarp, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_AvboitExtinction, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_AvboitIntegration, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_AvboitAccumulate, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_SurfelSpawn, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_SurfelAgeFree, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_SurfelHashBuild, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_SurfelTrace, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_SurfelResolve, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_SurfelUpsample, s_GpuTimingQueriesPerRange },
+    };
+
+    for(const ScopeReservation& reservation : scopeReservations){
+        if(!m_graphics.gpuTiming().prepareScopeQueries(reservation.scope->identity, device, reservation.queryCount)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to prepare GPU timing scope '{}'"), StringConvert(reservation.scope->identity.c_str()));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void RendererFramePipeline::commitFrameTargets(DeferredFrameTargets&& targets){
+    m_frameTargets = Move(targets);
+
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, composite color {}, depth {}, shadow visibility {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver events {} layers: event data {}, event count {}, receiver spans {} layers: span data {}, span count {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, AVBOIT color {}, extinction {}, transmittance {})")
+        , m_frameTargets.width
+        , m_frameTargets.height
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.albedoFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.normalFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.worldPositionFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.opaqueColorFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.compositeColorFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.depthFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.shadowVisibilityFormat).name)
+        , m_frameTargets.csgPeelLayerCount
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgCapNormalFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgIntervalDepthFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgIntervalIdFormat).name)
+        , m_frameTargets.csgReceiverEventLayerCount
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgReceiverEventDataFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgReceiverEventCountFormat).name)
+        , m_frameTargets.csgReceiverSpanLayerCount
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgReceiverSpanDataFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgReceiverSpanCountFormat).name)
+        , m_frameTargets.csgRemovedIntervalLayerCount
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalDepthFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalCapNormalFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalDataFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalCountFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.avboit.accumColorFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.avboit.accumExtinctionFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.avboit.transmittanceFormat).name)
+    );
+}
+
+void RendererFramePipeline::resetFrameTargets(){
+    // AVBOIT owns descriptor registrations embedded in the aggregate, so retire them before Deferred clears it.
+    m_avboitSystem.resetAvboitFrameTargets(m_frameTargets.avboit);
+    m_deferredSystem.resetDeferredFrameTargets(m_frameTargets);
+}
+
+bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
+    m_shadowPreparationOutcome.resourcesValid = false;
+    m_shadowPreparationOutcome.ready = false;
+    m_preparedHasTransparentRenderers = false;
+    m_preparedTaskGraphPresentationContributor = nullptr;
+
+    if(!framebuffer)
+        return false;
+
+    const Core::AcquiredPresentationFrame& presentationFrame = m_graphics.acquiredPresentationFrame();
+    const Core::FramebufferDesc& presentationFramebufferDesc = framebuffer->getDescription();
+    if(
+        !presentationFrame.valid()
+        || presentationFrame.framebuffer.get() != framebuffer
+        || presentationFramebufferDesc.colorAttachments.size() != 1u
+        || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()
+    ){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation preparation did not match the acquired frame; requesting recreation"));
+        m_graphics.requestDeviceRecreation();
+        return false;
+    }
+
+    m_meshSystem.pruneRuntimeMeshResources();
+    m_preparedHasTransparentRenderers = m_materialSystem.prepareVisibleMaterialSurfaceInfos();
+    m_materialSystem.prepareVisibleMaterialInstanceMutableCache();
+    m_preparedCsgFrameState = CsgFrameState{};
+    m_preparedCsgFrameStateValid = false;
+
+    if(!m_frameTargets.valid())
+        return true;
+    DeferredFrameTargets& deferredTargets = m_frameTargets;
+
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
+    m_preparedCsgFrameState = HasCsgFrameCandidates(m_world)
+        ? m_csgSystem.buildFrameState(scratchArena, m_materialSystem)
+        : CsgFrameState{}
+    ;
+    m_preparedCsgFrameStateValid = true;
+    const bool hasCsgFrameWork = !m_preparedCsgFrameState.empty();
+    if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
+        return false;
+
+    // CSG receiver ranges are addressed by material-pass instance index.  A CSG-active material pass reserves one
+    // range for every compatible renderer, not only the renderers that receive CSG clipping, so the complete
+    // renderer view is the safe prepass capacity bound for either material pass.
+    const usize csgReceiverRangeCount = hasCsgFrameWork
+        ? m_world.view<RendererComponent>().candidateCount()
+        : 0u
+    ;
+
+    if(!m_materialSystem.prepareMaterialPassResources(
+        deferredTargets.framebuffer.get(),
+        MaterialPipelinePass::Opaque,
+        false,
+        m_preparedCsgFrameState,
+        nullptr
+    ))
+        return false;
+
+    if(
+        m_preparedHasTransparentRenderers
+        && !m_avboitSystem.prepareAvboitPassResources(deferredTargets, m_preparedCsgFrameState)
+    )
+        return false;
+
+    // Material owns capacity growth. Once every material domain pass is prepared, publish exactly one matching
+    // Mesh-owned descriptor generation for the frame and retain the prior generation on any failed refresh.
+    const ECSRenderDetail::MaterialPassBufferSnapshot materialBuffers = m_materialSystem.materialPassBufferSnapshot();
+    if(materialBuffers.valid() && !m_meshSystem.prepareMeshFrameBindings(materialBuffers))
+        return false;
+    if(hasCsgFrameWork && !materialBuffers.valid())
+        return false;
+
+    // All material passes have now established their frame buffers. Create CSG resources once from this
+    // renderer-owned prepass so draw paths only consume the prepared layouts and handles.
+    if(
+        hasCsgFrameWork
+        && !m_csgSystem.prepareCsgFrameResources(
+            csgReceiverRangeCount,
+            static_cast<usize>(m_preparedCsgFrameState.cutterCount)
+        )
+    )
+        return false;
+
+    // Resource selection and capacity growth happen before shared-graph compilation.  The first deferred packet
+    // records the corresponding GPU work later, after every selected handle has been imported declaratively.
+    m_raytracingSystem.discardSurfelResourceInitialization();
+    if(!m_raytracingSystem.preflightShadowVisibilityResources(deferredTargets, scratchArena)){
+        m_shadowPreparationOutcome.resourcesValid = false;
+        m_shadowPreparationOutcome.ready = false;
+        m_raytracingSystem.discardPreflightShadowVisibilityResources();
+        return false;
+    }
+    m_shadowPreparationOutcome.resourcesValid = true;
+
+    if(Core::IGpuTaskGraphPresentationContributor* const contributor = m_graphics.taskGraphPresentationContributor()){
+        if(contributor->prepareTaskGraphPresentation(presentationFrame))
+            m_preparedTaskGraphPresentationContributor = contributor;
+        else if(m_graphics.isDeviceRecreationRequested()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation contributor requested recreation during preparation"));
+            return false;
+        }
+        else
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: presentation contributor preparation failed; rendering scene output without its overlay"));
+    }
+
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

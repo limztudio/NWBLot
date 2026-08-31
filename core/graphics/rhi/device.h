@@ -50,18 +50,6 @@ namespace Feature{
     };
 };
 
-// Renderer-facing execution policy. A lane resolves to one physical backend queue for the lifetime of a device.
-// AsyncCompute deliberately resolves to Graphics when a dedicated Compute queue is unavailable or disabled; callers
-// should use the resolved queue carried by QueueSubmissionToken rather than assuming a second VkQueue exists.
-namespace RenderLane{
-    enum Enum : u8{
-        Graphics = 0,
-        AsyncCompute,
-
-        kCount,
-    };
-};
-
 // A completion edge produced only by an accepted queue submission. `valid()` is intentionally false for rejected or
 // empty work, while an accepted synchronization-only submission may still produce a token for dependency forwarding.
 // `physicalQueueIndex` and `deviceGeneration` identify the concrete backend queue that produced the timeline value.
@@ -123,6 +111,9 @@ struct QueueSubmissionDesc{
     const QueueSubmissionToken* waitTokens = nullptr;
     usize waitTokenCount = 0;
     QueueSubmissionPreSubmitHook preSubmitHook;
+    // Error-recovery paths may require an exact queue timeline submission even after earlier work consumed every
+    // pending wait. Normal empty submissions retain their no-op behavior unless this is explicit.
+    bool forceNativeSubmission = false;
 
     constexpr QueueSubmissionDesc& setWaitTokens(const QueueSubmissionToken* value, usize count){
         waitTokens = value;
@@ -148,36 +139,33 @@ struct CommandListParameters{
     // Type of the queue that this command list is to be executed on.
     // Dedicated Compute and Transfer queues expose only the command subsets their Vulkan families support.
     CommandQueue::Enum queueType = CommandQueue::Graphics;
-    // Device resolves queueType/renderLane to this actual queue before the command list is created. Explicit graph
-    // packets set it directly, so command pools, uploads, and ownership handoffs never collapse same-class queues.
+    // Device resolves queueType to its primary physical queue unless an exact queue is supplied. Explicit graph
+    // packets set the exact queue directly, so command pools, uploads, and ownership handoffs never collapse
+    // same-class queues.
     GpuPhysicalQueueId physicalQueue;
-    // Logical lane selection is resolved by Device::createCommandList. Keep the resolved broad class in this
-    // structure for ordinary command validation while physicalQueue selects the native transport.
-    RenderLane::Enum renderLane = RenderLane::Graphics;
-    bool resolveRenderLane = false;
-    // Zero is the ordinary serial/direct lease. Ready-frontier graph recording assigns a stable nonzero logical
-    // ThreadPool worker identity so each physical queue can keep native command-buffer pools worker-affined.
+    // Worker zero is the ordinary serial/direct lease. Ready-frontier graph recording combines a stable nonzero
+    // ThreadPool domain with its local nonzero worker index so different pools cannot alias one native arena shard.
+    // Manual nonzero worker indices may leave the domain at zero when the caller deliberately owns that namespace.
+    u64 recordingWorkerDomain = 0u;
     u32 recordingWorkerIndex = 0u;
 
     constexpr CommandListParameters& setQueueType(CommandQueue::Enum value){
         queueType = value;
         physicalQueue = {};
-        resolveRenderLane = false;
-        return *this;
-    }
-    constexpr CommandListParameters& setRenderLane(RenderLane::Enum value){
-        renderLane = value;
-        physicalQueue = {};
-        resolveRenderLane = true;
         return *this;
     }
     constexpr CommandListParameters& setPhysicalQueue(GpuPhysicalQueueId value){
         physicalQueue = value;
-        resolveRenderLane = false;
         return *this;
     }
     constexpr CommandListParameters& setRecordingWorkerIndex(const u32 value){
+        recordingWorkerDomain = 0u;
         recordingWorkerIndex = value;
+        return *this;
+    }
+    constexpr CommandListParameters& setRecordingWorker(const u64 domain, const u32 index){
+        recordingWorkerDomain = index == 0u ? 0u : domain;
+        recordingWorkerIndex = index;
         return *this;
     }
 };
@@ -215,6 +203,8 @@ public:
 public:
     usize pushEvent(const char* name);
     void popEvent();
+    // Clears only active nesting. Historical hash-to-string mappings remain available for in-flight crash reports.
+    void resetEventStack();
     ResolvedMarker getEventString(usize hash);
 
 
@@ -377,13 +367,23 @@ struct DeviceCreationParameters : public InstanceParameters{
     // Opt-in preference: if the current surface cannot expose HDR10, creation continues with the
     // requested SDR format instead of rejecting the device or window.
     bool enableHDR10Output = false;
+    // Opt-in presentation-image readback. Unsupported surfaces keep a normal presentable swap chain and publish
+    // swapChainReadbackAvailable=false instead of failing device creation.
+    bool enableSwapChainReadback = false;
     u32 swapChainSampleCount = 1;
     u32 swapChainSampleQuality = 0;
     u32 maxFramesInFlight = s_MaxFramesInFlight;
     bool enableNvrhiValidationLayer = false;
     bool enableRayTracingExtensions = false;
-    // Best-effort default lane. A dedicated compute-only family is used when present; otherwise AsyncCompute
-    // resolves to Graphics without failing device creation or fabricating an alias queue.
+    // Native mesh shaders are optional. Windows ARM64 defaults to the compute-emulation path because extension
+    // advertisement alone does not qualify native mesh-output correctness; callers may explicitly opt in.
+#if defined(_WIN32) && (defined(__aarch64__) || defined(_M_ARM64))
+    bool enableNativeMeshShaders = false;
+#else
+    bool enableNativeMeshShaders = true;
+#endif
+    // Best-effort asynchronous Compute topology. A dedicated compute-only family is used when present; otherwise
+    // device creation succeeds without fabricating an alias queue.
     bool enableAsyncComputeLane = true;
     // Best-effort optional transfer transport. Only a distinct transfer-only Vulkan family is exposed as a
     // CommandQueue::Transfer; task-graph copy work otherwise falls back to the existing Compute/Graphics queues.
@@ -424,6 +424,7 @@ struct SwapChainRuntimeState{
     Format::Enum backBufferFormat = Format::RGBA8_UNORM_SRGB;
     SwapChainOutputMode::Enum outputMode = SwapChainOutputMode::SDR;
     bool vsyncEnabled = false;
+    bool swapChainReadbackAvailable = false;
 };
 
 struct BackBufferResizeCallbacks{

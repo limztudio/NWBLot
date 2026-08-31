@@ -23,6 +23,9 @@
 #include "../shadow/instance_material.slangi"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Neutral albedo for an unconsumed miss result. A hit without an authored material surface gets the same fixed
 // mid-grey only through the generated dispatch's explicit no-surface fallback, never by probing a named .bind field.
 #ifndef NWB_GI_SW_TRACE_DEFAULT_ALBEDO

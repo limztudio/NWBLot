@@ -1,0 +1,74 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/deferred/task_graph_prefix_tasks.h>
+
+#include <impl/ecs_render/deferred/deferred_system.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ECSRenderDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool SceneShadingSetupGraphTask::record(
+    const Payload& payload,
+    Core::CommandList& commandList,
+    const Core::GpuTaskRecordContext& context
+){
+    static_cast<void>(commandList);
+    static_cast<void>(context);
+    if(!payload.deferredSystem || !payload.timingTicket || !*payload.timingTicket || !payload.ready)
+        return false;
+
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
+    *payload.ready = true;
+    return true;
+}
+
+
+void SceneShadingSetupGraphTask::accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static_cast<void>(token);
+    if(!payload.deferredSystem)
+        return;
+    payload.deferredSystem->confirmSceneShadingBufferUploads(
+        payload.lightData,
+        payload.lightCount,
+        payload.lightUploadRequired,
+        payload.sceneShadingState,
+        payload.sceneShadingUploadRequired
+    );
+}
+
+
+void SceneShadingSetupGraphTask::discarded(Payload& payload){
+    if(payload.ready)
+        *payload.ready = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

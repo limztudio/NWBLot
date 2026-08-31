@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from unittest import mock
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -31,15 +32,16 @@ sys.path.insert(0, str(REPO / "tests" / "smoke"))
 from profiles import BaselineProfile, get_profile, profile_names  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE,
+    STRICT_LOG_FAILURE_MESSAGES,
     SmokeFailure,
     SmokeSkip,
     build_launch_environment,
-    collect_log_delta,
     create_capture_backend,
     ensure_process_running,
     launch_logserver,
     launch_testbed,
-    require_normal_testbed_exit,
+    require_normal_process_exit,
+    shutdown_logserver_and_collect,
     terminate_process,
     validate_capture_result,
     wait_for_log_message,
@@ -51,9 +53,7 @@ CORPUS_SCHEMA = "nwb.renderer-baseline-corpus.v1"
 CURRENT_CORPUS_ID = "current-renderer-v1"
 CURRENT_CORPUS_FILE = Path(__file__).with_name("current_renderer_corpus.json")
 FORBIDDEN_LOG_MESSAGES = (
-    "[ERROR]",
-    "VUID-",
-    "Validation Error",
+    *STRICT_LOG_FAILURE_MESSAGES,
     "cannot safely continue after an unresolved frame recovery submission",
 )
 
@@ -272,6 +272,16 @@ def make_launch_args(args: argparse.Namespace) -> SimpleNamespace:
     )
 
 
+def validate_runtime_log(log_text: str, rejected_messages: Sequence[str]) -> Tuple[str, ...]:
+    if not log_text:
+        raise SmokeFailure("renderer baseline capture produced no captured logger output")
+    forbidden = tuple(message for message in FORBIDDEN_LOG_MESSAGES if message in log_text)
+    forbidden += tuple(message for message in rejected_messages if message in log_text)
+    if forbidden:
+        raise SmokeFailure(f"renderer baseline capture found forbidden log messages: {list(forbidden)}")
+    return forbidden
+
+
 def capture_scene(
     args: argparse.Namespace,
     profile: BaselineProfile,
@@ -331,23 +341,26 @@ def capture_scene(
             time.sleep(args.settle_seconds)
         ensure_process_running(app_process, "before baseline capture")
         validate_capture_result(backend.capture_window(window, capture_path))
+        app_exit_code, app_exit_tail = terminate_process(app_process, "renderer baseline capture", window)
+        app_process = None
+        log_text = shutdown_logserver_and_collect(
+            logserver_process,
+            log_directory,
+            log_baseline,
+            log_pattern,
+            "renderer baseline logserver",
+        )
+        logserver_process = None
     finally:
-        if app_process is not None:
-            app_exit_code, app_exit_tail = terminate_process(app_process, "renderer baseline capture", window)
-        time.sleep(0.25)
-        if log_directory:
-            log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
+        terminate_process(app_process, "renderer baseline capture", window)
         terminate_process(logserver_process, "renderer baseline logserver")
         if backend:
             backend.close()
 
-    require_normal_testbed_exit(app_exit_code, app_exit_tail)
+    require_normal_process_exit(app_exit_code, app_exit_tail, "testbed")
     if not capture_path.is_file():
         raise SmokeFailure(f"renderer baseline did not create capture: {capture_path}")
-    forbidden = tuple(message for message in FORBIDDEN_LOG_MESSAGES if message in log_text)
-    forbidden += tuple(message for message in args.reject_log if message in log_text)
-    if forbidden:
-        raise SmokeFailure(f"renderer baseline capture found forbidden log messages: {list(forbidden)}")
+    forbidden = validate_runtime_log(log_text, args.reject_log)
     log_path.write_text(log_text, encoding="utf-8")
     return CaptureResult(
         capture_file=capture_path.name,
@@ -833,8 +846,90 @@ def validate_args(args: argparse.Namespace) -> None:
 
 
 def run_self_test() -> int:
+    assert FORBIDDEN_LOG_MESSAGES[:len(STRICT_LOG_FAILURE_MESSAGES)] == STRICT_LOG_FAILURE_MESSAGES
+    try:
+        validate_runtime_log("", ())
+    except SmokeFailure:
+        pass
+    else:
+        raise AssertionError("renderer baseline empty runtime-log evidence must fail closed")
     with tempfile.TemporaryDirectory(prefix="nwb_renderer_baseline_") as temporary_directory:
         root = Path(temporary_directory)
+        module = sys.modules[__name__]
+        executable = root / "orchestration.exe"
+        executable.write_bytes(b"exe")
+        capture_path = root / "orchestration.bmp"
+        runtime_log_path = root / "orchestration.log"
+        app = SimpleNamespace(pid=4321, poll=lambda: None)
+        logserver = object()
+        baseline = {root / "old.log": 7}
+        backend = mock.Mock()
+        backend.wait_for_window.return_value = 17
+
+        def capture(_window, path):
+            path.write_bytes(b"bmp")
+            return SimpleNamespace(appears_blank=False, has_pixel_variation=True)
+
+        backend.capture_window.side_effect = capture
+        orchestration_args = SimpleNamespace(
+            executable=executable,
+            runtime_dir=root,
+            no_logserver=False,
+            logserver_executable=None,
+            startup_timeout=1.0,
+            gpu_validation=False,
+            settle_seconds=0.0,
+            profile="opaque-texture",
+            reject_log=[],
+        )
+        events = []
+
+        def terminate(process, name, window_handle=None):
+            if process is app:
+                events.append(("app-stop", name, window_handle))
+                return 7, "simulated abnormal exit"
+            assert process is None
+            events.append(("cleanup-none", name, window_handle))
+            return None, ""
+
+        def shutdown(process, directory, received_baseline, pattern, shutdown_name="logserver"):
+            assert process is logserver
+            assert directory == root
+            assert received_baseline == baseline
+            assert pattern == "logserver_*.log"
+            assert events == [("app-stop", "renderer baseline capture", 17)]
+            events.append(("logserver-helper", shutdown_name))
+            return "captured runtime evidence"
+
+        with mock.patch.object(module, "build_launch_environment", return_value={}), \
+             mock.patch.object(module, "create_capture_backend", return_value=backend), \
+             mock.patch.object(module, "launch_logserver", return_value=(logserver, 49152, root, baseline, "logserver_*.log")), \
+             mock.patch.object(module, "launch_testbed", return_value=app), \
+             mock.patch.object(module, "terminate_process", side_effect=terminate) as terminate_mock, \
+             mock.patch.object(module, "shutdown_logserver_and_collect", side_effect=shutdown) as shutdown_mock:
+            try:
+                capture_scene(orchestration_args, get_profile("opaque-texture"), capture_path, runtime_log_path, {})
+            except SmokeFailure as error:
+                assert "exit 7" in str(error)
+            else:
+                raise AssertionError("renderer orchestration accepted an abnormal Testbed exit")
+
+        assert events == [
+            ("app-stop", "renderer baseline capture", 17),
+            ("logserver-helper", "renderer baseline logserver"),
+            ("cleanup-none", "renderer baseline capture", 17),
+            ("cleanup-none", "renderer baseline logserver", None),
+        ]
+        assert terminate_mock.mock_calls == [
+            mock.call(app, "renderer baseline capture", 17),
+            mock.call(None, "renderer baseline capture", 17),
+            mock.call(None, "renderer baseline logserver"),
+        ]
+        shutdown_mock.assert_called_once_with(
+            logserver, root, baseline, "logserver_*.log", "renderer baseline logserver"
+        )
+        backend.close.assert_called_once_with()
+
         reference_directory = root / "opaque-texture" / "reference"
         reference_directory.mkdir(parents=True)
         reference_image = reference_directory / "baseline.bmp"

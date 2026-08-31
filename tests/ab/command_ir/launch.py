@@ -170,7 +170,7 @@ def run_self_test() -> int:
     paths = resolve_paths(args, settings)
     command = [str(item) for item in runner_command(args, paths)]
     assert command[command.index("--executable") + 1].endswith("command_ir_profile.exe")
-    assert "/.cozter/out/ab-results/command-ir/" in str(paths.output_directory)
+    assert "/.cozter/out/ab-results/command-ir/" in paths.output_directory.as_posix()
     assert command[command.index("--adapter-index") + 1] == "1"
     assert command[command.index("--records") + 1] == "8192"
     assert command[command.index("--warmup") + 1] == "2"

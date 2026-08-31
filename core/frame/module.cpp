@@ -18,6 +18,24 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_frame{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr Name s_ProjectUpdateCpuTimingScope("frame.project_update");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void Frame::ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY){
     auto* frame = static_cast<Frame*>(userData);
     NWB_ASSERT(frame);
@@ -55,7 +73,13 @@ Frame::Frame(void* inst, u16 width, u16 height)
     , m_telemetryUploadBytes(m_projectObjectArena)
     , m_projectThreadPool(queryProjectWorkerThreadCount(), CpuAffinity::Any)
     , m_projectJobSystem(m_projectThreadPool)
-    , m_graphics(m_graphicsAllocator, m_graphicsThreadPool, m_graphicsJobSystem, m_perfSession.gpuTimingSink())
+    , m_graphics(
+        m_graphicsAllocator,
+        m_graphicsThreadPool,
+        m_graphicsJobSystem,
+        m_perfSession.gpuTimingSink(),
+        &m_perfSession.cpuTimingSink()
+    )
 {
     auto& frameData = data<Common::FrameData>();
     frameData.width() = width;
@@ -131,11 +155,26 @@ bool Frame::update(f32 delta){
     return updateFrame(delta);
 }
 bool Frame::updateFrame(f32 delta){
+    Perf::TimingSink& cpuTiming = m_perfSession.cpuTimingSink();
+    Perf::TimingScopeId projectUpdateTimingScope;
+    f64 projectUpdateSeconds = 0.0;
+    bool recordProjectUpdateTiming = false;
+    const u64 sampleFrameIndex = m_perfSession.frameIndex();
+
     if(m_projectUpdateCallback){
+        Timer projectUpdateBegin;
+        if(cpuTiming.enabled()){
+            projectUpdateTimingScope = cpuTiming.registerScope(__hidden_frame::s_ProjectUpdateCpuTimingScope);
+            projectUpdateBegin = TimerNow();
+            recordProjectUpdateTiming = true;
+        }
+
         if(!m_projectUpdateCallback(m_projectUpdateUserData, delta)){
             NWB_LOGGER_ERROR(NWB_TEXT("Frame: project update callback returned false"));
             return false;
         }
+        if(recordProjectUpdateTiming)
+            projectUpdateSeconds = DurationInSeconds<f64>(TimerNow(), projectUpdateBegin);
     }
 
     if(quitRequested())
@@ -145,6 +184,11 @@ bool Frame::updateFrame(f32 delta){
         NWB_LOGGER_ERROR(NWB_TEXT("Frame: graphics frame update failed"));
         return false;
     }
+
+    // The callback interval ended before graphics work. Delay recording it until this frame will publish so a
+    // failed callback, quit, or graphics frame cannot leave a pending sample to be aggregated into a later frame.
+    if(recordProjectUpdateTiming)
+        cpuTiming.recordSample(projectUpdateTimingScope, projectUpdateSeconds, sampleFrameIndex);
 
     if(m_telemetrySession.captureOptions().frameGraphEnabled()){
         if(!m_frameGraphRegistry.record(m_telemetrySession))

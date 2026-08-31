@@ -2,7 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include "material_system.h"
+
+#include <impl/ecs_render/material/renderer_material_state.h>
+
+#include <core/assets/manager.h>
+#include <core/common/log.h>
+#include <core/ecs/world.h>
+#include <core/graphics/backend_selection.h>
+#include <core/graphics/module.h>
+#include <impl/assets_sampler/loader.h>
+#include <impl/assets_texture/loader.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -164,8 +174,8 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
         return true;
     }
 
-    RendererMaterialResourceState& resources = materialState().m_resourceState;
-    Core::Graphics& graphicsModule = graphics();
+    RendererMaterialResourceState& resources = m_materialState.m_resourceState;
+    Core::Graphics& graphicsModule = m_graphics;
     Core::GpuDescriptorHeap& heap = graphicsModule.getDevice().getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot resolve material resources without an initialized descriptor heap"));
@@ -187,7 +197,7 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
                 resources,
                 resourceReference.textureAsset,
                 graphicsModule,
-                assetManager(),
+                m_assetManager,
                 heapSlot
             )){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load Texture2D asset '{}'")
@@ -202,7 +212,7 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
                 resources,
                 resourceReference.samplerAsset,
                 graphicsModule,
-                assetManager(),
+                m_assetManager,
                 heapSlot
             )){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load sampler asset '{}'")
@@ -238,15 +248,6 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
 
     materialInfo.resourceReferencesResolved = true;
     return true;
-}
-
-void RendererMaterialSystem::releaseMaterialResourceReferences(){
-    __hidden_material_surface::ReleaseMaterialResourceState(graphics(), materialState().m_resourceState);
-    for(auto it = materialState().m_surfaceInfos.begin(); it != materialState().m_surfaceInfos.end(); ++it){
-        MaterialSurfaceInfo& materialInfo = it.value();
-        materialInfo.constantTypedBytes = materialInfo.unpatchedConstantTypedBytes;
-        materialInfo.resourceReferencesResolved = false;
-    }
 }
 
 bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
@@ -310,14 +311,14 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
         return false;
     }
 
-    const auto foundInfo = materialState().m_surfaceInfos.find(materialPath);
-    if(foundInfo != materialState().m_surfaceInfos.end()){
+    const auto foundInfo = m_materialState.m_surfaceInfos.find(materialPath);
+    if(foundInfo != m_materialState.m_surfaceInfos.end()){
         outInfo = &foundInfo.value();
         return resolveMaterialResourceReferences(*outInfo);
     }
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
-    if(!assetManager().loadSync(Material::AssetTypeName(), materialPath, loadedAsset)){
+    if(!m_assetManager.loadSync(Material::AssetTypeName(), materialPath, loadedAsset)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to load material '{}'"), StringConvert(materialPath.c_str()));
         return false;
     }
@@ -329,7 +330,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     const Material& material = static_cast<const Material&>(*loadedAsset);
     const auto& typedBlockBytes = material.typedBlockBytes();
 
-    MaterialSurfaceInfo createdInfo(arena());
+    MaterialSurfaceInfo createdInfo(m_arena);
     createdInfo.materialName = materialPath;
     if(material.shaderVariant().empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has empty shader variant")
@@ -413,7 +414,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     createdInfo.twoSided = material.twoSided();
     createdInfo.refractive = material.refractive();
 
-    auto result = materialState().m_surfaceInfos.try_emplace(materialPath, Move(createdInfo));
+    auto result = m_materialState.m_surfaceInfos.try_emplace(materialPath, Move(createdInfo));
     auto it = result.first;
     outInfo = &it.value();
     NWB_ASSERT(outInfo);
@@ -427,8 +428,8 @@ bool RendererMaterialSystem::findMaterialSurfaceInfo(const Core::Assets::AssetRe
     if(!materialPath)
         return false;
 
-    const auto foundInfo = materialState().m_surfaceInfos.find(materialPath);
-    if(foundInfo == materialState().m_surfaceInfos.end())
+    const auto foundInfo = m_materialState.m_surfaceInfos.find(materialPath);
+    if(foundInfo == m_materialState.m_surfaceInfos.end())
         return false;
 
     MaterialSurfaceInfo& materialInfo = foundInfo.value();
@@ -445,7 +446,7 @@ bool RendererMaterialSystem::appendPreparedMaterialSurfaceSampledTextures(
 ){
     if(!materialInfo.resourceReferencesResolved)
         return false;
-    RendererMaterialResourceState& resources = materialState().m_resourceState;
+    RendererMaterialResourceState& resources = m_materialState.m_resourceState;
     for(const MaterialResourceReference& resourceReference : materialInfo.resourceReferences){
         switch(resourceReference.resourceKind){
         case MaterialResourceKind::SampledImage2D:{
@@ -497,8 +498,8 @@ bool RendererMaterialSystem::gatherPreparedMaterialPassSampledTextures(
         return false;
 
     const auto appendDrawItem = [&](const MaterialPassDrawItem& drawItem){
-        const auto foundMaterial = materialState().m_surfaceInfos.find(drawItem.pipelineKey.material);
-        return foundMaterial != materialState().m_surfaceInfos.end()
+        const auto foundMaterial = m_materialState.m_surfaceInfos.find(drawItem.pipelineKey.material);
+        return foundMaterial != m_materialState.m_surfaceInfos.end()
             && appendPreparedMaterialSurfaceSampledTextures(foundMaterial.value(), outTextures)
         ;
     };
@@ -521,7 +522,7 @@ bool RendererMaterialSystem::gatherPreparedMaterialPassSampledTextures(
 
 bool RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
     bool hasTransparentRenderers = false;
-    auto rendererView = world().view<RendererComponent>();
+    auto rendererView = m_world.view<RendererComponent>();
     for(auto&& [entity, renderer] : rendererView){
         static_cast<void>(entity);
         if(!renderer.visible)
@@ -540,12 +541,12 @@ bool RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
 void RendererMaterialSystem::prepareVisibleMaterialInstanceMutableCache(){
     pruneMaterialInstanceMutableCache();
 
-    auto rendererView = world().view<RendererComponent>();
+    auto rendererView = m_world.view<RendererComponent>();
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible)
             continue;
 
-        const MaterialInstanceComponent* materialInstance = world().tryGetComponent<MaterialInstanceComponent>(entity);
+        const MaterialInstanceComponent* materialInstance = m_world.tryGetComponent<MaterialInstanceComponent>(entity);
         if(!materialInstance || materialInstance->overrides.empty())
             continue;
 
@@ -576,7 +577,7 @@ bool RendererMaterialSystem::hasTransparentRenderers(const RendererResourceLooku
         return materialInfo->transparent;
     };
 
-    auto rendererView = world().view<RendererComponent>();
+    auto rendererView = m_world.view<RendererComponent>();
     for(auto&& [entity, renderer] : rendererView){
         static_cast<void>(entity);
         if(!renderer.visible)
@@ -586,6 +587,16 @@ bool RendererMaterialSystem::hasTransparentRenderers(const RendererResourceLooku
             return true;
     }
     return false;
+}
+
+
+void RendererMaterialSystem::releaseMaterialResourceReferences(){
+    __hidden_material_surface::ReleaseMaterialResourceState(m_graphics, m_materialState.m_resourceState);
+    for(auto it = m_materialState.m_surfaceInfos.begin(); it != m_materialState.m_surfaceInfos.end(); ++it){
+        MaterialSurfaceInfo& materialInfo = it.value();
+        materialInfo.constantTypedBytes = materialInfo.unpatchedConstantTypedBytes;
+        materialInfo.resourceReferencesResolved = false;
+    }
 }
 
 

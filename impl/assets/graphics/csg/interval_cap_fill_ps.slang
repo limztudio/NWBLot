@@ -5,6 +5,10 @@
 #include "../deferred/binding_slots.h"
 #include "../mesh/runtime_constants.h"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // The cap-fill fullscreen draw reuses the ordinary 64-byte mesh push ABI.  Its fourth frame-slot word is unused by
 // this path, so it selects the global CSG context UniformBuffer without growing any push range.
 struct NwbCsgCapFillPushConstants{
@@ -52,9 +56,9 @@ struct NwbCsgIntervalCapFillPixelInput{
 };
 
 struct NwbCsgIntervalCapFillPixelOutput{
-    [[vk::location(NWB_MESH_GBUFFER_BASE_COLOR_LOCATION)]] half4 baseColor : SV_Target0;
-    [[vk::location(NWB_MESH_GBUFFER_NORMAL_LOCATION)]] half4 normal : SV_Target1;
-    [[vk::location(NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION)]] half4 worldPosition : SV_Target2;
+    [[vk::location(NWB_MESH_GBUFFER_BASE_COLOR_LOCATION)]] float4 baseColor : SV_Target0;
+    [[vk::location(NWB_MESH_GBUFFER_NORMAL_LOCATION)]] float4 normal : SV_Target1;
+    [[vk::location(NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION)]] float4 worldPosition : SV_Target2;
     float depth : SV_Depth;
 };
 

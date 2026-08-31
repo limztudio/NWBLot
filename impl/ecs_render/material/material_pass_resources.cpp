@@ -2,10 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include "material_system.h"
+
+#include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/material/material_pass_csg_private.h>
+#include <impl/ecs_render/material/renderer_material_state.h>
+#include <impl/ecs_render/shader/shader_system.h>
+#include <impl/ecs_render/shared/renderer_push_constants_private.h>
 
 #include <impl/assets/graphics/mesh/names.h>
+
+#include <core/common/log.h>
+#include <core/graphics/module.h>
+#include <core/graphics/shader_archive.h>
 
 #include <global/algorithm.h>
 
@@ -19,25 +28,46 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool RendererMaterialSystem::prepareMaterialPassBindingLayout(Core::BindingLayoutHandle& outBindingLayout){
+    outBindingLayout.reset();
+    if(!m_materialState.m_materialPassBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
+        bindingLayoutDesc
+            .setVisibility(Core::ShaderType::All)
+            // Every material graphics pass uses this push-only layout without consuming a descriptor set. Transparent
+            // passes consume the full combined mesh/AVBOIT payload; opaque and AVBOIT compute paths use smaller payloads.
+            .addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)))
+        ;
+        m_materialState.m_materialPassBindingLayout = m_graphics.getDevice().createBindingLayout(bindingLayoutDesc);
+        if(!m_materialState.m_materialPassBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create the shared material-pass push-constant layout"));
+            return false;
+        }
+    }
+    outBindingLayout = m_materialState.m_materialPassBindingLayout;
+    return true;
+}
+
+
 bool RendererMaterialSystem::createComputeEmulationResources(){
-    if(!drawState().m_computeBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc(arena());
+    if(!m_materialState.m_computeBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
         // The per-mesh generated-vertex UAV is a global StorageBuffer heap entry selected through the fourth mesh
         // frame-slot push-constant lane.  This local layout deliberately retains only the push range.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
-        auto& device = graphics().getDevice();
-        drawState().m_computeBindingLayout = device.createBindingLayout(bindingLayoutDesc);
-        if(!drawState().m_computeBindingLayout){
+        auto& device = m_graphics.getDevice();
+        m_materialState.m_computeBindingLayout = device.createBindingLayout(bindingLayoutDesc);
+        if(!m_materialState.m_computeBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding layout"));
             return false;
         }
     }
 
-    if(!drawState().m_emulationVertexShader){
-        if(!m_renderer.shaderSystem().loadShader(
-            drawState().m_emulationVertexShader,
+    if(!m_materialState.m_emulationVertexShader){
+        if(!m_shaderSystem.loadShader(
+            m_materialState.m_emulationVertexShader,
             AssetsGraphicsMesh::s_EmulationVertexShaderName,
             Core::ShaderArchive::s_DefaultVariant,
             Core::ShaderType::Vertex,
@@ -46,7 +76,7 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
             return false;
     }
 
-    if(!drawState().m_emulationInputLayout){
+    if(!m_materialState.m_emulationInputLayout){
         Core::VertexAttributeDesc attributes[NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT];
         ECSRenderDetail::SetEmulatedVertexAttribute(
             attributes[NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION],
@@ -85,13 +115,13 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
             "POSITION1"
         );
 
-        auto& device = graphics().getDevice();
-        drawState().m_emulationInputLayout = device.createInputLayout(
+        auto& device = m_graphics.getDevice();
+        m_materialState.m_emulationInputLayout = device.createInputLayout(
             attributes,
             NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT,
-            drawState().m_emulationVertexShader.get()
+            m_materialState.m_emulationVertexShader.get()
         );
-        if(!drawState().m_emulationInputLayout){
+        if(!m_materialState.m_emulationInputLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation input layout"));
             return false;
         }
@@ -120,29 +150,30 @@ bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(
 ){
     if(drawItems.empty())
         return true;
-    if(!m_renderer.meshSystem().createMeshFrameHeapHandles())
-        return false;
 
     bool ready = true;
-    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem&, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
+    for(const MaterialPassDrawItem& drawItem : drawItems){
         if(!ready)
-            return;
+            break;
+
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
 
         if(!computeEmulation){
             ready = pipelineResources.meshletPipeline
-                && m_renderer.meshSystem().meshGeometryHeapHandlesReady(mesh)
+                && mesh.valid()
             ;
-            return;
+            continue;
         }
 
         ready = pipelineResources.computePipeline
             && pipelineResources.emulationPipeline
-            && m_renderer.meshSystem().meshGeometryHeapHandlesReady(mesh)
+            && mesh.valid()
             && mesh.emulationVertexBuffer
             && mesh.emulationVertexHeapHandle.valid()
             && mesh.emulationVertexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
         ;
-    });
+    }
     return ready;
 }
 
@@ -150,10 +181,10 @@ bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceC
     if(instanceCount == 0)
         return true;
     NWB_ASSERT(instanceCount <= static_cast<usize>(Limit<u32>::s_Max));
-    if(drawState().m_instanceBuffer && drawState().m_instanceBufferCapacity >= instanceCount)
+    if(m_materialState.m_instanceBuffer && m_materialState.m_instanceBufferCapacity >= instanceCount)
         return true;
 
-    const usize capacity = ::NextGrowingCapacity(drawState().m_instanceBufferCapacity, instanceCount);
+    const usize capacity = ::NextGrowingCapacity(m_materialState.m_instanceBufferCapacity, instanceCount);
 #if defined(NWB_DEBUG)
     if(capacity > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance buffer capacity overflows addressable memory"));
@@ -165,18 +196,18 @@ bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceC
     instanceBufferDesc
         .setByteSize(static_cast<u64>(capacity * sizeof(InstanceGpuData)))
         .setStructStride(sizeof(InstanceGpuData))
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(ECSRenderDetail::s_InstanceBufferName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle instanceBuffer = graphics().createBuffer(instanceBufferDesc);
+    Core::BufferHandle instanceBuffer = m_graphics.createBuffer(instanceBufferDesc);
     if(!instanceBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create instance data buffer"));
         return false;
     }
 
-    m_renderer.meshSystem().releaseMeshFrameHeapHandles();
-    drawState().m_instanceBuffer = Move(instanceBuffer);
-    drawState().m_instanceBufferCapacity = capacity;
+    m_materialState.m_instanceBuffer = Move(instanceBuffer);
+    m_materialState.m_instanceBufferCapacity = capacity;
     return true;
 }
 
@@ -194,26 +225,26 @@ bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byte
 #else
     requiredByteCount = AlignUp(requiredByteCount, sizeof(u32));
 #endif
-    if(drawState().m_materialTypedBuffer && drawState().m_materialTypedBufferCapacity >= requiredByteCount)
+    if(m_materialState.m_materialTypedBuffer && m_materialState.m_materialTypedBufferCapacity >= requiredByteCount)
         return true;
 
-    const usize capacity = ::NextGrowingCapacity(drawState().m_materialTypedBufferCapacity, requiredByteCount);
+    const usize capacity = ::NextGrowingCapacity(m_materialState.m_materialTypedBufferCapacity, requiredByteCount);
     Core::BufferDesc materialTypedBufferDesc;
     materialTypedBufferDesc
         .setByteSize(static_cast<u64>(capacity))
         .setStructStride(sizeof(u32))
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(ECSRenderDetail::s_MaterialTypedBufferName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle materialTypedBuffer = graphics().createBuffer(materialTypedBufferDesc);
+    Core::BufferHandle materialTypedBuffer = m_graphics.createBuffer(materialTypedBufferDesc);
     if(!materialTypedBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create material typed buffer"));
         return false;
     }
 
-    m_renderer.meshSystem().releaseMeshFrameHeapHandles();
-    drawState().m_materialTypedBuffer = Move(materialTypedBuffer);
-    drawState().m_materialTypedBufferCapacity = capacity;
+    m_materialState.m_materialTypedBuffer = Move(materialTypedBuffer);
+    m_materialState.m_materialTypedBufferCapacity = capacity;
     return true;
 }
 
@@ -253,47 +284,33 @@ bool RendererMaterialSystem::materialPassDrawBuffersReady(
     NWB_ASSERT((requiredMaterialTypedBytes & (sizeof(u32) - 1u)) == 0u);
 
     return
-        (instanceCount == 0u || (drawState().m_instanceBuffer && drawState().m_instanceBufferCapacity >= instanceCount))
-        && drawState().m_materialTypedBuffer
-        && drawState().m_materialTypedBufferCapacity >= requiredMaterialTypedBytes
+        (instanceCount == 0u || (m_materialState.m_instanceBuffer && m_materialState.m_instanceBufferCapacity >= instanceCount))
+        && m_materialState.m_materialTypedBuffer
+        && m_materialState.m_materialTypedBufferCapacity >= requiredMaterialTypedBytes
     ;
 }
 
-void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData){
+ECSRenderDetail::MaterialPassBufferSnapshot RendererMaterialSystem::materialPassBufferSnapshot()const{
+    return {
+        .instanceBuffer = m_materialState.m_instanceBuffer,
+        .materialTypedBuffer = m_materialState.m_materialTypedBuffer,
+        .instanceBufferCapacity = m_materialState.m_instanceBufferCapacity,
+        .materialTypedBufferCapacity = m_materialState.m_materialTypedBufferCapacity,
+    };
+}
+
+void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(
+    InstanceGpuDataVector& instanceData,
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
+){
     // Slot 6 carries CSG's heap-selected UniformBuffer context for every raster instance, avoiding a second
     // pipeline-local resource descriptor in the mesh and compute geometry stages.
-    const u32 csgContextHeapSlot = csgState().m_clipContextSlotsHeapHandle.valid()
-        ? csgState().m_clipContextSlotsHeapHandle.slot()
-        : 0u
-    ;
+    u32 csgContextHeapSlot = 0u;
+    if(!csgResources.findClipContextHeapSlot(csgContextHeapSlot))
+        csgContextHeapSlot = 0u;
     for(InstanceGpuData& instance : instanceData)
         instance.geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT] = csgContextHeapSlot;
 }
-
-bool RendererMaterialSystem::findMaterialPassDrawItemResources(
-    const MaterialPassDrawItem& drawItem,
-    MeshResources*& outMesh,
-    MaterialPipelineResources*& outPipelineResources
-){
-    outMesh = nullptr;
-    outPipelineResources = nullptr;
-
-    const auto foundMesh = meshState().m_meshes.find(drawItem.meshKey);
-    if(foundMesh == meshState().m_meshes.end())
-        return false;
-
-    const auto foundPipeline = materialState().m_pipelines.find(drawItem.pipelineKey);
-    if(foundPipeline == materialState().m_pipelines.end())
-        return false;
-
-    outMesh = &foundMesh.value();
-    outPipelineResources = &foundPipeline.value();
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 NWB_IMPL_END
 

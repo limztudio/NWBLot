@@ -243,7 +243,8 @@ static bool GetVariantBytecode(
         includeDirectories,
         dependencies,
         sourcePath,
-        cachePaths.bytecodePath
+        cachePaths.bytecodePath,
+        entry.optimizationLevel
     };
     if(!shaderCook.compileVariant(compileRequest, outBytecode))
         return false;

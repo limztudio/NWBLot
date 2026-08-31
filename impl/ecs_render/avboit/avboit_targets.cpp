@@ -37,6 +37,8 @@ static Core::TextureHandle CreateRenderTarget(
         .setInRenderTarget(true)
         .setName(debugName)
         .setClearValue(clearValue)
+        .setInitialState(Core::ResourceStates::Common)
+        .setKeepInitialState(true)
     ;
     if(shareWithAsyncCompute)
         desc.setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
@@ -67,6 +69,8 @@ static Core::TextureHandle CreateTransmittanceVolume(
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/avboit/transmittance_volume")
         .setClearValue(Core::Color(1.f, 1.f, 1.f, 1.f))
+        .setInitialState(Core::ResourceStates::Common)
+        .setKeepInitialState(true)
     ;
     Core::TextureHandle texture = graphics.createTexture(desc);
     if(texture)
@@ -88,6 +92,7 @@ static Core::BufferHandle CreateU32Buffer(
         // Occupancy/extinction raster passes and the interleaved compute kernels exchange these work buffers.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(debugName)
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     Core::BufferHandle buffer = graphics.createBuffer(desc);
     if(buffer)
@@ -106,14 +111,52 @@ static Core::BufferHandle CreateU32Buffer(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererAvboitSystem::createAvboitFrameTargets(
-    DeferredFrameTargets& createdTargets,
-    const Core::Format::Enum lowRasterFormat,
-    const Core::Format::Enum accumColorFormat,
-    const Core::Format::Enum accumExtinctionFormat,
-    const Core::Format::Enum transmittanceFormat
-){
-    auto& device = graphics().getDevice();
+void RendererAvboitSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
+    // AVBOIT owns its five transient work-buffer registrations plus the writable transmittance StorageImage. The
+    // shared deferred slot-payload descriptor is borrowed, so release only owned descriptors before their targets.
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    if(heap.isInitialized()){
+        heap.free(targets.coverageBufferDescriptor);
+        heap.free(targets.depthWarpBufferDescriptor);
+        heap.free(targets.controlBufferDescriptor);
+        heap.free(targets.extinctionBufferDescriptor);
+        heap.free(targets.extinctionOverflowBufferDescriptor);
+        heap.free(targets.transmittanceTextureStorageDescriptor);
+    }
+
+    targets.lowFramebuffer.reset();
+    targets.accumulationFramebuffer.reset();
+
+    targets.lowRasterTarget.reset();
+    targets.accumColor.reset();
+    targets.accumExtinction.reset();
+    targets.transmittanceTexture.reset();
+
+    targets.coverageBuffer.reset();
+    targets.depthWarpBuffer.reset();
+    targets.controlBuffer.reset();
+    targets.extinctionBuffer.reset();
+    targets.extinctionOverflowBuffer.reset();
+
+    targets = AvboitFrameTargets{};
+}
+
+bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& createdTargets){
+    auto& device = m_graphics.getDevice();
+    const Core::Format::Enum lowRasterFormat = SelectRendererAvboitLowRasterFormat(device);
+    const Core::Format::Enum accumColorFormat = SelectRendererAvboitAccumColorFormat(device);
+    const Core::Format::Enum accumExtinctionFormat = SelectRendererAvboitAccumExtinctionFormat(device);
+    const Core::Format::Enum transmittanceFormat = SelectRendererAvboitTransmittanceFormat(device);
+    if(
+        lowRasterFormat == Core::Format::UNKNOWN
+        || accumColorFormat == Core::Format::UNKNOWN
+        || accumExtinctionFormat == Core::Format::UNKNOWN
+        || transmittanceFormat == Core::Format::UNKNOWN
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to find supported AVBOIT framebuffer formats"));
+        return false;
+    }
+
     AvboitFrameTargets avboitTargets;
     avboitTargets.fullWidth = createdTargets.width;
     avboitTargets.fullHeight = createdTargets.height;
@@ -140,7 +183,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
 
     const Core::Color transparentBlack(0.f, 0.f, 0.f, 0.f);
     avboitTargets.lowRasterTarget = __hidden_avboit_targets::CreateRenderTarget(
-        graphics(),
+        m_graphics,
         avboitTargets.lowWidth,
         avboitTargets.lowHeight,
         avboitTargets.lowRasterFormat,
@@ -153,7 +196,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     }
 
     avboitTargets.accumColor = __hidden_avboit_targets::CreateRenderTarget(
-        graphics(),
+        m_graphics,
         avboitTargets.fullWidth,
         avboitTargets.fullHeight,
         avboitTargets.accumColorFormat,
@@ -167,7 +210,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     }
 
     avboitTargets.accumExtinction = __hidden_avboit_targets::CreateRenderTarget(
-        graphics(),
+        m_graphics,
         avboitTargets.fullWidth,
         avboitTargets.fullHeight,
         avboitTargets.accumExtinctionFormat,
@@ -234,7 +277,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     const u64 extinctionOverflowBytes = lowPixelCount * sizeof(u32);
 
     avboitTargets.coverageBuffer = __hidden_avboit_targets::CreateU32Buffer(
-        graphics(),
+        m_graphics,
         coverageBytes,
         "engine/avboit/depth_coverage"
     );
@@ -244,7 +287,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     }
 
     avboitTargets.depthWarpBuffer = __hidden_avboit_targets::CreateU32Buffer(
-        graphics(),
+        m_graphics,
         depthWarpBytes,
         "engine/avboit/depth_warp_lut"
     );
@@ -254,7 +297,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     }
 
     avboitTargets.controlBuffer = __hidden_avboit_targets::CreateU32Buffer(
-        graphics(),
+        m_graphics,
         static_cast<u64>(ECSRenderAvboitDetail::s_AvboitControlWordCount) * sizeof(u32),
         "engine/avboit/control"
     );
@@ -264,7 +307,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     }
 
     avboitTargets.extinctionBuffer = __hidden_avboit_targets::CreateU32Buffer(
-        graphics(),
+        m_graphics,
         extinctionBytes,
         "engine/avboit/packed_extinction_volume"
     );
@@ -274,7 +317,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     }
 
     avboitTargets.extinctionOverflowBuffer = __hidden_avboit_targets::CreateU32Buffer(
-        graphics(),
+        m_graphics,
         extinctionOverflowBytes,
         "engine/avboit/extinction_overflow_depth"
     );
@@ -284,7 +327,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     }
 
     avboitTargets.transmittanceTexture = __hidden_avboit_targets::CreateTransmittanceVolume(
-        graphics(),
+        m_graphics,
         avboitTargets.lowWidth,
         avboitTargets.lowHeight,
         avboitTargets.physicalSliceCount,
@@ -298,7 +341,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     // AVBOIT material passes share DeferredBindlessFrameResources::slotsBuffer. That buffer is created after all
     // frame targets are registered in the global heap, so pass setup waits for the deferred target builder.
     createdTargets.avboit = Move(avboitTargets);
-    avboitState().m_targetsNeedClear = true;
+    m_avboitState.m_targetsNeedClear = true;
     return true;
 }
 

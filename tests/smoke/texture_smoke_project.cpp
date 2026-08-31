@@ -10,8 +10,10 @@
 #include <global/math/frame.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
-#include <impl/ecs_render/kernel/module.h>
+#include <impl/ecs_render/module.h>
 
+#include "framebuffer_capture.h"
+#include "smoke_environment.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 
@@ -30,6 +32,9 @@ using NWB::Tests::Smoke::CreateSmokeCamera;
 using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::DestroySmokeRenderWorld;
+using NWB::Tests::Smoke::FramebufferCapture;
+using NWB::Tests::Smoke::ReadSmokeEnvironmentText;
+using NWB::Tests::Smoke::SmokeEnvironmentString;
 
 using TextureSmokeMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 using TextureSmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
@@ -70,6 +75,7 @@ static constexpr f32 s_DirectionalLightPitch = 0.48f;
 // Aim the shadow toward the foreground rather than hiding the receiver spill behind the sphere from the camera.
 static constexpr f32 s_DirectionalLightYaw = 2.2f;
 static constexpr f32 s_DirectionalLightIntensity = 2.0f;
+static constexpr u32 s_FramebufferCaptureDefaultFrameCount = 360u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,8 +89,46 @@ private:
         return world;
     }
 
+    bool configureFramebufferCapture(){
+        SmokeEnvironmentString outputPath(m_context.objectArena);
+        if(!ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", outputPath))
+            return true;
+
+        u32 captureFrameCount = s_FramebufferCaptureDefaultFrameCount;
+        SmokeEnvironmentString frameCountText(m_context.objectArena);
+        if(ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT", frameCountText)){
+            u64 parsedFrameCount = 0u;
+            if(
+                !ParseU64(AStringView(frameCountText.data(), frameCountText.size()), parsedFrameCount)
+                || parsedFrameCount == 0u
+                || parsedFrameCount > static_cast<u64>(Limit<u32>::s_Max)
+            ){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("TextureSmokeProject: NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT must be a positive u32")
+                );
+                return false;
+            }
+            captureFrameCount = static_cast<u32>(parsedFrameCount);
+        }
+
+        auto capture = MakeUnique<FramebufferCapture>(
+            m_context,
+            AStringView(outputPath.data(), outputPath.size()),
+            captureFrameCount
+        );
+        if(!capture || !capture->start())
+            return false;
+
+        m_framebufferCapture = Move(capture);
+        return true;
+    }
+
     void destroyWorld(){
         DestroySmokeRenderWorld(m_context, m_world);
+        if(m_framebufferCapture){
+            m_framebufferCapture->stop();
+            m_framebufferCapture.reset();
+        }
     }
 
 
@@ -92,7 +136,9 @@ public:
     explicit TextureSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
         , m_world(createWorldOrDie(context))
-    {}
+    {
+        m_captureConfigurationValid = configureFramebufferCapture();
+    }
 
     virtual ~TextureSmokeProject()override{
         destroyWorld();
@@ -101,6 +147,9 @@ public:
 
 public:
     virtual bool onStartup()override{
+        if(!m_captureConfigurationValid)
+            return false;
+
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(
             *m_world,
             s_CameraHeight,
@@ -156,6 +205,8 @@ public:
     }
 
     virtual bool onUpdate(const f32 delta)override{
+        if(m_framebufferCapture)
+            m_framebufferCapture->update();
         m_world->tick(delta);
         return true;
     }
@@ -164,8 +215,10 @@ public:
 private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
+    UniquePtr<FramebufferCapture> m_framebufferCapture;
     NWB::Core::ECS::EntityID m_whiteGround = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_texturedSphere = NWB::Core::ECS::ENTITY_ID_INVALID;
+    bool m_captureConfigurationValid = true;
 };
 
 

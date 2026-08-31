@@ -7,17 +7,14 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Shared alpha path for AVBOIT material occupancy/extinction authoring. Include after the material surface hook is in
-// scope and after the pass declares its regular bindless or CSG-local opaque-depth contract.
+// Shared alpha path for AVBOIT material occupancy/extinction authoring. Include after the material surface hook is in scope and after the pass declares its regular bindless or CSG-local opaque-depth contract.
 
 
 bool nwbAvboitLoadAcceptedMaterialAlpha(
     const float4 position,
     const half4 color,
-    const half3 normal,
-    const half4 tangent,
+    const float3 normal,
+    const float4 tangent,
     const float2 uv0,
     const float4 worldPosition,
     out half outAlpha
@@ -27,9 +24,8 @@ bool nwbAvboitLoadAcceptedMaterialAlpha(
 
     NwbMeshSurfaceInputs surfaceInputs;
     surfaceInputs.color = color;
-    // Match the G-buffer/accumulate boundary: expand half directions before the material hook evaluates them.
-    surfaceInputs.normal = float3(normal);
-    surfaceInputs.tangent = float4(tangent);
+    surfaceInputs.normal = normal;
+    surfaceInputs.tangent = tangent;
     surfaceInputs.uv0 = uv0;
     surfaceInputs.worldPosition = worldPosition.xyz;
     surfaceInputs.incidentDirection = nwbMeshCameraToSurfaceDirection(worldPosition.xyz);
@@ -61,7 +57,7 @@ bool nwbAvboitLoadAcceptedMaterialAlpha(
 bool nwbAvboitLoadAcceptedMaterialAlpha(const NwbAvboitMaterialAlphaPixelInput input, out half outAlpha){
     return nwbAvboitLoadAcceptedMaterialAlpha(
         input.position,
-        input.color,
+        half4(input.color),
         input.normal,
         input.tangent,
         input.uv0,

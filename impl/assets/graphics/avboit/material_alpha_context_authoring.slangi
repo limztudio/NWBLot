@@ -2,16 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
 #ifndef NWB_GRAPHICS_AVBOIT_MATERIAL_ALPHA_CONTEXT_AUTHORING_SLANGI
 #define NWB_GRAPHICS_AVBOIT_MATERIAL_ALPHA_CONTEXT_AUTHORING_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Shared minimum context for the AVBOIT occupancy and extinction material passes. Both evaluate the same authored
-// surface hook solely to obtain renderCoverage, so their mesh/material binding contract must stay identical.
+// Shared minimum context for the AVBOIT occupancy and extinction material passes. Both evaluate the same authored surface hook solely to obtain renderCoverage, so their mesh/material binding contract must stay identical.
 
 
 #include "../mesh/runtime_constants.h"

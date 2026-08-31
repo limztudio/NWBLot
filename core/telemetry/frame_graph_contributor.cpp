@@ -14,6 +14,78 @@ NWB_TELEMETRY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool FrameGraphBuilder::addPhysicalQueueRuntimeStatistics(
+    const FrameGraphNodeHandle owner,
+    const FrameGraphPhysicalQueueRuntimeStatistics& statistics
+){
+    if(
+        !m_physicalQueueRuntimeStatistics
+        || !owner.valid()
+        || owner.index >= m_nodes.size()
+        || m_nodes[owner.index].kind != FrameGraphNodeKind::Pass
+        || !IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(
+            statistics,
+            m_nodes[owner.index].runtimeStatistics
+        )
+    )
+        return false;
+
+    for(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record : *m_physicalQueueRuntimeStatistics){
+        if(record.ownerNodeIndex == owner.index && record.statistics.queue == statistics.queue)
+            return false;
+    }
+
+    m_physicalQueueRuntimeStatistics->push_back(FrameGraphPhysicalQueueRuntimeStatisticsRecord{
+        .ownerNodeIndex = owner.index,
+        .statistics = statistics,
+    });
+    return true;
+}
+
+bool FrameGraphBuilder::addPacketSubmissionStatistics(
+    const FrameGraphNodeHandle owner,
+    const FrameGraphPacketSubmissionStatisticsRecord& statistics
+){
+    if(
+        !m_packetSubmissionStatistics
+        || !owner.valid()
+        || owner.index >= m_nodes.size()
+        || m_nodes[owner.index].kind != FrameGraphNodeKind::Pass
+        || statistics.ownerNodeIndex != owner.index
+        || !IsValidFrameGraphPacketSubmissionStatistics(statistics)
+    )
+        return false;
+
+    const FrameGraphRuntimeStatistics& ownerStatistics = m_nodes[owner.index].runtimeStatistics;
+    if(
+        !IsValidFrameGraphRuntimeStatistics(ownerStatistics)
+        || statistics.packetGeneration != ownerStatistics.planGeneration
+        || statistics.packetIndex >= ownerStatistics.compile.packetCount
+        || statistics.queue.deviceGeneration != ownerStatistics.deviceGeneration
+        || statistics.taskCount > ownerStatistics.submission.acceptedTaskCount
+        || statistics.commandListCount > ownerStatistics.submission.nativeCommandListCount
+        || statistics.plannedWaitTokenCount > ownerStatistics.submission.plannedWaitTokenCount
+        || statistics.sameQueueWaitElisionCount > ownerStatistics.submission.sameQueueWaitElisionCount
+        || statistics.timelineWaitCount > ownerStatistics.submission.timelineWaitCount
+        || statistics.mergedTimelineWaitCount > ownerStatistics.submission.mergedTimelineWaitCount
+        || statistics.submissionSeconds > ownerStatistics.submission.submissionSeconds
+        || (
+            statistics.joinsAcceptedQueueFrontier
+            && ownerStatistics.submission.acceptedFrontierSubmissionCount == 0u
+        )
+        || (statistics.recoverySubmission && ownerStatistics.submission.recoverySubmissionCount == 0u)
+    )
+        return false;
+
+    for(const FrameGraphPacketSubmissionStatisticsRecord& record : *m_packetSubmissionStatistics){
+        if(record.ownerNodeIndex == owner.index && record.packetIndex == statistics.packetIndex)
+            return false;
+    }
+
+    m_packetSubmissionStatistics->push_back(statistics);
+    return true;
+}
+
 void FrameGraphBuilder::addEdge(const FrameGraphNodeHandle from, const FrameGraphNodeHandle to, const FrameGraphEdgeKind::Enum kind, const u8 flags){
     if(!from.valid() || !to.valid())
         return;
@@ -38,13 +110,22 @@ void FrameGraphBuilder::dependsOnByName(const FrameGraphNodeHandle from, const N
     });
 }
 
-FrameGraphNodeHandle FrameGraphBuilder::addNode(const Name& name, const AStringView label, const FrameGraphNodeKind::Enum kind, const u8 flags){
+FrameGraphNodeHandle FrameGraphBuilder::addNode(
+    const Name& name,
+    const AStringView label,
+    const FrameGraphNodeKind::Enum kind,
+    const FrameGraphPassMetadata& metadata,
+    const u8 flags
+){
     const u32 index = static_cast<u32>(m_nodes.size());
     m_nodes.push_back(FrameGraphNodeDesc{
         .name = name,
         .label = label,
         .kind = kind,
         .flags = flags,
+        .queueAssignment = metadata.queueAssignment,
+        .compiledTask = metadata.compiledTask,
+        .runtimeStatistics = metadata.runtimeStatistics,
     });
     return FrameGraphNodeHandle{ .index = index };
 }

@@ -11,6 +11,10 @@
 #include "../raytrace/material_context_slots.slangi"
 #include "../bindless/bindless_heap_rt.slangi"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[vk::push_constant]]
 ConstantBuffer<NwbCausticPhotonPushConstants> g_NwbCausticSwPushConstants;
 
@@ -33,6 +37,11 @@ uint nwbMeshFrameInstanceHeapSlot(){
 uint nwbMeshFrameViewHeapSlot(){
     return 0u; // The caustic surface path does not consume the mesh-view alias.
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "../bindless/bindless_heap_mesh.slangi"
 
 #include "../scene/buffer.slangi"
@@ -115,85 +124,139 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
 
     // Near-first descent tightens closest.t before far-subtree tests.
     uint stack[NWB_CAUSTIC_SW_MESH_STACK_SIZE];
-    uint stackPointer = 0u;
-    NwbBvhNode node = NwbHeapBvhNodes(material.nodeSlot)[0u]; // per-mesh root
-    bool active = nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0);
+    stack[0u] = 0u;
+    uint stackPointer = 1u;
 
-    [loop] while(active){
-        if(nwbBvhNodeIsLeaf(node)){
-            const uint triangle = nwbBvhLeafPrimitive(node);
-            const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-            const uint3 triIndices = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
-            const uint i0 = triIndices.x;
-            const uint i1 = triIndices.y;
-            const uint i2 = triIndices.z;
-            const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(i0 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-            const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(i1 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-            const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(i2 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-            const NwbRayTriangleHit triangleHit = nwbRayTriangleMollerTrumbore(origin, direction, tMin, closest.t, v0, v1, v2);
-            if(triangleHit.hit){
-                closest.hit = true;
-                closest.t = triangleHit.t;
-                closest.isRefractive = refractive;
-                closest.worldPos = worldOrigin + worldDirection * triangleHit.t;
-                closest.shadingNormal = float3(0.0, 0.0, 1.0); // filled with the real interpolated normal for a refractive hit below
-                closest.ior = 1.0;
-                closest.transmission = half3(1.0h, 1.0h, 1.0h);
+    [loop] while(stackPointer > 0u){
+        --stackPointer;
+        NwbBvhNode node = NwbHeapBvhNodes(material.nodeSlot)[stack[stackPointer]];
+        if(!nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0))
+            continue;
 
-                if(refractive){
-                    const uint attributeBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-                    const NwbRayTraceVertexAttrib a0 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase);
-                    const NwbRayTraceVertexAttrib a1 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
-                    const NwbRayTraceVertexAttrib a2 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
-                    const float3 objectShadingNormal = float3(a0.normal) * triangleHit.w + float3(a1.normal) * triangleHit.u + float3(a2.normal) * triangleHit.v;
+        [loop] while(true){
+            if(nwbBvhNodeIsLeaf(node)){
+                const uint triangle = nwbBvhLeafPrimitive(node);
+                const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+                const uint3 triIndices = NwbHeapRawBuffer(material.indexSlot).Load3(
+                    indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES
+                );
+                const uint i0 = triIndices.x;
+                const uint i1 = triIndices.y;
+                const uint i2 = triIndices.z;
+                const float3 v0 = asfloat(
+                    NwbHeapRawBuffer(material.positionSlot).Load3(i0 * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
+                );
+                const float3 v1 = asfloat(
+                    NwbHeapRawBuffer(material.positionSlot).Load3(i1 * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
+                );
+                const float3 v2 = asfloat(
+                    NwbHeapRawBuffer(material.positionSlot).Load3(i2 * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
+                );
+                const NwbRayTriangleHit triangleHit = nwbRayTriangleMollerTrumbore(
+                    origin,
+                    direction,
+                    tMin,
+                    closest.t,
+                    v0,
+                    v1,
+                    v2
+                );
+                if(triangleHit.hit){
+                    closest.hit = true;
+                    closest.t = triangleHit.t;
+                    closest.isRefractive = refractive;
+                    closest.worldPos = worldOrigin + worldDirection * triangleHit.t;
+                    closest.shadingNormal = float3(0.0, 0.0, 1.0); // replaced by the interpolated normal for refractive hits
+                    closest.ior = 1.0;
+                    closest.transmission = half3(1.0h, 1.0h, 1.0h);
 
-                    const float3 worldShadingNormal = nwbSafeNormalize(nwbSwBvhTransformNormal(instance, objectShadingNormal), float3(0.0, 0.0, 1.0));
-                    closest.shadingNormal = worldShadingNormal;
+                    if(refractive){
+                        const uint attributeBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+                        const NwbRayTraceVertexAttrib a0 = nwbCausticSwLoadVertexAttrib(
+                            material.attributeSlot,
+                            attributeBase
+                        );
+                        const NwbRayTraceVertexAttrib a1 = nwbCausticSwLoadVertexAttrib(
+                            material.attributeSlot,
+                            attributeBase + 1u
+                        );
+                        const NwbRayTraceVertexAttrib a2 = nwbCausticSwLoadVertexAttrib(
+                            material.attributeSlot,
+                            attributeBase + 2u
+                        );
+                        const float3 objectShadingNormal =
+                            float3(a0.normal) * triangleHit.w
+                            + float3(a1.normal) * triangleHit.u
+                            + float3(a2.normal) * triangleHit.v
+                        ;
 
-                    NwbShadowHit hit;
-                    hit.meshInstanceIndex = material.meshInstanceIndex;
-                    hit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
-                    hit.materialConstantByteOffset = material.materialConstantByteOffset;
-                    hit.uv0 = a0.uv0 * triangleHit.w + a1.uv0 * triangleHit.u + a2.uv0 * triangleHit.v;
-                    hit.worldNormal = worldShadingNormal;
-                    hit.worldPosition = closest.worldPos;
-                    hit.rayDirection = worldDirection;
+                        const float3 worldShadingNormal = nwbSafeNormalize(
+                            nwbSwBvhTransformNormal(instance, objectShadingNormal),
+                            float3(0.0, 0.0, 1.0)
+                        );
+                        closest.shadingNormal = worldShadingNormal;
 
-                    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
-                    closest.ior = surface.refractionIor;
-                    closest.transmission = surface.shadowAbsorptionTint;
+                        NwbShadowHit hit;
+                        hit.meshInstanceIndex = material.meshInstanceIndex;
+                        hit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+                        hit.materialConstantByteOffset = material.materialConstantByteOffset;
+                        hit.uv0 = a0.uv0 * triangleHit.w + a1.uv0 * triangleHit.u + a2.uv0 * triangleHit.v;
+                        hit.worldNormal = worldShadingNormal;
+                        hit.worldPosition = closest.worldPos;
+                        hit.rayDirection = worldDirection;
+
+                        const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
+                        closest.ior = surface.refractionIor;
+                        closest.transmission = surface.shadowAbsorptionTint;
+                    }
                 }
+                break;
             }
-            active = false; // leaf done -> pop the next deferred node below
-        }
-        else{
-            const NwbBvhNode leftNode = NwbHeapBvhNodes(material.nodeSlot)[node.leftChild];
-            const uint right = nwbBvhNodeRightChildIndex(node);
-            const NwbBvhNode rightNode = NwbHeapBvhNodes(material.nodeSlot)[right];
-            float tLeft;
-            const bool hitLeft = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, 0.0, tLeft);
-            float tRight;
-            const bool hitRight = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, 0.0, tRight);
-            if(hitLeft && hitRight){
-                if(tLeft <= tRight){
-                    if(stackPointer < NWB_CAUSTIC_SW_MESH_STACK_SIZE) stack[stackPointer++] = right;
-                    node = leftNode;
+            else{
+                const NwbBvhNode leftNode = NwbHeapBvhNodes(material.nodeSlot)[node.leftChild];
+                const uint right = nwbBvhNodeRightChildIndex(node);
+                const NwbBvhNode rightNode = NwbHeapBvhNodes(material.nodeSlot)[right];
+                float tLeft;
+                const bool hitLeft = nwbBvhRayAabbT(
+                    origin,
+                    invDir,
+                    tMin,
+                    closest.t,
+                    leftNode.aabbMin,
+                    leftNode.aabbMax,
+                    0.0,
+                    tLeft
+                );
+                float tRight;
+                const bool hitRight = nwbBvhRayAabbT(
+                    origin,
+                    invDir,
+                    tMin,
+                    closest.t,
+                    rightNode.aabbMin,
+                    rightNode.aabbMax,
+                    0.0,
+                    tRight
+                );
+                if(hitLeft && hitRight){
+                    if(tLeft <= tRight){
+                        if(stackPointer < NWB_CAUSTIC_SW_MESH_STACK_SIZE){
+                            stack[stackPointer] = right;
+                            ++stackPointer;
+                        }
+                        node = leftNode;
+                    }
+                    else{
+                        if(stackPointer < NWB_CAUSTIC_SW_MESH_STACK_SIZE){
+                            stack[stackPointer] = node.leftChild;
+                            ++stackPointer;
+                        }
+                        node = rightNode;
+                    }
+                    continue;
                 }
-                else{
-                    if(stackPointer < NWB_CAUSTIC_SW_MESH_STACK_SIZE) stack[stackPointer++] = node.leftChild;
-                    node = rightNode;
-                }
-                continue;
-            }
-            if(hitLeft){ node = leftNode; continue; }
-            if(hitRight){ node = rightNode; continue; }
-            active = false; // both children culled -> pop
-        }
-
-        [loop] while(stackPointer > 0u){
-            node = NwbHeapBvhNodes(material.nodeSlot)[stack[--stackPointer]];
-            if(nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0)){
-                active = true;
+                if(hitLeft){ node = leftNode; continue; }
+                if(hitRight){ node = rightNode; continue; }
                 break;
             }
         }
@@ -217,43 +280,65 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     const float3 invDir = nwbBvhSafeInvDir(direction);
 
     uint stack[NWB_CAUSTIC_SW_SCENE_STACK_SIZE];
-    uint stackPointer = 0u;
-    NwbBvhNode node = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[0u]; // root
-    bool active = nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0);
+    stack[0u] = 0u;
+    uint stackPointer = 1u;
 
-    [loop] while(active){
-        if(nwbBvhNodeIsLeaf(node)){
-            nwbCausticSwInstanceClosest(nwbBvhLeafPrimitive(node), origin, direction, tMin, closest);
-            active = false; // -> pop below
-        }
-        else{
-            const NwbBvhNode leftNode = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[node.leftChild];
-            const uint right = nwbBvhNodeRightChildIndex(node);
-            const NwbBvhNode rightNode = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[right];
-            float tLeft;
-            const bool hitLeft = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, 0.0, tLeft);
-            float tRight;
-            const bool hitRight = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, 0.0, tRight);
-            if(hitLeft && hitRight){
-                if(tLeft <= tRight){
-                    if(stackPointer < NWB_CAUSTIC_SW_SCENE_STACK_SIZE) stack[stackPointer++] = right;
-                    node = leftNode;
-                }
-                else{
-                    if(stackPointer < NWB_CAUSTIC_SW_SCENE_STACK_SIZE) stack[stackPointer++] = node.leftChild;
-                    node = rightNode;
-                }
-                continue;
+    [loop] while(stackPointer > 0u){
+        --stackPointer;
+        NwbBvhNode node = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[stack[stackPointer]];
+        if(!nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0))
+            continue;
+
+        [loop] while(true){
+            if(nwbBvhNodeIsLeaf(node)){
+                nwbCausticSwInstanceClosest(nwbBvhLeafPrimitive(node), origin, direction, tMin, closest);
+                break;
             }
-            if(hitLeft){ node = leftNode; continue; }
-            if(hitRight){ node = rightNode; continue; }
-            active = false; // both children culled -> pop
-        }
-
-        [loop] while(stackPointer > 0u){
-            node = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[stack[--stackPointer]];
-            if(nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0)){
-                active = true;
+            else{
+                const NwbBvhNode leftNode = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[node.leftChild];
+                const uint right = nwbBvhNodeRightChildIndex(node);
+                const NwbBvhNode rightNode = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[right];
+                float tLeft;
+                const bool hitLeft = nwbBvhRayAabbT(
+                    origin,
+                    invDir,
+                    tMin,
+                    closest.t,
+                    leftNode.aabbMin,
+                    leftNode.aabbMax,
+                    0.0,
+                    tLeft
+                );
+                float tRight;
+                const bool hitRight = nwbBvhRayAabbT(
+                    origin,
+                    invDir,
+                    tMin,
+                    closest.t,
+                    rightNode.aabbMin,
+                    rightNode.aabbMax,
+                    0.0,
+                    tRight
+                );
+                if(hitLeft && hitRight){
+                    if(tLeft <= tRight){
+                        if(stackPointer < NWB_CAUSTIC_SW_SCENE_STACK_SIZE){
+                            stack[stackPointer] = right;
+                            ++stackPointer;
+                        }
+                        node = leftNode;
+                    }
+                    else{
+                        if(stackPointer < NWB_CAUSTIC_SW_SCENE_STACK_SIZE){
+                            stack[stackPointer] = node.leftChild;
+                            ++stackPointer;
+                        }
+                        node = rightNode;
+                    }
+                    continue;
+                }
+                if(hitLeft){ node = leftNode; continue; }
+                if(hitRight){ node = rightNode; continue; }
                 break;
             }
         }

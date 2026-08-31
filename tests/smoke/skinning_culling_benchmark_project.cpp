@@ -15,7 +15,7 @@
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_model/module.h>
 #include <impl/ecs_model_renderer/model_renderer.h>
-#include <impl/ecs_render/kernel/module.h>
+#include <impl/ecs_render/module.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
@@ -529,7 +529,7 @@ public:
 public:
     virtual bool onStartup()override{
         if(!m_staticPreview)
-            m_context.setTelemetryCapture(NWB::Core::Telemetry::CaptureOptions::All());
+            m_context.setTelemetryCapture(NWB::Core::Telemetry::CaptureOptions::PerfOnly());
 
         if(!loadSkeletonBindJoints()){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));

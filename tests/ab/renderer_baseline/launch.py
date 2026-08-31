@@ -160,7 +160,7 @@ def run_self_test() -> int:
     )
     paths = resolve_paths(args, settings)
     command = [str(item) for item in runner_command(args, paths)]
-    assert str(paths.runtime_directory).endswith("Testing/smoke_runtime/dbg")
+    assert paths.runtime_directory.as_posix().endswith("Testing/smoke_runtime/dbg")
     assert command[command.index("--executable") + 1].endswith("transparent_multi_smoke.exe")
     assert command[command.index("--profile") + 1] == "transparent-avboit"
     assert "--gpu-validation" in command

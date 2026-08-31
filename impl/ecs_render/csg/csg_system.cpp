@@ -4,7 +4,7 @@
 
 #include "csg_system.h"
 
-#include <impl/ecs_render/kernel/system.h>
+#include <impl/ecs_render/csg/renderer_csg_state.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,9 +16,29 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererCsgSystem::RendererCsgSystem(RendererSystem& renderer)
-    : RendererSystemSubsystemBase<RendererSystem>(renderer)
+RendererCsgSystem::RendererCsgSystem(
+    Core::Alloc::GlobalArena& arena,
+    Core::ECS::World& world,
+    Core::Graphics& graphics,
+    CsgShapeRegistry& csgShapeRegistry,
+    RendererCsgState& csgState,
+    RendererShaderSystem& shaderSystem,
+    RendererMeshSystem& meshSystem
+)
+    : m_arena(arena)
+    , m_world(world)
+    , m_graphics(graphics)
+    , m_csgShapeRegistry(csgShapeRegistry)
+    , m_csgState(csgState)
+    , m_shaderSystem(shaderSystem)
+    , m_meshSystem(meshSystem)
 {}
+
+
+void RendererCsgSystem::invalidateResources(){
+    releaseCsgClipContextHeapHandles();
+    m_csgState.invalidateResources();
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

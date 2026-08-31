@@ -23,6 +23,36 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace QueuePresentWaitDisposition{
+    enum Enum : u8{
+        Consumed,
+        NotConsumed,
+        DeviceLost,
+        Unknown,
+    };
+};
+
+namespace CompatibilityPresentTransitionPolicy{
+    enum Enum : u8{
+        Invalid,
+        TransitionFromUnknown,
+        PreservePresent,
+    };
+};
+
+struct SwapChainImagePresentationState{
+    bool hasPresented = false;
+
+    [[nodiscard]] ResourceStates::Mask nativeInitialState()const noexcept{
+        return hasPresented ? ResourceStates::Present : ResourceStates::Unknown;
+    }
+
+    void observeQueuePresentWaitDisposition(const QueuePresentWaitDisposition::Enum disposition)noexcept{
+        if(disposition == QueuePresentWaitDisposition::Consumed)
+            hasPresented = true;
+    }
+};
+
 struct SwapChainSurfaceFormatSelection{
     VkSurfaceFormatKHR surfaceFormat = {};
     Format::Enum backBufferFormat = Format::UNKNOWN;
@@ -32,6 +62,40 @@ struct SwapChainSurfaceFormatSelection{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+// Vulkan specifies that presentation waits are still executed for the WSI failures listed below. Host/device OOM
+// rejects the operation before it is enqueued and leaves synchronization untouched. Unknown errors stay distinct so
+// callers can quarantine the acquired frame instead of guessing that its binary semaphore was consumed.
+inline QueuePresentWaitDisposition::Enum ClassifyQueuePresentWaitDisposition(const VkResult result)noexcept{
+    switch(result){
+    case VK_SUCCESS:
+    case VK_SUBOPTIMAL_KHR:
+    case VK_ERROR_OUT_OF_DATE_KHR:
+    case VK_ERROR_SURFACE_LOST_KHR:
+    case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT:
+    case VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT:
+        return QueuePresentWaitDisposition::Consumed;
+    case VK_ERROR_OUT_OF_HOST_MEMORY:
+    case VK_ERROR_OUT_OF_DEVICE_MEMORY:
+        return QueuePresentWaitDisposition::NotConsumed;
+    case VK_ERROR_DEVICE_LOST:
+        return QueuePresentWaitDisposition::DeviceLost;
+    default:
+        return QueuePresentWaitDisposition::Unknown;
+    }
+}
+
+// A never-presented acquired image has no reusable native layout. Its compatibility command list must transition
+// from Unknown directly instead of seeding the descriptor's retained Present state as if WSI had established it.
+inline CompatibilityPresentTransitionPolicy::Enum ResolveCompatibilityPresentTransitionPolicy(
+    const ResourceStates::Mask nativeInitialState
+)noexcept{
+    if(nativeInitialState == ResourceStates::Unknown)
+        return CompatibilityPresentTransitionPolicy::TransitionFromUnknown;
+    if(nativeInitialState == ResourceStates::Present)
+        return CompatibilityPresentTransitionPolicy::PreservePresent;
+    return CompatibilityPresentTransitionPolicy::Invalid;
+}
 
 // Frame acquisition queues its binary semaphore on the primary physical Graphics transport. A secondary Graphics
 // queue therefore cannot safely become the terminal swap-chain signal source until the acquired-image and

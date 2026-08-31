@@ -4,6 +4,7 @@
 
 #include "report.h"
 
+#include <global/hash_utils.h>
 #include <global/type_properties.h>
 
 
@@ -32,10 +33,29 @@ static constexpr f64 s_MillisecondsPerSecond = 1000.0;
 static constexpr usize s_PerfCsvFixedReserveBytes = 128u;
 static constexpr usize s_PerfCsvBytesPerEvent = 128u;
 static constexpr usize s_TimedGraphDotFixedReserveBytes = 96u;
-static constexpr usize s_TimedGraphDotBytesPerNode = 64u;
+static constexpr usize s_TimedGraphDotBytesPerGraph = 128u;
+static constexpr usize s_TimedGraphDotBytesPerNode = 768u;
 static constexpr usize s_TimedGraphDotBytesPerEdge = 40u;
 static constexpr usize s_TimedGraphDotTimingLabelExtraBytes = 16u;
+static constexpr usize s_TimedGraphDotRuntimeStatisticsBytes = 192u;
 static constexpr usize s_JsonReportReserveBytes = 1024u;
+static constexpr usize s_JsonReportBytesPerGraph = 128u;
+static constexpr usize s_JsonReportBytesPerNode = 896u;
+static constexpr usize s_JsonReportBytesPerEdge = 96u;
+static constexpr usize s_JsonReportRuntimeStatisticsBytes = 4096u;
+static constexpr usize s_JsonReportPhysicalQueueRuntimeStatisticsBytes = 2048u;
+static constexpr usize s_JsonReportPacketSubmissionStatisticsBytes = 512u;
+
+struct FrameGraphReportRecord{
+    u32 streamId = 0u;
+    Telemetry::FrameGraphPayload payload;
+
+    explicit FrameGraphReportRecord(TelemetryArena& arena)
+        : payload(arena)
+    {}
+};
+
+using FrameGraphReportRecords = Vector<FrameGraphReportRecord, TelemetryArena>;
 
 [[nodiscard]] usize EventKindBucket(const Telemetry::EventKind::Enum kind)noexcept{
     const usize index = static_cast<usize>(kind);
@@ -121,7 +141,24 @@ void AddFrameGraph(TelemetryReportSummary& summary, const Telemetry::FrameGraphP
         summary.maxFrameGraphEdgeCount = edgeCount;
 }
 
-using GraphTimingMap = HashMap<Name, f64, Hasher<Name>, EqualTo<Name>, TelemetryArena>;
+struct GraphTimingKey{
+    u64 frameIndex = 0u;
+    Name scopeName = NAME_NONE;
+};
+
+inline bool operator==(const GraphTimingKey& lhs, const GraphTimingKey& rhs)noexcept{
+    return lhs.frameIndex == rhs.frameIndex && lhs.scopeName == rhs.scopeName;
+}
+
+struct GraphTimingKeyHasher{
+    usize operator()(const GraphTimingKey& key)const noexcept{
+        usize seed = Hasher<u64>{}(key.frameIndex);
+        ::HashCombine(seed, key.scopeName);
+        return seed;
+    }
+};
+
+using GraphTimingMap = HashMap<GraphTimingKey, f64, GraphTimingKeyHasher, EqualTo<GraphTimingKey>, TelemetryArena>;
 
 [[nodiscard]] usize EstimatePerfCsvReserve(const usize eventCount)noexcept{
     return s_PerfCsvFixedReserveBytes + eventCount * s_PerfCsvBytesPerEvent;
@@ -129,14 +166,56 @@ using GraphTimingMap = HashMap<Name, f64, Hasher<Name>, EqualTo<Name>, Telemetry
 
 [[nodiscard]] usize EstimateTimedGraphDotReserve(const Telemetry::FrameGraphPayload& graph)noexcept{
     usize labelBytes = 0u;
-    for(const Telemetry::FrameGraphNodePayload& node : graph.nodes)
+    usize runtimeStatisticsBytes = 0u;
+    for(const Telemetry::FrameGraphNodePayload& node : graph.nodes){
         labelBytes += node.label.size();
+        if(node.runtimeStatistics.present)
+            runtimeStatisticsBytes += s_TimedGraphDotRuntimeStatisticsBytes;
+    }
 
     return s_TimedGraphDotFixedReserveBytes
+        + s_TimedGraphDotBytesPerGraph
         + graph.nodes.size() * s_TimedGraphDotBytesPerNode
         + graph.edges.size() * s_TimedGraphDotBytesPerEdge
         + labelBytes
+        + runtimeStatisticsBytes
     ;
+}
+
+[[nodiscard]] usize EstimateTimedGraphsDotReserve(const FrameGraphReportRecords& graphs)noexcept{
+    usize reserveBytes = 0u;
+    for(const FrameGraphReportRecord& graph : graphs)
+        reserveBytes += EstimateTimedGraphDotReserve(graph.payload);
+    return reserveBytes;
+}
+
+[[nodiscard]] usize EstimateJsonReportReserve(const FrameGraphReportRecords& graphs)noexcept{
+    usize reserveBytes = s_JsonReportReserveBytes;
+    for(const FrameGraphReportRecord& graph : graphs){
+        reserveBytes += s_JsonReportBytesPerGraph;
+        reserveBytes += graph.payload.nodes.size() * s_JsonReportBytesPerNode;
+        reserveBytes += graph.payload.edges.size() * s_JsonReportBytesPerEdge;
+        for(const Telemetry::FrameGraphNodePayload& node : graph.payload.nodes){
+            reserveBytes += node.label.size();
+            if(node.runtimeStatistics.present)
+                reserveBytes += s_JsonReportRuntimeStatisticsBytes;
+        }
+        reserveBytes += graph.payload.physicalQueueRuntimeStatistics.size()
+            * s_JsonReportPhysicalQueueRuntimeStatisticsBytes
+        ;
+        reserveBytes += graph.payload.packetSubmissionStatistics.size()
+            * s_JsonReportPacketSubmissionStatisticsBytes
+        ;
+    }
+    return reserveBytes;
+}
+
+[[nodiscard]] AStringView FrameGraphNodeIdentityText(
+    const Telemetry::FrameGraphNodePayload& node,
+    char (&identityText)[NameDetail::s_DebugHashTextLength + 1u]
+)noexcept{
+    NameDetail::HashToDebugString(node.name.hash(), identityText, sizeof(identityText));
+    return AStringView(identityText, NameDetail::s_DebugHashTextLength);
 }
 
 [[nodiscard]] const char* FrameGraphNodeShape(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
@@ -149,6 +228,20 @@ using GraphTimingMap = HashMap<Name, f64, Hasher<Name>, EqualTo<Name>, Telemetry
     case Telemetry::FrameGraphNodeKind::Unknown:
     default:
         return "box";
+    }
+}
+
+[[nodiscard]] const char* FrameGraphNodeKindText(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
+    switch(kind){
+    case Telemetry::FrameGraphNodeKind::Pass:
+        return "pass";
+    case Telemetry::FrameGraphNodeKind::Resource:
+        return "resource";
+    case Telemetry::FrameGraphNodeKind::External:
+        return "external";
+    case Telemetry::FrameGraphNodeKind::Unknown:
+    default:
+        return "unknown";
     }
 }
 
@@ -166,20 +259,689 @@ using GraphTimingMap = HashMap<Name, f64, Hasher<Name>, EqualTo<Name>, Telemetry
     }
 }
 
-// Joins the decoded frame-graph topology with per-scope timing (keyed by Name hash, which is
-// shared between graph nodes and perf-timing scopes) and emits a Graphviz DOT timed frame graph.
-void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayload& graph, const GraphTimingMap& timing, AString<TelemetryArena>& out){
-    out.clear();
-    out.reserve(EstimateTimedGraphDotReserve(graph));
-    out += "digraph frame_graph {\n";
+[[nodiscard]] const char* FrameGraphQueueClassText(const Telemetry::FrameGraphQueueClass::Enum queueClass)noexcept{
+    switch(queueClass){
+    case Telemetry::FrameGraphQueueClass::Graphics:
+        return "graphics";
+    case Telemetry::FrameGraphQueueClass::Compute:
+        return "compute";
+    case Telemetry::FrameGraphQueueClass::Transfer:
+        return "transfer";
+    case Telemetry::FrameGraphQueueClass::Unknown:
+    default:
+        return "unknown";
+    }
+}
+
+[[nodiscard]] const char* FrameGraphQueueAssignmentReasonText(
+    const Telemetry::FrameGraphQueueAssignmentReason::Enum reason
+)noexcept{
+    switch(reason){
+    case Telemetry::FrameGraphQueueAssignmentReason::RequiredGraphics:
+        return "requiredGraphics";
+    case Telemetry::FrameGraphQueueAssignmentReason::PreferredQueue:
+        return "preferredQueue";
+    case Telemetry::FrameGraphQueueAssignmentReason::DedicatedCompute:
+        return "dedicatedCompute";
+    case Telemetry::FrameGraphQueueAssignmentReason::DedicatedTransfer:
+        return "dedicatedTransfer";
+    case Telemetry::FrameGraphQueueAssignmentReason::Fallback:
+        return "fallback";
+    case Telemetry::FrameGraphQueueAssignmentReason::ConservativeAny:
+        return "conservativeAny";
+    case Telemetry::FrameGraphQueueAssignmentReason::SameClassRouting:
+        return "sameClassRouting";
+    case Telemetry::FrameGraphQueueAssignmentReason::CompilerOverride:
+        return "compilerOverride";
+    case Telemetry::FrameGraphQueueAssignmentReason::ScoredAny:
+        return "scoredAny";
+    case Telemetry::FrameGraphQueueAssignmentReason::Unknown:
+    default:
+        return "unknown";
+    }
+}
+
+[[nodiscard]] const char* FrameGraphQueueAssignmentAcceptanceText(
+    const Telemetry::FrameGraphQueueAssignmentAcceptance::Enum acceptance
+)noexcept{
+    switch(acceptance){
+    case Telemetry::FrameGraphQueueAssignmentAcceptance::First:
+        return "first";
+    case Telemetry::FrameGraphQueueAssignmentAcceptance::Unchanged:
+        return "unchanged";
+    case Telemetry::FrameGraphQueueAssignmentAcceptance::Changed:
+        return "changed";
+    case Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted:
+        return "notAccepted";
+    default:
+        return "unknown";
+    }
+}
+
+[[nodiscard]] const char* FrameGraphTaskPacketizationDecisionText(
+    const Telemetry::FrameGraphTaskPacketizationDecision::Enum decision
+)noexcept{
+    switch(decision){
+    case Telemetry::FrameGraphTaskPacketizationDecision::FirstTask:
+        return "firstTask";
+    case Telemetry::FrameGraphTaskPacketizationDecision::MergeNotRequested:
+        return "mergeNotRequested";
+    case Telemetry::FrameGraphTaskPacketizationDecision::TaskForcesBoundary:
+        return "taskForcesBoundary";
+    case Telemetry::FrameGraphTaskPacketizationDecision::QueueChanged:
+        return "queueChanged";
+    case Telemetry::FrameGraphTaskPacketizationDecision::PrecedingTaskForcesBoundary:
+        return "precedingTaskForcesBoundary";
+    case Telemetry::FrameGraphTaskPacketizationDecision::ScoredMergeIneligible:
+        return "scoredMergeIneligible";
+    case Telemetry::FrameGraphTaskPacketizationDecision::MergeRequiresExplicitImmediateDependency:
+        return "mergeRequiresExplicitImmediateDependency";
+    case Telemetry::FrameGraphTaskPacketizationDecision::CrossQueueConsumerFrontier:
+        return "crossQueueConsumerFrontier";
+    case Telemetry::FrameGraphTaskPacketizationDecision::MergedExplicit:
+        return "mergedExplicit";
+    case Telemetry::FrameGraphTaskPacketizationDecision::MergedFrontierScored:
+        return "mergedFrontierScored";
+    case Telemetry::FrameGraphTaskPacketizationDecision::ScoredMergeDomainMismatch:
+        return "scoredMergeDomainMismatch";
+    case Telemetry::FrameGraphTaskPacketizationDecision::Unknown:
+    default:
+        return "unknown";
+    }
+}
+
+void AppendFrameGraphPhysicalQueueJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphPhysicalQueueId& queue
+){
+    if(!queue.valid()){
+        out += "null";
+        return;
+    }
+
+    StringAppendFormat(out, "{{\"index\": {}, \"deviceGeneration\": {}}}", queue.index, queue.deviceGeneration);
+}
+
+void AppendFrameGraphQueueAssignmentJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphQueueAssignment& assignment
+){
+    if(!assignment.present){
+        out += "null";
+        return;
+    }
+
+    out += "{\"initialQueue\": ";
+    AppendFrameGraphPhysicalQueueJson(out, assignment.initialQueue);
+    out += ", \"plannedQueue\": ";
+    AppendFrameGraphPhysicalQueueJson(out, assignment.plannedQueue);
+    out += ", \"acceptedQueue\": ";
+    AppendFrameGraphPhysicalQueueJson(out, assignment.acceptedQueue);
+    out += ", \"previousAcceptedQueue\": ";
+    AppendFrameGraphPhysicalQueueJson(out, assignment.previousAcceptedQueue);
+    out += ", \"queueClass\": ";
+    AppendJsonQuotedText(out, AStringView(FrameGraphQueueClassText(assignment.queueClass)));
+    out += ", \"reason\": ";
+    AppendJsonQuotedText(out, AStringView(FrameGraphQueueAssignmentReasonText(assignment.reason)));
+    StringAppendFormat(out, ", \"modifierMask\": {}", static_cast<u32>(assignment.modifiers));
+    out += ", \"acceptance\": ";
+    AppendJsonQuotedText(out, AStringView(FrameGraphQueueAssignmentAcceptanceText(assignment.acceptance)));
+    StringAppendFormat(out, ", \"dedicated\": {}", assignment.dedicated ? "true" : "false");
+    StringAppendFormat(
+        out,
+        ", \"score\": {{\"preference\": {}, \"overlap\": {}, \"queueLoad\": {}, \"incomingCrossings\": {}, "
+        "\"outgoingCrossings\": {}, \"ownershipTransfers\": {}, \"total\": {}}}}}",
+        assignment.score.preference,
+        assignment.score.overlap,
+        assignment.score.queueLoad,
+        assignment.score.incomingCrossings,
+        assignment.score.outgoingCrossings,
+        assignment.score.ownershipTransfers,
+        assignment.score.total
+    );
+}
+
+void AppendFrameGraphCompiledTaskJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphCompiledTask& compiledTask
+){
+    if(!compiledTask.present){
+        out += "null";
+        return;
+    }
+
+    StringAppendFormat(
+        out,
+        "{{\"planGeneration\": {}, \"packetIndex\": {}, \"packetizationDecision\": ",
+        compiledTask.planGeneration,
+        compiledTask.packetIndex
+    );
+    AppendJsonQuotedText(
+        out,
+        AStringView(FrameGraphTaskPacketizationDecisionText(compiledTask.packetizationDecision))
+    );
+    out += '}';
+}
+
+void AppendFrameGraphCompileRuntimeStatisticsJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphCompileRuntimeStatistics& statistics,
+    const bool resourceVersionStatisticsPresent
+){
+    StringAppendFormat(
+        out,
+        "{{\"taskCount\": {}, \"resourceCount\": {}, \"resourceVersionCount\": ",
+        statistics.taskCount,
+        statistics.resourceCount
+    );
+    if(resourceVersionStatisticsPresent){
+        StringAppendFormat(
+            out,
+            "{}, \"resourceVersionEdgeCount\": {}",
+            statistics.resourceVersionCount,
+            statistics.resourceVersionEdgeCount
+        );
+    }
+    else
+        out += "null, \"resourceVersionEdgeCount\": null";
+    StringAppendFormat(
+        out,
+        ", \"resourceUseCount\": {}, \"explicitDependencyCount\": {}, "
+        "\"inferredDependencyCount\": {}, \"packetCount\": {}, \"packetDependencyCount\": {}, \"mergedTaskCount\": {}",
+        statistics.resourceUseCount,
+        statistics.explicitDependencyCount,
+        statistics.inferredDependencyCount,
+        statistics.packetCount,
+        statistics.packetDependencyCount,
+        statistics.mergedTaskCount
+    );
+    StringAppendFormat(
+        out,
+        ", \"transitionBarrierCount\": {}, \"uavBarrierCount\": {}, \"ownershipReleaseBarrierCount\": {}, "
+        "\"ownershipAcquireBarrierCount\": {}, \"stateExportBarrierCount\": {}",
+        statistics.transitionBarrierCount,
+        statistics.uavBarrierCount,
+        statistics.ownershipReleaseBarrierCount,
+        statistics.ownershipAcquireBarrierCount,
+        statistics.stateExportBarrierCount
+    );
+    StringAppendFormat(
+        out,
+        ", \"logicalOwnershipTransferCount\": {}, \"logicalOwnershipTransferSignatureCount\": {}, "
+        "\"repeatedOwnershipTransferSignatureCount\": {}, \"concurrentSharingCouldAvoidTransferCount\": {}, "
+        "\"concurrentSharingAdviceResourceCount\": {}, \"logicalOwnershipTransferInternalCount\": {}, "
+        "\"logicalOwnershipTransferExternalImportCount\": {}, \"logicalOwnershipTransferExternalExportCount\": {}",
+        statistics.logicalOwnershipTransferCount,
+        statistics.logicalOwnershipTransferSignatureCount,
+        statistics.repeatedOwnershipTransferSignatureCount,
+        statistics.concurrentSharingCouldAvoidTransferCount,
+        statistics.concurrentSharingAdviceResourceCount,
+        statistics.logicalOwnershipTransferInternalCount,
+        statistics.logicalOwnershipTransferExternalImportCount,
+        statistics.logicalOwnershipTransferExternalExportCount
+    );
+    StringAppendFormat(
+        out,
+        ", \"resourceSetCount\": {}, \"resourceSetMemberCount\": {}, \"directResourceUseCount\": {}, "
+        "\"declaredResourceSetUseCount\": {}, \"expandedResourceSetMemberUseCount\": {}, \"payloadObjectCount\": {}, "
+        "\"payloadObjectBytes\": {}, \"uploadBlobCount\": {}, \"uploadBlobBytes\": {}",
+        statistics.resourceSetCount,
+        statistics.resourceSetMemberCount,
+        statistics.directResourceUseCount,
+        statistics.declaredResourceSetUseCount,
+        statistics.expandedResourceSetMemberUseCount,
+        statistics.payloadObjectCount,
+        statistics.payloadObjectBytes,
+        statistics.uploadBlobCount,
+        statistics.uploadBlobBytes
+    );
+    StringAppendFormat(
+        out,
+        ", \"declarationSeconds\": {:.9}, \"analysisSeconds\": {:.9}, \"validationSeconds\": {:.9}, "
+        "\"dependencyAnalysisSeconds\": {:.9}, \"hazardAnalysisSeconds\": {:.9}, \"topologicalOrderSeconds\": {:.9}",
+        statistics.declarationSeconds,
+        statistics.analysisSeconds,
+        statistics.validationSeconds,
+        statistics.dependencyAnalysisSeconds,
+        statistics.hazardAnalysisSeconds,
+        statistics.topologicalOrderSeconds
+    );
+    StringAppendFormat(
+        out,
+        ", \"queueAssignmentSeconds\": {:.9}, \"planningSeconds\": {:.9}, \"packetizationSeconds\": {:.9}, "
+        "\"resourceStatePlanningSeconds\": {:.9}, \"packetDependencyPlanningSeconds\": {:.9}, \"totalSeconds\": {:.9}}}",
+        statistics.queueAssignmentSeconds,
+        statistics.planningSeconds,
+        statistics.packetizationSeconds,
+        statistics.resourceStatePlanningSeconds,
+        statistics.packetDependencyPlanningSeconds,
+        statistics.totalSeconds
+    );
+}
+
+void AppendFrameGraphRecordingRuntimeStatisticsJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphRecordingRuntimeStatistics& statistics
+){
+    StringAppendFormat(
+        out,
+        "{{\"packetCount\": {}, \"taskCount\": {}, \"commandListCount\": {}, \"barrierCount\": {}, "
+        "\"workerRoutedPacketCount\": {}, \"parallelPacketCount\": {}",
+        statistics.packetCount,
+        statistics.taskCount,
+        statistics.commandListCount,
+        statistics.barrierCount,
+        statistics.workerRoutedPacketCount,
+        statistics.parallelPacketCount
+    );
+    StringAppendFormat(
+        out,
+        ", \"commandListAcquisitionSeconds\": {:.9}, \"graphBarrierRecordingSeconds\": {:.9}, "
+        "\"taskRecordSeconds\": {:.9}, \"recordingSeconds\": {:.9}, \"recordingElapsedSeconds\": {:.9}, "
+        "\"readyFrontierElapsedSeconds\": {:.9}, \"readyFrontierWorkerBusySeconds\": {:.9}, "
+        "\"readyFrontierWorkerCapacitySeconds\": {:.9}}}",
+        statistics.commandListAcquisitionSeconds,
+        statistics.graphBarrierRecordingSeconds,
+        statistics.taskRecordSeconds,
+        statistics.recordingSeconds,
+        statistics.recordingElapsedSeconds,
+        statistics.readyFrontierElapsedSeconds,
+        statistics.readyFrontierWorkerBusySeconds,
+        statistics.readyFrontierWorkerCapacitySeconds
+    );
+}
+
+void AppendFrameGraphSubmissionRuntimeStatisticsJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphSubmissionRuntimeStatistics& statistics,
+    const bool recoverySubmissionCountPresent
+){
+    StringAppendFormat(
+        out,
+        "{{\"acceptedPacketCount\": {}, \"acceptedTaskCount\": {}, \"rejectedPacketCount\": {}, "
+        "\"rejectedTaskCount\": {}, \"nativeSubmissionCount\": {}, \"rejectedSubmissionCount\": {}, "
+        "\"nativeCommandListCount\": {}, \"plannedWaitTokenCount\": {}, \"sameQueueWaitElisionCount\": {}, "
+        "\"timelineWaitCount\": {}, \"mergedTimelineWaitCount\": {}, \"acceptedFrontierSubmissionCount\": {}",
+        statistics.acceptedPacketCount,
+        statistics.acceptedTaskCount,
+        statistics.rejectedPacketCount,
+        statistics.rejectedTaskCount,
+        statistics.nativeSubmissionCount,
+        statistics.rejectedSubmissionCount,
+        statistics.nativeCommandListCount,
+        statistics.plannedWaitTokenCount,
+        statistics.sameQueueWaitElisionCount,
+        statistics.timelineWaitCount,
+        statistics.mergedTimelineWaitCount,
+        statistics.acceptedFrontierSubmissionCount
+    );
+    if(recoverySubmissionCountPresent)
+        StringAppendFormat(out, ", \"recoverySubmissionCount\": {}", statistics.recoverySubmissionCount);
+    else
+        out += ", \"recoverySubmissionCount\": null";
+    StringAppendFormat(out, ", \"submissionSeconds\": {:.9}}}", statistics.submissionSeconds);
+}
+
+void AppendFrameGraphPhysicalQueueCompileRuntimeStatisticsJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphPhysicalQueueCompileRuntimeStatistics& statistics
+){
+    StringAppendFormat(
+        out,
+        "{{\"taskCount\": {}, \"packetCount\": {}, \"mergedTaskCount\": {}, "
+        "\"prologueBarrierCount\": {}, \"epilogueBarrierCount\": {}, "
+        "\"ownershipReleaseBarrierCount\": {}, \"ownershipAcquireBarrierCount\": {}",
+        statistics.taskCount,
+        statistics.packetCount,
+        statistics.mergedTaskCount,
+        statistics.prologueBarrierCount,
+        statistics.epilogueBarrierCount,
+        statistics.ownershipReleaseBarrierCount,
+        statistics.ownershipAcquireBarrierCount
+    );
+    StringAppendFormat(
+        out,
+        ", \"incomingLogicalOwnershipTransferCount\": {}, \"outgoingLogicalOwnershipTransferCount\": {}, "
+        "\"incomingLogicalOwnershipTransferSignatureCount\": {}, "
+        "\"outgoingLogicalOwnershipTransferSignatureCount\": {}, "
+        "\"incomingRepeatedOwnershipTransferSignatureCount\": {}, "
+        "\"outgoingRepeatedOwnershipTransferSignatureCount\": {}, "
+        "\"concurrentSharingAdviceResourceCount\": {}}}",
+        statistics.incomingLogicalOwnershipTransferCount,
+        statistics.outgoingLogicalOwnershipTransferCount,
+        statistics.incomingLogicalOwnershipTransferSignatureCount,
+        statistics.outgoingLogicalOwnershipTransferSignatureCount,
+        statistics.incomingRepeatedOwnershipTransferSignatureCount,
+        statistics.outgoingRepeatedOwnershipTransferSignatureCount,
+        statistics.concurrentSharingAdviceResourceCount
+    );
+}
+
+void AppendFrameGraphPhysicalQueueRecordingRuntimeStatisticsJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics& statistics
+){
+    StringAppendFormat(
+        out,
+        "{{\"packetCount\": {}, \"taskCount\": {}, \"commandListCount\": {}, \"barrierCount\": {}, "
+        "\"workerRoutedPacketCount\": {}, \"parallelPacketCount\": {}, "
+        "\"commandListAcquisitionSeconds\": {:.9}, \"graphBarrierRecordingSeconds\": {:.9}, "
+        "\"taskRecordSeconds\": {:.9}, \"recordingSeconds\": {:.9}}}",
+        statistics.packetCount,
+        statistics.taskCount,
+        statistics.commandListCount,
+        statistics.barrierCount,
+        statistics.workerRoutedPacketCount,
+        statistics.parallelPacketCount,
+        statistics.commandListAcquisitionSeconds,
+        statistics.graphBarrierRecordingSeconds,
+        statistics.taskRecordSeconds,
+        statistics.recordingSeconds
+    );
+}
+
+void AppendFrameGraphPhysicalQueueSubmissionRuntimeStatisticsJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics& statistics,
+    const bool recoverySubmissionCountPresent
+){
+    StringAppendFormat(
+        out,
+        "{{\"acceptedPacketCount\": {}, \"acceptedTaskCount\": {}, \"rejectedPacketCount\": {}, "
+        "\"rejectedTaskCount\": {}, \"nativeSubmissionCount\": {}, \"rejectedSubmissionCount\": {}, "
+        "\"nativeCommandListCount\": {}, \"plannedWaitTokenCount\": {}, \"sameQueueWaitElisionCount\": {}, "
+        "\"timelineWaitCount\": {}, \"mergedTimelineWaitCount\": {}, \"acceptedFrontierSubmissionCount\": {}",
+        statistics.acceptedPacketCount,
+        statistics.acceptedTaskCount,
+        statistics.rejectedPacketCount,
+        statistics.rejectedTaskCount,
+        statistics.nativeSubmissionCount,
+        statistics.rejectedSubmissionCount,
+        statistics.nativeCommandListCount,
+        statistics.plannedWaitTokenCount,
+        statistics.sameQueueWaitElisionCount,
+        statistics.timelineWaitCount,
+        statistics.mergedTimelineWaitCount,
+        statistics.acceptedFrontierSubmissionCount
+    );
+    if(recoverySubmissionCountPresent)
+        StringAppendFormat(out, ", \"recoverySubmissionCount\": {}", statistics.recoverySubmissionCount);
+    else
+        out += ", \"recoverySubmissionCount\": null";
+    StringAppendFormat(out, ", \"submissionSeconds\": {:.9}}}", statistics.submissionSeconds);
+}
+
+void AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& statistics,
+    const bool recoverySubmissionCountPresent
+){
+    out += "{\"queue\": ";
+    AppendFrameGraphPhysicalQueueJson(out, statistics.queue);
+    out += ", \"queueClass\": ";
+    AppendJsonQuotedText(out, AStringView(FrameGraphQueueClassText(statistics.queueClass)));
+    out += ", \"compile\": ";
+    AppendFrameGraphPhysicalQueueCompileRuntimeStatisticsJson(out, statistics.compile);
+    out += ", \"recording\": ";
+    AppendFrameGraphPhysicalQueueRecordingRuntimeStatisticsJson(out, statistics.recording);
+    out += ", \"submission\": ";
+    AppendFrameGraphPhysicalQueueSubmissionRuntimeStatisticsJson(
+        out,
+        statistics.submission,
+        recoverySubmissionCountPresent
+    );
+    out += '}';
+}
+
+void AppendFrameGraphPacketSubmissionStatisticsJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphPacketSubmissionStatisticsRecord& statistics
+){
+    StringAppendFormat(
+        out,
+        "{{\"packet\": {{\"index\": {}, \"generation\": {}}}, \"queue\": ",
+        statistics.packetIndex,
+        statistics.packetGeneration
+    );
+    AppendFrameGraphPhysicalQueueJson(out, statistics.queue);
+    out += ", \"queueClass\": ";
+    AppendJsonQuotedText(out, AStringView(FrameGraphQueueClassText(statistics.queueClass)));
+    StringAppendFormat(
+        out,
+        ", \"taskCount\": {}, \"commandListCount\": {}, \"plannedWaitTokenCount\": {}, "
+        "\"sameQueueWaitElisionCount\": {}, \"timelineWaitCount\": {}, \"mergedTimelineWaitCount\": {}",
+        statistics.taskCount,
+        statistics.commandListCount,
+        statistics.plannedWaitTokenCount,
+        statistics.sameQueueWaitElisionCount,
+        statistics.timelineWaitCount,
+        statistics.mergedTimelineWaitCount
+    );
+    StringAppendFormat(
+        out,
+        ", \"joinsAcceptedQueueFrontier\": {}, \"recoverySubmission\": {}, \"submissionSeconds\": {:.9}}}",
+        statistics.joinsAcceptedQueueFrontier ? "true" : "false",
+        statistics.recoverySubmission ? "true" : "false",
+        statistics.submissionSeconds
+    );
+}
+
+void AppendFrameGraphRuntimeStatisticsJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphRuntimeStatistics& statistics,
+    const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    const Telemetry::FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
+    const u32 ownerNodeIndex,
+    const bool physicalQueueRuntimeStatisticsPresent,
+    const bool packetSubmissionStatisticsPresent,
+    const bool recoverySubmissionCountPresent,
+    const bool resourceVersionStatisticsPresent
+){
+    if(!statistics.present){
+        out += "null";
+        return;
+    }
+
+    StringAppendFormat(
+        out,
+        "{{\"graphGeneration\": {}, \"planGeneration\": {}, \"recordingAttemptGeneration\": {}, "
+        "\"deviceGeneration\": {}, \"compile\": ",
+        statistics.graphGeneration,
+        statistics.planGeneration,
+        statistics.recordingAttemptGeneration,
+        statistics.deviceGeneration
+    );
+    AppendFrameGraphCompileRuntimeStatisticsJson(out, statistics.compile, resourceVersionStatisticsPresent);
+    out += ", \"recording\": ";
+    AppendFrameGraphRecordingRuntimeStatisticsJson(out, statistics.recording);
+    out += ", \"submission\": ";
+    AppendFrameGraphSubmissionRuntimeStatisticsJson(out, statistics.submission, recoverySubmissionCountPresent);
+    out += ", \"physicalQueues\": ";
+    if(!physicalQueueRuntimeStatisticsPresent)
+        out += "null";
+    else{
+        out += '[';
+        bool firstPhysicalQueue = true;
+        for(const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord& record : physicalQueueRuntimeStatistics){
+            if(record.ownerNodeIndex != ownerNodeIndex)
+                continue;
+            if(!firstPhysicalQueue)
+                out += ", ";
+            AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(out, record.statistics, recoverySubmissionCountPresent);
+            firstPhysicalQueue = false;
+        }
+        out += ']';
+    }
+
+    out += ", \"packetSubmissions\": ";
+    if(!packetSubmissionStatisticsPresent)
+        out += "null";
+    else{
+        out += '[';
+        bool firstPacketSubmission = true;
+        for(const Telemetry::FrameGraphPacketSubmissionStatisticsRecord& record : packetSubmissionStatistics){
+            if(record.ownerNodeIndex != ownerNodeIndex)
+                continue;
+            if(!firstPacketSubmission)
+                out += ", ";
+            AppendFrameGraphPacketSubmissionStatisticsJson(out, record);
+            firstPacketSubmission = false;
+        }
+        out += ']';
+    }
+    out += '}';
+}
+
+[[nodiscard]] usize FrameGraphPhysicalQueueRuntimeStatisticsCount(
+    const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    const u32 ownerNodeIndex
+)noexcept{
+    usize count = 0u;
+    for(const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord& record : physicalQueueRuntimeStatistics){
+        if(record.ownerNodeIndex == ownerNodeIndex)
+            ++count;
+    }
+    return count;
+}
+
+[[nodiscard]] usize FrameGraphPacketSubmissionStatisticsCount(
+    const Telemetry::FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
+    const u32 ownerNodeIndex
+)noexcept{
+    usize count = 0u;
+    for(const Telemetry::FrameGraphPacketSubmissionStatisticsRecord& record : packetSubmissionStatistics){
+        if(record.ownerNodeIndex == ownerNodeIndex)
+            ++count;
+    }
+    return count;
+}
+
+void AppendFrameGraphPhysicalQueueDot(
+    AString<TelemetryArena>& out,
+    const AStringView prefix,
+    const Telemetry::FrameGraphPhysicalQueueId& queue
+){
+    if(!queue.valid()){
+        StringAppendFormat(out, ", {}_index=\"none\", {}_device_generation=\"none\"", prefix, prefix);
+        return;
+    }
+
+    StringAppendFormat(out, ", {}_index={}, {}_device_generation={}", prefix, queue.index, prefix, queue.deviceGeneration);
+}
+
+void AppendFrameGraphQueueAssignmentDot(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphQueueAssignment& assignment
+){
+    if(!assignment.present){
+        out += ", queue_assignment=\"none\"";
+        return;
+    }
+
+    out += ", queue_assignment=\"present\"";
+    AppendFrameGraphPhysicalQueueDot(out, "queue_initial", assignment.initialQueue);
+    AppendFrameGraphPhysicalQueueDot(out, "queue_planned", assignment.plannedQueue);
+    AppendFrameGraphPhysicalQueueDot(out, "queue_accepted", assignment.acceptedQueue);
+    AppendFrameGraphPhysicalQueueDot(out, "queue_previous_accepted", assignment.previousAcceptedQueue);
+    out += ", queue_class=";
+    AppendDotQuotedText(out, AStringView(FrameGraphQueueClassText(assignment.queueClass)));
+    out += ", queue_reason=";
+    AppendDotQuotedText(out, AStringView(FrameGraphQueueAssignmentReasonText(assignment.reason)));
+    StringAppendFormat(out, ", queue_modifier_mask={}", static_cast<u32>(assignment.modifiers));
+    out += ", queue_acceptance=";
+    AppendDotQuotedText(out, AStringView(FrameGraphQueueAssignmentAcceptanceText(assignment.acceptance)));
+    StringAppendFormat(out, ", queue_dedicated={}", assignment.dedicated ? "true" : "false");
+    StringAppendFormat(
+        out,
+        ", queue_score_preference={}, queue_score_overlap={}, queue_score_queue_load={}, queue_score_incoming_crossings={}, "
+        "queue_score_outgoing_crossings={}, queue_score_ownership_transfers={}, queue_score_total={}",
+        assignment.score.preference,
+        assignment.score.overlap,
+        assignment.score.queueLoad,
+        assignment.score.incomingCrossings,
+        assignment.score.outgoingCrossings,
+        assignment.score.ownershipTransfers,
+        assignment.score.total
+    );
+}
+
+void AppendFrameGraphCompiledTaskDot(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphCompiledTask& compiledTask
+){
+    if(!compiledTask.present){
+        out += ", compiled_task=\"none\"";
+        return;
+    }
+
+    StringAppendFormat(
+        out,
+        ", compiled_task=\"present\", compiled_plan_generation={}, compiled_packet_index={}",
+        compiledTask.planGeneration,
+        compiledTask.packetIndex
+    );
+    out += ", packetization_decision=";
+    AppendDotQuotedText(
+        out,
+        AStringView(FrameGraphTaskPacketizationDecisionText(compiledTask.packetizationDecision))
+    );
+}
+
+void AppendFrameGraphRuntimeStatisticsDot(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphRuntimeStatistics& statistics,
+    const usize physicalQueueRuntimeStatisticsCount,
+    const usize packetSubmissionStatisticsCount,
+    const bool physicalQueueRuntimeStatisticsPresent,
+    const bool packetSubmissionStatisticsPresent
+){
+    if(!statistics.present){
+        out += ", runtime_statistics=\"none\"";
+        return;
+    }
+
+    StringAppendFormat(
+        out,
+        ", runtime_statistics=\"present\", runtime_graph_generation={}, runtime_plan_generation={}, "
+        "runtime_recording_attempt_generation={}, runtime_device_generation={}",
+        statistics.graphGeneration,
+        statistics.planGeneration,
+        statistics.recordingAttemptGeneration,
+        statistics.deviceGeneration
+    );
+    if(physicalQueueRuntimeStatisticsPresent)
+        StringAppendFormat(out, ", runtime_physical_queue_count={}", physicalQueueRuntimeStatisticsCount);
+    else
+        out += ", runtime_physical_queue_count=\"unknown\"";
+    if(packetSubmissionStatisticsPresent)
+        StringAppendFormat(out, ", runtime_packet_submission_count={}", packetSubmissionStatisticsCount);
+    else
+        out += ", runtime_packet_submission_count=\"unknown\"";
+}
+
+// Joins each decoded frame-graph topology with timing from its exact frame and scope Name while retaining every
+// capture, stable identity, and opaque producer-owned flag byte. A timing stream need not match the graph stream.
+void AppendTimedGraphDot(
+    TelemetryArena& arena,
+    const FrameGraphReportRecord& record,
+    const usize graphIndex,
+    const GraphTimingMap& timing,
+    AString<TelemetryArena>& out
+){
+    const Telemetry::FrameGraphPayload& graph = record.payload;
+    StringAppendFormat(out, "digraph frame_graph_{}_{}_{} {{\n", graph.frameIndex, record.streamId, graphIndex);
+    StringAppendFormat(out, "  graph [label=\"Frame {} stream {}\"];\n", graph.frameIndex, record.streamId);
     out += "  rankdir=LR;\n";
     out += "  node [shape=box, fontname=\"monospace\"];\n";
 
     AString<TelemetryArena> timedLabel(arena);
     for(usize i = 0u; i < graph.nodes.size(); ++i){
         const Telemetry::FrameGraphNodePayload& node = graph.nodes[i];
+        char identityText[NameDetail::s_DebugHashTextLength + 1u] = {};
+        const AStringView identity = FrameGraphNodeIdentityText(node, identityText);
 
-        const auto timed = timing.find(node.name);
+        const GraphTimingKey timingKey{ graph.frameIndex, node.name };
+        const auto timed = timing.find(timingKey);
         const AStringView labelView(node.label.data(), node.label.size());
         StringAppendFormat(out, "  n{} [shape={}, label=", i, FrameGraphNodeShape(node.kind));
         if(timed != timing.end()){
@@ -193,21 +955,130 @@ void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayloa
         }
         else
             AppendDotQuotedText(out, labelView);
+        out += ", identity=";
+        AppendDotQuotedText(out, identity);
+        out += ", kind=";
+        AppendDotQuotedText(out, AStringView(FrameGraphNodeKindText(node.kind)));
+        StringAppendFormat(out, ", flags={}", static_cast<u32>(node.flags));
+        AppendFrameGraphQueueAssignmentDot(out, node.queueAssignment);
+        AppendFrameGraphCompiledTaskDot(out, node.compiledTask);
+        const usize physicalQueueRuntimeStatisticsCount = FrameGraphPhysicalQueueRuntimeStatisticsCount(
+            graph.physicalQueueRuntimeStatistics,
+            static_cast<u32>(i)
+        );
+        const usize packetSubmissionStatisticsCount = FrameGraphPacketSubmissionStatisticsCount(
+            graph.packetSubmissionStatistics,
+            static_cast<u32>(i)
+        );
+        AppendFrameGraphRuntimeStatisticsDot(
+            out,
+            node.runtimeStatistics,
+            physicalQueueRuntimeStatisticsCount,
+            packetSubmissionStatisticsCount,
+            graph.physicalQueueRuntimeStatisticsPresent && physicalQueueRuntimeStatisticsCount != 0u,
+            graph.packetSubmissionStatisticsPresent
+        );
         out += "];\n";
     }
 
     for(const Telemetry::FrameGraphEdgePayload& edge : graph.edges){
         StringAppendFormat(out, "  n{} -> n{} [label=", edge.fromNodeIndex, edge.toNodeIndex);
         AppendDotQuotedText(out, AStringView(FrameGraphEdgeLabel(edge.kind)));
-        out += "];\n";
+        StringAppendFormat(out, ", flags={}];\n", static_cast<u32>(edge.flags));
     }
 
     out += "}\n";
 }
 
-void BuildJson(const TelemetryReportSummary& summary, AString<TelemetryArena>& out){
+void BuildTimedGraphsDot(
+    TelemetryArena& arena,
+    const FrameGraphReportRecords& graphs,
+    const GraphTimingMap& timing,
+    AString<TelemetryArena>& out
+){
     out.clear();
-    out.reserve(s_JsonReportReserveBytes);
+    out.reserve(EstimateTimedGraphsDotReserve(graphs));
+    for(usize graphIndex = 0u; graphIndex < graphs.size(); ++graphIndex){
+        AppendTimedGraphDot(arena, graphs[graphIndex], graphIndex, timing, out);
+        if(graphIndex + 1u != graphs.size())
+            out += '\n';
+    }
+}
+
+void AppendFrameGraphJson(
+    const FrameGraphReportRecord& record,
+    const usize graphIndex,
+    const bool finalGraph,
+    AString<TelemetryArena>& out
+){
+    const Telemetry::FrameGraphPayload& graph = record.payload;
+    out += "      {\n";
+    StringAppendFormat(out, "        \"captureIndex\": {},\n", graphIndex);
+    StringAppendFormat(out, "        \"frameIndex\": {},\n", graph.frameIndex);
+    StringAppendFormat(out, "        \"streamId\": {},\n", record.streamId);
+    out += "        \"nodes\": [\n";
+    for(usize nodeIndex = 0u; nodeIndex < graph.nodes.size(); ++nodeIndex){
+        const Telemetry::FrameGraphNodePayload& node = graph.nodes[nodeIndex];
+        char identityText[NameDetail::s_DebugHashTextLength + 1u] = {};
+        const AStringView identity = FrameGraphNodeIdentityText(node, identityText);
+
+        StringAppendFormat(out, "          {{\"index\": {}, \"identity\": ", nodeIndex);
+        AppendJsonQuotedText(out, identity);
+        out += ", \"label\": ";
+        AppendJsonQuotedText(out, AStringView(node.label.data(), node.label.size()));
+        out += ", \"kind\": ";
+        AppendJsonQuotedText(out, AStringView(FrameGraphNodeKindText(node.kind)));
+        StringAppendFormat(out, ", \"flags\": {}, \"queueAssignment\": ", static_cast<u32>(node.flags));
+        AppendFrameGraphQueueAssignmentJson(out, node.queueAssignment);
+        out += ", \"compiledTask\": ";
+        AppendFrameGraphCompiledTaskJson(out, node.compiledTask);
+        out += ", \"runtimeStatistics\": ";
+        const usize physicalQueueRuntimeStatisticsCount = FrameGraphPhysicalQueueRuntimeStatisticsCount(
+            graph.physicalQueueRuntimeStatistics,
+            static_cast<u32>(nodeIndex)
+        );
+        AppendFrameGraphRuntimeStatisticsJson(
+            out,
+            node.runtimeStatistics,
+            graph.physicalQueueRuntimeStatistics,
+            graph.packetSubmissionStatistics,
+            static_cast<u32>(nodeIndex),
+            graph.physicalQueueRuntimeStatisticsPresent && physicalQueueRuntimeStatisticsCount != 0u,
+            graph.packetSubmissionStatisticsPresent,
+            graph.wireVersion >= Telemetry::s_FrameGraphRecoverySubmissionCountPayloadVersion,
+            graph.wireVersion >= Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion
+        );
+        StringAppendFormat(out, "}}{}\n", nodeIndex + 1u == graph.nodes.size() ? "" : ",");
+    }
+    out += "        ],\n";
+    out += "        \"edges\": [\n";
+    for(usize edgeIndex = 0u; edgeIndex < graph.edges.size(); ++edgeIndex){
+        const Telemetry::FrameGraphEdgePayload& edge = graph.edges[edgeIndex];
+        StringAppendFormat(
+            out,
+            "          {{\"from\": {}, \"to\": {}, \"kind\": ",
+            edge.fromNodeIndex,
+            edge.toNodeIndex
+        );
+        AppendJsonQuotedText(out, AStringView(FrameGraphEdgeLabel(edge.kind)));
+        StringAppendFormat(
+            out,
+            ", \"flags\": {}}}{}\n",
+            static_cast<u32>(edge.flags),
+            edgeIndex + 1u == graph.edges.size() ? "" : ","
+        );
+    }
+    out += "        ]\n";
+    StringAppendFormat(out, "      }}{}\n", finalGraph ? "" : ",");
+}
+
+void BuildJson(
+    const TelemetryReportSummary& summary,
+    const FrameGraphReportRecords& graphs,
+    AString<TelemetryArena>& out
+){
+    out.clear();
+    out.reserve(EstimateJsonReportReserve(graphs));
     out += "{\n";
     StringAppendFormat(out, "  \"eventCount\": {},\n", summary.eventCount);
     out += "  \"frameRange\": {";
@@ -244,7 +1115,11 @@ void BuildJson(const TelemetryReportSummary& summary, AString<TelemetryArena>& o
     StringAppendFormat(out, "    \"nodes\": {},\n", summary.frameGraphNodeCount);
     StringAppendFormat(out, "    \"edges\": {},\n", summary.frameGraphEdgeCount);
     StringAppendFormat(out, "    \"maxNodes\": {},\n", summary.maxFrameGraphNodeCount);
-    StringAppendFormat(out, "    \"maxEdges\": {}\n", summary.maxFrameGraphEdgeCount);
+    StringAppendFormat(out, "    \"maxEdges\": {},\n", summary.maxFrameGraphEdgeCount);
+    out += "    \"records\": [\n";
+    for(usize graphIndex = 0u; graphIndex < graphs.size(); ++graphIndex)
+        AppendFrameGraphJson(graphs[graphIndex], graphIndex, graphIndex + 1u == graphs.size(), out);
+    out += "    ]\n";
     out += "  },\n";
     StringAppendFormat(out, "  \"parseFailures\": {}\n", summary.parseFailureCount);
     out += "}\n";
@@ -301,9 +1176,15 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
 
     outReport.summary.eventCount = events.eventCount();
 
-    __hidden_telemetry_report::GraphTimingMap timingByScope(0, Hasher<Name>(), EqualTo<Name>(), arena);
-    timingByScope.reserve(events.eventCount());
-    usize lastFrameGraphIndex = events.eventCount();
+    __hidden_telemetry_report::GraphTimingMap timingByFrameAndScope(
+        0,
+        __hidden_telemetry_report::GraphTimingKeyHasher(),
+        EqualTo<__hidden_telemetry_report::GraphTimingKey>(),
+        arena
+    );
+    timingByFrameAndScope.reserve(events.eventCount());
+    __hidden_telemetry_report::FrameGraphReportRecords frameGraphs(arena);
+    frameGraphs.reserve(events.eventCount());
 
     for(usize i = 0u; i < events.eventCount(); ++i){
         const Telemetry::EventRecord* const event = events.eventAt(i);
@@ -336,7 +1217,17 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
             }
             __hidden_telemetry_report::AddTiming(outReport.summary, payload);
             __hidden_telemetry_report::AppendPerfCsvRow(outReport.perfCsv, payload.source, payload);
-            timingByScope.insert_or_assign(payload.scopeName, payload.stats.seconds);
+            // first/last are arrival endpoints, so only one sample proves an exact source-frame association when
+            // different queues complete out of order. Aggregated windows remain available in the Perf CSV.
+            if(
+                payload.stats.sampleCount == 1u
+                && payload.stats.firstSampleFrameIndex == payload.stats.lastSampleFrameIndex
+            ){
+                timingByFrameAndScope.insert_or_assign(
+                    __hidden_telemetry_report::GraphTimingKey{ payload.stats.firstSampleFrameIndex, payload.scopeName },
+                    payload.stats.seconds
+                );
+            }
             break;
         }
         case Telemetry::EventKind::MemoryFrame: {
@@ -349,13 +1240,14 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
             break;
         }
         case Telemetry::EventKind::FrameGraphFrame: {
-            Telemetry::FrameGraphPayload payload(arena);
-            if(!Telemetry::ParseFrameGraphPayload(arena, event->payload.data(), event->payload.size(), payload)){
+            __hidden_telemetry_report::FrameGraphReportRecord& record = frameGraphs.emplace_back(arena);
+            record.streamId = event->header.streamId;
+            if(!Telemetry::ParseFrameGraphPayload(arena, event->payload.data(), event->payload.size(), record.payload)){
+                frameGraphs.pop_back();
                 ++outReport.summary.parseFailureCount;
                 break;
             }
-            __hidden_telemetry_report::AddFrameGraph(outReport.summary, payload);
-            lastFrameGraphIndex = i;
+            __hidden_telemetry_report::AddFrameGraph(outReport.summary, record.payload);
             break;
         }
         default:
@@ -363,16 +1255,8 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
         }
     }
 
-    if(lastFrameGraphIndex < events.eventCount()){
-        const Telemetry::EventRecord* const graphEvent = events.eventAt(lastFrameGraphIndex);
-        if(graphEvent){
-            Telemetry::FrameGraphPayload graphPayload(arena);
-            if(Telemetry::ParseFrameGraphPayload(arena, graphEvent->payload.data(), graphEvent->payload.size(), graphPayload))
-                __hidden_telemetry_report::BuildTimedGraphDot(arena, graphPayload, timingByScope, outReport.graph);
-        }
-    }
-
-    __hidden_telemetry_report::BuildJson(outReport.summary, outReport.json);
+    __hidden_telemetry_report::BuildTimedGraphsDot(arena, frameGraphs, timingByFrameAndScope, outReport.graph);
+    __hidden_telemetry_report::BuildJson(outReport.summary, frameGraphs, outReport.json);
     return true;
 }
 

@@ -37,9 +37,7 @@ concept BackendApi = requires(
 
     { backend.enumerateAdapters(adapters) }->SameAs<bool>;
     { constBackend.getSelectedAdapterInfo(adapters[0]) }->SameAs<bool>;
-    { backend.getCurrentBackBuffer() }->SameAs<Texture*>;
     { backend.getBackBuffer(u32{}) }->SameAs<Texture*>;
-    { backend.getCurrentBackBufferIndex() }->SameAs<u32>;
     { backend.getBackBufferCount() }->SameAs<u32>;
 
     backend.setPlatformFrameParam(frameParam);
@@ -48,7 +46,8 @@ concept BackendApi = requires(
     { backend.createSwapChain() }->SameAs<bool>;
     backend.destroy();
     backend.resizeSwapChain();
-    { backend.beginFrame(callbacks) }->SameAs<bool>;
+    { backend.beginFrame(callbacks) }->SameAs<AcquiredBackBuffer>;
+    { backend.abandonAcquiredFrame() }->SameAs<bool>;
     { backend.claimFramePresentationSignal() }->SameAs<QueueSubmissionPreSubmitHook>;
     { backend.confirmFramePresentationSignal(submissionToken) }->SameAs<bool>;
     backend.cancelFramePresentationSignal();
@@ -105,7 +104,8 @@ concept DeviceApi = requires(
     { device.createTexture(textureDesc) }->SameAs<TextureHandle>;
     { device.getTextureMemoryRequirements(texture) }->SameAs<MemoryRequirements>;
     { device.bindTextureMemory(texture, heap, u64{}) }->SameAs<bool>;
-    { device.createHandleForNativeTexture(ObjectType{}, nativeObject, textureDesc) }->SameAs<TextureHandle>;
+    { device.createHandleForNativeTexture(ObjectType{}, nativeObject, textureDesc, {}) }->SameAs<TextureHandle>;
+    requires (!requires{ device.createHandleForNativeTexture(ObjectType{}, nativeObject, textureDesc); });
     { device.createStagingTexture(textureDesc, CpuAccessMode::Read) }->SameAs<StagingTextureHandle>;
     { device.mapStagingTexture(stagingTexture, textureSlice, CpuAccessMode::Read, rowPitch) }->SameAs<void*>;
     device.unmapStagingTexture(stagingTexture);
@@ -115,7 +115,8 @@ concept DeviceApi = requires(
     device.unmapBuffer(buffer);
     { device.getBufferMemoryRequirements(buffer) }->SameAs<MemoryRequirements>;
     { device.bindBufferMemory(buffer, heap, u64{}) }->SameAs<bool>;
-    { device.createHandleForNativeBuffer(ObjectType{}, nativeObject, bufferDesc) }->SameAs<BufferHandle>;
+    { device.createHandleForNativeBuffer(ObjectType{}, nativeObject, bufferDesc, {}) }->SameAs<BufferHandle>;
+    requires (!requires{ device.createHandleForNativeBuffer(ObjectType{}, nativeObject, bufferDesc, u32{}); });
 
     { device.createShader(shaderDesc, binary, usize{}) }->SameAs<ShaderHandle>;
     { device.createShaderSpecialization(shader, specializationConstants, u32{}) }->SameAs<ShaderHandle>;
@@ -131,7 +132,7 @@ concept DeviceApi = requires(
     { device.pollTimerQuery(timerQuery) }->SameAs<bool>;
     { device.getTimerQueryResult(timerQuery, timerQueryResult) }->SameAs<bool>;
     { device.getTimerQueryTime(timerQuery) }->SameAs<f32>;
-    device.resetTimerQuery(timerQuery);
+    { device.resetTimerQuery(timerQuery) }->SameAs<bool>;
 
     { device.createFramebuffer(framebufferDesc) }->SameAs<FramebufferHandle>;
     { device.createGraphicsPipeline(graphicsPipelineDesc, framebufferInfo) }->SameAs<GraphicsPipelineHandle>;
@@ -153,17 +154,17 @@ concept DeviceApi = requires(
     { device.executeCommandLists(commandLists, usize{}, GpuPhysicalQueueId{}, outSubmitted) }->SameAs<u64>;
     { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics, submissionDesc) }->SameAs<QueueSubmissionToken>;
     { device.executeCommandLists(commandLists, usize{}, GpuPhysicalQueueId{}, submissionDesc) }->SameAs<QueueSubmissionToken>;
-    { device.executeCommandLists(commandLists, usize{}, RenderLane::AsyncCompute, submissionDesc) }->SameAs<QueueSubmissionToken>;
     device.queueWaitForCommandList(CommandQueue::Graphics, CommandQueue::Graphics, u64{});
-    { device.resolveRenderLane(RenderLane::AsyncCompute) }->SameAs<CommandQueue::Enum>;
-    { device.isRenderLaneDedicated(RenderLane::AsyncCompute) }->SameAs<bool>;
     { device.getDeviceGeneration() }->SameAs<u16>;
     { device.getPhysicalQueueIndex(CommandQueue::Graphics) }->SameAs<u16>;
     { device.getPrimaryPhysicalQueue(CommandQueue::Graphics) }->SameAs<GpuPhysicalQueueId>;
     { device.getPhysicalQueueTopology() }->SameAs<GpuPhysicalQueueTopology>;
     { device.getPhysicalQueueInfo(GpuPhysicalQueueId{}) }->SameAs<const GpuPhysicalQueueInfo*>;
+    { device.getCommandArenaStatistics(GpuPhysicalQueueId{}) }->SameAs<GpuCommandArenaStatistics>;
+    { device.getCommandArenaWorkerStatistics(GpuPhysicalQueueId{}, u64{}, u32{}) }->SameAs<GpuCommandArenaWorkerStatistics>;
     { device.matchesPhysicalQueueIdentity(CommandQueue::Graphics, u16{}, u16{}) }->SameAs<bool>;
     { device.matchesPhysicalQueueIdentity(GpuPhysicalQueueId{}) }->SameAs<bool>;
+    { device.validateSubmissionWaitToken(QueueSubmissionToken{}) }->SameAs<bool>;
     { device.isDeviceLost() }->SameAs<bool>;
     { device.waitForIdle() }->SameAs<bool>;
     device.runGarbageCollection();
@@ -192,6 +193,7 @@ concept CommandListApi = requires(
     const Rect& rect,
     const Box& box,
     const Color& color,
+    const RenderPassParameters& renderPassParameters,
     const UIntColor& uintColor,
     const IntColor& intColor,
     const void* data,
@@ -217,6 +219,7 @@ concept CommandListApi = requires(
     resourceStateHandoff.reset();
     { resourceStateHandoff.valid() }->SameAs<bool>;
     commandList.clearState();
+    commandList.beginRenderPass(&framebuffer, renderPassParameters);
     commandList.endRenderPass();
 
     commandList.clearTextureFloat(texture, subresources, color);
@@ -269,8 +272,8 @@ concept CommandListApi = requires(
     commandList.executeMultiIndirectClusterOperation(clusterOperationDesc);
     commandList.buildTopLevelAccelStructFromBuffer(accelStruct, buffer, u64{}, usize{}, RayTracingAccelStructBuildFlags::None);
     commandList.convertCoopVecMatrices(coopVecConvertDescs, usize{});
-    commandList.beginTimerQuery(timerQuery);
-    commandList.endTimerQuery(timerQuery);
+    { commandList.beginTimerQuery(timerQuery) }->SameAs<bool>;
+    { commandList.endTimerQuery(timerQuery) }->SameAs<bool>;
     commandList.beginMarker(markerName);
     commandList.endMarker();
 
@@ -288,16 +291,17 @@ concept CommandListApi = requires(
     commandList.releaseBufferOwnership(buffer, GpuPhysicalQueueId{});
     commandList.releaseTextureOwnership(texture, subresources, CommandQueue::Transfer);
     commandList.releaseBufferOwnership(buffer, CommandQueue::Transfer);
-    commandList.releaseTextureOwnership(texture, subresources, RenderLane::AsyncCompute);
-    commandList.releaseBufferOwnership(buffer, RenderLane::AsyncCompute);
     commandList.setPermanentTextureState(texture, ResourceStates::ShaderResource);
     commandList.setPermanentBufferState(buffer, ResourceStates::ShaderResource);
     commandList.commitBarriers();
     { commandList.getTextureSubresourceState(texture, ArraySlice{}, MipLevel{}) }->SameAs<ResourceStates::Mask>;
     { commandList.getBufferState(buffer) }->SameAs<ResourceStates::Mask>;
+    { commandList.getPermanentTextureState(texture) }->SameAs<ResourceStates::Mask>;
+    { commandList.getPermanentBufferState(buffer) }->SameAs<ResourceStates::Mask>;
     commandList.getDevice();
     { commandList.getDevice() }->SameAs<Device&>;
     { commandList.getDescription() }->SameAs<const CommandListParameters&>;
+    { commandList.getResolvedDescription() }->SameAs<CommandListParameters>;
 
 };
 
@@ -308,6 +312,8 @@ concept DescribedResourceApi = requires(const T& resource){
 
 template<typename T>
 concept BufferApi = DescribedResourceApi<T, BufferDesc> && requires(const T& buffer){
+    { buffer.getCreationDescription() }->SameAs<const BufferDesc&>;
+    { buffer.descriptionMatchesCreation() }->SameAs<bool>;
     { buffer.getGpuVirtualAddress() }->SameAs<GpuVirtualAddress>;
 };
 
@@ -316,6 +322,8 @@ concept TextureApi = DescribedResourceApi<T, TextureDesc> && requires(
     T& texture,
     TextureSubresourceSet subresources
 ){
+    { texture.getCreationDescription() }->SameAs<const TextureDesc&>;
+    { texture.descriptionMatchesCreation() }->SameAs<bool>;
     { texture.getNativeView(ObjectType{}, Format::UNKNOWN, subresources, TextureDimension::Unknown, bool{}) }->SameAs<Object>;
 };
 
@@ -390,7 +398,7 @@ concept RayTracingShaderTableApi = requires(
     T& shaderTable,
     AStringView exportName
 ){
-    shaderTable.setRayGenerationShader(exportName);
+    { shaderTable.setRayGenerationShader(exportName) }->SameAs<bool>;
     { shaderTable.addMissShader(exportName) }->SameAs<u32>;
     { shaderTable.addHitGroup(exportName) }->SameAs<u32>;
     { shaderTable.addCallableShader(exportName) }->SameAs<u32>;

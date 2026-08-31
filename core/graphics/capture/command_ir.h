@@ -65,16 +65,27 @@ namespace GpuCommandIrWireOpcode{
 
 // The stream is a same-host tooling format for now. The magic/version make a future reader reject incompatible
 // layouts before interpreting its POD records; remote or persistent cross-platform transport will add endian policy.
+// Its serialized identity intentionally remains graph+plan scoped so tooling may replay a captured plan. Recording
+// attempts guard only a live GpuCommandIrCapture object's mutation while native packets are being recorded.
 inline constexpr u32 s_GpuCommandIrStreamMagic = 0x4E574349u; // NWCI
-inline constexpr u16 s_GpuCommandIrStreamFirstSupportedVersion = 1u;
-inline constexpr u16 s_GpuCommandIrStreamVersion = 2u;
+inline constexpr u16 s_GpuCommandIrStreamFirstSupportedVersion = 3u;
+inline constexpr u16 s_GpuCommandIrStreamVersion = 3u;
 
 #pragma pack(push, 1)
+struct GpuCommandIrStreamHeaderPrefix{
+    u32 magic = s_GpuCommandIrStreamMagic;
+    u16 version = s_GpuCommandIrStreamVersion;
+    u16 reserved = 0u;
+};
+
+// Version 3 separates declared graph handles from compiler-generated packet handles. Versions 1 and 2 used a
+// 32-byte header that cannot name the immutable packet plan, so this reader rejects them before decoding records.
 struct GpuCommandIrStreamHeader{
     u32 magic = s_GpuCommandIrStreamMagic;
     u16 version = s_GpuCommandIrStreamVersion;
     u16 reserved = 0u;
     u64 graphGeneration = 0u;
+    u64 planGeneration = 0u;
     u64 recordCount = 0u;
     u64 payloadBytes = 0u;
 };
@@ -85,8 +96,9 @@ struct GpuCommandIrHeader{
     u16 byteSize = 0u;
 };
 
-// Every v1 built-in record targets one graph generation supplied by GpuCommandIrStreamHeader. Queue generation
-// remains command-local because it names a physical-device queue lifetime rather than graph metadata.
+// Every v3 built-in record targets the graph generation and immutable compiled-plan generation supplied by
+// GpuCommandIrStreamHeader. Queue generation remains command-local because it names a physical-device queue
+// lifetime rather than graph metadata.
 struct GpuCommandIrRecordContext{
     u32 taskIndex = Limit<u32>::s_Max;
     u32 packetIndex = Limit<u32>::s_Max;
@@ -201,7 +213,8 @@ struct GpuCommandIrClearTextureRectUIntRecord{
 };
 #pragma pack(pop)
 
-static_assert(sizeof(GpuCommandIrStreamHeader) == 32u, "Command IR stream header wire layout drifted");
+static_assert(sizeof(GpuCommandIrStreamHeaderPrefix) == 8u, "Command IR stream header prefix wire layout drifted");
+static_assert(sizeof(GpuCommandIrStreamHeader) == 40u, "Command IR stream header wire layout drifted");
 static_assert(sizeof(GpuCommandIrHeader) == 4u, "Command IR command header wire layout drifted");
 static_assert(sizeof(GpuCommandIrRecordContext) == 12u, "Command IR context wire layout drifted");
 static_assert(sizeof(GpuCommandIrTextureSlice) == 32u, "Command IR texture slice wire layout drifted");
@@ -275,6 +288,7 @@ namespace GpuCommandIrStreamValidationError{
         InvalidHeaderReserved,
         PayloadSizeMismatch,
         InvalidGraphGeneration,
+        InvalidPlanGeneration,
         InvalidRecordCount,
         TruncatedRecord,
         InvalidRecordSize,
@@ -310,6 +324,7 @@ public:
     [[nodiscard]] GpuCommandIrStreamReadStatus::Enum next(GpuCommandIrBuiltinTaskRecord& outRecord)noexcept;
     [[nodiscard]] const GpuCommandIrStreamValidationResult& validation()const noexcept{ return m_validation; }
     [[nodiscard]] u64 graphGeneration()const noexcept{ return m_graphGeneration; }
+    [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
     [[nodiscard]] u64 recordCount()const noexcept{ return m_recordCount; }
 
 
@@ -328,6 +343,7 @@ private:
     usize m_payloadEnd = 0u;
     u16 m_streamVersion = 0u;
     u64 m_graphGeneration = 0u;
+    u64 m_planGeneration = 0u;
     u64 m_recordCount = 0u;
     u64 m_nextRecordIndex = 0u;
 };
@@ -348,6 +364,7 @@ namespace GpuCommandIrReplayError{
         PacketQueueUnavailable,
         MissingTransferCapability,
         GraphGenerationMismatch,
+        PlanGenerationMismatch,
         RecordPacketMismatch,
         RecordQueueMismatch,
         InvalidTask,
@@ -367,8 +384,17 @@ namespace GpuCommandIrReplayError{
         StreamChangedDuringReplay,
         UnsupportedDirectVulkanOpcode,
         DirectVulkanLoweringFailed,
+        CommandListRecordingFailed,
+        BackendResourceNotReady,
+        PermanentResourceStateMismatch,
     };
 };
+
+static_assert(static_cast<u8>(GpuCommandIrReplayError::StreamChangedDuringReplay) == 24u);
+static_assert(static_cast<u8>(GpuCommandIrReplayError::DirectVulkanLoweringFailed) == 26u);
+static_assert(static_cast<u8>(GpuCommandIrReplayError::CommandListRecordingFailed) == 27u);
+static_assert(static_cast<u8>(GpuCommandIrReplayError::BackendResourceNotReady) == 28u);
+static_assert(static_cast<u8>(GpuCommandIrReplayError::PermanentResourceStateMismatch) == 29u);
 
 struct GpuCommandIrReplayResult{
     GpuCommandIrReplayError::Enum error = GpuCommandIrReplayError::None;
@@ -382,9 +408,10 @@ struct GpuCommandIrReplayResult{
     }
 };
 
-// Validates the commands selected by `packet` from a compiler-owned capture without touching a native command
-// list. The complete stream is syntax-validated first, then records for other packets are ignored so a normal
-// multi-packet capture can be replayed one packet at a time.
+// Performs graph-only validation for the commands selected by `packet` without touching a native command list.
+// The complete stream is syntax-validated first, then records for other packets are ignored so a normal
+// multi-packet capture can be replayed one packet at a time. Backend ownership, backing readiness, and permanent
+// state compatibility require a replay CommandList and are checked by the replay entry points before lowering.
 [[nodiscard]] GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
     BinaryByteView bytes,
     const GpuTaskGraph& graph,
@@ -392,10 +419,11 @@ struct GpuCommandIrReplayResult{
     GpuSubmissionPacketId packet
 )noexcept;
 
-// Re-runs complete preflight before lowering only `packet`'s commands. The command list must be open, have the
-// packet's resolved queue class, and have no active render pass. The bytes and graph must remain unchanged for the
-// duration of the call, and resources must belong to that command list's device. This does not apply graph state
-// seeds or barriers and does not submit work; callers retain the surrounding packet-recording contract.
+// Re-runs complete preflight before lowering only `packet`'s commands. The command list must be open on the packet's
+// exact resolved physical queue, retain that queue's broad class, and have no active render pass. The bytes and graph
+// must remain unchanged for the duration of the call, and resources must belong to that command list's device. This
+// does not apply graph state seeds or barriers and does not submit work; callers retain the surrounding
+// packet-recording contract.
 [[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
     BinaryByteView bytes,
     const GpuTaskGraph& graph,
@@ -406,9 +434,11 @@ struct GpuCommandIrReplayResult{
 
 // Experimental Vulkan-only tooling lowerer for a CopyBuffer-only packet body. It repeats complete graph-aware
 // preflight and rejects any selected opcode it cannot lower before recording the first native command. The caller
-// must already have applied the compiler-owned initial-state seed and CopySource/CopyDest barriers to commandList:
-// unlike ReplayGpuCommandIrPacket, this path deliberately bypasses CommandList's automatic copy-state tracking.
-// It is not part of native packet recording and does not own barriers, state snapshots, or submission.
+// must already have applied the compiler-owned initial-state seed and CopySource/CopyDest barriers to commandList.
+// The command list must be open on the packet's exact resolved physical queue, retain that queue's broad class, and
+// have no active render pass. Unlike ReplayGpuCommandIrPacket, this path deliberately bypasses CommandList's
+// automatic copy-state tracking. It is not part of native packet recording and does not own barriers, state
+// snapshots, or submission.
 [[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
     BinaryByteView bytes,
     const GpuTaskGraph& graph,
@@ -434,6 +464,11 @@ public:
 
     [[nodiscard]] usize recordCount()const noexcept{ return m_records.size(); }
     [[nodiscard]] u64 graphGeneration()const noexcept{ return m_graphGeneration; }
+    [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
+    [[nodiscard]] u64 recordingAttemptGeneration()const noexcept{ return m_recordingAttemptGeneration; }
+    // A non-empty capture belongs to exactly one native recording attempt, even when the graph and compiler plan
+    // remain unchanged across a rejected retry.
+    [[nodiscard]] bool beginRecordingAttempt(u64 recordingAttemptGeneration)noexcept;
     [[nodiscard]] const GpuCommandIrBuiltinTaskRecord* recordAt(usize index)const noexcept;
     [[nodiscard]] BinaryByteView commandBytes()const noexcept{
         return BinaryByteView{ m_commandBytes.data(), m_commandBytes.size() };
@@ -495,6 +530,8 @@ private:
     GraphicsVector<GpuCommandIrBuiltinTaskRecord> m_records;
     GraphicsBytes m_commandBytes;
     u64 m_graphGeneration = 0u;
+    u64 m_planGeneration = 0u;
+    u64 m_recordingAttemptGeneration = 0u;
 };
 
 

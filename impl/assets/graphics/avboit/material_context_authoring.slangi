@@ -7,10 +7,7 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Per-draw material context from the AVBOIT draw push constant. Include after common.slangi and gbuffer_io.slangi,
-// before material_typed_accessors.slangi expands its Constant-storage load helpers.
+// Per-draw material context from the AVBOIT draw push constant. Include after common.slangi and gbuffer_io.slangi, before material_typed_accessors.slangi expands its Constant-storage load helpers.
 
 
 uint nwbMeshShadingModelId(){

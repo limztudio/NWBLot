@@ -2,16 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_GRAPHICS_BINDLESS_HEAP_MESH_SLANGI
+#define NWB_GRAPHICS_BINDLESS_HEAP_MESH_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Global descriptor heap - typed mesh-stream views over the StorageBuffer class.
 //
 // Raster geometry is stored in eleven immutable streams with five different structured element layouts plus four
 // raw byte streams. They all share the StorageBuffer descriptor table: the type/stride below is a shader-side view,
 // exactly like the BVH-node alias in bindless_heap_bvh.slangi. Per-draw instance data carries the slot for each
 // mesh-stream ABI position.
-
-
-#ifndef NWB_GRAPHICS_BINDLESS_HEAP_MESH_SLANGI
-#define NWB_GRAPHICS_BINDLESS_HEAP_MESH_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -11,7 +11,7 @@
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
-#include <impl/ecs_render/kernel/module.h>
+#include <impl/ecs_render/module.h>
 #include <impl/ecs_render/material/material_instance.h>
 
 #include "csg_smoke_helpers.h"
@@ -90,11 +90,7 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
 };
 
 [[nodiscard]] static const tchar* CsgVisibleFpsLabel(){
-#if defined(NWB_CSG_VISIBLE_FORCE_MESHLET_EMULATION)
-    return NWB_TEXT("CsgVisibleSmokeProject[compute-emulation]");
-#else
-    return NWB_TEXT("CsgVisibleSmokeProject[mesh-shader]");
-#endif
+    return NWB_TEXT("CsgVisibleSmokeProject");
 }
 
 
@@ -244,18 +240,7 @@ static void ApplyCutterTransform(
 
 class CsgVisibleSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    static void applyFeatureOverrides(NWB::ProjectRuntimeContext& context){
-#if defined(NWB_CSG_VISIBLE_FORCE_MESHLET_EMULATION) && !defined(NWB_FINAL)
-        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::Meshlets, true);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: forced Meshlets feature off for compute-emulation smoke"));
-#else
-        static_cast<void>(context);
-#endif
-    }
-
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        applyFeatureOverrides(context);
-
         auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.threadPool);
         if(!world){
             NWB_LOGGER_FATAL(NWB_TEXT("CsgVisibleSmokeProject initialization failed: ECS world allocation failed"));
@@ -266,6 +251,14 @@ private:
             throw RuntimeException("CsgVisibleSmokeProject initialization failed");
         }
 
+        if(context.graphics.queryFeatureSupport(NWB::Core::Feature::Meshlets)){
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: natural native mesh-shader route selected"));
+        }else{
+            NWB_LOGGER_ESSENTIAL_INFO(
+                NWB_TEXT("CsgVisibleSmokeProject: natural compute-emulation route selected because Meshlets are unavailable")
+            );
+        }
+
         AddSmokeRenderSystems(*world, context);
 
         return MakeNotNullUnique(Move(world));
@@ -273,9 +266,6 @@ private:
 
     void destroyWorld(){
         DestroySmokeRenderWorld(m_context, m_world);
-#if defined(NWB_CSG_VISIBLE_FORCE_MESHLET_EMULATION) && !defined(NWB_FINAL)
-        m_context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::Meshlets, false);
-#endif
     }
 
 
@@ -396,11 +386,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 
 const tchar* NWB::QueryProjectWindowTitle(){
-#if defined(NWB_CSG_VISIBLE_FORCE_MESHLET_EMULATION)
-    return NWB_TEXT("NWB CSG Visible Compute Emulation Smoke");
-#else
     return NWB_TEXT("NWB CSG Visible Smoke");
-#endif
 }
 
 

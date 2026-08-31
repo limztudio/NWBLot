@@ -39,7 +39,7 @@ struct NwbMeshGeneratedVertex{
     uint2 normal;
     uint2 tangent;
 #else
-    // The mesh path keeps the same payload native-half in registers before emitting its half raster varyings.
+    // The mesh path keeps the same payload native-half in registers before promoting it to the float raster ABI.
     half4 normal;
     half4 tangent;
 #endif
@@ -340,15 +340,29 @@ NwbMeshSourceVertex nwbMeshLoadSourceVertex(
     return sourceVertex;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Guarded like nwbMeshInstanceIndex()/nwbMeshMaterialConstantByteOffset() above: when a material-context provider
 // (the shadow trace's material-context header, or the AVBOIT accumulate authoring header) defines
 // NWB_MESH_MATERIAL_CONTEXT_PROVIDED it owns nwbMeshLoadInstance(), so this mesh runtime must NOT also define it
 // (otherwise the includer's definition collides with this one). The rasterizer never defines the macro, so its
 // definition below is byte-for-byte unchanged.
 #if !defined(NWB_MESH_MATERIAL_CONTEXT_PROVIDED)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NwbMeshInstanceData nwbMeshLoadInstance(){
     return g_NwbMeshInstances[nwbMeshInstanceIndex()];
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
 

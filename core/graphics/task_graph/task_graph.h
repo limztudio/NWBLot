@@ -9,6 +9,7 @@
 
 #include <core/alloc/scratch.h>
 #include <global/arena_object.h>
+#include <global/sync.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,6 +23,7 @@ NWB_CORE_BEGIN
 
 class GpuTaskGraphAnalysis;
 class GpuTaskGraphQueueAssignments;
+class GpuTaskGraphQueueAssignmentTelemetryTracker;
 class GpuCompiledGraph;
 struct GpuCompiledBarrier;
 
@@ -36,6 +38,7 @@ struct GpuTaskGraphTaskView{
     AStringView markerLabel;
     GpuQueueRequest queue;
     GpuTaskSchedulingHint scheduling;
+    GpuTaskTimingMetadata timing;
     const GpuTaskId* dependencies = nullptr;
     usize dependencyCount = 0u;
     const GpuExternalCompletionId* externalDependencies = nullptr;
@@ -45,6 +48,8 @@ struct GpuTaskGraphTaskView{
     usize externalStateSourceCount = 0u;
     const GpuTaskResourceUse* resourceUses = nullptr;
     usize resourceUseCount = 0u;
+    const GpuTaskResourceVersionUse* resourceVersionUses = nullptr;
+    usize resourceVersionUseCount = 0u;
     bool hasPayload = false;
     bool hasRecordPayload = false;
 };
@@ -72,6 +77,7 @@ struct GpuTaskGraphResourceView{
     GpuPhysicalQueueId initialOwnerQueue;
     GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
     GpuExternalCompletionId initialOwnerCompletion;
+    QueueSubmissionToken initialOwnerMinimumCompletionToken;
     // For imported exclusive-owner handoffs this is a graph-owned immutable snapshot, captured at declaration.
     const CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
     // Texture-only multi-producer ownership handoff sources. A first graph use must be fully covered by exactly one
@@ -79,7 +85,18 @@ struct GpuTaskGraphResourceView{
     const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSources = nullptr;
     usize initialOwnerHandoffSourceCount = 0u;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+    // Typed resource imports own an exact copy of the backend's immutable physical admission facts. Metadata-only
+    // resources have no snapshot and retain the logical queue-sharing resolver.
+    ResourceQueueAdmissionSnapshot queueAdmission;
+    bool hasQueueAdmission = false;
     bool hasBackendResource = false;
+};
+
+struct GpuTaskGraphResourceVersionView{
+    GpuGraphResourceVersionId id;
+    GpuGraphResourceId resource;
+    GpuTaskResourceRange range;
+    GpuGraphResourceVersionOrigin::Enum origin = GpuGraphResourceVersionOrigin::kCount;
 };
 
 struct GpuTaskGraphResourceSetView{
@@ -102,11 +119,30 @@ struct GpuTaskGraphExternalCompletionView{
     GpuExternalCompletionId id;
     Name identity = NAME_NONE;
     AStringView markerLabel;
+    QueueSubmissionToken token;
+    bool hasToken = false;
+};
+
+// One graph-declared presentation completion. The backbuffer is a retained typed texture captured in its native
+// Unknown/Present acquisition state and exported only to the Present sink, without a second ownership release.
+// Every declared user must reach the Graphics producer and compile onto its exact physical queue. The producer may
+// omit a direct use so a terminal timing/finalization task can publish after the earlier backbuffer writers.
+struct GpuPresentEndpoint{
+    GpuTaskId producer;
+    GpuGraphResourceId backBuffer;
 };
 
 struct GpuTaskGraphTelemetryOptions{
     const GpuTaskGraphQueueAssignments* queueAssignments = nullptr;
+    const GpuCompiledGraph* compiledGraph = nullptr;
+    const GpuTaskGraphQueueAssignmentTelemetryTracker* queueAssignmentTelemetry = nullptr;
 };
+
+class GpuTaskGraph;
+class GpuNativePacketRecorder;
+class GpuGraphSubmissionTransaction;
+class GpuRecordedGraph;
+class GpuTaskGraphSubmitter;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -114,12 +150,109 @@ struct GpuTaskGraphTelemetryOptions{
 
 class GpuTaskGraph final : NoCopy{
     friend class GpuTaskGraphCompiler;
+    friend class GpuNativePacketRecorder;
+    friend class GpuGraphSubmissionTransaction;
+    friend class GpuRecordedGraph;
+    friend class GpuTaskGraphSubmitter;
+
+private:
+    enum class TaskLifecycleState : u8{
+        Declared,
+        Recording,
+        Recorded,
+        Discarding,
+        Submitting,
+        Accepting,
+        Accepted,
+        Discarded,
+    };
+
+private:
+    // A packet claim is an opaque runtime capability. Only the recorder that acquired it can invoke task thunks,
+    // complete native recording, or abandon that exact packet attempt.
+    class PacketRecordingLease final : NoCopy{
+        friend class GpuTaskGraph;
+
+    public:
+        PacketRecordingLease() = default;
+        PacketRecordingLease(PacketRecordingLease&&) = delete;
+        PacketRecordingLease& operator=(PacketRecordingLease&&) = delete;
+
+
+    public:
+        [[nodiscard]] bool valid()const noexcept{
+            return m_packet.valid()
+                && m_planGeneration != 0u
+                && m_recordingAttemptGeneration != 0u
+                && m_claimGeneration != 0u
+            ;
+        }
+
+
+    private:
+        void reset()noexcept{
+            m_packet = {};
+            m_planGeneration = 0u;
+            m_recordingAttemptGeneration = 0u;
+            m_claimGeneration = 0u;
+        }
+
+
+    private:
+        GpuSubmissionPacketId m_packet;
+        u64 m_planGeneration = 0u;
+        u64 m_recordingAttemptGeneration = 0u;
+        u64 m_claimGeneration = 0u;
+    };
+
+    // Native submission has the same exclusive ownership rule as native recording: cancellation cannot discard
+    // graph payload while Device::executeCommandLists() owns the packet, and only the owning transaction resolves it.
+    class PacketSubmissionLease final : NoCopy{
+        friend class GpuTaskGraph;
+        friend class GpuGraphSubmissionTransaction;
+
+    public:
+        PacketSubmissionLease() = default;
+        PacketSubmissionLease(PacketSubmissionLease&&) = delete;
+        PacketSubmissionLease& operator=(PacketSubmissionLease&&) = delete;
+
+
+    public:
+        [[nodiscard]] bool valid()const noexcept{
+            return m_packet.valid()
+                && m_planGeneration != 0u
+                && m_recordingAttemptGeneration != 0u
+                && m_claimGeneration != 0u
+            ;
+        }
+
+
+    private:
+        void reset()noexcept{
+            m_packet = {};
+            m_planGeneration = 0u;
+            m_recordingAttemptGeneration = 0u;
+            m_claimGeneration = 0u;
+        }
+
+
+    private:
+        GpuSubmissionPacketId m_packet;
+        u64 m_planGeneration = 0u;
+        u64 m_recordingAttemptGeneration = 0u;
+        u64 m_claimGeneration = 0u;
+    };
+
+private:
+    [[nodiscard]] static u64 allocateGeneration()noexcept;
+
 
 private:
     struct GpuTaskNode{
         Name identity = NAME_NONE;
         GpuQueueRequest queue;
         GpuTaskSchedulingHint scheduling;
+        GpuTaskTimingMetadata timing;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
         u32 dependencyOffset = 0u;
@@ -130,11 +263,26 @@ private:
         u32 externalStateSourceCount = 0u;
         u32 resourceUseOffset = 0u;
         u32 resourceUseCount = 0u;
+        u32 resourceVersionUseOffset = 0u;
+        u32 resourceVersionUseCount = 0u;
+        // Preserve declaration structure after resource-set uses expand into the materialized range above.
+        u32 directResourceUseCount = 0u;
+        u32 declaredResourceSetUseCount = 0u;
+        u32 expandedResourceSetMemberUseCount = 0u;
         void* payload = nullptr;
+        usize payloadObjectSize = 0u;
         GpuTaskRecordThunk recordPayload = nullptr;
         GpuTaskAcceptedThunk acceptPayload = nullptr;
         GpuTaskDiscardedThunk discardPayload = nullptr;
         GpuTaskPayloadDestroyThunk destroyPayload = nullptr;
+        // Lifecycle callbacks are scoped to one graph-owned recording attempt. A retry only re-arms every task
+        // after the preceding attempt fully discarded, so a stale native packet cannot publish a later attempt.
+        mutable TaskLifecycleState lifecycleState = TaskLifecycleState::Declared;
+        mutable u64 lifecycleAttemptGeneration = 0u;
+        mutable u64 recordingClaimGeneration = 0u;
+        mutable u64 submissionClaimGeneration = 0u;
+        mutable bool recordThunkInProgress = false;
+        mutable bool recordThunkCompleted = false;
     };
 
     struct GpuGraphResourceNode{
@@ -142,22 +290,34 @@ private:
         TextureHandle texture;
         BufferHandle buffer;
         RayTracingAccelStructHandle accelStruct;
+        u16 deviceGeneration = 0u;
         // The graph retains its own immutable copy for late recording. Keep the declaration source identity
         // separately so repeated typed imports continue to reject incompatible external handoff metadata.
         CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
         const CommandListResourceStateHandoff* initialOwnerStateSourceIdentity = nullptr;
         GpuExternalCompletionId initialOwnerCompletion;
+        QueueSubmissionToken initialOwnerMinimumCompletionToken;
         ResourceStates::Mask initialState = ResourceStates::Unknown;
         ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
         u32 initialOwnerHandoffSourceOffset = 0u;
         u32 initialOwnerHandoffSourceCount = 0u;
+        u32 queueFamilyIndexOffset = 0u;
+        u32 queueFamilyIndexCount = 0u;
         GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
         GpuPhysicalQueueId initialOwnerQueue;
         GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
         GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
         ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+        bool usesConcurrentSharing = false;
+        bool hasQueueAdmission = false;
+    };
+
+    struct GpuGraphResourceVersionNode{
+        GpuGraphResourceId resource;
+        GpuTaskResourceRange range;
+        GpuGraphResourceVersionOrigin::Enum origin = GpuGraphResourceVersionOrigin::kCount;
     };
 
     struct GpuGraphResourceSetNode{
@@ -177,12 +337,15 @@ private:
         ComputePipelineHandle computePipeline;
         MeshletPipelineHandle meshletPipeline;
         RayTracingPipelineHandle rayTracingPipeline;
+        u16 deviceGeneration = 0u;
     };
 
     struct GpuExternalCompletionNode{
         Name identity = NAME_NONE;
+        QueueSubmissionToken token;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
+        bool hasToken = false;
     };
 
     struct GpuUploadBlobNode{
@@ -214,6 +377,11 @@ public:
     // must not provide separate resource uses.
     [[nodiscard]] GpuTaskId addCopyTextureTask(const GpuTaskDesc& desc, const GpuCopyTextureTaskDesc& copyDesc);
 
+    // Adds a graph-owned native texture-resolve task. The helper derives ResolveSource/ResolveDest resource uses
+    // from its regions and retains the imported textures through recording, so desc must declare Graphics capability
+    // and must not provide separate resource uses.
+    [[nodiscard]] GpuTaskId addResolveTextureTask(const GpuTaskDesc& desc, const GpuResolveTextureTaskDesc& resolveDesc);
+
     // Copies caller-owned bytes into graph-owned CPU storage. `alignment` must be a nonzero power of two; blobs
     // expose only an opaque byte view, so no typed-alignment promise escapes the graph. Built-in upload tasks resolve
     // the immutable blob while recording, then use the ordinary CommandList staging allocator for GPU lifetime.
@@ -223,8 +391,8 @@ public:
         usize alignment = alignof(u8)
     );
 
-    // Adds graph-owned buffer/texture uploads. Their single resource use describes the state visible after the
-    // task's internal CopyDest write and optional final transition, so later graph packets see exact final state.
+    // Adds graph-owned buffer/texture uploads. Ordered uses expose the native CopyDest write and optional local
+    // final transition, so packet preflight and later graph packets observe the complete state contract.
     [[nodiscard]] GpuTaskId addUploadBufferTask(const GpuTaskDesc& desc, const GpuUploadBufferTaskDesc& uploadDesc);
     [[nodiscard]] GpuTaskId addUploadTextureTask(const GpuTaskDesc& desc, const GpuUploadTextureTaskDesc& uploadDesc);
 
@@ -234,11 +402,12 @@ public:
 
     // Adds a graph-owned native texture clear. The helper retains the imported texture and derives its CopyDest
     // write declaration, so desc must declare Transfer capability and must not provide separate resource uses.
+    // It adds Compute for ordinary color unless Graphics is declared, and adds Graphics for depth/stencil.
     [[nodiscard]] GpuTaskId addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc);
 
     // Adds a graph-owned native rectangular unsigned-integer texture clear. The helper retains the imported texture
     // and derives its exact subresource CopyDest write declaration, so desc must declare Transfer capability and
-    // must not provide separate resource uses.
+    // must not provide separate resource uses. Partial regions additionally require Compute or Graphics.
     [[nodiscard]] GpuTaskId addClearTextureRectUIntTask(
         const GpuTaskDesc& desc,
         const GpuClearTextureRectUIntTaskDesc& clearDesc
@@ -253,20 +422,20 @@ public:
             return {};
 
         GpuTaskRecordThunk recordPayload = nullptr;
-        if constexpr(requires(const Payload& value, CommandList& commandList, const GpuTaskRecordContext& context){
-            { TaskT::record(value, commandList, context) } -> SameAs<bool>;
+        if constexpr(requires{
+            { &TaskT::record } -> SameAs<bool (*)(const Payload&, CommandList&, const GpuTaskRecordContext&)>;
         })
             recordPayload = &RecordPayload<TaskT>;
 
         GpuTaskAcceptedThunk acceptPayload = nullptr;
-        if constexpr(requires(Payload& value, const QueueSubmissionToken& token){
-            TaskT::accepted(value, token);
+        if constexpr(requires{
+            { &TaskT::accepted } -> SameAs<void (*)(Payload&, const QueueSubmissionToken&)>;
         })
             acceptPayload = &AcceptPayload<TaskT>;
 
         GpuTaskDiscardedThunk discardPayload = nullptr;
-        if constexpr(requires(Payload& value){
-            TaskT::discarded(value);
+        if constexpr(requires{
+            { &TaskT::discarded } -> SameAs<void (*)(Payload&)>;
         })
             discardPayload = &DiscardPayload<TaskT>;
 
@@ -276,10 +445,11 @@ public:
             recordPayload,
             acceptPayload,
             discardPayload,
-            &DestroyPayload<Payload>
+            &DestroyPayload<Payload>,
+            sizeof(Payload)
         );
         if(!task.valid())
-            DestroyArenaObject(m_arena, storedPayload);
+            discardAndDestroyUnappendedPayload(storedPayload, discardPayload, &DestroyPayload<Payload>);
         return task;
     }
 
@@ -299,6 +469,9 @@ public:
         const GpuGraphResourceDesc& desc
     );
     [[nodiscard]] GpuGraphResourceId importHazardDomain(const GpuGraphResourceDesc& desc);
+    // Declares a distinct semantic value for one exact physical resource range. Repeating an identical descriptor
+    // intentionally produces a different version ID.
+    [[nodiscard]] GpuGraphResourceVersionId declareResourceVersion(const GpuGraphResourceVersionDesc& desc);
     // Stores an immutable dynamic resource collection. Task resource-set declarations expand to the set's concrete
     // members at task creation, so compilation and recording keep their existing resource-level contracts.
     [[nodiscard]] GpuGraphResourceSetId importResourceSet(const GpuGraphResourceSetDesc& desc);
@@ -322,27 +495,66 @@ public:
         const GpuGraphPipelineDesc& desc
     );
     [[nodiscard]] GpuExternalCompletionId importExternalCompletion(const GpuExternalCompletionDesc& desc);
+    // One graph may publish one presentation completion. The compiler validates the retained typed backbuffer,
+    // its single-sink acquisition/final-state contract, every user-to-producer dependency, at least one real
+    // writer, and exact physical Graphics routing before exposing it to native presentation policy.
+    [[nodiscard]] bool declarePresentEndpoint(const GpuPresentEndpoint& endpoint);
+    [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const noexcept{
+        return m_hasPresentEndpoint ? &m_presentEndpoint : nullptr;
+    }
 
+    // Reset is externally serialized against *starting* native recording/submission entrypoints. Once a packet
+    // claim exists, reset detects it and refuses teardown; callers must resolve that lease before retrying reset.
     void reset();
 
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
+    // Every successful compile-relevant declaration or owned-storage mutation advances this revision, including
+    // changes that leave task/resource handle generations and counts unchanged.
+    [[nodiscard]] u64 declarationRevision()const noexcept{ return m_declarationRevision; }
+
+
+private:
+    [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
+    // Starts or validates one native-recording attempt for the compiler-owned packet. A retry can begin only after
+    // every task from the previous attempt was discarded; accepted-frontier recovery remains in that same attempt.
+    [[nodiscard]] bool beginRecordingAttempt(
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet
+    )const noexcept;
+    [[nodiscard]] bool matchesRecordingAttempt(
+        const GpuCompiledGraph& compiledGraph,
+        u64 recordingAttemptGeneration
+    )const noexcept;
+
+
+public:
+    [[nodiscard]] bool validForDeviceGeneration(u16 deviceGeneration)const noexcept;
     [[nodiscard]] bool validTask(const GpuTaskId& id)const noexcept;
     [[nodiscard]] bool validResource(const GpuGraphResourceId& id)const noexcept;
+    [[nodiscard]] bool validResourceVersion(const GpuGraphResourceVersionId& id)const noexcept;
     [[nodiscard]] bool validResourceSet(const GpuGraphResourceSetId& id)const noexcept;
     [[nodiscard]] bool validUploadBlob(const GpuUploadBlobId& id)const noexcept;
     [[nodiscard]] bool validPipeline(const GpuGraphPipelineId& id)const noexcept;
     [[nodiscard]] bool validExternalCompletion(const GpuExternalCompletionId& id)const noexcept;
     [[nodiscard]] usize taskCount()const noexcept{ return m_tasks.size(); }
     [[nodiscard]] usize resourceCount()const noexcept{ return m_resources.size(); }
+    [[nodiscard]] usize resourceVersionCount()const noexcept{ return m_resourceVersions.size(); }
     [[nodiscard]] usize resourceSetCount()const noexcept{ return m_resourceSets.size(); }
     [[nodiscard]] usize uploadBlobCount()const noexcept{ return m_uploadBlobs.size(); }
     [[nodiscard]] usize pipelineCount()const noexcept{ return m_pipelines.size(); }
     [[nodiscard]] usize externalCompletionCount()const noexcept{ return m_externalCompletions.size(); }
     [[nodiscard]] GpuTaskGraphTaskView taskAt(usize index)const;
     [[nodiscard]] GpuTaskGraphResourceView resourceAt(usize index)const;
+    [[nodiscard]] GpuTaskGraphResourceVersionView resourceVersionAt(usize index)const;
     [[nodiscard]] GpuTaskGraphResourceSetView resourceSetAt(usize index)const;
     [[nodiscard]] GpuTaskGraphPipelineView pipelineAt(usize index)const;
     [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const;
+    // Returns the immutable accepted token retained by a bound completion. Metadata-only and stale IDs return null
+    // so submission may apply its temporary compatibility fallback without confusing it with graph ownership. The
+    // borrowed pointer is invalidated by a later external-completion import or graph reset.
+    [[nodiscard]] const QueueSubmissionToken* externalCompletionToken(
+        const GpuExternalCompletionId& completion
+    )const noexcept;
     [[nodiscard]] Texture* textureForResource(const GpuGraphResourceId& resource)const noexcept;
     [[nodiscard]] Buffer* bufferForResource(const GpuGraphResourceId& resource)const noexcept;
     // Acceleration structures expose their concrete backing allocation only for graph-runtime state handoffs.
@@ -356,11 +568,76 @@ public:
     [[nodiscard]] ComputePipeline* computePipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
     [[nodiscard]] MeshletPipeline* meshletPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
     [[nodiscard]] RayTracingPipeline* rayTracingPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
+
+
+private:
     [[nodiscard]] bool recordTask(
         const GpuTaskId& task,
         CommandList& commandList,
-        const GpuTaskRecordContext& context
+        const GpuTaskRecordContext& context,
+        const PacketRecordingLease& lease,
+        bool& outRecordThunkInvoked
     )const;
+
+
+    // Claims all packet tasks before native command recording begins. One recording attempt can therefore have
+    // exactly one native artifact per packet even when callers use separate recorded-graph outputs concurrently.
+    // The returned opaque lease authenticates the one recorder that may invoke task thunks, complete, or abort it.
+    [[nodiscard]] bool beginPacketRecording(
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        u64 recordingAttemptGeneration,
+        PacketRecordingLease& outLease
+    )const noexcept;
+    // A claimed native packet becomes submission-eligible only after every one of its task record thunks completed.
+    [[nodiscard]] bool completePacketRecording(
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        PacketRecordingLease& lease
+    )const noexcept;
+    // Abandons an active packet claim after its owning recorder has stopped invoking task thunks. Ordinary
+    // transaction cleanup deliberately cannot discard a Recording packet, because that would allow a retry to
+    // re-arm graph payload while the original recorder still owns it.
+    void abortPacketRecording(
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        PacketRecordingLease& lease
+    )const noexcept;
+    [[nodiscard]] bool packetReadyForSubmission(
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        u64 recordingAttemptGeneration
+    )const noexcept;
+
+
+private:
+    [[nodiscard]] bool beginPacketSubmission(
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        u64 recordingAttemptGeneration,
+        PacketSubmissionLease& outLease
+    )const noexcept;
+    [[nodiscard]] bool completePacketSubmission(
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        const QueueSubmissionToken& token,
+        PacketSubmissionLease& lease
+    )const noexcept;
+    void abortPacketSubmission(
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        PacketSubmissionLease& lease
+    )const noexcept;
+    // Atomically discards one non-recording packet. A packet with an in-flight Recording claim is left intact so
+    // transaction cancellation cannot race native command recording or reopen the graph for a retry.
+    [[nodiscard]] bool discardUnacceptedPacket(
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        u64 recordingAttemptGeneration
+    )const noexcept;
+
+
+private:
     // Lowers a compiler-owned packet-boundary barrier through the existing CommandList state tracker.  Task thunks
     // retain responsibility only for barriers internal to their own command sequence.
     [[nodiscard]] bool applyCompiledBarrier(
@@ -375,8 +652,9 @@ public:
         const GpuTaskId& task,
         CommandList& commandList
     )const;
-    void acceptTask(const GpuTaskId& task, const QueueSubmissionToken& token)noexcept;
-    void discardTask(const GpuTaskId& task)noexcept;
+
+
+public:
     [[nodiscard]] bool appendFrameGraphTelemetry(
         Telemetry::FrameGraphBuilder& builder,
         const GpuTaskGraphAnalysis& analysis,
@@ -416,37 +694,58 @@ private:
         GpuTaskRecordThunk recordPayload,
         GpuTaskAcceptedThunk acceptPayload,
         GpuTaskDiscardedThunk discardPayload,
+        GpuTaskPayloadDestroyThunk destroyPayload,
+        usize payloadObjectSize
+    );
+    void discardAndDestroyUnappendedPayload(
+        void* payload,
+        GpuTaskDiscardedThunk discardPayload,
         GpuTaskPayloadDestroyThunk destroyPayload
+    )noexcept;
+    void retainResourceQueueAdmission(
+        GpuGraphResourceNode& resource,
+        const ResourceQueueAdmissionSnapshot& admission
     );
     [[nodiscard]] GpuGraphResourceId appendResource(const GpuGraphResourceDesc& desc);
+    [[nodiscard]] GpuGraphResourceVersionId appendResourceVersion(const GpuGraphResourceVersionDesc& desc);
     [[nodiscard]] GpuGraphResourceSetId appendResourceSet(const GpuGraphResourceSetDesc& desc);
     [[nodiscard]] GpuGraphPipelineId appendPipeline(const GpuGraphPipelineDesc& desc);
     [[nodiscard]] GpuExternalCompletionId appendExternalCompletion(const GpuExternalCompletionDesc& desc);
     [[nodiscard]] const GpuUploadBlobNode* findUploadBlob(const GpuUploadBlobId& blob)const noexcept;
     [[nodiscard]] bool appendMarkerLabel(AStringView text, u32& outOffset, u32& outSize);
     [[nodiscard]] AStringView markerLabel(u32 offset, u32 size)const;
-    void destroyTaskPayloads()noexcept;
+    [[nodiscard]] bool destroyTaskPayloads()noexcept;
     void destroyTaskStateSnapshots()noexcept;
     void destroyResourceStateSnapshots()noexcept;
 
 
 private:
     GraphicsArena& m_arena;
+    mutable Futex m_lifecycleMutex;
     GraphicsVector<GpuTaskNode> m_tasks;
     GraphicsVector<GpuTaskId> m_dependencies;
     GraphicsVector<GpuExternalCompletionId> m_externalDependencies;
     GraphicsVector<GpuTaskExternalStateSource> m_externalStateSources;
     GraphicsVector<CommandListResourceStateHandoff*> m_externalStateSnapshots;
     GraphicsVector<GpuTaskResourceUse> m_resourceUses;
+    GraphicsVector<GpuTaskResourceVersionUse> m_resourceVersionUses;
     GraphicsVector<GpuGraphResourceNode> m_resources;
+    GraphicsVector<GpuGraphResourceVersionNode> m_resourceVersions;
     GraphicsVector<GpuTaskGraphInitialOwnerHandoffSourceView> m_initialOwnerHandoffSources;
+    GraphicsVector<u32> m_queueFamilyIndices;
     GraphicsVector<GpuGraphResourceSetNode> m_resourceSets;
     GraphicsVector<GpuGraphResourceId> m_resourceSetMembers;
     GraphicsVector<GpuGraphPipelineNode> m_pipelines;
     GraphicsVector<GpuExternalCompletionNode> m_externalCompletions;
     GraphicsVector<GpuUploadBlobNode> m_uploadBlobs;
     GraphicsBytes m_markerText;
+    GpuPresentEndpoint m_presentEndpoint;
     u64 m_generation = 0u;
+    u64 m_declarationRevision = 0u;
+    mutable u64 m_activeRecordingAttemptGeneration = 0u;
+    mutable u64 m_activeRecordingPlanGeneration = 0u;
+    bool m_hasPresentEndpoint = false;
+    mutable bool m_teardownInProgress = false;
 };
 
 

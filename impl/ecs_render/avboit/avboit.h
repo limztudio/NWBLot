@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/renderer_types.h>
+#include <impl/ecs_render/shared/renderer_frame_types.h>
 
 #include <impl/assets/graphics/avboit/constants.h>
 
@@ -39,12 +39,6 @@ static_assert(
     offsetof(RendererAvboitPushConstants, heapSlots) == sizeof(u32) * NWB_AVBOIT_PUSH_HEAP_SLOTS_WORD_OFFSET,
     "RendererAvboit heap-slot push offset drifted"
 );
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr usize s_RendererAvboitTransparentDrawPushConstantSize = NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

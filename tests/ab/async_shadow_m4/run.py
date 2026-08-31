@@ -18,6 +18,7 @@ window. `--self-test` exercises parsing, statistics, and image comparison withou
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import math
 import re
@@ -30,22 +31,28 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from unittest import mock
 
 
 REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / "tests" / "ab"))
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
+from name_symbols import debug_name_hash_token, known_name_symbols  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE,
+    STRICT_LOG_FAILURE_MESSAGES,
     SmokeFailure,
     SmokeSkip,
+    WindowsCapture,
     build_launch_environment,
     collect_log_delta,
     create_capture_backend,
     ensure_process_running,
     launch_logserver,
     launch_testbed,
-    require_normal_testbed_exit,
+    require_normal_process_exit,
+    shutdown_logserver_and_collect,
     terminate_process,
     validate_capture_result,
 )
@@ -67,14 +74,11 @@ SCOPE_RE = re.compile(
 
 REQUIRED_ASYNC_SCOPES = (
     "render.frame",
-    "render.async_prefix",
     "render.async_shadow",
     "render.async_final",
 )
 DEFAULT_FORBIDDEN_LOGS = (
-    "[ERROR]",
-    "VUID-",
-    "Validation Error",
+    *STRICT_LOG_FAILURE_MESSAGES,
     "cannot safely continue after an unresolved frame recovery submission",
 )
 M4_PIXEL_CAPTURE_READY_LOG = "StressTestSmokeProject: M4 pixel capture ready after"
@@ -197,12 +201,12 @@ def wait_for_log_message(
 
 
 def load_name_symbols(path: Optional[Path]) -> Dict[str, str]:
+    decoded = known_name_symbols(REQUIRED_ASYNC_SCOPES)
     if not path:
-        return {}
+        return decoded
     if not path.is_file():
         raise SmokeFailure(f"Name-symbol sidecar does not exist: {path}")
 
-    decoded: Dict[str, str] = {}
     for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         fields = raw_line.split("\t")
         if len(fields) >= 3 and fields[2]:
@@ -466,6 +470,19 @@ def validate_lane_for_mode(mode: str, lane: LaneStatus) -> None:
         raise SmokeFailure(f"synchronous baseline unexpectedly enabled async compute: {lane}")
 
 
+def capture_m4_client_area(capture_backend, window, capture_path):
+    """Capture application pixels only; Windows excludes the compositor-owned non-client frame."""
+    if isinstance(capture_backend, WindowsCapture):
+        return capture_backend.capture_prepared_m4_client_window(window, capture_path)
+    return capture_backend.capture_client_window(window, capture_path)
+
+
+def prepare_m4_client_area(capture_backend, window):
+    """Stabilize the Windows M4 client capture before the held-frame marker."""
+    if isinstance(capture_backend, WindowsCapture):
+        capture_backend.prepare_m4_client_window(window)
+
+
 def run_frame_locked_capture(
     args: argparse.Namespace,
     mode: str,
@@ -518,6 +535,7 @@ def run_frame_locked_capture(
         if not window:
             raise SmokeFailure(f"{mode} benchmark did not expose the expected window '{args.window_title}'")
 
+        prepare_m4_client_area(capture_backend, window)
         wait_for_log_message(
             app_process,
             log_directory,
@@ -527,19 +545,24 @@ def run_frame_locked_capture(
             args.startup_timeout,
         )
         wait_while_running(app_process, args.pixel_capture_settle_seconds, f"while settling {mode} frame-locked capture")
-        capture_result = capture_backend.capture_window(window, capture_path)
+        capture_result = capture_m4_client_area(capture_backend, window, capture_path)
         validate_capture_result(capture_result)
+        app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} frame-locked capture", window)
+        app_process = None
+        log_text = shutdown_logserver_and_collect(
+            logserver_process,
+            log_directory,
+            log_baseline,
+            log_pattern,
+            "benchmark logserver",
+        )
+        logserver_process = None
+        capture_log_path.write_text(log_text, encoding="utf-8")
     finally:
-        if app_process:
-            app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} frame-locked capture", window)
-        # Let client messages written during normal teardown land before stopping the server and reading its delta.
-        time.sleep(0.5)
-        if log_directory:
-            log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
-            capture_log_path.write_text(log_text, encoding="utf-8")
+        terminate_process(app_process, f"{mode} frame-locked capture", window)
         terminate_process(logserver_process, "benchmark logserver")
 
-    require_normal_testbed_exit(app_exit_code, app_exit_tail)
+    require_normal_process_exit(app_exit_code, app_exit_tail, "testbed")
     if not log_text:
         raise SmokeFailure(f"{mode} frame-locked capture produced no captured logger output")
 
@@ -611,16 +634,21 @@ def run_single_mode(
 
         wait_while_running(app_process, args.warmup_seconds, f"during {mode} warmup")
         wait_while_running(app_process, args.measure_seconds, f"during {mode} measurement")
+        app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} benchmark", window)
+        app_process = None
+        measurement_log_text = shutdown_logserver_and_collect(
+            logserver_process,
+            log_directory,
+            log_baseline,
+            log_pattern,
+            "benchmark logserver",
+        )
+        logserver_process = None
     finally:
-        if app_process:
-            app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} benchmark", window)
-        # Let client messages written during normal teardown land before stopping the server and reading its delta.
-        time.sleep(0.5)
-        if log_directory:
-            measurement_log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
+        terminate_process(app_process, f"{mode} benchmark", window)
         terminate_process(logserver_process, "benchmark logserver")
 
-    require_normal_testbed_exit(app_exit_code, app_exit_tail)
+    require_normal_process_exit(app_exit_code, app_exit_tail, "testbed")
     if not measurement_log_text:
         raise SmokeFailure(f"{mode} benchmark produced no captured logger output")
 
@@ -877,6 +905,7 @@ def build_test_bmp(path: Path, pixels: Sequence[Tuple[int, int, int]]) -> None:
 
 def run_self_test() -> int:
     capture_args = parse_args(["--self-test"])
+    assert DEFAULT_FORBIDDEN_LOGS[:len(STRICT_LOG_FAILURE_MESSAGES)] == STRICT_LOG_FAILURE_MESSAGES
     assert capture_args.pixel_capture_frames == 96
     assert capture_args.pixel_capture_settle_seconds == 0.75
 
@@ -896,21 +925,297 @@ def run_self_test() -> int:
         DEFAULT_FORBIDDEN_LOGS,
     ) == ["cannot safely continue after an unresolved frame recovery submission"]
 
+    class ClientAreaCaptureProbe:
+        def __init__(self):
+            self.calls = []
+
+        def capture_client_window(self, window, output_path):
+            self.calls.append((window, output_path))
+            return "client-capture"
+
+    client_capture_probe = ClientAreaCaptureProbe()
+    client_capture_path = Path("client-capture.bmp")
+    prepare_m4_client_area(client_capture_probe, 17)
+    assert capture_m4_client_area(client_capture_probe, 17, client_capture_path) == "client-capture"
+    assert client_capture_probe.calls == [(17, client_capture_path)]
+
+    m4_capture_calls = []
+    m4_capture_probe = object.__new__(WindowsCapture)
+    m4_capture_probe.prepare_m4_client_window = lambda window: m4_capture_calls.append(("prepare", window))
+    m4_capture_probe.capture_prepared_m4_client_window = (
+        lambda window, output_path: m4_capture_calls.append(("capture", window, output_path)) or "prepared-client-capture"
+    )
+    prepare_m4_client_area(m4_capture_probe, 17)
+    assert capture_m4_client_area(m4_capture_probe, 17, client_capture_path) == "prepared-client-capture"
+    assert m4_capture_calls == [("prepare", 17), ("capture", 17, client_capture_path)]
+
+    frame_locked_capture_source = inspect.getsource(run_frame_locked_capture)
+    assert frame_locked_capture_source.index("prepare_m4_client_area(capture_backend, window)") < frame_locked_capture_source.index(
+        "wait_for_log_message("
+    ) < frame_locked_capture_source.index("wait_while_running(")
+
+    class ClientRectUser32:
+        def __init__(self, get_client_rect_result=True, client_to_screen_result=True):
+            self.get_client_rect_result = get_client_rect_result
+            self.client_to_screen_result = client_to_screen_result
+            self.get_client_rect_calls = 0
+            self.client_to_screen_calls = 0
+
+        def GetClientRect(self, hwnd, rect_pointer):
+            del hwnd
+            self.get_client_rect_calls += 1
+            if not self.get_client_rect_result:
+                return 0
+            rect = rect_pointer._obj
+            rect.left = 0
+            rect.top = 0
+            rect.right = 1280
+            rect.bottom = 900
+            return 1
+
+        def ClientToScreen(self, hwnd, point_pointer):
+            del hwnd
+            self.client_to_screen_calls += 1
+            if not self.client_to_screen_result:
+                return 0
+            point = point_pointer._obj
+            point.x += 104
+            point.y += 73
+            return 1
+
+    client_rect_user32 = ClientRectUser32()
+    client_rect_capture = object.__new__(WindowsCapture)
+    client_rect_capture.user32 = client_rect_user32
+    client_rect = client_rect_capture._client_rect(17)
+    assert (client_rect.left, client_rect.top, client_rect.right, client_rect.bottom) == (104, 73, 1384, 973)
+    assert client_rect_user32.get_client_rect_calls == 1
+    assert client_rect_user32.client_to_screen_calls == 1
+
+    client_rect_failure_user32 = ClientRectUser32(get_client_rect_result=False)
+    client_rect_failure_capture = object.__new__(WindowsCapture)
+    client_rect_failure_capture.user32 = client_rect_failure_user32
+    assert client_rect_failure_capture._client_rect(17) is None
+    assert client_rect_failure_user32.get_client_rect_calls == 1
+    assert client_rect_failure_user32.client_to_screen_calls == 0
+
+    client_origin_failure_user32 = ClientRectUser32(client_to_screen_result=False)
+    client_origin_failure_capture = object.__new__(WindowsCapture)
+    client_origin_failure_capture.user32 = client_origin_failure_user32
+    assert client_origin_failure_capture._client_rect(17) is None
+    assert client_origin_failure_user32.get_client_rect_calls == 1
+    assert client_origin_failure_user32.client_to_screen_calls == 1
+
+    class DwmApi:
+        def __init__(self, calls, set_result=0, flush_result=0):
+            self.calls = calls
+            self.set_result = set_result
+            self.flush_result = flush_result
+
+        def DwmSetWindowAttribute(self, hwnd, attribute, preference_pointer, preference_size):
+            self.calls.append(("DwmSetWindowAttribute", hwnd.value, attribute, preference_pointer._obj.value, preference_size))
+            return self.set_result
+
+        def DwmFlush(self):
+            self.calls.append(("DwmFlush",))
+            return self.flush_result
+
+    dwm_calls = []
+    dwm_capture = object.__new__(WindowsCapture)
+    dwm_capture.dwmapi = DwmApi(dwm_calls)
+    dwm_capture._prepare_capture_window = lambda hwnd: dwm_calls.append(("prepare", hwnd))
+    dwm_capture.prepare_m4_client_window(17)
+    assert dwm_calls == [
+        ("prepare", 17),
+        ("DwmSetWindowAttribute", 17, 33, 1, 4),
+        ("DwmFlush",),
+    ]
+
+    unsupported_calls = []
+    unsupported_capture = object.__new__(WindowsCapture)
+    unsupported_capture.dwmapi = DwmApi(unsupported_calls, -2147024809)
+    unsupported_capture._prepare_capture_window = lambda hwnd: unsupported_calls.append(("prepare", hwnd))
+    try:
+        unsupported_capture.prepare_m4_client_window(17)
+    except SmokeSkip as error:
+        assert "Windows 11 build 22000 or later" in str(error)
+        assert "0x80070057" in str(error)
+    else:
+        raise AssertionError("M4 DWM setup accepted an unsupported corner-preference attribute")
+    assert unsupported_calls == [
+        ("prepare", 17),
+        ("DwmSetWindowAttribute", 17, 33, 1, 4),
+    ]
+
+    negative_failure_calls = []
+    negative_failure_capture = object.__new__(WindowsCapture)
+    negative_failure_capture.dwmapi = DwmApi(negative_failure_calls, -1)
+    negative_failure_capture._prepare_capture_window = lambda hwnd: negative_failure_calls.append(("prepare", hwnd))
+    try:
+        negative_failure_capture.prepare_m4_client_window(17)
+    except SmokeFailure as error:
+        assert "DwmSetWindowAttribute" in str(error)
+        assert "HRESULT 0xFFFFFFFF" in str(error)
+    else:
+        raise AssertionError("M4 DWM setup accepted a negative DwmSetWindowAttribute failure")
+    assert len(negative_failure_calls) == 2
+
+    for set_result, flush_result, expected_operation, expected_calls in (
+        (1, 0, "DwmSetWindowAttribute", 2),
+        (0, 1, "DwmFlush", 3),
+    ):
+        failure_calls = []
+        failure_capture = object.__new__(WindowsCapture)
+        failure_capture.dwmapi = DwmApi(failure_calls, set_result, flush_result)
+        failure_capture._prepare_capture_window = lambda hwnd: failure_calls.append(("prepare", hwnd))
+        try:
+            failure_capture.prepare_m4_client_window(17)
+        except SmokeFailure as error:
+            assert expected_operation in str(error)
+            assert "HRESULT 0x00000001" in str(error)
+        else:
+            raise AssertionError(f"M4 DWM setup accepted non-S_OK {expected_operation} result")
+        assert len(failure_calls) == expected_calls
+
+    raw_client_capture_calls = []
+    raw_client_capture = object.__new__(WindowsCapture)
+    raw_client_capture._client_rect = lambda hwnd: raw_client_capture_calls.append(("client-rect", hwnd)) or "client-rect"
+    raw_client_capture._capture_screen_rect = (
+        lambda hwnd, rect, output_path: raw_client_capture_calls.append(("screen-bitblt", hwnd, rect, output_path))
+        or "raw-client-capture"
+    )
+    assert raw_client_capture.capture_prepared_m4_client_window(17, client_capture_path) == "raw-client-capture"
+    assert raw_client_capture_calls == [
+        ("client-rect", 17),
+        ("screen-bitblt", 17, "client-rect", client_capture_path),
+    ]
+
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
+        module = sys.modules[__name__]
+        executable = root / "orchestration.exe"
+        executable.write_bytes(b"exe")
+        capture_args.output_dir = root
+        capture_args.runtime_dir = root
+        app = SimpleNamespace(pid=4321, poll=lambda: None)
+        logserver = object()
+        baseline = {root / "old.log": 7}
+        backend = mock.Mock()
+        backend.wait_for_window.return_value = 17
+        backend.capture_client_window.return_value = SimpleNamespace(
+            appears_blank=False,
+            has_pixel_variation=True,
+        )
+        orchestration_lane = LaneStatus(False, False, 0, 1)
+        events = []
+
+        def terminate(process, name, window_handle=None):
+            if process is app:
+                events.append(("app-stop", name, window_handle))
+                return 7, "simulated abnormal exit"
+            assert process is None
+            events.append(("cleanup-none", name, window_handle))
+            return None, ""
+
+        def shutdown(process, log_directory, received_baseline, pattern, shutdown_name="logserver"):
+            assert process is logserver
+            assert log_directory == root
+            assert received_baseline == baseline
+            assert pattern == "logserver_*.log"
+            assert events[-1][0] == "app-stop"
+            events.append(("logserver-helper", shutdown_name))
+            return "captured runtime evidence"
+
+        with mock.patch.object(module, "build_launch_environment", return_value={}), \
+             mock.patch.object(module, "launch_logserver", return_value=(logserver, 49152, root, baseline, "logserver_*.log")), \
+             mock.patch.object(module, "launch_testbed", return_value=app), \
+             mock.patch.object(module, "wait_for_lane_status", return_value=orchestration_lane), \
+             mock.patch.object(module, "wait_for_log_message"), \
+             mock.patch.object(module, "wait_while_running"), \
+             mock.patch.object(module, "terminate_process", side_effect=terminate) as terminate_mock, \
+             mock.patch.object(module, "shutdown_logserver_and_collect", side_effect=shutdown) as shutdown_mock:
+            try:
+                run_frame_locked_capture(capture_args, "sync", executable, backend)
+            except SmokeFailure as error:
+                assert "exit 7" in str(error)
+            else:
+                raise AssertionError("frame-locked orchestration accepted an abnormal Testbed exit")
+
+            try:
+                run_single_mode(capture_args, "sync", executable, {}, backend, None)
+            except SmokeFailure as error:
+                assert "exit 7" in str(error)
+            else:
+                raise AssertionError("timed orchestration accepted an abnormal Testbed exit")
+
+        assert events == [
+            ("app-stop", "sync frame-locked capture", 17),
+            ("logserver-helper", "benchmark logserver"),
+            ("cleanup-none", "sync frame-locked capture", 17),
+            ("cleanup-none", "benchmark logserver", None),
+            ("app-stop", "sync benchmark", 17),
+            ("logserver-helper", "benchmark logserver"),
+            ("cleanup-none", "sync benchmark", 17),
+            ("cleanup-none", "benchmark logserver", None),
+        ]
+        assert terminate_mock.mock_calls == [
+            mock.call(app, "sync frame-locked capture", 17),
+            mock.call(None, "sync frame-locked capture", 17),
+            mock.call(None, "benchmark logserver"),
+            mock.call(app, "sync benchmark", 17),
+            mock.call(None, "sync benchmark", 17),
+            mock.call(None, "benchmark logserver"),
+        ]
+        assert shutdown_mock.mock_calls == [
+            mock.call(logserver, root, baseline, "logserver_*.log", "benchmark logserver"),
+            mock.call(logserver, root, baseline, "logserver_*.log", "benchmark logserver"),
+        ]
+
         timing = root / "timing.txt"
+        frame_token = debug_name_hash_token("render.frame")
+        shadow_token = debug_name_hash_token("render.async_shadow")
+        assert frame_token == "40b0e96fbc71842a_8b1f334a9e5209dd_e341401cb88c31da_09af79e15cfb43b2_f6b5516d15dbcf7a_05406d8b5a24bcb8_9a3ecd4d8684c68f_371acbda0ef43b35"
         timing.write_text(
             "=== interval: 20 frames / 0.5s ===\n"
-            "  render.frame: avg=4.0000 min=3.0000 max=5.0000 samples=20\n"
-            "  render.async_shadow: avg=1.2500 min=0.0 max=2.0 samples=20\n"
+            f"  {frame_token}: avg=4.0000 min=3.0000 max=5.0000 samples=20\n"
+            f"  {shadow_token}: avg=1.2500 min=0.0 max=2.0 samples=20\n"
             "=== interval: 20 frames / 0.5s ===\n"
-            "  render.frame: avg=5.0000 min=4.0000 max=6.0000 samples=20\n"
-            "  render.async_shadow: avg=1.7500 min=0.0 max=2.0 samples=20\n",
+            f"  {frame_token}: avg=5.0000 min=4.0000 max=6.0000 samples=20\n"
+            f"  {shadow_token}: avg=1.7500 min=0.0 max=2.0 samples=20\n",
             encoding="utf-8",
         )
-        summaries = summarize_scopes(parse_timing_file(timing, {}))
+        summaries = summarize_scopes(parse_timing_file(timing, load_name_symbols(None)))
         assert summaries["render.frame"].median_ms == 4.5
         assert summaries["render.async_shadow"].positive_sample_count == 2
+
+        # The prefix envelope is diagnostic-only: it is absent when the compiler splits its endpoints into separate
+        # submissions. The rollout gate must still accept complete frame/shadow/final timing in that valid topology.
+        stable_scope = ScopeSummary(6, 6, 1.0, 1.0, 1.0, 1.0)
+        async_run = RunResult(
+            mode="async",
+            executable="async.exe",
+            timing_file="async.timing.txt",
+            log_file="async.log",
+            capture_file=None,
+            lane=LaneStatus(True, True, 0, 1),
+            scopes={
+                "render.frame": stable_scope,
+                "render.async_shadow": stable_scope,
+                "render.async_final": stable_scope,
+            },
+            forbidden_log_messages=[],
+        )
+        sync_run = RunResult(
+            mode="sync",
+            executable="sync.exe",
+            timing_file="sync.timing.txt",
+            log_file="sync.log",
+            capture_file=None,
+            lane=LaneStatus(False, False, 0, 1),
+            scopes={"render.frame": stable_scope},
+            forbidden_log_messages=[],
+        )
+        capture_args.skip_pixel_parity = True
+        assert evaluate_runs(capture_args, sync_run, async_run)["verdict"] == "pass"
 
         first = root / "first.bmp"
         second = root / "second.bmp"

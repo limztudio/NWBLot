@@ -6,6 +6,10 @@
 
 
 #include "module.h"
+#include "heap_binding_contract.h"
+#include "host_readback_sync.h"
+#include "native_buffer_provenance.h"
+#include "native_texture_provenance.h"
 
 #include <core/common/log.h>
 
@@ -93,6 +97,15 @@ struct StagingTextureMipLayout{
 };
 using StagingTextureMipLayoutVector = Vector<StagingTextureMipLayout, Alloc::GlobalArena>;
 
+struct StagingTextureRange{
+    u64 byteOffset = 0;
+    u64 byteSize = 0;
+    u64 rowPitch = 0;
+    u32 bufferRowLength = 0;
+    u32 bufferImageHeight = 0;
+};
+using StagingTextureQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
+
 struct GraphicsPipelineFixedState{
     VkPipelineViewportStateCreateInfo viewportState = {};
     VkPipelineMultisampleStateCreateInfo multisampling = {};
@@ -136,8 +149,20 @@ bool IsSupportedSampleCount(u32 sampleCount);
 bool ValidateTextureShape(const TextureDesc& desc, const tchar* operationName);
 VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo);
 bool GetTextureFormatBlockLayout(const FormatInfo& formatInfo, TextureFormatBlockLayout& outLayout);
+bool TryComputeCommonAlignment(u32 firstAlignment, u32 secondAlignment, u32& outAlignment)noexcept;
+bool TryComputeUploadSuballocationAlignment(u32 requiredAlignment, u32& outAlignment)noexcept;
+bool IsBufferImageCopyAspectMaskSupported(VkImageAspectFlags aspectMask)noexcept;
 bool ValidateBufferImageCopyAspectMask(VkImageAspectFlags aspectMask, const tchar* operationName);
 VkExtent3D GetTextureMipExtent(const TextureDesc& desc, MipLevel mipLevel);
+bool BuildBufferImageCopyLayout(
+    const VkExtent3D& extent,
+    const TextureFormatBlockLayout& formatLayout,
+    u64 rowPitch,
+    u64 depthPitch,
+    BufferImageCopyRequiredSize::Enum requiredSizeMode,
+    BufferImageCopyPitchFields::Enum pitchFields,
+    BufferImageCopyLayout& outLayout
+);
 bool BuildBufferImageCopyLayout(
     const VkExtent3D& extent,
     const TextureFormatBlockLayout& formatLayout,
@@ -165,23 +190,50 @@ bool BuildTextureImageViewCreateInfo(
     VkImageViewCreateInfo& outViewInfo
 );
 bool BuildImageViewCreateInfo(Texture& texture, const DescriptorWriteItem& item, VkImageViewCreateInfo& outViewInfo);
-u64 ComputeStagingTextureOffset(
+bool BuildStagingTextureRange(
     const TextureSlice& resolvedSlice,
     const StagingTextureMipLayout& mipLayout,
     const TextureFormatBlockLayout& formatLayout,
     u64 arrayByteSize,
-    usize* outRowPitch = nullptr,
-    u32* outBufferRowLength = nullptr,
-    u32* outBufferImageHeight = nullptr,
-    u64* outRangeSize = nullptr
-);
+    u64 totalByteSize,
+    u32 requiredOffsetAlignment,
+    bool requireHostPointerRange,
+    StagingTextureRange& outRange
+)noexcept;
 bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout, TextureSlice* outResolved = nullptr);
 bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes);
 
 template<typename... Pointers>
+[[nodiscard]] constexpr bool AreAllPointersValid(Pointers... pointers)noexcept{
+    return (... && (pointers != nullptr));
+}
+
+[[nodiscard]] constexpr bool IsTextureSubresourceRangeValid(const TextureSubresourceSet& subresources)noexcept{
+    return subresources.numMipLevels != 0u && subresources.numArraySlices != 0u;
+}
+
+[[nodiscard]] constexpr bool IsPushConstantByteSizeValid(const u32 byteSize, const u32 maximumByteSize)noexcept{
+    return byteSize != 0u && (byteSize & s_BufferAlignmentMask) == 0u && byteSize <= maximumByteSize;
+}
+
+[[nodiscard]] constexpr bool AreDispatchGroupCountsValid(
+    const u32 groupsX,
+    const u32 groupsY,
+    const u32 groupsZ,
+    const u32* const maximumGroupCounts
+)noexcept{
+    return
+        maximumGroupCounts
+        && groupsX <= maximumGroupCounts[0u]
+        && groupsY <= maximumGroupCounts[1u]
+        && groupsZ <= maximumGroupCounts[2u]
+    ;
+}
+
+template<typename... Pointers>
 inline bool DebugValidateNotNull(const tchar* operationName, const tchar* message, Pointers... pointers){
 #if defined(NWB_DEBUG)
-    if((... || (pointers == nullptr))){
+    if(!AreAllPointersValid(pointers...)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
         return false;
@@ -273,7 +325,7 @@ inline bool DebugValidateTextureSliceExtentsMatch(
 
 inline bool DebugValidateTextureSubresourceRange(const TextureSubresourceSet& subresources, const tchar* operationName){
 #if defined(NWB_DEBUG)
-    if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
+    if(!IsTextureSubresourceRangeValid(subresources)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: invalid subresource range"), operationName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: invalid subresource range"), operationName);
         return false;
@@ -305,7 +357,11 @@ u32 GetPushConstantByteSize(const BindingLayoutDesc& desc);
 bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, const tchar* operationName);
 bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, const tchar* operationName);
 void DestroyPipelineAndOwnedLayout(VkDevice device, const VkAllocationCallbacks* allocationCallbacks, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
-VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags);
+[[nodiscard]] bool ConvertAccelStructBuildFlags(
+    RayTracingAccelStructBuildFlags::Mask buildFlags,
+    VkBuildAccelerationStructureFlagsKHR& outBuildFlags,
+    const tchar* operationName
+);
 bool BuildGraphicsPipelineFixedState(
     const FramebufferInfo& fbinfo,
     const RenderState& renderState,
@@ -367,7 +423,8 @@ inline VkPipelineRasterizationStateCreateInfo BuildPipelineRasterizationState(
     rasterizer.polygonMode = polygonMode;
     rasterizer.cullMode = ConvertCullMode(rasterState.cullMode);
     rasterizer.frontFace = rasterState.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
-    rasterizer.depthBiasEnable = rasterState.depthBias != 0 ? VK_TRUE : VK_FALSE;
+    rasterizer.depthBiasEnable =
+        rasterState.depthBias != 0 || rasterState.slopeScaledDepthBias != 0.0f ? VK_TRUE : VK_FALSE;
     rasterizer.depthBiasConstantFactor = static_cast<f32>(rasterState.depthBias);
     rasterizer.depthBiasClamp = rasterState.depthBiasClamp;
     rasterizer.depthBiasSlopeFactor = rasterState.slopeScaledDepthBias;
@@ -530,11 +587,14 @@ inline void CopyHostMemory(
 class Device;
 class Queue;
 class TrackedCommandBuffer;
+class StateTracker;
 class GpuDescriptorHeap;
 class DescriptorBufferManager;
 
 class Buffer;
 class Texture;
+class AccelStruct;
+class OpacityMicromap;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -545,6 +605,7 @@ struct VulkanContext{
     VkInstance instance = VK_NULL_HANDLE;
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device = VK_NULL_HANDLE;
+    u16 deviceGeneration = 0u;
     VkAllocationCallbacks* allocationCallbacks = nullptr;
     VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 
@@ -556,9 +617,6 @@ struct VulkanContext{
     VkPhysicalDeviceMemoryProperties memoryProperties{};
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties{};
 
-    // Lazily created descriptor-buffer gap-set layout for explicit heap sets.
-    VkDescriptorSetLayout emptyDescriptorBufferSetLayout = VK_NULL_HANDLE;
-
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};
     // These are the feature bits actually enabled through vkCreateDevice's pNext chain.  Extension names alone
     // are not capability answers because an enabled extension may have had its feature bit disabled.
@@ -569,12 +627,23 @@ struct VulkanContext{
     bool clusterAccelerationStructureFeatureEnabled = false;
     bool rayTracingInvocationReorderFeatureEnabled = false;
     bool rayTracingInvocationReorderExtFeatureEnabled = false;
+    // True only after an enabled calibrated-timestamp extension exposes the DEVICE domain and its dispatch pair
+    // completes a device-domain probe. It is immutable after Device construction.
+    bool comparableGpuTimestamps = false;
+    bool textureCompressionBcFeatureEnabled = false;
+    bool textureCompressionAstcLdrFeatureEnabled = false;
+    bool textureCompressionAstcHdrFeatureEnabled = false;
+    bool independentBlendFeatureEnabled = false;
+    bool fullDrawIndexUint32FeatureEnabled = false;
+    bool multiDrawIndirectFeatureEnabled = false;
+    bool drawIndirectFirstInstanceFeatureEnabled = false;
     // Descriptor-buffer limits used for layout and offsets.
     VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties{};
     VkPhysicalDeviceCooperativeVectorPropertiesNV coopVecProperties{};
     // Retains the cooperative-vector feature bits enabled in the device-create chain, not a later physical-device probe.
     VkPhysicalDeviceCooperativeVectorFeaturesNV coopVecFeatures{};
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
+    VkPhysicalDeviceMeshShaderPropertiesEXT meshShaderProperties{};
     VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV rayTracingLinearSweptSpheresFeatures{};
     VkPhysicalDeviceClusterAccelerationStructurePropertiesNV nvClusterAccelerationStructureProperties{};
     // Core subgroup properties (the engine requires Vulkan 1.3).
@@ -594,11 +663,13 @@ struct VulkanContext{
 
     struct Extensions{
         bool KHR_synchronization2 = false;
+        bool KHR_calibrated_timestamps = false;
         bool KHR_ray_tracing_pipeline = false;
         bool KHR_ray_query = false;
         bool KHR_acceleration_structure = false;
         bool buffer_device_address = false;
         bool EXT_descriptor_buffer = false;
+        bool EXT_calibrated_timestamps = false;
         bool EXT_debug_utils = false;
         bool KHR_swapchain = false;
         bool KHR_dynamic_rendering = false;
@@ -617,8 +688,9 @@ struct VulkanContext{
     } extensions;
 
 
-    explicit VulkanContext(GraphicsAllocator& allocatorRef, Alloc::ThreadPool& threadPoolRef)
-        : objectArena(allocatorRef.getObjectArena())
+    explicit VulkanContext(GraphicsAllocator& allocatorRef, Alloc::ThreadPool& threadPoolRef, u16 generation = 0u)
+        : deviceGeneration(generation)
+        , objectArena(allocatorRef.getObjectArena())
         , allocator(allocatorRef)
         , threadPool(threadPoolRef)
     {}
@@ -628,10 +700,12 @@ struct VulkanContext{
         VkInstance inst,
         VkPhysicalDevice physDev,
         VkDevice dev,
-        VkAllocationCallbacks* allocCb)
+        VkAllocationCallbacks* allocCb,
+        u16 generation = 0u)
         : instance(inst)
         , physicalDevice(physDev)
         , device(dev)
+        , deviceGeneration(generation)
         , allocationCallbacks(allocCb)
         , objectArena(allocatorRef.getObjectArena())
         , allocator(allocatorRef)
@@ -705,23 +779,106 @@ inline bool UsesConcurrentQueueSharing(
 // Command buffer with resource tracking
 
 
+struct RetainedBufferStateCommit{
+    Buffer* buffer = nullptr;
+};
+
+struct RetainedTextureStateCommit{
+    Texture* texture = nullptr;
+    MipLevel mipLevel = 0;
+    ArraySlice arraySlice = 0;
+};
+
+struct AccelStructGeometryBuildSignature{
+    VkGeometryTypeKHR geometryType = VK_GEOMETRY_TYPE_MAX_ENUM_KHR;
+    VkGeometryFlagsKHR geometryFlags = 0u;
+    u32 primitiveCount = 0u;
+
+    VkFormat vertexFormat = VK_FORMAT_UNDEFINED;
+    VkFormat radiusFormat = VK_FORMAT_UNDEFINED;
+    VkIndexType indexType = VK_INDEX_TYPE_NONE_KHR;
+    VkDeviceSize vertexStride = 0u;
+    VkDeviceSize radiusStride = 0u;
+    VkDeviceSize indexStride = 0u;
+    u32 maxVertex = 0u;
+    VkRayTracingLssIndexingModeNV lssIndexingMode = VK_RAY_TRACING_LSS_INDEXING_MODE_MAX_ENUM_NV;
+    VkRayTracingLssPrimitiveEndCapsModeNV lssEndCapsMode = VK_RAY_TRACING_LSS_PRIMITIVE_END_CAPS_MODE_MAX_ENUM_NV;
+    bool transformDataPresent = false;
+};
+
+struct PendingAccelStructBuildCommit{
+    AccelStruct* accelStruct = nullptr;
+    VkAccelerationStructureTypeKHR accelStructType = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
+    VkBuildAccelerationStructureFlagsKHR buildFlags = 0u;
+    usize geometrySignatureOffset = 0u;
+    u32 geometrySignatureCount = 0u;
+};
+
+struct PendingOpacityMicromapBuildCommit{
+    OpacityMicromap* opacityMicromap = nullptr;
+};
+
+namespace TrackedCommandBufferArenaState{
+    enum Enum : u8{
+        Untracked = 0u,
+        Leased,
+        Reusable,
+        Pending,
+    };
+};
+
 class TrackedCommandBuffer final : public RefCounter<GraphicsResource>, NoCopy{
     friend class CommandList;
+    friend class DescriptorBufferManager;
     friend class Queue;
+    friend class StateTracker;
     friend class GpuDescriptorHeap;
 
 
 public:
     TrackedCommandBuffer(
+        Queue& queue,
         const VulkanContext& context,
         u32 queueFamilyIndex,
         VkCommandPool commandPool,
-        bool ownsCommandPool
+        bool ownsCommandPool,
+        Futex* sharedCommandPoolMutex
     );
     ~TrackedCommandBuffer();
 
 
 private:
+    void retainResource(GraphicsResource& resource);
+    void retainBuffer(Buffer& buffer);
+    void trackRetainedBuffer(Buffer& buffer);
+    void appendRetainedBufferStateCommit(Buffer& buffer);
+    void commitRetainedBufferStateCommits();
+    void discardRetainedBufferStateCommits();
+    void retainTexture(Texture& texture);
+    void trackRetainedTexture(Texture& texture);
+    void appendRetainedTextureStateCommit(Texture& texture, MipLevel mipLevel, ArraySlice arraySlice);
+    void commitRetainedTextureStateCommits();
+    void discardRetainedTextureStateCommits();
+    void appendPendingAccelStructBuildCommit(
+        AccelStruct& accelStruct,
+        VkAccelerationStructureTypeKHR accelStructType,
+        VkBuildAccelerationStructureFlagsKHR buildFlags,
+        const AccelStructGeometryBuildSignature* geometrySignatures,
+        usize geometrySignatureCount
+    );
+    [[nodiscard]] bool getPendingAccelStructBuildSignature(
+        const AccelStruct& accelStruct,
+        VkAccelerationStructureTypeKHR& outAccelStructType,
+        VkBuildAccelerationStructureFlagsKHR& outBuildFlags,
+        const AccelStructGeometryBuildSignature*& outGeometrySignatures,
+        usize& outGeometrySignatureCount
+    )const;
+    void commitPendingAccelStructBuildCommits();
+    void discardPendingAccelStructBuildCommits();
+    void appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap);
+    [[nodiscard]] bool hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const;
+    void commitPendingOpacityMicromapBuildCommits();
+    void discardPendingOpacityMicromapBuildCommits();
     void clearTrackedReferences();
 
 
@@ -729,18 +886,31 @@ private:
     VkCommandBuffer m_cmdBuf = VK_NULL_HANDLE;
     VkCommandPool m_cmdPool = VK_NULL_HANDLE;
     bool m_ownsCmdPool = false;
+    Futex* m_sharedCommandPoolMutex = nullptr;
 
     Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_referencedResources;
+    Vector<Buffer*, Alloc::GlobalArena> m_referencedBuffers;
+    Vector<Texture*, Alloc::GlobalArena> m_referencedTextures;
     Vector<BufferHandle, Alloc::GlobalArena> m_referencedStagingBuffers;
     Vector<GpuDescriptorHeap*, Alloc::GlobalArena> m_referencedDescriptorHeaps;
+    Vector<RetainedBufferStateCommit, Alloc::GlobalArena> m_retainedBufferStateCommits;
+    Vector<RetainedTextureStateCommit, Alloc::GlobalArena> m_retainedTextureStateCommits;
+    Vector<PendingAccelStructBuildCommit, Alloc::GlobalArena> m_pendingAccelStructBuildCommits;
+    Vector<AccelStructGeometryBuildSignature, Alloc::GlobalArena> m_pendingAccelStructBuildSignatures;
+    Vector<PendingOpacityMicromapBuildCommit, Alloc::GlobalArena> m_pendingOpacityMicromapBuildCommits;
+    DescriptorBufferManager* m_descriptorBufferManager = nullptr;
+    u64 m_descriptorBufferGeneration = 0u;
 
     u64 m_recordingID = 0;
     u64 m_submissionID = 0;
     // Explicit graph-worker leases own one queue-local Vulkan pool each. Recycled buffers retain that identity
     // until the queue timeline retires them; default/direct lease zero instead keeps its private pool.
+    u64 m_recordingWorkerDomain = 0u;
     u32 m_recordingWorkerIndex = 0u;
 
     const VulkanContext& m_context;
+    Queue& m_queue;
+    TrackedCommandBufferArenaState::Enum m_arenaState = TrackedCommandBufferArenaState::Untracked;
 };
 typedef Handle<TrackedCommandBuffer> TrackedCommandBufferPtr;
 
@@ -750,7 +920,9 @@ typedef Handle<TrackedCommandBuffer> TrackedCommandBufferPtr;
 
 
 class Queue final : NoCopy{
+    friend class CommandList;
     friend class Device;
+    friend class TrackedCommandBuffer;
 
 
 public:
@@ -759,7 +931,15 @@ public:
 
 
 public:
-    [[nodiscard]] TrackedCommandBufferPtr getOrCreateCommandBuffer(u32 recordingWorkerIndex = 0u);
+    [[nodiscard]] TrackedCommandBufferPtr getOrCreateCommandBuffer(
+        u64 recordingWorkerDomain = 0u,
+        u32 recordingWorkerIndex = 0u
+    );
+    [[nodiscard]] GpuCommandArenaStatistics commandArenaStatistics()const noexcept;
+    [[nodiscard]] GpuCommandArenaWorkerStatistics commandArenaWorkerStatistics(
+        u64 recordingWorkerDomain,
+        u32 recordingWorkerIndex
+    )const noexcept;
 
     void addWaitSemaphore(VkSemaphore semaphore, u64 value);
     void addSignalSemaphore(VkSemaphore semaphore, u64 value);
@@ -772,15 +952,24 @@ public:
         VkSemaphore semaphore = VK_NULL_HANDLE;
         u64 value = 0u;
     };
+    struct SubmissionCommandListIdentity{
+        TrackedCommandBufferPtr owner;
+        u64 recordingLeaseSerial = 0u;
+        u64 nativeRecordingID = 0u;
+        u64 recordingWorkerDomain = 0u;
+        u32 recordingWorkerIndex = 0u;
+    };
 
     u64 submit(
         CommandList* const* ppCmd,
         usize numCmd,
+        const SubmissionCommandListIdentity* expectedCommandLists = nullptr,
         const SubmissionWait* localWaits = nullptr,
         usize localWaitCount = 0u,
         bool* outSubmissionAccepted = nullptr,
         const SubmissionSignal* localSignals = nullptr,
-        usize localSignalCount = 0u
+        usize localSignalCount = 0u,
+        bool forceNativeSubmission = false
     );
     void updateLastFinishedID();
 
@@ -789,17 +978,51 @@ public:
 
 private:
     struct WorkerCommandArena{
+        u64 recordingWorkerDomain = 0u;
         u32 recordingWorkerIndex = 0u;
         VkCommandPool commandPool = VK_NULL_HANDLE;
+        Futex mutex;
+        Atomic<WorkerCommandArena*> next = nullptr;
+        Atomic<u64> currentCommandBufferCount = 0u;
+        Atomic<u64> highWaterCommandBufferCount = 0u;
+        Atomic<u64> reusableCommandBufferCount = 0u;
+        Atomic<u64> leasedCommandBufferCount = 0u;
+        Atomic<u64> pendingCommandBufferCount = 0u;
+        Atomic<u64> growthEventCount = 0u;
+        Atomic<u64> resetEventCount = 0u;
+        List<TrackedCommandBufferPtr, Alloc::GlobalArena> commandBuffersPool;
+
+
+        WorkerCommandArena(Alloc::GlobalArena& arena, const u64 workerDomain, const u32 workerIndex)
+            : recordingWorkerDomain(workerDomain)
+            , recordingWorkerIndex(workerIndex)
+            , commandBuffersPool(arena)
+        {}
     };
 
+    static void updateCommandBufferHighWater(Atomic<u64>& highWaterCount, u64 currentCount)noexcept;
+    [[nodiscard]] u64 nextRecordingID()noexcept;
+    void registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
+    void transitionCommandBufferState(
+        TrackedCommandBuffer& commandBuffer,
+        TrackedCommandBufferArenaState::Enum nextState
+    )noexcept;
+    void unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
     // Requires m_mutex. Releases native command-buffer resource/staging references only after the queue timeline
-    // has completed their submission, then preserves each worker-affine lease in the reusable pool.
+    // has completed their submission, then preserves each worker-affine lease in its own reusable pool.
     void collectCompletedCommandBuffers();
     // Default/direct lease zero stays private per command buffer because external callers may record it from
-    // unrelated threads. Explicit graph workers use one Vulkan pool shard per physical queue and worker index.
-    [[nodiscard]] TrackedCommandBufferPtr createCommandBuffer(u32 recordingWorkerIndex);
-    [[nodiscard]] VkCommandPool getOrCreateWorkerCommandPool(u32 recordingWorkerIndex);
+    // unrelated threads. Explicit graph workers use one Vulkan pool shard per physical queue and worker identity.
+    [[nodiscard]] TrackedCommandBufferPtr createCommandBuffer(
+        VkCommandPool commandPool,
+        Futex* sharedCommandPoolMutex,
+        u64 recordingWorkerDomain,
+        u32 recordingWorkerIndex
+    );
+    [[nodiscard]] WorkerCommandArena* findWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex)const;
+    [[nodiscard]] WorkerCommandArena* getOrCreateWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
+    [[nodiscard]] TrackedCommandBufferPtr getOrCreateDirectCommandBuffer();
+    [[nodiscard]] TrackedCommandBufferPtr getOrCreateWorkerCommandBuffer(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     void destroyWorkerCommandArenas();
     void clearPendingSemaphores();
     void recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf);
@@ -817,18 +1040,39 @@ private:
     u32 m_queueFamilyIndex;
 
     Futex m_mutex;
+    Futex m_workerCommandArenasMutex;
     Vector<VkSemaphore, Alloc::GlobalArena> m_waitSemaphores;
     Vector<u64, Alloc::GlobalArena> m_waitSemaphoreValues;
     Vector<VkSemaphore, Alloc::GlobalArena> m_signalSemaphores;
     Vector<u64, Alloc::GlobalArena> m_signalSemaphoreValues;
 
-    u64 m_lastRecordingID = 0;
+    Atomic<u64> m_lastRecordingID = 0u;
     u64 m_lastSubmittedID = 0;
     u64 m_lastFinishedID = 0;
 
     List<TrackedCommandBufferPtr, Alloc::GlobalArena> m_commandBuffersInFlight;
     List<TrackedCommandBufferPtr, Alloc::GlobalArena> m_commandBuffersPool;
-    Vector<WorkerCommandArena, Alloc::GlobalArena> m_workerCommandArenas;
+    Vector<WorkerCommandArena*, Alloc::GlobalArena> m_workerCommandArenas;
+    // Published worker nodes are append-only while the queue is usable. Device teardown joins recording clients
+    // before destroyWorkerCommandArenas() clears the head and reclaims the stable nodes.
+    Atomic<WorkerCommandArena*> m_workerCommandArenaHead = nullptr;
+
+    Atomic<u64> m_explicitWorkerArenaCount = 0u;
+    Atomic<u64> m_directCommandBufferCount = 0u;
+    Atomic<u64> m_directHighWaterCommandBufferCount = 0u;
+    Atomic<u64> m_directReusableCommandBufferCount = 0u;
+    Atomic<u64> m_directLeasedCommandBufferCount = 0u;
+    Atomic<u64> m_pendingDirectCommandBufferCount = 0u;
+    Atomic<u64> m_directCommandBufferGrowthEventCount = 0u;
+    Atomic<u64> m_directCommandBufferResetEventCount = 0u;
+    Atomic<u64> m_pendingWorkerEpochCount = 0u;
+    Atomic<u64> m_currentCommandBufferCount = 0u;
+    Atomic<u64> m_highWaterCommandBufferCount = 0u;
+    Atomic<u64> m_reusableCommandBufferCount = 0u;
+    Atomic<u64> m_leasedCommandBufferCount = 0u;
+    Atomic<u64> m_pendingCommandBufferCount = 0u;
+    Atomic<u64> m_commandBufferGrowthEventCount = 0u;
+    Atomic<u64> m_commandBufferResetEventCount = 0u;
 };
 
 
@@ -837,6 +1081,11 @@ private:
 
 
 class VulkanAllocator final : NoCopy{
+    friend class Buffer;
+    friend class Device;
+    friend class Texture;
+
+
 public:
     explicit VulkanAllocator(const VulkanContext& context);
     ~VulkanAllocator();
@@ -856,11 +1105,10 @@ public:
 
     VkResult createStagingTexture(StagingTexture& texture, const VkBufferCreateInfo& bufferInfo, CpuAccessMode::Enum cpuAccess);
     void destroyStagingTexture(StagingTexture& texture);
-    VkResult mapStagingTextureMemory(StagingTexture& texture, void** outData);
-    void unmapStagingTextureMemory(StagingTexture& texture);
     VkResult invalidateStagingTextureMemory(StagingTexture& texture, u64 offset, u64 size);
     VkResult allocateHeap(Heap& heap);
     void freeHeap(Heap& heap);
+    VkResult invalidateHeapMemory(Heap& heap, u64 offset, u64 size);
     VkResult bindHeapBufferMemory(Buffer& buffer, Heap& heap, u64 offset);
     VkResult bindHeapTextureMemory(Texture& texture, Heap& heap, u64 offset);
     VkResult createHostMappedBuffer(
@@ -873,8 +1121,21 @@ public:
 
 
 private:
+    [[nodiscard]] bool tryRegisterBufferNativeIdentity(Buffer& buffer);
+    void unregisterBufferNativeIdentity(VkBuffer nativeBuffer, Buffer& buffer)noexcept;
+    [[nodiscard]] bool isBufferNativeIdentityRegistered(const Buffer& buffer)const noexcept;
+    [[nodiscard]] bool tryRegisterTextureNativeIdentity(Texture& texture);
+    void unregisterTextureNativeIdentity(VkImage nativeImage, Texture& texture)noexcept;
+    [[nodiscard]] bool isTextureNativeIdentityRegistered(VkImage nativeImage, const Texture& texture)const noexcept;
+
+
+private:
     const VulkanContext& m_context;
     VulkanAllocatorHandle m_allocator = nullptr;
+    mutable Futex m_bufferNativeIdentityMutex;
+    HashMap<u64, Buffer*, Hasher<u64>, EqualTo<u64>, Alloc::GlobalArena> m_bufferNativeIdentities;
+    mutable Futex m_textureNativeIdentityMutex;
+    HashMap<VkImage, Texture*, Hasher<VkImage>, EqualTo<VkImage>, Alloc::GlobalArena> m_textureNativeIdentities;
 };
 
 
@@ -883,9 +1144,20 @@ private:
 
 
 class Heap final : public RefCounter<GraphicsResource>, NoCopy{
+    friend class Buffer;
     friend class Device;
+    friend class Texture;
     friend class VulkanAllocator;
     friend class Queue;
+
+
+private:
+    struct BindingReservation{
+        const void* owner = nullptr;
+        VulkanDetail::HeapBindingResourceClass::Enum resourceClass =
+            VulkanDetail::HeapBindingResourceClass::Buffer;
+        VulkanDetail::HeapBindingRange range;
+    };
 
 
 public:
@@ -899,25 +1171,38 @@ public:
 
 
 private:
+    void eraseBindingReservationLocked(const void* owner);
+
+
+private:
     HeapDesc m_desc;
     VkDeviceMemory m_memory = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;
     VkDeviceSize m_memoryOffset = 0;
     u32 m_memoryTypeIndex = UINT32_MAX;
+    void* m_mappedMemory = nullptr;
+    bool m_requiresInvalidate = false;
+    Vector<BindingReservation, Alloc::GlobalArena> m_bindingReservations;
+    Futex m_bindingMutex;
 
+    const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Handles staging buffer uploads
+// Handles upload and build-scratch buffer chunks
 
 
 class UploadManager final : NoCopy{
+    friend class Device;
+
+
 private:
     struct BufferChunk final : public RefCounter<GraphicsResource>{
         BufferHandle buffer;
         TrackedCommandBuffer* owner;
+        u64 nativeRecordingID;
         GpuPhysicalQueueId physicalQueue;
         u64 size;
         u64 allocated;
@@ -928,6 +1213,7 @@ private:
             Alloc::ThreadPool& pool,
             BufferHandle buf,
             TrackedCommandBuffer* chunkOwner,
+            u64 chunkNativeRecordingID,
             GpuPhysicalQueueId queue,
             u64 sz
         );
@@ -935,7 +1221,7 @@ private:
     };
     using BufferChunkPtr = RefCountPtr<BufferChunk>;
     using BufferChunkList = List<BufferChunkPtr, Alloc::GlobalArena>;
-    using ChunkRecyclePredicate = bool (*)(TrackedCommandBuffer* owner, const void* context);
+    using ChunkRecyclePredicate = bool (*)(TrackedCommandBuffer* owner, u64 nativeRecordingID, const void* context);
     struct ActiveQueueChunks{
         GpuPhysicalQueueId queue;
         BufferChunkList chunks;
@@ -960,6 +1246,7 @@ public:
         u64* pOffset,
         void** pCpuVA,
         TrackedCommandBuffer* owner,
+        u64 nativeRecordingID,
         GpuPhysicalQueueId queue,
         u64 completedVersion,
         u32 alignment = s_DefaultUploadSuballocationAlignment
@@ -967,13 +1254,19 @@ public:
     void submitChunks(
         GpuPhysicalQueueId queue,
         u64 submittedVersion,
-        TrackedCommandBuffer* const* submittedOwners,
-        usize submittedOwnerCount
+        const Queue::SubmissionCommandListIdentity* submittedCommandLists,
+        usize submittedCommandListCount
     );
-    void discardChunks(GpuPhysicalQueueId queue, TrackedCommandBuffer* owner, u64 reusableVersion);
+    void discardChunks(
+        GpuPhysicalQueueId queue,
+        TrackedCommandBuffer* owner,
+        u64 nativeRecordingID,
+        u64 reusableVersion
+    );
 
 
 private:
+    void collectCompletedChunks();
     void trimChunkPoolLocked();
     [[nodiscard]] BufferChunkList* findActiveChunksLocked(GpuPhysicalQueueId queue, bool create);
     BufferChunkList::iterator recycleActiveChunkLocked(BufferChunkList& activeChunks, BufferChunkList::iterator it, u64 version, bool resetAllocated);
@@ -985,6 +1278,8 @@ private:
         const void* predicateContext
     );
 
+
+private:
     Device& m_device;
     u64 m_defaultChunkSize;
     u64 m_memoryLimit;
@@ -1004,7 +1299,9 @@ private:
 class Buffer final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Device;
     friend class CommandList;
+    friend class DescriptorBufferManager;
     friend class StateTracker;
+    friend class TrackedCommandBuffer;
     friend class VulkanAllocator;
     friend class UploadManager;
     friend class ShaderTable;
@@ -1031,25 +1328,56 @@ public:
 
 
 public:
-    Buffer(const VulkanContext& context, VulkanAllocator& allocator);
+    Buffer(
+        const VulkanContext& context,
+        VulkanAllocator& allocator,
+        const BufferDesc& creationDesc,
+        const VkBufferCreateInfo& bufferInfo,
+        bool initialStateKnown
+    );
     ~Buffer();
 
 
 public:
     [[nodiscard]] const BufferDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] const BufferDesc& getCreationDescription()const noexcept{ return m_creationDesc; }
+    [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
     [[nodiscard]] GpuVirtualAddress getGpuVirtualAddress()const{ return m_deviceAddress; }
+    [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
+    // Task-graph declarations copy this production admission snapshot while retaining the Buffer itself.
+    [[nodiscard]] ResourceQueueAdmissionSnapshot getQueueAdmissionSnapshot()const noexcept{
+        return ResourceQueueAdmissionSnapshot{
+            .admittedQueueClasses = m_creationDesc.queueSharing,
+            .queueFamilyIndices = m_bufferQueueFamilyIndices.empty() ? nullptr : m_bufferQueueFamilyIndices.data(),
+            .queueFamilyIndexCount = static_cast<u32>(m_bufferQueueFamilyIndices.size()),
+            .usesConcurrentSharing = m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT,
+        };
+    }
+    // Resolves the state a typed task-graph import may inherit from live retained/native provenance.
+    [[nodiscard]] ResourceStates::Mask resolveTaskGraphImportInitialState()const noexcept;
+    virtual Object getNativeHandle(ObjectType objectType) override;
 
 
 private:
     [[nodiscard]] VkBufferView getView(Format::Enum format, u64 byteOffset, u64 byteSize);
+    [[nodiscard]] bool isRetainedStateKnown()const noexcept;
+    void setRetainedStateKnown(bool known)noexcept;
 
 private:
     BufferDesc m_desc;
+    const BufferDesc m_creationDesc;
+    const bool m_creationInitialStateKnown;
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;
+    const Vector<u32, Alloc::GlobalArena> m_bufferQueueFamilyIndices;
+    const VkBufferCreateInfo m_bufferInfo{};
     u64 m_deviceAddress = 0;
     void* m_mappedMemory = nullptr;
+    HeapHandle m_boundHeap;
+    VulkanDetail::HeapBindingRange m_heapBindingRange;
+    Futex m_memoryBindingMutex;
+    Atomic<bool> m_retainedStateKnown = false;
 
     Vector<u64, Alloc::GlobalArena> m_versionTracking;
     Vector<BufferViewEntry, Alloc::GlobalArena> m_bufferViews;
@@ -1069,12 +1397,14 @@ inline UploadManager::BufferChunk::BufferChunk(
     Alloc::ThreadPool& pool,
     BufferHandle buf,
     TrackedCommandBuffer* chunkOwner,
+    u64 chunkNativeRecordingID,
     GpuPhysicalQueueId queue,
     u64 sz
 )
     : RefCounter<GraphicsResource>(pool)
     , buffer(Move(buf))
     , owner(chunkOwner)
+    , nativeRecordingID(chunkNativeRecordingID)
     , physicalQueue(queue)
     , size(sz)
     , allocated(0)
@@ -1127,37 +1457,84 @@ class Texture final : public RefCounter<GraphicsResource>, NoCopy{
     friend class BackendContext;
     friend class Device;
     friend class CommandList;
+    friend class DescriptorBufferManager;
     friend class StateTracker;
     friend class VulkanAllocator;
     friend class Queue;
+    friend class TrackedCommandBuffer;
 
 
 public:
-    Texture(const VulkanContext& context, VulkanAllocator& allocator);
+    Texture(
+        const VulkanContext& context,
+        VulkanAllocator& allocator,
+        const TextureDesc& creationDesc,
+        const VkImageCreateInfo& imageInfo,
+        bool initialStateKnown
+    );
     ~Texture();
 
 
 public:
     [[nodiscard]] const TextureDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] const TextureDesc& getCreationDescription()const noexcept{ return m_creationDesc; }
+    [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
+    [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
+    // Task-graph declarations copy this production admission snapshot while retaining the Texture itself.
+    [[nodiscard]] ResourceQueueAdmissionSnapshot getQueueAdmissionSnapshot()const noexcept{
+        return ResourceQueueAdmissionSnapshot{
+            .admittedQueueClasses = m_creationDesc.queueSharing,
+            .queueFamilyIndices = m_imageQueueFamilyIndices.empty() ? nullptr : m_imageQueueFamilyIndices.data(),
+            .queueFamilyIndexCount = static_cast<u32>(m_imageQueueFamilyIndices.size()),
+            .usesConcurrentSharing = m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT,
+        };
+    }
+    // Resolves the state a typed task-graph import may inherit from live retained/native provenance.
+    [[nodiscard]] ResourceStates::Mask resolveTaskGraphImportInitialState()const;
     Object getNativeHandle(ObjectType objectType);
-    Object getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool);
+    Object getNativeView(
+        ObjectType objectType,
+        Format::Enum format,
+        TextureSubresourceSet subresources,
+        TextureDimension::Enum dimension,
+        bool
+    );
 
-    [[nodiscard]] VkImageView getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format);
+    [[nodiscard]] VkImageView getView(
+        const TextureSubresourceSet& subresources,
+        TextureDimension::Enum dimension,
+        Format::Enum format
+    );
+
+
+private:
+    [[nodiscard]] bool revokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
+    void releaseRevokedNativeImageIdentity(VkImage expectedNativeImage)noexcept;
+    [[nodiscard]] bool isRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel);
+    void setRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel, bool known);
 
 
 private:
     TextureDesc m_desc;
+    const TextureDesc m_creationDesc;
+    const bool m_creationInitialStateKnown;
     VulkanDetail::TextureFormatBlockLayout m_formatLayout;
     VkImageAspectFlags m_aspectMask = 0;
 
     VkImage m_image = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;
-    VkImageCreateInfo m_imageInfo{};
+    const Vector<u32, Alloc::GlobalArena> m_imageQueueFamilyIndices;
+    const VkImageCreateInfo m_imageInfo{};
+    HeapHandle m_boundHeap;
+    VulkanDetail::HeapBindingRange m_heapBindingRange;
+    Futex m_memoryBindingMutex;
 
     HashMap<TextureViewKey, VkImageView, TextureViewKeyHasher, EqualTo<TextureViewKey>, Alloc::GlobalArena> m_views;
+    Futex m_viewsMutex;
+    Vector<u8, Alloc::GlobalArena> m_retainedSubresourceStates;
+    mutable Futex m_retainedSubresourceStatesMutex;
 
     bool m_managed = true; // if true, owns the VkImage or VMA allocation
-    bool m_keepInitialStateKnown = false;
 
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
@@ -1185,15 +1562,21 @@ public:
 
 private:
     TextureDesc m_desc;
+    TextureDesc m_creationDesc;
     VulkanDetail::TextureFormatBlockLayout m_formatLayout;
     VkImageAspectFlags m_aspectMask = 0;
     u64 m_arrayByteSize = 0;
+    u64 m_totalByteSize = 0;
+    u32 m_bufferOffsetAlignment = 0;
+    ResourceQueueSharing::Mask m_creationQueueSharing = ResourceQueueSharing::Exclusive;
+    VkSharingMode m_creationSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     VulkanDetail::StagingTextureMipLayoutVector m_mipLayouts;
+    VulkanDetail::StagingTextureQueueFamilyVector m_admittedQueueFamilies;
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;
+    Futex m_mappingMutex;
     void* m_mappedMemory = nullptr;
-    bool m_persistentlyMapped = false;
     bool m_requiresInvalidate = false;
     CpuAccessMode::Enum m_cpuAccess{};
 
@@ -1207,8 +1590,10 @@ private:
 
 
 class Sampler final : public RefCounter<GraphicsResource>, NoCopy{
+    friend class CommandList;
     friend class Device;
     friend class DescriptorBufferManager;
+    friend class GpuDescriptorHeap;
 
 
 public:
@@ -1394,6 +1779,8 @@ using PipelineShaderStageVector = Vector<VkPipelineShaderStageCreateInfo, Alloc:
 using PipelineSpecializationInfoVector = Vector<VkSpecializationInfo, Alloc::ScratchArena>;
 
 struct PipelineBindingState{
+    BindingLayoutVector m_bindingLayoutsAtCreation;
+    Array<u32, s_MaxBindingLayouts> m_bindingLayoutSetIndicesAtCreation{};
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     bool m_ownsPipelineLayout = false;
     u32 m_pushConstantByteSize = 0;
@@ -1453,7 +1840,6 @@ inline void AttachPipelineBindingState(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 // Descriptor-buffer manager: host-mapped resource/sampler segments bind by byte offset.
 
 namespace DescriptorBufferSegmentKind{
@@ -1468,18 +1854,35 @@ struct DescriptorBufferSegment{
     DescriptorBufferSegmentKind::Enum kind = DescriptorBufferSegmentKind::None;
     u32 offsetBytes = 0;
     u32 sizeBytes = 0;
+    // Process-unique identity of the exact resource or sampler storage.
+    u64 storageIdentity = 0;
     // Prevents stale handles from writing a recycled byte range.
     u64 allocationSerial = 0;
 
     [[nodiscard]] bool valid()const{
         return (kind == DescriptorBufferSegmentKind::Resource || kind == DescriptorBufferSegmentKind::Sampler)
             && sizeBytes > 0
+            && storageIdentity != 0u
             && allocationSerial != 0u
         ;
     }
 };
 
 class DescriptorBufferManager final : NoCopy{
+    friend class CommandList;
+    friend class GpuDescriptorHeap;
+    friend class Queue;
+
+
+public:
+    // Resource and sampler descriptor buffers are always bound in this order. A TLAS set reuses the resource
+    // descriptor buffer, so the optional third offset extends this fixed topology.
+    static constexpr u32 s_ResourceDescriptorBufferIndex = 0u;
+    static constexpr u32 s_SamplerDescriptorBufferIndex = 1u;
+    static constexpr u32 s_PersistentDescriptorBufferCount = 2u;
+    static constexpr u32 s_DescriptorBufferCountWithAccelStruct = 3u;
+
+
 private:
     // Mergeable free byte range.
     struct FreeRange{
@@ -1489,6 +1892,7 @@ private:
 
     // Host-mapped descriptor segment with synchronized free ranges and live-allocation tracking.
     struct SegmentStorage{
+        const u64 storageIdentity;
         VkBuffer buffer = VK_NULL_HANDLE;
         VulkanAllocationHandle allocation = nullptr;
         void* mappedMemory = nullptr;
@@ -1503,59 +1907,99 @@ private:
         Vector<DescriptorBufferSegment, Alloc::GlobalArena> liveAllocations;
 
 
-        explicit SegmentStorage(Alloc::GlobalArena& arena)
-            : freeRanges(arena)
+        SegmentStorage(Alloc::GlobalArena& arena, const u64 storageIdentityValue)
+            : storageIdentity(storageIdentityValue)
+            , freeRanges(arena)
             , liveAllocations(arena)
         {}
+    };
+    struct BindingSnapshot{
+        Array<VkDescriptorBufferBindingInfoEXT, s_PersistentDescriptorBufferCount> bindingInfos{};
+        u64 generation = 0u;
+        u64 resourceStorageIdentity = 0u;
+        u64 samplerStorageIdentity = 0u;
+        u32 offsetAlignmentBytes = 0u;
     };
 
 
 public:
-    // Resource and sampler descriptor buffers are always bound in this order. A TLAS set reuses the resource
-    // descriptor buffer, so the optional third offset extends this fixed topology.
-    static constexpr u32 s_ResourceDescriptorBufferIndex = 0u;
-    static constexpr u32 s_SamplerDescriptorBufferIndex = 1u;
-    static constexpr u32 s_PersistentDescriptorBufferCount = 2u;
-    static constexpr u32 s_DescriptorBufferCountWithAccelStruct = 3u;
-
-    DescriptorBufferManager(const VulkanContext& context, VulkanAllocator& allocator);
+    DescriptorBufferManager(Device& device, const VulkanContext& context, VulkanAllocator& allocator);
     ~DescriptorBufferManager();
+
+
+private:
+    void shutdownForLifecycleOperation();
 
 
 public:
     bool initialize();
     void shutdown();
 
-    [[nodiscard]] bool isEnabled()const{ return m_enabled; }
+    [[nodiscard]] bool isEnabled()const;
 
     // Exact driver descriptor size; 0 when descriptor buffers are disabled.
     [[nodiscard]] u32 getDescriptorSize(VkDescriptorType descriptorType)const;
     [[nodiscard]] u32 getOffsetAlignmentBytes()const;
+    [[nodiscard]] u64 getUniformBufferAddressAlignmentBytes()const;
+    [[nodiscard]] u64 getStorageBufferAddressAlignmentBytes()const;
+    [[nodiscard]] u64 getTexelBufferAddressAlignmentBytes()const;
+    [[nodiscard]] u32 getMaxTexelBufferElements()const;
 
-    // Stable after initialize().
-    [[nodiscard]] const VkDescriptorBufferBindingInfoEXT& getResourceBindingInfo()const{ return m_resourceSegment.bindingInfo; }
-    [[nodiscard]] const VkDescriptorBufferBindingInfoEXT& getSamplerBindingInfo()const{ return m_samplerSegment.bindingInfo; }
+    // Coherent copies from the current binding generation; zeroed while unavailable.
+    [[nodiscard]] VkDescriptorBufferBindingInfoEXT getResourceBindingInfo()const;
+    [[nodiscard]] VkDescriptorBufferBindingInfoEXT getSamplerBindingInfo()const;
+
     // Resource and sampler buffer indices in bind order.
     [[nodiscard]] u32 getResourceBufferIndex()const{ return s_ResourceDescriptorBufferIndex; }
     [[nodiscard]] u32 getSamplerBufferIndex()const{ return s_SamplerDescriptorBufferIndex; }
 
     // Allocates aligned, zeroed descriptor bytes from free ranges or the bump pointer.
     [[nodiscard]] DescriptorBufferSegment allocate(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes);
+
+
+private:
+    [[nodiscard]] DescriptorBufferSegment allocateForBindingGeneration(
+        DescriptorBufferSegmentKind::Enum kind,
+        u32 sizeBytes,
+        u32 alignmentBytes,
+        u64 requiredGeneration
+    );
+
+
+public:
     void free(const DescriptorBufferSegment& segment);
 
+
+private:
+    void freeForBindingGeneration(const DescriptorBufferSegment& segment, u64 requiredGeneration);
+
+
+public:
     // Validates allocation identity, then encodes one descriptor.
     bool writeDescriptor(const DescriptorWriteItem& item, const DescriptorBufferSegment& allocation, u32 dstOffsetBytes, VkDescriptorType descriptorType);
 
 
 private:
+    [[nodiscard]] bool captureBindingSnapshotLocked(BindingSnapshot& outSnapshot)const;
+    [[nodiscard]] bool isLiveSegmentLocked(
+        const SegmentStorage& storage,
+        const DescriptorBufferSegment& segment,
+        DescriptorBufferSegmentKind::Enum expectedKind
+    )const;
     bool initializeSegment(SegmentStorage& segment, const ACompactString& debugName, u32 capacityBytes);
     void shutdownSegment(SegmentStorage& segment);
 
 
 private:
+    Device& m_device;
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
+    Futex m_lifecycleOperationMutex;
+    mutable Futex m_lifecycleMutex;
+    u64 m_bindingGeneration = 0u;
+    u64 m_nextBindingGeneration = 1u;
     bool m_enabled = false;
+    bool m_lifecycleTransitioning = false;
     SegmentStorage m_resourceSegment;
     SegmentStorage m_samplerSegment;
 };
@@ -1565,12 +2009,73 @@ private:
 // Global Descriptor Heap
 
 
-// Descriptor-buffer-only bindless heap at sets 8/9; required at device creation.
+// Descriptor-buffer-only bindless heap at sets 0/1; required at device creation.
 class GpuDescriptorHeap final : NoCopy{
     friend class Device;
     friend class CommandList;
     friend class Queue;
     friend class TrackedCommandBuffer;
+
+
+private:
+    enum class SlotState : u8{
+        Free,
+        Live,
+        PendingRecording,
+        Retired,
+    };
+
+    // Fresh indices plus a recycled free list per namespace.
+    struct SlotAllocator{
+        u32 capacity = 0;
+        u32 nextFresh = 0;
+        Vector<u32, Alloc::GlobalArena> freeList;
+        // PendingRecording is the only freed state that native recording may still consume.
+        Vector<SlotState, Alloc::GlobalArena> slotStates;
+        // Keeps the allocated class authoritative while a slot is live or quarantined.
+        Vector<u8, Alloc::GlobalArena> allocatedClasses;
+
+        explicit SlotAllocator(Alloc::GlobalArena& arena)
+            : freeList(arena)
+            , slotStates(arena)
+            , allocatedClasses(arena)
+        {}
+    };
+    struct RetiredSlot{
+        GpuDescriptorHandle handle;
+        u64 lastRequiredHeapUseID = 0u;
+    };
+    struct HeapUse{
+        TrackedCommandBuffer* commandBuffer = nullptr;
+        QueueSubmissionToken submissionToken;
+        GpuPhysicalQueueId physicalQueue;
+        u64 id = 0u;
+    };
+
+
+public:
+    class PendingRecordingLease final{
+        friend class GpuDescriptorHeap;
+
+
+    private:
+        explicit PendingRecordingLease(GpuDescriptorHeap& heap);
+
+    public:
+        ~PendingRecordingLease();
+        PendingRecordingLease(const PendingRecordingLease&) = delete;
+        PendingRecordingLease(PendingRecordingLease&&) = delete;
+        PendingRecordingLease& operator=(const PendingRecordingLease&) = delete;
+        PendingRecordingLease& operator=(PendingRecordingLease&&) = delete;
+
+
+    public:
+        [[nodiscard]] bool valid()const noexcept{ return m_heap != nullptr; }
+
+    private:
+        GpuDescriptorHeap* m_heap = nullptr;
+        u64 m_descriptorBufferGeneration = 0u;
+    };
 
 
 public:
@@ -1579,15 +2084,21 @@ public:
 
 
 public:
+    // Prevents slot reuse while CPU snapshots may still record. The final overlapping release establishes the
+    // native heap-use boundary for every slot freed under the leases.
+    [[nodiscard]] PendingRecordingLease acquirePendingRecordingLease();
+
     bool initialize(const GpuDescriptorHeapDesc& desc);
     void shutdown();
 
     [[nodiscard]] bool isInitialized()const{ return m_initialized; }
+    // Coherent aggregate lifecycle counters; intentionally does not identify individual physical queues.
+    [[nodiscard]] GpuDescriptorHeapLifecycleStatistics lifecycleStatistics()const;
 
     // Returns invalid (logged) when the class namespace is exhausted.
     [[nodiscard]] GpuDescriptorHandle allocate(GpuDescriptorClass::Enum descriptorClass);
 
-    // Defers slot reuse until every command buffer that bound this heap before the free has completed or been abandoned.
+    // Defers reuse across pending CPU recording and until every protected heap binding completes or is abandoned.
     void free(GpuDescriptorHandle handle);
 
     // Resolves deferred reuse from accepted queue tokens and their completed timelines.
@@ -1596,7 +2107,7 @@ public:
     // Caller must not overwrite a slot read by in-flight work.
     bool write(GpuDescriptorHandle handle, const DescriptorWriteItem& item);
 
-    // Bind after state setup; optionally includes a per-generation TLAS block at set 10.
+    // Bind after state setup; optionally includes a per-generation TLAS block at set 2.
     void bindCompute(
         CommandList& commandList,
         const ComputePipeline& pipeline,
@@ -1607,7 +2118,7 @@ public:
     void bindGraphics(CommandList& commandList, const GraphicsPipeline& pipeline);
     void bindGraphics(CommandList& commandList, const MeshletPipeline& pipeline);
 
-    // Ray-tracing equivalent of bindCompute; optionally binds a TLAS block at set 10.
+    // Ray-tracing equivalent of bindCompute; optionally binds a TLAS block at set 2.
     void bindRayTracing(
         CommandList& commandList,
         const RayTracingPipeline& pipeline,
@@ -1619,10 +2130,10 @@ public:
     [[nodiscard]] u32 getResourceSetIndex()const{ return m_desc.bindlessHeapAbi.resourceSetIndex; }
     [[nodiscard]] u32 getSamplerSetIndex()const{ return m_desc.bindlessHeapAbi.samplerSetIndex; }
     [[nodiscard]] u32 getAccelStructSetIndex()const{ return m_desc.bindlessHeapAbi.accelStructSetIndex; }
-    // Resource and sampler layouts at sets 8 and 9.
+    // Resource and sampler layouts at sets 0 and 1.
     [[nodiscard]] const BindingLayoutHandle& getResourceLayout()const{ return m_resourceLayout; }
     [[nodiscard]] const BindingLayoutHandle& getSamplerLayout()const{ return m_samplerLayout; }
-    // Per-generation one-descriptor TLAS layout at set 10.
+    // Per-generation one-descriptor TLAS layout at set 2.
     [[nodiscard]] const BindingLayoutHandle& getAccelStructLayout()const{ return m_accelStructLayout; }
     [[nodiscard]] bool hasAccelStructLayout()const{ return m_accelStructLayout != nullptr; }
     // SPIR-V binding number for a descriptor class.
@@ -1634,35 +2145,21 @@ public:
 
 
 private:
-    // Fresh indices plus a recycled free list per namespace.
-    struct SlotAllocator{
-        u32 capacity = 0;
-        u32 nextFresh = 0;
-        Vector<u32, Alloc::GlobalArena> freeList;
-        // Rejects double frees and retired-handle writes.
-        Vector<u8, Alloc::GlobalArena> liveSlots;
-
-        explicit SlotAllocator(Alloc::GlobalArena& arena)
-            : freeList(arena)
-            , liveSlots(arena)
-        {}
-    };
-    struct RetiredSlot{
-        GpuDescriptorHandle handle;
-        u64 lastRequiredHeapUseID = 0u;
-    };
-    struct HeapUse{
-        TrackedCommandBuffer* commandBuffer = nullptr;
-        QueueSubmissionToken submissionToken;
-        u64 id = 0u;
-    };
-
     [[nodiscard]] SlotAllocator& allocatorForClass(GpuDescriptorClass::Enum descriptorClass);
     void releaseAccelStructDescriptorBlock(u32 slot);
     void releaseRetainedDescriptorResource(GpuDescriptorHandle handle);
-    void trackCommandBufferUse(TrackedCommandBuffer& commandBuffer);
+    [[nodiscard]] bool isResourceAdmittedToActiveUsesLocked(const ResourceQueueAdmissionSnapshot& admission)const noexcept;
+    [[nodiscard]] bool retainedResourcesReadyForQueueLocked(const GpuPhysicalQueueInfo& queue)const noexcept;
+    [[nodiscard]] bool retainedResourcesReadyForQueue(const GpuPhysicalQueueId& queue)const noexcept;
+    [[nodiscard]] bool trackCommandBufferUseLocked(
+        TrackedCommandBuffer& commandBuffer,
+        const GpuPhysicalQueueId& physicalQueue
+    );
     void submitCommandBufferUse(TrackedCommandBuffer& commandBuffer, QueueSubmissionToken submissionToken);
     void discardCommandBufferUse(TrackedCommandBuffer& commandBuffer);
+    void releasePendingRecordingLease(u64 descriptorBufferGeneration);
+    void shutdownForDeviceTeardown();
+    void shutdownLocked();
 
     // Allocates persistent resource/sampler blocks; TLAS blocks are per handle.
     bool initializeDescriptorBufferBlocks(u32 offsetAlignmentBytes);
@@ -1686,8 +2183,9 @@ private:
     Vector<DescriptorBufferSegment, Alloc::GlobalArena> m_accelStructBufferBlocks;
     Vector<RayTracingAccelStructHandle, Alloc::GlobalArena> m_accelStructResources;
     // Resource keep-alives protect descriptors used by in-flight work.
-    Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_resourceDescriptorResources;
-    Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_samplerDescriptorResources;
+    Vector<BufferHandle, Alloc::GlobalArena> m_resourceDescriptorBuffers;
+    Vector<TextureHandle, Alloc::GlobalArena> m_resourceDescriptorTextures;
+    Vector<SamplerHandle, Alloc::GlobalArena> m_samplerDescriptorResources;
     u32 m_accelStructBufferBindingOffset = 0u;
     // Binding byte offsets within a set block.
     u32 m_classBufferOffset[GpuDescriptorClass::kCount] = {};
@@ -1696,9 +2194,12 @@ private:
     SlotAllocator m_samplerSlots;
     SlotAllocator m_accelStructSlots;
 
+    Vector<GpuDescriptorHandle, Alloc::GlobalArena> m_pendingRecording;
     Vector<RetiredSlot, Alloc::GlobalArena> m_retired;
     Vector<HeapUse, Alloc::GlobalArena> m_heapUses;
+    usize m_activePendingRecordingLeaseCount = 0u;
     u64 m_lastHeapUseID = 0u;
+    u64 m_descriptorBufferGeneration = 0u;
 
     mutable Futex m_mutex;
     bool m_initialized = false;
@@ -1721,6 +2222,7 @@ public:
 
 public:
     [[nodiscard]] const GraphicsPipelineDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     [[nodiscard]] const FramebufferInfo& getFramebufferInfo()const{ return m_framebufferInfo; }
     Object getNativeHandle(ObjectType objectType);
 
@@ -1750,6 +2252,7 @@ public:
 
 public:
     [[nodiscard]] const ComputePipelineDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     Object getNativeHandle(ObjectType objectType);
 
 
@@ -1777,6 +2280,7 @@ public:
 
 public:
     [[nodiscard]] const MeshletPipelineDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     [[nodiscard]] const FramebufferInfo& getFramebufferInfo()const{ return m_framebufferInfo; }
     Object getNativeHandle(ObjectType objectType);
 
@@ -1794,6 +2298,28 @@ private:
 // Ray Tracing Pipeline
 
 
+namespace ShaderTableRecordKind{
+    enum Enum : u8{
+        RayGeneration,
+        Miss,
+        HitGroup,
+        Callable,
+
+        Count,
+        Invalid = Count,
+    };
+};
+
+struct ShaderTableGroupMetadata{
+    GraphicsString exportName;
+    ShaderTableRecordKind::Enum kind = ShaderTableRecordKind::Invalid;
+    u32 groupIndex = 0u;
+
+    explicit ShaderTableGroupMetadata(GraphicsArena& arena)
+        : exportName(arena)
+    {}
+};
+
 class RayTracingPipeline final : public RefCounter<GraphicsResource>, public PipelineBindingState, NoCopy{
     friend class Device;
     friend class CommandList;
@@ -1801,21 +2327,25 @@ class RayTracingPipeline final : public RefCounter<GraphicsResource>, public Pip
 
 
 public:
-    RayTracingPipeline(const VulkanContext& context, Device& device);
+    RayTracingPipeline(const VulkanContext& context, Device& device, bool allowClusterAccelerationStructures);
     ~RayTracingPipeline();
 
 
 public:
     [[nodiscard]] const RayTracingPipelineDesc& getDescription()const{ return m_desc; }
-    RayTracingShaderTableHandle createShaderTable();
+    [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
+    [[nodiscard]] bool allowsClusterAccelerationStructures()const noexcept{ return m_allowClusterAccelerationStructuresAtCreation; }
+    [[nodiscard]] RayTracingShaderTableHandle createShaderTable();
     Object getNativeHandle(ObjectType objectType);
 
 
 private:
     RayTracingPipelineDesc m_desc;
+    const bool m_allowClusterAccelerationStructuresAtCreation;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     // vkGetRayTracingShaderGroupHandlesKHR returns tightly packed handles; SBT records add alignment later.
     Vector<u8, Alloc::GlobalArena> m_shaderGroupHandles;
+    GraphicsVector<ShaderTableGroupMetadata> m_shaderGroups;
 
     const VulkanContext& m_context;
     Device& m_device;
@@ -1831,27 +2361,78 @@ class ShaderTable final : public RefCounter<GraphicsResource>, NoCopy{
     friend class RayTracingPipeline;
 
 
+private:
+    struct DispatchRegionSnapshot{
+        BufferHandle buffer;
+        u64 offset = 0u;
+        u32 recordCount = 0u;
+        usize selectedGroupCount = 0u;
+    };
+
+    struct DispatchSnapshot{
+        Handle<RayTracingPipeline> pipeline;
+        DispatchRegionSnapshot rayGeneration;
+        DispatchRegionSnapshot miss;
+        DispatchRegionSnapshot hit;
+        DispatchRegionSnapshot callable;
+    };
+
+    struct ShaderRecordPreflight{
+        usize handleOffset = 0u;
+        u64 recordByteSize = 0u;
+        u64 allocationByteSize = 0u;
+        u32 groupIndex = 0u;
+        u32 handleSize = 0u;
+        u32 handleSizeAligned = 0u;
+        u32 baseAlignment = 0u;
+    };
+
+
 public:
     ShaderTable(const VulkanContext& context, Device& device);
     ~ShaderTable();
 
 
 public:
-    void setRayGenerationShader(AStringView exportName);
-    u32 addMissShader(AStringView exportName);
-    u32 addHitGroup(AStringView exportName);
-    u32 addCallableShader(AStringView exportName);
+    [[nodiscard]] bool setRayGenerationShader(AStringView exportName);
+    [[nodiscard]] u32 addMissShader(AStringView exportName);
+    [[nodiscard]] u32 addHitGroup(AStringView exportName);
+    [[nodiscard]] u32 addCallableShader(AStringView exportName);
     void clearMissShaders();
     void clearHitShaders();
     void clearCallableShaders();
-    RayTracingPipeline* getPipeline(){ return m_pipeline.get(); }
+    [[nodiscard]] RayTracingPipeline* getPipeline(){ return m_pipeline.get(); }
     Object getNativeHandle(ObjectType objectType);
 
 
 private:
-    void allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize);
-    u32 appendShaderRecord(
+    void captureDispatchSnapshot(DispatchSnapshot& outSnapshot)const;
+    [[nodiscard]] bool findGroupIndex(
         AStringView exportName,
+        ShaderTableRecordKind::Enum expectedKind,
+        u32& outGroupIndex,
+        const tchar* operationName,
+        const tchar* exportKind
+    )const;
+    [[nodiscard]] bool preflightShaderRecord(
+        AStringView exportName,
+        ShaderTableRecordKind::Enum expectedKind,
+        u32 recordCount,
+        ShaderRecordPreflight& outPreflight,
+        const tchar* operationName,
+        const tchar* exportKind
+    )const;
+    [[nodiscard]] bool allocateSBTBuffer(
+        const ShaderRecordPreflight& preflight,
+        BufferHandle& outBuffer,
+        u64& outOffset,
+        const tchar* operationName,
+        const tchar* recordName
+    );
+    [[nodiscard]] u32 appendShaderRecord(
+        AStringView exportName,
+        ShaderTableRecordKind::Enum expectedKind,
+        GraphicsVector<u32>& groupIndices,
         BufferHandle& buffer,
         u64& offset,
         u32& count,
@@ -1859,7 +2440,6 @@ private:
         const tchar* recordName,
         const tchar* exportKind
     );
-    u32 findGroupIndex(AStringView exportName)const;
 
 
 private:
@@ -1870,10 +2450,16 @@ private:
     BufferHandle m_hitBuffer;
     BufferHandle m_callableBuffer;
 
+    GraphicsVector<u32> m_missGroupIndices;
+    GraphicsVector<u32> m_hitGroupIndices;
+    GraphicsVector<u32> m_callableGroupIndices;
+
     u64 m_raygenOffset = 0;
     u64 m_missOffset = 0;
     u64 m_hitOffset = 0;
     u64 m_callableOffset = 0;
+
+    mutable Futex m_mutex;
 
     const VulkanContext& m_context;
     Device& m_device;
@@ -1901,7 +2487,6 @@ public:
 public:
     [[nodiscard]] const BindingLayoutDesc* getDescription()const{ return m_isBindless ? nullptr : &m_desc; }
     [[nodiscard]] const BindlessLayoutDesc* getBindlessDesc()const{ return m_isBindless ? &m_bindlessDesc : nullptr; }
-    Object getNativeHandle(ObjectType){ return Object(m_pipelineLayout); }
 
 public:
     [[nodiscard]] const BindingLayoutDesc& getBindingLayoutDesc()const{ return m_desc; }
@@ -1915,6 +2500,7 @@ public:
 private:
     BindingLayoutDesc m_desc;
     BindlessLayoutDesc m_bindlessDesc;
+    // Only push-only layouts own a reusable zero-set pipeline layout. Bindless layouts are composed by concrete pipelines.
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     Vector<VkDescriptorSetLayout, Alloc::GlobalArena> m_descriptorSetLayouts;
     // Driver-created set size, segment, and binding offsets.
@@ -1936,15 +2522,23 @@ private:
 class AccelStruct final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Device;
     friend class CommandList;
-
+    friend class DescriptorBufferManager;
+    friend class GpuDescriptorHeap;
+    friend class TrackedCommandBuffer;
 
 public:
-    AccelStruct(const VulkanContext& context);
+    AccelStruct(
+        const VulkanContext& context,
+        ResourceQueueSharing::Mask creationQueueSharing = ResourceQueueSharing::Exclusive
+    );
     ~AccelStruct();
 
 
 public:
     [[nodiscard]] const RayTracingAccelStructDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] ResourceQueueSharing::Mask getCreationQueueSharing()const noexcept{ return m_creationQueueSharing; }
+    [[nodiscard]] bool queueSharingMatchesCreation()const noexcept{ return m_desc.queueSharing == m_creationQueueSharing; }
+    [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     [[nodiscard]] u64 getDeviceAddress()const{ return m_deviceAddress; }
     // Exposed for explicit scheduling handoffs.
     [[nodiscard]] Buffer* getBackingBuffer()const{ return m_buffer.get(); }
@@ -1955,12 +2549,19 @@ public:
 
 private:
     RayTracingAccelStructDesc m_desc;
+    const ResourceQueueSharing::Mask m_creationQueueSharing;
     VkAccelerationStructureKHR m_accelStruct = VK_NULL_HANDLE;
     BufferHandle m_buffer;
     u64 m_deviceAddress = 0;
+    mutable Futex m_memoryBindingMutex;
+    mutable Futex m_acceptedBuildSignatureMutex;
+    Vector<AccelStructGeometryBuildSignature, Alloc::GlobalArena> m_acceptedBuildGeometrySignatures;
+    VkAccelerationStructureTypeKHR m_acceptedBuildType = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
+    VkBuildAccelerationStructureFlagsKHR m_acceptedBuildFlags = 0u;
+    bool m_hasAcceptedBuild = false;
 
     const VulkanContext& m_context;
-    bool m_built = false;
+    bool m_isTopLevelAtCreation = false;
 };
 
 
@@ -1971,6 +2572,7 @@ private:
 class OpacityMicromap final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Device;
     friend class CommandList;
+    friend class TrackedCommandBuffer;
 
 
 public:
@@ -1989,9 +2591,12 @@ private:
     BufferHandle m_dataBuffer;
     VkMicromapEXT m_micromap = VK_NULL_HANDLE;
     u64 m_deviceAddress = 0;
+    u32 m_maxOpacity2StateSubdivisionLevel = 0u;
+    u32 m_maxOpacity4StateSubdivisionLevel = 0u;
     bool m_compacted = false;
 
     const VulkanContext& m_context;
+    Atomic<bool> m_acceptedConstructed{ false };
 };
 
 
@@ -2025,6 +2630,57 @@ class StateTracker final : NoCopy{
     friend class CommandList;
 
 
+private:
+    struct PermanentTextureStateValue{
+        ResourceStates::Mask state = ResourceStates::Unknown;
+        TextureHandle texture;
+    };
+
+    struct PermanentBufferStateValue{
+        ResourceStates::Mask state = ResourceStates::Unknown;
+        BufferHandle buffer;
+    };
+
+    struct BufferUavBarrierPolicyValue{
+        bool enableBarriers = true;
+        BufferHandle buffer;
+    };
+
+    struct TextureUavBarrierPolicyValue{
+        bool enableBarriers = true;
+        TextureHandle texture;
+    };
+
+    using PermanentTextureStateMap = HashMap<
+        Texture*,
+        PermanentTextureStateValue,
+        Hasher<Texture*>,
+        EqualTo<Texture*>,
+        Alloc::GlobalArena
+    >;
+    using PermanentBufferStateMap = HashMap<
+        Buffer*,
+        PermanentBufferStateValue,
+        Hasher<Buffer*>,
+        EqualTo<Buffer*>,
+        Alloc::GlobalArena
+    >;
+    using BufferUavBarrierPolicyMap = HashMap<
+        Buffer*,
+        BufferUavBarrierPolicyValue,
+        Hasher<Buffer*>,
+        EqualTo<Buffer*>,
+        Alloc::GlobalArena
+    >;
+    using TextureUavBarrierPolicyMap = HashMap<
+        Texture*,
+        TextureUavBarrierPolicyValue,
+        Hasher<Texture*>,
+        EqualTo<Texture*>,
+        Alloc::GlobalArena
+    >;
+
+
 public:
     StateTracker(const VulkanContext& context);
     ~StateTracker();
@@ -2032,17 +2688,27 @@ public:
 
 public:
     void reset();
+    void beginRecordingAttempt();
+    void commitRecordingAttempt();
+    void rollbackRecordingAttempt();
     void setPermanentTextureState(Texture& texture, ResourceStates::Mask state);
     void setPermanentBufferState(Buffer& buffer, ResourceStates::Mask state);
 
     [[nodiscard]] bool isPermanentTexture(Texture& texture)const;
     [[nodiscard]] bool isPermanentBuffer(Buffer& buffer)const;
+    [[nodiscard]] ResourceStates::Mask getPermanentTextureState(Texture* texture)const;
+    [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const;
     [[nodiscard]] ResourceStates::Mask getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
     [[nodiscard]] ResourceStates::Mask getBufferState(Buffer* buffer)const;
+    // Explicit state comes from this command list or an imported packet handoff. A keep-initial-state descriptor
+    // fallback deliberately does not count: graph lowering can still declare the first known graph state.
+    [[nodiscard]] bool hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
+    [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer)const;
 
     void beginTrackingTexture(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingBuffer(Buffer* buffer, ResourceStates::Mask state);
     void appendKeepInitialStateBarriers(
+        TrackedCommandBuffer& commandBuffer,
         Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& imageBarriers,
         Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& bufferBarriers
     );
@@ -2064,14 +2730,17 @@ private:
 
 
 private:
-    HashMap<Texture*, ResourceStates::Mask, Hasher<Texture*>, EqualTo<Texture*>, Alloc::GlobalArena> m_permanentTextureStates;
-    HashMap<Buffer*, ResourceStates::Mask, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_permanentBufferStates;
+    PermanentTextureStateMap m_permanentTextureStates;
+    PermanentBufferStateMap m_permanentBufferStates;
+    PermanentTextureStateMap m_attemptPermanentTextureStates;
+    PermanentBufferStateMap m_attemptPermanentBufferStates;
     HashMap<TextureSubresourceStateKey, ResourceStates::Mask, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureStates;
     HashMap<Buffer*, ResourceStates::Mask, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferStates;
-    HashMap<Texture*, bool, Hasher<Texture*>, EqualTo<Texture*>, Alloc::GlobalArena> m_textureUavBarriers;
-    HashMap<Buffer*, bool, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferUavBarriers;
+    TextureUavBarrierPolicyMap m_textureUavBarriers;
+    BufferUavBarrierPolicyMap m_bufferUavBarriers;
 
     const VulkanContext& m_context;
+    bool m_recordingAttemptActive = false;
 };
 
 
@@ -2079,21 +2748,9 @@ private:
 // Command List
 
 
-struct RenderPassParameters{
-    Color colorClearValues[s_MaxRenderTargets]{};
-    f32 depthClearValue = s_DepthClearValue;
-    bool clearColorTargets = false;
-    u8 colorClearMask = static_cast<u8>((1u << s_MaxRenderTargets) - 1u);
-    bool clearDepthTarget = false;
-    bool clearStencilTarget = false;
-    u8 stencilClearValue = 0;
-
-
-    [[nodiscard]] bool clearColorTarget(u32 index)const{ return (colorClearMask & (1u << index)) != 0; }
-};
-
 class CommandList final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Device;
+    friend class GpuDescriptorHeap;
     friend class Queue;
 
 
@@ -2108,26 +2765,50 @@ public:
     // Final state snapshot follows keepInitialState restoration.
     void close(CommandListResourceStateHandoff* finalStates = nullptr);
     // False when no submit-ready command buffer is owned.
-    [[nodiscard]] bool hasCommandBuffer()const{ return m_currentCmdBuf != nullptr; }
+    [[nodiscard]] bool hasCommandBuffer()const{ return matchesNativeLeaseIdentity(); }
     // `hasCommandBuffer` remains true after close so queues can submit it. Tooling that emits commands must use
     // this predicate instead of treating ownership as an active recording scope.
-    [[nodiscard]] bool isRecording()const noexcept{ return m_isRecording; }
+    [[nodiscard]] bool isRecording()const noexcept{ return m_isRecording && matchesNativeLeaseIdentity(); }
+    // Sticky for the current open/close attempt. A failed native capability or command semantic check invalidates
+    // the complete list; close discards its native buffer and open is the only operation that starts a fresh attempt.
+    [[nodiscard]] bool commandRecordingFailed()const noexcept{ return m_commandRecordingFailed; }
+    // Every open attempt starts a distinct native-buffer lease, including failed attempts. Packet recorders and
+    // replay tooling capture this serial before invoking extensible lowering and reject a thunk that closes or
+    // replaces the command buffer while claiming success.
+    [[nodiscard]] u64 recordingLeaseSerial()const noexcept{ return m_recordingLeaseSerial; }
+    [[nodiscard]] bool matchesRecordingLease(u64 serial)const noexcept{
+        return serial != 0u
+            && serial == m_recordingLeaseSerial
+            && matchesActiveNativeLeaseIdentity()
+        ;
+    }
     [[nodiscard]] bool isRenderPassActive()const noexcept{ return m_renderPassActive; }
     void clearState();
+    void beginRenderPass(Framebuffer* framebuffer, const RenderPassParameters& params);
     void endRenderPass();
 
     void setResourceStatesForFramebuffer(Framebuffer& framebuffer);
     void commitBarriers();
 
-    void setTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits);
-    void setBufferState(Buffer* buffer, ResourceStates::Mask stateBits);
-    void setAccelStructState(RayTracingAccelStruct* as, ResourceStates::Mask stateBits);
-    // Exports an exclusive resource to an ordered physical consumer queue. RenderLane overloads preserve the
-    // deprecated lane-facing contract while graph lowering uses the resolved CommandQueue transport directly.
+    void setTextureState(
+        Texture* texture,
+        TextureSubresourceSet subresources,
+        ResourceStates::Mask stateBits,
+        bool forceMemoryDependency = false
+    );
+    void setBufferState(
+        Buffer* buffer,
+        ResourceStates::Mask stateBits,
+        bool forceMemoryDependency = false
+    );
+    void setAccelStructState(
+        RayTracingAccelStruct* as,
+        ResourceStates::Mask stateBits,
+        bool forceMemoryDependency = false
+    );
+    // Exports an exclusive resource to an ordered physical consumer queue.
     void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, CommandQueue::Enum destinationQueue);
     void releaseBufferOwnership(Buffer* buffer, CommandQueue::Enum destinationQueue);
-    void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, RenderLane::Enum destinationLane);
-    void releaseBufferOwnership(Buffer* buffer, RenderLane::Enum destinationLane);
     void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, GpuPhysicalQueueId destinationQueue);
     void releaseBufferOwnership(Buffer* buffer, GpuPhysicalQueueId destinationQueue);
 
@@ -2204,14 +2885,6 @@ public:
     void dispatch(u32 groupsX, u32 groupsY = 1, u32 groupsZ = 1);
     void dispatchIndirect(u32 offsetBytes);
 
-    // Binds heap blocks at sets 8/9 and optional TLAS at set 10; pipeline must be descriptor-buffer compatible.
-    void bindDescriptorBufferHeap(
-        GpuDescriptorHeap& heap,
-        VkPipelineBindPoint bindPoint,
-        VkPipelineLayout pipelineLayout,
-        GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::invalid()
-    );
-
     void setMeshletState(const MeshletState& state);
     void dispatchMesh(u32 groupsX, u32 groupsY = 1, u32 groupsZ = 1);
 
@@ -2225,17 +2898,19 @@ public:
     void convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs);
 
     void resetTimerQuery(TimerQuery* query);
+    [[nodiscard]] bool canRecordTimerQueryHere()const;
     [[nodiscard]] bool canResetTimerQueryHere()const;
-    void beginTimerQuery(TimerQuery* query);
-    void endTimerQuery(TimerQuery* query);
+    [[nodiscard]] bool beginTimerQuery(TimerQuery* query);
+    [[nodiscard]] bool endTimerQuery(TimerQuery* query);
     void beginMarker(const AStringView name);
     void endMarker();
 
 #if defined(NWB_DEBUG)
     // Task-graph recording opens one scope around each record thunk. Command methods report the capabilities they
     // actually consume so the packet recorder can reject a declaration that is incompatible with that task.
-    void beginTaskCapabilityTracking();
+    void beginTaskCapabilityTracking(GpuQueueCapability::Mask declaredCapabilities);
     [[nodiscard]] GpuQueueCapability::Mask endTaskCapabilityTracking();
+    void cancelTaskCapabilityTracking();
 #endif
 
     void setEnableUavBarriersForTexture(Texture* texture, bool enableBarriers);
@@ -2244,20 +2919,104 @@ public:
     void beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits);
     ResourceStates::Mask getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel);
     ResourceStates::Mask getBufferState(Buffer* buffer);
+    [[nodiscard]] ResourceStates::Mask getPermanentTextureState(Texture* texture)const;
+    [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const;
+    [[nodiscard]] bool hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
+    [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer)const;
 
     Device& getDevice(){ return m_device; }
     const CommandListParameters& getDescription(){ return m_desc; }
+    [[nodiscard]] CommandListParameters getResolvedDescription()const noexcept{ return m_creationDesc; }
 
 private:
+    void clearStateInternal();
+    [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
+    [[nodiscard]] bool matchesNativeLeaseIdentity()const noexcept;
+    [[nodiscard]] bool matchesActiveNativeLeaseIdentity()const noexcept;
+    [[nodiscard]] bool matchesSubmissionLease(
+        GpuPhysicalQueueId executionQueue,
+        CommandQueue::Enum executionQueueClass
+    )const noexcept;
+    [[nodiscard]] bool validateFramebufferForRendering(Framebuffer* framebuffer, const tchar* operationName)noexcept;
+    [[nodiscard]] bool validateRenderPassBegin(
+        Framebuffer* framebuffer,
+        const RenderPassParameters& params,
+        const tchar* operationName
+    )noexcept;
+    [[nodiscard]] bool prepareFramebufferForRendering(Framebuffer* framebuffer, const tchar* operationName)noexcept;
+    [[nodiscard]] bool validateViewportState(
+        const ViewportState& viewport,
+        const tchar* operationName
+    )noexcept;
+    [[nodiscard]] bool validateTextureForGpuState(
+        Texture* texture,
+        ResourceStates::Mask requiredState,
+        const tchar* operationName,
+        VkImageUsageFlags requiredUsage = 0u
+    )noexcept;
+    [[nodiscard]] bool validateBufferForGpuState(
+        Buffer* buffer,
+        ResourceStates::Mask requiredState,
+        const tchar* operationName,
+        VkBufferUsageFlags explicitRequiredUsage = 0u
+    )noexcept;
+    [[nodiscard]] bool validateGraphicsState(const GraphicsState& state)noexcept;
+    [[nodiscard]] bool validateMeshletState(const MeshletState& state)noexcept;
+    [[nodiscard]] bool validateGraphicsDrawState(const tchar* operationName, bool indexed)noexcept;
+    [[nodiscard]] bool validateGraphicsDrawArguments(
+        const DrawArguments& arguments,
+        bool indexed,
+        const tchar* operationName
+    )noexcept;
     void setResourceStatesForGraphicsBuffers(const GraphicsState& state);
+    [[nodiscard]] bool isTextureAdmittedToCommandQueue(const Texture& texture)const noexcept;
+    [[nodiscard]] bool isTextureReadyForCommandQueue(
+        Texture* texture,
+        VkImageUsageFlags requiredUsage = 0u
+    )const noexcept;
+    [[nodiscard]] bool isBufferAdmittedToCommandQueue(const Buffer& buffer)const noexcept;
+    [[nodiscard]] bool isBufferReadyForCommandQueue(
+        Buffer* buffer,
+        VkBufferUsageFlags requiredUsage = 0u
+    )const noexcept;
+    [[nodiscard]] bool validateTrackedTexturesReadyForClose()noexcept;
+    [[nodiscard]] bool validateTrackedBuffersReadyForClose()noexcept;
+    [[nodiscard]] bool validateTrackedResourcesReadyForSubmission()const noexcept;
     [[nodiscard]] bool importResourceStateHandoff(const CommandListResourceStateHandoff& states);
     void exportResourceStateHandoff(CommandListResourceStateHandoff& states)const;
     void appendPendingOwnershipReleaseBarriers();
+    void collectHostReadbackBuffers();
+    void appendHostReadbackBarriers();
+    void registerHostReadbackBuffer(Buffer& buffer);
+    void registerHostReadbackStagingTexture(StagingTexture& stagingTexture);
+    void retainResource(Buffer* resource);
+    void retainResource(Texture* resource);
+    void retainResource(Framebuffer* resource);
     void retainResource(GraphicsResource* resource);
     void retainStagingBuffer(Buffer& buffer);
-    void ensureDescriptorBuffersBound();
-    // Bind empty set 0 before global heap sets; no local descriptor transport.
-    void bindDescriptorBufferEmptySet(VkPipelineBindPoint bindPoint, VkPipelineLayout pipelineLayout);
+    void bindDescriptorBufferHeap(
+        GpuDescriptorHeap& heap,
+        const ComputePipeline& pipeline,
+        GpuDescriptorHandle accelStructHandle
+    );
+    void bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const GraphicsPipeline& pipeline);
+    void bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const MeshletPipeline& pipeline);
+    void bindDescriptorBufferHeap(
+        GpuDescriptorHeap& heap,
+        const RayTracingPipeline& pipeline,
+        GpuDescriptorHandle accelStructHandle
+    );
+    void bindDescriptorBufferHeapNative(
+        GpuDescriptorHeap& heap,
+        VkPipelineBindPoint bindPoint,
+        const PipelineBindingState& pipelineBindings,
+        GpuDescriptorHandle accelStructHandle,
+        const tchar* operationName
+    );
+    void ensureDescriptorBuffersBound(
+        DescriptorBufferManager& manager,
+        const DescriptorBufferManager::BindingSnapshot& snapshot
+    );
     void setViewportState(const ViewportState& viewport);
 
     bool beginDynamicRendering(Framebuffer* framebuffer, const RenderPassParameters& params);
@@ -2265,49 +3024,108 @@ private:
     bool ensureGraphicsRenderPass(Framebuffer* framebuffer);
     void endActiveRenderPass();
     void executePipelineBarrier(const VkDependencyInfo& depInfo);
-    [[nodiscard]] bool validateNonTransferCommand(const tchar* operationName)const;
-#if defined(NWB_DEBUG)
-    void recordTaskCapability(GpuQueueCapability::Mask capability)noexcept;
-#endif
-    bool validateIndirectBuffer(Buffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const;
-    bool prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, const tchar* operationLabel, const tchar* commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode, Buffer*& outIndirectBuffer)const;
+    [[nodiscard]] bool validateCommandRecordingScope(const tchar* operationName)noexcept;
+    [[nodiscard]] bool recordAndValidateCommandCapability(GpuQueueCapability::Mask requiredCapabilities, const tchar* operationName)noexcept;
+    [[nodiscard]] bool recordAndValidateAnyCommandCapability(GpuQueueCapability::Mask alternativeCapabilities, const tchar* operationName)noexcept;
+    void rejectCommandRecording(const tchar* operationName, const tchar* reason)noexcept;
+    void invalidateCommandRecording()noexcept;
+    void discardInvalidCommandBuffer()noexcept;
+    [[nodiscard]] bool validateIndirectBuffer(
+        Buffer* buffer,
+        u64 offsetBytes,
+        u64 commandSizeBytes,
+        u32 commandCount,
+        const tchar* commandName
+    )noexcept;
+    [[nodiscard]] bool prepareDrawIndirect(
+        u32 offsetBytes,
+        u32 drawCount,
+        u64 commandSizeBytes,
+        const tchar* operationLabel,
+        const tchar* commandName,
+        VulkanDetail::IndirectDrawIndexMode::Enum indexMode,
+        Buffer*& outIndirectBuffer
+    )noexcept;
     void clearColorTexture(Texture* textureResource, TextureSubresourceSet subresources, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
     void clearColorTextureBox(Texture* textureResource, TextureSubresourceSet subresources, const Box& box, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
     bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, const tchar* valueName);
     bool clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
+    [[nodiscard]] bool validateStagingTextureCopyResources(
+        StagingTexture& stagingTexture,
+        Texture& texture,
+        CpuAccessMode::Enum requiredCpuAccess,
+        VkImageUsageFlags requiredImageUsage,
+        const tchar* operationName
+    )noexcept;
     bool prepareStagingTextureCopy(
         StagingTexture& stagingResource,
         const TextureSlice& stagingSlice,
         Texture& textureResource,
         const TextureSlice& textureSlice,
-        const tchar* operationName,
-        const tchar* singleSampleRequirement,
         VkBufferImageCopy& outRegion
     )const;
-    bool prepareUploadStaging(usize dataSize, const tchar* operationName, Buffer*& outStagingBuffer, u64& outStagingOffset, void*& outCpuVA);
-    bool prepareUploadStaging(const void* data, usize dataSize, const tchar* operationName, Buffer*& outStagingBuffer, u64& outStagingOffset);
+    bool prepareUploadStaging(
+        usize dataSize,
+        const tchar* operationName,
+        Buffer*& outStagingBuffer,
+        u64& outStagingOffset,
+        void*& outCpuVA,
+        u32 alignment = s_DefaultUploadSuballocationAlignment
+    );
+    bool prepareUploadStaging(
+        const void* data,
+        usize dataSize,
+        const tchar* operationName,
+        Buffer*& outStagingBuffer,
+        u64& outStagingOffset,
+        u32 alignment = s_DefaultUploadSuballocationAlignment
+    );
+    [[nodiscard]] bool suballocateBuildScratchAddress(
+        u64 buildScratchSize,
+        u64 scratchAlignment,
+        VkDeviceAddress& outScratchAddress,
+        const tchar* operationName
+    );
+    [[nodiscard]] bool validateAccelStructBuildSignature(
+        AccelStruct& accelStruct,
+        VkAccelerationStructureTypeKHR accelStructType,
+        VkBuildAccelerationStructureFlagsKHR buildFlags,
+        const AccelStructGeometryBuildSignature* geometrySignatures,
+        usize geometrySignatureCount,
+        bool performUpdate,
+        const tchar* operationName,
+        bool& outHasPriorBuild
+    );
     bool buildTopLevelAccelStructFromInstanceData(
         RayTracingAccelStruct& as,
         VkDeviceAddress instanceDataAddress,
         usize numInstances,
         RayTracingAccelStructBuildFlags::Mask buildFlags,
+        VkBuildAccelerationStructureFlagsKHR vkBuildFlags,
         const tchar* operationName
     );
-    [[nodiscard]] bool attachAccelStructBuildScratchBuffer(VkAccelerationStructureBuildGeometryInfoKHR& buildInfo, u64 buildScratchSize, const char* debugName, const tchar* operationName);
+    void resetMarkerState();
     void discardUnsubmittedUploadChunks();
 
 
 private:
+    const CommandListParameters m_creationDesc;
     CommandListParameters m_desc;
     TrackedCommandBufferPtr m_currentCmdBuf;
     StateTracker m_stateTracker;
+    VulkanDetail::HostReadbackBarrierTracker m_hostReadbackBarrierTracker;
     bool m_enableAutomaticBarriers = true;
     bool m_isRecording = false;
+    bool m_commandRecordingFailed = false;
+    u64 m_recordingLeaseSerial = 0u;
+    u64 m_nativeRecordingID = 0u;
     bool m_renderPassActive = false;
     bool m_descriptorBuffersBound = false;
+    u32 m_markerDepth = 0u;
     Framebuffer* m_renderPassFramebuffer = nullptr;
 #if defined(NWB_DEBUG)
     GpuQueueCapability::Mask m_taskCapabilitiesUsed = GpuQueueCapability::None;
+    GpuQueueCapability::Mask m_taskDeclaredCapabilities = GpuQueueCapability::None;
     bool m_taskCapabilityTracking = false;
 #endif
 
@@ -2364,6 +3182,8 @@ public:
 
 private:
     VkQueryPool m_queryPool = VK_NULL_HANDLE;
+    GpuPhysicalQueueId m_timestampQueue;
+    u32 m_timestampValidBits = 0u;
 
     const VulkanContext& m_context;
 };
@@ -2383,19 +3203,26 @@ class Device final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 private:
-    // AMD breadcrumb ring maps the last GPU marker after device loss.
+    // AMD breadcrumb ring provides best-effort per-queue observations; physical queues may execute out of sequence.
     struct AmdBreadcrumbSlotRecord{
-        u32 sequence = 0u;
+        u64 serial = 0u;
         usize markerHash = 0u;
+        u32 marker = 0u;
     };
     struct AmdBreadcrumbBuffer{
         VkBuffer buffer = VK_NULL_HANDLE;
         VulkanAllocationHandle allocation = {};
         void* mappedMemory = nullptr;
-        Atomic<u32> nextSequence = 0u;
-        // Prevents concurrent recording from tearing a marker record.
+        VulkanDetail::AmdBreadcrumbRingLayout layout;
+        // Prevents concurrent recording from tearing marker records or per-queue reservation serials.
         Futex slotMutex;
-        Array<AmdBreadcrumbSlotRecord, s_MaxAmdBreadcrumbSlots> slotRecords = {};
+        GraphicsVector<AmdBreadcrumbSlotRecord> slotRecords;
+        GraphicsVector<u64> nextSerials;
+
+        explicit AmdBreadcrumbBuffer(Alloc::GlobalArena& arena)
+            : slotRecords(arena)
+            , nextSerials(arena)
+        {}
     };
 
 
@@ -2419,7 +3246,19 @@ public:
     [[nodiscard]] TextureHandle createTexture(const TextureDesc& d);
     [[nodiscard]] MemoryRequirements getTextureMemoryRequirements(Texture* texture);
     bool bindTextureMemory(Texture* texture, Heap* heap, u64 offset);
-    [[nodiscard]] TextureHandle createHandleForNativeTexture(ObjectType objectType, Object texture, const TextureDesc& desc);
+    // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
+    [[nodiscard]] bool isTextureReadyForGpuUse(
+        Texture* texture,
+        VkImageUsageFlags requiredUsage = 0u
+    )const noexcept;
+    // The caller owns native binding and lifetime and must provide exact immutable creation provenance.
+    // Only one live Texture wrapper may name a VkImage per Device.
+    [[nodiscard]] TextureHandle createHandleForNativeTexture(
+        ObjectType objectType,
+        Object texture,
+        const TextureDesc& desc,
+        const NativeTextureProvenance& nativeProvenance
+    );
     [[nodiscard]] StagingTextureHandle createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess);
     void* mapStagingTexture(StagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch);
     void unmapStagingTexture(StagingTexture* tex);
@@ -2428,7 +3267,18 @@ public:
     void unmapBuffer(Buffer* buffer);
     [[nodiscard]] MemoryRequirements getBufferMemoryRequirements(Buffer* buffer);
     bool bindBufferMemory(Buffer* buffer, Heap* heap, u64 offset);
-    [[nodiscard]] BufferHandle createHandleForNativeBuffer(ObjectType objectType, Object buffer, const BufferDesc& desc);
+    // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
+    // Native wrappers trust caller-managed binding. Managed ordinary buffers require their VMA allocation, while
+    // managed virtual buffers require a retained, device-owned bound Heap allocation. CPU mapping is irrelevant.
+    [[nodiscard]] bool isBufferReadyForGpuUse(Buffer* buffer, VkBufferUsageFlags requiredUsage = 0u)const noexcept;
+    // The caller owns native binding and lifetime and must provide the exact immutable creation provenance.
+    // Only one live Buffer wrapper may name a VkBuffer per Device.
+    [[nodiscard]] BufferHandle createHandleForNativeBuffer(
+        ObjectType objectType,
+        Object buffer,
+        const BufferDesc& desc,
+        const NativeBufferProvenance& nativeProvenance
+    );
     [[nodiscard]] ShaderHandle createShader(const ShaderDesc& d, const void* binary, usize binarySize);
     [[nodiscard]] ShaderHandle createShaderSpecialization(Shader* baseShader, const ShaderSpecialization* constants, u32 numConstants);
     [[nodiscard]] ShaderLibraryHandle createShaderLibrary(const void* binary, usize binarySize);
@@ -2442,7 +3292,7 @@ public:
     bool pollTimerQuery(TimerQuery* query);
     [[nodiscard]] bool getTimerQueryResult(TimerQuery* query, TimerQueryResult& outResult);
     f32 getTimerQueryTime(TimerQuery* query);
-    void resetTimerQuery(TimerQuery* query);
+    bool resetTimerQuery(TimerQuery* query);
     [[nodiscard]] FramebufferHandle createFramebuffer(const FramebufferDesc& desc);
     [[nodiscard]] GraphicsPipelineHandle createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo);
     [[nodiscard]] ComputePipelineHandle createComputePipeline(const ComputePipelineDesc& desc);
@@ -2455,6 +3305,8 @@ public:
     [[nodiscard]] MemoryRequirements getAccelStructMemoryRequirements(RayTracingAccelStruct* as);
     [[nodiscard]] RayTracingClusterOperationSizeInfo getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params);
     bool bindAccelStructMemory(RayTracingAccelStruct* as, Heap* heap, u64 offset);
+    // Structural readiness deliberately allows an unbuilt acceleration structure to remain a legal build target.
+    [[nodiscard]] bool isAccelStructReadyForGpuUse(RayTracingAccelStruct* as)const noexcept;
     [[nodiscard]] CommandListHandle createCommandList(const CommandListParameters& params = CommandListParameters());
     // outCommandListsSubmitted is true only for a new command-buffer submission.
     u64 executeCommandLists(
@@ -2469,7 +3321,7 @@ public:
         const GpuPhysicalQueueId& executionQueue,
         bool* outCommandListsSubmitted = nullptr
     );
-    // Cross-lane dependencies are immutable submission-local token edges.
+    // Cross-queue dependencies are immutable submission-local token edges.
     [[nodiscard]] QueueSubmissionToken executeCommandLists(
         CommandList* const* pCommandLists,
         usize numCommandLists,
@@ -2482,15 +3334,7 @@ public:
         const GpuPhysicalQueueId& executionQueue,
         const QueueSubmissionDesc& submitDesc
     );
-    [[nodiscard]] QueueSubmissionToken executeCommandLists(
-        CommandList* const* pCommandLists,
-        usize numCommandLists,
-        RenderLane::Enum executionLane,
-        const QueueSubmissionDesc& submitDesc
-    );
     void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance);
-    [[nodiscard]] CommandQueue::Enum resolveRenderLane(RenderLane::Enum lane)const;
-    [[nodiscard]] bool isRenderLaneDedicated(RenderLane::Enum lane)const;
     // The registry owns every active native VkQueue. Broad CommandQueue calls resolve through the designated
     // primary record only for legacy callers; graph recording/submission selects a concrete ID directly.
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_deviceGeneration; }
@@ -2498,15 +3342,32 @@ public:
     [[nodiscard]] GpuPhysicalQueueId getPrimaryPhysicalQueue(CommandQueue::Enum queue)const noexcept;
     [[nodiscard]] GpuPhysicalQueueTopology getPhysicalQueueTopology()const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* getPhysicalQueueInfo(const GpuPhysicalQueueId& queue)const noexcept;
+    [[nodiscard]] bool supportsComparableGpuTimestamps()const noexcept{ return m_context.comparableGpuTimestamps; }
+    // Absolute ranges require the extension-backed logical-device epoch and a complete 64-bit queue timestamp.
+    // Partial-width timestamps remain valid for modular ordinary durations only.
+    [[nodiscard]] bool supportsComparableGpuTimestamps(const GpuPhysicalQueueId& queue)const noexcept{
+        const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(queue);
+        return supportsComparableGpuTimestamps() && queueInfo && queueInfo->timestampValidBits == 64u;
+    }
+    [[nodiscard]] GpuCommandArenaStatistics getCommandArenaStatistics(const GpuPhysicalQueueId& queue)const noexcept;
+    [[nodiscard]] GpuCommandArenaWorkerStatistics getCommandArenaWorkerStatistics(
+        const GpuPhysicalQueueId& queue,
+        u64 recordingWorkerDomain,
+        u32 recordingWorkerIndex
+    )const noexcept;
     [[nodiscard]] bool matchesPhysicalQueueIdentity(
         CommandQueue::Enum queue,
         u16 physicalQueueIndex,
         u16 deviceGeneration
     )const noexcept;
     [[nodiscard]] bool matchesPhysicalQueueIdentity(const GpuPhysicalQueueId& queue)const noexcept;
+    // Validates an accepted token as a current submission wait without changing queue state. The producer timeline
+    // is sampled under its queue mutex so a failed submit cannot expose its tentative value as available work.
+    [[nodiscard]] bool validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept;
     // Device loss requires full device recreation.
     [[nodiscard]] bool isDeviceLost()const noexcept{ return m_deviceLost.load(MemoryOrder::acquire); }
-    // Cross-queue timing requires Graphics and Compute timestamp support.
+    // Reports core Graphics+Compute timestamp-stage support only; it does not imply that distinct submissions share
+    // a comparable timestamp epoch. Use supportsComparableGpuTimestamps() for absolute ranges.
     [[nodiscard]] bool supportsGraphicsAndComputeTimestamps()const{
         return m_context.physicalDeviceProperties.limits.timestampComputeAndGraphics == VK_TRUE;
     }
@@ -2529,12 +3390,11 @@ public:
     bool isAnyGpuMarkerEnabled(){ return isGpuCrashDiagnosticsEnabled() || isAmdBreadcrumbEnabled(); }
     [[nodiscard]] GpuCrashTracker& getGpuCrashTracker(){ return m_gpuCrashTracker; }
     void captureGpuCrash(AStringView context)noexcept;
-#if defined(NWB_GPU_FAULT_INJECTION)
-    // Test-only device-loss fault injection.
-    void debugTriggerGpuFault(u64 faultDeviceAddress);
-#endif
 
-    [[nodiscard]] AmdBreadcrumbWrite reserveAmdBreadcrumb(usize markerHash);
+    [[nodiscard]] AmdBreadcrumbWrite reserveAmdBreadcrumb(
+        const GpuPhysicalQueueId& queue,
+        usize markerHash
+    );
 
     void queueWaitForSemaphore(CommandQueue::Enum waitQueue, VkSemaphore semaphore, u64 value);
     void queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore semaphore, u64 value);
@@ -2544,19 +3404,6 @@ public:
 public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType);
     [[nodiscard]] Queue* getQueue(const GpuPhysicalQueueId& queue);
-#if !defined(NWB_FINAL)
-    // Test-only validated-submit seams exercise production cleanup and retain the exact submission-local waits
-    // received by Device after graph/runtime assembly.
-    void rejectNextSubmissionForTesting(CommandQueue::Enum queue);
-    void clearSubmissionRejectionsForTesting();
-    void clearSubmissionWaitTokensForTesting();
-    void armSubmissionWaitCaptureForTesting();
-    [[nodiscard]] usize lastSubmissionWaitTokenCountForTesting(const GpuPhysicalQueueId& executionQueue)const noexcept;
-    [[nodiscard]] QueueSubmissionToken lastSubmissionWaitTokenForTesting(
-        const GpuPhysicalQueueId& executionQueue,
-        usize index
-    )const noexcept;
-#endif
     [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap(){ return m_gpuDescriptorHeap; }
     // Writes descriptor-buffer entries, including TLAS handles.
     [[nodiscard]] DescriptorBufferManager& getDescriptorBufferManager(){ return m_descriptorBufferManager; }
@@ -2565,14 +3412,6 @@ public:
 private:
     [[nodiscard]] bool registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc);
     void configureLegacyQueueContext();
-#if !defined(NWB_FINAL)
-    [[nodiscard]] bool consumeSubmissionRejectionForTesting(CommandQueue::Enum queue);
-    void captureSubmissionWaitTokensForTesting(
-        const GpuPhysicalQueueId& executionQueue,
-        const QueueSubmissionToken* waitTokens,
-        usize waitTokenCount
-    );
-#endif
     // Probed once at device initialization so compressed texture selection does not rely on
     // a later optimistic format-property query.
     void probeCompressedTextureFormats();
@@ -2588,17 +3427,16 @@ private:
         bool& outOwnsPipelineLayout,
         Alloc::ScratchArena& scratchArena
     )const;
-    // Lazily creates the descriptor-buffer gap-set layout for explicit heap sets.
-    [[nodiscard]] VkDescriptorSetLayout getOrCreateEmptyDescriptorBufferSetLayout()const;
-#if defined(NWB_DEBUG)
     [[nodiscard]] bool validateHeapMemoryBinding(
         const Heap& heap,
         const VkMemoryRequirements& memoryRequirements,
+        const VkMemoryDedicatedRequirements& dedicatedRequirements,
         u64 offset,
+        VulkanDetail::HeapBindingResourceClass::Enum resourceClass,
         const tchar* operationName,
-        const tchar* resourceName
+        const tchar* resourceName,
+        VulkanDetail::HeapBindingRange& outRange
     )const;
-#endif
     [[nodiscard]] bool configurePipelineBindings(
         const BindingLayoutVector& bindingLayouts,
         const tchar* operationName,
@@ -2704,14 +3542,6 @@ private:
     Array<Queue*, static_cast<u32>(CommandQueue::kCount)> m_primaryQueues = {};
     // Only block-compressed entries are populated; all are resolved before the device is exposed.
     Array<FormatSupport::Mask, static_cast<usize>(Format::kCount)> m_compressedFormatSupport = {};
-
-#if !defined(NWB_FINAL)
-    Array<Atomic<u32>, static_cast<u32>(CommandQueue::kCount)> m_submissionRejectionsForTesting = {};
-    Atomic<bool> m_submissionWaitCaptureArmedForTesting = false;
-    mutable Futex m_submissionWaitTokensForTestingMutex;
-    GpuPhysicalQueueId m_submissionWaitQueueForTesting;
-    GraphicsVector<QueueSubmissionToken> m_submissionWaitTokensForTesting;
-#endif
 
     UploadManager m_uploadManager;
     UploadManager m_scratchManager;

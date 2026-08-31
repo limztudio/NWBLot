@@ -16,7 +16,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 
 CONFIGURATIONS = ("dbg", "opt", "fin")
-DEFAULT_ARCH = "x64"
+SUPPORTED_ARCHITECTURES = ("x64", "arm64")
 DEFAULT_CONFIG = "dbg"
 DEFAULT_DOMAIN = "full"
 DEFAULT_BUILD_JOBS = "8"
@@ -196,6 +196,19 @@ def host_platform_name(system_name: Optional[str] = None) -> str:
     return sys.platform.lower()
 
 
+def host_arch_name(machine_name: Optional[str] = None) -> str:
+    machine = (machine_name or platform.machine()).lower()
+    if machine in ("x64", "amd64", "x86_64", "x86-64"):
+        return "x64"
+    if machine in ("arm64", "aarch64"):
+        return "arm64"
+    raise SystemExit(f"unsupported host architecture '{machine}'; NWBLot supports x64 and arm64")
+
+
+def configure_preset_architecture(preset_name: str) -> Optional[str]:
+    return next((arch for arch in SUPPORTED_ARCHITECTURES if preset_name.endswith(f"-{arch}")), None)
+
+
 def executable_name(base_name: str, platform_name: str) -> str:
     return base_name + ".exe" if platform_name == "windows" else base_name
 
@@ -206,10 +219,11 @@ def default_configure_preset_name(platform_name: str, domain: str, arch: str) ->
     return f"{platform_name}-clang-{domain}-{arch}"
 
 
-def default_build_preset_name(platform_name: str, domain: str, config: str) -> str:
+def default_build_preset_name(platform_name: str, domain: str, config: str, arch: str = "x64") -> str:
+    arch_suffix = "" if arch == "x64" else f"-{arch}"
     if domain == DEFAULT_DOMAIN:
-        return f"{platform_name}-clang-{config}"
-    return f"{platform_name}-clang-{domain}-{config}"
+        return f"{platform_name}-clang{arch_suffix}-{config}"
+    return f"{platform_name}-clang-{domain}{arch_suffix}-{config}"
 
 
 def default_build_dir(root: Path, platform_name: str, domain: str, arch: str) -> Path:
@@ -438,7 +452,12 @@ def resolve_repo_root(value: Optional[Path]) -> Path:
 def resolve_launch_settings(args, default_domain: str) -> LaunchSettings:
     root = resolve_repo_root(args.repo_root)
     platform_name = args.platform
-    arch = args.arch
+    preset_arch = configure_preset_architecture(args.configure_preset) if args.configure_preset else None
+    if args.arch and preset_arch and args.arch != preset_arch:
+        raise SystemExit(
+            f"--arch {args.arch} conflicts with configure preset '{args.configure_preset}' ({preset_arch})"
+        )
+    arch = args.arch or preset_arch or (host_arch_name() if platform_name == "windows" else "x64")
     if args.configure_preset:
         configure_preset = args.configure_preset
         build_dir = args.build_dir or root / "__cmake" / "build" / configure_preset
@@ -877,7 +896,11 @@ def list_profiles_command(args) -> int:
 def add_build_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--repo-root", type=Path, help="Repository root. Defaults to the directory containing launcher.py.")
     parser.add_argument("--platform", default=host_platform_name(), help="Output platform directory, such as windows/linux/darwin.")
-    parser.add_argument("--arch", default=DEFAULT_ARCH, help="Output architecture directory.")
+    parser.add_argument(
+        "--arch",
+        choices=SUPPORTED_ARCHITECTURES,
+        help="Target architecture. Defaults to the native architecture on Windows and x64 elsewhere.",
+    )
     parser.add_argument("--domain", help="Output domain directory. Defaults to full or the CMake cache.")
     parser.add_argument("--configure-preset", help="CMake configure preset. Defaults from platform/domain/arch.")
     parser.add_argument("--build-dir", type=Path, help="CMake build directory.")

@@ -93,10 +93,18 @@ inline VmaAllocationCreateInfo BuildHeapAllocationInfo(const HeapDesc& desc){
         break;
     case HeapType::Upload:
         allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        allocInfo.flags =
+            VMA_ALLOCATION_CREATE_MAPPED_BIT
+            | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
+        ;
         break;
     case HeapType::Readback:
         allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
         allocInfo.preferredFlags = VK_MEMORY_PROPERTY_HOST_CACHED_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        allocInfo.flags =
+            VMA_ALLOCATION_CREATE_MAPPED_BIT
+            | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
+        ;
         break;
     default:
         break;
@@ -111,12 +119,6 @@ inline VmaAllocationCreateInfo BuildHostMappedBufferAllocationInfo(){
         0,
         VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
     );
-}
-
-inline u32 BuildAllMemoryTypeBits(const VkPhysicalDeviceMemoryProperties& memoryProperties){
-    if(memoryProperties.memoryTypeCount >= s_VulkanMemoryTypeBitCount)
-        return UINT32_MAX;
-    return (1u << memoryProperties.memoryTypeCount) - 1u;
 }
 
 inline bool BuildRequiresInvalidate(const VkPhysicalDeviceMemoryProperties& memoryProperties, const u32 memoryTypeIndex){
@@ -242,8 +244,29 @@ inline void DestroyBufferAllocation(
 
 VulkanAllocator::VulkanAllocator(const VulkanContext& context)
     : m_context(context)
+    , m_bufferNativeIdentities(0u, Hasher<u64>(), EqualTo<u64>(), context.objectArena)
+    , m_textureNativeIdentities(0u, Hasher<VkImage>(), EqualTo<VkImage>(), context.objectArena)
 {}
 VulkanAllocator::~VulkanAllocator(){
+    usize registeredBufferCount = 0u;
+    {
+        ScopedLock lock(m_bufferNativeIdentityMutex);
+        registeredBufferCount = m_bufferNativeIdentities.size();
+    }
+    usize registeredTextureCount = 0u;
+    {
+        ScopedLock lock(m_textureNativeIdentityMutex);
+        registeredTextureCount = m_textureNativeIdentities.size();
+    }
+    if(registeredBufferCount != 0u || registeredTextureCount != 0u){
+        NWB_LOGGER_CRITICAL_WARNING(
+            NWB_TEXT("Vulkan: Allocator destruction found {} live Buffer and {} live Texture native identities")
+            , registeredBufferCount
+            , registeredTextureCount
+        );
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Buffer and Texture resources must not outlive their allocator"));
+    }
+
     if(m_allocator){
         vmaDestroyAllocator(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator));
         m_allocator = nullptr;
@@ -287,7 +310,7 @@ VkResult VulkanAllocator::createBuffer(Buffer& buffer, const VkBufferCreateInfo&
     if(!m_allocator)
         return VK_ERROR_INITIALIZATION_FAILED;
 
-    VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildBufferAllocationInfo(buffer.m_desc, bufferInfo.size);
+    VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildBufferAllocationInfo(buffer.m_creationDesc, bufferInfo.size);
     const VkResult res = __hidden_vulkan_allocator::CreateBufferAllocation(
         m_allocator,
         m_context.memoryProperties,
@@ -301,8 +324,8 @@ VkResult VulkanAllocator::createBuffer(Buffer& buffer, const VkBufferCreateInfo&
     if(res == VK_SUCCESS){
         buffer.m_persistentlyMapped = buffer.m_mappedMemory != nullptr;
 #if defined(NWB_DEBUG)
-        if(buffer.m_desc.debugName)
-            vmaSetAllocationName(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), __hidden_vulkan_allocator::ToVmaAllocation(buffer.m_allocation), buffer.m_desc.debugName.logText());
+        if(buffer.m_creationDesc.debugName)
+            vmaSetAllocationName(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), __hidden_vulkan_allocator::ToVmaAllocation(buffer.m_allocation), buffer.m_creationDesc.debugName.logText());
 #endif
     }
     return res;
@@ -351,8 +374,12 @@ VkResult VulkanAllocator::createTexture(Texture& texture, const VkImageCreateInf
     if(res == VK_SUCCESS){
         texture.m_allocation = __hidden_vulkan_allocator::ToVulkanAllocationHandle(allocation);
 #if defined(NWB_DEBUG)
-        if(texture.m_desc.name)
-            vmaSetAllocationName(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), allocation, texture.m_desc.name.logText());
+        if(texture.m_creationDesc.name)
+            vmaSetAllocationName(
+                __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
+                allocation,
+                texture.m_creationDesc.name.logText()
+            );
 #endif
     }
     return res;
@@ -393,9 +420,13 @@ VkResult VulkanAllocator::createStagingTexture(
         texture.m_mappedMemory,
         &texture.m_requiresInvalidate
     );
-    if(res == VK_SUCCESS)
-        texture.m_persistentlyMapped = texture.m_mappedMemory != nullptr;
-    return res;
+    if(res != VK_SUCCESS)
+        return res;
+    if(texture.m_mappedMemory)
+        return VK_SUCCESS;
+
+    destroyStagingTexture(texture);
+    return VK_ERROR_MEMORY_MAP_FAILED;
 }
 
 void VulkanAllocator::destroyStagingTexture(StagingTexture& texture){
@@ -404,18 +435,9 @@ void VulkanAllocator::destroyStagingTexture(StagingTexture& texture){
         texture.m_buffer,
         texture.m_allocation,
         texture.m_mappedMemory,
-        texture.m_persistentlyMapped
+        true
     );
-    texture.m_persistentlyMapped = false;
     texture.m_requiresInvalidate = false;
-}
-
-VkResult VulkanAllocator::mapStagingTextureMemory(StagingTexture& texture, void** outData){
-    return __hidden_vulkan_allocator::MapAllocation(m_allocator, texture.m_allocation, outData);
-}
-
-void VulkanAllocator::unmapStagingTextureMemory(StagingTexture& texture){
-    __hidden_vulkan_allocator::UnmapAllocation(m_allocator, texture.m_allocation);
 }
 
 VkResult VulkanAllocator::invalidateStagingTextureMemory(StagingTexture& texture, const u64 offset, const u64 size){
@@ -431,7 +453,15 @@ VkResult VulkanAllocator::allocateHeap(Heap& heap){
     VkMemoryRequirements memRequirements{};
     memRequirements.size = heap.m_desc.capacity;
     memRequirements.alignment = Max<VkDeviceSize>(m_context.physicalDeviceProperties.limits.bufferImageGranularity, 1u);
-    memRequirements.memoryTypeBits = __hidden_vulkan_allocator::BuildAllMemoryTypeBits(m_context.memoryProperties);
+    if(heap.m_desc.type == HeapType::Readback){
+        memRequirements.alignment = Max<VkDeviceSize>(
+            memRequirements.alignment,
+            m_context.physicalDeviceProperties.limits.nonCoherentAtomSize
+        );
+    }
+    memRequirements.memoryTypeBits = VulkanDetail::BuildNonProtectedMemoryTypeBits(m_context.memoryProperties);
+    if(memRequirements.memoryTypeBits == 0u)
+        return VK_ERROR_FEATURE_NOT_PRESENT;
 
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildHeapAllocationInfo(heap.m_desc);
     VmaAllocationInfo allocationInfo{};
@@ -449,6 +479,15 @@ VkResult VulkanAllocator::allocateHeap(Heap& heap){
         heap.m_memory = allocationInfo.deviceMemory;
         heap.m_memoryOffset = allocationInfo.offset;
         heap.m_memoryTypeIndex = allocationInfo.memoryType;
+        heap.m_mappedMemory = allocationInfo.pMappedData;
+        heap.m_requiresInvalidate =
+            heap.m_desc.type == HeapType::Readback
+            && __hidden_vulkan_allocator::BuildRequiresInvalidate(m_context.memoryProperties, allocationInfo.memoryType)
+        ;
+        if(heap.m_desc.type != HeapType::DeviceLocal && !heap.m_mappedMemory){
+            freeHeap(heap);
+            return VK_ERROR_MEMORY_MAP_FAILED;
+        }
     }
 
     return res;
@@ -465,6 +504,16 @@ void VulkanAllocator::freeHeap(Heap& heap){
     heap.m_memory = VK_NULL_HANDLE;
     heap.m_memoryOffset = 0;
     heap.m_memoryTypeIndex = UINT32_MAX;
+    heap.m_mappedMemory = nullptr;
+    heap.m_requiresInvalidate = false;
+}
+
+VkResult VulkanAllocator::invalidateHeapMemory(Heap& heap, const u64 offset, const u64 size){
+    if(!heap.m_allocation || !heap.m_mappedMemory)
+        return VK_ERROR_MEMORY_MAP_FAILED;
+    if(!heap.m_requiresInvalidate)
+        return VK_SUCCESS;
+    return __hidden_vulkan_allocator::InvalidateAllocation(m_allocator, heap.m_allocation, offset, size);
 }
 
 VkResult VulkanAllocator::bindHeapBufferMemory(Buffer& buffer, Heap& heap, const u64 offset){
@@ -515,6 +564,66 @@ VkResult VulkanAllocator::createHostMappedBuffer(
 
 void VulkanAllocator::destroyHostMappedBuffer(VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory){
     __hidden_vulkan_allocator::DestroyBufferAllocation(m_allocator, buffer, allocation, mappedMemory, true);
+}
+
+bool VulkanAllocator::tryRegisterBufferNativeIdentity(Buffer& buffer){
+    if(buffer.m_buffer == VK_NULL_HANDLE)
+        return false;
+
+    const u64 nativeIdentity = Object(buffer.m_buffer).integer;
+    ScopedLock lock(m_bufferNativeIdentityMutex);
+    return m_bufferNativeIdentities.emplace(nativeIdentity, &buffer).second;
+}
+
+void VulkanAllocator::unregisterBufferNativeIdentity(const VkBuffer nativeBuffer, Buffer& buffer)noexcept{
+    if(nativeBuffer == VK_NULL_HANDLE)
+        return;
+
+    const u64 nativeIdentity = Object(nativeBuffer).integer;
+    ScopedLock lock(m_bufferNativeIdentityMutex);
+    const auto found = m_bufferNativeIdentities.find(nativeIdentity);
+    if(found != m_bufferNativeIdentities.end() && found.value() == &buffer)
+        m_bufferNativeIdentities.erase(found);
+}
+
+bool VulkanAllocator::isBufferNativeIdentityRegistered(const Buffer& buffer)const noexcept{
+    if(buffer.m_buffer == VK_NULL_HANDLE)
+        return false;
+
+    const u64 nativeIdentity = Object(buffer.m_buffer).integer;
+    ScopedLock lock(m_bufferNativeIdentityMutex);
+    const auto found = m_bufferNativeIdentities.find(nativeIdentity);
+    return found != m_bufferNativeIdentities.end() && found.value() == &buffer;
+}
+
+bool VulkanAllocator::tryRegisterTextureNativeIdentity(Texture& texture){
+    if(texture.m_image == VK_NULL_HANDLE)
+        return false;
+
+    ScopedLock lock(m_textureNativeIdentityMutex);
+    return m_textureNativeIdentities.emplace(texture.m_image, &texture).second;
+}
+
+void VulkanAllocator::unregisterTextureNativeIdentity(const VkImage nativeImage, Texture& texture)noexcept{
+    if(nativeImage == VK_NULL_HANDLE)
+        return;
+
+    ScopedLock lock(m_textureNativeIdentityMutex);
+    const auto found = m_textureNativeIdentities.find(nativeImage);
+    if(found != m_textureNativeIdentities.end() && found.value() == &texture)
+        m_textureNativeIdentities.erase(found);
+}
+
+bool VulkanAllocator::isTextureNativeIdentityRegistered(
+    const VkImage nativeImage,
+    const Texture& texture
+)const noexcept{
+    if(nativeImage == VK_NULL_HANDLE)
+        return false;
+
+    ScopedLock lock(m_textureNativeIdentityMutex);
+    const auto found = m_textureNativeIdentities.find(nativeImage);
+    return found != m_textureNativeIdentities.end() && found.value() == &texture;
 }
 
 

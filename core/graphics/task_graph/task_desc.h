@@ -30,6 +30,9 @@ struct GpuTaskRecordContext;
 // producer becomes an in-graph packet, and avoids renderer-owned packet-specific record overrides.
 struct GpuTaskExternalStateSource{
     const CommandListResourceStateHandoff* states = nullptr;
+    // This predicate is evaluated after queue assignment and never constrains routing. kCount keeps the snapshot
+    // applicable to every consumer queue class.
+    CommandQueue::Enum applicableConsumerQueueClass = CommandQueue::kCount;
 };
 
 // Typed task payloads are stored in graph-owned memory, while these static thunks let the packet recorder invoke
@@ -63,8 +66,13 @@ struct GpuTaskSchedulingHint{
     bool allowMergeAcrossConsumerFrontier = false;
     // A late recovery/finalization packet must wait for the latest accepted work on every other physical queue.
     // The compiler preserves it as a separate packet and the submitter derives those waits from the graph-owned
-    // submission transaction; callers do not assemble a queue-class token ladder.
+    // submission transaction; callers do not assemble a queue-class token ladder. It may use no resource or only
+    // HazardDomains, and may have outgoing task edges, but it cannot have an incoming task/external dependency,
+    // an external state source, or a concrete Texture/Buffer/AccelStruct use.
     bool joinsAcceptedQueueFrontier = false;
+    // Identifies a true partial-submission recovery packet within the broader recovery/finalization frontier class.
+    // Recovery must also join the accepted queue frontier and is counted only after native submission acceptance.
+    bool isRecoverySubmission = false;
     // Recording stays serial unless every task in a packet explicitly opts in.  An opt-in record thunk may run on a
     // worker concurrently with other opt-in packets from the same compiler-derived ready frontier, so it must not
     // mutate shared CPU state or rely on thread-affine APIs. Submission remains in compiler order.
@@ -81,11 +89,48 @@ struct GpuTaskSchedulingHint{
     // serial same-class chains (for example, multi-mip uploads): the first task may offload, while later tasks stay
     // with it instead of creating avoidable timeline/ownership crossings at every stage.
     bool preserveSameClassQueueWithDirectDependency = false;
-    // Extends the same-class opt-in to a physical queue from another Vulkan family. This remains separately opt-in
-    // because exclusive resource uses cross that boundary through compiler-owned release/acquire ownership pairs.
-    // It has no effect unless allowSameClassQueueRouting is also set.
+    // Extends physical routing to another Vulkan family. This remains separately opt-in because exclusive resource
+    // uses cross that boundary through compiler-owned release/acquire ownership pairs. Same-class routing still
+    // requires allowSameClassQueueRouting; cross-class timing also requires its stronger opt-in below.
     bool allowCrossFamilySameClassQueueRouting = false;
+    // Enables timing-history routing and bounded calibration for this task. This is separate from ordinary
+    // same-class routing so an application can keep historical measurement scoped to a small, proven-safe subset.
+    // Another Vulkan family additionally requires allowCrossFamilySameClassQueueRouting, preserving a deliberate
+    // dual opt-in before the compiler plans any ownership-transfer route.
+    bool allowTimingFeedbackRouting = false;
+    // Extends timing feedback to another queue class that the queue request and resource declarations already
+    // permit. This never relaxes required capabilities or a strict concrete preference; it only lets accepted,
+    // class-specific history replace an otherwise legal static Graphics/Compute/Transfer placement.
+    bool allowCrossClassTimingFeedbackRouting = false;
+    // FrontierScored automatic coalescing requires this nonempty domain to match every task already in the
+    // preceding packet. Empty domains are never scored-merge eligible; explicit mergeWithPrevious ignores it.
+    Name frontierScoredMergeDomain = {};
 };
+
+namespace GpuTaskTimingPolicy{
+    enum Enum : u8{
+        None,
+        PacketOnly,
+        Task,
+
+        kCount,
+    };
+};
+
+// Optional dimensions for immutable timing-history keys. Variant distinguishes compatible task implementations;
+// resolutionClass groups a renderer-defined resolution bucket or exact target extent. Policy selects graph-owned
+// packet/task query scopes and defaults to None so existing manually timed declarations remain unchanged.
+struct GpuTaskTimingMetadata{
+    u32 variant = 0u;
+    u32 resolutionClass = 0u;
+    GpuTaskTimingPolicy::Enum policy = GpuTaskTimingPolicy::None;
+};
+
+// Packet timing identities are derived from the first semantic task rather than compiler packet IDs, preserving
+// one stable telemetry key when an equivalent graph is recompiled into a new plan generation.
+[[nodiscard]] inline Name GpuTaskPacketTimingScopeName(const Name& firstTaskIdentity){
+    return DeriveName(firstTaskIdentity, AStringView(".packet"));
+}
 
 // One immutable external ownership source for an imported texture range. Multiple sources let a later graph consume
 // a prior graph's disjoint terminal texture exports without collapsing them into one fake physical owner. Every
@@ -111,6 +156,8 @@ struct GpuGraphResourceDesc{
     GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
     // Compiler-generated packet-boundary transitions begin from this state. Unknown remains valid only while a
     // transitional CommandListResourceStateHandoff supplies the authoritative imported state at recording time.
+    // Typed imports inherit their resource descriptor state only when this field was left unspecified; an explicit
+    // Unknown preserves Vulkan's fresh-resource UNDEFINED origin for the graph's first writer.
     ResourceStates::Mask initialState = ResourceStates::Unknown;
     // Optional required state when graph work completes. The compiler applies this to every terminal range the
     // graph declared for an imported texture, buffer, or acceleration structure and publishes it in the accepted
@@ -131,22 +178,29 @@ struct GpuGraphResourceDesc{
     // consumer packet.
     GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
     GpuExternalCompletionId initialOwnerCompletion;
+    // The bound completion may advance on the same source queue, but it must never precede this release token.
+    // This makes the legacy whole-resource handoff as race-safe as the texture multi-source form above.
+    QueueSubmissionToken initialOwnerMinimumCompletionToken;
     const CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
     // Texture-only multi-producer companion to the single-owner fields above. Sources must be non-overlapping and
     // must not be mixed with those legacy fields; the graph copies every state source at declaration time.
     const GpuGraphInitialOwnerHandoffSourceDesc* initialOwnerHandoffSources = nullptr;
     usize initialOwnerHandoffSourceCount = 0u;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+    // Appended so positional aggregate initializers retain their existing field layout. Prefer setInitialState()
+    // whenever Unknown is intended as an explicit physical initial state rather than an unspecified default.
+    bool hasExplicitInitialState = false;
 
     constexpr GpuGraphResourceDesc& setIdentity(const Name& value){ identity = value; return *this; }
     constexpr GpuGraphResourceDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
     constexpr GpuGraphResourceDesc& setType(const GpuGraphResourceType::Enum value){ type = value; return *this; }
-    constexpr GpuGraphResourceDesc& setInitialState(const ResourceStates::Mask value){ initialState = value; return *this; }
+    constexpr GpuGraphResourceDesc& setInitialState(const ResourceStates::Mask value){ initialState = value; hasExplicitInitialState = true; return *this; }
     constexpr GpuGraphResourceDesc& setExternalFinalState(const ResourceStates::Mask value){ externalFinalState = value; return *this; }
     constexpr GpuGraphResourceDesc& setExternalFinalReleaseDestinationQueue(const GpuPhysicalQueueId value){ externalFinalReleaseDestinationQueue = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerQueue(const GpuPhysicalQueueId value){ initialOwnerQueue = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerReleaseDestinationQueue(const GpuPhysicalQueueId value){ initialOwnerReleaseDestinationQueue = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerCompletion(const GpuExternalCompletionId value){ initialOwnerCompletion = value; return *this; }
+    constexpr GpuGraphResourceDesc& setInitialOwnerMinimumCompletionToken(const QueueSubmissionToken& value){ initialOwnerMinimumCompletionToken = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerStateSource(const CommandListResourceStateHandoff* const value){ initialOwnerStateSource = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerHandoffSources(
         const GpuGraphInitialOwnerHandoffSourceDesc* const values,
@@ -157,6 +211,18 @@ struct GpuGraphResourceDesc{
         return *this;
     }
     constexpr GpuGraphResourceDesc& setQueueSharing(const ResourceQueueSharing::Mask value){ queueSharing = value; return *this; }
+};
+
+// A version identifies one semantic value of one exact physical resource range. Imported roots enter the graph
+// without an in-graph producer; task-produced versions require a producer declaration during compilation.
+struct GpuGraphResourceVersionDesc{
+    GpuGraphResourceId resource;
+    GpuTaskResourceRange range;
+    GpuGraphResourceVersionOrigin::Enum origin = GpuGraphResourceVersionOrigin::kCount;
+
+    constexpr GpuGraphResourceVersionDesc& setResource(const GpuGraphResourceId value){ resource = value; return *this; }
+    constexpr GpuGraphResourceVersionDesc& setRange(const GpuTaskResourceRange& value){ range = value; return *this; }
+    constexpr GpuGraphResourceVersionDesc& setOrigin(const GpuGraphResourceVersionOrigin::Enum value){ origin = value; return *this; }
 };
 
 // Resource sets retain graph resource IDs, not backend pointers. Their member list is copied into graph-owned
@@ -189,14 +255,17 @@ struct GpuGraphPipelineDesc{
     constexpr GpuGraphPipelineDesc& setType(const GpuGraphPipelineType::Enum value){ type = value; return *this; }
 };
 
-// Phase 1 represents prior-frame and other out-of-graph completions as named metadata nodes. It deliberately does
-// not make QueueSubmissionToken authoritative until the physical-queue and device-generation contracts arrive.
+// Prior-frame and other out-of-graph completions may retain the authoritative accepted native token directly in
+// graph-owned storage. An empty token preserves metadata-only declaration for compatibility callers that bind the
+// completion immediately before submission.
 struct GpuExternalCompletionDesc{
     Name identity = NAME_NONE;
     AStringView markerLabel;
+    QueueSubmissionToken token;
 
     constexpr GpuExternalCompletionDesc& setIdentity(const Name& value){ identity = value; return *this; }
     constexpr GpuExternalCompletionDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
+    constexpr GpuExternalCompletionDesc& setToken(const QueueSubmissionToken& value){ token = value; return *this; }
 };
 
 struct GpuTaskDesc{
@@ -214,6 +283,10 @@ struct GpuTaskDesc{
     usize resourceUseCount = 0u;
     const GpuTaskResourceSetUse* resourceSetUses = nullptr;
     usize resourceSetUseCount = 0u;
+    // Appended so positional aggregate initializers retain their existing field layout.
+    GpuTaskTimingMetadata timing;
+    const GpuTaskResourceVersionUse* resourceVersionUses = nullptr;
+    usize resourceVersionUseCount = 0u;
 
     constexpr GpuTaskDesc& setIdentity(const Name& value){ identity = value; return *this; }
     constexpr GpuTaskDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
@@ -238,6 +311,12 @@ struct GpuTaskDesc{
     constexpr GpuTaskDesc& setResourceSetUses(const GpuTaskResourceSetUse* values, const usize count){
         resourceSetUses = values;
         resourceSetUseCount = count;
+        return *this;
+    }
+    constexpr GpuTaskDesc& setTimingMetadata(const GpuTaskTimingMetadata& value){ timing = value; return *this; }
+    constexpr GpuTaskDesc& setResourceVersionUses(const GpuTaskResourceVersionUse* values, const usize count){
+        resourceVersionUses = values;
+        resourceVersionUseCount = count;
         return *this;
     }
 };
@@ -269,6 +348,22 @@ struct GpuCopyTextureTaskRegion{
 
 struct GpuCopyTextureTaskDesc{
     const GpuCopyTextureTaskRegion* regions = nullptr;
+    usize regionCount = 0u;
+    // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
+    QueueSubmissionToken* acceptedToken = nullptr;
+};
+
+// Resolve operations are task-level primitives with explicit source/destination state declarations. The helper
+// retains both textures until late recording and records directly through CommandList after queue assignment.
+struct GpuResolveTextureTaskRegion{
+    GpuGraphResourceId source;
+    TextureSubresourceSet sourceSubresources = s_AllSubresources;
+    GpuGraphResourceId destination;
+    TextureSubresourceSet destinationSubresources = s_AllSubresources;
+};
+
+struct GpuResolveTextureTaskDesc{
+    const GpuResolveTextureTaskRegion* regions = nullptr;
     usize regionCount = 0u;
     // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
     QueueSubmissionToken* acceptedToken = nullptr;

@@ -48,6 +48,7 @@ struct VulkanPhysicalQueueDesc{
     GpuQueueCapability::Mask capabilities = GpuQueueCapability::None;
     u32 familyIndex = Limit<u32>::s_Max;
     u32 queueIndex = 0u;
+    u32 timestampValidBits = 0u;
     bool dedicated = false;
     bool primaryForClass = false;
 };
@@ -57,21 +58,7 @@ struct DeviceDesc{
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device = VK_NULL_HANDLE;
 
-    // Queue handles grouped together, then their integer indices packed back-to-back, to avoid the
-    // 4-byte padding that an interleaved handle/index layout would otherwise introduce between each pair.
-    VkQueue graphicsQueue = VK_NULL_HANDLE;
-    VkQueue computeQueue = VK_NULL_HANDLE;
-    VkQueue transferQueue = VK_NULL_HANDLE;
-    i32 graphicsQueueIndex = s_InvalidQueueFamilyIndex;
-    i32 computeQueueIndex = s_InvalidQueueFamilyIndex;
-    i32 transferQueueIndex = s_InvalidQueueFamilyIndex;
-    // True only when the renderer requested AsyncCompute and a distinct dedicated Compute family was created.
-    bool asyncComputeLaneEnabled = false;
-    // True only when the renderer requested Transfer and a distinct dedicated transfer-only family was created.
-    bool transferQueueEnabled = false;
-
-    // Preferred native registry input. Existing grouped fields above remain as a source-compatible fallback for
-    // older creation code; new creation paths should enumerate every active VkQueue here.
+    // Required native registry input, synchronously consumed by CreateDevice. Enumerate every active VkQueue here.
     const VulkanPhysicalQueueDesc* physicalQueues = nullptr;
     usize physicalQueueCount = 0u;
 
@@ -88,10 +75,19 @@ struct DeviceDesc{
 
     // Indicates if VkPhysicalDeviceVulkan12Features::bufferDeviceAddress was set to 'true' at device creation time
     bool bufferDeviceAddressSupported = false;
+    // Retains the texture-compression features enabled through vkCreateDevice.
+    bool textureCompressionBcFeatureEnabled = false;
+    bool textureCompressionAstcLdrFeatureEnabled = false;
+    bool textureCompressionAstcHdrFeatureEnabled = false;
     // Indicates if dynamic rendering was enabled at device creation time (via Vulkan 1.3 core or KHR extension)
     bool dynamicRenderingSupported = false;
     // Indicates if synchronization2 was enabled at device creation time (via Vulkan 1.3 core or KHR extension)
     bool synchronization2Supported = false;
+    bool independentBlendFeatureEnabled = false;
+    bool fullDrawIndexUint32FeatureEnabled = false;
+    bool multiDrawIndirectFeatureEnabled = false;
+    bool drawIndirectFirstInstanceFeatureEnabled = false;
+    bool meshShaderFeatureEnabled = false;
     // Enabled feature-chain state for optional ray-tracing capabilities.  Keep this distinct from extension-name
     // presence so runtime feature queries do not advertise an extension whose required feature bit was not enabled.
     bool accelerationStructureFeatureEnabled = false;

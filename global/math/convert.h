@@ -5,10 +5,10 @@
 #pragma once
 
 
+#include "../bit.h"
+
 #include "type.h"
 #include "constant.h"
-
-#include <bit>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,7 +55,7 @@ inline constexpr int s_F16CNearestRoundingControl = 0;
 
 
 [[nodiscard]] NWB_INLINE Half FloatToHalfScalar(const f32 value)noexcept{
-    u32 bits = std::bit_cast<u32>(value);
+    u32 bits = BitCast<u32>(value);
     const u32 sign = (bits & s_F32SignBitMask) >> s_F32ToF16SignBitShift;
     bits &= s_F32AbsoluteBitMask;
 
@@ -105,7 +105,7 @@ inline constexpr int s_F16CNearestRoundingControl = 0;
     const u32 result = ((static_cast<u32>(value) & s_F16SignBitMask) << s_F32ToF16SignBitShift)
         | (static_cast<u32>(exponent + s_F32ToF16ExponentBiasDelta) << s_F32MantissaBitCount)
         | (mantissa << s_F32ToF16MantissaShift);
-    return std::bit_cast<f32>(result);
+    return BitCast<f32>(result);
 }
 
 #if defined(NWB_HAS_F16C)
@@ -198,7 +198,7 @@ template<u32 MANTISSA_BIT_COUNT>
     static_assert(MANTISSA_BIT_COUNT > 0u, "Unsigned floating-point values need a mantissa");
     static_assert(MANTISSA_BIT_COUNT <= UnsignedFloatConvertDetail::s_MaxMantissaBitCount, "Unsupported unsigned floating-point mantissa width");
 
-    u32 bits = std::bit_cast<u32>(value);
+    u32 bits = BitCast<u32>(value);
     const u32 absBits = bits & UnsignedFloatConvertDetail::s_F32AbsoluteBitMask;
     const u32 targetInf = UnsignedFloatConvertDetail::s_ExponentFieldMask << MANTISSA_BIT_COUNT;
     const u32 targetMantissaMask = (1u << MANTISSA_BIT_COUNT) - 1u;
@@ -680,7 +680,7 @@ NWB_INLINE SIMDMatrix SIMDCALL LoadFloat(const Float33U& src)noexcept{
 #elif defined (NWB_HAS_NEON)
     float32x4_t v0 = vld1q_f32(&src.m[0][0]);
     float32x4_t v1 = vld1q_f32(&src.m[1][1]);
-    float32x2_t v2 = vcreate_f32(static_cast<u64>(*reinterpret_cast<const u32*>(&src.m[2][2])));
+    float32x2_t v2 = vcreate_f32(static_cast<u64>(BitCast<u32>(src.m[2][2])));
     float32x4_t T = vextq_f32(v0, v1, 3);
 
     SIMDMatrix M;

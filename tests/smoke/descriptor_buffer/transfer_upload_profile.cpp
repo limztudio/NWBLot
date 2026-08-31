@@ -843,13 +843,13 @@ static void EmitResult(const Result& result){
     return finish(0);
 }
 
-[[nodiscard]] static int EntryPoint(const isize argc, char** argv, void*){
-    return Run(static_cast<int>(argc), argv);
-}
-
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_UNICODE)
 [[nodiscard]] static int EntryPoint(const isize argc, wchar** argv, void*){
     return Core::Common::ApplicationEntryDetail::InvokeWithUtf8Args(argc, argv, Run);
+}
+#else
+[[nodiscard]] static int EntryPoint(const isize argc, char** argv, void*){
+    return Run(static_cast<int>(argc), argv);
 }
 #endif
 

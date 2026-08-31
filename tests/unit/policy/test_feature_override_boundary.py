@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep the retired final-build test-feature escape hatch out of production code."""
+"""Keep retired mutable feature-support test seams out of production code."""
 
 from __future__ import annotations
 
@@ -9,22 +9,34 @@ from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-TEST_OVERRIDE = "NWB_ENABLE_TEST_FEATURE_OVERRIDES"
+FORBIDDEN_TOKENS = (
+    "NWB_ENABLE_TEST_FEATURE_OVERRIDES",
+    "setFeatureSupportDisabledForTesting",
+    "clearFeatureSupportDisabledForTesting",
+    "m_disabledFeatureSupportMask",
+    "NWB_TESTBED_FORCE_RAYTRACING_EMULATION",
+)
 SKIPPED_DIRECTORIES = frozenset((
     ".cozter",
     ".git",
+    ".idea",
     "3rd_parties",
+    "__artifacts",
     "__build_obj",
     "__cmake",
+    "__exec",
+    "__pycache__",
+    "cmake-build-debug",
     "tests",
 ))
 
 
-def token_lines(source: str) -> tuple[int, ...]:
+def token_occurrences(source: str) -> tuple[tuple[int, str], ...]:
     return tuple(
-        line_number
+        (line_number, token)
         for line_number, line in enumerate(source.splitlines(), start=1)
-        if TEST_OVERRIDE in line
+        for token in FORBIDDEN_TOKENS
+        if token in line
     )
 
 
@@ -48,21 +60,33 @@ def find_violations(source_root: Path) -> list[str]:
     violations: list[str] = []
     for path in production_files(source_root):
         source = path.read_text(encoding="utf-8", errors="replace")
-        for line_number in token_lines(source):
-            violations.append(f"{path.relative_to(source_root)}:{line_number}: {TEST_OVERRIDE}")
+        for line_number, token in token_occurrences(source):
+            violations.append(f"{path.relative_to(source_root)}:{line_number}: {token}")
     return violations
 
 
 def run_self_test() -> int:
     cases = (
         ("empty", "", ()),
-        ("one reference", f"#if defined({TEST_OVERRIDE})\n#endif", (1,)),
-        ("comment reference", f"// {TEST_OVERRIDE}", (1,)),
-        ("multiline", f"first\n{TEST_OVERRIDE}\nlast", (2,)),
+        (
+            "one reference",
+            f"#if defined({FORBIDDEN_TOKENS[0]})\n#endif",
+            ((1, FORBIDDEN_TOKENS[0]),),
+        ),
+        (
+            "comment reference",
+            f"// {FORBIDDEN_TOKENS[1]}",
+            ((1, FORBIDDEN_TOKENS[1]),),
+        ),
+        (
+            "multiple references",
+            f"{FORBIDDEN_TOKENS[2]}\nclean\n{FORBIDDEN_TOKENS[3]}",
+            ((1, FORBIDDEN_TOKENS[2]), (3, FORBIDDEN_TOKENS[3])),
+        ),
     )
     failed = False
     for name, source, expected in cases:
-        actual = token_lines(source)
+        actual = token_occurrences(source)
         if actual != expected:
             print(f"{name}: expected {expected}, got {actual}", file=sys.stderr)
             failed = True
@@ -76,7 +100,7 @@ def main() -> int:
     source_root = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else REPOSITORY_ROOT
     violations = find_violations(source_root)
     if violations:
-        print("NWB_ENABLE_TEST_FEATURE_OVERRIDES is test-only and must not appear outside tests/.", file=sys.stderr)
+        print("Mutable GPU feature-support test seams must not appear outside tests/.", file=sys.stderr)
         print("\n".join(violations), file=sys.stderr)
         return 1
     return 0

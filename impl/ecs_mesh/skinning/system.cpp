@@ -78,14 +78,14 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Run
     return request;
 }
 
-[[nodiscard]] static Core::GpuTaskSchedulingHint JointPaletteUploadScheduling(const bool mergeWithPrevious){
+[[nodiscard]] static Core::GpuTaskSchedulingHint JointPaletteUploadScheduling(){
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
     scheduling.overlapPreferred = false;
     scheduling.avoidQueueCrossing = true;
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
-    scheduling.mergeWithPrevious = mergeWithPrevious;
+    scheduling.frontierScoredMergeDomain = Name("mesh_skinning.serial");
     return scheduling;
 }
 
@@ -107,10 +107,9 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Run
     scheduling.avoidQueueCrossing = true;
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
-    scheduling.mergeWithPrevious = true;
+    scheduling.frontierScoredMergeDomain = Name("mesh_skinning.serial");
     return scheduling;
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -323,12 +322,6 @@ bool MeshSkinningSystem::replaceAcceptedSkinningState(const Core::CommandListRes
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> liveBuffers(m_arena);
     collectLiveSkinningStateBuffers(liveBuffers);
     return m_acceptedSkinningState.replaceBufferSubset(state, liveBuffers.data(), liveBuffers.size());
-}
-
-bool MeshSkinningSystem::mergeAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state){
-    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> liveBuffers(m_arena);
-    collectLiveSkinningStateBuffers(liveBuffers);
-    return m_acceptedSkinningState.mergeBufferSubset(state, liveBuffers.data(), liveBuffers.size());
 }
 
 
@@ -622,7 +615,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             const auto importBuffer = [&](const Core::BufferHandle& buffer, const AStringView label){
                 if(!buffer)
                     return Core::GpuGraphResourceId{};
-                const Core::BufferDesc& description = buffer->getDescription();
+                const Core::BufferDesc& description = buffer->getCreationDescription();
                 if(!description.debugName)
                     return Core::GpuGraphResourceId{};
                 return graph.importBuffer(
@@ -758,7 +751,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                     .setIdentity(uploadIdentity)
                     .setMarkerLabel("Skinning Bindless Slots Upload")
                     .setQueue(__hidden_system::JointPaletteUploadQueueRequest())
-                    .setScheduling(__hidden_system::JointPaletteUploadScheduling(terminalTask.valid()))
+                    .setScheduling(__hidden_system::JointPaletteUploadScheduling())
                 ;
                 if(terminalTask.valid())
                     selectorUploadDesc.setDependencies(&terminalTask, 1u);
@@ -823,7 +816,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                     ))
                     .setMarkerLabel("Skinning Rest-to-Skinned Copy")
                     .setQueue(__hidden_system::JointPaletteUploadQueueRequest())
-                    .setScheduling(__hidden_system::JointPaletteUploadScheduling(terminalTask.valid()))
+                    .setScheduling(__hidden_system::JointPaletteUploadScheduling())
                 ;
                 if(!copyDesc.identity){
                     NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive graph identity for rest-to-skinned copy"));
@@ -879,7 +872,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                     ))
                     .setMarkerLabel("Skinning Joint Palette Upload")
                     .setQueue(__hidden_system::JointPaletteUploadQueueRequest())
-                    .setScheduling(__hidden_system::JointPaletteUploadScheduling(terminalTask.valid()))
+                    .setScheduling(__hidden_system::JointPaletteUploadScheduling())
                 ;
                 if(!jointPaletteUploadDesc.identity){
                     NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive graph identity for joint palette upload"));
@@ -1129,7 +1122,9 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     Core::GpuRecordedGraph recordedGraph(m_arena);
     Core::GpuGraphSubmissionTransaction transaction(m_arena);
     const Core::GpuTaskGraphCompiler compiler;
-    if(!compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena)){
+    Core::GpuTaskGraphCompileOptions compileOptions;
+    compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierScored;
+    if(!compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to compile graph-owned skinning work"));
         return false;
     }
@@ -1147,29 +1142,67 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     }
 
     transaction.reset(compiledGraph);
-    const Core::GpuNativePacketRecorder recorder(device);
-    if(!recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
-        recordedGraph
-    )){
-        transaction.discardUnaccepted(graph, compiledGraph);
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to record graph-owned skinning work"));
-        return false;
-    }
-
-    const Core::CommandListResourceStateHandoff* const finalStates = recordedGraph.taskFinalStateSeed(
-        compiledGraph,
-        terminalTask
-    );
-    if(!finalStates){
-        transaction.discardUnaccepted(graph, compiledGraph);
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain graph-owned skinning frame state"));
-        return false;
-    }
+    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> liveBuffers(m_arena);
+    collectLiveSkinningStateBuffers(liveBuffers);
+    Core::GpuPersistentResourceStateCache::Candidate acceptedStateCandidate(m_arena);
+    struct SkinningStateContext{
+        Core::GpuPersistentResourceStateCache* cache = nullptr;
+        Core::GpuPersistentResourceStateCache::Candidate* candidate = nullptr;
+        const Core::BufferHandle* buffers = nullptr;
+        usize bufferCount = 0u;
+        bool preparationInvoked = false;
+        bool statePrepared = false;
+        bool stateAccepted = false;
+    } skinningState{
+        .cache = &m_acceptedSkinningState,
+        .candidate = &acceptedStateCandidate,
+        .buffers = liveBuffers.data(),
+        .bufferCount = liveBuffers.size(),
+    };
+    const auto prepareSkinningState = [](
+        void* const rawContext,
+        const Core::CommandListResourceStateHandoff* const finalState
+    ) -> bool {
+        SkinningStateContext* const context = static_cast<SkinningStateContext*>(rawContext);
+        if(!context)
+            return false;
+        context->preparationInvoked = true;
+        if(
+            !context->cache
+            || !context->candidate
+            || !finalState
+            || (context->bufferCount != 0u && !context->buffers)
+        )
+            return false;
+        context->statePrepared = context->cache->buildMergedBufferSubset(
+            *context->candidate,
+            *finalState,
+            context->buffers,
+            context->bufferCount
+        );
+        return context->statePrepared;
+    };
+    const Core::GpuTaskGraphTaskRecordedCallback recordedCallback{
+        .task = terminalTask,
+        .context = &skinningState,
+        .invoke = prepareSkinningState,
+    };
+    const auto acceptSkinningTask = [](
+        void* const rawContext,
+        const Core::QueueSubmissionToken& token
+    ) -> bool {
+        static_cast<void>(token);
+        SkinningStateContext* const context = static_cast<SkinningStateContext*>(rawContext);
+        if(!context || !context->cache || !context->candidate || !context->statePrepared)
+            return false;
+        context->stateAccepted = context->cache->commit(*context->candidate);
+        return context->stateAccepted;
+    };
+    const Core::GpuTaskGraphTaskAcceptedCallback acceptedCallback{
+        .task = terminalTask,
+        .context = &skinningState,
+        .invoke = acceptSkinningTask,
+    };
 
     const Core::GpuTaskGraphTaskTimingTicket timingTickets[] = {
         Core::GpuTaskGraphTaskTimingTicket{
@@ -1177,33 +1210,48 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             .timingTicket = &timingTicket,
         },
     };
+    Core::GpuTaskGraphNormalExecutionDesc normalExecution;
+    normalExecution.taskRecordedCallbacks = &recordedCallback;
+    normalExecution.taskRecordedCallbackCount = 1u;
+    normalExecution.taskTimingTickets = timingTickets;
+    normalExecution.taskTimingTicketCount = LengthOf(timingTickets);
+    normalExecution.taskAcceptedCallbacks = &acceptedCallback;
+    normalExecution.taskAcceptedCallbackCount = 1u;
+    const Core::GpuNativePacketRecorder recorder(device);
     const Core::GpuTaskGraphSubmitter submitter(device);
-    if(!submitter.submitPacketRangeInCompileOrderFromTasks(
+    const bool skinningSubmitted = submitter.recordAndSubmitNormalGraph(
         graph,
         compiledGraph,
+        recorder,
         recordedGraph,
-        compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
-        timingTickets,
-        LengthOf(timingTickets),
+        normalExecution,
         transaction,
         scratchArena
-    )){
-        transaction.discardUnaccepted(graph, compiledGraph);
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning submission was rejected"));
-        return false;
-    }
-
+    );
     const Core::QueueSubmissionToken skinningToken = transaction.taskToken(compiledGraph, terminalTask);
-    if(!skinningToken.valid() || !skinningToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning submission lost its Graphics queue identity"));
+    if(!skinningToken.valid()){
+        if(!transaction.discardUnaccepted(
+            graph,
+            compiledGraph,
+            recordedGraph.recordingAttemptGeneration()
+        ))
+            m_graphics.requestDeviceRecreation();
+        if(!skinningState.preparationInvoked)
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to record graph-owned skinning work"));
+        else if(!skinningState.statePrepared)
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to prepare graph-owned skinning frame state"));
+        else
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning submission was rejected"));
         return false;
     }
-    // Filter the accepted state before retaining it across frames. The graph task already owns every live
-    // deformation/bounds/repack transition; filtering merely drops retired runtime-buffer generations.
-    if(!mergeAcceptedSkinningState(*finalStates)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain accepted graph-owned skinning state"));
+    if(!skinningSubmitted || !skinningState.stateAccepted){
+        m_graphics.requestDeviceRecreation();
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: accepted graph-owned skinning submission lost its retained state"));
+        return false;
+    }
+    if(!skinningToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration)){
+        m_graphics.requestDeviceRecreation();
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning submission lost its Graphics queue identity"));
         return false;
     }
     return true;

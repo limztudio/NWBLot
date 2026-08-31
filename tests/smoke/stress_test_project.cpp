@@ -15,7 +15,6 @@
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_model/module.h>
 #include <impl/ecs_model_renderer/model_renderer.h>
-#include <impl/ecs_render/kernel/module.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
@@ -44,6 +43,7 @@ using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
+using NWB::Tests::Smoke::ReadSmokeEnvironmentFlag;
 using NWB::Tests::Smoke::ReadSmokeFrozenYawFromEnvironment;
 using NWB::Tests::Smoke::SetSmokeYawWindowTitle;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
@@ -205,14 +205,17 @@ private:
         return s_fixedDelta;
     }
 
+    [[nodiscard]] static bool hybridShadowOpaqueBaseline(){
+#if defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)
+        static const bool s_enabled = ReadSmokeEnvironmentFlag("NWB_HYBRID_SHADOW_BOUNDARY_OPAQUE_BASELINE");
+        return s_enabled;
+#else
+        return false;
+#endif
+    }
+
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("StressTestSmokeProject"));
-
-        // Force ray-tracing emulation so the SOFTWARE shadow path runs even on RT-capable hardware -- the A/B sibling of
-        // the hardware path. Default OFF: the demo runs the hardware (hybrid) path.
-#if defined(NWB_STRESS_TEST_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
-        NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
-#endif
 
         AddSmokeSkinnedRenderSystems(*world, context);
         return world;
@@ -227,10 +230,11 @@ private:
         // to the back. Neighbours are a transparent and an opaque character offset diagonally, so their (directional +
         // point) shadows overlap on the ground -- the colored transparent shadow folds onto the hard opaque shadow and
         // adjacent characters' shadows pile up, making the shadow duplication / combine easy to observe.
-        const bool transparent = (index % 2u) == 0u;
+        const bool transparentMaterialClass = (index % 2u) == 0u;
+        const bool transparent = !hybridShadowOpaqueBaseline() && transparentMaterialClass;
         const u32 classIndex = index / 2u; // 0..4 within each material class (tint palette)
         const f32 x = (static_cast<f32>(index) - static_cast<f32>(s_CharacterCount - 1u) * 0.5f) * s_CharacterSpacingX;
-        const f32 z = transparent ? s_TransparentRowZ : s_OpaqueRowZ;
+        const f32 z = transparentMaterialClass ? s_TransparentRowZ : s_OpaqueRowZ;
 
         bool tintApplied = false;
         const NWB::Core::ECS::EntityID entity = CreateTintedModelEntity(
@@ -398,38 +402,32 @@ public:
             NWB_TEXT("StressTestSmokeProject failed to create all scene entities")
         );
 
-#if defined(NWB_SOFT_TRANSPARENT_SHADOW_FOLD_BENCHMARK) && !defined(NWB_FINAL)
-        auto* const rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>();
-        NWB_FATAL_ASSERT_MSG(rendererSystem, NWB_TEXT("StressTestSmokeProject renderer system disappeared"));
-#if defined(NWB_SOFT_TRANSPARENT_SHADOW_FOLD_MONOLITHIC_BENCHMARK)
-        rendererSystem->setGraphOwnedSoftTransparentShadowFoldEnabledForTesting(false);
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("StressTestSmokeProject: enabled retained monolithic soft-transparent shadow-fold benchmark")
-        );
-#else
-        rendererSystem->setGraphOwnedSoftTransparentShadowFoldEnabledForTesting(true);
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("StressTestSmokeProject: enabled graph-owned soft-transparent shadow-fold benchmark")
-        );
-#endif
-#elif defined(NWB_HYBRID_SHADOW_BOUNDARY_FALLBACK_BENCHMARK) && !defined(NWB_FINAL)
-        auto* const rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>();
-        NWB_FATAL_ASSERT_MSG(rendererSystem, NWB_TEXT("StressTestSmokeProject renderer system disappeared"));
-        rendererSystem->forceHybridSceneTraversalFallbackEveryFrameForTesting();
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("StressTestSmokeProject: enabled persistent hybrid transparent-shadow fallback benchmark")
-        );
-#elif defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("StressTestSmokeProject: enabled healthy hybrid transparent-shadow benchmark")
-        );
+#if defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)
+        const bool rayQueryCapable =
+            m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct)
+            && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery)
+        ;
+        if(!rayQueryCapable){
+            NWB_LOGGER_ESSENTIAL_INFO(
+                NWB_TEXT("StressTestSmokeProject: hybrid shadow boundary skipped because RayQuery-capable hardware is unavailable")
+            );
+        }else{
+            NWB_LOGGER_ESSENTIAL_INFO(
+                NWB_TEXT("StressTestSmokeProject: RayQuery-capable hybrid shadow hardware available")
+            );
+            if(hybridShadowOpaqueBaseline())
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: enabled natural opaque hardware-shadow baseline"));
+            else
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: enabled healthy hybrid transparent-shadow benchmark"));
+        }
 #endif
 
+        const u32 transparentCharacterCount = hybridShadowOpaqueBaseline() ? 0u : s_CharactersPerClass;
         NWB_LOGGER_ESSENTIAL_INFO(
             NWB_TEXT("StressTestSmokeProject: spawned {} spinning characters ({} transparent + {} opaque) over ground, directional + point light")
             , s_CharacterCount
-            , s_CharactersPerClass
-            , s_CharactersPerClass
+            , transparentCharacterCount
+            , s_CharacterCount - transparentCharacterCount
         );
         return true;
     }
@@ -522,9 +520,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 
 const tchar* NWB::QueryProjectWindowTitle(){
-#if defined(NWB_SOFT_TRANSPARENT_SHADOW_FOLD_BENCHMARK)
-    return NWB_TEXT("NWB Soft Transparent Shadow Fold Benchmark");
-#elif defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)
+#if defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)
     return NWB_TEXT("NWB Hybrid Shadow Boundary Benchmark");
 #elif defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
     return NWB_TEXT("NWB Async Shadow M4 Benchmark");

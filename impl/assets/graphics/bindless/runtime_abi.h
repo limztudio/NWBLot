@@ -26,6 +26,11 @@ namespace AssetsGraphicsBindless{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static_assert(NWB_BINDLESS_HEAP_RESOURCE_SET == 0u);
+static_assert(NWB_BINDLESS_HEAP_SAMPLER_SET == NWB_BINDLESS_HEAP_RESOURCE_SET + 1u);
+static_assert(NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET == NWB_BINDLESS_HEAP_SAMPLER_SET + 1u);
+
+
 // Converts the shared macro-only CPU/GPU ABI into the typed payload consumed by Core::Graphics. This adapter stays
 // on the implementation/project side so the renderer never depends directly on asset-owned shader constants.
 [[nodiscard]] inline Core::GpuDescriptorHeapAbi MakeGpuDescriptorHeapAbi(){

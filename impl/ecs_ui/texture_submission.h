@@ -24,6 +24,7 @@ private:
     struct Request{
         ImTextureData* textureData = nullptr;
         ImTextureStatus expectedStatus = ImTextureStatus_Destroyed;
+        bool* initialUploadAccepted = nullptr;
     };
     using RequestVector = Vector<Request, Core::Alloc::GlobalArena>;
 
@@ -38,10 +39,11 @@ public:
     void reset(){ m_requests.clear(); }
     [[nodiscard]] bool empty()const{ return m_requests.empty(); }
 
-    void add(ImTextureData& textureData){
+    void add(ImTextureData& textureData, bool* const initialUploadAccepted = nullptr){
         Request request;
         request.textureData = &textureData;
         request.expectedStatus = textureData.Status;
+        request.initialUploadAccepted = initialUploadAccepted;
         m_requests.push_back(request);
     }
 
@@ -53,6 +55,10 @@ public:
 
                 switch(request.expectedStatus){
                 case ImTextureStatus_WantCreate:
+                    if(request.initialUploadAccepted)
+                        *request.initialUploadAccepted = true;
+                    request.textureData->SetStatus(ImTextureStatus_OK);
+                    break;
                 case ImTextureStatus_WantUpdates:
                     request.textureData->SetStatus(ImTextureStatus_OK);
                     break;

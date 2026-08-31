@@ -214,7 +214,7 @@ template<typename PayloadT, typename PayloadVector>
     const tchar* label,
     const bool canHaveRawViews = false,
     const bool accelStructBuildInput = false,
-    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::Exclusive
+    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute
 ){
     const Name bufferName = DeriveRuntimeResourceName(
         instance.sourceName,
@@ -268,7 +268,7 @@ template<typename PayloadT, typename PayloadVector>
     const tchar* label,
     const bool canHaveRawViews = false,
     const bool accelStructBuildInput = false,
-    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::Exclusive
+    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute
 ){
     outBuffer = SetupRuntimeBuffer<PayloadT>(
         graphics,
@@ -294,7 +294,7 @@ template<typename PayloadVector>
     const PayloadVector& payload,
     const bool canHaveUavs,
     const tchar* label,
-    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::Exclusive
+    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute
 ){
     outBuffer = nullptr;
 
@@ -358,9 +358,8 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         return false;
 
     const bool rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
-    // Without hardware ray tracing the software BVH shadow fallback runs instead, reading the skinned
-    // positions and triangle indices as raw byte buffers, so those buffers need raw views in that case.
-    const bool swShadow = !rtSupported;
+    // Both the software fallback and the hybrid transparent-shadow tail read skinned positions and reconstructed
+    // triangle indices as raw byte buffers. Keep those views available even when hardware ray tracing is present.
 
     bool uploaded = true;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float3U>(
@@ -398,7 +397,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         instance.restPositions,
         true,
         NWB_TEXT("skinned position"),
-        swShadow,
+        true,
         rtSupported,
         Core::ResourceQueueSharing::GraphicsAndAsyncCompute
     ) && uploaded;
@@ -547,7 +546,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             triangleIndices,
             false,
             NWB_TEXT("rt triangle index"),
-            swShadow,
+            true,
             rtSupported,
             Core::ResourceQueueSharing::GraphicsAndAsyncCompute
         ) && uploaded;

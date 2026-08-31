@@ -1,11 +1,32 @@
 include_guard(GLOBAL)
 
-macro(nwb_require_x64)
+macro(nwb_require_supported_architecture)
     if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-        message(FATAL_ERROR "NWBLot currently supports x64/64-bit builds only.")
+        message(FATAL_ERROR "NWBLot supports 64-bit x64 and ARM64 targets only.")
     endif()
 
-    set(NWB_OUTPUT_ARCH "x64")
+    if(NOT DEFINED NWB_TARGET_ARCH OR NWB_TARGET_ARCH STREQUAL "")
+        set(_nwb_requested_arch "${CMAKE_SYSTEM_PROCESSOR}")
+    else()
+        set(_nwb_requested_arch "${NWB_TARGET_ARCH}")
+    endif()
+    string(TOLOWER "${_nwb_requested_arch}" _nwb_requested_arch)
+
+    if(_nwb_requested_arch MATCHES "^(x64|amd64|x86_64|x86-64)$")
+        set(_nwb_resolved_arch "x64")
+    elseif(_nwb_requested_arch MATCHES "^(arm64|aarch64)$")
+        set(_nwb_resolved_arch "arm64")
+    else()
+        message(FATAL_ERROR
+            "Unsupported NWB_TARGET_ARCH '${_nwb_requested_arch}'. Expected x64 or arm64."
+        )
+    endif()
+
+    set(NWB_TARGET_ARCH "${_nwb_resolved_arch}" CACHE STRING "NWBLot target architecture" FORCE)
+    set_property(CACHE NWB_TARGET_ARCH PROPERTY STRINGS x64 arm64)
+    set(NWB_OUTPUT_ARCH "${_nwb_resolved_arch}")
+    unset(_nwb_requested_arch)
+    unset(_nwb_resolved_arch)
 endmacro()
 
 macro(nwb_resolve_output_domain)

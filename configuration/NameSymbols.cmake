@@ -15,7 +15,7 @@ endfunction()
 #   cmake --build <release-build-dir> --config <cfg> --target nwb_namesym
 #
 # It drives configuration/generate_name_symbols.py, which configures + builds the buildmode variant (preset
-# "<platform>-clang-namesym-x64", output domain "namesym", separate binaryDir so the release tree is untouched), runs
+# "<platform>-clang-namesym-<arch>", output domain "namesym", separate binaryDir so the release tree is untouched), runs
 # its workloads, and copies the produced "<exe>.namesym" sidecars into this configuration's output root for the log
 # server to load at startup (NameSymbols::LoadDefaultFile) and decode opt/fin client log hashes.
 #
@@ -45,7 +45,12 @@ function(nwb_add_name_symbol_target)
     endif()
 
     string(TOLOWER "${CMAKE_SYSTEM_NAME}" _namesym_output_platform)
-    set(_namesym_configure_preset "${_namesym_platform_prefix}-x64")
+    set(_namesym_configure_preset "${_namesym_platform_prefix}-${NWB_OUTPUT_ARCH}")
+    if(NWB_OUTPUT_ARCH STREQUAL "x64")
+        set(_namesym_build_preset "${_namesym_platform_prefix}-$<CONFIG>")
+    else()
+        set(_namesym_build_preset "${_namesym_platform_prefix}-${NWB_OUTPUT_ARCH}-$<CONFIG>")
+    endif()
     set(_namesym_build_dir "${PROJECT_SOURCE_DIR}/__cmake/build/${_namesym_configure_preset}")
     set(_namesym_buildmode_bin_dir "${PROJECT_SOURCE_DIR}/__exec/${_namesym_output_platform}/${NWB_OUTPUT_ARCH}/namesym/$<CONFIG>")
     set(_namesym_release_dest "${NWB_OUTPUT_ROOT}/$<CONFIG>")
@@ -67,7 +72,7 @@ function(nwb_add_name_symbol_target)
             "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/configuration/generate_name_symbols.py"
             --source-dir "${PROJECT_SOURCE_DIR}"
             --configure-preset "${_namesym_configure_preset}"
-            --build-preset "${_namesym_platform_prefix}-$<CONFIG>"
+            --build-preset "${_namesym_build_preset}"
             --build-dir "${_namesym_build_dir}"
             --config "$<CONFIG>"
             --buildmode-bin-dir "${_namesym_buildmode_bin_dir}"

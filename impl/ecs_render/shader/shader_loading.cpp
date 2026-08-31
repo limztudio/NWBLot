@@ -2,9 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
+#include "shader_system.h"
 
 #include <impl/assets/graphics/deferred/names.h>
+#include <impl/assets_shader/loader.h>
+
+#include <core/graphics/shader_archive.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,9 +33,9 @@ bool RendererShaderSystem::loadShader(
         variantName,
         shaderType,
         debugName,
-        graphics(),
-        assetManager(),
-        shaderPathResolver(),
+        m_graphics,
+        m_assetManager,
+        m_shaderPathResolver,
         NWB_TEXT("RendererSystem"),
         archiveStageName
     );
@@ -41,7 +44,7 @@ bool RendererShaderSystem::loadShader(
 
 bool RendererShaderSystem::loadDeferredCompositeVertexShader(){
     return loadShader(
-        deferredState().m_compositeVertexShader,
+        m_deferredCompositeVertexShader,
         AssetsGraphicsDeferred::s_CompositeVertexShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Vertex,

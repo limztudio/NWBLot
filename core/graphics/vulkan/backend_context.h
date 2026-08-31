@@ -6,6 +6,7 @@
 
 
 #include "backend.h"
+#include "swapchain_presentation.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -64,8 +65,9 @@ private:
     };
 
     struct SwapChainImage{
-        VkImage image;
+        VkImage image = VK_NULL_HANDLE;
         TextureHandle rhiHandle;
+        VulkanDetail::SwapChainImagePresentationState presentationState;
     };
     using SemaphoreVector = GraphicsVector<VkSemaphore>;
 
@@ -94,6 +96,8 @@ private:
     };
     static constexpr ExtEntry s_OptionalDeviceExts[] = {
         { VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, DeviceExtensionFeature::None },
+        { VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, DeviceExtensionFeature::None },
+        { VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME, DeviceExtensionFeature::FragmentShadingRate },
         { VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_KHR_MAINTENANCE_4_EXTENSION_NAME, DeviceExtensionFeature::None },
@@ -152,9 +156,7 @@ public:
         return m_enabledExtensions.layers.find(lookup) != m_enabledExtensions.layers.end();
     }
 
-    Texture* getCurrentBackBuffer()const;
     Texture* getBackBuffer(u32 index)const;
-    u32 getCurrentBackBufferIndex()const{ return m_swapChainIndex; }
     u32 getBackBufferCount()const{ return static_cast<u32>(m_swapChainImages.size()); }
 
     void setPlatformFrameParam(const Common::FrameParam& frameParam){ m_platformFrameParam = frameParam; }
@@ -163,10 +165,13 @@ public:
     bool createSwapChain();
     void destroy();
     void resizeSwapChain();
-    bool beginFrame(const BackBufferResizeCallbacks& callbacks);
+    [[nodiscard]] AcquiredBackBuffer beginFrame(const BackBufferResizeCallbacks& callbacks);
+    // Idempotently retires synchronization for a healthy aborted frame. The acquired WSI image stays quarantined
+    // until swap-chain or device teardown; an already-resolved frame is a successful no-op.
+    [[nodiscard]] bool abandonAcquiredFrame()noexcept;
     bool present();
     // Claims the acquired image's completion semaphore for one exact graph packet. A null hook leaves the
-    // compatibility empty-submit path in present() active.
+    // compatibility transition-submit path in present() active.
     [[nodiscard]] QueueSubmissionPreSubmitHook claimFramePresentationSignal()noexcept;
     // The renderer confirms only the terminal packet token accepted by the graph submission transaction.
     [[nodiscard]] bool confirmFramePresentationSignal(const QueueSubmissionToken& token)noexcept;
@@ -183,6 +188,18 @@ private:
     bool pickPhysicalDevice();
     bool findQueueFamilies(VkPhysicalDevice physicalDevice);
     bool createVulkanDevice();
+    void logVulkanDeviceConfiguration(
+        Alloc::ScratchArena& scratchArena,
+        const VkPhysicalDeviceProperties& physicalDeviceProperties,
+        bool maintenance4Enabled,
+        const VkPhysicalDeviceMaintenance4Features& maintenance4Features,
+        bool createAsyncComputeQueue,
+        bool createCrossFamilySecondaryComputeQueue,
+        i32 secondaryComputeQueueFamily,
+        bool createDedicatedTransferQueue,
+        bool createCrossFamilySecondaryTransferQueue,
+        i32 secondaryTransferQueueFamily
+    );
     bool createVulkanSwapChain();
     void destroySwapChain();
     void clearSemaphores(SemaphoreVector& semaphores);
@@ -197,7 +214,7 @@ private:
         const GpuPhysicalQueueId& executionQueue,
         QueueSubmissionNativeSignal& outSignal
     )noexcept;
-    void replaceFramePresentationSemaphoreAfterIdle()noexcept;
+    [[nodiscard]] bool replaceFramePresentationSemaphoreAfterIdle()noexcept;
     void resetFramePresentationSignal()noexcept;
 
 
@@ -264,19 +281,28 @@ private:
     u32 m_framePresentationSwapChainIndex = Limit<u32>::s_Max;
     FramePresentationSignalState m_framePresentationSignalState = FramePresentationSignalState::Idle;
     bool m_frameAcquired = false;
+    bool m_frameAbandonmentComplete = false;
 
     ::Queue<EventQueryHandle, Alloc::GlobalArena> m_framesInFlight;
     Vector<EventQueryHandle, Alloc::GlobalArena> m_queryPool;
 
-    u32 m_swapChainIndex = static_cast<u32>(-1);
+    u32 m_swapChainIndex = Limit<u32>::s_Max;
     u32 m_acquireSemaphoreIndex = 0;
     u32 m_maxFramesInFlight = s_MaxFramesInFlight;
 
     bool m_swapChainMutableFormatSupported = false;
     bool m_hdr10ColorSpaceExtensionEnabled = false;
     bool m_bufferDeviceAddressSupported = false;
+    bool m_textureCompressionBcFeatureEnabled = false;
+    bool m_textureCompressionAstcLdrFeatureEnabled = false;
+    bool m_textureCompressionAstcHdrFeatureEnabled = false;
     bool m_dynamicRenderingSupported = false;
     bool m_synchronization2Supported = false;
+    bool m_independentBlendFeatureEnabled = false;
+    bool m_fullDrawIndexUint32FeatureEnabled = false;
+    bool m_multiDrawIndirectFeatureEnabled = false;
+    bool m_drawIndirectFirstInstanceFeatureEnabled = false;
+    bool m_meshShaderFeatureEnabled = false;
     bool m_accelerationStructureFeatureEnabled = false;
     bool m_rayTracingPipelineFeatureEnabled = false;
     bool m_rayQueryFeatureEnabled = false;

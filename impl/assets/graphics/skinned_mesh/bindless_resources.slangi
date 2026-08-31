@@ -2,12 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-runtime skinned-mesh StorageBuffer-heap selectors. The C++ RuntimeBindlessResourceSlots mirror is four std140
-// uint4 lanes, so every skinning, bounds, and repack dispatch sees the same persistent stream generation.
-
-
 #ifndef NWB_GRAPHICS_SKINNED_MESH_BINDLESS_RESOURCES_SLANGI
 #define NWB_GRAPHICS_SKINNED_MESH_BINDLESS_RESOURCES_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Per-runtime skinned-mesh StorageBuffer-heap selectors. The C++ RuntimeBindlessResourceSlots mirror is four std140
+// uint4 lanes, so every skinning, bounds, and repack dispatch sees the same persistent stream generation.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

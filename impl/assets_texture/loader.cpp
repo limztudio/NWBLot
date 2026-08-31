@@ -916,6 +916,10 @@ bool TextureAssetLoader::Create(
         .regionCount = uploadRegions.size(),
         .finalState = Core::ResourceStates::ShaderResource,
         .acceptedToken = &uploadToken,
+        // The loader has just created the image. Its descriptor state is the post-upload contract, not the native
+        // VkImage layout before this batch records its first write.
+        .physicalInitialState = Core::ResourceStates::Unknown,
+        .hasPhysicalInitialState = true,
     })){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to submit graph-owned texture upload for '{}'"), owner, StringConvert(imageName.c_str()));
         return false;

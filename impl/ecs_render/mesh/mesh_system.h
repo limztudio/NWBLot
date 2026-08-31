@@ -5,7 +5,31 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/subsystem_base.h>
+#include <impl/ecs_render/mesh/renderer_mesh_types.h>
+#include <impl/ecs_render/shared/renderer_frame_bindings.h>
+
+#include <core/assets/ref.h>
+#include <core/ecs/entity_id.h>
+#include <core/graphics/render_pass.h>
+#include <impl/assets/graphics/mesh/binding_slots.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSETS_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class AssetManager;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,44 +42,74 @@ NWB_IMPL_BEGIN
 
 
 namespace ECSRenderDetail{
-    struct MeshFrameHeapSlots;
     struct MeshViewGpuData;
+    struct MeshSoftwareBvhParentBuildState{
+        Core::BufferHandle buffer;
+        Name identity = NAME_NONE;
+    };
+    struct MeshBlasGraphState{
+        Name meshName = NAME_NONE;
+        Core::RayTracingAccelStructHandle blas;
+        bool backingFresh = false;
+        bool nativeBuildsBlas = false;
+    };
+    // Owning cross-domain view of mesh-bound acceleration resources. Consumers may prepare changes against this
+    // value, but only RendererMeshSystem may publish them into the live mesh registry.
+    struct MeshRayTracingResourceSnapshot{
+        Name meshName = NAME_NONE;
+        Core::BufferHandle positionBuffer;
+        Core::BufferHandle triangleIndexBuffer;
+        Core::BufferHandle attributeBuffer;
+        Core::RayTracingAccelStructHandle blas;
+        Core::GpuDescriptorHandle swBvhPositionHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::BufferHandle swBvhNodeBuffer;
+        Core::BufferHandle swBvhParentBuffer;
+        Core::GpuDescriptorHandle swBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
+        u32 meshletPrimitiveIndexCount = 0u;
+        u32 blasRefitsSinceRebuild = 0u;
+        u32 swBvhRefitsSinceRebuild = 0u;
+        bool runtimeMesh = false;
+        bool blasBuildPending = false;
+        bool blasBackingFresh = false;
+        bool blasBackingStateHandoffPending = false;
+        bool swBvhBuildPending = false;
+        bool swBvhTopologyBuilt = false;
+        u64 runtimeMeshVersion = 0u;
+        CsgReceiverCpuBounds csgLocalBounds;
+    };
+    using MeshSoftwareBvhParentBuildStateVector = Vector<MeshSoftwareBvhParentBuildState, Core::Alloc::ScratchArena>;
+    using MeshRetainedAccelerationStateBufferVector = Vector<Core::BufferHandle, Core::Alloc::ScratchArena>;
+    using MeshBlasGraphStateVector = Vector<MeshBlasGraphState, Core::Alloc::ScratchArena>;
+    using MeshRayTracingResourceSnapshotVector = Vector<MeshRayTracingResourceSnapshot, Core::Alloc::ScratchArena>;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererMeshSystem final : public RendererSystemSubsystemBase<RendererSystem>{
-public:
-    explicit RendererMeshSystem(RendererSystem& renderer);
+class RendererMeshState;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererMeshSystem final : NoCopy{
+private:
+    static constexpr u32 s_MeshPositionBindingSlot = NWB_MESH_BINDING_POSITION;
+    static constexpr u32 s_MeshNormalBindingSlot = NWB_MESH_BINDING_NORMAL;
+    static constexpr u32 s_MeshTangentBindingSlot = NWB_MESH_BINDING_TANGENT;
+    static constexpr u32 s_MeshUv0BindingSlot = NWB_MESH_BINDING_UV0;
+    static constexpr u32 s_MeshColorBindingSlot = NWB_MESH_BINDING_COLOR;
+    static constexpr u32 s_MeshletDescBindingSlot = NWB_MESH_BINDING_MESHLET_DESC;
+    static constexpr u32 s_MeshletBoundsBindingSlot = NWB_MESH_BINDING_MESHLET_BOUNDS;
+    static constexpr u32 s_MeshletPositionRefBindingSlot = NWB_MESH_BINDING_MESHLET_POSITION_REFS;
+    static constexpr u32 s_MeshletAttributeRefBindingSlot = NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS;
+    static constexpr u32 s_MeshletLocalVertexRefBindingSlot = NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS;
+    static constexpr u32 s_MeshletPrimitiveIndexBindingSlot = NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES;
 
 public:
-    [[nodiscard]] bool createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
-    [[nodiscard]] bool findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
-    // Graph declaration resolves already-prepared draw-item keys without touching assets or mutating mesh state.
-    [[nodiscard]] bool findMeshResources(const Name& meshKey, MeshResources*& outMesh);
-    [[nodiscard]] bool createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
-    [[nodiscard]] bool findRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
-    void pruneRuntimeMeshResources();
-    [[nodiscard]] bool createMeshViewBuffer();
-    // Resolves the immutable per-frame view payload before graph declaration.  The caller publishes it through a
-    // graph-owned upload task, then confirms the CPU mirror only after that packet accepts.
-    [[nodiscard]] bool prepareMeshViewBufferUpload(
-        f32 fallbackAspectRatio,
-        ECSRenderDetail::MeshViewGpuData& outViewState,
-        bool& outUploadRequired
-    )const;
-    void confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState);
-    [[nodiscard]] bool createMeshFrameHeapHandles();
-    [[nodiscard]] bool meshFrameHeapHandlesReady()const;
-    void populateMeshFrameHeapSlots(ECSRenderDetail::MeshFrameHeapSlots& outSlots)const;
-    void releaseMeshFrameHeapHandles();
-    [[nodiscard]] bool meshGeometryHeapHandlesReady(const MeshResources& mesh)const;
-    void populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const;
-    [[nodiscard]] bool ensureMeshSwBvhInputHeapHandles(MeshResources& mesh);
-    void releaseMeshGeometryHeapHandles(MeshResources& mesh);
-    void releaseAllMeshGeometryHeapHandles();
     template<typename BindingHandler>
     static void forEachMeshSourceBindingSlot(BindingHandler&& handler){
         handler(s_MeshPositionBindingSlot, false);
@@ -95,6 +149,67 @@ public:
         });
     }
 
+public:
+    RendererMeshSystem(
+        Core::Alloc::GlobalArena& arena,
+        Core::ECS::World& world,
+        Core::Graphics& graphics,
+        Core::Assets::AssetManager& assetManager,
+        RendererMeshState& meshState
+    );
+
+public:
+    void invalidateResources();
+    [[nodiscard]] bool createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
+    [[nodiscard]] bool findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
+    // Graph declaration resolves already-prepared draw-item keys without touching assets or mutating mesh state.
+    [[nodiscard]] bool findMeshResources(const Name& meshKey, MeshResources*& outMesh);
+    [[nodiscard]] bool createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
+    [[nodiscard]] bool findRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
+    void pruneRuntimeMeshResources();
+    void collectRayTracingResourceSnapshots(ECSRenderDetail::MeshRayTracingResourceSnapshotVector& outSnapshots)const;
+    [[nodiscard]] bool findRayTracingResourceSnapshot(
+        const Name& meshName,
+        ECSRenderDetail::MeshRayTracingResourceSnapshot& outSnapshot
+    )const;
+    [[nodiscard]] bool findRenderableRayTracingResourceSnapshot(
+        const RenderableMeshDesc& mesh,
+        ECSRenderDetail::MeshRayTracingResourceSnapshot& outSnapshot
+    )const;
+    [[nodiscard]] bool commitRayTracingResourceSnapshot(
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected,
+        ECSRenderDetail::MeshRayTracingResourceSnapshot& desired
+    );
+    [[nodiscard]] bool ensureRayTracingInputHeapHandles(
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected,
+        ECSRenderDetail::MeshRayTracingResourceSnapshot& outSnapshot
+    );
+    void confirmAcceptedRayTracingStateHandoffs()noexcept;
+    void discardRayTracingBuildState()noexcept;
+    [[nodiscard]] bool collectSoftwareBvhParentBuildStates(ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector& outStates)const;
+    void collectRetainedAccelerationStateBuffers(ECSRenderDetail::MeshRetainedAccelerationStateBufferVector& outBuffers)const;
+    void collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphStateVector& outStates)const;
+    [[nodiscard]] bool createMeshViewBuffer();
+    [[nodiscard]] ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot()const;
+    [[nodiscard]] bool snapshotAcceptedMeshViewWorldToClip(Float44& outWorldToClip)const noexcept;
+    // Resolves the immutable per-frame view payload before graph declaration.  The caller publishes it through a
+    // graph-owned upload task, then confirms the CPU mirror only after that packet accepts.
+    [[nodiscard]] bool prepareMeshViewBufferUpload(
+        f32 fallbackAspectRatio,
+        ECSRenderDetail::MeshViewGpuData& outViewState,
+        bool& outUploadRequired
+    )const;
+    void confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState);
+    void invalidateMeshViewBufferUploadMirror();
+    [[nodiscard]] bool prepareMeshFrameBindings(const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers);
+    [[nodiscard]] ECSRenderDetail::MeshFrameBindingSnapshot meshFrameBindingSnapshot()const;
+    [[nodiscard]] bool meshGeometryHeapHandlesReady(const MeshResources& mesh)const;
+    void populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const;
+    void releaseMeshGeometryHeapHandles(MeshResources& mesh);
+
+private:
+    void releaseMeshFrameHeapHandles();
+
 private:
     // Persistent mesh descriptors are established while the resource is created.  Material preparation and draw
     // paths may only consume the ready handles so neither can allocate descriptor-heap entries mid-frame.
@@ -102,18 +217,17 @@ private:
     [[nodiscard]] bool meshRenderBindingsReady(const MeshResources& mesh)const;
     [[nodiscard]] bool createComputeEmulationHeapHandle(MeshResources& mesh);
     [[nodiscard]] bool createMeshGeometryHeapHandles(MeshResources& mesh);
+    [[nodiscard]] bool ensureMeshSwBvhInputHeapHandles(MeshResources& mesh);
 
-    static constexpr u32 s_MeshPositionBindingSlot = NWB_MESH_BINDING_POSITION;
-    static constexpr u32 s_MeshNormalBindingSlot = NWB_MESH_BINDING_NORMAL;
-    static constexpr u32 s_MeshTangentBindingSlot = NWB_MESH_BINDING_TANGENT;
-    static constexpr u32 s_MeshUv0BindingSlot = NWB_MESH_BINDING_UV0;
-    static constexpr u32 s_MeshColorBindingSlot = NWB_MESH_BINDING_COLOR;
-    static constexpr u32 s_MeshletDescBindingSlot = NWB_MESH_BINDING_MESHLET_DESC;
-    static constexpr u32 s_MeshletBoundsBindingSlot = NWB_MESH_BINDING_MESHLET_BOUNDS;
-    static constexpr u32 s_MeshletPositionRefBindingSlot = NWB_MESH_BINDING_MESHLET_POSITION_REFS;
-    static constexpr u32 s_MeshletAttributeRefBindingSlot = NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS;
-    static constexpr u32 s_MeshletLocalVertexRefBindingSlot = NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS;
-    static constexpr u32 s_MeshletPrimitiveIndexBindingSlot = NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES;
+private:
+    void releaseAllMeshGeometryHeapHandles();
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    Core::ECS::World& m_world;
+    Core::Graphics& m_graphics;
+    Core::Assets::AssetManager& m_assetManager;
+    RendererMeshState& m_meshState;
 };
 
 

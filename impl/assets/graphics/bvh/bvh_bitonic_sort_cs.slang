@@ -131,6 +131,10 @@ void main(
     g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.payloadHeapSlot][global] = s_tilePayload[local];
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #undef NWB_BVH_SORT_TILE_COMPARE_SWAP
 
 

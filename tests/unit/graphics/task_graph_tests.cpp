@@ -14649,6 +14649,186 @@ TEST(GpuTaskGraph, RejectsMultiSourceInitialOwnerCompletionAcrossQueues){
 }
 
 
+TEST(GpuTaskGraph, ValidatesInitialOwnerCompletionSourceContractsAtCompileTime){
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    const Graphics::GpuQueueRequest graphicsQueue{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeQueue{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    const auto compileSingleOwner = [&](
+        const Graphics::QueueSubmissionToken completionToken,
+        const Graphics::QueueSubmissionToken minimumCompletionToken
+    ){
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
+            Graphics::GpuExternalCompletionDesc{}
+                .setIdentity(Name("tests/task_graph/owned_initial_owner_completion"))
+                .setMarkerLabel("Owned Initial Owner Completion")
+                .setToken(completionToken)
+        );
+        EXPECT_TRUE(completion.valid());
+        if(!completion.valid())
+            return false;
+
+        Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
+        const Graphics::GpuGraphResourceId resource = graph.importResource(
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/owned_initial_owner_buffer"))
+                .setMarkerLabel("Owned Initial Owner Buffer")
+                .setType(Graphics::GpuGraphResourceType::Buffer)
+                .setInitialState(Graphics::ResourceStates::Common)
+                .setInitialOwnerQueue(queues[0u].id)
+                .setInitialOwnerReleaseDestinationQueue(queues[1u].id)
+                .setInitialOwnerCompletion(completion)
+                .setInitialOwnerMinimumCompletionToken(minimumCompletionToken)
+                .setInitialOwnerStateSource(&stateSource)
+        );
+        EXPECT_TRUE(resource.valid());
+        if(!resource.valid())
+            return false;
+
+        const Graphics::GpuTaskResourceUse use{
+            .resource = resource,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc taskDesc;
+        taskDesc
+            .setIdentity(Name("tests/task_graph/owned_initial_owner_use"))
+            .setMarkerLabel("Owned Initial Owner Use")
+            .setQueue(computeQueue)
+            .setResourceUses(&use, 1u)
+        ;
+        const Graphics::GpuTaskId task = graph.addTask(taskDesc);
+        EXPECT_TRUE(task.valid());
+        if(!task.valid())
+            return false;
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        const bool compiled = Compile(graph, analysis, topology, assignments, compiledGraph);
+        EXPECT_EQ(compiledGraph.valid(), compiled);
+        return compiled;
+    };
+
+    const Graphics::QueueSubmissionToken minimumCompletionToken{
+        .queue = Graphics::CommandQueue::Graphics,
+        .value = 7u,
+        .physicalQueueIndex = queues[0u].id.index,
+        .deviceGeneration = queues[0u].id.deviceGeneration,
+    };
+    EXPECT_TRUE(compileSingleOwner(minimumCompletionToken, minimumCompletionToken));
+
+    const Graphics::QueueSubmissionToken wrongQueueCompletionToken{
+        .queue = Graphics::CommandQueue::Compute,
+        .value = 11u,
+        .physicalQueueIndex = queues[1u].id.index,
+        .deviceGeneration = queues[1u].id.deviceGeneration,
+    };
+    EXPECT_FALSE(compileSingleOwner(wrongQueueCompletionToken, minimumCompletionToken));
+
+    Graphics::QueueSubmissionToken belowMinimumCompletionToken = minimumCompletionToken;
+    --belowMinimumCompletionToken.value;
+    EXPECT_FALSE(compileSingleOwner(belowMinimumCompletionToken, minimumCompletionToken));
+
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuExternalCompletionId sharedCompletion = graph.importExternalCompletion(
+        Graphics::GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/task_graph/cross_resource_owner_completion"))
+            .setMarkerLabel("Cross Resource Owner Completion")
+    );
+    ASSERT_TRUE(sharedCompletion.valid());
+    Graphics::CommandListResourceStateHandoff graphicsStateSource(testArena.arena);
+    Graphics::CommandListResourceStateHandoff computeStateSource(testArena.arena);
+    const Graphics::QueueSubmissionToken computeMinimumCompletionToken{
+        .queue = Graphics::CommandQueue::Compute,
+        .value = 11u,
+        .physicalQueueIndex = queues[1u].id.index,
+        .deviceGeneration = queues[1u].id.deviceGeneration,
+    };
+    const Graphics::GpuGraphResourceId graphicsOwnedResource = graph.importResource(
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/cross_resource_graphics_owner"))
+            .setMarkerLabel("Cross Resource Graphics Owner")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::Common)
+            .setInitialOwnerQueue(queues[0u].id)
+            .setInitialOwnerReleaseDestinationQueue(queues[1u].id)
+            .setInitialOwnerCompletion(sharedCompletion)
+            .setInitialOwnerMinimumCompletionToken(minimumCompletionToken)
+            .setInitialOwnerStateSource(&graphicsStateSource)
+    );
+    const Graphics::GpuGraphResourceId computeOwnedResource = graph.importResource(
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/cross_resource_compute_owner"))
+            .setMarkerLabel("Cross Resource Compute Owner")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::Common)
+            .setInitialOwnerQueue(queues[1u].id)
+            .setInitialOwnerReleaseDestinationQueue(queues[0u].id)
+            .setInitialOwnerCompletion(sharedCompletion)
+            .setInitialOwnerMinimumCompletionToken(computeMinimumCompletionToken)
+            .setInitialOwnerStateSource(&computeStateSource)
+    );
+    ASSERT_TRUE(graphicsOwnedResource.valid());
+    ASSERT_TRUE(computeOwnedResource.valid());
+
+    const Graphics::GpuTaskResourceUse graphicsOwnedUse{
+        .resource = graphicsOwnedResource,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::CopyDest,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    Graphics::GpuTaskDesc graphicsOwnedTaskDesc;
+    graphicsOwnedTaskDesc
+        .setIdentity(Name("tests/task_graph/cross_resource_graphics_owner_use"))
+        .setMarkerLabel("Cross Resource Graphics Owner Use")
+        .setQueue(computeQueue)
+        .setResourceUses(&graphicsOwnedUse, 1u)
+    ;
+    const Graphics::GpuTaskResourceUse computeOwnedUse{
+        .resource = computeOwnedResource,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::CopyDest,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    Graphics::GpuTaskDesc computeOwnedTaskDesc;
+    computeOwnedTaskDesc
+        .setIdentity(Name("tests/task_graph/cross_resource_compute_owner_use"))
+        .setMarkerLabel("Cross Resource Compute Owner Use")
+        .setQueue(graphicsQueue)
+        .setResourceUses(&computeOwnedUse, 1u)
+    ;
+    ASSERT_TRUE(graph.addTask(graphicsOwnedTaskDesc).valid());
+    ASSERT_TRUE(graph.addTask(computeOwnedTaskDesc).valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    EXPECT_FALSE(compiledGraph.valid());
+}
+
+
 TEST(GpuTaskGraph, CompilesMultiSourceInitialTextureOwnershipHandoff){
     const Graphics::GpuPhysicalQueueInfo queues[] = {
         GraphicsQueue(),

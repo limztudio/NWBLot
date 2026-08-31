@@ -23,6 +23,15 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct InitialOwnershipCompletionRequirement{
+    GpuPhysicalQueueId sourceQueue;
+    u64 minimumValue = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] bool AppendCompiledOwnershipTransfer(
     GpuTaskGraphResourceStatePlan& plan,
     const GpuTaskGraphResourceView& resource,
@@ -329,6 +338,29 @@ bool GpuTaskGraphCompiler::compile(
         .planGeneration = outCompiledGraph.m_planGeneration,
     };
 
+    Vector<InitialOwnershipCompletionRequirement, Alloc::ScratchArena> initialOwnershipCompletionRequirements(
+        graph.externalCompletionCount(),
+        scratchArena
+    );
+    const auto appendInitialOwnershipCompletionRequirement = [&](
+        const GpuExternalCompletionId completion,
+        const GpuPhysicalQueueId sourceQueue,
+        const u64 minimumValue
+    ){
+        if(!graph.validExternalCompletion(completion) || !sourceQueue.valid() || minimumValue == 0u)
+            return false;
+
+        InitialOwnershipCompletionRequirement& requirement =
+            initialOwnershipCompletionRequirements[completion.index]
+        ;
+        if(requirement.sourceQueue.valid() && requirement.sourceQueue != sourceQueue)
+            return false;
+        requirement.sourceQueue = sourceQueue;
+        if(requirement.minimumValue < minimumValue)
+            requirement.minimumValue = minimumValue;
+        return true;
+    };
+
     // An import may name the exact physical queue that owned an exclusive texture/buffer/acceleration structure
     // before graph work began.
     // A different first packet must also name a fixed release destination, an imported completion, and a native
@@ -383,6 +415,11 @@ bool GpuTaskGraphCompiler::compile(
                         source.sourceQueue.deviceGeneration
                     )
                     || !source.stateSource
+                    || !appendInitialOwnershipCompletionRequirement(
+                        source.completion,
+                        source.sourceQueue,
+                        source.minimumCompletionToken.value
+                    )
                 ){
                     outCompiledGraph.reset();
                     return false;
@@ -412,8 +449,40 @@ bool GpuTaskGraphCompiler::compile(
                         resource.initialOwnerQueue.deviceGeneration
                     )
                     || !resource.initialOwnerStateSource
+                    || !appendInitialOwnershipCompletionRequirement(
+                        resource.initialOwnerCompletion,
+                        resource.initialOwnerQueue,
+                        resource.initialOwnerMinimumCompletionToken.value
+                    )
                 )
             )
+        ){
+            outCompiledGraph.reset();
+            return false;
+        }
+    }
+    for(usize completionIndex = 0u; completionIndex < graph.externalCompletionCount(); ++completionIndex){
+        const InitialOwnershipCompletionRequirement& requirement =
+            initialOwnershipCompletionRequirements[completionIndex]
+        ;
+        if(!requirement.sourceQueue.valid())
+            continue;
+
+        const GpuTaskGraphExternalCompletionView completion = graph.externalCompletionAt(completionIndex);
+        if(!completion.hasToken)
+            continue;
+        const GpuPhysicalQueueInfo* const sourceQueueInfo = FindCompiledQueueInfo(
+            compiledPlan,
+            requirement.sourceQueue
+        );
+        if(
+            !sourceQueueInfo
+            || completion.token.queue != sourceQueueInfo->queueClass
+            || !completion.token.matchesPhysicalQueue(
+                requirement.sourceQueue.index,
+                requirement.sourceQueue.deviceGeneration
+            )
+            || completion.token.value < requirement.minimumValue
         ){
             outCompiledGraph.reset();
             return false;

@@ -161,6 +161,19 @@ struct GpuTaskGraphCompileOptions{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct GpuTaskGraphSchedulingTaskIndexView{
+    const u32* taskIndices = nullptr;
+    usize taskCount = 0u;
+
+
+    [[nodiscard]] bool empty()const noexcept{ return taskCount == 0u; }
+    [[nodiscard]] u32 operator[](const usize index)const noexcept{
+        NWB_ASSERT(index < taskCount);
+        return taskIndices[index];
+    }
+};
+
+
 class GpuTaskGraphAnalysis final : NoCopy{
     friend class GpuTaskGraphCompiler;
 
@@ -168,6 +181,10 @@ public:
     explicit GpuTaskGraphAnalysis(GraphicsArena& arena)
         : m_edges(arena)
         , m_schedulingEdges(arena)
+        , m_schedulingOutgoingOffsets(arena)
+        , m_schedulingOutgoingConsumers(arena)
+        , m_schedulingIncomingOffsets(arena)
+        , m_schedulingIncomingProducers(arena)
         , m_inferredEdges(arena)
         , m_externalDependencies(arena)
         , m_topologicalOrder(arena)
@@ -190,6 +207,8 @@ public:
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& schedulingEdges()const noexcept{
         return m_schedulingEdges;
     }
+    [[nodiscard]] GpuTaskGraphSchedulingTaskIndexView schedulingConsumers(const GpuTaskId& producer)const noexcept;
+    [[nodiscard]] GpuTaskGraphSchedulingTaskIndexView schedulingProducers(const GpuTaskId& consumer)const noexcept;
     // Every resource reason remains available even when it shares one scheduling edge with an explicit dependency.
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& inferredEdges()const noexcept{ return m_inferredEdges; }
     [[nodiscard]] const GraphicsVector<GpuTaskExternalDependencyEdge>& externalDependencies()const noexcept{
@@ -208,6 +227,10 @@ public:
 private:
     GraphicsVector<GpuTaskDependencyEdge> m_edges;
     GraphicsVector<GpuTaskDependencyEdge> m_schedulingEdges;
+    GraphicsVector<usize> m_schedulingOutgoingOffsets;
+    GraphicsVector<u32> m_schedulingOutgoingConsumers;
+    GraphicsVector<usize> m_schedulingIncomingOffsets;
+    GraphicsVector<u32> m_schedulingIncomingProducers;
     GraphicsVector<GpuTaskDependencyEdge> m_inferredEdges;
     GraphicsVector<GpuTaskExternalDependencyEdge> m_externalDependencies;
     GraphicsVector<GpuTaskId> m_topologicalOrder;

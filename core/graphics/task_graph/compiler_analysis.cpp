@@ -266,6 +266,56 @@ static void BuildSchedulingEdges(
     }
 }
 
+[[nodiscard]] static bool BuildSchedulingTaskAdjacency(
+    const GraphicsVector<GpuTaskDependencyEdge>& schedulingEdges,
+    const usize taskCount,
+    const u64 graphGeneration,
+    GraphicsVector<usize>& outOutgoingOffsets,
+    GraphicsVector<u32>& outOutgoingConsumers,
+    GraphicsVector<usize>& outIncomingOffsets,
+    GraphicsVector<u32>& outIncomingProducers,
+    Alloc::ScratchArena& scratchArena
+){
+    outOutgoingOffsets.clear();
+    outOutgoingConsumers.clear();
+    outIncomingOffsets.clear();
+    outIncomingProducers.clear();
+    outOutgoingOffsets.resize(taskCount + 1u, 0u);
+    outIncomingOffsets.resize(taskCount + 1u, 0u);
+    for(const GpuTaskDependencyEdge& edge : schedulingEdges){
+        if(
+            !edge.producer.valid()
+            || !edge.consumer.valid()
+            || edge.producer.generation != graphGeneration
+            || edge.consumer.generation != graphGeneration
+            || edge.producer.index >= taskCount
+            || edge.consumer.index >= taskCount
+            || edge.producer == edge.consumer
+        )
+            return false;
+        ++outOutgoingOffsets[edge.producer.index + 1u];
+        ++outIncomingOffsets[edge.consumer.index + 1u];
+    }
+    for(usize taskIndex = 1u; taskIndex <= taskCount; ++taskIndex){
+        outOutgoingOffsets[taskIndex] += outOutgoingOffsets[taskIndex - 1u];
+        outIncomingOffsets[taskIndex] += outIncomingOffsets[taskIndex - 1u];
+    }
+
+    outOutgoingConsumers.resize(schedulingEdges.size());
+    outIncomingProducers.resize(schedulingEdges.size());
+    Vector<usize, Alloc::ScratchArena> writeOffsets(taskCount, scratchArena);
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
+        writeOffsets[taskIndex] = outOutgoingOffsets[taskIndex];
+    for(const GpuTaskDependencyEdge& edge : schedulingEdges)
+        outOutgoingConsumers[writeOffsets[edge.producer.index]++] = edge.consumer.index;
+
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
+        writeOffsets[taskIndex] = outIncomingOffsets[taskIndex];
+    for(const GpuTaskDependencyEdge& edge : schedulingEdges)
+        outIncomingProducers[writeOffsets[edge.consumer.index]++] = edge.producer.index;
+    return true;
+}
+
 [[nodiscard]] static const GpuTaskDependencyEdge* FindCycleDiagnosticEdge(
     const GraphicsVector<GpuTaskDependencyEdge>& cycleEdges
 )noexcept{
@@ -289,6 +339,10 @@ static void BuildSchedulingEdges(
 void GpuTaskGraphAnalysis::reset(){
     m_edges.clear();
     m_schedulingEdges.clear();
+    m_schedulingOutgoingOffsets.clear();
+    m_schedulingOutgoingConsumers.clear();
+    m_schedulingIncomingOffsets.clear();
+    m_schedulingIncomingProducers.clear();
     m_inferredEdges.clear();
     m_externalDependencies.clear();
     m_topologicalOrder.clear();
@@ -319,7 +373,54 @@ bool GpuTaskGraphAnalysis::validFor(const GpuTaskGraph& graph)const noexcept{
         && m_resourceCount == graph.resourceCount()
         && m_resourceVersionCount == graph.resourceVersionCount()
         && m_externalCompletionCount == graph.externalCompletionCount()
+        && m_topologicalOrder.size() == m_taskCount
+        && m_schedulingOutgoingOffsets.size() == m_taskCount + 1u
+        && m_schedulingIncomingOffsets.size() == m_taskCount + 1u
+        && m_schedulingOutgoingOffsets.front() == 0u
+        && m_schedulingIncomingOffsets.front() == 0u
+        && m_schedulingOutgoingConsumers.size() == m_schedulingEdges.size()
+        && m_schedulingIncomingProducers.size() == m_schedulingEdges.size()
+        && m_schedulingOutgoingOffsets.back() == m_schedulingEdges.size()
+        && m_schedulingIncomingOffsets.back() == m_schedulingEdges.size()
     ;
+}
+
+GpuTaskGraphSchedulingTaskIndexView GpuTaskGraphAnalysis::schedulingConsumers(const GpuTaskId& producer)const noexcept{
+    if(
+        !m_valid
+        || !producer.valid()
+        || producer.generation != m_generation
+        || producer.index >= m_taskCount
+        || m_schedulingOutgoingOffsets.size() != m_taskCount + 1u
+    )
+        return {};
+    const usize firstConsumer = m_schedulingOutgoingOffsets[producer.index];
+    const usize consumerEnd = m_schedulingOutgoingOffsets[producer.index + 1u];
+    if(consumerEnd < firstConsumer || consumerEnd > m_schedulingOutgoingConsumers.size())
+        return {};
+    return GpuTaskGraphSchedulingTaskIndexView{
+        .taskIndices = consumerEnd != firstConsumer ? m_schedulingOutgoingConsumers.data() + firstConsumer : nullptr,
+        .taskCount = consumerEnd - firstConsumer,
+    };
+}
+
+GpuTaskGraphSchedulingTaskIndexView GpuTaskGraphAnalysis::schedulingProducers(const GpuTaskId& consumer)const noexcept{
+    if(
+        !m_valid
+        || !consumer.valid()
+        || consumer.generation != m_generation
+        || consumer.index >= m_taskCount
+        || m_schedulingIncomingOffsets.size() != m_taskCount + 1u
+    )
+        return {};
+    const usize firstProducer = m_schedulingIncomingOffsets[consumer.index];
+    const usize producerEnd = m_schedulingIncomingOffsets[consumer.index + 1u];
+    if(producerEnd < firstProducer || producerEnd > m_schedulingIncomingProducers.size())
+        return {};
+    return GpuTaskGraphSchedulingTaskIndexView{
+        .taskIndices = producerEnd != firstProducer ? m_schedulingIncomingProducers.data() + firstProducer : nullptr,
+        .taskCount = producerEnd - firstProducer,
+    };
 }
 
 bool GpuTaskGraphAnalysis::hasExplicitEdge(const GpuTaskId& producer, const GpuTaskId& consumer)const noexcept{
@@ -700,6 +801,17 @@ bool GpuTaskGraphCompiler::analyze(
             outAnalysis.m_schedulingEdges,
             scratchArena
         );
+        if(!BuildSchedulingTaskAdjacency(
+            outAnalysis.m_schedulingEdges,
+            graph.taskCount(),
+            graph.generation(),
+            outAnalysis.m_schedulingOutgoingOffsets,
+            outAnalysis.m_schedulingOutgoingConsumers,
+            outAnalysis.m_schedulingIncomingOffsets,
+            outAnalysis.m_schedulingIncomingProducers,
+            scratchArena
+        ))
+            return fail(GpuTaskGraphAnalysisStatus::InvalidTaskDependency);
     }
     const f64 topologicalOrderSeconds = semanticTopologySeconds
         + DurationInSeconds<f64>(TimerNow(), finalTopologyBegin)

@@ -20,6 +20,91 @@ namespace __hidden_gpu_task_graph_compiler_packetization{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct PacketMergeSummary{
+    Name uniformFrontierScoredMergeDomain;
+    bool allTasksAllowMerge = false;
+    bool hasCrossQueueConsumerFrontier = false;
+};
+
+[[nodiscard]] bool TaskAllowsPacketMerge(const GpuTaskGraphTaskView& task)noexcept{
+    return task.scheduling.allowPacketMerge
+        && !task.scheduling.forceSubmissionBoundary
+        && !task.scheduling.joinsAcceptedQueueFrontier
+    ;
+}
+
+[[nodiscard]] bool SchedulingConsumersContain(
+    const GpuTaskGraphAnalysis& analysis,
+    const GpuTaskId& producer,
+    const GpuTaskId& consumer
+)noexcept{
+    const GpuTaskGraphSchedulingTaskIndexView consumers = analysis.schedulingConsumers(producer);
+    for(usize consumerIndex = 0u; consumerIndex < consumers.taskCount; ++consumerIndex){
+        if(consumers[consumerIndex] == consumer.index)
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] bool HasCrossQueueConsumerFrontier(
+    const GpuTaskGraphAnalysis& analysis,
+    const GpuTaskGraphQueueAssignments& assignments,
+    const GpuTaskId& task,
+    const GpuPhysicalQueueId& packetQueue
+)noexcept{
+    const GpuTaskGraphSchedulingTaskIndexView consumers = analysis.schedulingConsumers(task);
+    for(usize consumerIndex = 0u; consumerIndex < consumers.taskCount; ++consumerIndex){
+        const GpuTaskId consumer{ consumers[consumerIndex], task.generation };
+        const GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
+        if(
+            !consumerAssignment
+            || !consumerAssignment->queue.valid()
+            || consumerAssignment->queue != packetQueue
+        )
+            return true;
+    }
+    return false;
+}
+
+static void InitializePacketMergeSummary(
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueId& packetQueue,
+    const GpuTaskGraphAnalysis& analysis,
+    const GpuTaskGraphQueueAssignments& assignments,
+    const bool trackConsumerFrontiers,
+    PacketMergeSummary& outSummary
+){
+    outSummary.uniformFrontierScoredMergeDomain = task.scheduling.frontierScoredMergeDomain;
+    outSummary.allTasksAllowMerge = TaskAllowsPacketMerge(task);
+    outSummary.hasCrossQueueConsumerFrontier = trackConsumerFrontiers
+        && HasCrossQueueConsumerFrontier(analysis, assignments, task.id, packetQueue)
+    ;
+}
+
+static void AccumulatePacketMergeSummary(
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueId& packetQueue,
+    const GpuTaskGraphAnalysis& analysis,
+    const GpuTaskGraphQueueAssignments& assignments,
+    const bool trackConsumerFrontiers,
+    PacketMergeSummary& inOutSummary
+){
+    inOutSummary.allTasksAllowMerge = inOutSummary.allTasksAllowMerge && TaskAllowsPacketMerge(task);
+    if(
+        !inOutSummary.uniformFrontierScoredMergeDomain
+        || !task.scheduling.frontierScoredMergeDomain
+        || inOutSummary.uniformFrontierScoredMergeDomain != task.scheduling.frontierScoredMergeDomain
+    )
+        inOutSummary.uniformFrontierScoredMergeDomain = Name{};
+    if(
+        trackConsumerFrontiers
+        && !inOutSummary.hasCrossQueueConsumerFrontier
+        && HasCrossQueueConsumerFrontier(analysis, assignments, task.id, packetQueue)
+    )
+        inOutSummary.hasCrossQueueConsumerFrontier = true;
+}
+
+
 [[nodiscard]] bool ResolvePacketTimingEnvelope(
     const GpuTaskGraphPacketTimingEnvelopeOptions& options,
     GpuTaskGraphCompilerDetail::GpuTaskGraphCompiledPlanStorage& compiledPlan,
@@ -156,7 +241,9 @@ namespace GpuTaskGraphCompilerDetail{
     GpuSubmissionPacketRange& outTimingEnvelopeRange
 ){
     if(
-        compiledPlan.compiledTaskIndexByTask.size() != graph.taskCount()
+        !analysis.validFor(graph)
+        || !assignments.validFor(graph)
+        || compiledPlan.compiledTaskIndexByTask.size() != graph.taskCount()
         || !compiledPlan.tasks.empty()
     )
         return false;
@@ -167,6 +254,10 @@ namespace GpuTaskGraphCompilerDetail{
     // it only absorbs a cheap immediate successor after proving that the preceding packet has no cross-queue signal
     // frontier. This keeps current renderer packet boundaries stable while the generic compiler can reduce safe
     // one-task submission overhead for new callers.
+    __hidden_gpu_task_graph_compiler_packetization::PacketMergeSummary precedingPacketSummary;
+    const bool trackConsumerFrontiers = policy == GpuTaskGraphPacketizationPolicy::FrontierSafe
+        || policy == GpuTaskGraphPacketizationPolicy::FrontierScored
+    ;
     for(const GpuTaskId taskID : analysis.topologicalOrder()){
         if(
             !taskID.valid()
@@ -214,38 +305,16 @@ namespace GpuTaskGraphCompilerDetail{
             bool precedingPacketAllowsMerge = precedingPacket.queue == assignment->queue;
             if(!precedingPacketAllowsMerge)
                 packetizationDecision = GpuTaskPacketizationDecision::QueueChanged;
-            for(u32 precedingTaskIndex = 0u;
-                precedingPacketAllowsMerge && precedingTaskIndex < precedingPacket.taskCount;
-                ++precedingTaskIndex
-            ){
-                const GpuTaskId precedingTask = compiledPlan.packetTasks[
-                    precedingPacket.taskOffset + precedingTaskIndex
-                ];
-                const GpuTaskGraphTaskView preceding = graph.taskAt(precedingTask.index);
-                const bool precedingTaskAllowsMerge = preceding.scheduling.allowPacketMerge
-                    && !preceding.scheduling.forceSubmissionBoundary
-                    && !preceding.scheduling.joinsAcceptedQueueFrontier
-                ;
-                if(!precedingTaskAllowsMerge)
-                    packetizationDecision = GpuTaskPacketizationDecision::PrecedingTaskForcesBoundary;
-                precedingPacketAllowsMerge = precedingTaskAllowsMerge;
+            if(precedingPacketAllowsMerge && !precedingPacketSummary.allTasksAllowMerge){
+                packetizationDecision = GpuTaskPacketizationDecision::PrecedingTaskForcesBoundary;
+                precedingPacketAllowsMerge = false;
             }
             if(precedingPacketAllowsMerge && scoredMergeRequested){
                 const Name& frontierScoredMergeDomain = task.scheduling.frontierScoredMergeDomain;
-                bool precedingPacketMatchesScoredMergeDomain = static_cast<bool>(frontierScoredMergeDomain);
-                for(u32 precedingTaskIndex = 0u;
-                    precedingPacketMatchesScoredMergeDomain && precedingTaskIndex < precedingPacket.taskCount;
-                    ++precedingTaskIndex
-                ){
-                    const GpuTaskId precedingTask = compiledPlan.packetTasks[
-                        precedingPacket.taskOffset + precedingTaskIndex
-                    ];
-                    const GpuTaskGraphTaskView preceding = graph.taskAt(precedingTask.index);
-                    precedingPacketMatchesScoredMergeDomain =
-                        static_cast<bool>(preceding.scheduling.frontierScoredMergeDomain)
-                        && preceding.scheduling.frontierScoredMergeDomain == frontierScoredMergeDomain
-                    ;
-                }
+                const bool precedingPacketMatchesScoredMergeDomain = static_cast<bool>(frontierScoredMergeDomain)
+                    && static_cast<bool>(precedingPacketSummary.uniformFrontierScoredMergeDomain)
+                    && precedingPacketSummary.uniformFrontierScoredMergeDomain == frontierScoredMergeDomain
+                ;
                 if(!precedingPacketMatchesScoredMergeDomain)
                     packetizationDecision = GpuTaskPacketizationDecision::ScoredMergeDomainMismatch;
                 precedingPacketAllowsMerge = precedingPacketMatchesScoredMergeDomain;
@@ -257,13 +326,13 @@ namespace GpuTaskGraphCompilerDetail{
                 const GpuTaskId precedingTask = compiledPlan.packetTasks[
                     precedingPacket.taskOffset + precedingPacket.taskCount - 1u
                 ];
-                bool directlyDependsOnPrecedingTask = false;
-                for(const GpuTaskDependencyEdge& edge : analysis.schedulingEdges()){
-                    if(edge.producer == precedingTask && edge.consumer == taskID){
-                        directlyDependsOnPrecedingTask = true;
-                        break;
-                    }
-                }
+                const bool directlyDependsOnPrecedingTask =
+                    __hidden_gpu_task_graph_compiler_packetization::SchedulingConsumersContain(
+                        analysis,
+                        precedingTask,
+                        taskID
+                    )
+                ;
                 const bool eligibleScoredMerge = directlyDependsOnPrecedingTask
                     && task.scheduling.cost <= GpuTaskCostHint::Small
                     && !task.scheduling.allowMergeAcrossConsumerFrontier
@@ -293,36 +362,12 @@ namespace GpuTaskGraphCompilerDetail{
             }
             if(
                 precedingPacketAllowsMerge
-                && (
-                    policy == GpuTaskGraphPacketizationPolicy::FrontierSafe
-                    || policy == GpuTaskGraphPacketizationPolicy::FrontierScored
-                )
+                && trackConsumerFrontiers
                 && !task.scheduling.allowMergeAcrossConsumerFrontier
             ){
-                for(u32 precedingTaskIndex = 0u;
-                    precedingPacketAllowsMerge && precedingTaskIndex < precedingPacket.taskCount;
-                    ++precedingTaskIndex
-                ){
-                    const GpuTaskId precedingTask = compiledPlan.packetTasks[
-                        precedingPacket.taskOffset + precedingTaskIndex
-                    ];
-                    for(const GpuTaskDependencyEdge& edge : analysis.schedulingEdges()){
-                        if(edge.producer != precedingTask)
-                            continue;
-
-                        const GpuTaskQueueAssignment* const consumerAssignment = assignments.find(edge.consumer);
-                        // Queue assignment covers every analyzed task. Treat a broken assignment conservatively so a
-                        // missing consumer identity cannot hide a required cross-queue signal frontier.
-                        if(
-                            !consumerAssignment
-                            || !consumerAssignment->queue.valid()
-                            || consumerAssignment->queue != precedingPacket.queue
-                        ){
-                            packetizationDecision = GpuTaskPacketizationDecision::CrossQueueConsumerFrontier;
-                            precedingPacketAllowsMerge = false;
-                            break;
-                        }
-                    }
+                if(precedingPacketSummary.hasCrossQueueConsumerFrontier){
+                    packetizationDecision = GpuTaskPacketizationDecision::CrossQueueConsumerFrontier;
+                    precedingPacketAllowsMerge = false;
                 }
             }
             if(precedingPacketAllowsMerge){
@@ -352,6 +397,24 @@ namespace GpuTaskGraphCompilerDetail{
                 .isRecoverySubmission = task.scheduling.isRecoverySubmission,
                 .recordsTiming = taskRecordsTiming,
             });
+            __hidden_gpu_task_graph_compiler_packetization::InitializePacketMergeSummary(
+                task,
+                assignment->queue,
+                analysis,
+                assignments,
+                trackConsumerFrontiers,
+                precedingPacketSummary
+            );
+        }
+        else{
+            __hidden_gpu_task_graph_compiler_packetization::AccumulatePacketMergeSummary(
+                task,
+                assignment->queue,
+                analysis,
+                assignments,
+                trackConsumerFrontiers,
+                precedingPacketSummary
+            );
         }
         compiledPlan.packetTasks.push_back(taskID);
         compiledPlan.tasks.push_back(GpuCompiledTask{

@@ -3470,7 +3470,6 @@ public:
         const GpuPhysicalQueueId& executionQueue,
         const QueueSubmissionDesc& submitDesc
     );
-    void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance);
     // The registry owns every active native VkQueue. Broad CommandQueue calls resolve through the designated
     // primary record only for legacy callers; graph recording/submission selects a concrete ID directly.
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_deviceGeneration; }
@@ -3545,6 +3544,7 @@ public:
     void queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore semaphore, u64 value);
     [[nodiscard]] u64 queueGetCompletedInstance(CommandQueue::Enum queue);
     [[nodiscard]] u64 queueGetCompletedInstance(const GpuPhysicalQueueId& queue);
+    void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance);
 
 public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType);

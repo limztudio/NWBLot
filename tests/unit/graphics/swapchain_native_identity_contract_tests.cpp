@@ -410,7 +410,7 @@ TEST(SwapChainPresentation, CanonicalNativeQueueStateSerializesEveryInternalHost
     EXPECT_NE(fullBackendHeader.find("[[nodiscard]] bool waitEventQuery(EventQuery* query"), AStringView::npos);
 
     AString queueSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "queue.cpp", queueSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "queue_submission.cpp", queueSource));
     const AStringView fullQueueSource(queueSource.data(), queueSource.size());
     const usize submitHostLockOffset = fullQueueSource.find("ScopedLock hostLock(m_nativeQueue.hostMutex);");
     const usize nativeSubmitOffset = fullQueueSource.find("vkQueueSubmit2(m_nativeQueue.queue", submitHostLockOffset);

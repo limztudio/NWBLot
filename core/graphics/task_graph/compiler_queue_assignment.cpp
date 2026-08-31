@@ -85,24 +85,27 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraphAnalysis& analysis,
     const GpuTaskGraphTaskView& task,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GraphicsVector<u32>& assignmentIndicesByTask,
     const GpuTaskGraphQueueTopology& topology,
     const GpuPhysicalQueueInfo& baseQueue,
     const usize assignedPrefixCount,
     const bool allowCrossFamilyRouting
 )noexcept{
     const GpuPhysicalQueueInfo* result = nullptr;
-    for(usize assignmentIndex = 0u; assignmentIndex < assignedPrefixCount; ++assignmentIndex){
-        const GpuTaskQueueAssignment& assignment = assignments[assignmentIndex];
-        bool directDependency = false;
-        for(const GpuTaskDependencyEdge& edge : analysis.schedulingEdges()){
-            if(edge.producer == assignment.task && edge.consumer == task.id){
-                directDependency = true;
-                break;
-            }
-        }
-        if(!directDependency)
+    usize resultAssignmentIndex = 0u;
+    const GpuTaskGraphSchedulingTaskIndexView producerIndices = analysis.schedulingProducers(task.id);
+    for(usize producerIndex = 0u; producerIndex < producerIndices.taskCount; ++producerIndex){
+        const u32 producerTaskIndex = producerIndices[producerIndex];
+        if(producerTaskIndex >= assignmentIndicesByTask.size())
             continue;
 
+        const u32 producerAssignmentIndex = assignmentIndicesByTask[producerTaskIndex];
+        if(producerAssignmentIndex >= assignedPrefixCount || producerAssignmentIndex >= assignments.size())
+            continue;
+        const GpuTaskId producerTask{ producerTaskIndex, task.id.generation };
+        const GpuTaskQueueAssignment& assignment = assignments[producerAssignmentIndex];
+        if(assignment.task != producerTask)
+            continue;
         const GpuPhysicalQueueInfo* const candidate = FindPhysicalQueueInfo(topology, assignment.queue);
         if(
             !candidate
@@ -111,7 +114,10 @@ namespace GpuTaskGraphCompilerDetail{
             || !IsLegalQueueAssignmentCandidate(graph, topology, task, *candidate)
         )
             continue;
-        result = candidate;
+        if(!result || producerAssignmentIndex > resultAssignmentIndex){
+            result = candidate;
+            resultAssignmentIndex = producerAssignmentIndex;
+        }
     }
     return result;
 }
@@ -736,6 +742,7 @@ bool GpuTaskGraphCompiler::assignQueues(
                     analysis,
                     task,
                     outAssignments.m_assignments,
+                    outAssignments.m_assignmentIndicesByTask,
                     topology,
                     *selectedQueue,
                     assignmentIndex,

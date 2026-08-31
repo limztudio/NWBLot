@@ -11986,6 +11986,89 @@ TEST(GpuTaskGraph, PreservesAuxiliarySameClassQueueAcrossSerialOffloadChain){
 }
 
 
+TEST(GpuTaskGraph, PreservesLatestDirectDependencyRouteAcrossIncomingAdjacencyOrder){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuQueueRequest graphicsRequest;
+    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+    graphicsRequest.allowFallback = false;
+    graphicsRequest.compilerMayOverridePreference = false;
+
+    Graphics::GpuTaskSchedulingHint producerScheduling;
+    producerScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    producerScheduling.allowSameClassQueueRouting = true;
+    const Graphics::GpuTaskId first = AddTaskWithQueue(
+        graph,
+        Name("tests/task_graph/direct_affinity_order_first"),
+        "Direct Affinity Order First",
+        graphicsRequest,
+        producerScheduling
+    );
+    const Graphics::GpuTaskId second = AddTaskWithQueue(
+        graph,
+        Name("tests/task_graph/direct_affinity_order_second"),
+        "Direct Affinity Order Second",
+        graphicsRequest,
+        producerScheduling
+    );
+    ASSERT_TRUE(first.valid());
+    ASSERT_TRUE(second.valid());
+
+    Graphics::GpuTaskSchedulingHint consumerScheduling;
+    consumerScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    consumerScheduling.allowSameClassQueueRouting = true;
+    consumerScheduling.preserveSameClassQueueWithDirectDependency = true;
+    const Graphics::GpuTaskId consumerDependencies[] = { second, first };
+    const Graphics::GpuTaskId consumer = AddTaskWithQueue(
+        graph,
+        Name("tests/task_graph/direct_affinity_order_consumer"),
+        "Direct Affinity Order Consumer",
+        graphicsRequest,
+        consumerScheduling,
+        {},
+        consumerDependencies,
+        LengthOf(consumerDependencies)
+    );
+    ASSERT_TRUE(consumer.valid());
+
+    Graphics::GpuPhysicalQueueInfo auxiliaryGraphicsQueue = GraphicsQueue(1u);
+    auxiliaryGraphicsQueue.queueIndex = 1u;
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        auxiliaryGraphicsQueue,
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
+    EXPECT_EQ(analysis.topologicalOrder()[0u], first);
+    EXPECT_EQ(analysis.topologicalOrder()[1u], second);
+    EXPECT_EQ(analysis.topologicalOrder()[2u], consumer);
+    const Graphics::GpuTaskGraphSchedulingTaskIndexView producers = analysis.schedulingProducers(consumer);
+    ASSERT_EQ(producers.taskCount, 2u);
+    EXPECT_EQ(producers[0u], second.index);
+    EXPECT_EQ(producers[1u], first.index);
+
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
+    const Graphics::GpuTaskQueueAssignment* const firstAssignment = assignments.find(first);
+    const Graphics::GpuTaskQueueAssignment* const secondAssignment = assignments.find(second);
+    const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
+    ASSERT_NE(firstAssignment, nullptr);
+    ASSERT_NE(secondAssignment, nullptr);
+    ASSERT_NE(consumerAssignment, nullptr);
+    EXPECT_EQ(firstAssignment->queue, queues[0u].id);
+    EXPECT_EQ(secondAssignment->queue, auxiliaryGraphicsQueue.id);
+    EXPECT_EQ(consumerAssignment->queue, auxiliaryGraphicsQueue.id);
+    EXPECT_TRUE(consumerAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DirectDependencyAffinity);
+}
+
+
 TEST(GpuTaskGraph, RetainsSameFamilyRoutingWithoutCrossFamilyOptIn){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

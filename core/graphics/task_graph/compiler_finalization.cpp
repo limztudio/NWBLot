@@ -323,11 +323,6 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
         packetCount > static_cast<usize>(Limit<u32>::s_Max)
         || compiledPlan.packetDependencies.size() > static_cast<usize>(Limit<u32>::s_Max)
         || compiledPlan.packetExternalDependencies.size() > static_cast<usize>(Limit<u32>::s_Max)
-        || (
-            plansTerminalFinalizationDependencies
-            && packetCount != 0u
-            && packetCount > Limit<usize>::s_Max / packetCount
-        )
     )
         return false;
 
@@ -347,11 +342,22 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
     for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex)
         packetDependencyConsumerMarkers[packetIndex] = Limit<u32>::s_Max;
 
-    Vector<u8, Alloc::ScratchArena> packetReachability(scratchArena);
-    if(plansTerminalFinalizationDependencies)
-        packetReachability.resize(packetCount * packetCount);
-    for(usize reachabilityIndex = 0u; reachabilityIndex < packetReachability.size(); ++reachabilityIndex)
-        packetReachability[reachabilityIndex] = 0u;
+    constexpr usize s_BitsPerPacketReachabilityWord = sizeof(u64) * 8u;
+    Vector<u64, Alloc::ScratchArena> packetReachability(scratchArena);
+    usize packetReachabilityWordsPerPacket = 0u;
+    if(plansTerminalFinalizationDependencies){
+        if(packetCount == 0u)
+            return false;
+        packetReachabilityWordsPerPacket = (packetCount - 1u) / s_BitsPerPacketReachabilityWord + 1u;
+        usize packetReachabilityWordCount = 0u;
+        if(
+            !TryMultiply<usize>(packetCount, packetReachabilityWordsPerPacket, packetReachabilityWordCount)
+            || packetReachabilityWordCount > Limit<usize>::s_Max / sizeof(u64)
+            || packetReachabilityWordCount > packetReachability.max_size()
+        )
+            return false;
+        packetReachability.resize(packetReachabilityWordCount, 0u);
+    }
     const auto publishPacketDependency = [&](const GpuSubmissionPacketId producer, const GpuSubmissionPacketId consumer){
         if(
             !producer.valid()
@@ -363,11 +369,13 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
         )
             return false;
 
-        packetReachability[producer.index * packetCount + consumer.index] = 1u;
-        for(usize ancestorIndex = 0u; ancestorIndex < producer.index; ++ancestorIndex){
-            if(packetReachability[ancestorIndex * packetCount + producer.index] != 0u)
-                packetReachability[ancestorIndex * packetCount + consumer.index] = 1u;
-        }
+        const usize producerRowOffset = static_cast<usize>(producer.index) * packetReachabilityWordsPerPacket;
+        const usize consumerRowOffset = static_cast<usize>(consumer.index) * packetReachabilityWordsPerPacket;
+        const usize producerWordCount = static_cast<usize>(producer.index) / s_BitsPerPacketReachabilityWord + 1u;
+        for(usize wordIndex = 0u; wordIndex < producerWordCount; ++wordIndex)
+            packetReachability[consumerRowOffset + wordIndex] |= packetReachability[producerRowOffset + wordIndex];
+        const usize producerWord = consumerRowOffset + producer.index / s_BitsPerPacketReachabilityWord;
+        packetReachability[producerWord] |= static_cast<u64>(1u) << (producer.index % s_BitsPerPacketReachabilityWord);
         return true;
     };
 
@@ -476,10 +484,15 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
                     break;
                 }
             }
-            if(
-                !needsTerminalFinalizationDependency
-                || packetReachability[producerPacketID.index * packetCount + consumerPacketIndex] != 0u
-            )
+            if(!needsTerminalFinalizationDependency)
+                continue;
+            const usize reachabilityWord = consumerPacketIndex * packetReachabilityWordsPerPacket
+                + producerPacketID.index / s_BitsPerPacketReachabilityWord
+            ;
+            const u64 reachabilityBit = static_cast<u64>(1u)
+                << (producerPacketID.index % s_BitsPerPacketReachabilityWord)
+            ;
+            if((packetReachability[reachabilityWord] & reachabilityBit) != 0u)
                 continue;
             if(
                 !appendPacketDependency(producerPacketID)

@@ -36,6 +36,21 @@ using BufferStateIndexMap = HashMap<Buffer*, usize, Hasher<Buffer*>, EqualTo<Buf
 using PermanentTextureStateIndexMap = HashMap<Texture*, usize, Hasher<Texture*>, EqualTo<Texture*>, Alloc::GlobalArena>;
 
 
+[[nodiscard]] static bool OwnershipMatches(
+    const GpuPhysicalQueueId ownerQueue,
+    const GpuPhysicalQueueId releaseDestinationQueue,
+    const GpuPhysicalQueueId expectedOwnerQueue,
+    const GpuPhysicalQueueId expectedReleaseDestinationQueue
+)noexcept{
+    if(ownerQueue != expectedOwnerQueue)
+        return false;
+    return expectedOwnerQueue == expectedReleaseDestinationQueue
+        ? !releaseDestinationQueue.valid()
+        : releaseDestinationQueue == expectedReleaseDestinationQueue
+    ;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -429,25 +444,18 @@ bool CommandListResourceStateHandoff::coversTextureRangeWithOwnership(
     if(resolvedSubresources.numMipLevels == 0u || resolvedSubresources.numArraySlices == 0u)
         return false;
 
-    const auto ownershipMatches = [&expectedOwnerQueue, &expectedReleaseDestinationQueue](
-        const GpuPhysicalQueueId ownerQueue,
-        const GpuPhysicalQueueId releaseDestinationQueue
-    ){
-        if(ownerQueue != expectedOwnerQueue)
-            return false;
-        return expectedOwnerQueue == expectedReleaseDestinationQueue
-            ? !releaseDestinationQueue.valid()
-            : releaseDestinationQueue == expectedReleaseDestinationQueue
-        ;
-    };
-
     const PermanentTextureState* permanentState = nullptr;
     for(const PermanentTextureState& state : m_permanentTextureStates){
         if(state.texture != texture)
             continue;
         if(
             permanentState
-            || !ownershipMatches(state.ownerQueue, state.releaseDestinationQueue)
+            || !__hidden_command_list_state_handoff::OwnershipMatches(
+                state.ownerQueue,
+                state.releaseDestinationQueue,
+                expectedOwnerQueue,
+                expectedReleaseDestinationQueue
+            )
         )
             return false;
         permanentState = &state;
@@ -469,7 +477,12 @@ bool CommandListResourceStateHandoff::coversTextureRangeWithOwnership(
                     continue;
                 if(
                     matchingState
-                    || !ownershipMatches(state.ownerQueue, state.releaseDestinationQueue)
+                    || !__hidden_command_list_state_handoff::OwnershipMatches(
+                        state.ownerQueue,
+                        state.releaseDestinationQueue,
+                        expectedOwnerQueue,
+                        expectedReleaseDestinationQueue
+                    )
                 )
                     return false;
                 matchingState = &state;
@@ -479,6 +492,57 @@ bool CommandListResourceStateHandoff::coversTextureRangeWithOwnership(
         }
     }
     return true;
+}
+
+bool CommandListResourceStateHandoff::coversBufferWithOwnership(
+    Buffer* const buffer,
+    const GpuPhysicalQueueId expectedOwnerQueue,
+    const GpuPhysicalQueueId expectedReleaseDestinationQueue
+)const{
+    if(
+        !m_valid
+        || m_deviceGeneration == 0u
+        || !buffer
+        || !expectedOwnerQueue.valid()
+    )
+        return false;
+
+    const BufferState* permanentState = nullptr;
+    for(const BufferState& state : m_permanentBufferStates){
+        if(state.buffer != buffer)
+            continue;
+        if(
+            permanentState
+            || !__hidden_command_list_state_handoff::OwnershipMatches(
+                state.ownerQueue,
+                state.releaseDestinationQueue,
+                expectedOwnerQueue,
+                expectedReleaseDestinationQueue
+            )
+        )
+            return false;
+        permanentState = &state;
+    }
+    if(permanentState)
+        return true;
+
+    const BufferState* matchingState = nullptr;
+    for(const BufferState& state : m_bufferStates){
+        if(state.buffer != buffer)
+            continue;
+        if(
+            matchingState
+            || !__hidden_command_list_state_handoff::OwnershipMatches(
+                state.ownerQueue,
+                state.releaseDestinationQueue,
+                expectedOwnerQueue,
+                expectedReleaseDestinationQueue
+            )
+        )
+            return false;
+        matchingState = &state;
+    }
+    return matchingState != nullptr;
 }
 
 bool CommandListResourceStateHandoff::copyFrom(const CommandListResourceStateHandoff& source){

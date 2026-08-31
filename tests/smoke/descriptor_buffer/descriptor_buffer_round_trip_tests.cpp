@@ -11891,6 +11891,8 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
     computeProducer->releaseBufferOwnership(buffer.get(), graphicsQueue);
     computeProducer->close(&computeState);
     ASSERT_TRUE(computeState.valid());
+    EXPECT_TRUE(computeState.coversBufferWithOwnership(buffer.get(), computeQueue, graphicsQueue));
+    EXPECT_FALSE(computeState.coversBufferWithOwnership(buffer.get(), graphicsQueue, graphicsQueue));
     CommandList* const producerLists[] = { computeProducer.get() };
     const QueueSubmissionToken producerToken = device.executeCommandLists(
         producerLists,
@@ -11901,6 +11903,17 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
     ASSERT_TRUE(producerToken.valid());
     ASSERT_TRUE(producerToken.matchesPhysicalQueue(computeQueue.index, computeQueue.deviceGeneration));
     ASSERT_GT(producerToken.value, primerToken.value);
+
+    CommandListParameters graphicsParams;
+    graphicsParams.setQueueType(CommandQueue::Graphics);
+    CommandListResourceStateHandoff staleGraphicsState(asyncScope.arena());
+    const CommandListHandle staleGraphicsProducer = device.createCommandList(graphicsParams);
+    ASSERT_NE(staleGraphicsProducer.get(), nullptr);
+    staleGraphicsProducer->open();
+    staleGraphicsProducer->setBufferState(buffer.get(), ResourceStates::UnorderedAccess);
+    staleGraphicsProducer->close(&staleGraphicsState);
+    ASSERT_TRUE(staleGraphicsState.valid());
+    EXPECT_FALSE(staleGraphicsState.coversBufferWithOwnership(buffer.get(), computeQueue, graphicsQueue));
 
     GpuTaskGraph graph(asyncScope.arena());
     const GpuExternalCompletionId completion = graph.importExternalCompletion(
@@ -11991,10 +12004,82 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
     ASSERT_NE(externalDependencies, nullptr);
     EXPECT_EQ(externalDependencies[0u], completion);
 
+    const GpuNativePacketRecorder recorder(device);
+    {
+        GpuTaskGraph staleGraph(asyncScope.arena());
+        const GpuExternalCompletionId staleCompletion = staleGraph.importExternalCompletion(
+            GpuExternalCompletionDesc{}
+                .setIdentity(Name("tests/descriptor_buffer/stale_initial_owner_compute_completion"))
+                .setMarkerLabel("Stale Initial Owner Compute Completion")
+        );
+        ASSERT_TRUE(staleCompletion.valid());
+        const GpuGraphResourceId staleResource = staleGraph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/descriptor_buffer/stale_initial_owner_compute_buffer"))
+                .setMarkerLabel("Stale Initial Owner Compute Buffer")
+                .setType(GpuGraphResourceType::Buffer)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setInitialOwnerQueue(computeQueue)
+                .setInitialOwnerReleaseDestinationQueue(graphicsQueue)
+                .setInitialOwnerCompletion(staleCompletion)
+                .setInitialOwnerMinimumCompletionToken(producerToken)
+                .setInitialOwnerStateSource(&staleGraphicsState)
+        );
+        ASSERT_TRUE(staleResource.valid());
+        const GpuTaskResourceUse staleUses[] = {
+            GpuTaskResourceUse{
+                .resource = staleResource,
+                .range = {},
+                .requiredState = ResourceStates::ShaderResource,
+                .access = GpuTaskResourceAccess::Read,
+            },
+        };
+        GpuTaskDesc staleTaskDesc;
+        staleTaskDesc
+            .setIdentity(Name("tests/descriptor_buffer/stale_initial_owner_compute_use"))
+            .setMarkerLabel("Stale Initial Owner Compute Use")
+            .setQueue(graphicsRequest)
+            .setResourceUses(staleUses, LengthOf(staleUses))
+        ;
+        bool staleTaskRecorded = false;
+        const GpuTaskId staleTask = staleGraph.addTask<NativePacketPrefixTask>(
+            staleTaskDesc,
+            NativePacketPrefixTask::Payload{
+                .buffer = buffer.get(),
+                .expectedState = ResourceStates::ShaderResource,
+                .recorded = &staleTaskRecorded,
+            }
+        );
+        ASSERT_TRUE(staleTask.valid());
+
+        GpuTaskGraphAnalysis staleAnalysis(asyncScope.arena());
+        GpuTaskGraphQueueAssignments staleAssignments(asyncScope.arena());
+        GpuCompiledGraph staleCompiledGraph(asyncScope.arena());
+        ASSERT_TRUE(compiler.compile(
+            staleGraph,
+            staleAnalysis,
+            topology,
+            staleAssignments,
+            staleCompiledGraph,
+            scratchArena
+        ));
+        const GpuCompiledTask* const staleCompiledTask = staleCompiledGraph.findTask(staleTask);
+        ASSERT_NE(staleCompiledTask, nullptr);
+        ASSERT_TRUE(staleCompiledTask->packet.valid());
+        GpuRecordedGraph staleRecordedGraph(asyncScope.arena());
+        EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
+            staleGraph,
+            staleCompiledGraph,
+            GpuSubmissionPacketRange{ .first = staleCompiledTask->packet, .packetCount = 1u },
+            staleRecordedGraph
+        ));
+        EXPECT_FALSE(staleTaskRecorded);
+    }
+
     GpuRecordedGraph recordedGraph(asyncScope.arena());
     GpuGraphSubmissionTransaction transaction(asyncScope.arena());
     transaction.reset(compiledGraph);
-    const GpuNativePacketRecorder recorder(device);
     ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,

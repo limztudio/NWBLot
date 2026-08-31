@@ -265,7 +265,14 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         }
         case GpuGraphResourceType::Buffer:{
             Buffer* const buffer = graph.bufferForResource(barrier.resource);
-            if(!buffer)
+            if(
+                !buffer
+                || !sourceStates->coversBufferWithOwnership(
+                    buffer,
+                    barrier.sourceQueue,
+                    barrier.destinationQueue
+                )
+            )
                 return false;
             Buffer* const buffers[] = { buffer };
             if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))
@@ -275,7 +282,14 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         case GpuGraphResourceType::AccelStruct:{
             RayTracingAccelStruct* const accelStruct = graph.accelStructForResource(barrier.resource);
             Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
-            if(!backingBuffer)
+            if(
+                !backingBuffer
+                || !sourceStates->coversBufferWithOwnership(
+                    backingBuffer,
+                    barrier.sourceQueue,
+                    barrier.destinationQueue
+                )
+            )
                 return false;
             Buffer* const buffers[] = { backingBuffer };
             if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))

@@ -277,6 +277,11 @@ public:
         GpuPhysicalQueueId expectedOwnerQueue,
         GpuPhysicalQueueId expectedReleaseDestinationQueue
     )const;
+    [[nodiscard]] bool coversBufferWithOwnership(
+        Buffer* buffer,
+        GpuPhysicalQueueId expectedOwnerQueue,
+        GpuPhysicalQueueId expectedReleaseDestinationQueue
+    )const;
     // Copies a valid state snapshot without exposing backend tracker storage.  Packet recording uses this to retain
     // graph-owned producer seeds while legacy consumers still request their own final handoff.
     [[nodiscard]] bool copyFrom(const CommandListResourceStateHandoff& source);

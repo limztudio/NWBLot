@@ -468,16 +468,22 @@ TEST(SwapChainPresentation, CanonicalNativeQueueStateSerializesEveryInternalHost
     EXPECT_LT(presentHostLockOffset, nativePresentOffset);
 
     AString orchestrationSource;
+    AString presentationSource;
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "core" / "graphics" / "vulkan" / "backend_context_orchestration.cpp",
         orchestrationSource
     ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "backend_context_presentation.cpp",
+        presentationSource
+    ));
     const AStringView fullOrchestrationSource(orchestrationSource.data(), orchestrationSource.size());
+    const AStringView fullPresentationSource(presentationSource.data(), presentationSource.size());
     EXPECT_NE(
-        fullOrchestrationSource.find("m_rhiDevice->presentNativeQueue(m_presentNativeQueueIndex, presentInfo, res)"),
+        fullPresentationSource.find("m_rhiDevice->presentNativeQueue(m_presentNativeQueueIndex, presentInfo, res)"),
         AStringView::npos
     );
-    EXPECT_EQ(fullOrchestrationSource.find("vkQueuePresentKHR"), AStringView::npos);
+    EXPECT_EQ(fullPresentationSource.find("vkQueuePresentKHR"), AStringView::npos);
 
     AString surfaceSource;
     ASSERT_TRUE(ReadTextFile(
@@ -529,10 +535,10 @@ TEST(SwapChainPresentation, CanonicalNativeQueueStateSerializesEveryInternalHost
     EXPECT_NE(fullQuerySource.find("captureDeviceLoss(\"event query poll\")"), AStringView::npos);
     EXPECT_NE(fullQuerySource.find("captureDeviceLoss(\"event query wait\")"), AStringView::npos);
 
-    const usize frameQueryWaitOffset = fullOrchestrationSource.find("if(!m_rhiDevice->waitEventQuery(query.get())){");
-    const usize frameQueryPopOffset = fullOrchestrationSource.find("m_framesInFlight.pop();", frameQueryWaitOffset);
-    const usize frameQuerySubmitOffset = fullOrchestrationSource.find("if(!m_rhiDevice->setEventQuery(query.get()", frameQueryPopOffset);
-    const usize frameQueryPublishOffset = fullOrchestrationSource.find("m_framesInFlight.push(query);", frameQuerySubmitOffset);
+    const usize frameQueryWaitOffset = fullPresentationSource.find("if(!m_rhiDevice->waitEventQuery(query.get())){");
+    const usize frameQueryPopOffset = fullPresentationSource.find("m_framesInFlight.pop();", frameQueryWaitOffset);
+    const usize frameQuerySubmitOffset = fullPresentationSource.find("if(!m_rhiDevice->setEventQuery(query.get()", frameQueryPopOffset);
+    const usize frameQueryPublishOffset = fullPresentationSource.find("m_framesInFlight.push(query);", frameQuerySubmitOffset);
     ASSERT_NE(frameQueryWaitOffset, AStringView::npos);
     ASSERT_NE(frameQueryPopOffset, AStringView::npos);
     ASSERT_NE(frameQuerySubmitOffset, AStringView::npos);
@@ -551,18 +557,18 @@ TEST(SwapChainPresentation, LogicalQuarantineRemainsDistinctFromNativeDeviceLoss
 
     AString backendHeaderSource;
     AString diagnosticSource;
-    AString orchestrationSource;
+    AString presentationSource;
     AString deviceQueueSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", backendHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device_diagnostics.cpp", diagnosticSource));
     ASSERT_TRUE(ReadTextFile(
-        repoRoot / "core" / "graphics" / "vulkan" / "backend_context_orchestration.cpp",
-        orchestrationSource
+        repoRoot / "core" / "graphics" / "vulkan" / "backend_context_presentation.cpp",
+        presentationSource
     ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device_queue.cpp", deviceQueueSource));
     const AStringView backendHeader(backendHeaderSource.data(), backendHeaderSource.size());
     const AStringView diagnostics(diagnosticSource.data(), diagnosticSource.size());
-    const AStringView orchestration(orchestrationSource.data(), orchestrationSource.size());
+    const AStringView presentation(presentationSource.data(), presentationSource.size());
     const AStringView deviceQueue(deviceQueueSource.data(), deviceQueueSource.size());
 
     EXPECT_NE(backendHeader.find("Atomic<bool> m_deviceLost = false;"), AStringView::npos);
@@ -580,10 +586,10 @@ TEST(SwapChainPresentation, LogicalQuarantineRemainsDistinctFromNativeDeviceLoss
     EXPECT_EQ(diagnostics.find("m_deviceQuarantined.store"), AStringView::npos);
     EXPECT_EQ(backendHeader.find("captureGpuCrash"), AStringView::npos);
 
-    EXPECT_NE(orchestration.find("captureDeviceLoss(\"acquire next image\")"), AStringView::npos);
-    EXPECT_NE(orchestration.find("captureDeviceLoss(\"present\")"), AStringView::npos);
-    EXPECT_NE(orchestration.find("m_rhiDevice->quarantineDevice();"), AStringView::npos);
-    EXPECT_EQ(orchestration.find("captureDeviceLoss(\"present semaphore idle\")"), AStringView::npos);
+    EXPECT_NE(presentation.find("captureDeviceLoss(\"acquire next image\")"), AStringView::npos);
+    EXPECT_NE(presentation.find("captureDeviceLoss(\"present\")"), AStringView::npos);
+    EXPECT_NE(presentation.find("m_rhiDevice->quarantineDevice();"), AStringView::npos);
+    EXPECT_EQ(presentation.find("captureDeviceLoss(\"present semaphore idle\")"), AStringView::npos);
     EXPECT_NE(deviceQueue.find("if(submissionsBlocked())"), AStringView::npos);
     EXPECT_NE(deviceQueue.find("bool Device::beginLifecycleDrain()noexcept{"), AStringView::npos);
 }

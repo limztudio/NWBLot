@@ -2113,18 +2113,21 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     AString graphicsSource;
     AString backendContractSource;
     AString backendOrchestrationSource;
+    AString backendPresentationSource;
     AString rendererResourcesSource;
     AString uiSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.h", graphicsHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.cpp", graphicsSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "backend_contract.h", backendContractSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_context_orchestration.cpp", backendOrchestrationSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_context_presentation.cpp", backendPresentationSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_resources.cpp", rendererResourcesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
     const AStringView graphicsHeader(graphicsHeaderSource.data(), graphicsHeaderSource.size());
     const AStringView graphics(graphicsSource.data(), graphicsSource.size());
     const AStringView backendContract(backendContractSource.data(), backendContractSource.size());
     const AStringView backendOrchestration(backendOrchestrationSource.data(), backendOrchestrationSource.size());
+    const AStringView backendPresentation(backendPresentationSource.data(), backendPresentationSource.size());
     const AStringView rendererResources(rendererResourcesSource.data(), rendererResourcesSource.size());
     const AStringView ui(uiSource.data(), uiSource.size());
 
@@ -2135,11 +2138,11 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     EXPECT_FALSE(ContainsText(graphicsHeader, "getCurrentFramebuffer"));
     EXPECT_TRUE(ContainsText(backendContract, "{ backend.abandonAcquiredFrame() }->SameAs<bool>;"));
 
-    const usize abandonmentOffset = backendOrchestration.find("bool BackendContext::abandonAcquiredFrame()noexcept{");
-    const usize presentDefinitionOffset = backendOrchestration.find("bool BackendContext::present(){", abandonmentOffset);
+    const usize abandonmentOffset = backendPresentation.find("bool BackendContext::abandonAcquiredFrame()noexcept{");
+    const usize presentDefinitionOffset = backendPresentation.find("bool BackendContext::present(){", abandonmentOffset);
     ASSERT_NE(abandonmentOffset, AStringView::npos);
     ASSERT_NE(presentDefinitionOffset, AStringView::npos);
-    const AStringView abandonment = backendOrchestration.substr(
+    const AStringView abandonment = backendPresentation.substr(
         abandonmentOffset,
         presentDefinitionOffset - abandonmentOffset
     );
@@ -2166,7 +2169,7 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     EXPECT_TRUE(ContainsText(abandonment, "m_frameAbandonmentComplete = true;"));
     EXPECT_FALSE(ContainsText(abandonment, "m_frameAcquired = false"));
 
-    const AStringView present = backendOrchestration.substr(presentDefinitionOffset);
+    const AStringView present = backendPresentation.substr(presentDefinitionOffset);
     const usize nonConsumedOffset = present.find(
         "presentWaitDisposition != VulkanDetail::QueuePresentWaitDisposition::Consumed"
     );
@@ -2345,16 +2348,16 @@ TEST(EcsGraphics, CompatibilityPresentTransitionsExactAcquiredImageBeforeSignal)
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
-    AString backendOrchestrationSource;
+    AString backendPresentationSource;
     ASSERT_TRUE(ReadTextFile(
-        repoRoot / "core" / "graphics" / "vulkan" / "backend_context_orchestration.cpp",
-        backendOrchestrationSource
+        repoRoot / "core" / "graphics" / "vulkan" / "backend_context_presentation.cpp",
+        backendPresentationSource
     ));
-    const AStringView backendOrchestration(backendOrchestrationSource.data(), backendOrchestrationSource.size());
+    const AStringView backendPresentation(backendPresentationSource.data(), backendPresentationSource.size());
 
-    const usize presentOffset = backendOrchestration.find("bool BackendContext::present(){");
+    const usize presentOffset = backendPresentation.find("bool BackendContext::present(){");
     ASSERT_NE(presentOffset, AStringView::npos);
-    const AStringView present = backendOrchestration.substr(presentOffset);
+    const AStringView present = backendPresentation.substr(presentOffset);
     const usize compatibilityBranchOffset = present.find("if(!frameSignalAccepted){");
     const usize presentInfoOffset = present.find("VkPresentInfoKHR presentInfo = {};");
     ASSERT_NE(compatibilityBranchOffset, AStringView::npos);

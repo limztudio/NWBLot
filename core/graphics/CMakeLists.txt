@@ -119,6 +119,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context_frame.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context_instance.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context_orchestration.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context_presentation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context_surface.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/aftermath.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/resource_base.h"

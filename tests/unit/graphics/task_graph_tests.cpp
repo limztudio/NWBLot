@@ -16780,6 +16780,70 @@ TEST(GpuTaskGraph, KeepsExplicitPacketDependenciesOutOfRecordingReadyFrontiers){
 }
 
 
+TEST(GpuTaskGraph, PlansSchedulingPacketDependenciesInStableIncomingOrder){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuTaskId first = AddTask(
+        graph,
+        Name("tests/task_graph/stable_packet_dependency_first"),
+        "Stable Packet Dependency First"
+    );
+    const Graphics::GpuTaskId second = AddTask(
+        graph,
+        Name("tests/task_graph/stable_packet_dependency_second"),
+        "Stable Packet Dependency Second"
+    );
+    const Graphics::GpuTaskId third = AddTask(
+        graph,
+        Name("tests/task_graph/stable_packet_dependency_third"),
+        "Stable Packet Dependency Third"
+    );
+    const Graphics::GpuTaskId consumerDependencies[] = { third, first, second };
+    const Graphics::GpuTaskId consumer = AddTask(
+        graph,
+        Name("tests/task_graph/stable_packet_dependency_consumer"),
+        "Stable Packet Dependency Consumer",
+        consumerDependencies,
+        LengthOf(consumerDependencies)
+    );
+    ASSERT_TRUE(first.valid());
+    ASSERT_TRUE(second.valid());
+    ASSERT_TRUE(third.valid());
+    ASSERT_TRUE(consumer.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuTaskGraphSchedulingTaskIndexView producers = analysis.schedulingProducers(consumer);
+    ASSERT_EQ(producers.taskCount, LengthOf(consumerDependencies));
+    EXPECT_EQ(producers[0u], third.index);
+    EXPECT_EQ(producers[1u], first.index);
+    EXPECT_EQ(producers[2u], second.index);
+
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(second);
+    const Graphics::GpuSubmissionPacketId thirdPacket = compiledGraph.packetForTask(third);
+    const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumer);
+    ASSERT_TRUE(firstPacket.valid());
+    ASSERT_TRUE(secondPacket.valid());
+    ASSERT_TRUE(thirdPacket.valid());
+    ASSERT_TRUE(consumerPacket.valid());
+    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, LengthOf(consumerDependencies));
+    const Graphics::GpuPacketDependency* const dependencies = compiledGraph.packetDependencies(consumerPacket);
+    ASSERT_NE(dependencies, nullptr);
+    EXPECT_EQ(dependencies[0u].producer, thirdPacket);
+    EXPECT_EQ(dependencies[1u].producer, firstPacket);
+    EXPECT_EQ(dependencies[2u].producer, secondPacket);
+}
+
+
 // Submission dependencies preserve GPU execution order, while only a resource-state seed needs its producer packet
 // recorded before a consumer can materialize immutable initial state into its native command list.
 TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){

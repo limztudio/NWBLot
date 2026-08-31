@@ -401,11 +401,10 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
             if(!compiledConsumerTask)
                 return false;
 
-            for(const GpuTaskDependencyEdge& edge : analysis.schedulingEdges()){
-                if(edge.consumer != consumerTask)
-                    continue;
-
-                const GpuSubmissionPacketId producerPacket = FindCompiledPacketForTask(compiledPlan, edge.producer);
+            const GpuTaskGraphSchedulingTaskIndexView producerIndices = analysis.schedulingProducers(consumerTask);
+            for(usize producerIndex = 0u; producerIndex < producerIndices.taskCount; ++producerIndex){
+                const GpuTaskId producerTask{ producerIndices[producerIndex], consumerTask.generation };
+                const GpuSubmissionPacketId producerPacket = FindCompiledPacketForTask(compiledPlan, producerTask);
                 if(!appendPacketDependency(producerPacket))
                     return false;
             }

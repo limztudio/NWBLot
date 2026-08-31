@@ -38,17 +38,6 @@ namespace GpuTaskGraphCompilerDetail{
     ;
 }
 
-[[nodiscard]] static const GpuTaskQueueAssignment* FindQueueAssignment(
-    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
-    const GpuTaskId& task
-)noexcept{
-    for(const GpuTaskQueueAssignment& assignment : assignments){
-        if(assignment.task == task)
-            return &assignment;
-    }
-    return nullptr;
-}
-
 [[nodiscard]] static bool IsTransitivelyIndependent(
     const Vector<u8, Alloc::ScratchArena>& schedulingReachability,
     const usize taskCount,
@@ -190,11 +179,26 @@ bool HasTransitivelyIndependentRequiredGraphicsTask(
     return false;
 }
 
+const GpuTaskQueueAssignment* FindQueueAssignment(
+    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GraphicsVector<u32>& assignmentIndicesByTask,
+    const GpuTaskId& task
+)noexcept{
+    if(!task.valid() || task.index >= assignmentIndicesByTask.size())
+        return nullptr;
+    const u32 assignmentIndex = assignmentIndicesByTask[task.index];
+    if(assignmentIndex >= assignments.size())
+        return nullptr;
+    const GpuTaskQueueAssignment& assignment = assignments[assignmentIndex];
+    return assignment.task == task ? &assignment : nullptr;
+}
+
 
 GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const GpuTaskGraph& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GraphicsVector<u32>& assignmentIndicesByTask,
     const GpuTaskGraphQueueTopology& topology,
     const Vector<u8, Alloc::ScratchArena>& schedulingReachability,
     const GpuTaskGraphTaskView& task,
@@ -232,12 +236,20 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     u64 outgoingCrossings = 0u;
     for(const GpuTaskDependencyEdge& edge : analysis.schedulingEdges()){
         if(edge.consumer == task.id){
-            const GpuTaskQueueAssignment* const producer = FindQueueAssignment(assignments, edge.producer);
+            const GpuTaskQueueAssignment* const producer = FindQueueAssignment(
+                assignments,
+                assignmentIndicesByTask,
+                edge.producer
+            );
             if(producer && producer->queue != candidate.id)
                 ++incomingCrossings;
         }
         if(edge.producer == task.id){
-            const GpuTaskQueueAssignment* const consumer = FindQueueAssignment(assignments, edge.consumer);
+            const GpuTaskQueueAssignment* const consumer = FindQueueAssignment(
+                assignments,
+                assignmentIndicesByTask,
+                edge.consumer
+            );
             if(consumer && consumer->queue != candidate.id)
                 ++outgoingCrossings;
         }
@@ -275,8 +287,16 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
         if(alreadyCounted)
             continue;
 
-        const GpuTaskQueueAssignment* const producerAssignment = FindQueueAssignment(assignments, edge.producer);
-        const GpuTaskQueueAssignment* const consumerAssignment = FindQueueAssignment(assignments, edge.consumer);
+        const GpuTaskQueueAssignment* const producerAssignment = FindQueueAssignment(
+            assignments,
+            assignmentIndicesByTask,
+            edge.producer
+        );
+        const GpuTaskQueueAssignment* const consumerAssignment = FindQueueAssignment(
+            assignments,
+            assignmentIndicesByTask,
+            edge.consumer
+        );
         const GpuPhysicalQueueInfo* const producerQueue = edge.producer == task.id
             ? &candidate
             : producerAssignment ? FindPhysicalQueueInfo(topology, producerAssignment->queue) : nullptr

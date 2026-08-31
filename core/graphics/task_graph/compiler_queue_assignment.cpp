@@ -209,6 +209,7 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraph& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GraphicsVector<u32>& assignmentIndicesByTask,
     const GpuTaskGraphQueueTopology& topology,
     const Vector<u8, Alloc::ScratchArena>& schedulingReachability,
     const GpuTaskGraphTaskView& task,
@@ -268,6 +269,7 @@ namespace GpuTaskGraphCompilerDetail{
             graph,
             analysis,
             assignments,
+            assignmentIndicesByTask,
             topology,
             schedulingReachability,
             task,
@@ -366,6 +368,7 @@ namespace GpuTaskGraphCompilerDetail{
 
 void GpuTaskGraphQueueAssignments::reset(){
     m_assignments.clear();
+    m_assignmentIndicesByTask.clear();
     m_diagnostic = GpuTaskQueueAssignmentDiagnostic{};
     m_generation = 0u;
     m_declarationRevision = 0u;
@@ -379,6 +382,8 @@ bool GpuTaskGraphQueueAssignments::validFor(const GpuTaskGraph& graph)const noex
         && m_generation == graph.generation()
         && m_declarationRevision == graph.declarationRevision()
         && m_taskCount == graph.taskCount()
+        && m_assignments.size() == m_taskCount
+        && m_assignmentIndicesByTask.size() == m_taskCount
     ;
 }
 
@@ -394,14 +399,9 @@ bool GpuTaskGraphQueueAssignments::validFor(
 }
 
 const GpuTaskQueueAssignment* GpuTaskGraphQueueAssignments::find(const GpuTaskId& task)const noexcept{
-    if(!m_valid || task.generation != m_generation)
+    if(!m_valid)
         return nullptr;
-
-    for(const GpuTaskQueueAssignment& assignment : m_assignments){
-        if(assignment.task == task)
-            return &assignment;
-    }
-    return nullptr;
+    return GpuTaskGraphCompilerDetail::FindQueueAssignment(m_assignments, m_assignmentIndicesByTask, task);
 }
 
 
@@ -448,6 +448,7 @@ bool GpuTaskGraphCompiler::assignQueues(
     outAssignments.m_generation = graph.generation();
     outAssignments.m_declarationRevision = graph.declarationRevision();
     outAssignments.m_taskCount = graph.taskCount();
+    outAssignments.m_assignmentIndicesByTask.resize(graph.taskCount(), Limit<u32>::s_Max);
     outAssignments.m_assignments.reserve(graph.taskCount());
 
     Vector<u8, Alloc::ScratchArena> schedulingReachability(scratchArena);
@@ -457,6 +458,16 @@ bool GpuTaskGraphCompiler::assignQueues(
     // Establish a legal route for every task before scoring. Outgoing crossings and ownership costs must see a
     // complete provisional plan instead of treating later consumers as if they did not exist.
     for(const GpuTaskId taskID : analysis.topologicalOrder()){
+        if(
+            !taskID.valid()
+            || taskID.generation != outAssignments.m_generation
+            || taskID.index >= outAssignments.m_assignmentIndicesByTask.size()
+            || outAssignments.m_assignmentIndicesByTask[taskID.index] != Limit<u32>::s_Max
+            || outAssignments.m_assignments.size() >= Limit<u32>::s_Max
+        )
+            return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis, taskID);
+        const u32 assignmentIndex = static_cast<u32>(outAssignments.m_assignments.size());
+
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
         const GpuPhysicalQueueInfo* const graphicsQueue = FindBestLegalQueueAssignmentCandidate(
             graph,
@@ -583,7 +594,10 @@ bool GpuTaskGraphCompiler::assignQueues(
             .modifiers = GpuTaskQueueAssignmentModifier::None,
             .dedicated = selectedQueue->dedicated,
         });
+        outAssignments.m_assignmentIndicesByTask[taskID.index] = assignmentIndex;
     }
+    if(outAssignments.m_assignments.size() != outAssignments.m_assignmentIndicesByTask.size())
+        return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis);
 
     // Evaluate movable Compute and Any tasks against the same complete provisional plan, then publish their class
     // decisions together. This keeps topology iteration order and partially-updated future routes out of scoring.
@@ -612,6 +626,7 @@ bool GpuTaskGraphCompiler::assignQueues(
                     graph,
                     analysis,
                     outAssignments.m_assignments,
+                    outAssignments.m_assignmentIndicesByTask,
                     topology,
                     schedulingReachability,
                     task,
@@ -671,6 +686,7 @@ bool GpuTaskGraphCompiler::assignQueues(
             graph,
             analysis,
             outAssignments.m_assignments,
+            outAssignments.m_assignmentIndicesByTask,
             topology,
             schedulingReachability,
             task,
@@ -680,6 +696,7 @@ bool GpuTaskGraphCompiler::assignQueues(
             graph,
             analysis,
             outAssignments.m_assignments,
+            outAssignments.m_assignmentIndicesByTask,
             topology,
             schedulingReachability,
             task,
@@ -817,6 +834,7 @@ bool GpuTaskGraphCompiler::assignQueues(
                 graph,
                 analysis,
                 outAssignments.m_assignments,
+                outAssignments.m_assignmentIndicesByTask,
                 topology,
                 schedulingReachability,
                 task,
@@ -848,6 +866,7 @@ bool GpuTaskGraphCompiler::assignQueues(
             graph,
             analysis,
             outAssignments.m_assignments,
+            outAssignments.m_assignmentIndicesByTask,
             topology,
             schedulingReachability,
             task,

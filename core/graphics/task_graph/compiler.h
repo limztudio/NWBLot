@@ -238,6 +238,7 @@ class GpuTaskGraphQueueAssignments final : NoCopy{
 public:
     explicit GpuTaskGraphQueueAssignments(GraphicsArena& arena)
         : m_assignments(arena)
+        , m_assignmentIndicesByTask(arena)
     {}
 
 
@@ -256,6 +257,8 @@ public:
 
 private:
     GraphicsVector<GpuTaskQueueAssignment> m_assignments;
+    // Dense declaration-task index to topological m_assignments offset.
+    GraphicsVector<u32> m_assignmentIndicesByTask;
     GpuTaskQueueAssignmentDiagnostic m_diagnostic;
     u64 m_generation = 0u;
     u64 m_declarationRevision = 0u;

@@ -155,10 +155,17 @@ struct GpuTaskGraphResourceStatePlan{
     const GpuTaskGraphTaskView& task
 )noexcept;
 
+[[nodiscard]] const GpuTaskQueueAssignment* FindQueueAssignment(
+    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GraphicsVector<u32>& assignmentIndicesByTask,
+    const GpuTaskId& task
+)noexcept;
+
 [[nodiscard]] GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const GpuTaskGraph& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GraphicsVector<u32>& assignmentIndicesByTask,
     const GpuTaskGraphQueueTopology& topology,
     const Vector<u8, Alloc::ScratchArena>& schedulingReachability,
     const GpuTaskGraphTaskView& task,

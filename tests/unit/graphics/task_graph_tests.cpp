@@ -10957,6 +10957,9 @@ TEST(GpuTaskGraph, RejectsCrossClassTimingRoutesWithoutEveryRequiredOptIn){
             Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidTimingFeedback
         );
         EXPECT_EQ(assignments.diagnostic().task, task);
+        EXPECT_FALSE(assignments.valid());
+        EXPECT_FALSE(assignments.validFor(graph));
+        EXPECT_EQ(assignments.find(task), nullptr);
     };
 
     runCase(false, true, true, false);
@@ -15431,6 +15434,9 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
 
     const Graphics::GpuTaskId lookupOrder[] = { first, second, third, third, second, first };
     for(const Graphics::GpuTaskId task : lookupOrder){
+        const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
+        ASSERT_NE(assignment, nullptr);
+        EXPECT_EQ(assignment->task, task);
         const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
         ASSERT_NE(compiledTask, nullptr);
         EXPECT_EQ(compiledTask->task, task);
@@ -15461,7 +15467,8 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
     ASSERT_NE(compiledGraph.findTask(first), nullptr);
 
-    const auto expectMissingTask = [&compiledGraph](const Graphics::GpuTaskId task){
+    const auto expectMissingTask = [&assignments, &compiledGraph](const Graphics::GpuTaskId task){
+        EXPECT_EQ(assignments.find(task), nullptr);
         EXPECT_EQ(compiledGraph.findTask(task), nullptr);
         EXPECT_FALSE(compiledGraph.packetForTask(task).valid());
         EXPECT_EQ(
@@ -15503,6 +15510,8 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
 
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
     ASSERT_TRUE(compiledGraph.validFor(graph));
+    ASSERT_NE(assignments.find(first), nullptr);
+    ASSERT_NE(assignments.find(appended), nullptr);
     ASSERT_NE(compiledGraph.findTask(first), nullptr);
     ASSERT_NE(compiledGraph.findTask(appended), nullptr);
 
@@ -15517,6 +15526,7 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
     expectMissingTask(first);
     expectMissingTask(appended);
+    ASSERT_NE(assignments.find(replacement), nullptr);
     ASSERT_NE(compiledGraph.findTask(replacement), nullptr);
     EXPECT_TRUE(compiledGraph.packetForTask(replacement).valid());
 }
@@ -15553,19 +15563,27 @@ TEST(GpuTaskGraph, CompiledTaskLookupScalesAcrossDenseTaskIds){
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
     ASSERT_EQ(compiledGraph.taskCount(), s_TaskCount);
 
+    u64 assignmentChecksum = 0u;
     u64 packetChecksum = 0u;
     for(usize sweepIndex = 0u; sweepIndex < s_QuerySweepCount; ++sweepIndex){
         for(usize queryIndex = 0u; queryIndex < s_TaskCount; ++queryIndex){
             const usize taskIndex = (queryIndex * 4051u + sweepIndex) % s_TaskCount;
+            const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(tasks[taskIndex]);
+            if(!assignment || assignment->task != tasks[taskIndex]){
+                ADD_FAILURE() << "Dense queue-assignment lookup failed at task " << taskIndex;
+                return;
+            }
             const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(tasks[taskIndex]);
             if(!compiledTask || compiledTask->task != tasks[taskIndex] || !compiledTask->packet.valid()){
                 ADD_FAILURE() << "Dense compiled-task lookup failed at task " << taskIndex;
                 return;
             }
+            assignmentChecksum += static_cast<u64>(assignment->task.index) + 1u;
             packetChecksum += static_cast<u64>(compiledTask->packet.index) + 1u;
         }
     }
     const u64 expectedSweepChecksum = static_cast<u64>(s_TaskCount) * (s_TaskCount + 1u) / 2u;
+    EXPECT_EQ(assignmentChecksum, expectedSweepChecksum * s_QuerySweepCount);
     EXPECT_EQ(packetChecksum, expectedSweepChecksum * s_QuerySweepCount);
 }
 

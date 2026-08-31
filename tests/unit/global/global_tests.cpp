@@ -14,6 +14,7 @@
 #include <global/arena_object.h>
 #include <global/basic_string.h>
 #include <global/binary.h>
+#include <global/bit.h>
 #include <global/blocking_io.h>
 #include <global/compile.h>
 #include <global/containers.h>
@@ -194,6 +195,20 @@ struct U32VectorView{
     [[nodiscard]] u32 operator[](const usize index)const{ return values[index]; }
 };
 
+struct BitCastPair{
+    u16 first = 0u;
+    u16 second = 0u;
+};
+
+struct NonTrivialBitCastWord{
+    u32 value = 0u;
+
+    ~NonTrivialBitCastWord(){}
+};
+
+template<typename To, typename From>
+concept CanBitCast = requires(const From& source){ BitCast<To>(source); };
+
 struct MoveOnlySwapValue{
     i32 value = 0;
 
@@ -242,6 +257,29 @@ TEST(Global, PodRoundTrip){
     readValue = 0u;
     EXPECT_TRUE(ReadPOD(byteView, cursor, readValue));
     EXPECT_EQ(readValue, writtenValue);
+}
+
+TEST(Global, BitCastPreservesObjectRepresentation){
+    static_assert(sizeof(BitCastPair) == sizeof(u32));
+    static_assert(sizeof(NonTrivialBitCastWord) == sizeof(u32));
+    static_assert(CanBitCast<u32, f32>);
+    static_assert(CanBitCast<f32, u32>);
+    static_assert(!CanBitCast<u64, u32>);
+    static_assert(!CanBitCast<u32, NonTrivialBitCastWord>);
+    static_assert(!CanBitCast<NonTrivialBitCastWord, u32>);
+
+    constexpr f32 s_Value = 1.0f;
+    constexpr u32 s_Bits = BitCast<u32>(s_Value);
+    static_assert(s_Bits == 0x3f800000u);
+    static_assert(IsSame_V<decltype(BitCast<u32>(s_Value)), u32>);
+    static_assert(noexcept(BitCast<u32>(s_Value)));
+
+    constexpr BitCastPair s_Pair{ 0x1234u, 0xabcdu };
+    constexpr BitCastPair s_PairRoundTrip = BitCast<BitCastPair>(BitCast<u32>(s_Pair));
+    static_assert(s_PairRoundTrip.first == s_Pair.first);
+    static_assert(s_PairRoundTrip.second == s_Pair.second);
+
+    EXPECT_EQ(BitCast<f32>(s_Bits), s_Value);
 }
 
 TEST(Global, AllocationSizeHelpers){

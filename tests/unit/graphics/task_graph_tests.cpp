@@ -13529,6 +13529,135 @@ TEST(GpuTaskGraph, AvoidsTransitiveExternalFinalizationPacketDependencies){
 }
 
 
+TEST(GpuTaskGraph, OrdersIndependentTerminalFinalizationDependenciesNearestFirst){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuGraphResourceDesc resourceDesc;
+    resourceDesc
+        .setIdentity(Name("tests/task_graph/ordered_terminal_finalization_resource"))
+        .setMarkerLabel("Ordered Terminal Finalization Resource")
+        .setType(Graphics::GpuGraphResourceType::Texture)
+        .setInitialState(Graphics::ResourceStates::ShaderResource)
+        .setExternalFinalState(Graphics::ResourceStates::CopySource)
+        .setQueueSharing(Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute)
+    ;
+    const Graphics::GpuGraphResourceId resource = graph.importResource(resourceDesc);
+    ASSERT_TRUE(resource.valid());
+
+    const Graphics::GpuTaskResourceRange range{
+        .textureSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+    };
+    const Graphics::GpuTaskResourceUse readerUse{
+        .resource = resource,
+        .range = range,
+        .requiredState = Graphics::ResourceStates::ShaderResource,
+        .access = Graphics::GpuTaskResourceAccess::Read,
+        .hasIndependentStateSource = true,
+    };
+    Graphics::GpuTaskSchedulingHint readerScheduling;
+    readerScheduling.forceSubmissionBoundary = true;
+    readerScheduling.allowPacketMerge = false;
+    const Graphics::GpuQueueRequest readerQueues[] = {
+        {
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueuePreference::Graphics,
+            false,
+            false,
+        },
+        {
+            Graphics::GpuQueueCapability::Compute,
+            Graphics::GpuQueuePreference::Compute,
+            false,
+            false,
+        },
+        {
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueuePreference::Graphics,
+            false,
+            false,
+        },
+        {
+            Graphics::GpuQueueCapability::Compute,
+            Graphics::GpuQueuePreference::Compute,
+            false,
+            false,
+        },
+    };
+
+    Graphics::GpuTaskId readers[4u] = {};
+    const Name readerBaseName("tests/task_graph/ordered_terminal_finalization_reader_");
+    char readerIndexBuffer[32u] = {};
+    for(usize readerIndex = 0u; readerIndex < LengthOf(readers); ++readerIndex){
+        Graphics::GpuTaskDesc readerDesc;
+        readerDesc
+            .setIdentity(DeriveName(readerBaseName, FormatDecimal(readerIndex, readerIndexBuffer)))
+            .setMarkerLabel("Ordered Terminal Finalization Reader")
+            .setQueue(readerQueues[readerIndex])
+            .setScheduling(readerScheduling)
+            .setDependencies(readerIndex == 1u ? &readers[0u] : nullptr, readerIndex == 1u ? 1u : 0u)
+            .setResourceUses(&readerUse, 1u)
+        ;
+        readers[readerIndex] = graph.addTask(readerDesc);
+        ASSERT_TRUE(readers[readerIndex].valid());
+    }
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    EXPECT_NE(FindEdge(analysis, readers[0u], readers[1u]), nullptr);
+    EXPECT_EQ(FindEdge(analysis, readers[0u], readers[3u]), nullptr);
+    EXPECT_EQ(FindEdge(analysis, readers[2u], readers[3u]), nullptr);
+    ASSERT_EQ(compiledGraph.packetCount(), LengthOf(readers));
+
+    Graphics::GpuSubmissionPacketId packets[4u] = {};
+    for(usize readerIndex = 0u; readerIndex < LengthOf(readers); ++readerIndex){
+        packets[readerIndex] = compiledGraph.packetForTask(readers[readerIndex]);
+        ASSERT_TRUE(packets[readerIndex].valid());
+        EXPECT_EQ(packets[readerIndex].index, readerIndex);
+        EXPECT_EQ(compiledGraph.packet(packets[readerIndex]).queue, queues[readerIndex % 2u].id);
+    }
+
+    ASSERT_EQ(compiledGraph.packet(packets[0u]).dependencyCount, 0u);
+    ASSERT_EQ(compiledGraph.packet(packets[1u]).dependencyCount, 1u);
+    ASSERT_EQ(compiledGraph.packet(packets[2u]).dependencyCount, 0u);
+    ASSERT_EQ(compiledGraph.packet(packets[3u]).dependencyCount, 2u);
+    const Graphics::GpuPacketDependency* const secondDependencies = compiledGraph.packetDependencies(packets[1u]);
+    const Graphics::GpuPacketDependency* const terminalDependencies = compiledGraph.packetDependencies(packets[3u]);
+    ASSERT_NE(secondDependencies, nullptr);
+    ASSERT_NE(terminalDependencies, nullptr);
+    EXPECT_EQ(secondDependencies[0u].producer, packets[0u]);
+    EXPECT_EQ(secondDependencies[0u].consumer, packets[1u]);
+    EXPECT_EQ(terminalDependencies[0u].producer, packets[2u]);
+    EXPECT_EQ(terminalDependencies[0u].consumer, packets[3u]);
+    EXPECT_EQ(terminalDependencies[1u].producer, packets[1u]);
+    EXPECT_EQ(terminalDependencies[1u].consumer, packets[3u]);
+
+    for(usize readerIndex = 1u; readerIndex < LengthOf(readers); ++readerIndex){
+        const Graphics::GpuCompiledTask* const compiledReader = compiledGraph.findTask(readers[readerIndex]);
+        ASSERT_NE(compiledReader, nullptr);
+        EXPECT_EQ(compiledReader->prologueStateSeedCount, 0u);
+    }
+    const Graphics::GpuCompiledTask* const terminalReader = compiledGraph.findTask(readers[3u]);
+    ASSERT_NE(terminalReader, nullptr);
+    ASSERT_EQ(terminalReader->epilogueBarrierCount, 1u);
+    const Graphics::GpuCompiledBarrier* const terminalBarriers = compiledGraph.taskEpilogueBarriers(readers[3u]);
+    ASSERT_NE(terminalBarriers, nullptr);
+    EXPECT_EQ(terminalBarriers[0u].type, Graphics::GpuCompiledBarrierType::TextureStateExport);
+    EXPECT_EQ(terminalBarriers[0u].before, Graphics::ResourceStates::ShaderResource);
+    EXPECT_EQ(terminalBarriers[0u].after, Graphics::ResourceStates::CopySource);
+}
+
+
 TEST(GpuTaskGraph, TerminalFinalizationReachabilityCrossesPackedWordBoundaries){
     const usize prefixPacketCounts[] = { 63u, 64u, 127u, 128u };
     const Graphics::GpuTaskResourceRange range{

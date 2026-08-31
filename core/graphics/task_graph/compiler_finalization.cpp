@@ -326,6 +326,11 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
     )
         return false;
 
+    Vector<GpuPacketDependency, Alloc::ScratchArena> orderedTerminalFinalizationDependencies(scratchArena);
+    if(terminalFinalizationDependencies.size() > orderedTerminalFinalizationDependencies.max_size())
+        return false;
+    orderedTerminalFinalizationDependencies.reserve(terminalFinalizationDependencies.size());
+
     for(const GpuPacketDependency& dependency : terminalFinalizationDependencies){
         if(
             !dependency.producer.valid()
@@ -336,6 +341,38 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
             || dependency.consumer.index >= packetCount
         )
             return false;
+        orderedTerminalFinalizationDependencies.push_back(dependency);
+    }
+
+    if(plansTerminalFinalizationDependencies){
+        Sort(
+            orderedTerminalFinalizationDependencies.begin(),
+            orderedTerminalFinalizationDependencies.end(),
+            [](const GpuPacketDependency& lhs, const GpuPacketDependency& rhs){
+                if(lhs.consumer.index != rhs.consumer.index)
+                    return lhs.consumer.index < rhs.consumer.index;
+                return lhs.producer.index > rhs.producer.index;
+            }
+        );
+
+        usize uniqueTerminalFinalizationDependencyCount = 0u;
+        for(usize dependencyIndex = 0u; dependencyIndex < orderedTerminalFinalizationDependencies.size(); ++dependencyIndex){
+            const GpuPacketDependency dependency = orderedTerminalFinalizationDependencies[dependencyIndex];
+            if(uniqueTerminalFinalizationDependencyCount != 0u){
+                const GpuPacketDependency& previousDependency =
+                    orderedTerminalFinalizationDependencies[uniqueTerminalFinalizationDependencyCount - 1u]
+                ;
+                if(
+                    previousDependency.producer == dependency.producer
+                    && previousDependency.consumer == dependency.consumer
+                )
+                    continue;
+            }
+
+            orderedTerminalFinalizationDependencies[uniqueTerminalFinalizationDependencyCount] = dependency;
+            ++uniqueTerminalFinalizationDependencyCount;
+        }
+        orderedTerminalFinalizationDependencies.resize(uniqueTerminalFinalizationDependencyCount);
     }
 
     Vector<u32, Alloc::ScratchArena> packetDependencyConsumerMarkers(packetCount, scratchArena);
@@ -379,6 +416,7 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
         return true;
     };
 
+    usize terminalFinalizationDependencyIndex = 0u;
     for(usize consumerPacketIndex = 0u; consumerPacketIndex < compiledPlan.packets.size(); ++consumerPacketIndex){
         GpuSubmissionPacket& consumerPacket = compiledPlan.packets[consumerPacketIndex];
         const GpuSubmissionPacketId consumerPacketID{
@@ -466,26 +504,17 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
                 return false;
         }
 
-        // Visit the nearest shadowed producers first. If an existing or newly added path already joins an older
-        // producer into this terminal packet, avoid adding a redundant direct edge while retaining deterministic
-        // dependency order.
-        for(usize producerPacketIndex = consumerPacketIndex; producerPacketIndex > 0u; --producerPacketIndex){
-            const GpuSubmissionPacketId producerPacketID{
-                static_cast<u32>(producerPacketIndex - 1u),
-                compiledPlan.planGeneration,
-            };
-            bool needsTerminalFinalizationDependency = false;
-            for(const GpuPacketDependency& dependency : terminalFinalizationDependencies){
-                if(
-                    dependency.producer == producerPacketID
-                    && dependency.consumer == consumerPacketID
-                ){
-                    needsTerminalFinalizationDependency = true;
-                    break;
-                }
-            }
-            if(!needsTerminalFinalizationDependency)
-                continue;
+        // Each consumer group is ordered nearest-producer first. If an existing or newly added path already joins
+        // an older producer into this terminal packet, avoid adding a redundant direct edge while retaining the
+        // canonical dependency order.
+        while(
+            terminalFinalizationDependencyIndex < orderedTerminalFinalizationDependencies.size()
+            && orderedTerminalFinalizationDependencies[terminalFinalizationDependencyIndex].consumer == consumerPacketID
+        ){
+            const GpuSubmissionPacketId producerPacketID =
+                orderedTerminalFinalizationDependencies[terminalFinalizationDependencyIndex].producer
+            ;
+            ++terminalFinalizationDependencyIndex;
             const usize reachabilityWord = consumerPacketIndex * packetReachabilityWordsPerPacket
                 + producerPacketID.index / s_BitsPerPacketReachabilityWord
             ;
@@ -501,6 +530,8 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
                 return false;
         }
     }
+    if(terminalFinalizationDependencyIndex != orderedTerminalFinalizationDependencies.size())
+        return false;
 
     // Packet dependencies are already constrained to earlier compiler-order packets and remain the authoritative
     // GPU submission order. Native recording only needs prior packets that export a state snapshot consumed by a

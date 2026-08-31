@@ -211,12 +211,20 @@ private:
     [[nodiscard]] CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet)noexcept;
     [[nodiscard]] const CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet)const noexcept;
     [[nodiscard]] PacketRecordingScratch* packetRecordingScratch(const GpuSubmissionPacketId& packet)noexcept;
+    void cachePacketRecordingOverlaps(
+        const GpuCompiledGraph& compiledGraph,
+        const Vector<u32, Alloc::ScratchArena>& packetIndices,
+        Alloc::ScratchArena& scratchArena
+    );
 
 
 private:
     GraphicsArena& m_arena;
     GpuTimingRecorder* m_timingRecorder = nullptr;
     GraphicsVector<GpuRecordedPacket> m_packets;
+    // The recorder caller writes these graph-wide flags only after a ready-frontier worker batch joins. Queries
+    // then read them without lazy mutation until reset clears the next recording attempt.
+    GraphicsVector<u8> m_packetRecordingOverlaps;
     GraphicsVector<GlobalUniquePtr<GpuTimingSubmissionTicket>> m_packetTimingTickets;
     GraphicsVector<CommandListResourceStateHandoff> m_packetStateSeeds;
     PacketRecordingScratch m_serialRecordingScratch;

@@ -24,43 +24,25 @@ namespace __hidden_gpu_packet_runtime_recorded_graph{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordingIntervalsOverlap(
-    const GpuRecordedPacket& packetA,
-    const GpuRecordedPacket& packetB
-)noexcept{
-    return packetA.recordingBeginNanoseconds < packetA.recordingEndNanoseconds
-        && packetB.recordingBeginNanoseconds < packetB.recordingEndNanoseconds
-        && packetA.recordingBeginNanoseconds < packetB.recordingEndNanoseconds
-        && packetB.recordingBeginNanoseconds < packetA.recordingEndNanoseconds
-    ;
-}
+struct PacketRecordingIntervalEntry{
+    u64 beginNanoseconds = 0u;
+    u64 endNanoseconds = 0u;
+    u32 packetIndex = 0u;
+};
 
-[[nodiscard]] bool PacketRecordingOverlapsAny(
-    const GraphicsVector<GpuRecordedPacket>& packets,
-    const GpuCompiledGraph& compiledGraph,
-    const usize packetIndex
+[[nodiscard]] bool LessPacketRecordingIntervalEntry(
+    const PacketRecordingIntervalEntry& left,
+    const PacketRecordingIntervalEntry& right
 )noexcept{
-    if(packetIndex >= packets.size())
-        return false;
-    const GpuRecordedPacket& packet = packets[packetIndex];
-    if(
-        packet.commandListCount == 0u
-        || packet.packet != compiledGraph.packetIdAt(packetIndex)
-    )
-        return false;
-
-    for(usize otherPacketIndex = 0u; otherPacketIndex < packets.size(); ++otherPacketIndex){
-        if(otherPacketIndex == packetIndex)
-            continue;
-        const GpuRecordedPacket& otherPacket = packets[otherPacketIndex];
-        if(
-            otherPacket.commandListCount != 0u
-            && otherPacket.packet == compiledGraph.packetIdAt(otherPacketIndex)
-            && RecordingIntervalsOverlap(packet, otherPacket)
+    return left.beginNanoseconds < right.beginNanoseconds
+        || (
+            left.beginNanoseconds == right.beginNanoseconds
+            && (
+                left.endNanoseconds < right.endNanoseconds
+                || (left.endNanoseconds == right.endNanoseconds && left.packetIndex < right.packetIndex)
+            )
         )
-            return true;
-    }
-    return false;
+    ;
 }
 
 
@@ -76,6 +58,7 @@ namespace __hidden_gpu_packet_runtime_recorded_graph{
 GpuRecordedGraph::GpuRecordedGraph(GraphicsArena& arena)
     : m_arena(arena)
     , m_packets(arena)
+    , m_packetRecordingOverlaps(arena)
     , m_packetTimingTickets(arena)
     , m_packetStateSeeds(arena)
     , m_serialRecordingScratch(arena)
@@ -87,6 +70,8 @@ GpuRecordedGraph::~GpuRecordedGraph() = default;
 void GpuRecordedGraph::reset(const GpuCompiledGraph& compiledGraph){
     m_packets.clear();
     m_packets.resize(compiledGraph.packetCount());
+    m_packetRecordingOverlaps.clear();
+    m_packetRecordingOverlaps.resize(compiledGraph.packetCount());
     m_packetTimingTickets.clear();
     m_timingRecorder = nullptr;
     m_packetTimingTickets.resize(compiledGraph.packetCount());
@@ -135,6 +120,7 @@ bool GpuRecordedGraph::validFor(const GpuCompiledGraph& compiledGraph)const noex
         && m_planGeneration == compiledGraph.planGeneration()
         && m_deviceGeneration == compiledGraph.deviceGeneration()
         && m_packets.size() == compiledGraph.packetCount()
+        && m_packetRecordingOverlaps.size() == compiledGraph.packetCount()
         && m_packetTimingTickets.size() == compiledGraph.packetCount()
         && m_packetStateSeeds.size() == compiledGraph.packetCount()
         && m_packetRecordingScratch.size() == compiledGraph.packetCount()
@@ -185,7 +171,7 @@ GpuTaskGraphRecordingStatistics GpuRecordedGraph::recordingStatistics(
         statistics.recordingSeconds += recordedPacket.recordingSeconds;
         if(recordedPacket.recordingWorkerIndex != 0u)
             ++statistics.workerRoutedPacketCount;
-        if(__hidden_gpu_packet_runtime_recorded_graph::PacketRecordingOverlapsAny(m_packets, compiledGraph, packetIndex))
+        if(m_packetRecordingOverlaps[packetIndex] != 0u)
             ++statistics.parallelPacketCount;
     }
     return statistics;
@@ -233,9 +219,9 @@ GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueReco
         statistics.recordingSeconds += recordedPacket.recordingSeconds;
         if(recordedPacket.recordingWorkerIndex != 0u)
             ++statistics.workerRoutedPacketCount;
-        // Compare this queue's packet against every published graph packet. CPU recording overlap is graph-wide and
-        // may cross physical queues; restricting the comparison to this queue would undercount and break partitioning.
-        if(__hidden_gpu_packet_runtime_recorded_graph::PacketRecordingOverlapsAny(m_packets, compiledGraph, packetIndex))
+        // The cached flag is graph-wide. A packet on this queue retains overlap with a published packet on another
+        // physical queue, preserving the aggregate's cross-queue recording semantics.
+        if(m_packetRecordingOverlaps[packetIndex] != 0u)
             ++statistics.parallelPacketCount;
     }
     return statistics;
@@ -463,6 +449,55 @@ GpuRecordedGraph::PacketRecordingScratch* GpuRecordedGraph::packetRecordingScrat
     if(!packet.valid() || packet.generation != m_planGeneration || packet.index >= m_packetRecordingScratch.size())
         return nullptr;
     return &m_packetRecordingScratch[packet.index];
+}
+
+void GpuRecordedGraph::cachePacketRecordingOverlaps(
+    const GpuCompiledGraph& compiledGraph,
+    const Vector<u32, Alloc::ScratchArena>& packetIndices,
+    Alloc::ScratchArena& scratchArena
+){
+    using IntervalEntry = __hidden_gpu_packet_runtime_recorded_graph::PacketRecordingIntervalEntry;
+
+    Vector<IntervalEntry, Alloc::ScratchArena> intervalEntries(scratchArena);
+    intervalEntries.reserve(packetIndices.size());
+    for(const u32 packetIndex : packetIndices){
+        if(
+            packetIndex >= m_packets.size()
+            || packetIndex >= m_packetRecordingOverlaps.size()
+        )
+            continue;
+        const GpuRecordedPacket& recordedPacket = m_packets[packetIndex];
+        if(
+            recordedPacket.commandListCount == 0u
+            || recordedPacket.packet != compiledGraph.packetIdAt(packetIndex)
+            || recordedPacket.recordingBeginNanoseconds >= recordedPacket.recordingEndNanoseconds
+        )
+            continue;
+        intervalEntries.push_back(IntervalEntry{
+            .beginNanoseconds = recordedPacket.recordingBeginNanoseconds,
+            .endNanoseconds = recordedPacket.recordingEndNanoseconds,
+            .packetIndex = packetIndex,
+        });
+    }
+    Sort(
+        intervalEntries.begin(),
+        intervalEntries.end(),
+        __hidden_gpu_packet_runtime_recorded_graph::LessPacketRecordingIntervalEntry
+    );
+
+    u64 maximumPreviousEndNanoseconds = 0u;
+    for(usize intervalIndex = 0u; intervalIndex < intervalEntries.size(); ++intervalIndex){
+        const IntervalEntry& interval = intervalEntries[intervalIndex];
+        const bool overlapsPrevious = intervalIndex != 0u
+            && interval.beginNanoseconds < maximumPreviousEndNanoseconds
+        ;
+        const bool overlapsNext = intervalIndex + 1u < intervalEntries.size()
+            && intervalEntries[intervalIndex + 1u].beginNanoseconds < interval.endNanoseconds
+        ;
+        if(overlapsPrevious || overlapsNext)
+            m_packetRecordingOverlaps[interval.packetIndex] = 1u;
+        maximumPreviousEndNanoseconds = Max(maximumPreviousEndNanoseconds, interval.endNanoseconds);
+    }
 }
 
 

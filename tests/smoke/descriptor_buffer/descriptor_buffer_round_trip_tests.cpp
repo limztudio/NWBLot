@@ -1573,6 +1573,69 @@ struct WorkerAffinedPacketTask{
 };
 
 
+// With two logical recording slots, the long packet holds one slot while the other records both short packets in
+// sequence. This creates one interval that overlaps two mutually non-overlapping intervals without timer sleeps.
+struct RecordingOverlapBridgeTask{
+    struct State{
+        AtomicFlag longRecordingEntered;
+        AtomicFlag secondShortRecordingEntered;
+    };
+
+    struct Payload{
+        State* state = nullptr;
+        u32 sequenceIndex = 0u;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext&
+    ){
+        if(!payload.state || payload.sequenceIndex > 2u || !commandList.isRecording())
+            return false;
+
+        State& state = *payload.state;
+        if(payload.sequenceIndex == 0u){
+            if(state.longRecordingEntered.test_and_set(MemoryOrder::release))
+                return false;
+            state.longRecordingEntered.notify_all();
+            state.secondShortRecordingEntered.wait(false, MemoryOrder::acquire);
+        }
+        else{
+            state.longRecordingEntered.wait(false, MemoryOrder::acquire);
+            if(payload.sequenceIndex == 2u){
+                if(state.secondShortRecordingEntered.test_and_set(MemoryOrder::release))
+                    return false;
+                state.secondShortRecordingEntered.notify_all();
+            }
+        }
+        return commandList.isRecording();
+    }
+};
+
+
+// All three packets enter their task thunks before one intentionally fails. The two published peers still overlap
+// and must remain visible through recording telemetry even though the ready-frontier operation returns false.
+struct RecordingOverlapResultTask{
+    struct Payload{
+        Latch* recordingStarted = nullptr;
+        bool shouldRecord = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext&
+    ){
+        if(!payload.recordingStarted || !commandList.isRecording())
+            return false;
+        payload.recordingStarted->count_down();
+        payload.recordingStarted->wait();
+        return payload.shouldRecord && commandList.isRecording();
+    }
+};
+
+
 struct DescriptorHeapStorageBufferDispatchPushConstants{
     u32 storageBufferSlot = 0u;
     u32 seed = 0u;
@@ -24630,6 +24693,274 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRecordsExplicitGpuDep
     EXPECT_EQ(firstAcceptedToken.deviceGeneration, secondAcceptedToken.deviceGeneration);
     EXPECT_LT(firstAcceptedToken.value, secondAcceptedToken.value);
     EXPECT_TRUE(device.waitForIdle());
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecordingOverlapCacheHandlesOneLongAndTwoSequentialIntervals){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    RecordingOverlapBridgeTask::State state;
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    scheduling.allowParallelRecording = true;
+    const GpuQueueRequest queueRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const auto addTask = [&](const Name& identity, const AStringView label, const u32 sequenceIndex){
+        GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(queueRequest)
+            .setScheduling(scheduling)
+        ;
+        return graph.addTask<RecordingOverlapBridgeTask>(
+            desc,
+            RecordingOverlapBridgeTask::Payload{
+                .state = &state,
+                .sequenceIndex = sequenceIndex,
+            }
+        );
+    };
+    const GpuTaskId longTask = addTask(
+        Name("tests/descriptor_buffer/recording_overlap_bridge_long"),
+        "Recording Overlap Bridge Long",
+        0u
+    );
+    const GpuTaskId firstShortTask = addTask(
+        Name("tests/descriptor_buffer/recording_overlap_bridge_first_short"),
+        "Recording Overlap Bridge First Short",
+        1u
+    );
+    const GpuTaskId secondShortTask = addTask(
+        Name("tests/descriptor_buffer/recording_overlap_bridge_second_short"),
+        "Recording Overlap Bridge Second Short",
+        2u
+    );
+    ASSERT_TRUE(longTask.valid());
+    ASSERT_TRUE(firstShortTask.valid());
+    ASSERT_TRUE(secondShortTask.valid());
+
+    const GpuPhysicalQueueInfo graphicsQueue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(GpuQueueCapability::Graphics),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &graphicsQueue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/recording_overlap_bridge_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    const GpuSubmissionPacketId longPacket = compiledGraph.packetForTask(longTask);
+    const GpuSubmissionPacketId firstShortPacket = compiledGraph.packetForTask(firstShortTask);
+    const GpuSubmissionPacketId secondShortPacket = compiledGraph.packetForTask(secondShortTask);
+    ASSERT_TRUE(longPacket.valid());
+    ASSERT_TRUE(firstShortPacket.valid());
+    ASSERT_TRUE(secondShortPacket.valid());
+    ASSERT_EQ(compiledGraph.packetIdAt(0u), longPacket);
+    ASSERT_EQ(compiledGraph.packetIdAt(1u), firstShortPacket);
+    ASSERT_EQ(compiledGraph.packetIdAt(2u), secondShortPacket);
+    ASSERT_EQ(compiledGraph.packet(longPacket).recordingFrontier, 0u);
+    ASSERT_EQ(compiledGraph.packet(firstShortPacket).recordingFrontier, 0u);
+    ASSERT_EQ(compiledGraph.packet(secondShortPacket).recordingFrontier, 0u);
+
+    Alloc::ThreadPool recordingWorkers(1u, CpuAffinity::Any);
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInReadyFrontiers(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        recordedGraph,
+        recordingWorkers
+    ));
+    const GpuRecordedPacket* const longRecorded = recordedGraph.find(longPacket);
+    const GpuRecordedPacket* const firstShortRecorded = recordedGraph.find(firstShortPacket);
+    const GpuRecordedPacket* const secondShortRecorded = recordedGraph.find(secondShortPacket);
+    ASSERT_NE(longRecorded, nullptr);
+    ASSERT_NE(firstShortRecorded, nullptr);
+    ASSERT_NE(secondShortRecorded, nullptr);
+    EXPECT_LT(longRecorded->recordingBeginNanoseconds, longRecorded->recordingEndNanoseconds);
+    EXPECT_LT(firstShortRecorded->recordingBeginNanoseconds, firstShortRecorded->recordingEndNanoseconds);
+    EXPECT_LT(secondShortRecorded->recordingBeginNanoseconds, secondShortRecorded->recordingEndNanoseconds);
+    EXPECT_LE(firstShortRecorded->recordingEndNanoseconds, secondShortRecorded->recordingBeginNanoseconds);
+    EXPECT_LT(longRecorded->recordingBeginNanoseconds, firstShortRecorded->recordingEndNanoseconds);
+    EXPECT_LT(firstShortRecorded->recordingBeginNanoseconds, longRecorded->recordingEndNanoseconds);
+    EXPECT_LT(longRecorded->recordingBeginNanoseconds, secondShortRecorded->recordingEndNanoseconds);
+    EXPECT_LT(secondShortRecorded->recordingBeginNanoseconds, longRecorded->recordingEndNanoseconds);
+
+    const GpuTaskGraphRecordingStatistics recordingStatistics = recordedGraph.recordingStatistics(compiledGraph);
+    ASSERT_TRUE(recordingStatistics.valid());
+    EXPECT_EQ(recordingStatistics.packetCount, 3u);
+    EXPECT_EQ(recordingStatistics.workerRoutedPacketCount, 3u);
+    EXPECT_EQ(recordingStatistics.parallelPacketCount, 3u);
+    const GpuTaskGraphPhysicalQueueRecordingStatistics queueStatistics =
+        recordedGraph.physicalQueueRecordingStatistics(compiledGraph, graphicsQueue.id)
+    ;
+    ASSERT_TRUE(queueStatistics.valid());
+    EXPECT_EQ(queueStatistics.packetCount, 3u);
+    EXPECT_EQ(queueStatistics.parallelPacketCount, 3u);
+    EXPECT_EQ(recordedGraph.recordingStatistics(compiledGraph).parallelPacketCount, 3u);
+    EXPECT_EQ(
+        recordedGraph.physicalQueueRecordingStatistics(compiledGraph, graphicsQueue.id).parallelPacketCount,
+        3u
+    );
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    EXPECT_TRUE(transaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        recordedGraph.recordingAttemptGeneration()
+    ));
+    recordedGraph.reset(compiledGraph);
+    const GpuTaskGraphRecordingStatistics resetStatistics = recordedGraph.recordingStatistics(compiledGraph);
+    const GpuTaskGraphPhysicalQueueRecordingStatistics resetQueueStatistics =
+        recordedGraph.physicalQueueRecordingStatistics(compiledGraph, graphicsQueue.id)
+    ;
+    ASSERT_TRUE(resetStatistics.valid());
+    ASSERT_TRUE(resetQueueStatistics.valid());
+    EXPECT_EQ(resetStatistics.packetCount, 0u);
+    EXPECT_EQ(resetStatistics.parallelPacketCount, 0u);
+    EXPECT_EQ(resetQueueStatistics.packetCount, 0u);
+    EXPECT_EQ(resetQueueStatistics.parallelPacketCount, 0u);
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecordingOverlapCacheKeepsPublishedPeersAfterPartialFailure){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    Latch recordingStarted(3);
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    scheduling.allowParallelRecording = true;
+    const GpuQueueRequest queueRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const auto addTask = [&](const Name& identity, const AStringView label, const bool shouldRecord){
+        GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(queueRequest)
+            .setScheduling(scheduling)
+        ;
+        return graph.addTask<RecordingOverlapResultTask>(
+            desc,
+            RecordingOverlapResultTask::Payload{
+                .recordingStarted = &recordingStarted,
+                .shouldRecord = shouldRecord,
+            }
+        );
+    };
+    const GpuTaskId firstTask = addTask(
+        Name("tests/descriptor_buffer/recording_overlap_partial_first"),
+        "Recording Overlap Partial First",
+        true
+    );
+    const GpuTaskId secondTask = addTask(
+        Name("tests/descriptor_buffer/recording_overlap_partial_second"),
+        "Recording Overlap Partial Second",
+        true
+    );
+    const GpuTaskId failedTask = addTask(
+        Name("tests/descriptor_buffer/recording_overlap_partial_failed"),
+        "Recording Overlap Partial Failed",
+        false
+    );
+    ASSERT_TRUE(firstTask.valid());
+    ASSERT_TRUE(secondTask.valid());
+    ASSERT_TRUE(failedTask.valid());
+
+    const GpuPhysicalQueueInfo graphicsQueue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(GpuQueueCapability::Graphics),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &graphicsQueue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/recording_overlap_partial_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    const GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(firstTask);
+    const GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(secondTask);
+    const GpuSubmissionPacketId expectedFailedPacket = compiledGraph.packetForTask(failedTask);
+    ASSERT_TRUE(firstPacket.valid());
+    ASSERT_TRUE(secondPacket.valid());
+    ASSERT_TRUE(expectedFailedPacket.valid());
+    ASSERT_EQ(compiledGraph.packet(firstPacket).recordingFrontier, 0u);
+    ASSERT_EQ(compiledGraph.packet(secondPacket).recordingFrontier, 0u);
+    ASSERT_EQ(compiledGraph.packet(expectedFailedPacket).recordingFrontier, 0u);
+
+    Alloc::ThreadPool recordingWorkers(2u, CpuAffinity::Any);
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    EXPECT_FALSE(recorder.recordPacketRangeInReadyFrontiers(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        recordedGraph,
+        recordingWorkers,
+        &failedPacket
+    ));
+    EXPECT_EQ(failedPacket, expectedFailedPacket);
+    const GpuRecordedPacket* const firstRecorded = recordedGraph.find(firstPacket);
+    const GpuRecordedPacket* const secondRecorded = recordedGraph.find(secondPacket);
+    ASSERT_NE(firstRecorded, nullptr);
+    ASSERT_NE(secondRecorded, nullptr);
+    EXPECT_EQ(recordedGraph.find(expectedFailedPacket), nullptr);
+    EXPECT_LT(firstRecorded->recordingBeginNanoseconds, secondRecorded->recordingEndNanoseconds);
+    EXPECT_LT(secondRecorded->recordingBeginNanoseconds, firstRecorded->recordingEndNanoseconds);
+
+    const GpuTaskGraphRecordingStatistics recordingStatistics = recordedGraph.recordingStatistics(compiledGraph);
+    ASSERT_TRUE(recordingStatistics.valid());
+    EXPECT_EQ(recordingStatistics.packetCount, 2u);
+    EXPECT_EQ(recordingStatistics.commandListCount, 2u);
+    EXPECT_EQ(recordingStatistics.workerRoutedPacketCount, 2u);
+    EXPECT_EQ(recordingStatistics.parallelPacketCount, 2u);
+    const GpuTaskGraphPhysicalQueueRecordingStatistics queueStatistics =
+        recordedGraph.physicalQueueRecordingStatistics(compiledGraph, graphicsQueue.id)
+    ;
+    ASSERT_TRUE(queueStatistics.valid());
+    EXPECT_EQ(queueStatistics.packetCount, 2u);
+    EXPECT_EQ(queueStatistics.parallelPacketCount, 2u);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    EXPECT_TRUE(transaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        recordedGraph.recordingAttemptGeneration()
+    ));
 }
 
 

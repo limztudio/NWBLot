@@ -598,13 +598,9 @@ bool GpuTaskGraphCompiler::analyze(
             ++outAnalysis.m_resourceVersionEdgeCount;
         appendRawEdge(edge);
     };
-    const auto appendExternalDependency = [&](const GpuTaskExternalDependencyEdge& edge){
-        for(const GpuTaskExternalDependencyEdge& existing : outAnalysis.m_externalDependencies){
-            if(existing.completion == edge.completion && existing.consumer == edge.consumer)
-                return;
-        }
-        outAnalysis.m_externalDependencies.push_back(edge);
-    };
+    Vector<u32, Alloc::ScratchArena> externalDependencyConsumerMarkers(graph.externalCompletionCount(), scratchArena);
+    for(usize completionIndex = 0u; completionIndex < graph.externalCompletionCount(); ++completionIndex)
+        externalDependencyConsumerMarkers[completionIndex] = Limit<u32>::s_Max;
 
     for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
         const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
@@ -618,10 +614,14 @@ bool GpuTaskGraphCompiler::analyze(
             });
         }
         for(usize dependencyIndex = 0u; dependencyIndex < task.externalDependencyCount; ++dependencyIndex){
-            appendExternalDependency(GpuTaskExternalDependencyEdge{
-                .completion = task.externalDependencies[dependencyIndex],
+            const GpuExternalCompletionId completion = task.externalDependencies[dependencyIndex];
+            if(externalDependencyConsumerMarkers[completion.index] == task.id.index)
+                continue;
+            outAnalysis.m_externalDependencies.push_back(GpuTaskExternalDependencyEdge{
+                .completion = completion,
                 .consumer = task.id,
             });
+            externalDependencyConsumerMarkers[completion.index] = task.id.index;
         }
     }
     for(const GpuTaskDependencyEdge& edge : resourceVersionDependencyEdges)

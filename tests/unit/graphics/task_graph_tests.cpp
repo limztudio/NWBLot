@@ -15030,6 +15030,7 @@ TEST(GpuTaskGraph, CompilesMultiSourceInitialTextureOwnershipHandoff){
             .setIdentity(Name("tests/task_graph/multi_owner_overlapping_task"))
             .setMarkerLabel("Multi Owner Overlapping Task")
             .setQueue(graphicsQueue)
+            .setExternalDependencies(&tailCompletion, 1u)
             .setResourceUses(uses, LengthOf(uses))
         ;
         const Graphics::GpuTaskId task = graph.addTask(taskDesc);
@@ -15072,10 +15073,8 @@ TEST(GpuTaskGraph, CompilesMultiSourceInitialTextureOwnershipHandoff){
         );
         ASSERT_NE(dependencies, nullptr);
         ASSERT_EQ(compiledGraph.packet(compiledTask->packet).externalDependencyCount, 2u);
-        const bool hasMipZeroCompletion = dependencies[0u] == mipZeroCompletion || dependencies[1u] == mipZeroCompletion;
-        const bool hasTailCompletion = dependencies[0u] == tailCompletion || dependencies[1u] == tailCompletion;
-        EXPECT_TRUE(hasMipZeroCompletion);
-        EXPECT_TRUE(hasTailCompletion);
+        EXPECT_EQ(dependencies[0u], tailCompletion);
+        EXPECT_EQ(dependencies[1u], mipZeroCompletion);
     }
 
     {
@@ -16409,6 +16408,106 @@ TEST(GpuTaskGraph, CompilesOnlyIndependentAcceptedQueueFrontierTasks){
         EXPECT_EQ(compiledTask->epilogueBarrierCount, 0u);
     }
 }
+
+TEST(GpuTaskGraph, DeduplicatesMergedPacketExternalDependenciesInTaskOrder){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuExternalCompletionId completions[] = {
+        graph.importExternalCompletion(
+            Graphics::GpuExternalCompletionDesc{}
+                .setIdentity(Name("tests/task_graph/merged_external_a"))
+                .setMarkerLabel("Merged External A")
+        ),
+        graph.importExternalCompletion(
+            Graphics::GpuExternalCompletionDesc{}
+                .setIdentity(Name("tests/task_graph/merged_external_b"))
+                .setMarkerLabel("Merged External B")
+        ),
+        graph.importExternalCompletion(
+            Graphics::GpuExternalCompletionDesc{}
+                .setIdentity(Name("tests/task_graph/merged_external_c"))
+                .setMarkerLabel("Merged External C")
+        ),
+    };
+    for(const Graphics::GpuExternalCompletionId completion : completions)
+        ASSERT_TRUE(completion.valid());
+
+    const Graphics::GpuExternalCompletionId firstExternalDependencies[] = {
+        completions[1u],
+        completions[0u],
+        completions[1u],
+    };
+    Graphics::GpuTaskSchedulingHint firstScheduling;
+    firstScheduling.allowPacketMerge = true;
+    Graphics::GpuTaskDesc firstDesc;
+    firstDesc
+        .setIdentity(Name("tests/task_graph/merged_external_first"))
+        .setMarkerLabel("Merged External First")
+        .setScheduling(firstScheduling)
+        .setExternalDependencies(firstExternalDependencies, LengthOf(firstExternalDependencies))
+    ;
+    const Graphics::GpuTaskId first = graph.addTask(firstDesc);
+    ASSERT_TRUE(first.valid());
+
+    const Graphics::GpuExternalCompletionId secondExternalDependencies[] = {
+        completions[0u],
+        completions[2u],
+        completions[1u],
+        completions[2u],
+    };
+    Graphics::GpuTaskSchedulingHint secondScheduling;
+    secondScheduling.allowPacketMerge = true;
+    secondScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskDesc secondDesc;
+    secondDesc
+        .setIdentity(Name("tests/task_graph/merged_external_second"))
+        .setMarkerLabel("Merged External Second")
+        .setScheduling(secondScheduling)
+        .setDependencies(&first, 1u)
+        .setExternalDependencies(secondExternalDependencies, LengthOf(secondExternalDependencies))
+    ;
+    const Graphics::GpuTaskId second = graph.addTask(secondDesc);
+    ASSERT_TRUE(second.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const auto& analysisDependencies =
+        analysis.externalDependencies()
+    ;
+    ASSERT_EQ(analysisDependencies.size(), 5u);
+    EXPECT_EQ(analysisDependencies[0u].completion, completions[1u]);
+    EXPECT_EQ(analysisDependencies[0u].consumer, first);
+    EXPECT_EQ(analysisDependencies[1u].completion, completions[0u]);
+    EXPECT_EQ(analysisDependencies[1u].consumer, first);
+    EXPECT_EQ(analysisDependencies[2u].completion, completions[0u]);
+    EXPECT_EQ(analysisDependencies[2u].consumer, second);
+    EXPECT_EQ(analysisDependencies[3u].completion, completions[2u]);
+    EXPECT_EQ(analysisDependencies[3u].consumer, second);
+    EXPECT_EQ(analysisDependencies[4u].completion, completions[1u]);
+    EXPECT_EQ(analysisDependencies[4u].consumer, second);
+
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(first);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(second), packet);
+    ASSERT_EQ(compiledGraph.packet(packet).taskCount, 2u);
+    ASSERT_EQ(compiledGraph.packet(packet).externalDependencyCount, 3u);
+    const Graphics::GpuExternalCompletionId* const packetDependencies = compiledGraph.packetExternalDependencies(packet);
+    ASSERT_NE(packetDependencies, nullptr);
+    EXPECT_EQ(packetDependencies[0u], completions[1u]);
+    EXPECT_EQ(packetDependencies[1u], completions[0u]);
+    EXPECT_EQ(packetDependencies[2u], completions[2u]);
+    EXPECT_EQ(compiledGraph.compileStatistics().declaredExternalDependencyCount, analysisDependencies.size());
+    EXPECT_EQ(compiledGraph.compileStatistics().packetExternalDependencyCount, 3u);
+}
+
 
 TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries){
     TestArena testArena;

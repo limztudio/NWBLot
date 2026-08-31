@@ -343,6 +343,13 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
             return false;
         orderedTerminalFinalizationDependencies.push_back(dependency);
     }
+    for(const GpuTaskExternalDependencyEdge& dependency : initialOwnershipDependencies){
+        if(
+            !graph.validTask(dependency.consumer)
+            || !graph.validExternalCompletion(dependency.completion)
+        )
+            return false;
+    }
 
     if(plansTerminalFinalizationDependencies){
         Sort(
@@ -378,6 +385,9 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
     Vector<u32, Alloc::ScratchArena> packetDependencyConsumerMarkers(packetCount, scratchArena);
     for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex)
         packetDependencyConsumerMarkers[packetIndex] = Limit<u32>::s_Max;
+    Vector<u32, Alloc::ScratchArena> externalDependencyConsumerMarkers(graph.externalCompletionCount(), scratchArena);
+    for(usize completionIndex = 0u; completionIndex < graph.externalCompletionCount(); ++completionIndex)
+        externalDependencyConsumerMarkers[completionIndex] = Limit<u32>::s_Max;
 
     constexpr usize s_BitsPerPacketReachabilityWord = sizeof(u64) * 8u;
     Vector<u64, Alloc::ScratchArena> packetReachability(scratchArena);
@@ -416,6 +426,7 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
         return true;
     };
 
+    usize initialOwnershipDependencyIndex = 0u;
     usize terminalFinalizationDependencyIndex = 0u;
     for(usize consumerPacketIndex = 0u; consumerPacketIndex < compiledPlan.packets.size(); ++consumerPacketIndex){
         GpuSubmissionPacket& consumerPacket = compiledPlan.packets[consumerPacketIndex];
@@ -448,11 +459,25 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
             return true;
         };
         consumerPacket.externalDependencyOffset = static_cast<u32>(compiledPlan.packetExternalDependencies.size());
+        const auto appendExternalDependency = [&](const GpuExternalCompletionId completion){
+            if(!graph.validExternalCompletion(completion))
+                return false;
+            if(externalDependencyConsumerMarkers[completion.index] == consumerPacketID.index)
+                return true;
+            if(compiledPlan.packetExternalDependencies.size() >= static_cast<usize>(Limit<u32>::s_Max))
+                return false;
+
+            compiledPlan.packetExternalDependencies.push_back(completion);
+            externalDependencyConsumerMarkers[completion.index] = consumerPacketID.index;
+            ++consumerPacket.externalDependencyCount;
+            return true;
+        };
         for(u32 taskIndex = 0u; taskIndex < consumerPacket.taskCount; ++taskIndex){
             const GpuTaskId consumerTask = compiledPlan.packetTasks[consumerPacket.taskOffset + taskIndex];
             const GpuCompiledTask* const compiledConsumerTask = FindCompiledTask(compiledPlan, consumerTask);
-            if(!compiledConsumerTask)
+            if(!compiledConsumerTask || !graph.validTask(consumerTask))
                 return false;
+            const GpuTaskGraphTaskView consumerTaskView = graph.taskAt(consumerTask.index);
 
             const GpuTaskGraphSchedulingTaskIndexView producerIndices = analysis.schedulingProducers(consumerTask);
             for(usize producerIndex = 0u; producerIndex < producerIndices.taskCount; ++producerIndex){
@@ -470,26 +495,19 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
                     return false;
             }
 
-            const auto appendExternalDependency = [&](const GpuTaskExternalDependencyEdge& edge){
-                for(u32 dependencyIndex = 0u; dependencyIndex < consumerPacket.externalDependencyCount; ++dependencyIndex){
-                    if(compiledPlan.packetExternalDependencies[
-                        consumerPacket.externalDependencyOffset + dependencyIndex
-                    ] == edge.completion)
-                        return true;
-                }
-                if(compiledPlan.packetExternalDependencies.size() >= static_cast<usize>(Limit<u32>::s_Max))
-                    return false;
-
-                compiledPlan.packetExternalDependencies.push_back(edge.completion);
-                ++consumerPacket.externalDependencyCount;
-                return true;
-            };
-            for(const GpuTaskExternalDependencyEdge& edge : analysis.externalDependencies()){
-                if(edge.consumer == consumerTask && !appendExternalDependency(edge))
+            for(usize dependencyIndex = 0u; dependencyIndex < consumerTaskView.externalDependencyCount; ++dependencyIndex){
+                if(!appendExternalDependency(consumerTaskView.externalDependencies[dependencyIndex]))
                     return false;
             }
-            for(const GpuTaskExternalDependencyEdge& edge : initialOwnershipDependencies){
-                if(edge.consumer == consumerTask && !appendExternalDependency(edge))
+            while(
+                initialOwnershipDependencyIndex < initialOwnershipDependencies.size()
+                && initialOwnershipDependencies[initialOwnershipDependencyIndex].consumer == consumerTask
+            ){
+                const GpuExternalCompletionId completion =
+                    initialOwnershipDependencies[initialOwnershipDependencyIndex].completion
+                ;
+                ++initialOwnershipDependencyIndex;
+                if(!appendExternalDependency(completion))
                     return false;
             }
         }
@@ -530,6 +548,8 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
                 return false;
         }
     }
+    if(initialOwnershipDependencyIndex != initialOwnershipDependencies.size())
+        return false;
     if(terminalFinalizationDependencyIndex != orderedTerminalFinalizationDependencies.size())
         return false;
 

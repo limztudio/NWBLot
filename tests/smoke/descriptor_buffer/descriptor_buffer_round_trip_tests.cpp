@@ -47540,7 +47540,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
 }
 
 
-TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorReadyFrontierFollowsCompilerStateSeeds){
+TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorOrdersNonmonotonicReadyFrontiersByCompilerStateSeeds){
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto createBuffer = [&device]{
         return device.createBuffer(
@@ -47552,8 +47552,10 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorReadyFrontierFollowsCom
     };
     const BufferHandle frontierBuffer = createBuffer();
     const BufferHandle recordedStateBuffer = createBuffer();
+    const BufferHandle independentBuffer = createBuffer();
     ASSERT_NE(frontierBuffer.get(), nullptr);
     ASSERT_NE(recordedStateBuffer.get(), nullptr);
+    ASSERT_NE(independentBuffer.get(), nullptr);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId frontierResource = graph.importBuffer(
@@ -47572,8 +47574,17 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorReadyFrontierFollowsCom
             .setType(GpuGraphResourceType::Buffer)
             .setInitialState(ResourceStates::Unknown)
     );
+    const GpuGraphResourceId independentResource = graph.importBuffer(
+        independentBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/runtime_frontier_independent"))
+            .setMarkerLabel("Runtime Frontier Independent")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+    );
     ASSERT_TRUE(frontierResource.valid());
     ASSERT_TRUE(recordedStateResource.valid());
+    ASSERT_TRUE(independentResource.valid());
 
     GpuTaskSchedulingHint scheduling;
     scheduling.forceSubmissionBoundary = true;
@@ -47662,6 +47673,30 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorReadyFrontierFollowsCom
     );
     ASSERT_TRUE(consumerTask.valid());
 
+    // This late-declared packet is independent, so compiler order remains 0,1,2,3 while recording depth becomes
+    // 0,1,2,0. The ready recorder must group the final packet back into frontier zero without quadratic rescans.
+    const GpuTaskResourceUse independentUse{
+        .resource = independentResource,
+        .range = {},
+        .requiredState = ResourceStates::CopyDest,
+        .access = GpuTaskResourceAccess::Write,
+    };
+    bool independentRecorded = false;
+    const GpuTaskId independentTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/runtime_frontier_independent_task"))
+            .setMarkerLabel("Runtime Frontier Independent Task")
+            .setQueue(graphicsRequest)
+            .setScheduling(scheduling)
+            .setResourceUses(&independentUse, 1u),
+        NativePacketPrefixTask::Payload{
+            .buffer = independentBuffer.get(),
+            .expectedState = ResourceStates::CopyDest,
+            .recorded = &independentRecorded,
+        }
+    );
+    ASSERT_TRUE(independentTask.valid());
+
     const GpuPhysicalQueueInfo queue{
         .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
@@ -47684,16 +47719,20 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorReadyFrontierFollowsCom
     Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/runtime_frontier_recorded_state_scratch"));
     const GpuTaskGraphCompiler compiler;
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    ASSERT_EQ(compiledGraph.packetCount(), 4u);
     const GpuSubmissionPacketId frontierPacket = compiledGraph.packetForTask(frontierTask);
     const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producerTask);
     const GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumerTask);
+    const GpuSubmissionPacketId independentPacket = compiledGraph.packetForTask(independentTask);
     ASSERT_TRUE(frontierPacket.valid());
     ASSERT_TRUE(producerPacket.valid());
     ASSERT_TRUE(consumerPacket.valid());
+    ASSERT_TRUE(independentPacket.valid());
+    EXPECT_LT(consumerPacket.index, independentPacket.index);
     EXPECT_EQ(compiledGraph.packet(frontierPacket).recordingFrontier, 0u);
     EXPECT_EQ(compiledGraph.packet(producerPacket).recordingFrontier, 1u);
     EXPECT_EQ(compiledGraph.packet(consumerPacket).recordingFrontier, 2u);
+    EXPECT_EQ(compiledGraph.packet(independentPacket).recordingFrontier, 0u);
     const GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producerTask);
     const GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumerTask);
     ASSERT_NE(compiledProducer, nullptr);
@@ -47712,7 +47751,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorReadyFrontierFollowsCom
     const GpuNativePacketRecorder recorder(device);
     const GpuTaskGraphSubmitter submitter(device);
     GpuTaskGraphNormalExecutionDesc normalExecution;
-    normalExecution.terminalTask = consumerTask;
+    normalExecution.terminalTask = independentTask;
     normalExecution.readyFrontierWorkerPool = &recordingWorkers;
     GpuSubmissionPacketId failedPacket;
     ASSERT_TRUE(submitter.recordAndSubmitNormalGraph(
@@ -47729,13 +47768,18 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorReadyFrontierFollowsCom
     EXPECT_TRUE(frontierRecorded);
     EXPECT_TRUE(producerRecorded);
     EXPECT_TRUE(consumerRecorded);
+    EXPECT_TRUE(independentRecorded);
     EXPECT_TRUE(transaction.taskToken(compiledGraph, frontierTask).valid());
     EXPECT_TRUE(transaction.taskToken(compiledGraph, producerTask).valid());
     EXPECT_TRUE(transaction.taskToken(compiledGraph, consumerTask).valid());
+    EXPECT_TRUE(transaction.taskToken(compiledGraph, independentTask).valid());
     const GpuRecordedPacket* const producerRecording = recordedGraph.find(producerPacket);
     const GpuRecordedPacket* const consumerRecording = recordedGraph.find(consumerPacket);
+    const GpuRecordedPacket* const independentRecording = recordedGraph.find(independentPacket);
     ASSERT_NE(producerRecording, nullptr);
     ASSERT_NE(consumerRecording, nullptr);
+    ASSERT_NE(independentRecording, nullptr);
+    EXPECT_LE(independentRecording->recordingEndNanoseconds, producerRecording->recordingBeginNanoseconds);
     EXPECT_LE(producerRecording->recordingEndNanoseconds, consumerRecording->recordingBeginNanoseconds);
     EXPECT_TRUE(device.waitForIdle());
 }

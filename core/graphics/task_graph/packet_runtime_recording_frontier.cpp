@@ -26,6 +26,20 @@ namespace __hidden_gpu_packet_runtime_recording_frontier{
 
 inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph/packet_recording_frontier");
 
+struct PacketRecordingFrontierEntry{
+    GpuSubmissionPacketId packet;
+    u32 frontier = 0u;
+};
+
+[[nodiscard]] bool LessPacketRecordingFrontierEntry(
+    const PacketRecordingFrontierEntry& left,
+    const PacketRecordingFrontierEntry& right
+)noexcept{
+    return left.frontier < right.frontier
+        || (left.frontier == right.frontier && left.packet.index < right.packet.index)
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -111,6 +125,8 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     GpuSubmissionPacketId* const outFailedPacket,
     GpuCommandIrCapture* const commandIrCapture
 )const{
+    using RecordingEntry = __hidden_gpu_packet_runtime_recording_frontier::PacketRecordingFrontierEntry;
+
     if(outFailedPacket)
         *outFailedPacket = {};
     if(
@@ -128,14 +144,11 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         return false;
 
     Alloc::ScratchArena scratchArena(__hidden_gpu_packet_runtime_recording_frontier::s_PacketRecordingFrontierScratchArena);
-    Vector<GpuSubmissionPacketId, Alloc::ScratchArena> recordingPackets(scratchArena);
-    Vector<u32, Alloc::ScratchArena> effectiveRecordingFrontiers(scratchArena);
-    recordingPackets.reserve(range.packetCount);
-    effectiveRecordingFrontiers.reserve(range.packetCount);
-    u32 maximumFrontier = 0u;
+    Vector<RecordingEntry, Alloc::ScratchArena> recordingEntries(scratchArena);
+    recordingEntries.reserve(range.packetCount);
+    bool recordingFrontiersAreMonotonic = true;
     for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
         const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
-        recordingPackets.push_back(packet);
 
         u32 effectiveFrontier = compiledGraph.packet(packet).recordingFrontier;
         if(effectiveFrontier == Limit<u32>::s_Max)
@@ -151,9 +164,9 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 return true;
 
             const usize sourceDescIndex = sourcePacket.index - rangeBegin;
-            if(sourceDescIndex >= effectiveRecordingFrontiers.size())
+            if(sourceDescIndex >= recordingEntries.size())
                 return false;
-            const u32 sourceFrontier = effectiveRecordingFrontiers[sourceDescIndex];
+            const u32 sourceFrontier = recordingEntries[sourceDescIndex].frontier;
             if(sourceFrontier == Limit<u32>::s_Max)
                 return false;
             effectiveFrontier = Max(effectiveFrontier, sourceFrontier + 1u);
@@ -174,8 +187,12 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                     return false;
             }
         }
-        effectiveRecordingFrontiers.push_back(effectiveFrontier);
-        maximumFrontier = Max(maximumFrontier, effectiveFrontier);
+        if(!recordingEntries.empty() && effectiveFrontier < recordingEntries.back().frontier)
+            recordingFrontiersAreMonotonic = false;
+        recordingEntries.push_back(RecordingEntry{
+            .packet = packet,
+            .frontier = effectiveFrontier,
+        });
     }
     const auto completeReadyFrontierTelemetry = [&]{
         const f64 elapsedSeconds = DurationInSeconds<f64>(TimerNow(), recordingOperationBegin);
@@ -205,8 +222,8 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         || !workerPool.isParallelEnabled()
         || range.packetCount < 2u
     ){
-        for(usize recordingIndex = 0u; recordingIndex < recordingPackets.size(); ++recordingIndex){
-            const GpuSubmissionPacketId packet = recordingPackets[recordingIndex];
+        for(const RecordingEntry& entry : recordingEntries){
+            const GpuSubmissionPacketId packet = entry.packet;
             if(recordPacket(
                 graph,
                 compiledGraph,
@@ -267,14 +284,32 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         return true;
     };
 
+    // Compiler order is already free for monotonic frontiers, including a deep state-seed chain. A later independent
+    // packet may lower the frontier again; sort that sparse case once instead of rescanning every packet per depth.
+    if(!recordingFrontiersAreMonotonic){
+        Sort(
+            recordingEntries.begin(),
+            recordingEntries.end(),
+            __hidden_gpu_packet_runtime_recording_frontier::LessPacketRecordingFrontierEntry
+        );
+    }
+
     Vector<usize, Alloc::ScratchArena> parallelRecordingIndices(scratchArena);
     Vector<u8, Alloc::ScratchArena> parallelResults(scratchArena);
-    for(u32 frontier = 0u;; ++frontier){
+    parallelRecordingIndices.reserve(recordingEntries.size());
+    parallelResults.reserve(recordingEntries.size());
+    usize frontierBegin = 0u;
+    while(frontierBegin < recordingEntries.size()){
+        usize frontierEnd = frontierBegin + 1u;
+        while(
+            frontierEnd < recordingEntries.size()
+            && recordingEntries[frontierEnd].frontier == recordingEntries[frontierBegin].frontier
+        )
+            ++frontierEnd;
+
         parallelRecordingIndices.clear();
-        for(usize recordingIndex = 0u; recordingIndex < recordingPackets.size(); ++recordingIndex){
-            const GpuSubmissionPacketId packet = recordingPackets[recordingIndex];
-            if(effectiveRecordingFrontiers[recordingIndex] != frontier)
-                continue;
+        for(usize recordingIndex = frontierBegin; recordingIndex < frontierEnd; ++recordingIndex){
+            const GpuSubmissionPacketId packet = recordingEntries[recordingIndex].packet;
             if(!packetStateSeedsAreRecorded(packet)){
                 if(outFailedPacket)
                     *outFailedPacket = packet;
@@ -299,7 +334,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         if(!parallelRecordingIndices.empty()){
             parallelResults.resize(parallelRecordingIndices.size());
             workerPool.parallelFor(0u, parallelRecordingIndices.size(), [&](const usize parallelIndex){
-                const GpuSubmissionPacketId packet = recordingPackets[parallelRecordingIndices[parallelIndex]];
+                const GpuSubmissionPacketId packet = recordingEntries[parallelRecordingIndices[parallelIndex]].packet;
                 GpuRecordedGraph::PacketRecordingScratch* const scratch = outRecordedGraph.packetRecordingScratch(packet);
                 // Reserve zero for serial/direct command lists. ThreadPool's caller is worker zero, so shift every
                 // ready-frontier lease by one. The stable pool domain prevents a second ThreadPool with the same
@@ -319,12 +354,11 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 if(parallelResults[parallelIndex] != 0u)
                     continue;
                 if(outFailedPacket)
-                    *outFailedPacket = recordingPackets[parallelRecordingIndices[parallelIndex]];
+                    *outFailedPacket = recordingEntries[parallelRecordingIndices[parallelIndex]].packet;
                 return false;
             }
         }
-        if(frontier == maximumFrontier)
-            break;
+        frontierBegin = frontierEnd;
     }
     completeReadyFrontierTelemetry();
     return true;

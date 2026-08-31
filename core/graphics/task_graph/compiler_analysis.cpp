@@ -40,6 +40,11 @@ struct TaskDependencyAdjacency{
     {}
 };
 
+struct TaskCycleTraversalFrame{
+    usize nextAdjacencyIndex = 0u;
+    u32 taskIndex = 0u;
+};
+
 [[nodiscard]] static bool IsResourceVersionHazard(const GpuTaskHazardType::Enum hazard)noexcept{
     return hazard == GpuTaskHazardType::VersionDependency || hazard == GpuTaskHazardType::VersionLifetime;
 }
@@ -133,9 +138,10 @@ static bool BuildTopologicalOrder(
         return true;
 
     Vector<u8, Alloc::ScratchArena> visitState(taskCount, scratchArena);
-    Vector<u32, Alloc::ScratchArena> visitStack(scratchArena);
+    Vector<TaskCycleTraversalFrame, Alloc::ScratchArena> visitStack(scratchArena);
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
         visitState[taskIndex] = 0u;
+    visitStack.reserve(taskCount);
 
     const auto appendCycleEdge = [&](const u32 producerIndex, const u32 consumerIndex){
         for(
@@ -151,39 +157,55 @@ static bool BuildTopologicalOrder(
         }
         NWB_ASSERT(false);
     };
-    const auto visit = [&](auto&& self, const u32 taskIndex) -> bool{
+    bool foundCycle = false;
+    for(u32 taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        if(visitState[taskIndex] != 0u)
+            continue;
+
         visitState[taskIndex] = 1u;
-        visitStack.push_back(taskIndex);
-        for(
-            usize adjacencyIndex = adjacency.offsets[taskIndex];
-            adjacencyIndex < adjacency.offsets[taskIndex + 1u];
-            ++adjacencyIndex
-        ){
-            const GpuTaskDependencyEdge& edge = edges[adjacency.edgeIndices[adjacencyIndex]];
+        visitStack.push_back(TaskCycleTraversalFrame{
+            .nextAdjacencyIndex = adjacency.offsets[taskIndex],
+            .taskIndex = taskIndex,
+        });
+        while(!visitStack.empty()){
+            TaskCycleTraversalFrame& frame = visitStack.back();
+            if(frame.nextAdjacencyIndex >= adjacency.offsets[frame.taskIndex + 1u]){
+                visitState[frame.taskIndex] = 2u;
+                visitStack.pop_back();
+                continue;
+            }
+
+            const u32 producerIndex = frame.taskIndex;
+            const GpuTaskDependencyEdge& edge = edges[adjacency.edgeIndices[frame.nextAdjacencyIndex]];
+            ++frame.nextAdjacencyIndex;
             const u32 consumerIndex = edge.consumer.index;
             if(visitState[consumerIndex] == 1u){
                 usize cycleStart = 0u;
-                while(visitStack[cycleStart] != consumerIndex)
+                while(visitStack[cycleStart].taskIndex != consumerIndex)
                     ++cycleStart;
                 for(usize cycleIndex = cycleStart; cycleIndex < visitStack.size(); ++cycleIndex){
-                    outCyclePath.push_back(graph.taskAt(visitStack[cycleIndex]).id);
-                    if(cycleIndex + 1u < visitStack.size())
-                        appendCycleEdge(visitStack[cycleIndex], visitStack[cycleIndex + 1u]);
+                    outCyclePath.push_back(graph.taskAt(visitStack[cycleIndex].taskIndex).id);
+                    if(cycleIndex + 1u < visitStack.size()){
+                        appendCycleEdge(
+                            visitStack[cycleIndex].taskIndex,
+                            visitStack[cycleIndex + 1u].taskIndex
+                        );
+                    }
                 }
                 outCyclePath.push_back(graph.taskAt(consumerIndex).id);
-                appendCycleEdge(taskIndex, consumerIndex);
-                return true;
+                appendCycleEdge(producerIndex, consumerIndex);
+                foundCycle = true;
+                break;
             }
-            if(visitState[consumerIndex] == 0u && self(self, consumerIndex))
-                return true;
+            if(visitState[consumerIndex] == 0u){
+                visitState[consumerIndex] = 1u;
+                visitStack.push_back(TaskCycleTraversalFrame{
+                    .nextAdjacencyIndex = adjacency.offsets[consumerIndex],
+                    .taskIndex = consumerIndex,
+                });
+            }
         }
-        visitStack.pop_back();
-        visitState[taskIndex] = 2u;
-        return false;
-    };
-
-    for(u32 taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
-        if(visitState[taskIndex] == 0u && visit(visit, taskIndex))
+        if(foundCycle)
             break;
     }
     outOrder.clear();

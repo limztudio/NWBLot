@@ -46705,6 +46705,59 @@ TEST(GpuTaskGraph, RejectsExplicitCyclesAndExportsExternalMetadata){
     EXPECT_FALSE(graph.appendFrameGraphTelemetry(builder, analysis, telemetryScratchArena));
 }
 
+TEST(GpuTaskGraph, RejectsDeepExplicitCyclesWithoutCallStackGrowth){
+    constexpr usize s_TaskCount = 8192u;
+
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Name taskBaseName("tests/task_graph/deep_cycle_task_");
+    char taskIndexBuffer[32u] = {};
+    const Graphics::GpuTaskId futureLast{
+        static_cast<u32>(s_TaskCount - 1u),
+        graph.generation(),
+    };
+    const Graphics::GpuTaskId first = AddTask(
+        graph,
+        DeriveName(taskBaseName, FormatDecimal(0u, taskIndexBuffer)),
+        "Deep Cycle Task",
+        &futureLast,
+        1u
+    );
+    ASSERT_TRUE(first.valid());
+
+    Graphics::GpuTaskId previous = first;
+    for(usize taskIndex = 1u; taskIndex < s_TaskCount; ++taskIndex){
+        const Graphics::GpuTaskId current = AddTask(
+            graph,
+            DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer)),
+            "Deep Cycle Task",
+            &previous,
+            1u
+        );
+        ASSERT_TRUE(current.valid());
+        previous = current;
+    }
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    EXPECT_FALSE(Analyze(graph, analysis));
+    EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::Cycle);
+    EXPECT_TRUE(analysis.topologicalOrder().empty());
+    ASSERT_EQ(analysis.cyclePath().size(), s_TaskCount + 1u);
+    ASSERT_EQ(analysis.cycleEdges().size(), s_TaskCount);
+    for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
+        const Graphics::GpuTaskId expectedTask{ static_cast<u32>(taskIndex), graph.generation() };
+        EXPECT_EQ(analysis.cyclePath()[taskIndex], expectedTask);
+        EXPECT_EQ(analysis.cycleEdges()[taskIndex].producer, analysis.cyclePath()[taskIndex]);
+        EXPECT_EQ(analysis.cycleEdges()[taskIndex].consumer, analysis.cyclePath()[taskIndex + 1u]);
+        EXPECT_EQ(analysis.cycleEdges()[taskIndex].hazard, Graphics::GpuTaskHazardType::Explicit);
+        EXPECT_FALSE(analysis.cycleEdges()[taskIndex].resource.valid());
+        EXPECT_FALSE(analysis.cycleEdges()[taskIndex].resourceVersion.valid());
+    }
+    EXPECT_EQ(analysis.cyclePath().back(), first);
+    EXPECT_EQ(analysis.diagnostic().task, analysis.cycleEdges()[0u].consumer);
+    EXPECT_EQ(analysis.diagnostic().relatedTask, analysis.cycleEdges()[0u].producer);
+}
+
 TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

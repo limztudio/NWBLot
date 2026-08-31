@@ -444,22 +444,22 @@ TEST(SwapChainPresentation, CanonicalNativeQueueStateSerializesEveryInternalHost
     EXPECT_LT(hostLockListOffset, lockSetOffset);
     EXPECT_LT(lockSetOffset, deviceIdleOffset);
 
-    AString deviceQueueSource;
+    AString submissionLifecycleSource;
     ASSERT_TRUE(ReadTextFile(
-        repoRoot / "core" / "graphics" / "vulkan" / "device_queue.cpp",
-        deviceQueueSource
+        repoRoot / "core" / "graphics" / "vulkan" / "device_submission_lifecycle.cpp",
+        submissionLifecycleSource
     ));
-    const AStringView fullDeviceQueueSource(deviceQueueSource.data(), deviceQueueSource.size());
-    const usize presentFunctionOffset = fullDeviceQueueSource.find("bool Device::presentNativeQueue(");
-    const usize registerFunctionOffset = fullDeviceQueueSource.find(
-        "bool Device::registerPhysicalQueue(",
+    const AStringView fullSubmissionLifecycleSource(submissionLifecycleSource.data(), submissionLifecycleSource.size());
+    const usize presentFunctionOffset = fullSubmissionLifecycleSource.find("bool Device::presentNativeQueue(");
+    const usize presentFunctionEnd = fullSubmissionLifecycleSource.find(
+        "NWB_VULKAN_END",
         presentFunctionOffset
     );
     ASSERT_NE(presentFunctionOffset, AStringView::npos);
-    ASSERT_NE(registerFunctionOffset, AStringView::npos);
-    const AStringView presentFunction = fullDeviceQueueSource.substr(
+    ASSERT_NE(presentFunctionEnd, AStringView::npos);
+    const AStringView presentFunction = fullSubmissionLifecycleSource.substr(
         presentFunctionOffset,
-        registerFunctionOffset - presentFunctionOffset
+        presentFunctionEnd - presentFunctionOffset
     );
     const usize presentHostLockOffset = presentFunction.find("ScopedLock hostLock(nativeQueue.hostMutex);");
     const usize nativePresentOffset = presentFunction.find("vkQueuePresentKHR(nativeQueue.queue", presentHostLockOffset);
@@ -558,18 +558,21 @@ TEST(SwapChainPresentation, LogicalQuarantineRemainsDistinctFromNativeDeviceLoss
     AString backendHeaderSource;
     AString diagnosticSource;
     AString presentationSource;
-    AString deviceQueueSource;
+    AString submissionLifecycleSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", backendHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device_diagnostics.cpp", diagnosticSource));
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "core" / "graphics" / "vulkan" / "backend_context_presentation.cpp",
         presentationSource
     ));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device_queue.cpp", deviceQueueSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "device_submission_lifecycle.cpp",
+        submissionLifecycleSource
+    ));
     const AStringView backendHeader(backendHeaderSource.data(), backendHeaderSource.size());
     const AStringView diagnostics(diagnosticSource.data(), diagnosticSource.size());
     const AStringView presentation(presentationSource.data(), presentationSource.size());
-    const AStringView deviceQueue(deviceQueueSource.data(), deviceQueueSource.size());
+    const AStringView submissionLifecycle(submissionLifecycleSource.data(), submissionLifecycleSource.size());
 
     EXPECT_NE(backendHeader.find("Atomic<bool> m_deviceLost = false;"), AStringView::npos);
     EXPECT_NE(backendHeader.find("Atomic<bool> m_deviceQuarantined = false;"), AStringView::npos);
@@ -590,8 +593,8 @@ TEST(SwapChainPresentation, LogicalQuarantineRemainsDistinctFromNativeDeviceLoss
     EXPECT_NE(presentation.find("captureDeviceLoss(\"present\")"), AStringView::npos);
     EXPECT_NE(presentation.find("m_rhiDevice->quarantineDevice();"), AStringView::npos);
     EXPECT_EQ(presentation.find("captureDeviceLoss(\"present semaphore idle\")"), AStringView::npos);
-    EXPECT_NE(deviceQueue.find("if(submissionsBlocked())"), AStringView::npos);
-    EXPECT_NE(deviceQueue.find("bool Device::beginLifecycleDrain()noexcept{"), AStringView::npos);
+    EXPECT_NE(submissionLifecycle.find("if(submissionsBlocked())"), AStringView::npos);
+    EXPECT_NE(submissionLifecycle.find("bool Device::beginLifecycleDrain()noexcept{"), AStringView::npos);
 }
 
 

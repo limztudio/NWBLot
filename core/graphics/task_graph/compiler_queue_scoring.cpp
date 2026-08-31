@@ -309,25 +309,27 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
 
     u64 incomingCrossings = 0u;
     u64 outgoingCrossings = 0u;
-    for(const GpuTaskDependencyEdge& edge : analysis.schedulingEdges()){
-        if(edge.consumer == task.id){
-            const GpuTaskQueueAssignment* const producer = FindQueueAssignment(
-                assignments,
-                assignmentIndicesByTask,
-                edge.producer
-            );
-            if(producer && producer->queue != candidate.id)
-                ++incomingCrossings;
-        }
-        if(edge.producer == task.id){
-            const GpuTaskQueueAssignment* const consumer = FindQueueAssignment(
-                assignments,
-                assignmentIndicesByTask,
-                edge.consumer
-            );
-            if(consumer && consumer->queue != candidate.id)
-                ++outgoingCrossings;
-        }
+    const GpuTaskGraphSchedulingTaskIndexView producerIndices = analysis.schedulingProducers(task.id);
+    for(usize producerIndex = 0u; producerIndex < producerIndices.taskCount; ++producerIndex){
+        const GpuTaskId producerTask{ producerIndices[producerIndex], task.id.generation };
+        const GpuTaskQueueAssignment* const producer = FindQueueAssignment(
+            assignments,
+            assignmentIndicesByTask,
+            producerTask
+        );
+        if(producer && producer->queue != candidate.id)
+            ++incomingCrossings;
+    }
+    const GpuTaskGraphSchedulingTaskIndexView consumerIndices = analysis.schedulingConsumers(task.id);
+    for(usize consumerIndex = 0u; consumerIndex < consumerIndices.taskCount; ++consumerIndex){
+        const GpuTaskId consumerTask{ consumerIndices[consumerIndex], task.id.generation };
+        const GpuTaskQueueAssignment* const consumer = FindQueueAssignment(
+            assignments,
+            assignmentIndicesByTask,
+            consumerTask
+        );
+        if(consumer && consumer->queue != candidate.id)
+            ++outgoingCrossings;
     }
     score.incomingCrossings = SaturateQueueScoreTerm(incomingCrossings);
     score.outgoingCrossings = SaturateQueueScoreTerm(outgoingCrossings);

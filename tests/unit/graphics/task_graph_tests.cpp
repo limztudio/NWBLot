@@ -16855,6 +16855,12 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
         "Recording Frontier State Seed Buffer"
     );
     ASSERT_TRUE(buffer.valid());
+    const Graphics::GpuTaskId orderingProducer = AddTask(
+        graph,
+        Name("tests/task_graph/recording_frontier_ordering_producer"),
+        "Recording Frontier Ordering Producer"
+    );
+    ASSERT_TRUE(orderingProducer.valid());
 
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
@@ -16884,7 +16890,7 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
     const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
     ASSERT_TRUE(producer.valid());
 
-    const Graphics::GpuTaskId consumerDependencies[] = { producer };
+    const Graphics::GpuTaskId consumerDependencies[] = { producer, orderingProducer };
     const Graphics::GpuTaskResourceUse consumerUse{
         .resource = buffer,
         .range = {},
@@ -16913,9 +16919,11 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
 
+    const Graphics::GpuSubmissionPacketId orderingProducerPacket = compiledGraph.packetForTask(orderingProducer);
     const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
     const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumer);
     const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+    ASSERT_TRUE(orderingProducerPacket.valid());
     ASSERT_TRUE(producerPacket.valid());
     ASSERT_TRUE(consumerPacket.valid());
     ASSERT_NE(producerPacket, consumerPacket);
@@ -16923,8 +16931,13 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
     EXPECT_EQ(compiledGraph.packet(producerPacket).recordingFrontier, 0u);
     EXPECT_EQ(compiledGraph.packet(consumerPacket).recordingFrontier, 1u);
     EXPECT_EQ(compiledGraph.compileStatistics().recordingFrontierCount, 2u);
-    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(consumerPacket)[0u].producer, producerPacket);
+    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 2u);
+    const Graphics::GpuPacketDependency* const dependencies = compiledGraph.packetDependencies(consumerPacket);
+    ASSERT_NE(dependencies, nullptr);
+    // The state seed projects producerPacket a second time after both scheduling dependencies. Deduplication retains
+    // the original scheduling order rather than moving that producer to the end.
+    EXPECT_EQ(dependencies[0u].producer, producerPacket);
+    EXPECT_EQ(dependencies[1u].producer, orderingProducerPacket);
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
 
     const Graphics::GpuPacketStateSeed* const stateSeeds = compiledGraph.taskPrologueStateSeeds(consumer);

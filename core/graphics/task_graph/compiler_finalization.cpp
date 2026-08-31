@@ -320,9 +320,14 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
     const usize packetCount = compiledPlan.packets.size();
     const bool plansTerminalFinalizationDependencies = !terminalFinalizationDependencies.empty();
     if(
-        plansTerminalFinalizationDependencies
-        && packetCount != 0u
-        && packetCount > Limit<usize>::s_Max / packetCount
+        packetCount > static_cast<usize>(Limit<u32>::s_Max)
+        || compiledPlan.packetDependencies.size() > static_cast<usize>(Limit<u32>::s_Max)
+        || compiledPlan.packetExternalDependencies.size() > static_cast<usize>(Limit<u32>::s_Max)
+        || (
+            plansTerminalFinalizationDependencies
+            && packetCount != 0u
+            && packetCount > Limit<usize>::s_Max / packetCount
+        )
     )
         return false;
 
@@ -337,6 +342,10 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
         )
             return false;
     }
+
+    Vector<u32, Alloc::ScratchArena> packetDependencyConsumerMarkers(packetCount, scratchArena);
+    for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex)
+        packetDependencyConsumerMarkers[packetIndex] = Limit<u32>::s_Max;
 
     Vector<u8, Alloc::ScratchArena> packetReachability(scratchArena);
     if(plansTerminalFinalizationDependencies)
@@ -379,18 +388,16 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
             )
                 return false;
 
-            for(u32 dependencyIndex = 0u; dependencyIndex < consumerPacket.dependencyCount; ++dependencyIndex){
-                const GpuPacketDependency& existing = compiledPlan.packetDependencies[
-                    consumerPacket.dependencyOffset + dependencyIndex
-                ];
-                if(existing.producer == producerPacket)
-                    return true;
-            }
+            if(packetDependencyConsumerMarkers[producerPacket.index] == consumerPacketID.index)
+                return true;
+            if(compiledPlan.packetDependencies.size() >= static_cast<usize>(Limit<u32>::s_Max))
+                return false;
 
             compiledPlan.packetDependencies.push_back(GpuPacketDependency{
                 .producer = producerPacket,
                 .consumer = consumerPacketID,
             });
+            packetDependencyConsumerMarkers[producerPacket.index] = consumerPacketID.index;
             ++consumerPacket.dependencyCount;
             return true;
         };
@@ -418,28 +425,26 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
             }
 
             const auto appendExternalDependency = [&](const GpuTaskExternalDependencyEdge& edge){
-                bool alreadyAdded = false;
                 for(u32 dependencyIndex = 0u; dependencyIndex < consumerPacket.externalDependencyCount; ++dependencyIndex){
                     if(compiledPlan.packetExternalDependencies[
                         consumerPacket.externalDependencyOffset + dependencyIndex
-                    ] == edge.completion){
-                        alreadyAdded = true;
-                        break;
-                    }
+                    ] == edge.completion)
+                        return true;
                 }
-                if(alreadyAdded)
-                    return;
+                if(compiledPlan.packetExternalDependencies.size() >= static_cast<usize>(Limit<u32>::s_Max))
+                    return false;
 
                 compiledPlan.packetExternalDependencies.push_back(edge.completion);
                 ++consumerPacket.externalDependencyCount;
+                return true;
             };
             for(const GpuTaskExternalDependencyEdge& edge : analysis.externalDependencies()){
-                if(edge.consumer == consumerTask)
-                    appendExternalDependency(edge);
+                if(edge.consumer == consumerTask && !appendExternalDependency(edge))
+                    return false;
             }
             for(const GpuTaskExternalDependencyEdge& edge : initialOwnershipDependencies){
-                if(edge.consumer == consumerTask)
-                    appendExternalDependency(edge);
+                if(edge.consumer == consumerTask && !appendExternalDependency(edge))
+                    return false;
             }
         }
         if(!plansTerminalFinalizationDependencies)

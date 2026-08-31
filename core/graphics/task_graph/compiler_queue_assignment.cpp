@@ -211,7 +211,7 @@ namespace GpuTaskGraphCompilerDetail{
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
     const GraphicsVector<u32>& assignmentIndicesByTask,
     const GpuTaskGraphQueueTopology& topology,
-    const Vector<u8, Alloc::ScratchArena>& schedulingReachability,
+    const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& incumbent,
     const GpuTaskTimingAssignmentKey& key,
@@ -451,8 +451,8 @@ bool GpuTaskGraphCompiler::assignQueues(
     outAssignments.m_assignmentIndicesByTask.resize(graph.taskCount(), Limit<u32>::s_Max);
     outAssignments.m_assignments.reserve(graph.taskCount());
 
-    Vector<u8, Alloc::ScratchArena> schedulingReachability(scratchArena);
-    if(!BuildGpuTaskSchedulingReachability(analysis, graph.taskCount(), schedulingReachability))
+    GpuTaskSchedulingReachability schedulingReachability(scratchArena);
+    if(!BuildGpuTaskSchedulingReachability(graph, analysis, schedulingReachability))
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis);
 
     // Establish a legal route for every task before scoring. Outgoing crossings and ownership costs must see a

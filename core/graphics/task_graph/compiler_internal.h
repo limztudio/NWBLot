@@ -142,16 +142,38 @@ struct GpuTaskGraphResourceStatePlan{
     bool dedicatedOnly = false
 )noexcept;
 
+class GpuTaskSchedulingReachability final : NoCopy{
+    friend bool BuildGpuTaskSchedulingReachability(
+        const GpuTaskGraph& graph,
+        const GpuTaskGraphAnalysis& analysis,
+        GpuTaskSchedulingReachability& outReachability
+    );
+
+public:
+    explicit GpuTaskSchedulingReachability(Alloc::ScratchArena& scratchArena);
+    GpuTaskSchedulingReachability(GpuTaskSchedulingReachability&&) = delete;
+
+    [[nodiscard]] bool reaches(const GpuTaskId& source, const GpuTaskId& destination)const noexcept;
+    [[nodiscard]] bool transitivelyIndependent(const GpuTaskId& lhs, const GpuTaskId& rhs)const noexcept;
+
+private:
+    Vector<u64, Alloc::ScratchArena> m_words;
+    u64 m_graphGeneration = 0u;
+    usize m_taskCount = 0u;
+    usize m_wordsPerRow = 0u;
+    bool m_valid = false;
+};
+
 [[nodiscard]] bool BuildGpuTaskSchedulingReachability(
+    const GpuTaskGraph& graph,
     const GpuTaskGraphAnalysis& analysis,
-    usize taskCount,
-    Vector<u8, Alloc::ScratchArena>& outReachability
+    GpuTaskSchedulingReachability& outReachability
 );
 
 [[nodiscard]] bool HasTransitivelyIndependentRequiredGraphicsTask(
     const GpuTaskGraph& graph,
     const GpuTaskGraphAnalysis& analysis,
-    const Vector<u8, Alloc::ScratchArena>& schedulingReachability,
+    const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskGraphTaskView& task
 )noexcept;
 
@@ -167,7 +189,7 @@ struct GpuTaskGraphResourceStatePlan{
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
     const GraphicsVector<u32>& assignmentIndicesByTask,
     const GpuTaskGraphQueueTopology& topology,
-    const Vector<u8, Alloc::ScratchArena>& schedulingReachability,
+    const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& candidate
 )noexcept;

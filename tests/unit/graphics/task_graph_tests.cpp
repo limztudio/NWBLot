@@ -12,6 +12,7 @@
 #include <core/graphics/capture/command_ir.h>
 #include <core/graphics/capture/command_ir_internal.h>
 #include <core/graphics/task_graph/compiler.h>
+#include <core/graphics/task_graph/compiler_internal.h>
 #include <core/graphics/task_graph/packet_runtime.h>
 #include <core/graphics/task_graph/queue_assignment_telemetry.h>
 #include <core/graphics/vulkan/backend.h>
@@ -9254,6 +9255,87 @@ TEST(GpuTaskGraph, SchedulingAdjacencyRejectsStaleIdsAndClearsOnReset){
     EXPECT_FALSE(analysis.validFor(graph));
     EXPECT_TRUE(analysis.schedulingConsumers(first).empty());
     EXPECT_TRUE(analysis.schedulingProducers(second).empty());
+}
+
+
+TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordBoundaries){
+    constexpr usize s_MaxTaskCount = 129u;
+    const usize taskCounts[] = { 63u, 64u, 65u, 66u, 127u, 128u, 129u };
+
+    for(const usize taskCount : taskCounts){
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        Graphics::GpuTaskId tasks[s_MaxTaskCount] = {};
+        const Name taskBaseName("tests/task_graph/packed_reachability_task_");
+        char taskIndexBuffer[32u] = {};
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            const Graphics::GpuTaskId* const dependency = taskIndex >= 2u ? &tasks[taskIndex - 2u] : nullptr;
+            tasks[taskIndex] = AddTask(
+                graph,
+                DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer)),
+                "Packed Reachability Task",
+                dependency,
+                dependency ? 1u : 0u
+            );
+            ASSERT_TRUE(tasks[taskIndex].valid());
+            EXPECT_EQ(tasks[taskIndex].index, taskIndex);
+        }
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        ASSERT_TRUE(Analyze(graph, analysis));
+        Core::Alloc::ScratchArena reachabilityScratchArena(Name("tests/graphics/task_graph_packed_reachability_scratch"));
+        Graphics::GpuTaskGraphCompilerDetail::GpuTaskSchedulingReachability reachability(reachabilityScratchArena);
+        ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(
+            graph,
+            analysis,
+            reachability
+        ));
+
+        const usize lastEvenTask = (taskCount & 1u) != 0u ? taskCount - 1u : taskCount - 2u;
+        const usize lastOddTask = (taskCount & 1u) != 0u ? taskCount - 2u : taskCount - 1u;
+        EXPECT_TRUE(reachability.reaches(tasks[0u], tasks[lastEvenTask]));
+        EXPECT_FALSE(reachability.reaches(tasks[lastEvenTask], tasks[0u]));
+        EXPECT_TRUE(reachability.reaches(tasks[1u], tasks[lastOddTask]));
+        EXPECT_FALSE(reachability.reaches(tasks[lastOddTask], tasks[1u]));
+        EXPECT_FALSE(reachability.transitivelyIndependent(tasks[0u], tasks[lastEvenTask]));
+        EXPECT_FALSE(reachability.transitivelyIndependent(tasks[1u], tasks[lastOddTask]));
+        EXPECT_TRUE(reachability.transitivelyIndependent(tasks[0u], tasks[lastOddTask]));
+        EXPECT_TRUE(reachability.transitivelyIndependent(tasks[1u], tasks[lastEvenTask]));
+
+        const usize boundaryProducer = taskCount - 3u;
+        const usize boundaryConsumer = taskCount - 1u;
+        EXPECT_TRUE(reachability.reaches(tasks[boundaryProducer], tasks[boundaryConsumer]));
+        EXPECT_FALSE(reachability.reaches(tasks[boundaryConsumer], tasks[boundaryProducer]));
+        EXPECT_TRUE(reachability.transitivelyIndependent(tasks[taskCount - 2u], tasks[boundaryConsumer]));
+        if(taskCount >= 127u){
+            const usize secondWordProducer = taskCount - 63u;
+            EXPECT_TRUE(reachability.reaches(tasks[secondWordProducer], tasks[boundaryConsumer]));
+            EXPECT_FALSE(reachability.reaches(tasks[boundaryConsumer], tasks[secondWordProducer]));
+            EXPECT_TRUE(reachability.transitivelyIndependent(tasks[secondWordProducer - 1u], tasks[boundaryConsumer]));
+        }
+
+        const Graphics::GpuTaskId staleTask{ tasks[0u].index, graph.generation() + 1u };
+        const Graphics::GpuTaskId outOfRangeTask{ static_cast<u32>(taskCount), graph.generation() };
+        EXPECT_FALSE(reachability.reaches(tasks[0u], tasks[0u]));
+        EXPECT_FALSE(reachability.transitivelyIndependent(tasks[0u], tasks[0u]));
+        EXPECT_FALSE(reachability.reaches(staleTask, tasks[lastEvenTask]));
+        EXPECT_FALSE(reachability.transitivelyIndependent(staleTask, tasks[lastOddTask]));
+        EXPECT_FALSE(reachability.reaches(outOfRangeTask, tasks[lastEvenTask]));
+        EXPECT_FALSE(reachability.transitivelyIndependent(outOfRangeTask, tasks[lastOddTask]));
+
+        if(taskCount == s_MaxTaskCount){
+            Graphics::GpuTaskGraph emptyGraph(testArena.arena);
+            Graphics::GpuTaskGraphAnalysis emptyAnalysis(testArena.arena);
+            ASSERT_TRUE(Analyze(emptyGraph, emptyAnalysis));
+            ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(
+                emptyGraph,
+                emptyAnalysis,
+                reachability
+            ));
+            EXPECT_FALSE(reachability.reaches(tasks[0u], tasks[lastEvenTask]));
+            EXPECT_FALSE(reachability.transitivelyIndependent(tasks[0u], tasks[lastOddTask]));
+        }
+    }
 }
 
 

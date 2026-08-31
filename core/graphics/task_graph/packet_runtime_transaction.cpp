@@ -294,18 +294,6 @@ bool GpuGraphSubmissionTransaction::bindRecordingAttempt(
     return true;
 }
 
-bool GpuGraphSubmissionTransaction::matchesRecordedAttempt(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuRecordedGraph& recordedGraph
-)const noexcept{
-    ScopedLock lock(m_mutex);
-    return m_recordingAttemptGeneration != 0u
-        && recordedGraph.validFor(graph, compiledGraph)
-        && m_recordingAttemptGeneration == recordedGraph.recordingAttemptGeneration()
-    ;
-}
-
 bool GpuGraphSubmissionTransaction::beginPacketSubmission(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,

@@ -51,15 +51,7 @@ bool GpuGraphSubmissionTransaction::copyAcceptedPacketTokens(
 
 QueueSubmissionToken GpuGraphSubmissionTransaction::packetToken(const GpuSubmissionPacketId& packet)const noexcept{
     ScopedLock lock(m_mutex);
-    if(
-        !m_valid
-        || !packet.valid()
-        || packet.generation != m_planGeneration
-        || packet.index >= m_packets.size()
-    )
-        return {};
-    const PacketRuntime& runtime = m_packets[packet.index];
-    return runtime.state == PacketRuntimeState::Accepted ? runtime.token : QueueSubmissionToken{};
+    return packetTokenLocked(packet);
 }
 
 
@@ -67,18 +59,22 @@ QueueSubmissionToken GpuGraphSubmissionTransaction::taskToken(
     const GpuCompiledGraph& compiledGraph,
     const GpuTaskId task
 )const noexcept{
-    if(!validFor(compiledGraph))
-        return {};
-    return packetToken(compiledGraph.packetForTask(task));
+    ScopedLock lock(m_mutex);
+    return taskTokenLocked(compiledGraph, task);
 }
+
 GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResourceHandoff(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,
     const GpuGraphResourceId resource
 )const noexcept{
+    ScopedLock lock(m_mutex);
     if(
-        !matchesRecordedAttempt(graph, compiledGraph, recordedGraph)
+        !validForLocked(compiledGraph)
+        || m_recordingAttemptGeneration == 0u
+        || !recordedGraph.validFor(graph, compiledGraph)
+        || m_recordingAttemptGeneration != recordedGraph.recordingAttemptGeneration()
     )
         return {};
 
@@ -103,7 +99,7 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
 
     const auto appendProducer = [&](const GpuCompiledExternalResourceExportSource& source){
         const GpuSubmissionPacketId packet = compiledGraph.packetForTask(source.producerTask);
-        const QueueSubmissionToken producerToken = taskToken(compiledGraph, source.producerTask);
+        const QueueSubmissionToken producerToken = taskTokenLocked(compiledGraph, source.producerTask);
         if(
             !packet.valid()
             || !source.sourceQueue.valid()
@@ -296,8 +292,9 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
     const GpuRecordedGraph& recordedGraph,
     const GpuGraphResourceId resource
 )const noexcept{
+    ScopedLock lock(m_mutex);
     if(
-        !validFor(compiledGraph)
+        !validForLocked(compiledGraph)
         || !recordedGraph.validFor(compiledGraph)
         || m_recordingAttemptGeneration == 0u
         || m_recordingAttemptGeneration != recordedGraph.recordingAttemptGeneration()
@@ -329,7 +326,7 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
         return {};
     scratch->reset();
 
-    const QueueSubmissionToken producerToken = taskToken(compiledGraph, exportInfo->producerTask);
+    const QueueSubmissionToken producerToken = taskTokenLocked(compiledGraph, exportInfo->producerTask);
     const CommandListResourceStateHandoff* const stateSource = recordedGraph.taskFinalStateSeed(
         compiledGraph,
         exportInfo->producerTask
@@ -407,6 +404,29 @@ bool GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(
         outTokens.push_back(latest.token);
     }
     return true;
+}
+
+QueueSubmissionToken GpuGraphSubmissionTransaction::packetTokenLocked(
+    const GpuSubmissionPacketId& packet
+)const noexcept{
+    if(
+        !m_valid
+        || !packet.valid()
+        || packet.generation != m_planGeneration
+        || packet.index >= m_packets.size()
+    )
+        return {};
+    const PacketRuntime& runtime = m_packets[packet.index];
+    return runtime.state == PacketRuntimeState::Accepted ? runtime.token : QueueSubmissionToken{};
+}
+
+QueueSubmissionToken GpuGraphSubmissionTransaction::taskTokenLocked(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId task
+)const noexcept{
+    if(!validForLocked(compiledGraph))
+        return {};
+    return packetTokenLocked(compiledGraph.packetForTask(task));
 }
 
 GpuTaskGraphRuntimeStatistics CollectGpuTaskGraphRuntimeStatistics(

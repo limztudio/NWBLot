@@ -768,6 +768,11 @@ private:
 
     [[nodiscard]] bool validForLocked(const GpuCompiledGraph& compiledGraph)const noexcept;
     [[nodiscard]] bool waitForSubmissionPublicationAndHasAcceptedPackets()const noexcept;
+    [[nodiscard]] QueueSubmissionToken packetTokenLocked(const GpuSubmissionPacketId& packet)const noexcept;
+    [[nodiscard]] QueueSubmissionToken taskTokenLocked(
+        const GpuCompiledGraph& compiledGraph,
+        GpuTaskId task
+    )const noexcept;
 
 
 private:
@@ -807,11 +812,6 @@ private:
         const GpuCompiledGraph& compiledGraph,
         u64 recordingAttemptGeneration
     )noexcept;
-    [[nodiscard]] bool matchesRecordedAttempt(
-        const GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuRecordedGraph& recordedGraph
-    )const noexcept;
     struct LatestAcceptedQueueToken{
         GpuPhysicalQueueId queue;
         QueueSubmissionToken token;

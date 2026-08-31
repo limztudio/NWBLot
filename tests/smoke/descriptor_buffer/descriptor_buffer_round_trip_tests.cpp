@@ -9875,8 +9875,45 @@ static void ExpectImportedFinalStateExportAfterTaskLocalTransition(
     EXPECT_EQ(stateProbe->getTextureSubresourceState(texture.get(), 0u, 0u), externalFinalState);
     stateProbe->close();
 
+    Atomic<bool> handoffQueryStarted{ false };
+    Atomic<bool> stopHandoffQueries{ false };
+    Atomic<u32> handoffQueryCount{ 0u };
+    Atomic<bool> handoffContractViolationObserved{ false };
+    Atomic<bool> postAcceptanceHandoffObserved{ false };
+    Thread handoffQueryThread([&](){
+        handoffQueryStarted.store(true, MemoryOrder::release);
+        handoffQueryStarted.notify_all();
+        while(!stopHandoffQueries.load(MemoryOrder::acquire)){
+            const QueueSubmissionToken acceptedToken = transaction.packetToken(packet);
+            const GpuTaskGraphExternalResourceHandoff legacyHandoff = transaction.externalResourceHandoff(
+                compiledGraph,
+                recordedGraph,
+                resource
+            );
+            const GpuTaskGraphExternalResourceHandoff graphAwareHandoff = transaction.externalResourceHandoff(
+                graph,
+                compiledGraph,
+                recordedGraph,
+                resource
+            );
+            if(acceptedToken.valid()){
+                if(!legacyHandoff.validFor(compiledGraph) || !graphAwareHandoff.validFor(compiledGraph))
+                    handoffContractViolationObserved.store(true, MemoryOrder::release);
+                else
+                    postAcceptanceHandoffObserved.store(true, MemoryOrder::release);
+            }
+            const u32 completedQueryCount = handoffQueryCount.load(MemoryOrder::relaxed);
+            handoffQueryCount.store(completedQueryCount + 1u, MemoryOrder::release);
+            YieldThread();
+        }
+    });
+    while(!handoffQueryStarted.load(MemoryOrder::acquire))
+        handoffQueryStarted.wait(false, MemoryOrder::acquire);
+    while(handoffQueryCount.load(MemoryOrder::acquire) < 64u)
+        YieldThread();
+
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+    const bool submitted = submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
@@ -9887,7 +9924,16 @@ static void ExpectImportedFinalStateExportAfterTaskLocalTransition(
         0u,
         transaction,
         scratchArena
-    ));
+    );
+    const u32 postSubmissionQueryTarget = handoffQueryCount.load(MemoryOrder::acquire) + 64u;
+    while(handoffQueryCount.load(MemoryOrder::acquire) < postSubmissionQueryTarget)
+        YieldThread();
+    stopHandoffQueries.store(true, MemoryOrder::release);
+    handoffQueryThread.join();
+
+    ASSERT_TRUE(submitted);
+    EXPECT_FALSE(handoffContractViolationObserved.load(MemoryOrder::acquire));
+    EXPECT_TRUE(postAcceptanceHandoffObserved.load(MemoryOrder::acquire));
     EXPECT_TRUE(transaction.packetToken(packet).valid());
     const GpuTaskGraphExternalResourceHandoff handoff = transaction.externalResourceHandoff(
         compiledGraph,

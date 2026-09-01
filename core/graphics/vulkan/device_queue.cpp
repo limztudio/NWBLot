@@ -32,14 +32,51 @@ namespace __hidden_vulkan_device_queue{
 #endif
 }
 
+enum class SubmissionHookDiagnostic : u8{
+    PreparationRejected,
+    PreparationThrew,
+    PreparationThrowResolutionRejected,
+    InvalidNativeSemaphore,
+    RollbackResolutionRejected,
+    TokenResolutionRejected,
+};
+
+static void ReportSubmissionHookDiagnostic(const SubmissionHookDiagnostic diagnostic)noexcept{
+    try{
+        switch(diagnostic){
+        case SubmissionHookDiagnostic::PreparationRejected:
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to prepare exact queue submission hook"));
+            return;
+        case SubmissionHookDiagnostic::PreparationThrew:
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Exact queue submission hook threw; preparation was rolled back"));
+            return;
+        case SubmissionHookDiagnostic::PreparationThrowResolutionRejected:
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Exact queue submission hook threw and rejected rollback resolution"));
+            return;
+        case SubmissionHookDiagnostic::InvalidNativeSemaphore:
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exact queue submission hook returned an invalid native semaphore"));
+            return;
+        case SubmissionHookDiagnostic::RollbackResolutionRejected:
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Submission hook rejected rollback resolution"));
+            return;
+        case SubmissionHookDiagnostic::TokenResolutionRejected:
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Exact queue submission hook rejected its resolution token"));
+            return;
+        default:
+            return;
+        }
+    }
+    catch(...){}
+}
+
 class ScopedSubmissionHookResolution final : NoCopy{
 public:
     explicit ScopedSubmissionHookResolution(const QueueSubmissionPreSubmitHook& hook)noexcept
         : m_hook(hook)
     {}
-    ~ScopedSubmissionHookResolution(){
+    ~ScopedSubmissionHookResolution()noexcept{
         if(m_armed && !resolve({}))
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Submission hook rejected rollback resolution"));
+            ReportSubmissionHookDiagnostic(SubmissionHookDiagnostic::RollbackResolutionRejected);
     }
 
 
@@ -640,23 +677,40 @@ QueueSubmissionToken Device::executeCommandLists(
     __hidden_vulkan_device_queue::ScopedSubmissionHookResolution hookResolution(submitDesc.preSubmitHook);
     if(submitDesc.preSubmitHook.valid()){
         QueueSubmissionNativeSignal nativeSignal;
-        const bool hookPrepared = submitDesc.preSubmitHook.invoke(
+        bool hookPrepared = false;
+        try{
+            hookPrepared = submitDesc.preSubmitHook.invoke(
                 submitDesc.preSubmitHook.context,
                 submitDesc.preSubmitHook.identity,
                 executionQueue,
                 nativeSignal
-        );
+            );
+        }
+        catch(...){
+            hookResolution.arm();
+            const bool rollbackResolved = hookResolution.resolve({});
+            __hidden_vulkan_device_queue::ReportSubmissionHookDiagnostic(
+                rollbackResolved
+                    ? __hidden_vulkan_device_queue::SubmissionHookDiagnostic::PreparationThrew
+                    : __hidden_vulkan_device_queue::SubmissionHookDiagnostic::PreparationThrowResolutionRejected
+            );
+            return {};
+        }
         if(hookPrepared)
             hookResolution.arm();
         if(!hookPrepared || !nativeSignal.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to prepare exact queue submission hook"));
+            __hidden_vulkan_device_queue::ReportSubmissionHookDiagnostic(
+                __hidden_vulkan_device_queue::SubmissionHookDiagnostic::PreparationRejected
+            );
             return {};
         }
 
         hookSignal.semaphore = __hidden_vulkan_device_queue::DecodeSubmissionNativeSemaphore(nativeSignal.semaphore);
         hookSignal.value = nativeSignal.value;
         if(hookSignal.semaphore == VK_NULL_HANDLE){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exact queue submission hook returned an invalid native semaphore"));
+            __hidden_vulkan_device_queue::ReportSubmissionHookDiagnostic(
+                __hidden_vulkan_device_queue::SubmissionHookDiagnostic::InvalidNativeSemaphore
+            );
             return {};
         }
         localSignals = &hookSignal;
@@ -738,8 +792,11 @@ QueueSubmissionToken Device::executeCommandLists(
         }
     }
 
-    if(!hookResolution.resolve(submissionToken))
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Exact queue submission hook rejected its resolution token"));
+    if(!hookResolution.resolve(submissionToken)){
+        __hidden_vulkan_device_queue::ReportSubmissionHookDiagnostic(
+            __hidden_vulkan_device_queue::SubmissionHookDiagnostic::TokenResolutionRejected
+        );
+    }
 
     if(!submissionAccepted)
         return {};

@@ -158,6 +158,88 @@ private:
 };
 
 
+// Preparation has already transferred a valid native signal into Device before this probe throws. Device must
+// therefore issue one invalid resolution even though the callback never returned success.
+class ThrowingPreparedSubmissionSignal final : NoCopy{
+private:
+    [[nodiscard]] static bool prepare(
+        void* const context,
+        const u64 identity,
+        const GpuPhysicalQueueId& executionQueue,
+        QueueSubmissionNativeSignal& outSignal
+    ){
+        ThrowingPreparedSubmissionSignal* const signal = static_cast<ThrowingPreparedSubmissionSignal*>(context);
+        if(
+            !signal
+            || !signal->valid()
+            || identity != s_Identity
+            || executionQueue != signal->m_expectedQueue
+            || signal->m_invocationCount != 0u
+            || signal->m_prepared
+        )
+            return false;
+
+        outSignal = signal->m_semaphore.nativeSignal();
+        ++signal->m_invocationCount;
+        signal->m_prepared = true;
+        throw 1;
+    }
+
+    [[nodiscard]] static bool resolved(
+        void* const context,
+        const u64 identity,
+        const QueueSubmissionToken& submissionToken
+    )noexcept{
+        ThrowingPreparedSubmissionSignal* const signal = static_cast<ThrowingPreparedSubmissionSignal*>(context);
+        if(!signal || identity != s_Identity)
+            return false;
+
+        const bool prepared = signal->m_prepared;
+        signal->m_prepared = false;
+        signal->m_resolvedToken = submissionToken;
+        ++signal->m_resolutionCount;
+        return prepared && !submissionToken.valid();
+    }
+
+
+public:
+    ThrowingPreparedSubmissionSignal(
+        GraphicsBackend::Device& device,
+        const GpuPhysicalQueueId& expectedQueue
+    )
+        : m_semaphore(device)
+        , m_expectedQueue(expectedQueue)
+    {}
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{ return m_expectedQueue.valid() && m_semaphore.valid(); }
+    [[nodiscard]] QueueSubmissionPreSubmitHook hook()noexcept{
+        return QueueSubmissionPreSubmitHook{
+            .context = this,
+            .identity = s_Identity,
+            .invoke = &ThrowingPreparedSubmissionSignal::prepare,
+            .resolved = &ThrowingPreparedSubmissionSignal::resolved,
+        };
+    }
+    [[nodiscard]] bool prepared()const noexcept{ return m_prepared; }
+    [[nodiscard]] const QueueSubmissionToken& resolvedToken()const noexcept{ return m_resolvedToken; }
+    [[nodiscard]] u32 invocationCount()const noexcept{ return m_invocationCount; }
+    [[nodiscard]] u32 resolutionCount()const noexcept{ return m_resolutionCount; }
+
+
+private:
+    static constexpr u64 s_Identity = 1u;
+
+    VulkanTestBinarySemaphore m_semaphore;
+    GpuPhysicalQueueId m_expectedQueue;
+    QueueSubmissionToken m_resolvedToken;
+    u32 m_invocationCount = 0u;
+    u32 m_resolutionCount = 0u;
+    bool m_prepared = false;
+};
+
+
 // Holds executeCommandLists inside the resolved callback after native acceptance. The caller can then observe state
 // that must be published before any externally owned acceptance callback runs.
 class BlockingResolvedSubmissionSignal final : NoCopy{
@@ -5078,6 +5160,31 @@ struct NativePacketCaptureRetryTask{
 };
 
 
+struct NativePacketSubmissionFailureLifecycleTask{
+    struct Payload{
+        bool* attempted = nullptr;
+        u32* discardedCount = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(commandList);
+        static_cast<void>(context);
+        if(payload.attempted)
+            *payload.attempted = true;
+        return true;
+    }
+
+    static void discarded(Payload& payload)noexcept{
+        if(payload.discardedCount)
+            ++*payload.discardedCount;
+    }
+};
+
+
 // Two public recorder calls contend for one merged packet while its prefix thunk is blocked. This exercises the
 // runtime claim, cancellation, abort, retry, and exactly-once discard contract without exposing packet lifecycle
 // controls to tests.
@@ -5541,6 +5648,8 @@ struct NativePacketRecordingBoundaryViolationTask{
 
 struct NativePacketSubmissionHookObserver{
     u32 invocationCount = 0u;
+    u32 resolutionCount = 0u;
+    QueueSubmissionToken resolvedToken;
 };
 
 [[nodiscard]] static bool RejectNativePacketSubmissionHook(
@@ -5557,6 +5666,21 @@ struct NativePacketSubmissionHookObserver{
     ++context->invocationCount;
     outSignal = {};
     return false;
+}
+
+[[nodiscard]] static bool ObserveNativePacketSubmissionHookResolution(
+    void* const rawContext,
+    const u64,
+    const QueueSubmissionToken& submissionToken
+)noexcept{
+    NativePacketSubmissionHookObserver* const context =
+        static_cast<NativePacketSubmissionHookObserver*>(rawContext)
+    ;
+    if(!context)
+        return false;
+    ++context->resolutionCount;
+    context->resolvedToken = submissionToken;
+    return true;
 }
 
 
@@ -9870,6 +9994,81 @@ TEST_F(DescriptorBufferRoundTripTest, SubmissionHookRecordingLeaseReplacementCan
 }
 
 
+TEST_F(DescriptorBufferRoundTripTest, SubmissionHookExceptionResolvesIndeterminatePreparationBeforeRetry){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+    ASSERT_TRUE(device.waitForIdle());
+    const u64 completedBeforeRejectedHooks = device.queueGetCompletedInstance(graphicsQueue);
+
+    auto commandList = device.createCommandList();
+    ASSERT_TRUE(commandList);
+    commandList->open();
+    commandList->close();
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+    CommandList* const commandLists[]{ commandList.get() };
+    VulkanTestQueueSubmit2Observer submissionObserver(device);
+    ASSERT_TRUE(submissionObserver.valid());
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 0u);
+
+    NativePacketSubmissionHookObserver rejectedObserver;
+    QueueSubmissionDesc rejectedSubmission;
+    rejectedSubmission.setPreSubmitHook(QueueSubmissionPreSubmitHook{
+        .context = &rejectedObserver,
+        .invoke = RejectNativePacketSubmissionHook,
+        .resolved = ObserveNativePacketSubmissionHookResolution,
+    });
+    ASSERT_TRUE(s_logger.has_value());
+    {
+        Common::LoggerRegistrationGuard reportOnlyLogger(
+            *s_logger,
+            Common::LoggerBreakPolicy::ReportOnly
+        );
+        EXPECT_FALSE(device.executeCommandLists(
+            commandLists,
+            LengthOf(commandLists),
+            graphicsQueue,
+            rejectedSubmission
+        ).valid());
+    }
+    EXPECT_EQ(rejectedObserver.invocationCount, 1u);
+    EXPECT_EQ(rejectedObserver.resolutionCount, 0u);
+    EXPECT_FALSE(rejectedObserver.resolvedToken.valid());
+    EXPECT_TRUE(commandList->hasCommandBuffer());
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 0u);
+
+    __hidden_descriptor_buffer_round_trip_tests::ThrowingPreparedSubmissionSignal throwingSignal(
+        device,
+        graphicsQueue
+    );
+    ASSERT_TRUE(throwingSignal.valid());
+    QueueSubmissionDesc throwingSubmission;
+    throwingSubmission.setPreSubmitHook(throwingSignal.hook());
+    EXPECT_FALSE(device.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        graphicsQueue,
+        throwingSubmission
+    ).valid());
+    EXPECT_EQ(throwingSignal.invocationCount(), 1u);
+    EXPECT_EQ(throwingSignal.resolutionCount(), 1u);
+    EXPECT_FALSE(throwingSignal.prepared());
+    EXPECT_FALSE(throwingSignal.resolvedToken().valid());
+    EXPECT_TRUE(commandList->hasCommandBuffer());
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 0u);
+    EXPECT_EQ(device.queueGetCompletedInstance(graphicsQueue), completedBeforeRejectedHooks);
+
+    EXPECT_TRUE(device.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        graphicsQueue,
+        QueueSubmissionDesc{}
+    ).valid());
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 1u);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 TEST_F(DescriptorBufferRoundTripTest, HostTimerResetRejectsForeignDeviceQueryOwnership){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto query = device.createTimerQuery();
@@ -13092,6 +13291,149 @@ TEST_F(DescriptorBufferRoundTripTest, TaskSubmissionHookResolvesSemanticAnchorTo
     EXPECT_TRUE(token.valid());
     EXPECT_EQ(transaction.packetToken(packet).value, token.value);
     EXPECT_TRUE(device.waitForIdle());
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, TaskSubmissionHookExceptionRejectsGraphTimingAndReleasesLifecycle){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = s_scope->graphics().gpuTiming();
+    const GpuPhysicalQueueId graphicsQueue = BackendQueueId(device, CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const Name taskIdentity("tests/descriptor_buffer/task_submission_hook_exception");
+    bool attempted = false;
+    u32 discardedCount = 0u;
+    const GpuTaskId task = graph.addTask<NativePacketSubmissionFailureLifecycleTask>(
+        GpuTaskDesc{}
+            .setIdentity(taskIdentity)
+            .setMarkerLabel("Task Submission Hook Exception")
+            .setQueue(GpuQueueRequest{
+                GpuQueueCapability::Graphics,
+                GpuQueuePreference::Graphics,
+                false,
+                false,
+            })
+            .setTimingMetadata(GpuTaskTimingMetadata{ .policy = GpuTaskTimingPolicy::PacketOnly }),
+        NativePacketSubmissionFailureLifecycleTask::Payload{
+            .attempted = &attempted,
+            .discardedCount = &discardedCount,
+        }
+    );
+    ASSERT_TRUE(task.valid());
+
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/task_submission_hook_exception_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(
+        graph,
+        analysis,
+        device.getPhysicalQueueTopology(),
+        assignments,
+        compiledGraph,
+        scratchArena
+    ));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+    ASSERT_EQ(compiledGraph.packet(packet).queue, graphicsQueue);
+    ASSERT_TRUE(compiledGraph.packet(packet).recordsTiming);
+
+    GpuTimingScopeDefinition packetTimingScope;
+    packetTimingScope.identity = GpuTaskPacketTimingScopeName(taskIdentity);
+    packetTimingScope.markerLabel = "Task Submission Hook Exception Packet";
+    ASSERT_TRUE(packetTimingScope.valid());
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+    s_scope->setGpuTimingEnabled(true);
+    timing.beginFrame(280u);
+    ASSERT_TRUE(timing.prepareScopeQueries(packetTimingScope.identity, device, s_MaxFramesInFlight));
+    auto resetCommandList = device.createCommandList();
+    ASSERT_NE(resetCommandList.get(), nullptr);
+    resetCommandList->open();
+    timing.recordFrameReset(*resetCommandList);
+    resetCommandList->close();
+    CommandList* const resetCommandLists[]{ resetCommandList.get() };
+    const QueueSubmissionToken resetToken = device.executeCommandLists(
+        resetCommandLists,
+        LengthOf(resetCommandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(resetToken.valid());
+    timing.confirmFrameReset(resetToken);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device, timing);
+    ASSERT_TRUE(recorder.recordTaskRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        task,
+        task,
+        recordedGraph
+    ));
+    EXPECT_TRUE(attempted);
+    const GpuTimingRecorderStatistics recordedTimingStatistics = timing.statistics(device);
+    ASSERT_TRUE(recordedTimingStatistics.valid());
+
+    __hidden_descriptor_buffer_round_trip_tests::ThrowingPreparedSubmissionSignal throwingSignal(
+        device,
+        graphicsQueue
+    );
+    ASSERT_TRUE(throwingSignal.valid());
+    const GpuTaskGraphTaskSubmissionHook submissionHook{
+        .task = task,
+        .hook = throwingSignal.hook(),
+    };
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    GpuSubmissionPacketId failedPacket;
+    EXPECT_FALSE(submitter.submitTaskRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        task,
+        task,
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena,
+        &failedPacket,
+        nullptr,
+        0u,
+        &submissionHook,
+        1u
+    ));
+    EXPECT_EQ(failedPacket, packet);
+    EXPECT_EQ(throwingSignal.invocationCount(), 1u);
+    EXPECT_EQ(throwingSignal.resolutionCount(), 1u);
+    EXPECT_FALSE(throwingSignal.prepared());
+    EXPECT_FALSE(throwingSignal.resolvedToken().valid());
+    EXPECT_EQ(discardedCount, 1u);
+    EXPECT_FALSE(transaction.packetToken(packet).valid());
+    const GpuTaskGraphSubmissionStatistics statistics = transaction.submissionStatistics();
+    ASSERT_TRUE(statistics.valid());
+    EXPECT_EQ(statistics.acceptedPacketCount, 0u);
+    EXPECT_EQ(statistics.acceptedTaskCount, 0u);
+    EXPECT_EQ(statistics.nativeSubmissionCount, 0u);
+    EXPECT_EQ(statistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(statistics.rejectedTaskCount, 1u);
+    EXPECT_EQ(statistics.rejectedSubmissionCount, 1u);
+    const GpuTimingRecorderStatistics rejectedTimingStatistics = timing.statistics(device);
+    ASSERT_TRUE(rejectedTimingStatistics.valid());
+    EXPECT_EQ(
+        rejectedTimingStatistics.discardedScopeCount,
+        recordedTimingStatistics.discardedScopeCount + 1u
+    );
+    EXPECT_TRUE(transaction.tryReset(compiledGraph));
+    EXPECT_TRUE(graph.tryReset());
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
 }
 
 

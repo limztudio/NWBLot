@@ -62,8 +62,11 @@ struct QueueSubmissionNativeSignal{
 
 // Called immediately before one validated native submission reaches its selected physical queue. It returns an
 // opaque binary signal that Device attaches directly to that submission, rather than appending it to a queue-global
-// pending list where another concurrent submit could consume it. The hook is a borrowed one-shot value: context
-// must outlive executeCommandLists, and copies must not be retained past resolution or their owner's lifecycle.
+// pending list where another concurrent submit could consume it. A false return must leave owner state failure
+// atomic and creates no resolution obligation. Device contains an exception as an indeterminate preparation,
+// rejects the submission, and invokes resolved exactly once with an invalid token. The hook is a borrowed one-shot
+// value: context must outlive executeCommandLists, and copies must not be retained past resolution or their owner's
+// lifecycle.
 using QueueSubmissionPreSubmitCallback = bool(*) (
     void* context,
     u64 identity,
@@ -71,8 +74,10 @@ using QueueSubmissionPreSubmitCallback = bool(*) (
     QueueSubmissionNativeSignal& outSignal
 );
 
-// Called exactly once after hook preparation, with the accepted physical-queue timeline token or an invalid token
-// when native submission was rejected. Callbacks must resolve one-shot state without synchronously draining Device.
+// Called exactly once after successful hook preparation, with the accepted physical-queue timeline token or an
+// invalid token when native submission was rejected. It is also called with an invalid token when preparation exits
+// by exception because owner state may already have changed. Callbacks must resolve both states without throwing or
+// synchronously draining Device.
 using QueueSubmissionResolvedCallback = bool(*) (
     void* context,
     u64 identity,

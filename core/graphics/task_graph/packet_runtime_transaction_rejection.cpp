@@ -25,7 +25,7 @@ void GpuGraphSubmissionTransaction::rejectTask(
     SubmissionOperation submissionOperation(*this, SubmissionOperationMode::ExclusiveBarrier);
     if(!submissionOperation.valid() || !validFor(compiledGraph))
         return;
-    rejectPacket(graph, compiledGraph, compiledGraph.packetForTask(task), recordingAttemptGeneration);
+    rejectTaskWithinSubmissionOperation(graph, compiledGraph, task, recordingAttemptGeneration);
 }
 
 bool GpuGraphSubmissionTransaction::discardUnaccepted(
@@ -98,6 +98,18 @@ bool GpuGraphSubmissionTransaction::discardUnaccepted(
 }
 
 
+void GpuGraphSubmissionTransaction::rejectTaskWithinSubmissionOperation(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId task,
+    const u64 recordingAttemptGeneration
+)noexcept{
+    if(!SubmissionOperation::activeExclusiveFor(*this) || !validFor(compiledGraph))
+        return;
+    rejectPacket(graph, compiledGraph, compiledGraph.packetForTask(task), recordingAttemptGeneration);
+}
+
+
 void GpuGraphSubmissionTransaction::rejectPacket(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
@@ -105,7 +117,8 @@ void GpuGraphSubmissionTransaction::rejectPacket(
     const u64 recordingAttemptGeneration
 )noexcept{
     if(
-        !validFor(compiledGraph)
+        !SubmissionOperation::activeFor(*this)
+        || !validFor(compiledGraph)
         || !compiledGraph.validPacket(packetID)
         || recordingAttemptGeneration == 0u
         || !bindRecordingAttemptWithinSubmissionOperation(graph, compiledGraph, recordingAttemptGeneration)
@@ -164,7 +177,8 @@ void GpuGraphSubmissionTransaction::rejectSubmittingPacket(
     GpuTaskGraph::PacketSubmissionLease& lease
 )noexcept{
     if(
-        !validFor(compiledGraph)
+        !SubmissionOperation::activeFor(*this)
+        || !validFor(compiledGraph)
         || !compiledGraph.validPacket(packetID)
         || !lease.valid()
         || lease.m_packet != packetID

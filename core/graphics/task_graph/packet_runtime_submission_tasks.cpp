@@ -104,8 +104,104 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
     const GpuTaskGraphTaskSubmissionHook* const taskSubmissionHooks,
     const usize taskSubmissionHookCount
 )const{
+    return submitPacketRangeInCompileOrderWithOperationPolicy(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        range,
+        PacketRangeSubmissionOperationPolicy::PerPacket,
+        externalCompletionTokens,
+        externalCompletionTokenCount,
+        taskTimingTickets,
+        taskTimingTicketCount,
+        transaction,
+        scratchArena,
+        outFailedPacket,
+        taskAcceptedCallbacks,
+        taskAcceptedCallbackCount,
+        taskSubmissionHooks,
+        taskSubmissionHookCount
+    );
+}
+
+
+bool GpuTaskGraphSubmitter::submitTaskRangeInCompileOrder(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuRecordedGraph& recordedGraph,
+    const GpuTaskId firstTask,
+    const GpuTaskId lastTask,
+    const GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
+    const usize externalCompletionTokenCount,
+    const GpuTaskGraphTaskTimingTicket* const taskTimingTickets,
+    const usize taskTimingTicketCount,
+    GpuGraphSubmissionTransaction& transaction,
+    Alloc::ScratchArena& scratchArena,
+    GpuSubmissionPacketId* const outFailedPacket,
+    const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
+    const usize taskAcceptedCallbackCount,
+    const GpuTaskGraphTaskSubmissionHook* const taskSubmissionHooks,
+    const usize taskSubmissionHookCount
+)const{
+    return submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.packetRangeForTasks(firstTask, lastTask),
+        externalCompletionTokens,
+        externalCompletionTokenCount,
+        taskTimingTickets,
+        taskTimingTicketCount,
+        transaction,
+        scratchArena,
+        outFailedPacket,
+        taskAcceptedCallbacks,
+        taskAcceptedCallbackCount,
+        taskSubmissionHooks,
+        taskSubmissionHookCount
+    );
+}
+
+
+bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderWithOperationPolicy(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuRecordedGraph& recordedGraph,
+    const GpuSubmissionPacketRange& range,
+    const PacketRangeSubmissionOperationPolicy operationPolicy,
+    const GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
+    const usize externalCompletionTokenCount,
+    const GpuTaskGraphTaskTimingTicket* const taskTimingTickets,
+    const usize taskTimingTicketCount,
+    GpuGraphSubmissionTransaction& transaction,
+    Alloc::ScratchArena& scratchArena,
+    GpuSubmissionPacketId* const outFailedPacket,
+    const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
+    const usize taskAcceptedCallbackCount,
+    const GpuTaskGraphTaskSubmissionHook* const taskSubmissionHooks,
+    const usize taskSubmissionHookCount
+)const{
     if(outFailedPacket)
         *outFailedPacket = {};
+    Optional<GpuGraphSubmissionTransaction::SubmissionOperation> preflightOperation;
+    if(operationPolicy == PacketRangeSubmissionOperationPolicy::PerPacket){
+        preflightOperation.emplace(
+            transaction,
+            GpuGraphSubmissionTransaction::SubmissionOperationMode::OrdinaryPacket
+        );
+    }
+    if(
+        (preflightOperation && !preflightOperation->valid())
+        || (
+            operationPolicy == PacketRangeSubmissionOperationPolicy::ActiveExclusiveBarrier
+            && !GpuGraphSubmissionTransaction::SubmissionOperation::activeExclusiveFor(transaction)
+        )
+    ){
+        if(outFailedPacket && compiledGraph.validPacketRange(range))
+            *outFailedPacket = range.first;
+        return false;
+    }
+
     if(
         !compiledGraph.validFor(graph)
         || !compiledGraph.validPacketRange(range)
@@ -232,6 +328,9 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
         if(packetPlan.recordsTiming != static_cast<bool>(ownedTimingTicket))
             return false;
     }
+    // Per-packet admission keeps independent native queues concurrent. Release the range preflight reader only after
+    // every mutable recorded-artifact query is complete; each packet then revalidates the artifact under its own gate.
+    preflightOperation.reset();
 
     Vector<GpuTimingSubmissionTicket*, Alloc::ScratchArena> resolvedTimingTickets{ scratchArena };
     resolvedTimingTickets.reserve(packetTimingTickets.size());
@@ -250,14 +349,17 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
                 break;
             }
         }
-        GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(
-            transaction,
-            packetPlan.joinsAcceptedQueueFrontier || preSubmitHook
-                ? GpuGraphSubmissionTransaction::SubmissionOperationMode::ExclusiveBarrier
-                : GpuGraphSubmissionTransaction::SubmissionOperationMode::OrdinaryPacket
-        );
+        Optional<GpuGraphSubmissionTransaction::SubmissionOperation> submissionOperation;
+        if(operationPolicy == PacketRangeSubmissionOperationPolicy::PerPacket){
+            submissionOperation.emplace(
+                transaction,
+                packetPlan.joinsAcceptedQueueFrontier || preSubmitHook
+                    ? GpuGraphSubmissionTransaction::SubmissionOperationMode::ExclusiveBarrier
+                    : GpuGraphSubmissionTransaction::SubmissionOperationMode::OrdinaryPacket
+            );
+        }
         if(
-            !submissionOperation.valid()
+            (submissionOperation && !submissionOperation->valid())
             || !submitPacketWithinSubmissionOperation(
                 graph,
                 compiledGraph,
@@ -280,44 +382,6 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
         }
     }
     return true;
-}
-
-
-bool GpuTaskGraphSubmitter::submitTaskRangeInCompileOrder(
-    GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuRecordedGraph& recordedGraph,
-    const GpuTaskId firstTask,
-    const GpuTaskId lastTask,
-    const GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
-    const usize externalCompletionTokenCount,
-    const GpuTaskGraphTaskTimingTicket* const taskTimingTickets,
-    const usize taskTimingTicketCount,
-    GpuGraphSubmissionTransaction& transaction,
-    Alloc::ScratchArena& scratchArena,
-    GpuSubmissionPacketId* const outFailedPacket,
-    const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
-    const usize taskAcceptedCallbackCount,
-    const GpuTaskGraphTaskSubmissionHook* const taskSubmissionHooks,
-    const usize taskSubmissionHookCount
-)const{
-    return submitPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        recordedGraph,
-        compiledGraph.packetRangeForTasks(firstTask, lastTask),
-        externalCompletionTokens,
-        externalCompletionTokenCount,
-        taskTimingTickets,
-        taskTimingTicketCount,
-        transaction,
-        scratchArena,
-        outFailedPacket,
-        taskAcceptedCallbacks,
-        taskAcceptedCallbackCount,
-        taskSubmissionHooks,
-        taskSubmissionHookCount
-    );
 }
 
 

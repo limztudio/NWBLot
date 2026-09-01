@@ -599,6 +599,7 @@ private:
     enum class SubmissionOperationMode : u8{
         OrdinaryPacket,
         ExclusiveBarrier,
+        CompositeBarrier,
     };
 
     struct PacketRuntime{
@@ -623,6 +624,15 @@ private:
 
 
     public:
+        [[nodiscard]] static bool activeFor(const GpuGraphSubmissionTransaction& transaction)noexcept{
+            return s_activeOperation && s_activeOperation->m_transaction == &transaction;
+        }
+        [[nodiscard]] static bool activeExclusiveFor(const GpuGraphSubmissionTransaction& transaction)noexcept{
+            return activeFor(transaction) && s_activeOperation->m_exclusive;
+        }
+
+
+    public:
         SubmissionOperation(
             const GpuGraphSubmissionTransaction& transaction,
             SubmissionOperationMode mode
@@ -638,6 +648,8 @@ private:
         const GpuGraphSubmissionTransaction* m_transaction = nullptr;
         const SubmissionOperation* m_previousOperation = nullptr;
         SharedQueuingMutex::scoped_lock m_gateLock;
+        bool m_exclusive = false;
+        bool m_composite = false;
     };
 
 private:
@@ -790,7 +802,7 @@ private:
     )const;
 
     [[nodiscard]] bool validForLocked(const GpuCompiledGraph& compiledGraph)const noexcept;
-    [[nodiscard]] bool waitForSubmissionPublicationAndHasAcceptedPackets()const noexcept;
+    [[nodiscard]] bool waitForSubmissionPublicationAndHasAcceptedPacketsWithinSubmissionOperation()const noexcept;
     [[nodiscard]] QueueSubmissionToken packetTokenLocked(const GpuSubmissionPacketId& packet)const noexcept;
     [[nodiscard]] QueueSubmissionToken taskTokenLocked(
         const GpuCompiledGraph& compiledGraph,
@@ -814,6 +826,12 @@ private:
     void resolveSubmissionBindingIfTerminalLocked(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph
+    )noexcept;
+    void rejectTaskWithinSubmissionOperation(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        GpuTaskId task,
+        u64 recordingAttemptGeneration
     )noexcept;
 
     // Reserves native submission before Device::executeCommandLists() begins. While a packet is Submitting,
@@ -870,6 +888,9 @@ private:
     u64 m_acceptanceRevision = 0u;
     GpuTaskGraphSubmissionStatistics m_submissionStatistics;
     bool m_valid = false;
+    // Ready-frontier workers cannot inherit the caller's thread-local operation chain. A composite writer therefore
+    // closes public operation admission across threads before it invokes or waits for arbitrary record callbacks.
+    mutable AtomicFlag m_compositeOperationActive;
     // Ordinary packets may reach independent native queues concurrently. Frontier joins and lifecycle mutations use
     // the fair writer side so they observe one complete publication boundary without starving behind new readers.
     mutable SharedQueuingMutex m_submissionGate;
@@ -912,6 +933,13 @@ struct GpuTaskGraphRuntimeStatistics{
 
 
 class GpuTaskGraphSubmitter final : NoCopy{
+private:
+    enum class PacketRangeSubmissionOperationPolicy : u8{
+        PerPacket,
+        ActiveExclusiveBarrier,
+    };
+
+
 public:
     explicit GpuTaskGraphSubmitter(Device& device)
         : m_device(device)
@@ -1035,14 +1063,48 @@ public:
 
 
 private:
+    // The caller owns the transaction's exclusive SubmissionOperation. This internal path lets the accepted-frontier
+    // composite reuse the ordinary task executor without attempting forbidden same-transaction gate reentry.
+    [[nodiscard]] bool recordAndSubmitTaskWithinSubmissionOperation(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuNativePacketRecorder& recorder,
+        GpuRecordedGraph& recordedGraph,
+        GpuTaskId task,
+        const GpuTaskGraphTaskRecordedCallback* recordedCallback,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuSubmissionPacketId* outFailedPacket,
+        const GpuTaskGraphTaskAcceptedCallback* acceptedCallback
+    )const;
     // Arms one graph recording attempt, publishes that exact attempt into the recorded artifact for failure
-    // cleanup, then binds its sole submission transaction before any task record callback can run.
-    [[nodiscard]] bool prepareRecordingAttemptAndBindTransaction(
+    // cleanup, then binds its sole submission transaction while the caller retains the exclusive operation.
+    [[nodiscard]] bool prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
         GpuRecordedGraph& recordedGraph,
         GpuGraphSubmissionTransaction& transaction
+    )const;
+    // Standalone ranges retain per-packet reader/writer concurrency. Composite ranges explicitly borrow their one
+    // outer writer so recorded callbacks cannot be overtaken before their submission decision is published.
+    [[nodiscard]] bool submitPacketRangeInCompileOrderWithOperationPolicy(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuRecordedGraph& recordedGraph,
+        const GpuSubmissionPacketRange& range,
+        PacketRangeSubmissionOperationPolicy operationPolicy,
+        const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
+        usize externalCompletionTokenCount,
+        const GpuTaskGraphTaskTimingTicket* taskTimingTickets,
+        usize taskTimingTicketCount,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuSubmissionPacketId* outFailedPacket,
+        const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks,
+        usize taskAcceptedCallbackCount,
+        const GpuTaskGraphTaskSubmissionHook* taskSubmissionHooks,
+        usize taskSubmissionHookCount
     )const;
     // The caller owns one valid SubmissionOperation for the full native-accept, task-callback, and
     // transaction-publication sequence. Range submission supplies its synchronous semantic obligations here; the

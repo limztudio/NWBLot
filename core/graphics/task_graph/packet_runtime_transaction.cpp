@@ -53,20 +53,30 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(
         if(operation->m_transaction == &transaction)
             return;
     }
+    if(transaction.m_compositeOperationActive.test(MemoryOrder::acquire))
+        return;
 
-    const bool exclusive = mode == SubmissionOperationMode::ExclusiveBarrier;
+    const bool composite = mode == SubmissionOperationMode::CompositeBarrier;
+    const bool exclusive = mode != SubmissionOperationMode::OrdinaryPacket;
     // A nested cross-transaction operation must acquire the target as a writer even when it submits an ordinary
     // packet. Acquiring another reader could succeed while the target resolution mutex is held, then form an ABBA
     // cycle with a symmetric callback. Writer try-acquire proves both the target gate and its inner resolution tail
     // are free without waiting while this thread retains its outer transaction.
-    if(s_activeOperation){
+    const bool nestedOperation = s_activeOperation != nullptr;
+    if(nestedOperation){
         if(!m_gateLock.try_acquire(transaction.m_submissionGate, true))
             return;
     }
     else
         m_gateLock.acquire(transaction.m_submissionGate, exclusive);
+    if(composite && transaction.m_compositeOperationActive.test_and_set(MemoryOrder::acq_rel)){
+        m_gateLock.release();
+        return;
+    }
     m_transaction = &transaction;
     m_previousOperation = s_activeOperation;
+    m_exclusive = nestedOperation || exclusive;
+    m_composite = composite;
     s_activeOperation = this;
 }
 
@@ -76,6 +86,8 @@ GpuGraphSubmissionTransaction::SubmissionOperation::~SubmissionOperation(){
 
     NWB_ASSERT(s_activeOperation == this);
     s_activeOperation = m_previousOperation;
+    if(m_composite)
+        m_transaction->m_compositeOperationActive.clear(MemoryOrder::release);
     m_gateLock.release();
 }
 
@@ -107,9 +119,8 @@ bool GpuGraphSubmissionTransaction::validForLocked(const GpuCompiledGraph& compi
 }
 
 
-bool GpuGraphSubmissionTransaction::waitForSubmissionPublicationAndHasAcceptedPackets()const noexcept{
-    SubmissionOperation submissionOperation(*this, SubmissionOperationMode::ExclusiveBarrier);
-    if(!submissionOperation.valid())
+bool GpuGraphSubmissionTransaction::waitForSubmissionPublicationAndHasAcceptedPacketsWithinSubmissionOperation()const noexcept{
+    if(!SubmissionOperation::activeExclusiveFor(*this))
         return false;
 
     ScopedLock lock(m_mutex);
@@ -314,7 +325,7 @@ bool GpuGraphSubmissionTransaction::bindRecordingAttemptWithinSubmissionOperatio
     const GpuCompiledGraph& compiledGraph,
     const u64 recordingAttemptGeneration
 )noexcept{
-    if(recordingAttemptGeneration == 0u)
+    if(!SubmissionOperation::activeFor(*this) || recordingAttemptGeneration == 0u)
         return false;
 
     ScopedLock lock(m_mutex);

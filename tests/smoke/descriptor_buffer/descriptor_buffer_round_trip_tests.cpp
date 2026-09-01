@@ -5163,6 +5163,63 @@ struct NativeTaskAcceptanceOrder{
 
 
 #if !defined(NWB_FINAL)
+struct NativeRecordedCallbackOperationContext{
+    GpuTaskGraph* graph = nullptr;
+    const GpuCompiledGraph* compiledGraph = nullptr;
+    const GpuRecordedGraph* recordedGraph = nullptr;
+    GpuTaskId task;
+    GpuGraphSubmissionTransaction* transaction = nullptr;
+    const GpuTaskGraphSubmitter* submitter = nullptr;
+    Alloc::ScratchArena* scratchArena = nullptr;
+    AtomicFlag callbackEntered;
+    AtomicFlag releaseCallback;
+    GpuSubmissionPacketId reentrantFailedPacket;
+    bool reentrantSubmissionResult = true;
+};
+
+[[nodiscard]] static bool RejectAfterBlockingNativeTaskRecordedOperation(
+    void* const rawContext,
+    const CommandListResourceStateHandoff* const finalState
+){
+    static_cast<void>(finalState);
+    NativeRecordedCallbackOperationContext* const context =
+        static_cast<NativeRecordedCallbackOperationContext*>(rawContext)
+    ;
+    if(!context)
+        return false;
+
+    if(
+        context->graph
+        && context->compiledGraph
+        && context->recordedGraph
+        && context->task.valid()
+        && context->transaction
+        && context->submitter
+        && context->scratchArena
+    ){
+        context->reentrantSubmissionResult = context->submitter->submitTaskRangeInCompileOrder(
+            *context->graph,
+            *context->compiledGraph,
+            *context->recordedGraph,
+            context->task,
+            context->task,
+            nullptr,
+            0u,
+            nullptr,
+            0u,
+            *context->transaction,
+            *context->scratchArena,
+            &context->reentrantFailedPacket
+        );
+    }
+    context->callbackEntered.test_and_set(MemoryOrder::release);
+    context->callbackEntered.notify_all();
+    while(!context->releaseCallback.test(MemoryOrder::acquire))
+        context->releaseCallback.wait(false, MemoryOrder::acquire);
+    return false;
+}
+
+
 struct NativeTaskSubmissionSerializationContext{
     GpuTaskGraph* graph = nullptr;
     const GpuCompiledGraph* compiledGraph = nullptr;
@@ -57191,6 +57248,198 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPacketsOverlapNativeSubmitBefor
     EXPECT_EQ(statistics.acceptedPacketCount, 2u);
     EXPECT_EQ(statistics.nativeSubmissionCount, 2u);
     EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// A composite retains one cross-thread transaction operation from recording-attempt binding through its recorded
+// callback decision. Same-thread and worker-equivalent cross-thread reentry fail immediately, so a false callback
+// terminally rejects the task before any native submission can overtake it.
+TEST_F(DescriptorBufferRoundTripTest, CompositeRecordedCallbackRejectionOwnsCrossThreadTransactionAdmission){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Tiny;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+
+    bool shouldRecord = true;
+    bool recorded = false;
+    const GpuTaskId task = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/composite_recorded_callback_operation"))
+            .setMarkerLabel("Composite Recorded Callback Operation")
+            .setQueue(graphicsRequest)
+            .setScheduling(scheduling),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &recorded,
+        }
+    );
+    ASSERT_TRUE(task.valid());
+
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena compileScratch(
+        Name("tests/descriptor_buffer/composite_recorded_callback_operation_compile_scratch")
+    );
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(
+        graph,
+        analysis,
+        device.getPhysicalQueueTopology(),
+        assignments,
+        compiledGraph,
+        compileScratch
+    ));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    const GpuTaskGraphSubmitter submitter(device);
+    VulkanTestQueueSubmit2Observer submissionObserver(device);
+    ASSERT_TRUE(submissionObserver.valid());
+
+    NativeRecordedCallbackOperationContext callbackContext;
+    callbackContext.graph = &graph;
+    callbackContext.compiledGraph = &compiledGraph;
+    callbackContext.recordedGraph = &recordedGraph;
+    callbackContext.task = task;
+    callbackContext.transaction = &transaction;
+    callbackContext.submitter = &submitter;
+    const GpuTaskGraphTaskRecordedCallback recordedCallback{
+        .task = task,
+        .context = &callbackContext,
+        .invoke = RejectAfterBlockingNativeTaskRecordedOperation,
+    };
+
+    bool compositeResult = true;
+    GpuSubmissionPacketId compositeFailedPacket;
+    Thread compositeThread([&](){
+        Alloc::ScratchArena submissionScratch(
+            Name("tests/descriptor_buffer/composite_recorded_callback_operation_thread_scratch")
+        );
+        callbackContext.scratchArena = &submissionScratch;
+        compositeResult = submitter.recordAndSubmitTask(
+            graph,
+            compiledGraph,
+            recorder,
+            recordedGraph,
+            task,
+            &recordedCallback,
+            transaction,
+            submissionScratch,
+            &compositeFailedPacket
+        );
+    });
+    const Timer callbackWaitBegin = TimerNow();
+    while(
+        !callbackContext.callbackEntered.test(MemoryOrder::acquire)
+        && DurationInSeconds<f64>(TimerNow(), callbackWaitBegin) < 5.0
+    )
+        YieldThread();
+    const bool callbackEntered = callbackContext.callbackEntered.test(MemoryOrder::acquire);
+    if(!callbackEntered){
+        callbackContext.releaseCallback.test_and_set(MemoryOrder::release);
+        callbackContext.releaseCallback.notify_all();
+        compositeThread.join();
+        EXPECT_TRUE(callbackEntered);
+        return;
+    }
+
+    EXPECT_TRUE(recorded);
+    EXPECT_FALSE(callbackContext.reentrantSubmissionResult);
+    EXPECT_EQ(callbackContext.reentrantFailedPacket, packet);
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 0u);
+
+    AtomicFlag competingStarted;
+    AtomicFlag competingReturned;
+    bool competingResult = true;
+    GpuSubmissionPacketId competingFailedPacket;
+    Thread competingThread([&](){
+        Alloc::ScratchArena submissionScratch(
+            Name("tests/descriptor_buffer/composite_recorded_callback_competing_thread_scratch")
+        );
+        competingStarted.test_and_set(MemoryOrder::release);
+        competingStarted.notify_all();
+        competingResult = submitter.submitTaskRangeInCompileOrder(
+            graph,
+            compiledGraph,
+            recordedGraph,
+            task,
+            task,
+            nullptr,
+            0u,
+            nullptr,
+            0u,
+            transaction,
+            submissionScratch,
+            &competingFailedPacket
+        );
+        competingReturned.test_and_set(MemoryOrder::release);
+        competingReturned.notify_all();
+    });
+    const Timer competingStartWaitBegin = TimerNow();
+    while(
+        !competingStarted.test(MemoryOrder::acquire)
+        && DurationInSeconds<f64>(TimerNow(), competingStartWaitBegin) < 5.0
+    )
+        YieldThread();
+    const bool competitorStarted = competingStarted.test(MemoryOrder::acquire);
+    if(!competitorStarted){
+        callbackContext.releaseCallback.test_and_set(MemoryOrder::release);
+        callbackContext.releaseCallback.notify_all();
+        compositeThread.join();
+        competingThread.join();
+        EXPECT_TRUE(competitorStarted);
+        return;
+    }
+
+    const Timer competingReturnWaitBegin = TimerNow();
+    while(
+        !competingReturned.test(MemoryOrder::acquire)
+        && DurationInSeconds<f64>(TimerNow(), competingReturnWaitBegin) < 5.0
+    )
+        YieldThread();
+    const bool competitorReturnedBeforeRelease = competingReturned.test(MemoryOrder::acquire);
+    EXPECT_TRUE(competitorReturnedBeforeRelease);
+    EXPECT_FALSE(competingResult);
+    EXPECT_EQ(competingFailedPacket, packet);
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 0u);
+
+    callbackContext.releaseCallback.test_and_set(MemoryOrder::release);
+    callbackContext.releaseCallback.notify_all();
+    compositeThread.join();
+    competingThread.join();
+
+    EXPECT_FALSE(compositeResult);
+    EXPECT_EQ(compositeFailedPacket, packet);
+    EXPECT_FALSE(competingResult);
+    EXPECT_EQ(competingFailedPacket, packet);
+    EXPECT_TRUE(competingReturned.test(MemoryOrder::acquire));
+    const QueueSubmissionToken token = transaction.packetToken(packet);
+    EXPECT_FALSE(token.valid());
+    EXPECT_FALSE(submissionObserver.overflowed());
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 0u);
+    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 0u);
+    const GpuTaskGraphSubmissionStatistics statistics = transaction.submissionStatistics();
+    EXPECT_EQ(statistics.acceptedPacketCount, 0u);
+    EXPECT_EQ(statistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(statistics.rejectedTaskCount, 1u);
+    EXPECT_EQ(statistics.nativeSubmissionCount, 0u);
+    EXPECT_TRUE(device.waitForIdle());
+    EXPECT_TRUE(transaction.tryReset(compiledGraph));
+    EXPECT_TRUE(graph.tryReset());
 }
 
 

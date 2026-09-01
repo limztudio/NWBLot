@@ -822,8 +822,12 @@ struct PendingAccelStructBuildCommit{
     AccelStruct* accelStruct = nullptr;
     VkAccelerationStructureTypeKHR accelStructType = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
     VkBuildAccelerationStructureFlagsKHR buildFlags = 0u;
-    usize geometrySignatureOffset = 0u;
-    u32 geometrySignatureCount = 0u;
+    Vector<AccelStructGeometryBuildSignature, Alloc::GlobalArena> geometrySignatures;
+
+
+    explicit PendingAccelStructBuildCommit(Alloc::GlobalArena& arena)
+        : geometrySignatures(arena)
+    {}
 };
 
 struct PendingOpacityMicromapBuildCommit{
@@ -897,13 +901,13 @@ private:
     void retainBuffer(Buffer& buffer);
     void trackRetainedBuffer(Buffer& buffer);
     void appendRetainedBufferStateCommit(Buffer& buffer);
-    void commitRetainedBufferStateCommits();
-    void discardRetainedBufferStateCommits();
+    void commitRetainedBufferStateCommits()noexcept;
+    void discardRetainedBufferStateCommits()noexcept;
     void retainTexture(Texture& texture);
     void trackRetainedTexture(Texture& texture);
     void appendRetainedTextureStateCommit(Texture& texture, MipLevel mipLevel, ArraySlice arraySlice);
-    void commitRetainedTextureStateCommits();
-    void discardRetainedTextureStateCommits();
+    void commitRetainedTextureStateCommits()noexcept;
+    void discardRetainedTextureStateCommits()noexcept;
     void appendPendingAccelStructBuildCommit(
         AccelStruct& accelStruct,
         VkAccelerationStructureTypeKHR accelStructType,
@@ -918,13 +922,13 @@ private:
         const AccelStructGeometryBuildSignature*& outGeometrySignatures,
         usize& outGeometrySignatureCount
     )const;
-    void commitPendingAccelStructBuildCommits();
-    void discardPendingAccelStructBuildCommits();
+    void commitPendingAccelStructBuildCommits()noexcept;
+    void discardPendingAccelStructBuildCommits()noexcept;
     void appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap);
     [[nodiscard]] bool hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const;
-    void commitPendingOpacityMicromapBuildCommits();
-    void discardPendingOpacityMicromapBuildCommits();
-    void clearTrackedReferences();
+    void commitPendingOpacityMicromapBuildCommits()noexcept;
+    void discardPendingOpacityMicromapBuildCommits()noexcept;
+    void clearTrackedReferences()noexcept;
 
 
 private:
@@ -941,7 +945,6 @@ private:
     Vector<RetainedBufferStateCommit, Alloc::GlobalArena> m_retainedBufferStateCommits;
     Vector<RetainedTextureStateCommit, Alloc::GlobalArena> m_retainedTextureStateCommits;
     Vector<PendingAccelStructBuildCommit, Alloc::GlobalArena> m_pendingAccelStructBuildCommits;
-    Vector<AccelStructGeometryBuildSignature, Alloc::GlobalArena> m_pendingAccelStructBuildSignatures;
     Vector<PendingOpacityMicromapBuildCommit, Alloc::GlobalArena> m_pendingOpacityMicromapBuildCommits;
     Vector<TimerQueryRecordingClaim, Alloc::GlobalArena> m_timerQueryRecordingClaims;
     DescriptorBufferManager* m_descriptorBufferManager = nullptr;
@@ -969,6 +972,10 @@ class Queue final : NoCopy{
     friend class CommandList;
     friend class Device;
     friend class TrackedCommandBuffer;
+
+
+private:
+    using CommandBufferList = List<TrackedCommandBufferPtr, Alloc::GlobalArena>;
 
 
 public:
@@ -1033,7 +1040,7 @@ private:
         Atomic<u64> pendingCommandBufferCount = 0u;
         Atomic<u64> growthEventCount = 0u;
         Atomic<u64> resetEventCount = 0u;
-        List<TrackedCommandBufferPtr, Alloc::GlobalArena> commandBuffersPool;
+        CommandBufferList commandBuffersPool;
 
 
         WorkerCommandArena(Alloc::GlobalArena& arena, const u64 workerDomain, const u32 workerIndex)
@@ -1067,8 +1074,11 @@ private:
     [[nodiscard]] TrackedCommandBufferPtr getOrCreateDirectCommandBuffer();
     [[nodiscard]] TrackedCommandBufferPtr getOrCreateWorkerCommandBuffer(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     void destroyWorkerCommandArenas();
-    void clearPendingSemaphores();
-    void recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf);
+    void clearPendingSemaphores()noexcept;
+    [[nodiscard]] CommandBufferList::iterator recycleCommandBuffer(
+        CommandBufferList& source,
+        CommandBufferList::iterator commandBuffer
+    )noexcept;
     [[nodiscard]] bool coversTimerQueryPrerequisite(
         const QueueSubmissionToken& prerequisite,
         bool prerequisiteObservedComplete,
@@ -1100,8 +1110,8 @@ private:
     u64 m_lastSubmittedID = 0;
     u64 m_lastFinishedID = 0;
 
-    List<TrackedCommandBufferPtr, Alloc::GlobalArena> m_commandBuffersInFlight;
-    List<TrackedCommandBufferPtr, Alloc::GlobalArena> m_commandBuffersPool;
+    CommandBufferList m_commandBuffersInFlight;
+    CommandBufferList m_commandBuffersPool;
     Vector<WorkerCommandArena*, Alloc::GlobalArena> m_workerCommandArenas;
     // Published worker nodes are append-only while the queue is usable. Device teardown joins recording clients
     // before destroyWorkerCommandArenas() clears the head and reclaims the stable nodes.
@@ -1562,7 +1572,7 @@ private:
     [[nodiscard]] bool revokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
     void releaseRevokedNativeImageIdentity(VkImage expectedNativeImage)noexcept;
     [[nodiscard]] bool isRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel);
-    void setRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel, bool known);
+    void setRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel, bool known)noexcept;
 
 
 private:
@@ -2207,8 +2217,8 @@ private:
         TrackedCommandBuffer& commandBuffer,
         const GpuPhysicalQueueId& physicalQueue
     );
-    void submitCommandBufferUse(TrackedCommandBuffer& commandBuffer, QueueSubmissionToken submissionToken);
-    void discardCommandBufferUse(TrackedCommandBuffer& commandBuffer);
+    void submitCommandBufferUse(TrackedCommandBuffer& commandBuffer, QueueSubmissionToken submissionToken)noexcept;
+    void discardCommandBufferUse(TrackedCommandBuffer& commandBuffer)noexcept;
     void releasePendingRecordingLease(u64 descriptorBufferGeneration);
     void shutdownForDeviceTeardown();
     void shutdownLocked();
@@ -2741,8 +2751,8 @@ public:
 public:
     void reset();
     void beginRecordingAttempt();
-    void commitRecordingAttempt();
-    void rollbackRecordingAttempt();
+    void commitRecordingAttempt()noexcept;
+    void rollbackRecordingAttempt()noexcept;
     void setPermanentTextureState(Texture& texture, ResourceStates::Mask state);
     void setPermanentBufferState(Buffer& buffer, ResourceStates::Mask state);
 

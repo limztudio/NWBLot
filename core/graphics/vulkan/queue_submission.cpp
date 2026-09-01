@@ -250,53 +250,15 @@ u64 Queue::submit(
         }
     }
 
-    Vector<TrackedCommandBufferPtr, Alloc::ScratchArena> trackedBuffers{scratchArena};
-    Vector<VkCommandBufferSubmitInfo, Alloc::ScratchArena> cmdBufInfos{scratchArena};
-
-    if(hasCommands){
-        trackedBuffers.reserve(numCmd);
-        cmdBufInfos.reserve(numCmd);
-
-        for(usize i = 0; i < numCmd; ++i){
-            auto* cmdList = ppCmd[i];
-            auto cmdBufInfo = VulkanDetail::MakeVkStruct<VkCommandBufferSubmitInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO);
-            cmdBufInfo.commandBuffer = cmdList->m_currentCmdBuf->m_cmdBuf;
-            cmdBufInfos.push_back(cmdBufInfo);
-
-            cmdList->m_currentCmdBuf->m_submissionID = m_lastSubmittedID + 1;
-            trackedBuffers.push_back(Move(cmdList->m_currentCmdBuf));
-            cmdList->m_nativeRecordingID = 0u;
-        }
-    }
-
-    const auto finalizeDetachedRecordingAttempts = [&](const bool accepted){
-        for(usize i = 0u; i < numCmd; ++i){
-            CommandList* const commandList = ppCmd[i];
-            if(!commandList || commandList->m_recordingLeaseSerial != expectedCommandLists[i].recordingLeaseSerial)
-                continue;
-
-            if(accepted)
-                commandList->m_stateTracker.commitRecordingAttempt();
-            else
-                commandList->m_stateTracker.rollbackRecordingAttempt();
-        }
-    };
-
     if(!requiresNativeSubmission)
         return m_lastSubmittedID;
 
     if(m_trackingSemaphore == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Queue submission skipped because timeline semaphore is unavailable."));
-
-        if(descriptorBufferLifecycleLock.owns_lock())
-            descriptorBufferLifecycleLock.unlock();
-        finalizeDetachedRecordingAttempts(false);
-        for(auto& tracked : trackedBuffers)
-            recycleCommandBuffer(Move(tracked));
         return m_lastSubmittedID;
     }
 
-    u64 submissionID = ++m_lastSubmittedID;
+    const u64 submissionID = m_lastSubmittedID + 1u;
 
     auto timelineSignal = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
     timelineSignal.semaphore = m_trackingSemaphore;
@@ -308,12 +270,6 @@ u64 Queue::submit(
     for(usize i = 0; i < localWaitCount; ++i){
         if(localWaits[i].semaphore == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait semaphore is null"));
-            m_lastSubmittedID = submissionID - 1;
-            if(descriptorBufferLifecycleLock.owns_lock())
-                descriptorBufferLifecycleLock.unlock();
-            finalizeDetachedRecordingAttempts(false);
-            for(auto& tracked : trackedBuffers)
-                recycleCommandBuffer(Move(tracked));
             return m_lastSubmittedID;
         }
 
@@ -351,6 +307,20 @@ u64 Queue::submit(
         signalInfos.push_back(signalInfo);
     }
 
+    Vector<VkCommandBufferSubmitInfo, Alloc::ScratchArena> cmdBufInfos{scratchArena};
+    CommandBufferList preparedCommandBuffers{m_context.objectArena};
+    if(hasCommands){
+        cmdBufInfos.reserve(numCmd);
+        for(usize i = 0u; i < numCmd; ++i){
+            CommandList* const commandList = ppCmd[i];
+            auto commandBufferInfo = VulkanDetail::MakeVkStruct<VkCommandBufferSubmitInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO);
+            commandBufferInfo.commandBuffer = commandList->m_currentCmdBuf->m_cmdBuf;
+            cmdBufInfos.push_back(commandBufferInfo);
+            preparedCommandBuffers.push_back(expectedCommandLists[i].owner);
+        }
+    }
+    NWB_ASSERT(preparedCommandBuffers.get_allocator() == m_commandBuffersInFlight.get_allocator());
+
     auto submitInfo = VulkanDetail::MakeVkStruct<VkSubmitInfo2>(VK_STRUCTURE_TYPE_SUBMIT_INFO_2);
     submitInfo.waitSemaphoreInfoCount = static_cast<uint32_t>(waitInfos.size());
     submitInfo.pWaitSemaphoreInfos = waitInfos.data();
@@ -358,6 +328,37 @@ u64 Queue::submit(
     submitInfo.pCommandBufferInfos = cmdBufInfos.data();
     submitInfo.signalSemaphoreInfoCount = static_cast<uint32_t>(signalInfos.size());
     submitInfo.pSignalSemaphoreInfos = signalInfos.data();
+
+    const auto finalizeDetachedRecordingAttempts = [&](const bool accepted)noexcept{
+        for(usize i = 0u; i < numCmd; ++i){
+            CommandList* const commandList = ppCmd[i];
+            if(!commandList || commandList->m_recordingLeaseSerial != expectedCommandLists[i].recordingLeaseSerial)
+                continue;
+
+            if(accepted)
+                commandList->m_stateTracker.commitRecordingAttempt();
+            else
+                commandList->m_stateTracker.rollbackRecordingAttempt();
+        }
+    };
+    const auto releaseDescriptorBufferLifecycle = [&]()noexcept{
+        if(!descriptorBufferLifecycleLock.owns_lock())
+            return;
+
+        Futex* const lifecycleMutex = descriptorBufferLifecycleLock.release();
+        NWB_ASSERT(lifecycleMutex);
+        if(lifecycleMutex)
+            lifecycleMutex->unlock();
+    };
+
+    auto preparedCommandBuffer = preparedCommandBuffers.begin();
+    for(usize i = 0u; i < numCmd; ++i, ++preparedCommandBuffer){
+        CommandList* const commandList = ppCmd[i];
+        TrackedCommandBufferPtr& tracked = *preparedCommandBuffer;
+        tracked->m_submissionID = submissionID;
+        commandList->m_currentCmdBuf = nullptr;
+        commandList->m_nativeRecordingID = 0u;
+    }
 
     VkResult res = VK_SUCCESS;
     bool submissionSuppressed = false;
@@ -369,10 +370,7 @@ u64 Queue::submit(
     }
 
     if(submissionSuppressed || res != VK_SUCCESS){
-        m_lastSubmittedID = submissionID - 1;
-
-        if(descriptorBufferLifecycleLock.owns_lock())
-            descriptorBufferLifecycleLock.unlock();
+        releaseDescriptorBufferLifecycle();
 
         if(submissionSuppressed){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Queue submission was suppressed because the device requires recreation."));
@@ -390,15 +388,17 @@ u64 Queue::submit(
         }
 
         finalizeDetachedRecordingAttempts(false);
-        for(auto& tracked : trackedBuffers){
-            recycleCommandBuffer(Move(tracked));
-        }
+        auto rejectedCommandBuffer = preparedCommandBuffers.begin();
+        while(rejectedCommandBuffer != preparedCommandBuffers.end())
+            rejectedCommandBuffer = recycleCommandBuffer(preparedCommandBuffers, rejectedCommandBuffer);
 
         return m_lastSubmittedID;
     }
 
-    if(descriptorBufferLifecycleLock.owns_lock())
-        descriptorBufferLifecycleLock.unlock();
+    auto acceptedCommandBuffer = preparedCommandBuffers.begin();
+    m_commandBuffersInFlight.splice(m_commandBuffersInFlight.end(), preparedCommandBuffers);
+    m_lastSubmittedID = submissionID;
+    releaseDescriptorBufferLifecycle();
     clearPendingSemaphores();
     finalizeDetachedRecordingAttempts(true);
 
@@ -408,7 +408,8 @@ u64 Queue::submit(
         .physicalQueueIndex = m_physicalQueue.index,
         .deviceGeneration = m_physicalQueue.deviceGeneration,
     };
-    for(auto& tracked : trackedBuffers){
+    for(usize i = 0u; i < numCmd; ++i, ++acceptedCommandBuffer){
+        TrackedCommandBufferPtr& tracked = *acceptedCommandBuffer;
         tracked->commitTimerQueryRecordingClaims(submissionToken);
         tracked->commitRetainedBufferStateCommits();
         tracked->commitRetainedTextureStateCommits();
@@ -419,7 +420,6 @@ u64 Queue::submit(
             if(heap)
                 heap->submitCommandBufferUse(*tracked, submissionToken);
         }
-        m_commandBuffersInFlight.push_back(Move(tracked));
     }
     if(outSubmissionAccepted)
         *outSubmissionAccepted = true;
@@ -465,27 +465,35 @@ void Queue::waitForIdle(){
     }
 }
 
-void Queue::clearPendingSemaphores(){
+void Queue::clearPendingSemaphores()noexcept{
     m_waitSemaphores.clear();
     m_waitSemaphoreValues.clear();
     m_signalSemaphores.clear();
     m_signalSemaphoreValues.clear();
 }
 
-void Queue::recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf){
+Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(
+    CommandBufferList& source,
+    const CommandBufferList::iterator commandBuffer
+)noexcept{
+    auto next = commandBuffer;
+    ++next;
+
+    TrackedCommandBufferPtr& cmdBuf = *commandBuffer;
     if(!cmdBuf)
-        return;
+        return source.erase(commandBuffer);
     if(&cmdBuf->m_queue != this || &cmdBuf->m_context != &m_context){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot recycle a command buffer through a foreign queue"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Command buffer recycle owner mismatch"));
-        return;
+        return next;
     }
 
     cmdBuf->clearTrackedReferences();
     transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Reusable);
     if(cmdBuf->m_recordingWorkerIndex == 0u){
-        m_commandBuffersPool.push_back(Move(cmdBuf));
-        return;
+        NWB_ASSERT(source.get_allocator() == m_commandBuffersPool.get_allocator());
+        m_commandBuffersPool.splice(m_commandBuffersPool.end(), source, commandBuffer);
+        return next;
     }
 
     WorkerCommandArena* const workerArena = findWorkerCommandArena(
@@ -500,15 +508,18 @@ void Queue::recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf){
             cmdBuf->m_recordingWorkerIndex
         );
         NWB_ASSERT_MSG(false, NWB_TEXT("Worker command buffer lost its owning command arena"));
-        m_commandBuffersPool.push_back(Move(cmdBuf));
-        return;
+        NWB_ASSERT(source.get_allocator() == m_commandBuffersPool.get_allocator());
+        m_commandBuffersPool.splice(m_commandBuffersPool.end(), source, commandBuffer);
+        return next;
     }
 
     // Queue submission/timeline retirement holds m_mutex before arriving here. It may take a worker arena lock,
     // but worker recording never takes m_mutex, so the lock order cannot form a cycle.
     ScopedLock lock(workerArena->mutex);
 
-    workerArena->commandBuffersPool.push_back(Move(cmdBuf));
+    NWB_ASSERT(source.get_allocator() == workerArena->commandBuffersPool.get_allocator());
+    workerArena->commandBuffersPool.splice(workerArena->commandBuffersPool.end(), source, commandBuffer);
+    return next;
 }
 
 

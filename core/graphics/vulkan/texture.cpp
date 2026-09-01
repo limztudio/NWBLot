@@ -650,7 +650,7 @@ bool Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const
     return index < m_retainedSubresourceStates.size() && m_retainedSubresourceStates[index] != 0u;
 }
 
-void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel, const bool known){
+void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel, const bool known)noexcept{
     if(
         !m_creationDesc.keepInitialState
         || arraySlice >= m_creationDesc.arraySize

@@ -303,7 +303,7 @@ bool GpuDescriptorHeap::trackCommandBufferUseLocked(
 void GpuDescriptorHeap::submitCommandBufferUse(
     TrackedCommandBuffer& commandBuffer,
     const QueueSubmissionToken submissionToken
-){
+)noexcept{
     if(
         !submissionToken.valid()
         || !submissionToken.hasPhysicalQueueIdentity()
@@ -336,7 +336,7 @@ void GpuDescriptorHeap::submitCommandBufferUse(
     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap could not resolve command-buffer heap use for accepted submission {}."), submissionToken.value);
 }
 
-void GpuDescriptorHeap::discardCommandBufferUse(TrackedCommandBuffer& commandBuffer){
+void GpuDescriptorHeap::discardCommandBufferUse(TrackedCommandBuffer& commandBuffer)noexcept{
     ScopedLock lock(m_mutex);
     for(HeapUse& heapUse : m_heapUses){
         if(heapUse.commandBuffer == &commandBuffer)

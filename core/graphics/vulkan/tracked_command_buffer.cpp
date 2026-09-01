@@ -36,7 +36,6 @@ TrackedCommandBuffer::TrackedCommandBuffer(
     , m_retainedBufferStateCommits(context.objectArena)
     , m_retainedTextureStateCommits(context.objectArena)
     , m_pendingAccelStructBuildCommits(context.objectArena)
-    , m_pendingAccelStructBuildSignatures(context.objectArena)
     , m_pendingOpacityMicromapBuildCommits(context.objectArena)
     , m_timerQueryRecordingClaims(context.objectArena)
     , m_context(context)
@@ -402,7 +401,7 @@ void TrackedCommandBuffer::appendRetainedBufferStateCommit(Buffer& buffer){
     m_retainedBufferStateCommits.push_back(RetainedBufferStateCommit{ .buffer = &buffer });
 }
 
-void TrackedCommandBuffer::commitRetainedBufferStateCommits(){
+void TrackedCommandBuffer::commitRetainedBufferStateCommits()noexcept{
     for(const RetainedBufferStateCommit& commit : m_retainedBufferStateCommits){
         if(commit.buffer)
             commit.buffer->setRetainedStateKnown(true);
@@ -410,7 +409,7 @@ void TrackedCommandBuffer::commitRetainedBufferStateCommits(){
     m_retainedBufferStateCommits.clear();
 }
 
-void TrackedCommandBuffer::discardRetainedBufferStateCommits(){
+void TrackedCommandBuffer::discardRetainedBufferStateCommits()noexcept{
     m_retainedBufferStateCommits.clear();
 }
 
@@ -444,7 +443,7 @@ void TrackedCommandBuffer::appendRetainedTextureStateCommit(
     });
 }
 
-void TrackedCommandBuffer::commitRetainedTextureStateCommits(){
+void TrackedCommandBuffer::commitRetainedTextureStateCommits()noexcept{
     for(const RetainedTextureStateCommit& commit : m_retainedTextureStateCommits){
         if(commit.texture)
             commit.texture->setRetainedSubresourceStateKnown(commit.arraySlice, commit.mipLevel, true);
@@ -452,7 +451,7 @@ void TrackedCommandBuffer::commitRetainedTextureStateCommits(){
     m_retainedTextureStateCommits.clear();
 }
 
-void TrackedCommandBuffer::discardRetainedTextureStateCommits(){
+void TrackedCommandBuffer::discardRetainedTextureStateCommits()noexcept{
     m_retainedTextureStateCommits.clear();
 }
 
@@ -468,19 +467,15 @@ void TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
     if(geometrySignatureCount > UINT32_MAX || (geometrySignatureCount != 0u && !geometrySignatures))
         return;
 
+    PendingAccelStructBuildCommit commit{m_context.objectArena};
+    commit.accelStruct = &accelStruct;
+    commit.accelStructType = accelStructType;
+    commit.buildFlags = buildFlags;
+    if(geometrySignatureCount != 0u)
+        commit.geometrySignatures.assign(geometrySignatures, geometrySignatures + geometrySignatureCount);
+
     retainResource(accelStruct);
-
-    const usize geometrySignatureOffset = m_pendingAccelStructBuildSignatures.size();
-    for(usize geometryIndex = 0u; geometryIndex < geometrySignatureCount; ++geometryIndex)
-        m_pendingAccelStructBuildSignatures.push_back(geometrySignatures[geometryIndex]);
-
-    m_pendingAccelStructBuildCommits.push_back(PendingAccelStructBuildCommit{
-        .accelStruct = &accelStruct,
-        .accelStructType = accelStructType,
-        .buildFlags = buildFlags,
-        .geometrySignatureOffset = geometrySignatureOffset,
-        .geometrySignatureCount = static_cast<u32>(geometrySignatureCount),
-    });
+    m_pendingAccelStructBuildCommits.push_back(Move(commit));
 }
 
 bool TrackedCommandBuffer::getPendingAccelStructBuildSignature(
@@ -493,23 +488,10 @@ bool TrackedCommandBuffer::getPendingAccelStructBuildSignature(
     for(usize commitIndex = m_pendingAccelStructBuildCommits.size(); commitIndex > 0u; --commitIndex){
         const PendingAccelStructBuildCommit& commit = m_pendingAccelStructBuildCommits[commitIndex - 1u];
         if(commit.accelStruct == &accelStruct){
-            NWB_ASSERT(
-                commit.geometrySignatureOffset <= m_pendingAccelStructBuildSignatures.size()
-                && commit.geometrySignatureCount <= m_pendingAccelStructBuildSignatures.size() - commit.geometrySignatureOffset
-            );
-            if(
-                commit.geometrySignatureOffset > m_pendingAccelStructBuildSignatures.size()
-                || commit.geometrySignatureCount > m_pendingAccelStructBuildSignatures.size() - commit.geometrySignatureOffset
-            )
-                return false;
-
             outAccelStructType = commit.accelStructType;
             outBuildFlags = commit.buildFlags;
-            outGeometrySignatures = commit.geometrySignatureCount != 0u
-                ? m_pendingAccelStructBuildSignatures.data() + commit.geometrySignatureOffset
-                : nullptr
-            ;
-            outGeometrySignatureCount = commit.geometrySignatureCount;
+            outGeometrySignatures = commit.geometrySignatures.empty() ? nullptr : commit.geometrySignatures.data();
+            outGeometrySignatureCount = commit.geometrySignatures.size();
             return true;
         }
     }
@@ -517,39 +499,23 @@ bool TrackedCommandBuffer::getPendingAccelStructBuildSignature(
     return false;
 }
 
-void TrackedCommandBuffer::commitPendingAccelStructBuildCommits(){
-    for(const PendingAccelStructBuildCommit& commit : m_pendingAccelStructBuildCommits){
+void TrackedCommandBuffer::commitPendingAccelStructBuildCommits()noexcept{
+    for(PendingAccelStructBuildCommit& commit : m_pendingAccelStructBuildCommits){
         if(!commit.accelStruct)
             continue;
-        if(
-            commit.geometrySignatureOffset > m_pendingAccelStructBuildSignatures.size()
-            || commit.geometrySignatureCount > m_pendingAccelStructBuildSignatures.size() - commit.geometrySignatureOffset
-        ){
-            NWB_ASSERT(false);
-            continue;
-        }
 
         AccelStruct& accelStruct = *commit.accelStruct;
         ScopedLock lock(accelStruct.m_acceptedBuildSignatureMutex);
-        if(commit.geometrySignatureCount != 0u){
-            const AccelStructGeometryBuildSignature* const signatures =
-                m_pendingAccelStructBuildSignatures.data() + commit.geometrySignatureOffset
-            ;
-            accelStruct.m_acceptedBuildGeometrySignatures.assign(signatures, signatures + commit.geometrySignatureCount);
-        }
-        else
-            accelStruct.m_acceptedBuildGeometrySignatures.clear();
+        accelStruct.m_acceptedBuildGeometrySignatures = Move(commit.geometrySignatures);
         accelStruct.m_acceptedBuildType = commit.accelStructType;
         accelStruct.m_acceptedBuildFlags = commit.buildFlags;
         accelStruct.m_hasAcceptedBuild = true;
     }
     m_pendingAccelStructBuildCommits.clear();
-    m_pendingAccelStructBuildSignatures.clear();
 }
 
-void TrackedCommandBuffer::discardPendingAccelStructBuildCommits(){
+void TrackedCommandBuffer::discardPendingAccelStructBuildCommits()noexcept{
     m_pendingAccelStructBuildCommits.clear();
-    m_pendingAccelStructBuildSignatures.clear();
 }
 
 void TrackedCommandBuffer::appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap){
@@ -568,7 +534,7 @@ bool TrackedCommandBuffer::hasPendingOpacityMicromapBuild(const OpacityMicromap&
     return false;
 }
 
-void TrackedCommandBuffer::commitPendingOpacityMicromapBuildCommits(){
+void TrackedCommandBuffer::commitPendingOpacityMicromapBuildCommits()noexcept{
     for(const PendingOpacityMicromapBuildCommit& commit : m_pendingOpacityMicromapBuildCommits){
         if(commit.opacityMicromap)
             commit.opacityMicromap->m_acceptedConstructed.store(true, MemoryOrder::release);
@@ -576,11 +542,11 @@ void TrackedCommandBuffer::commitPendingOpacityMicromapBuildCommits(){
     m_pendingOpacityMicromapBuildCommits.clear();
 }
 
-void TrackedCommandBuffer::discardPendingOpacityMicromapBuildCommits(){
+void TrackedCommandBuffer::discardPendingOpacityMicromapBuildCommits()noexcept{
     m_pendingOpacityMicromapBuildCommits.clear();
 }
 
-void TrackedCommandBuffer::clearTrackedReferences(){
+void TrackedCommandBuffer::clearTrackedReferences()noexcept{
     discardTimerQueryRecordingClaims();
     discardRetainedBufferStateCommits();
     discardRetainedTextureStateCommits();

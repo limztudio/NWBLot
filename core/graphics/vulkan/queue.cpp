@@ -598,8 +598,7 @@ void Queue::collectCompletedCommandBuffers(){
         if(cmdBuf->m_submissionID > m_lastFinishedID)
             break;
 
-        recycleCommandBuffer(Move(*it));
-        it = m_commandBuffersInFlight.erase(it);
+        it = recycleCommandBuffer(m_commandBuffersInFlight, it);
     }
 }
 

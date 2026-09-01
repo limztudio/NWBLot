@@ -50,24 +50,18 @@ void StateTracker::beginRecordingAttempt(){
     m_recordingAttemptActive = true;
 }
 
-void StateTracker::commitRecordingAttempt(){
+void StateTracker::commitRecordingAttempt()noexcept{
     m_attemptPermanentTextureStates.clear();
     m_attemptPermanentBufferStates.clear();
     m_recordingAttemptActive = false;
 }
 
-void StateTracker::rollbackRecordingAttempt(){
+void StateTracker::rollbackRecordingAttempt()noexcept{
     if(!m_recordingAttemptActive)
         return;
 
-    m_permanentTextureStates.clear();
-    m_permanentBufferStates.clear();
-    m_permanentTextureStates.reserve(m_attemptPermanentTextureStates.size());
-    m_permanentBufferStates.reserve(m_attemptPermanentBufferStates.size());
-    for(auto it = m_attemptPermanentTextureStates.begin(); it != m_attemptPermanentTextureStates.end(); ++it)
-        m_permanentTextureStates.insert_or_assign(it->first, it.value());
-    for(auto it = m_attemptPermanentBufferStates.begin(); it != m_attemptPermanentBufferStates.end(); ++it)
-        m_permanentBufferStates.insert_or_assign(it->first, it.value());
+    m_permanentTextureStates.swap(m_attemptPermanentTextureStates);
+    m_permanentBufferStates.swap(m_attemptPermanentBufferStates);
 
     m_attemptPermanentTextureStates.clear();
     m_attemptPermanentBufferStates.clear();

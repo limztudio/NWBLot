@@ -6,6 +6,8 @@
 
 #include "task_graph.h"
 
+#include <core/common/log.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,6 +32,22 @@ static Atomic<u64> s_NextAcceptanceRevision{ 1u };
     if(revision == 0u)
         revision = s_NextAcceptanceRevision.fetch_add(1u, MemoryOrder::relaxed);
     return revision;
+}
+
+[[nodiscard]] static bool InvokeTaskAcceptedCallback(
+    const GpuTaskGraphTaskAcceptedCallback& callback,
+    const QueueSubmissionToken& token
+)noexcept{
+    try{
+        return callback.invoke(callback.context, token);
+    }
+    catch(...){
+        try{
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Compatibility task-accepted callback threw; lifecycle publication continued"));
+        }
+        catch(...){}
+        return false;
+    }
 }
 
 
@@ -494,7 +512,10 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         for(usize callbackIndex = 0u; callbackIndex < taskAcceptedCallbackCount; ++callbackIndex){
             const GpuTaskGraphTaskAcceptedCallback& callback = taskAcceptedCallbacks[callbackIndex];
-            if(callback.task == tasks[taskIndex] && !callback.invoke(callback.context, token))
+            if(
+                callback.task == tasks[taskIndex]
+                && !__hidden_packet_runtime_transaction::InvokeTaskAcceptedCallback(callback, token)
+            )
                 callbacksAccepted = false;
         }
     }

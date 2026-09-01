@@ -4,6 +4,8 @@
 
 #include "task_graph.h"
 
+#include <core/common/log.h>
+
 #include <global/atomic.h>
 
 
@@ -23,6 +25,21 @@ u64 GpuTaskGraph::allocateGeneration()noexcept{
     if(generation == 0u)
         generation = s_NextGeneration.fetch_add(1u, MemoryOrder::relaxed);
     return generation;
+}
+
+void GpuTaskGraph::reportTaskPayloadCallbackException(const TaskPayloadCallbackPhase phase)noexcept{
+    try{
+        if(phase == TaskPayloadCallbackPhase::Record){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GPU task record callback threw; recording rejected"));
+            return;
+        }
+        if(phase == TaskPayloadCallbackPhase::Accepted){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GPU task accepted callback threw; lifecycle publication continued"));
+            return;
+        }
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GPU task discard callback threw; lifecycle publication continued"));
+    }
+    catch(...){}
 }
 
 

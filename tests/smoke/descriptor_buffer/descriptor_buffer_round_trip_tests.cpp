@@ -1906,6 +1906,8 @@ struct ParallelRecordingDiscardState{
     Atomic<u32> completedRecordingPhaseCount{ 0u };
     Atomic<u32> nextDiscardIndex{ 0u };
     Atomic<u32> activeDiscardCount{ 0u };
+    Atomic<u32> recordExceptionCount{ 0u };
+    Atomic<u32> discardExceptionCount{ 0u };
     Atomic<bool> foreignThreadObserved{ false };
     Atomic<bool> outOfOrderObserved{ false };
     Atomic<bool> overlappingDiscardObserved{ false };
@@ -1916,6 +1918,8 @@ struct ParallelRecordingDiscardTask{
     struct Payload{
         ParallelRecordingDiscardState* state = nullptr;
         u32 discardIndex = 0u;
+        bool throwAfterRecord = false;
+        bool throwAfterDiscard = false;
     };
 
     [[nodiscard]] static bool record(
@@ -1938,6 +1942,10 @@ struct ParallelRecordingDiscardTask{
                 completedPhaseCount = payload.state->completedRecordingPhaseCount.load(MemoryOrder::acquire);
             }
         }
+        if(payload.throwAfterRecord){
+            payload.state->recordExceptionCount.fetch_add(1u, MemoryOrder::relaxed);
+            throw 1u;
+        }
         return false;
     }
 
@@ -1952,6 +1960,10 @@ struct ParallelRecordingDiscardTask{
         if(discardIndex % 2u != payload.discardIndex)
             payload.state->outOfOrderObserved.store(true, MemoryOrder::relaxed);
         payload.state->activeDiscardCount.fetch_sub(1u, MemoryOrder::release);
+        if(payload.throwAfterDiscard){
+            payload.state->discardExceptionCount.fetch_add(1u, MemoryOrder::relaxed);
+            throw 1u;
+        }
     }
 };
 
@@ -3453,6 +3465,8 @@ struct NativePacketPrefixTask{
         ResourceStates::Mask expectedThirdTextureState = ResourceStates::Unknown;
         bool* recorded = nullptr;
         QueueSubmissionToken* acceptedToken = nullptr;
+        u32* acceptedCount = nullptr;
+        bool throwAfterAccepted = false;
         u32* discardedCount = nullptr;
     };
 
@@ -3481,6 +3495,10 @@ struct NativePacketPrefixTask{
     static void accepted(Payload& payload, const QueueSubmissionToken& token){
         if(payload.acceptedToken)
             *payload.acceptedToken = token;
+        if(payload.acceptedCount)
+            ++*payload.acceptedCount;
+        if(payload.throwAfterAccepted)
+            throw 1u;
     }
 
     static void discarded(Payload& payload){
@@ -5177,7 +5195,7 @@ struct NativeRecordedCallbackOperationContext{
     bool reentrantSubmissionResult = true;
 };
 
-[[nodiscard]] static bool RejectAfterBlockingNativeTaskRecordedOperation(
+[[nodiscard]] static bool ThrowAfterBlockingNativeTaskRecordedOperation(
     void* const rawContext,
     const CommandListResourceStateHandoff* const finalState
 ){
@@ -5216,7 +5234,7 @@ struct NativeRecordedCallbackOperationContext{
     context->callbackEntered.notify_all();
     while(!context->releaseCallback.test(MemoryOrder::acquire))
         context->releaseCallback.wait(false, MemoryOrder::acquire);
-    return false;
+    throw 1u;
 }
 
 
@@ -12758,6 +12776,15 @@ struct NativeTaskAcceptanceObserver{
     return context->continueSubmission;
 }
 
+[[nodiscard]] static bool ThrowNativeTaskAcceptance(
+    void* const rawContext,
+    const QueueSubmissionToken& token
+){
+    if(!ObserveNativeTaskAcceptance(rawContext, token))
+        return false;
+    throw 1u;
+}
+
 
 // Minimal graph-native timing endpoints used to exercise a late recovery packet in the same submission transaction.
 struct NativeFrameTimingPacketTask{
@@ -13147,12 +13174,15 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
         .setResourceUses(meshViewSetupUses, LengthOf(meshViewSetupUses))
     ;
     bool nativeMeshViewSetupRecorded = false;
+    u32 nativeMeshViewSetupAcceptedCount = 0u;
     const GpuTaskId meshViewSetupTask = graph.addTask<NativePacketPrefixTask>(
         meshViewSetupDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
             .expectedState = ResourceStates::ConstantBuffer,
             .recorded = &nativeMeshViewSetupRecorded,
+            .acceptedCount = &nativeMeshViewSetupAcceptedCount,
+            .throwAfterAccepted = true,
         }
     );
     ASSERT_TRUE(meshViewSetupTask.valid());
@@ -13323,6 +13353,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
         .setResourceUses(normalizeUses, LengthOf(normalizeUses))
     ;
     bool nativeNormalizeRecorded = false;
+    u32 nativeNormalizeAcceptedCount = 0u;
     const GpuTaskId normalizeTask = graph.addTask<NativePacketPrefixTask>(
         normalizeDesc,
         NativePacketPrefixTask::Payload{
@@ -13333,6 +13364,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
             .additionalTexture = additionalTexture.get(),
             .expectedAdditionalTextureState = ResourceStates::CopyDest,
             .recorded = &nativeNormalizeRecorded,
+            .acceptedCount = &nativeNormalizeAcceptedCount,
         }
     );
     ASSERT_TRUE(normalizeTask.valid());
@@ -13477,7 +13509,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
     NativeTaskAcceptanceOrder taskAcceptanceOrder;
     NativeTaskAcceptanceObserver meshViewSetupAcceptance{
         .lastToken = {},
-        .continueSubmission = false,
         .order = &taskAcceptanceOrder,
         .orderMarker = 1u,
     };
@@ -13495,7 +13526,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
         GpuTaskGraphTaskAcceptedCallback{
             .task = meshViewSetupTask,
             .context = &meshViewSetupAcceptance,
-            .invoke = ObserveNativeTaskAcceptance,
+            .invoke = ThrowNativeTaskAcceptance,
         },
     };
     GpuSubmissionPacketId failedSubmissionPacket;
@@ -13525,6 +13556,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
     EXPECT_EQ(taskAcceptanceOrder.invocationCount, 2u);
     EXPECT_EQ(taskAcceptanceOrder.markers[0u], 1u);
     EXPECT_EQ(taskAcceptanceOrder.markers[1u], 2u);
+    EXPECT_EQ(nativeMeshViewSetupAcceptedCount, 1u);
+    EXPECT_EQ(nativeNormalizeAcceptedCount, 1u);
     EXPECT_TRUE(device.waitForIdle());
 }
 
@@ -25654,6 +25687,8 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierSerializesFailedPacketDiscard
             ParallelRecordingDiscardTask::Payload{
                 .state = &state,
                 .discardIndex = discardIndex,
+                .throwAfterRecord = discardIndex == 0u,
+                .throwAfterDiscard = discardIndex == 0u,
             }
         );
     };
@@ -25713,6 +25748,8 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierSerializesFailedPacketDiscard
     EXPECT_EQ(recordedGraph.find(secondPacket), nullptr);
     EXPECT_EQ(state.nextDiscardIndex.load(MemoryOrder::relaxed), 2u);
     EXPECT_EQ(state.activeDiscardCount.load(MemoryOrder::relaxed), 0u);
+    EXPECT_EQ(state.recordExceptionCount.load(MemoryOrder::relaxed), 1u);
+    EXPECT_EQ(state.discardExceptionCount.load(MemoryOrder::relaxed), 1u);
     EXPECT_FALSE(state.foreignThreadObserved.load(MemoryOrder::relaxed));
     EXPECT_FALSE(state.outOfOrderObserved.load(MemoryOrder::relaxed));
     EXPECT_FALSE(state.overlappingDiscardObserved.load(MemoryOrder::relaxed));
@@ -25734,6 +25771,8 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierSerializesFailedPacketDiscard
     EXPECT_EQ(state.recordingArrivalCount.load(MemoryOrder::relaxed), 4u);
     EXPECT_EQ(state.nextDiscardIndex.load(MemoryOrder::relaxed), 4u);
     EXPECT_EQ(state.activeDiscardCount.load(MemoryOrder::relaxed), 0u);
+    EXPECT_EQ(state.recordExceptionCount.load(MemoryOrder::relaxed), 2u);
+    EXPECT_EQ(state.discardExceptionCount.load(MemoryOrder::relaxed), 2u);
     EXPECT_FALSE(state.foreignThreadObserved.load(MemoryOrder::relaxed));
     EXPECT_FALSE(state.outOfOrderObserved.load(MemoryOrder::relaxed));
     EXPECT_FALSE(state.overlappingDiscardObserved.load(MemoryOrder::relaxed));
@@ -55313,9 +55352,9 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsAtSemanticTerminal
 }
 
 
-// Recorded-state validation belongs to the ordinary graph transaction. A rejected candidate stops before the first
-// native submit and identifies its semantic packet while the caller retains explicit discard ownership.
-TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsBeforeRejectedRecordedCallbackSubmission){
+// Recorded-state validation contains compatibility callback exceptions inside the ordinary graph transaction. A
+// thrown callback stops before native submit and identifies its packet while the caller retains discard ownership.
+TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorContainsThrownRecordedCallbackBeforeSubmission){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
@@ -55352,7 +55391,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsBeforeRejectedReco
     ASSERT_TRUE(packet.valid());
 
     bool callbackInvoked = false;
-    const auto rejectRecordedState = [](
+    const auto throwRecordedState = [](
         void* const rawContext,
         const CommandListResourceStateHandoff* const finalState
     ) -> bool {
@@ -55361,12 +55400,12 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsBeforeRejectedReco
         if(!invoked)
             return false;
         *invoked = true;
-        return false;
+        throw 1u;
     };
     const GpuTaskGraphTaskRecordedCallback recordedCallback{
         .task = task,
         .context = &callbackInvoked,
-        .invoke = rejectRecordedState,
+        .invoke = throwRecordedState,
     };
     GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.taskRecordedCallbacks = &recordedCallback;
@@ -57252,8 +57291,8 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPacketsOverlapNativeSubmitBefor
 
 
 // A composite retains one cross-thread transaction operation from recording-attempt binding through its recorded
-// callback decision. Same-thread and worker-equivalent cross-thread reentry fail immediately, so a false callback
-// terminally rejects the task before any native submission can overtake it.
+// callback decision. Same-thread and worker-equivalent cross-thread reentry fail immediately, so a throwing
+// callback terminally rejects the task before any native submission can overtake it.
 TEST_F(DescriptorBufferRoundTripTest, CompositeRecordedCallbackRejectionOwnsCrossThreadTransactionAdmission){
     auto& device = DescriptorBufferRoundTripTest::device();
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
@@ -57320,7 +57359,7 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeRecordedCallbackRejectionOwnsCros
     const GpuTaskGraphTaskRecordedCallback recordedCallback{
         .task = task,
         .context = &callbackContext,
-        .invoke = RejectAfterBlockingNativeTaskRecordedOperation,
+        .invoke = ThrowAfterBlockingNativeTaskRecordedOperation,
     };
 
     bool compositeResult = true;

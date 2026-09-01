@@ -38,9 +38,9 @@ struct GpuTaskExternalStateSource{
 // Typed task payloads are stored in graph-owned memory, while these static thunks let the packet recorder invoke
 // them without allocating a type-erased callable per task.  Acceptance and discard are deliberately separate from
 // record: a task may only publish CPU-side effects once the containing queue submission is accepted.
-using GpuTaskRecordThunk = bool(*)(const void* payload, CommandList& commandList, const GpuTaskRecordContext& context);
-using GpuTaskAcceptedThunk = void(*)(void* payload, const QueueSubmissionToken& token);
-using GpuTaskDiscardedThunk = void(*)(void* payload);
+using GpuTaskRecordThunk = bool(*)(const void* payload, CommandList& commandList, const GpuTaskRecordContext& context)noexcept;
+using GpuTaskAcceptedThunk = void(*)(void* payload, const QueueSubmissionToken& token)noexcept;
+using GpuTaskDiscardedThunk = void(*)(void* payload)noexcept;
 using GpuTaskPayloadDestroyThunk = void(*)(GraphicsArena& arena, void* payload)noexcept;
 
 

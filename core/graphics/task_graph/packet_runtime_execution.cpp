@@ -6,6 +6,8 @@
 
 #include "task_graph.h"
 
+#include <core/common/log.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,6 +19,26 @@ NWB_CORE_BEGIN
 
 
 namespace __hidden_gpu_packet_runtime_execution{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool InvokeTaskRecordedCallback(
+    const GpuTaskGraphTaskRecordedCallback& callback,
+    const CommandListResourceStateHandoff* const finalState
+)noexcept{
+    try{
+        return callback.invoke(callback.context, finalState);
+    }
+    catch(...){
+        try{
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Compatibility task-recorded callback threw; recording rejected"));
+        }
+        catch(...){}
+        return false;
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -230,7 +252,10 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
                 const GpuTaskGraphTaskRecordedCallback& callback = desc.taskRecordedCallbacks[callbackIndex];
                 if(callback.task != task)
                     continue;
-                if(callback.invoke(callback.context, recordedGraph.taskFinalStateSeed(compiledGraph, task)))
+                if(__hidden_gpu_packet_runtime_execution::InvokeTaskRecordedCallback(
+                    callback,
+                    recordedGraph.taskFinalStateSeed(compiledGraph, task)
+                ))
                     continue;
                 if(outFailedPacket)
                     *outFailedPacket = packet;
@@ -614,8 +639,8 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskWithinSubmissionOperation(
 
     if(
         recordedCallback
-        && !recordedCallback->invoke(
-            recordedCallback->context,
+        && !__hidden_gpu_packet_runtime_execution::InvokeTaskRecordedCallback(
+            *recordedCallback,
             recordedGraph.taskFinalStateSeed(compiledGraph, task)
         )
     ){

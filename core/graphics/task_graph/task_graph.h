@@ -217,6 +217,12 @@ private:
         Discarded,
     };
 
+    enum class TaskPayloadCallbackPhase : u8{
+        Record,
+        Accepted,
+        Discarded,
+    };
+
     enum class SubmissionBindingState : u8{
         None,
         Active,
@@ -450,6 +456,11 @@ private:
     };
 
 
+private:
+    [[nodiscard]] static u64 allocateGeneration()noexcept;
+    static void reportTaskPayloadCallbackException(TaskPayloadCallbackPhase phase)noexcept;
+
+
 public:
     explicit GpuTaskGraph(GraphicsArena& arena);
     ~GpuTaskGraph();
@@ -656,10 +667,6 @@ public:
         const GpuTaskGraphTelemetryOptions& options = {}
     )const;
 
-
-private:
-    [[nodiscard]] static u64 allocateGeneration()noexcept;
-
 private:
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
     // Starts or validates one native-recording attempt for the compiler-owned packet. A retry can begin only after
@@ -788,19 +795,35 @@ private:
         const void* const payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
-    ){
+    )noexcept{
         using Payload = typename TaskT::Payload;
-        return TaskT::record(*static_cast<const Payload*>(payload), commandList, context);
+        try{
+            return TaskT::record(*static_cast<const Payload*>(payload), commandList, context);
+        }
+        catch(...){
+            reportTaskPayloadCallbackException(TaskPayloadCallbackPhase::Record);
+            return false;
+        }
     }
     template<typename TaskT>
-    static void AcceptPayload(void* const payload, const QueueSubmissionToken& token){
+    static void AcceptPayload(void* const payload, const QueueSubmissionToken& token)noexcept{
         using Payload = typename TaskT::Payload;
-        TaskT::accepted(*static_cast<Payload*>(payload), token);
+        try{
+            TaskT::accepted(*static_cast<Payload*>(payload), token);
+        }
+        catch(...){
+            reportTaskPayloadCallbackException(TaskPayloadCallbackPhase::Accepted);
+        }
     }
     template<typename TaskT>
-    static void DiscardPayload(void* const payload){
+    static void DiscardPayload(void* const payload)noexcept{
         using Payload = typename TaskT::Payload;
-        TaskT::discarded(*static_cast<Payload*>(payload));
+        try{
+            TaskT::discarded(*static_cast<Payload*>(payload));
+        }
+        catch(...){
+            reportTaskPayloadCallbackException(TaskPayloadCallbackPhase::Discarded);
+        }
     }
     template<typename PayloadT>
     static void DestroyPayload(GraphicsArena& arena, void* payload)noexcept{

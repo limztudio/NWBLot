@@ -38,8 +38,28 @@ bool GpuGraphSubmissionTransaction::discardUnaccepted(
         !submissionOperation.valid()
         || !validFor(compiledGraph)
         || recordingAttemptGeneration == 0u
-        || !bindRecordingAttempt(graph, compiledGraph, recordingAttemptGeneration)
     )
+        return false;
+
+    GpuGraphSubmissionBinding terminalBinding;
+    {
+        ScopedLock lock(m_mutex);
+        if(
+            validForLocked(compiledGraph)
+            && m_recordingAttemptGeneration == recordingAttemptGeneration
+            && m_submissionBindingResolved
+            && allPacketsTerminalLocked()
+        )
+            terminalBinding = m_activeSubmissionBinding;
+    }
+    if(terminalBinding.valid()){
+        return graph.matchesSubmissionTransaction(
+            compiledGraph,
+            recordingAttemptGeneration,
+            terminalBinding
+        );
+    }
+    if(!bindRecordingAttemptWithinSubmissionOperation(graph, compiledGraph, recordingAttemptGeneration))
         return false;
 
     for(usize packetIndex = 0u; packetIndex < compiledGraph.packetCount(); ++packetIndex){
@@ -88,9 +108,10 @@ void GpuGraphSubmissionTransaction::rejectPacket(
         !validFor(compiledGraph)
         || !compiledGraph.validPacket(packetID)
         || recordingAttemptGeneration == 0u
-        || !bindRecordingAttempt(graph, compiledGraph, recordingAttemptGeneration)
+        || !bindRecordingAttemptWithinSubmissionOperation(graph, compiledGraph, recordingAttemptGeneration)
     )
         return;
+    GpuGraphSubmissionBinding submissionBinding;
     {
         ScopedLock lock(m_mutex);
         if(
@@ -103,13 +124,15 @@ void GpuGraphSubmissionTransaction::rejectPacket(
         if(runtime.state != PacketRuntimeState::Declared)
             return;
         runtime.state = PacketRuntimeState::Rejecting;
+        submissionBinding = m_activeSubmissionBinding;
     }
 
     const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
     if(!graph.discardUnacceptedPacket(
         compiledGraph,
         packetID,
-        recordingAttemptGeneration
+        recordingAttemptGeneration,
+        submissionBinding
     ))
     {
         ScopedLock lock(m_mutex);
@@ -128,6 +151,7 @@ void GpuGraphSubmissionTransaction::rejectPacket(
                 runtime.state = PacketRuntimeState::Rejected;
                 ++m_submissionStatistics.rejectedPacketCount;
                 m_submissionStatistics.rejectedTaskCount += packet.taskCount;
+                resolveSubmissionBindingIfTerminalLocked(graph, compiledGraph);
             }
         }
     }
@@ -145,7 +169,12 @@ void GpuGraphSubmissionTransaction::rejectSubmittingPacket(
         || !lease.valid()
         || lease.m_packet != packetID
         || lease.m_planGeneration != compiledGraph.planGeneration()
-        || !bindRecordingAttempt(graph, compiledGraph, lease.m_recordingAttemptGeneration)
+        || !matchesRecordingAttemptBinding(
+            graph,
+            compiledGraph,
+            lease.m_recordingAttemptGeneration,
+            lease.m_submissionBinding
+        )
     )
         return;
 
@@ -180,6 +209,7 @@ void GpuGraphSubmissionTransaction::rejectSubmittingPacket(
             ++m_submissionStatistics.rejectedPacketCount;
             m_submissionStatistics.rejectedTaskCount += packet.taskCount;
             ++m_submissionStatistics.rejectedSubmissionCount;
+            resolveSubmissionBindingIfTerminalLocked(graph, compiledGraph);
         }
     }
 }

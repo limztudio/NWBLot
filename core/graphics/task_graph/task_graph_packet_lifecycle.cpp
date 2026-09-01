@@ -369,12 +369,14 @@ bool GpuTaskGraph::beginPacketSubmission(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packet,
     const u64 recordingAttemptGeneration,
+    const GpuGraphSubmissionBinding& submissionBinding,
     PacketSubmissionLease& outLease
 )const noexcept{
     if(
         !compiledGraph.validFor(*this)
         || !compiledGraph.validPacket(packet)
         || recordingAttemptGeneration == 0u
+        || !submissionBinding.valid()
         || outLease.valid()
     )
         return false;
@@ -388,6 +390,7 @@ bool GpuTaskGraph::beginPacketSubmission(
         m_teardownInProgress
         || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
         || m_activeRecordingAttemptGeneration != recordingAttemptGeneration
+        || m_activeSubmissionBinding != submissionBinding
     )
         return false;
 
@@ -417,6 +420,7 @@ bool GpuTaskGraph::beginPacketSubmission(
     outLease.m_planGeneration = compiledGraph.planGeneration();
     outLease.m_recordingAttemptGeneration = recordingAttemptGeneration;
     outLease.m_claimGeneration = claimGeneration;
+    outLease.m_submissionBinding = submissionBinding;
     return true;
 }
 
@@ -447,6 +451,7 @@ bool GpuTaskGraph::completePacketSubmission(
             m_teardownInProgress
             || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
             || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
+            || m_activeSubmissionBinding != lease.m_submissionBinding
         )
             return false;
 
@@ -479,6 +484,7 @@ bool GpuTaskGraph::completePacketSubmission(
             m_teardownInProgress
             || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
             || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
+            || m_activeSubmissionBinding != lease.m_submissionBinding
         )
             return false;
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
@@ -527,6 +533,7 @@ void GpuTaskGraph::abortPacketSubmission(
             m_teardownInProgress
             || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
             || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
+            || m_activeSubmissionBinding != lease.m_submissionBinding
         )
             return;
 
@@ -557,6 +564,7 @@ void GpuTaskGraph::abortPacketSubmission(
             m_teardownInProgress
             || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
             || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
+            || m_activeSubmissionBinding != lease.m_submissionBinding
         )
             return;
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
@@ -583,12 +591,14 @@ void GpuTaskGraph::abortPacketSubmission(
 bool GpuTaskGraph::discardUnacceptedPacket(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packet,
-    const u64 recordingAttemptGeneration
+    const u64 recordingAttemptGeneration,
+    const GpuGraphSubmissionBinding& submissionBinding
 )const noexcept{
     if(
         !compiledGraph.validFor(*this)
         || !compiledGraph.validPacket(packet)
         || recordingAttemptGeneration == 0u
+        || !submissionBinding.valid()
     )
         return false;
     const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
@@ -602,6 +612,7 @@ bool GpuTaskGraph::discardUnacceptedPacket(
             m_teardownInProgress
             || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
             || m_activeRecordingAttemptGeneration != recordingAttemptGeneration
+            || m_activeSubmissionBinding != submissionBinding
         )
             return false;
 
@@ -640,6 +651,7 @@ bool GpuTaskGraph::discardUnacceptedPacket(
             m_teardownInProgress
             || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
             || m_activeRecordingAttemptGeneration != recordingAttemptGeneration
+            || m_activeSubmissionBinding != submissionBinding
         )
             return false;
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){

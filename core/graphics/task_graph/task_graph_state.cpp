@@ -15,23 +15,19 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void GpuTaskGraph::reset(){
+bool GpuTaskGraph::tryReset(){
     {
         ScopedLock lock(m_lifecycleMutex);
-        if(m_teardownInProgress){
-            NWB_ASSERT_MSG(false, "GpuTaskGraph::reset requires prior teardown completion");
-            return;
-        }
+        if(m_teardownInProgress || m_submissionBindingState == SubmissionBindingState::Active)
+            return false;
         for(const GpuTaskNode& task : m_tasks){
             if(
                 task.lifecycleState == TaskLifecycleState::Recording
                 || task.lifecycleState == TaskLifecycleState::Submitting
                 || task.lifecycleState == TaskLifecycleState::Accepting
                 || task.lifecycleState == TaskLifecycleState::Discarding
-            ){
-                NWB_ASSERT_MSG(false, "GpuTaskGraph::reset requires in-flight task work to resolve first");
-                return;
-            }
+            )
+                return false;
         }
         m_teardownInProgress = true;
     }
@@ -39,8 +35,7 @@ void GpuTaskGraph::reset(){
     if(!destroyTaskPayloads()){
         ScopedLock lock(m_lifecycleMutex);
         m_teardownInProgress = false;
-        NWB_ASSERT_MSG(false, "GpuTaskGraph::reset requires in-flight task work to resolve first");
-        return;
+        return false;
     }
     destroyTaskStateSnapshots();
     destroyResourceStateSnapshots();
@@ -67,9 +62,18 @@ void GpuTaskGraph::reset(){
         m_declarationRevision = allocateGeneration();
         m_activeRecordingAttemptGeneration = allocateGeneration();
         m_activeRecordingPlanGeneration = 0u;
+        m_activeSubmissionBinding = {};
+        m_submissionBindingState = SubmissionBindingState::None;
         m_hasPresentEndpoint = false;
         m_teardownInProgress = false;
     }
+    return true;
+}
+
+
+void GpuTaskGraph::reset(){
+    if(!tryReset())
+        NWB_ASSERT_MSG(false, "GpuTaskGraph::reset requires every bound or in-flight task to resolve first");
 }
 
 u64 GpuTaskGraph::recordingAttemptGeneration()const noexcept{
@@ -115,6 +119,8 @@ bool GpuTaskGraph::beginRecordingAttempt(
     const bool planChanged = m_activeRecordingPlanGeneration != compiledGraph.planGeneration();
     if(!planChanged && !selectedTaskWasDiscarded)
         return true;
+    if(m_submissionBindingState == SubmissionBindingState::Active)
+        return false;
 
     for(const GpuTaskNode& task : m_tasks){
         if(
@@ -138,6 +144,8 @@ bool GpuTaskGraph::beginRecordingAttempt(
 
     m_activeRecordingPlanGeneration = compiledGraph.planGeneration();
     m_activeRecordingAttemptGeneration = allocateGeneration();
+    m_activeSubmissionBinding = {};
+    m_submissionBindingState = SubmissionBindingState::None;
     for(const GpuTaskNode& task : m_tasks){
         task.lifecycleState = TaskLifecycleState::Declared;
         task.lifecycleAttemptGeneration = m_activeRecordingAttemptGeneration;
@@ -160,6 +168,99 @@ bool GpuTaskGraph::matchesRecordingAttempt(
         && m_activeRecordingPlanGeneration == compiledGraph.planGeneration()
         && m_activeRecordingAttemptGeneration == recordingAttemptGeneration
     ;
+}
+
+
+bool GpuTaskGraph::bindSubmissionTransaction(
+    const GpuCompiledGraph& compiledGraph,
+    const u64 recordingAttemptGeneration,
+    const GpuGraphSubmissionBinding& submissionBinding
+)const noexcept{
+    if(!submissionBinding.valid())
+        return false;
+
+    ScopedLock lock(m_lifecycleMutex);
+    if(
+        m_teardownInProgress
+        || m_activeRecordingAttemptGeneration != recordingAttemptGeneration
+    )
+        return false;
+    if(m_submissionBindingState == SubmissionBindingState::Resolved)
+        return false;
+    if(m_submissionBindingState == SubmissionBindingState::Active)
+        return m_activeSubmissionBinding == submissionBinding;
+    if(m_submissionBindingState != SubmissionBindingState::None || m_activeSubmissionBinding.valid())
+        return false;
+    if(!compiledGraph.bindSubmissionTransaction(
+        *this,
+        m_activeRecordingPlanGeneration,
+        recordingAttemptGeneration,
+        submissionBinding
+    ))
+        return false;
+    m_activeSubmissionBinding = submissionBinding;
+    m_submissionBindingState = SubmissionBindingState::Active;
+    return true;
+}
+
+
+bool GpuTaskGraph::matchesSubmissionTransaction(
+    const GpuCompiledGraph& compiledGraph,
+    const u64 recordingAttemptGeneration,
+    const GpuGraphSubmissionBinding& submissionBinding
+)const noexcept{
+    ScopedLock lock(m_lifecycleMutex);
+    return submissionBinding.valid()
+        && !m_teardownInProgress
+        && m_activeRecordingAttemptGeneration == recordingAttemptGeneration
+        && m_submissionBindingState != SubmissionBindingState::None
+        && m_activeSubmissionBinding == submissionBinding
+        && compiledGraph.matchesSubmissionTransaction(
+            *this,
+            m_activeRecordingPlanGeneration,
+            recordingAttemptGeneration,
+            submissionBinding
+        )
+    ;
+}
+
+
+bool GpuTaskGraph::resolveSubmissionTransaction(
+    const GpuCompiledGraph& compiledGraph,
+    const u64 recordingAttemptGeneration,
+    const GpuGraphSubmissionBinding& submissionBinding
+)const noexcept{
+    ScopedLock lock(m_lifecycleMutex);
+    if(
+        !submissionBinding.valid()
+        || m_teardownInProgress
+        || m_activeRecordingAttemptGeneration != recordingAttemptGeneration
+        || m_activeSubmissionBinding != submissionBinding
+    )
+        return false;
+    if(m_submissionBindingState == SubmissionBindingState::Resolved)
+        return true;
+    if(m_submissionBindingState != SubmissionBindingState::Active)
+        return false;
+    for(const GpuTaskNode& task : m_tasks){
+        if(
+            task.lifecycleAttemptGeneration != recordingAttemptGeneration
+            || (
+                task.lifecycleState != TaskLifecycleState::Accepted
+                && task.lifecycleState != TaskLifecycleState::Discarded
+            )
+        )
+            return false;
+    }
+    if(!compiledGraph.resolveSubmissionTransaction(
+        *this,
+        m_activeRecordingPlanGeneration,
+        recordingAttemptGeneration,
+        submissionBinding
+    ))
+        return false;
+    m_submissionBindingState = SubmissionBindingState::Resolved;
+    return true;
 }
 
 bool GpuTaskGraph::validForDeviceGeneration(const u16 deviceGeneration)const noexcept{

@@ -695,11 +695,16 @@ public:
         , m_packets(arena)
         , m_latestAcceptedQueueTokens(arena)
         , m_externalResourceHandoffScratch(arena)
+        , m_transactionIdentity(GpuTaskGraph::allocateGeneration())
     {}
+    ~GpuGraphSubmissionTransaction();
 
 
 public:
     void reset(const GpuCompiledGraph& compiledGraph);
+    // Returns false without changing packet state, tokens, frontier, or statistics while this logical transaction
+    // still owns any nonterminal packet in a graph recording attempt.
+    [[nodiscard]] bool tryReset(const GpuCompiledGraph& compiledGraph);
 
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
     // Semantic task rejection resolves the current packet only inside the transaction, so renderer recovery code
@@ -794,6 +799,23 @@ private:
 
 
 private:
+    [[nodiscard]] bool allPacketsTerminalLocked()const noexcept;
+    [[nodiscard]] bool bindRecordingAttemptWithinSubmissionOperation(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        u64 recordingAttemptGeneration
+    )noexcept;
+    [[nodiscard]] bool matchesRecordingAttemptBinding(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        u64 recordingAttemptGeneration,
+        const GpuGraphSubmissionBinding& submissionBinding
+    )const noexcept;
+    void resolveSubmissionBindingIfTerminalLocked(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph
+    )noexcept;
+
     // Reserves native submission before Device::executeCommandLists() begins. While a packet is Submitting,
     // transaction cancellation cannot run its discarded callback or claim the graph for a retry.
     [[nodiscard]] bool beginPacketSubmission(
@@ -825,11 +847,6 @@ private:
         GpuSubmissionPacketId packet,
         GpuTaskGraph::PacketSubmissionLease& lease
     )noexcept;
-    [[nodiscard]] bool bindRecordingAttempt(
-        const GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        u64 recordingAttemptGeneration
-    )noexcept;
     struct LatestAcceptedQueueToken{
         GpuPhysicalQueueId queue;
         QueueSubmissionToken token;
@@ -844,6 +861,10 @@ private:
     u64 m_generation = 0u;
     u64 m_planGeneration = 0u;
     u64 m_recordingAttemptGeneration = 0u;
+    const u64 m_transactionIdentity = 0u;
+    u64 m_resetGeneration = 0u;
+    GpuGraphSubmissionBinding m_activeSubmissionBinding;
+    bool m_submissionBindingResolved = false;
     u16 m_deviceGeneration = 0u;
     u64 m_acceptedSubmissionCount = 0u;
     u64 m_acceptanceRevision = 0u;
@@ -1014,6 +1035,15 @@ public:
 
 
 private:
+    // Arms one graph recording attempt, publishes that exact attempt into the recorded artifact for failure
+    // cleanup, then binds its sole submission transaction before any task record callback can run.
+    [[nodiscard]] bool prepareRecordingAttemptAndBindTransaction(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        GpuRecordedGraph& recordedGraph,
+        GpuGraphSubmissionTransaction& transaction
+    )const;
     // The caller owns one valid SubmissionOperation for the full native-accept, task-callback, and
     // transaction-publication sequence. Range submission supplies its synchronous semantic obligations here; the
     // native packet primitive is never exposed as a public entry point.

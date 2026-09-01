@@ -612,6 +612,8 @@ AStringView GpuTaskGraph::markerLabel(const u32 offset, const u32 size)const{
 bool GpuTaskGraph::destroyTaskPayloads()noexcept{
     {
         ScopedLock lock(m_lifecycleMutex);
+        if(m_submissionBindingState == SubmissionBindingState::Active)
+            return false;
         for(const GpuTaskNode& task : m_tasks){
             if(
                 task.lifecycleState == TaskLifecycleState::Submitting

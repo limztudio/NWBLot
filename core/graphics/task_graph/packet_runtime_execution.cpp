@@ -173,6 +173,15 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
     )
         return false;
 
+    if(!prepareRecordingAttemptAndBindTransaction(
+        graph,
+        compiledGraph,
+        normalRange.first,
+        recordedGraph,
+        transaction
+    ))
+        return false;
+
     const bool recorded = desc.readyFrontierWorkerPool
         ? recorder.recordPacketRangeInReadyFrontiers(
             graph,
@@ -280,6 +289,15 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskRangeInCompileOrder(
         return false;
     }
 
+    if(!prepareRecordingAttemptAndBindTransaction(
+        graph,
+        compiledGraph,
+        range.first,
+        recordedGraph,
+        transaction
+    ))
+        return false;
+
     GpuSubmissionPacketId failedPacket;
     if(!recorder.recordPacketRangeInCompileOrder(
         graph,
@@ -344,6 +362,15 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskRangeInReadyFrontiers(
             *outFailedPacket = packet;
         return false;
     }
+
+    if(!prepareRecordingAttemptAndBindTransaction(
+        graph,
+        compiledGraph,
+        range.first,
+        recordedGraph,
+        transaction
+    ))
+        return false;
 
     GpuSubmissionPacketId failedPacket;
     if(!recorder.recordPacketRangeInReadyFrontiers(
@@ -414,14 +441,26 @@ bool GpuTaskGraphSubmitter::recordAndSubmitAcceptedFrontierTask(
             );
         }
     };
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
     if(
         !compiledGraph.validFor(graph)
         || !transaction.validFor(compiledGraph)
         || !graph.validTask(task)
         || !compiledGraph.findTask(task)
         || !compiledGraph.taskJoinsAcceptedQueueFrontier(task)
-        || !transaction.waitForSubmissionPublicationAndHasAcceptedPackets()
     ){
+        rejectTask();
+        return false;
+    }
+    if(!prepareRecordingAttemptAndBindTransaction(
+        graph,
+        compiledGraph,
+        packet,
+        recordedGraph,
+        transaction
+    ))
+        return false;
+    if(!transaction.waitForSubmissionPublicationAndHasAcceptedPackets()){
         rejectTask();
         return false;
     }
@@ -455,34 +494,30 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTask(
     if(outFailedPacket)
         *outFailedPacket = {};
 
-    const auto rejectTask = [&]{
-        if(
-            compiledGraph.validFor(graph)
-            && transaction.validFor(compiledGraph)
-            && graph.validTask(task)
-            && compiledGraph.findTask(task)
-        ){
-            u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();
-            if(recordingAttemptGeneration == 0u){
-                const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
-                if(!graph.beginRecordingAttempt(compiledGraph, packet))
-                    return;
-                recordingAttemptGeneration = graph.recordingAttemptGeneration();
-            }
-            transaction.rejectTask(
-                graph,
-                compiledGraph,
-                task,
-                recordingAttemptGeneration
-            );
-        }
-    };
     if(
         !compiledGraph.validFor(graph)
         || !transaction.validFor(compiledGraph)
         || !graph.validTask(task)
         || !compiledGraph.findTask(task)
-        || (recordedCallback && (!recordedCallback->invoke || recordedCallback->task != task))
+    )
+        return false;
+
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    if(!prepareRecordingAttemptAndBindTransaction(
+        graph,
+        compiledGraph,
+        packet,
+        recordedGraph,
+        transaction
+    ))
+        return false;
+    const u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();
+
+    const auto rejectTask = [&]{
+        transaction.rejectTask(graph, compiledGraph, task, recordingAttemptGeneration);
+    };
+    if(
+        (recordedCallback && (!recordedCallback->invoke || recordedCallback->task != task))
         || (acceptedCallback && (!acceptedCallback->invoke || acceptedCallback->task != task))
     ){
         rejectTask();
@@ -542,6 +577,40 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTask(
         return false;
     }
     return true;
+}
+
+
+bool GpuTaskGraphSubmitter::prepareRecordingAttemptAndBindTransaction(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId packet,
+    GpuRecordedGraph& recordedGraph,
+    GpuGraphSubmissionTransaction& transaction
+)const{
+    if(
+        !compiledGraph.validFor(graph)
+        || !compiledGraph.validPacket(packet)
+        || !transaction.validFor(compiledGraph)
+        || !graph.beginRecordingAttempt(compiledGraph, packet)
+    )
+        return false;
+
+    if(!recordedGraph.validFor(graph, compiledGraph))
+        recordedGraph.resetForRecording(graph, compiledGraph);
+    if(!recordedGraph.validFor(graph, compiledGraph))
+        return false;
+
+    GpuGraphSubmissionTransaction::SubmissionOperation bindingOperation(
+        transaction,
+        GpuGraphSubmissionTransaction::SubmissionOperationMode::ExclusiveBarrier
+    );
+    return bindingOperation.valid()
+        && transaction.bindRecordingAttemptWithinSubmissionOperation(
+            graph,
+            compiledGraph,
+            recordedGraph.recordingAttemptGeneration()
+        )
+    ;
 }
 
 

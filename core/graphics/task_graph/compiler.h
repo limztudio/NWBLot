@@ -25,6 +25,7 @@ namespace GpuTaskGraphAnalysisStatus{
     enum Enum : u8{
         NotAnalyzed,
         Success,
+        OutputPlanInUse,
         InvalidTask,
         MissingTaskRecordPayload,
         InvalidResource,

@@ -209,7 +209,12 @@ bool GpuTaskGraphCompiler::compile(
 )const{
     using namespace GpuTaskGraphCompilerDetail;
 
-    outCompiledGraph.reset();
+    if(!outCompiledGraph.tryReset()){
+        outAnalysis.reset();
+        outAnalysis.m_diagnostic.status = GpuTaskGraphAnalysisStatus::OutputPlanInUse;
+        outAssignments.reset();
+        return false;
+    }
     outAssignments.reset();
     const Timer compileBegin = TimerNow();
     const Timer analysisBegin = compileBegin;

@@ -147,6 +147,53 @@ class GpuRecordedGraph;
 class GpuTaskGraphSubmitter;
 
 
+class GpuGraphSubmissionBinding final{
+    friend class GpuCompiledGraph;
+    friend class GpuTaskGraph;
+    friend class GpuGraphSubmissionTransaction;
+    friend bool operator==(const GpuGraphSubmissionBinding& lhs, const GpuGraphSubmissionBinding& rhs)noexcept;
+
+
+public:
+    GpuGraphSubmissionBinding() = default;
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{
+        return m_transactionIdentity != 0u && m_resetGeneration != 0u;
+    }
+
+
+private:
+    GpuGraphSubmissionBinding(const u64 transactionIdentity, const u64 resetGeneration)noexcept
+        : m_transactionIdentity(transactionIdentity)
+        , m_resetGeneration(resetGeneration)
+    {}
+
+
+private:
+    u64 m_transactionIdentity = 0u;
+    u64 m_resetGeneration = 0u;
+};
+
+
+[[nodiscard]] inline bool operator==(
+    const GpuGraphSubmissionBinding& lhs,
+    const GpuGraphSubmissionBinding& rhs
+)noexcept{
+    return lhs.m_transactionIdentity == rhs.m_transactionIdentity
+        && lhs.m_resetGeneration == rhs.m_resetGeneration
+    ;
+}
+
+[[nodiscard]] inline bool operator!=(
+    const GpuGraphSubmissionBinding& lhs,
+    const GpuGraphSubmissionBinding& rhs
+)noexcept{
+    return !(lhs == rhs);
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -168,6 +215,12 @@ private:
         Accepting,
         Accepted,
         Discarded,
+    };
+
+    enum class SubmissionBindingState : u8{
+        None,
+        Active,
+        Resolved,
     };
 
 private:
@@ -263,6 +316,7 @@ private:
                 && m_planGeneration != 0u
                 && m_recordingAttemptGeneration != 0u
                 && m_claimGeneration != 0u
+                && m_submissionBinding.valid()
             ;
         }
 
@@ -273,6 +327,7 @@ private:
             m_planGeneration = 0u;
             m_recordingAttemptGeneration = 0u;
             m_claimGeneration = 0u;
+            m_submissionBinding = {};
         }
 
 
@@ -281,6 +336,7 @@ private:
         u64 m_planGeneration = 0u;
         u64 m_recordingAttemptGeneration = 0u;
         u64 m_claimGeneration = 0u;
+        GpuGraphSubmissionBinding m_submissionBinding;
     };
 
 private:
@@ -540,8 +596,9 @@ public:
         return m_hasPresentEndpoint ? &m_presentEndpoint : nullptr;
     }
 
-    // Reset is externally serialized against *starting* native recording/submission entrypoints. Once a packet
-    // claim exists, reset detects it and refuses teardown; callers must resolve that lease before retrying reset.
+    // Reset is externally serialized against *starting* native recording/submission entrypoints. A bound partial
+    // attempt and every transient packet claim refuse teardown; callers must resolve the owner before retrying.
+    [[nodiscard]] bool tryReset();
     void reset();
 
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
@@ -615,6 +672,21 @@ private:
         const GpuCompiledGraph& compiledGraph,
         u64 recordingAttemptGeneration
     )const noexcept;
+    [[nodiscard]] bool bindSubmissionTransaction(
+        const GpuCompiledGraph& compiledGraph,
+        u64 recordingAttemptGeneration,
+        const GpuGraphSubmissionBinding& submissionBinding
+    )const noexcept;
+    [[nodiscard]] bool matchesSubmissionTransaction(
+        const GpuCompiledGraph& compiledGraph,
+        u64 recordingAttemptGeneration,
+        const GpuGraphSubmissionBinding& submissionBinding
+    )const noexcept;
+    [[nodiscard]] bool resolveSubmissionTransaction(
+        const GpuCompiledGraph& compiledGraph,
+        u64 recordingAttemptGeneration,
+        const GpuGraphSubmissionBinding& submissionBinding
+    )const noexcept;
 
 private:
     [[nodiscard]] bool recordTask(
@@ -671,6 +743,7 @@ private:
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
         u64 recordingAttemptGeneration,
+        const GpuGraphSubmissionBinding& submissionBinding,
         PacketSubmissionLease& outLease
     )const noexcept;
     [[nodiscard]] bool completePacketSubmission(
@@ -689,7 +762,8 @@ private:
     [[nodiscard]] bool discardUnacceptedPacket(
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
-        u64 recordingAttemptGeneration
+        u64 recordingAttemptGeneration,
+        const GpuGraphSubmissionBinding& submissionBinding
     )const noexcept;
 
 private:
@@ -789,6 +863,8 @@ private:
     u64 m_declarationRevision = 0u;
     mutable u64 m_activeRecordingAttemptGeneration = 0u;
     mutable u64 m_activeRecordingPlanGeneration = 0u;
+    mutable GpuGraphSubmissionBinding m_activeSubmissionBinding;
+    mutable SubmissionBindingState m_submissionBindingState = SubmissionBindingState::None;
     bool m_hasPresentEndpoint = false;
     mutable bool m_teardownInProgress = false;
 };

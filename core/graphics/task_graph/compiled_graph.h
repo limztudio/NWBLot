@@ -7,6 +7,8 @@
 
 #include "task_desc.h"
 
+#include <global/sync.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,6 +22,7 @@ NWB_CORE_BEGIN
 class GpuTaskGraph;
 class GpuTaskGraphCompiler;
 class GpuCommandIrCapture;
+class GpuGraphSubmissionBinding;
 
 
 // Tasks describe semantic work. Packets are compiler-generated native-recording and submission units; a packet
@@ -340,13 +343,26 @@ struct GpuTaskGraphPhysicalQueueCompileStatistics{
 
 
 class GpuCompiledGraph final : NoCopy{
+    friend class GpuTaskGraph;
     friend class GpuTaskGraphCompiler;
+
+private:
+    enum class SubmissionBindingState : u8{
+        None,
+        Active,
+        Resolved,
+    };
+
 
 public:
     explicit GpuCompiledGraph(GraphicsArena& arena);
+    ~GpuCompiledGraph();
 
 
 public:
+    // An active graph attempt leases this exact immutable plan until every transaction packet resolves. Failed
+    // reset leaves packet storage, identities, topology, and statistics unchanged so explicit cleanup can continue.
+    [[nodiscard]] bool tryReset();
     void reset();
 
     [[nodiscard]] bool valid()const noexcept{ return m_valid && m_planGeneration != 0u; }
@@ -441,6 +457,27 @@ public:
 
 
 private:
+    [[nodiscard]] bool bindSubmissionTransaction(
+        const GpuTaskGraph& graph,
+        u64 expectedPlanGeneration,
+        u64 recordingAttemptGeneration,
+        const GpuGraphSubmissionBinding& submissionBinding
+    )const noexcept;
+    [[nodiscard]] bool matchesSubmissionTransaction(
+        const GpuTaskGraph& graph,
+        u64 expectedPlanGeneration,
+        u64 recordingAttemptGeneration,
+        const GpuGraphSubmissionBinding& submissionBinding
+    )const noexcept;
+    [[nodiscard]] bool resolveSubmissionTransaction(
+        const GpuTaskGraph& graph,
+        u64 expectedPlanGeneration,
+        u64 recordingAttemptGeneration,
+        const GpuGraphSubmissionBinding& submissionBinding
+    )const noexcept;
+
+
+private:
     GraphicsVector<GpuCompiledTask> m_tasks;
     // Dense declaration-task index to topological m_tasks offset. Offsets remain stable when arena vector storage moves.
     GraphicsVector<u32> m_compiledTaskIndexByTask;
@@ -463,6 +500,11 @@ private:
     u16 m_deviceGeneration = 0u;
     usize m_graphTaskCount = 0u;
     GpuTaskGraphCompileStatistics m_compileStatistics;
+    mutable Futex m_submissionBindingMutex;
+    mutable u64 m_submissionRecordingAttemptGeneration = 0u;
+    mutable u64 m_submissionTransactionIdentity = 0u;
+    mutable u64 m_submissionTransactionResetGeneration = 0u;
+    mutable SubmissionBindingState m_submissionBindingState = SubmissionBindingState::None;
     bool m_hasPresentEndpoint = false;
     bool m_valid = false;
 };

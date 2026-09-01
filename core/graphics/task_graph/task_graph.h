@@ -460,7 +460,7 @@ public:
 
         GpuTaskRecordThunk recordPayload = nullptr;
         if constexpr(requires{
-            { &TaskT::record } -> SameAs<bool (*)(const Payload&, CommandList&, const GpuTaskRecordContext&)>;
+            static_cast<bool (*)(const Payload&, CommandList&, const GpuTaskRecordContext&)>(&TaskT::record);
         })
             recordPayload = &RecordPayload<TaskT>;
 
@@ -472,7 +472,7 @@ public:
 
         GpuTaskDiscardedThunk discardPayload = nullptr;
         if constexpr(requires{
-            { &TaskT::discarded } -> SameAs<void (*)(Payload&)>;
+            static_cast<void (*)(Payload&)>(&TaskT::discarded);
         })
             discardPayload = &DiscardPayload<TaskT>;
 

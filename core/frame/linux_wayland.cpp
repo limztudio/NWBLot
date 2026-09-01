@@ -198,7 +198,7 @@ static i32 TranslateKey(xkb_keysym_t keySym){
     return TranslateLinuxKeySymbol<WaylandKeySymbols>(keySym);
 }
 
-static void StopKeyRepeat(WaylandContext& context){
+static void StopKeyRepeat(WaylandContext& context)noexcept{
     context.repeatPending = false;
     context.repeatKeycode = 0;
     context.repeatKey = Key::Unknown;
@@ -233,7 +233,7 @@ static void DispatchScroll(WaylandContext& context){
     context.scrollPending = false;
 }
 
-static void DestroyKeyboard(WaylandContext& context){
+static void DestroyKeyboard(WaylandContext& context)noexcept{
     if(context.keyboard){
         wl_keyboard_destroy(context.keyboard);
         context.keyboard = nullptr;
@@ -251,7 +251,7 @@ static void DestroyKeyboard(WaylandContext& context){
     StopKeyRepeat(context);
 }
 
-static void DestroyPointer(WaylandContext& context){
+static void DestroyPointer(WaylandContext& context)noexcept{
     if(context.pointer){
         wl_pointer_destroy(context.pointer);
         context.pointer = nullptr;
@@ -264,7 +264,7 @@ static void DestroyPointer(WaylandContext& context){
     context.scrollPending = false;
 }
 
-static void DestroyWaylandContext(Common::LinuxFrame& frameData){
+static void DestroyWaylandContext(Common::LinuxFrame& frameData)noexcept{
     WaylandContext* context = GetWaylandContext(frameData);
     if(!context){
         SetWaylandDisplay(frameData, nullptr);
@@ -1077,7 +1077,7 @@ bool RunWaylandFrame(Frame& frame){
     return false;
 }
 
-void CleanupWaylandFrame(Frame& frame){
+void CleanupWaylandFrame(Frame& frame)noexcept{
     DestroyWaylandContext(frame.data<Common::LinuxFrame>());
 }
 

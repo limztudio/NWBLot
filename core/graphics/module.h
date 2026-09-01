@@ -159,7 +159,7 @@ public:
         Perf::TimingSink& gpuTiming,
         Perf::TimingSink* cpuTiming
     );
-    ~Graphics();
+    ~Graphics()noexcept;
 
 
 public:

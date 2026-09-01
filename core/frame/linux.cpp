@@ -143,7 +143,7 @@ static bool RunBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backen
     }
 }
 
-static void CleanupBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backend){
+static void CleanupBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backend)noexcept{
     switch(backend){
     case Common::LinuxFrameBackend::Enum::X11:
         CleanupX11Frame(frame);
@@ -210,7 +210,7 @@ void Frame::setupPlatform(void* inst){
     frameData.nativeState() = nullptr;
     frameData.nativeAuxValue() = 0;
 }
-void Frame::cleanupPlatform(){
+void Frame::cleanupPlatform()noexcept{
     auto& frameData = data<Common::LinuxFrame>();
     FrameDetail::CleanupBackendFrame(*this, frameData.backend());
 

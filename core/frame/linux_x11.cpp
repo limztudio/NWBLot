@@ -469,7 +469,7 @@ bool RunX11Frame(Frame& frame){
     return false;
 }
 
-void CleanupX11Frame(Frame& frame){
+void CleanupX11Frame(Frame& frame)noexcept{
     auto& frameData = frame.data<Common::LinuxFrame>();
 
     if(GetX11Display(frameData)){

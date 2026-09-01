@@ -42,7 +42,7 @@ private:
 
 public:
     Frame(void* inst, u16 width, u16 height);
-    ~Frame();
+    ~Frame()noexcept(false);
 
 
 public:
@@ -112,7 +112,7 @@ public:
 
 private:
     void setupPlatform(void* inst);
-    void cleanupPlatform();
+    void cleanupPlatform()noexcept;
     bool updateFrame(f32 delta);
 
 

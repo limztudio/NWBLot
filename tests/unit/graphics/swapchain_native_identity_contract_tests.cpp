@@ -612,6 +612,10 @@ TEST(SwapChainPresentation, TeardownFailureDoesNotPublishADeadOrRecreatedInstanc
     const AStringView fullBackendHeader(backendHeader.data(), backendHeader.size());
     EXPECT_NE(fullBackendHeader.find("[[nodiscard]] bool destroy();"), AStringView::npos);
 
+    AString graphicsHeader;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.h", graphicsHeader));
+    EXPECT_NE(graphicsHeader.find("~Graphics()noexcept;"), AString::npos);
+
     AString graphicsSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.cpp", graphicsSource));
     const AStringView fullGraphicsSource(graphicsSource.data(), graphicsSource.size());
@@ -637,15 +641,62 @@ TEST(SwapChainPresentation, TeardownFailureDoesNotPublishADeadOrRecreatedInstanc
     EXPECT_LT(prepareDestroyOffset, highLevelClearOffset);
     EXPECT_LT(highLevelClearOffset, commitDestroyOffset);
     EXPECT_LT(commitDestroyOffset, instanceDestroyedOffset);
-    const usize graphicsDestructorOffset = fullGraphicsSource.find("Graphics::~Graphics(){");
+    const usize graphicsDestructorOffset = fullGraphicsSource.find("Graphics::~Graphics()noexcept{");
+    const usize activeUnwindOffset = fullGraphicsSource.find("if(UncaughtExceptionCount() > 0){", graphicsDestructorOffset);
+    const usize destructorJobDrainOffset = fullGraphicsSource.find("m_jobSystem.drain();", activeUnwindOffset);
+    const usize destructorPoolDrainOffset = fullGraphicsSource.find("m_threadPool.drain();", destructorJobDrainOffset);
+    const usize activeUnwindReturnOffset = fullGraphicsSource.find("return;", destructorPoolDrainOffset);
     const usize destructorAssertionOffset = fullGraphicsSource.find("NWB_FATAL_ASSERT_MSG(", graphicsDestructorOffset);
     const usize destructorDestroyOffset = fullGraphicsSource.find("destroy(),", destructorAssertionOffset);
     ASSERT_NE(graphicsDestructorOffset, AStringView::npos);
+    ASSERT_NE(activeUnwindOffset, AStringView::npos);
+    ASSERT_NE(destructorJobDrainOffset, AStringView::npos);
+    ASSERT_NE(destructorPoolDrainOffset, AStringView::npos);
+    ASSERT_NE(activeUnwindReturnOffset, AStringView::npos);
     ASSERT_NE(destructorAssertionOffset, AStringView::npos);
     ASSERT_NE(destructorDestroyOffset, AStringView::npos);
-    EXPECT_LT(graphicsDestructorOffset, destructorAssertionOffset);
+    EXPECT_LT(graphicsDestructorOffset, activeUnwindOffset);
+    EXPECT_LT(activeUnwindOffset, destructorJobDrainOffset);
+    EXPECT_LT(destructorJobDrainOffset, destructorPoolDrainOffset);
+    EXPECT_LT(destructorPoolDrainOffset, activeUnwindReturnOffset);
+    EXPECT_LT(activeUnwindReturnOffset, destructorAssertionOffset);
     EXPECT_LT(destructorAssertionOffset, destructorDestroyOffset);
     EXPECT_LT(destructorDestroyOffset, graphicsDestroyOffset);
+
+    AString frameHeader;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "frame" / "module.h", frameHeader));
+    EXPECT_NE(frameHeader.find("void cleanupPlatform()noexcept;"), AString::npos);
+
+    AString frameSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "frame" / "module.cpp", frameSource));
+    const AStringView fullFrameSource(frameSource.data(), frameSource.size());
+    const usize frameDestructorOffset = fullFrameSource.find("Frame::~Frame()noexcept(false){");
+    const usize frameActiveUnwindOffset = fullFrameSource.find("if(UncaughtExceptionCount() > 0){", frameDestructorOffset);
+    const usize projectJobDrainOffset = fullFrameSource.find("m_projectJobSystem.drain();", frameActiveUnwindOffset);
+    const usize projectPoolDrainOffset = fullFrameSource.find("m_projectThreadPool.drain();", projectJobDrainOffset);
+    const usize graphicsJobDrainOffset = fullFrameSource.find("m_graphicsJobSystem.drain();", projectPoolDrainOffset);
+    const usize graphicsPoolDrainOffset = fullFrameSource.find("m_graphicsThreadPool.drain();", graphicsJobDrainOffset);
+    const usize platformDetachOffset = fullFrameSource.find("cleanupPlatform();", graphicsPoolDrainOffset);
+    const usize frameActiveUnwindReturnOffset = fullFrameSource.find("return;", platformDetachOffset);
+    const usize normalCleanupOffset = fullFrameSource.find("cleanup();", frameActiveUnwindReturnOffset);
+    ASSERT_NE(frameDestructorOffset, AStringView::npos);
+    ASSERT_NE(frameActiveUnwindOffset, AStringView::npos);
+    ASSERT_NE(projectJobDrainOffset, AStringView::npos);
+    ASSERT_NE(projectPoolDrainOffset, AStringView::npos);
+    ASSERT_NE(graphicsJobDrainOffset, AStringView::npos);
+    ASSERT_NE(graphicsPoolDrainOffset, AStringView::npos);
+    ASSERT_NE(platformDetachOffset, AStringView::npos);
+    ASSERT_NE(frameActiveUnwindReturnOffset, AStringView::npos);
+    ASSERT_NE(normalCleanupOffset, AStringView::npos);
+    EXPECT_LT(frameDestructorOffset, frameActiveUnwindOffset);
+    EXPECT_LT(frameActiveUnwindOffset, projectJobDrainOffset);
+    EXPECT_LT(projectJobDrainOffset, projectPoolDrainOffset);
+    EXPECT_LT(projectPoolDrainOffset, graphicsJobDrainOffset);
+    EXPECT_LT(graphicsJobDrainOffset, graphicsPoolDrainOffset);
+    EXPECT_LT(graphicsPoolDrainOffset, platformDetachOffset);
+    EXPECT_LT(platformDetachOffset, frameActiveUnwindReturnOffset);
+    EXPECT_LT(frameActiveUnwindReturnOffset, normalCleanupOffset);
+
     const usize resizePreparationOffset = fullGraphicsSource.find("if(!backBufferResizing(transitionTicket))");
     const usize resizeBackendOffset = fullGraphicsSource.find(
         "if(!m_backend->commitSwapChainResize(Move(transitionTicket)))",

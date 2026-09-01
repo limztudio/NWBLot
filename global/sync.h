@@ -10,6 +10,13 @@
 #endif
 
 #if defined(_MSC_VER)
+#if defined(_M_ARM64)
+#include <intrin.h>
+#if !defined(__clang__)
+#pragma intrinsic(__yield)
+#endif
+#endif
+
 #if defined(_M_IX86) || defined(_M_X64)
 #pragma intrinsic(__rdtsc)
 #endif
@@ -37,14 +44,19 @@
 
 
 #if defined(NWB_PLATFORM_WINDOWS)
-inline void YieldThread(){ SwitchToThread(); }
+inline void YieldThread()noexcept{ SwitchToThread(); }
 #else
-inline void YieldThread(){ std::this_thread::yield(); }
+inline void YieldThread()noexcept{ std::this_thread::yield(); }
 #endif
 
 
-inline void MachinePause(i32 delay){
-#if defined(__ARM_ARCH_7A__) || defined(__aarch64__)
+inline void MachinePause(i32 delay)noexcept{
+#if defined(NWB_PLATFORM_WINDOWS) && defined(_M_ARM64)
+    while(delay > 0){
+        __yield();
+        --delay;
+    }
+#elif defined(__ARM_ARCH_7A__) || defined(__aarch64__)
     while(delay > 0){
         __asm__ __volatile__("yield");
         --delay;
@@ -101,7 +113,7 @@ private:
 
 
 public:
-    void lock(){
+    void lock()noexcept{
         if(try_lock())
             return;
 
@@ -118,7 +130,7 @@ public:
         }
     }
 
-    bool try_lock(){
+    bool try_lock()noexcept{
         u32 expected = s_Unlocked;
         return m_state.compare_exchange_strong(
             expected,
@@ -128,7 +140,7 @@ public:
         );
     }
 
-    void unlock(){
+    void unlock()noexcept{
         const u32 previous = m_state.fetch_sub(1, MemoryOrder::release);
         if(previous != s_Locked){
             m_state.store(s_Unlocked, MemoryOrder::release);
@@ -259,6 +271,30 @@ private:
 };
 template<isize LeastMaxValue>
 ScopedLock(Semaphore<LeastMaxValue>&) -> ScopedLock<Semaphore<LeastMaxValue>>;
+
+
+template<typename Mutex>
+class NothrowScopedLock final : NoCopy{
+    static_assert(requires(Mutex& mutex){
+        { mutex.lock() } noexcept;
+        { mutex.unlock() } noexcept;
+    }, "NothrowScopedLock requires genuinely no-throw lock and unlock operations");
+
+
+public:
+    explicit NothrowScopedLock(Mutex& mutex)noexcept
+        : m_mutex(mutex)
+    {
+        m_mutex.lock();
+    }
+    ~NothrowScopedLock()noexcept{ m_mutex.unlock(); }
+
+
+private:
+    Mutex& m_mutex;
+};
+template<typename Mutex>
+NothrowScopedLock(Mutex&) -> NothrowScopedLock<Mutex>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

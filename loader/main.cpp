@@ -11,6 +11,7 @@
 #include <CLI.hpp>
 
 #include <global/global.h>
+#include <global/exception.h>
 #include <global/filesystem.h>
 
 #include <core/common/command_line.h>
@@ -55,20 +56,37 @@ inline constexpr AStringView s_GraphicsVolumeName = "graphics";
 
 class CallbackShutdownGuard : NoCopy{
 public:
-    explicit CallbackShutdownGuard(NWB::IProjectEntryCallbacks& callbacks)
+    explicit CallbackShutdownGuard(
+        NWB::IProjectEntryCallbacks& callbacks,
+        NWB::Core::Alloc::JobSystem& jobSystem,
+        NWB::Core::Alloc::ThreadPool& threadPool)
         : m_callbacks(callbacks)
+        , m_jobSystem(jobSystem)
+        , m_threadPool(threadPool)
     {}
 
-    ~CallbackShutdownGuard(){
+    ~CallbackShutdownGuard()noexcept(false){
         if(!m_active)
             return;
+
+        m_active = false;
+        if(UncaughtExceptionCount() > 0){
+            m_jobSystem.drain();
+            m_threadPool.drain();
+            return;
+        }
 
         try{
             m_callbacks.onShutdown();
         }
         catch(...){
-            NWB_LOGGER_ERROR(NWB_TEXT("Project shutdown callback threw an exception"));
+            const ExceptionPtr exception = CaptureCurrentException();
+            m_jobSystem.drain();
+            m_threadPool.drain();
+            RethrowException(exception);
         }
+
+        NWB::Core::Alloc::FinishBorrowedSchedulerDomain(m_jobSystem, m_threadPool);
     }
 
     void activate(){
@@ -77,6 +95,8 @@ public:
 
 private:
     NWB::IProjectEntryCallbacks& m_callbacks;
+    NWB::Core::Alloc::JobSystem& m_jobSystem;
+    NWB::Core::Alloc::ThreadPool& m_threadPool;
     bool m_active = false;
 };
 
@@ -286,7 +306,7 @@ static int RunProjectRuntime(
     void* inst,
     NWB::Log::Client* telemetryClient
 ){
-    try{
+    {
         // Name symbols are a server-side concern: this client emits debug-hash tokens, and the log server loads the
         // .namesym sidecars (NameSymbols::LoadDefaultFile) + ingests uploads (LoadFromMemory) and rewrites those tokens
         // to readable text centrally (DecodeHashTokens). Do NOT load them here -- Name::c_str() intentionally falls back
@@ -386,7 +406,11 @@ static int RunProjectRuntime(
             NWB_LOGGER_FATAL(NWB_TEXT("CreateProjectEntryCallbacks failed: callback instance is null"));
             return -1;
         }
-        __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{ *callbacks };
+        __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{
+            *callbacks,
+            frame.projectJobSystem(),
+            frame.projectThreadPool()
+        };
         __hidden_loader::UpdateCallbackContext updateCallbackContext{ *callbacks };
 
         callbackShutdownGuard.activate();
@@ -406,10 +430,6 @@ static int RunProjectRuntime(
             NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame main loop failed"));
             return -1;
         }
-    }
-    catch(const GeneralException& e){
-        NWB_LOGGER_FATAL(NWB_TEXT("Exception: {}"), StringConvert(e.what()));
-        return -1;
     }
 
     return 0;

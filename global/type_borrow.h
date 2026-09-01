@@ -184,10 +184,25 @@ using IsDefaultConstructible = std::is_default_constructible<T>;
 template<class T>
 inline constexpr bool IsDefaultConstructible_V = std::is_default_constructible_v<T>;
 
+template<class T, class... Args>
+using IsConstructible = std::is_constructible<T, Args...>;
+template<class T, class... Args>
+inline constexpr bool IsConstructible_V = std::is_constructible_v<T, Args...>;
+
 template<class T>
 using IsNothrowMoveConstructible = std::is_nothrow_move_constructible<T>;
 template<class T>
 inline constexpr bool IsNothrowMoveConstructible_V = std::is_nothrow_move_constructible_v<T>;
+
+template<class T>
+using IsNothrowDestructible = std::is_nothrow_destructible<T>;
+template<class T>
+inline constexpr bool IsNothrowDestructible_V = std::is_nothrow_destructible_v<T>;
+
+template<class Func, class... Args>
+using IsInvocable = std::is_invocable<Func, Args...>;
+template<class Func, class... Args>
+inline constexpr bool IsInvocable_V = std::is_invocable_v<Func, Args...>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

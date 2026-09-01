@@ -23,13 +23,13 @@ private:
     };
 
     using InvokeFn = void(*)(void*);
-    using DestroyFn = void(*)(void*);
-    using MoveFn = void(*)(void*, void*);
+    using DestroyFn = void(*)(void*)noexcept;
+    using MoveFn = void(*)(void*, void*)noexcept;
 
 
 public:
     inline InplaceFunction() = default;
-    inline ~InplaceFunction(){ reset(); }
+    inline ~InplaceFunction()noexcept{ reset(); }
 
     inline InplaceFunction(InplaceFunction&& rhs)noexcept{
         moveFrom(Move(rhs));
@@ -43,12 +43,32 @@ public:
         return *this;
     }
 
-    template<typename Func, typename = EnableIf_T<!IsSame_V<Decay_T<Func>, InplaceFunction>>>
+    template<
+        typename Func,
+        typename FuncType = Decay_T<Func>,
+        typename = EnableIf_T<
+            !IsSame_V<FuncType, InplaceFunction>
+            && IsConstructible_V<FuncType, Func&&>
+            && IsInvocable_V<FuncType&>
+            && IsNothrowMoveConstructible_V<FuncType>
+            && IsNothrowDestructible_V<FuncType>
+        >
+    >
     inline explicit InplaceFunction(Func&& func){
         assign(Forward<Func>(func));
     }
 
-    template<typename Func, typename = EnableIf_T<!IsSame_V<Decay_T<Func>, InplaceFunction>>>
+    template<
+        typename Func,
+        typename FuncType = Decay_T<Func>,
+        typename = EnableIf_T<
+            !IsSame_V<FuncType, InplaceFunction>
+            && IsConstructible_V<FuncType, Func&&>
+            && IsInvocable_V<FuncType&>
+            && IsNothrowMoveConstructible_V<FuncType>
+            && IsNothrowDestructible_V<FuncType>
+        >
+    >
     inline InplaceFunction& operator=(Func&& func){
         reset();
         assign(Forward<Func>(func));
@@ -62,7 +82,7 @@ public:
         m_invoke(storagePtr());
     }
 
-    inline void reset(){
+    inline void reset()noexcept{
         if(!m_destroy)
             return;
 
@@ -80,6 +100,8 @@ private:
 
         static_assert(sizeof(FuncType) <= InlineStorageSize, "InplaceFunction capture size exceeds inline storage");
         static_assert(alignof(FuncType) <= alignof(Storage), "InplaceFunction capture alignment exceeds inline storage");
+        static_assert(IsNothrowMoveConstructible_V<FuncType>, "InplaceFunction targets must be nothrow move constructible");
+        static_assert(IsNothrowDestructible_V<FuncType>, "InplaceFunction targets must be nothrow destructible");
 
         new(storagePtr()) FuncType(Forward<Func>(func));
 
@@ -87,11 +109,11 @@ private:
             FuncType* f = static_cast<FuncType*>(storage);
             (*f)();
         };
-        m_destroy = [](void* storage){
+        m_destroy = [](void* storage)noexcept{
             FuncType* f = static_cast<FuncType*>(storage);
             f->~FuncType();
         };
-        m_move = [](void* dst, void* src){
+        m_move = [](void* dst, void* src)noexcept{
             FuncType* source = static_cast<FuncType*>(src);
             new(dst) FuncType(Move(*source));
             source->~FuncType();

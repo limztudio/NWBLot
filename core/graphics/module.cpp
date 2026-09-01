@@ -10,6 +10,7 @@
 
 #include <core/common/log.h>
 #include <core/telemetry/session.h>
+#include <global/exception.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -137,7 +138,15 @@ Graphics::Graphics(
     m_deviceCreationParams.enableRayTracingExtensions = true;
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
 }
-Graphics::~Graphics(){
+Graphics::~Graphics()noexcept{
+    // An active unwind is already terminal. Retire scheduler captures without re-entering the throwing Vulkan
+    // lifecycle path, so the original exception reaches the application-entry boundary.
+    if(UncaughtExceptionCount() > 0){
+        m_jobSystem.drain();
+        m_threadPool.drain();
+        return;
+    }
+
     NWB_FATAL_ASSERT_MSG(
         destroy(),
         NWB_TEXT("Graphics destruction requires either a completed device join or terminal device loss")

@@ -43,7 +43,7 @@ int Run(const int argc, char** argv){
         return app.exit(error, NWB_COUT, NWB_CERR);
     }
 
-    try{
+    {
         const AString outputPathText(outputArgument.data(), outputArgument.size());
         TextureDimension::Enum dimension = TextureDimension::Texture2D;
         Vector<Path> inputPaths;
@@ -176,10 +176,6 @@ int Run(const int argc, char** argv){
         ;
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
         return 0;
-    }
-    catch(const GeneralException& exception){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unexpected conversion exception: {}"), StringConvert(exception.what()));
-        return 1;
     }
 }
 

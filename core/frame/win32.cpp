@@ -635,7 +635,7 @@ void Frame::setupPlatform(void* inst){
     data<Common::WinFrame>().setActive(false);
     data<Common::WinFrame>().setInstance(reinterpret_cast<HINSTANCE>(inst));
 }
-void Frame::cleanupPlatform(){
+void Frame::cleanupPlatform()noexcept{
     FrameDetail::s_Frame = nullptr;
 }
 

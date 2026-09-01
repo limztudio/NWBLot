@@ -32,13 +32,13 @@ namespace FrameDetail{
 bool InitX11Frame(Frame& frame);
 bool ShowX11Frame(Frame& frame);
 bool RunX11Frame(Frame& frame);
-void CleanupX11Frame(Frame& frame);
+void CleanupX11Frame(Frame& frame)noexcept;
 
 #if defined(NWB_WITH_WAYLAND)
 bool InitWaylandFrame(Frame& frame);
 bool ShowWaylandFrame(Frame& frame);
 bool RunWaylandFrame(Frame& frame);
-void CleanupWaylandFrame(Frame& frame);
+void CleanupWaylandFrame(Frame& frame)noexcept;
 #endif
 
 

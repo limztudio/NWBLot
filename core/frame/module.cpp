@@ -7,6 +7,7 @@
 
 #include <core/common/log.h>
 #include <global/cpu_topology.h>
+#include <global/exception.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -89,9 +90,23 @@ Frame::Frame(void* inst, u16 width, u16 height)
     m_graphicsObjectArenaMemoryScope = m_perfSession.registerMemoryScope(FrameArenaScope::s_GraphicsObjectArena);
     m_projectObjectArenaMemoryScope = m_perfSession.registerMemoryScope(FrameArenaScope::s_ProjectObjectArena);
 }
-Frame::~Frame(){
+Frame::~Frame()noexcept(false){
+    // Telemetry upload and graphics teardown can invoke throwing callbacks. During terminal unwind, quiesce only
+    // scheduler-owned captures and detach callback-free platform state so the original exception survives.
+    if(UncaughtExceptionCount() > 0){
+        m_projectJobSystem.drain();
+        m_projectThreadPool.drain();
+        m_graphicsJobSystem.drain();
+        m_graphicsThreadPool.drain();
+        cleanupPlatform();
+        return;
+    }
+
     cleanup();
     cleanupPlatform();
+
+    Alloc::FinishBorrowedSchedulerDomain(m_projectJobSystem, m_projectThreadPool);
+    Alloc::FinishBorrowedSchedulerDomain(m_graphicsJobSystem, m_graphicsThreadPool);
 }
 
 

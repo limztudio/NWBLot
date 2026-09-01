@@ -153,13 +153,14 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
     };
 }
 
-// The lagged-history selector must share Deferred Lighting's dedicated Compute packet. Its built-in upload needs
-// Transfer capability, which the Vulkan Compute transport also advertises, but may not be rerouted for its tiny cost.
+// The lagged-history selector must share Deferred Lighting's selected packet. Its built-in upload needs Transfer
+// capability and prefers Compute without cost-based rerouting; Graphics remains the fallback when no Compute
+// transport exists, preserving the renderer on single-queue Vulkan devices.
 [[nodiscard]] inline Core::GpuQueueRequest ComputeUploadQueueRequest(){
     return Core::GpuQueueRequest{
         Core::GpuQueueCapability::Transfer,
         Core::GpuQueuePreference::Compute,
-        false,
+        true,
         false,
     };
 }

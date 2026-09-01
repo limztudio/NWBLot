@@ -42277,7 +42277,7 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     const Graphics::GpuQueueRequest computeUploadRequest{
         Graphics::GpuQueueCapability::Transfer,
         Graphics::GpuQueuePreference::Compute,
-        false,
+        true,
         false,
     };
     const Graphics::GpuQueueRequest transferRequest{
@@ -42864,6 +42864,41 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     }
     EXPECT_TRUE(historyCopyTransitionsCurrentIrradiance);
     EXPECT_TRUE(historyCopyTransitionsHistoryIrradiance);
+
+    const Graphics::GpuPhysicalQueueInfo graphicsOnlyQueue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology graphicsOnlyTopology{
+        .queues = &graphicsOnlyQueue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis graphicsOnlyAnalysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments graphicsOnlyAssignments(testArena.arena);
+    Graphics::GpuCompiledGraph graphicsOnlyCompiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(
+        graph,
+        graphicsOnlyAnalysis,
+        graphicsOnlyTopology,
+        graphicsOnlyAssignments,
+        graphicsOnlyCompiledGraph,
+        frontierOptions
+    ));
+    const Graphics::GpuTaskQueueAssignment* const graphicsUploadAssignment = graphicsOnlyAssignments.find(
+        laggedHistorySlotsUpload
+    );
+    const Graphics::GpuTaskQueueAssignment* const graphicsLightingAssignment = graphicsOnlyAssignments.find(lighting);
+    ASSERT_NE(graphicsUploadAssignment, nullptr);
+    ASSERT_NE(graphicsLightingAssignment, nullptr);
+    EXPECT_EQ(graphicsUploadAssignment->queue, graphicsOnlyQueue.id);
+    EXPECT_EQ(graphicsUploadAssignment->queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(graphicsLightingAssignment->queue, graphicsOnlyQueue.id);
+    EXPECT_EQ(graphicsLightingAssignment->queueClass, Graphics::CommandQueue::Graphics);
+    const Graphics::GpuSubmissionPacketId graphicsUploadPacket = graphicsOnlyCompiledGraph.packetForTask(
+        laggedHistorySlotsUpload
+    );
+    const Graphics::GpuSubmissionPacketId graphicsLightingPacket = graphicsOnlyCompiledGraph.packetForTask(lighting);
+    ASSERT_TRUE(graphicsUploadPacket.valid());
+    ASSERT_TRUE(graphicsLightingPacket.valid());
+    EXPECT_EQ(graphicsUploadPacket, graphicsLightingPacket);
+    EXPECT_EQ(graphicsOnlyCompiledGraph.packet(graphicsLightingPacket).taskCount, 2u);
 }
 
 

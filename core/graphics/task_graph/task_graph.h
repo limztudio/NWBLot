@@ -157,6 +157,7 @@ class GpuTaskGraph final : NoCopy{
     friend class GpuRecordedGraph;
     friend class GpuTaskGraphSubmitter;
 
+
 private:
     enum class TaskLifecycleState : u8{
         Declared,
@@ -244,10 +245,6 @@ private:
         u64 m_recordingAttemptGeneration = 0u;
         u64 m_claimGeneration = 0u;
     };
-
-private:
-    [[nodiscard]] static u64 allocateGeneration()noexcept;
-
 
 private:
     struct GpuTaskNode{
@@ -515,21 +512,6 @@ public:
     // changes that leave task/resource handle generations and counts unchanged.
     [[nodiscard]] u64 declarationRevision()const noexcept{ return m_declarationRevision; }
 
-
-private:
-    [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
-    // Starts or validates one native-recording attempt for the compiler-owned packet. A retry can begin only after
-    // every task from the previous attempt was discarded; accepted-frontier recovery remains in that same attempt.
-    [[nodiscard]] bool beginRecordingAttempt(
-        const GpuCompiledGraph& compiledGraph,
-        GpuSubmissionPacketId packet
-    )const noexcept;
-    [[nodiscard]] bool matchesRecordingAttempt(
-        const GpuCompiledGraph& compiledGraph,
-        u64 recordingAttemptGeneration
-    )const noexcept;
-
-
 public:
     [[nodiscard]] bool validForDeviceGeneration(u16 deviceGeneration)const noexcept;
     [[nodiscard]] bool validTask(const GpuTaskId& id)const noexcept;
@@ -572,6 +554,30 @@ public:
     [[nodiscard]] MeshletPipeline* meshletPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
     [[nodiscard]] RayTracingPipeline* rayTracingPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
 
+public:
+    [[nodiscard]] bool appendFrameGraphTelemetry(
+        Telemetry::FrameGraphBuilder& builder,
+        const GpuTaskGraphAnalysis& analysis,
+        Alloc::ScratchArena& scratchArena,
+        const GpuTaskGraphTelemetryOptions& options = {}
+    )const;
+
+
+private:
+    [[nodiscard]] static u64 allocateGeneration()noexcept;
+
+private:
+    [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
+    // Starts or validates one native-recording attempt for the compiler-owned packet. A retry can begin only after
+    // every task from the previous attempt was discarded; accepted-frontier recovery remains in that same attempt.
+    [[nodiscard]] bool beginRecordingAttempt(
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet
+    )const noexcept;
+    [[nodiscard]] bool matchesRecordingAttempt(
+        const GpuCompiledGraph& compiledGraph,
+        u64 recordingAttemptGeneration
+    )const noexcept;
 
 private:
     [[nodiscard]] bool recordTask(
@@ -581,7 +587,6 @@ private:
         const PacketRecordingLease& lease,
         bool& outRecordThunkInvoked
     )const;
-
 
     // Claims all packet tasks before native command recording begins. One recording attempt can therefore have
     // exactly one native artifact per packet even when callers use separate recorded-graph outputs concurrently.
@@ -612,7 +617,6 @@ private:
         u64 recordingAttemptGeneration
     )const noexcept;
 
-
 private:
     [[nodiscard]] bool beginPacketSubmission(
         const GpuCompiledGraph& compiledGraph,
@@ -639,7 +643,6 @@ private:
         u64 recordingAttemptGeneration
     )const noexcept;
 
-
 private:
     // Lowers a compiler-owned packet-boundary barrier through the existing CommandList state tracker.  Task thunks
     // retain responsibility only for barriers internal to their own command sequence.
@@ -655,16 +658,6 @@ private:
         const GpuTaskId& task,
         CommandList& commandList
     )const;
-
-
-public:
-    [[nodiscard]] bool appendFrameGraphTelemetry(
-        Telemetry::FrameGraphBuilder& builder,
-        const GpuTaskGraphAnalysis& analysis,
-        Alloc::ScratchArena& scratchArena,
-        const GpuTaskGraphTelemetryOptions& options = {}
-    )const;
-
 
 private:
     template<typename TaskT>

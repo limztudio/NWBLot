@@ -157,6 +157,89 @@ private:
 };
 
 
+// Holds executeCommandLists inside the resolved callback after native acceptance. The caller can then observe state
+// that must be published before any externally owned acceptance callback runs.
+class BlockingResolvedSubmissionSignal final : NoCopy{
+private:
+    [[nodiscard]] static bool prepare(
+        void* const context,
+        const u64 identity,
+        const GpuPhysicalQueueId& executionQueue,
+        QueueSubmissionNativeSignal& outSignal
+    ){
+        BlockingResolvedSubmissionSignal* const signal = static_cast<BlockingResolvedSubmissionSignal*>(context);
+        if(
+            !signal
+            || !signal->valid()
+            || identity != s_Identity
+            || executionQueue != signal->m_expectedQueue
+            || signal->m_invocationCount != 0u
+        )
+            return false;
+
+        outSignal = signal->m_semaphore.nativeSignal();
+        ++signal->m_invocationCount;
+        return true;
+    }
+    [[nodiscard]] static bool resolved(
+        void* const context,
+        const u64 identity,
+        const QueueSubmissionToken& submissionToken
+    )noexcept{
+        BlockingResolvedSubmissionSignal* const signal = static_cast<BlockingResolvedSubmissionSignal*>(context);
+        if(!signal || identity != s_Identity)
+            return false;
+
+        signal->m_resolvedToken = submissionToken;
+        signal->m_resolutionEntered.test_and_set(MemoryOrder::release);
+        signal->m_resolutionEntered.notify_all();
+        while(!signal->m_releaseResolution.test(MemoryOrder::acquire))
+            signal->m_releaseResolution.wait(false, MemoryOrder::acquire);
+        return true;
+    }
+
+
+public:
+    BlockingResolvedSubmissionSignal(
+        GraphicsBackend::Device& device,
+        const GpuPhysicalQueueId& expectedQueue
+    )
+        : m_semaphore(device)
+        , m_expectedQueue(expectedQueue)
+    {}
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{ return m_expectedQueue.valid() && m_semaphore.valid(); }
+    [[nodiscard]] QueueSubmissionPreSubmitHook hook()noexcept{
+        return QueueSubmissionPreSubmitHook{
+            .context = this,
+            .identity = s_Identity,
+            .invoke = &BlockingResolvedSubmissionSignal::prepare,
+            .resolved = &BlockingResolvedSubmissionSignal::resolved,
+        };
+    }
+    [[nodiscard]] bool resolutionEntered()const noexcept{ return m_resolutionEntered.test(MemoryOrder::acquire); }
+    void releaseResolution()noexcept{
+        m_releaseResolution.test_and_set(MemoryOrder::release);
+        m_releaseResolution.notify_all();
+    }
+    [[nodiscard]] const QueueSubmissionToken& resolvedToken()const noexcept{ return m_resolvedToken; }
+    [[nodiscard]] u32 invocationCount()const noexcept{ return m_invocationCount; }
+
+
+private:
+    static constexpr u64 s_Identity = 1u;
+
+    VulkanTestBinarySemaphore m_semaphore;
+    GpuPhysicalQueueId m_expectedQueue;
+    AtomicFlag m_resolutionEntered;
+    AtomicFlag m_releaseResolution;
+    QueueSubmissionToken m_resolvedToken;
+    u32 m_invocationCount = 0u;
+};
+
+
 // Deterministically holds one presentation-style signal claim after it publishes Queued but before Queue::submit.
 // This recreates the lifetime interval where cancellation and lifecycle drain must wait for exact native resolution
 // instead of retiring the binary semaphore while the submitting thread still owns its raw VkSemaphore handle.
@@ -60132,6 +60215,183 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuball
     ASSERT_NE(retryReadback, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_RetryWords); ++wordIndex)
         EXPECT_EQ(retryReadback[wordIndex], s_RetryWords[wordIndex]);
+    uploadDevice.unmapBuffer(readback.get());
+}
+
+
+// Accepted publication for a large owner batch must retain its upload chunk before resolving an external hook. Empty
+// peers put the uploading owner after the lookup threshold without creating a staging chunk per command list.
+TEST_F(DescriptorBufferRoundTripTest, LargeOwnerSubmissionRecyclesUploadChunkAfterAcceptedBatch){
+    HeadlessGraphicsScope uploadScope;
+    ASSERT_TRUE(uploadScope.initialize());
+
+    GraphicsBackend::Device& uploadDevice = uploadScope.graphics().getDevice();
+    const GpuPhysicalQueueId graphicsQueue = uploadDevice.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+    static constexpr usize s_CommandListCount = 9u;
+    static constexpr usize s_UploadCommandListIndex = s_CommandListCount - 1u;
+    static constexpr u32 s_FirstWords[] = { 0x12345678u, 0x90ABCDEFu, 0x0BADF00Du, 0xCAFEBABEu };
+    static constexpr u32 s_ReusedWords[] = { 0xDEADBEEFu, 0x01020304u, 0x55667788u, 0xA5A5A5A5u };
+    const BufferHandle destination = uploadDevice.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(s_ReusedWords))
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    const BufferHandle readback = uploadDevice.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(s_ReusedWords))
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+            .setCpuAccess(CpuAccessMode::Read)
+    );
+    ASSERT_TRUE(destination);
+    ASSERT_TRUE(readback);
+
+    CommandListHandle commandLists[s_CommandListCount];
+    CommandList* commandListPointers[s_CommandListCount] = {};
+    __hidden_descriptor_buffer_round_trip_tests::NativeUploadReuseCapture firstCapture;
+    {
+        __hidden_descriptor_buffer_round_trip_tests::ScopedNativeUploadReuseTrace nativeTrace(uploadDevice, firstCapture);
+        ASSERT_TRUE(nativeTrace.valid());
+
+        for(usize commandListIndex = 0u; commandListIndex < s_CommandListCount; ++commandListIndex){
+            commandLists[commandListIndex] = uploadDevice.createCommandList();
+            ASSERT_TRUE(commandLists[commandListIndex]);
+            commandLists[commandListIndex]->open();
+            if(commandListIndex == s_UploadCommandListIndex){
+                ASSERT_TRUE(commandLists[commandListIndex]->tryWriteBuffer(
+                    destination.get(),
+                    s_FirstWords,
+                    sizeof(s_FirstWords)
+                ));
+            }
+            commandLists[commandListIndex]->close();
+            ASSERT_FALSE(commandLists[commandListIndex]->commandRecordingFailed());
+            commandListPointers[commandListIndex] = commandLists[commandListIndex].get();
+        }
+    }
+    ASSERT_EQ(firstCapture.addressQueryCount, 1u);
+    ASSERT_EQ(firstCapture.copyCommandCount, 1u);
+    ASSERT_NE(firstCapture.copyCommands[0u].source, VK_NULL_HANDLE);
+
+    __hidden_descriptor_buffer_round_trip_tests::BlockingResolvedSubmissionSignal submissionSignal(
+        uploadDevice,
+        graphicsQueue
+    );
+    ASSERT_TRUE(submissionSignal.valid());
+    QueueSubmissionDesc firstSubmissionDesc;
+    firstSubmissionDesc.setPreSubmitHook(submissionSignal.hook());
+    QueueSubmissionToken firstToken;
+    AtomicFlag submissionFinished;
+    Thread submissionThread([&](){
+        firstToken = uploadDevice.executeCommandLists(
+            commandListPointers,
+            LengthOf(commandListPointers),
+            graphicsQueue,
+            firstSubmissionDesc
+        );
+        submissionFinished.test_and_set(MemoryOrder::release);
+        submissionFinished.notify_all();
+    });
+
+    const Timer resolutionWaitBegin = TimerNow();
+    while(
+        !submissionSignal.resolutionEntered()
+        && !submissionFinished.test(MemoryOrder::acquire)
+        && DurationInSeconds<f64>(TimerNow(), resolutionWaitBegin) < 5.0
+    )
+        YieldThread();
+    const bool resolutionEntered = submissionSignal.resolutionEntered();
+    if(!resolutionEntered){
+        submissionSignal.releaseResolution();
+        submissionThread.join();
+        EXPECT_TRUE(resolutionEntered);
+        return;
+    }
+    const QueueSubmissionToken resolvedToken = submissionSignal.resolvedToken();
+
+    bool firstSubmissionCompleted = false;
+    if(resolvedToken.valid()){
+        for(CommandListHandle& commandList : commandLists)
+            commandList.reset();
+
+        const Timer completionWaitBegin = TimerNow();
+        while(
+            uploadDevice.queueGetCompletedInstance(graphicsQueue) < resolvedToken.value
+            && DurationInSeconds<f64>(TimerNow(), completionWaitBegin) < 5.0
+        )
+            YieldThread();
+        firstSubmissionCompleted = uploadDevice.queueGetCompletedInstance(graphicsQueue) >= resolvedToken.value;
+    }
+
+    CommandListHandle reusedUpload;
+    __hidden_descriptor_buffer_round_trip_tests::NativeUploadReuseCapture reusedCapture;
+    bool reusedTraceValid = false;
+    bool reusedRecorded = false;
+    bool reusedRecordingFailed = true;
+    if(resolvedToken.valid() && firstSubmissionCompleted){
+        reusedUpload = uploadDevice.createCommandList();
+        __hidden_descriptor_buffer_round_trip_tests::ScopedNativeUploadReuseTrace nativeTrace(uploadDevice, reusedCapture);
+        reusedTraceValid = nativeTrace.valid();
+        if(reusedUpload && reusedTraceValid){
+            reusedUpload->open();
+            reusedRecorded = reusedUpload->tryWriteBuffer(destination.get(), s_ReusedWords, sizeof(s_ReusedWords));
+            reusedUpload->close();
+            reusedRecordingFailed = reusedUpload->commandRecordingFailed();
+        }
+    }
+    submissionSignal.releaseResolution();
+    submissionThread.join();
+
+    ASSERT_TRUE(firstToken.valid());
+    ASSERT_TRUE(resolvedToken.valid());
+    ASSERT_TRUE(firstSubmissionCompleted);
+    EXPECT_EQ(submissionSignal.invocationCount(), 1u);
+    EXPECT_EQ(resolvedToken.queue, firstToken.queue);
+    EXPECT_EQ(resolvedToken.physicalQueueIndex, firstToken.physicalQueueIndex);
+    EXPECT_EQ(resolvedToken.deviceGeneration, firstToken.deviceGeneration);
+    EXPECT_EQ(resolvedToken.value, firstToken.value);
+    ASSERT_TRUE(reusedUpload);
+    ASSERT_TRUE(reusedTraceValid);
+    ASSERT_TRUE(reusedRecorded);
+    ASSERT_FALSE(reusedRecordingFailed);
+    EXPECT_EQ(reusedCapture.addressQueryCount, 0u);
+    ASSERT_EQ(reusedCapture.copyCommandCount, 1u);
+    EXPECT_EQ(reusedCapture.copyCommands[0u].source, firstCapture.copyCommands[0u].source);
+    EXPECT_EQ(reusedCapture.copyCommands[0u].sourceOffset, firstCapture.copyCommands[0u].sourceOffset);
+
+    CommandList* const reusedUploads[]{ reusedUpload.get() };
+    const QueueSubmissionToken reusedToken = uploadDevice.executeCommandLists(
+        reusedUploads,
+        LengthOf(reusedUploads),
+        graphicsQueue,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(reusedToken.valid());
+    ASSERT_TRUE(uploadDevice.waitForIdle());
+
+    CommandListHandle readbackCopy = uploadDevice.createCommandList();
+    ASSERT_TRUE(readbackCopy);
+    readbackCopy->open();
+    readbackCopy->copyBuffer(readback.get(), 0u, destination.get(), 0u, sizeof(s_ReusedWords));
+    ASSERT_FALSE(readbackCopy->commandRecordingFailed());
+    readbackCopy->close();
+    CommandList* const readbackCopies[]{ readbackCopy.get() };
+    const QueueSubmissionToken readbackToken = uploadDevice.executeCommandLists(
+        readbackCopies,
+        LengthOf(readbackCopies),
+        graphicsQueue,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(readbackToken.valid());
+    ASSERT_TRUE(uploadDevice.waitForIdle());
+
+    const u32* const mappedReadback = static_cast<const u32*>(uploadDevice.mapBuffer(readback.get(), CpuAccessMode::Read));
+    ASSERT_NE(mappedReadback, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_ReusedWords); ++wordIndex)
+        EXPECT_EQ(mappedReadback[wordIndex], s_ReusedWords[wordIndex]);
     uploadDevice.unmapBuffer(readback.get());
 }
 

@@ -11,6 +11,7 @@
 #include "native_buffer_provenance.h"
 #include "native_queue_state.h"
 #include "native_texture_provenance.h"
+#include "submitted_command_buffer_owner_lookup.h"
 
 #include <core/common/log.h>
 
@@ -1281,7 +1282,7 @@ private:
     };
     using BufferChunkPtr = RefCountPtr<BufferChunk>;
     using BufferChunkList = List<BufferChunkPtr, Alloc::GlobalArena>;
-    using ChunkRecyclePredicate = bool (*)(TrackedCommandBuffer* owner, u64 nativeRecordingID, const void* context);
+    using ChunkRecyclePredicate = bool (*)(TrackedCommandBuffer* owner, u64 nativeRecordingID, const void* context) noexcept;
     struct ActiveQueueChunks{
         GpuPhysicalQueueId queue;
         BufferChunkList chunks;
@@ -1315,8 +1316,9 @@ public:
         GpuPhysicalQueueId queue,
         u64 submittedVersion,
         const Queue::SubmissionCommandListIdentity* submittedCommandLists,
-        usize submittedCommandListCount
-    );
+        usize submittedCommandListCount,
+        const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners
+    )noexcept;
     void discardChunks(
         GpuPhysicalQueueId queue,
         TrackedCommandBuffer* owner,
@@ -1328,15 +1330,21 @@ public:
 private:
     void collectCompletedChunks();
     void trimChunkPoolLocked();
-    [[nodiscard]] BufferChunkList* findActiveChunksLocked(GpuPhysicalQueueId queue, bool create);
-    BufferChunkList::iterator recycleActiveChunkLocked(BufferChunkList& activeChunks, BufferChunkList::iterator it, u64 version, bool resetAllocated);
-    void recycleMatchingActiveChunks(
+    [[nodiscard]] BufferChunkList* findActiveChunksLocked(GpuPhysicalQueueId queue)noexcept;
+    [[nodiscard]] BufferChunkList* findOrCreateActiveChunksLocked(GpuPhysicalQueueId queue);
+    BufferChunkList::iterator recycleActiveChunkLocked(
+        BufferChunkList& activeChunks,
+        BufferChunkList::iterator it,
+        u64 version,
+        bool resetAllocated
+    )noexcept;
+    void recycleMatchingActiveChunksLocked(
         GpuPhysicalQueueId queue,
         u64 version,
         bool resetAllocated,
         ChunkRecyclePredicate predicate,
         const void* predicateContext
-    );
+    )noexcept;
 
 
 private:

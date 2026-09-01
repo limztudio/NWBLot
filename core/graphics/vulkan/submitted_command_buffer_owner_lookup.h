@@ -1,0 +1,91 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "global.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TrackedCommandBuffer;
+
+namespace VulkanDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SubmittedCommandBufferOwnerLookup final : NoCopy{
+    using OwnerLookup = HashMap<
+        TrackedCommandBuffer*,
+        u64,
+        Hasher<TrackedCommandBuffer*>,
+        EqualTo<TrackedCommandBuffer*>,
+        Alloc::ScratchArena
+    >;
+
+
+private:
+    static constexpr usize s_LinearSearchThreshold = 8u;
+
+
+public:
+    explicit SubmittedCommandBufferOwnerLookup(Alloc::ScratchArena& arena)
+        : m_owners(0u, Hasher<TrackedCommandBuffer*>(), EqualTo<TrackedCommandBuffer*>(), arena)
+    {}
+
+
+public:
+    void prepare(const usize ownerCount){
+        if(ownerCount <= s_LinearSearchThreshold)
+            return;
+
+        m_owners.reserve(ownerCount);
+        m_indexed = true;
+    }
+    void add(TrackedCommandBuffer& owner, const u64 nativeRecordingID){
+        if(!m_indexed || nativeRecordingID == 0u)
+            return;
+
+        m_owners[&owner] = nativeRecordingID;
+    }
+    [[nodiscard]] bool indexed()const noexcept{ return m_indexed; }
+    [[nodiscard]] bool contains(TrackedCommandBuffer& owner, const u64 nativeRecordingID)const noexcept{
+        if(!m_indexed || nativeRecordingID == 0u)
+            return false;
+
+        const auto it = m_owners.find(&owner);
+        return it != m_owners.end() && it->second == nativeRecordingID;
+    }
+
+
+private:
+    OwnerLookup m_owners;
+    bool m_indexed = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

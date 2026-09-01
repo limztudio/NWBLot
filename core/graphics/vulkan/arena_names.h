@@ -57,8 +57,6 @@ inline constexpr Name s_InputLayoutArena("core/graphics/shader_input_layout");
 inline constexpr Name s_TextureClearArena("core/graphics/texture_clear");
 inline constexpr Name s_TextureResolveArena("core/graphics/texture_resolve");
 
-inline constexpr Name s_SubmitChunksArena("core/graphics/upload_submit_chunks");
-
 inline constexpr Name s_GpuCrashReportArena("core/graphics/gpu_crash_report");
 inline constexpr Name s_GpuCrashVendorBinaryArena("core/graphics/gpu_crash_vendor_binary");
 inline constexpr Name s_AftermathDumpArena("core/graphics/aftermath_dump");

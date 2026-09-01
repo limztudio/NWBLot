@@ -418,6 +418,14 @@ u64 Device::executeCommandLists(
                 hasSubmittedOwner = true;
         }
     }
+    VulkanDetail::SubmittedCommandBufferOwnerLookup submittedOwners{scratchArena};
+    submittedOwners.prepare(expectedCommandLists.size());
+    if(submittedOwners.indexed()){
+        for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
+            if(expected.owner)
+                submittedOwners.add(*expected.owner, expected.nativeRecordingID);
+        }
+    }
 
     bool submissionAccepted = false;
     const u64 submittedID = queue->submit(
@@ -428,8 +436,6 @@ u64 Device::executeCommandLists(
         0u,
         &submissionAccepted
     );
-    if(outCommandListsSubmitted)
-        *outCommandListsSubmitted = submissionAccepted && hasSubmittedOwner;
 
     if(!expectedCommandLists.empty()){
         if(submissionAccepted){
@@ -437,13 +443,15 @@ u64 Device::executeCommandLists(
                 executionQueue,
                 submittedID,
                 expectedCommandLists.data(),
-                expectedCommandLists.size()
+                expectedCommandLists.size(),
+                submittedOwners
             );
             m_scratchManager.submitChunks(
                 executionQueue,
                 submittedID,
                 expectedCommandLists.data(),
-                expectedCommandLists.size()
+                expectedCommandLists.size(),
+                submittedOwners
             );
         }
         else{
@@ -481,6 +489,9 @@ u64 Device::executeCommandLists(
             }
         }
     }
+
+    if(outCommandListsSubmitted)
+        *outCommandListsSubmitted = submissionAccepted && hasSubmittedOwner;
 
     return submittedID;
 }
@@ -612,6 +623,14 @@ QueueSubmissionToken Device::executeCommandLists(
             });
         }
     }
+    VulkanDetail::SubmittedCommandBufferOwnerLookup submittedOwners{scratchArena};
+    submittedOwners.prepare(expectedCommandLists.size());
+    if(submittedOwners.indexed()){
+        for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
+            if(expected.owner)
+                submittedOwners.add(*expected.owner, expected.nativeRecordingID);
+        }
+    }
 
     // The hook runs only after this submission's queue and timeline waits validate. Its native signal is passed as
     // submission-local data into Queue::submit, so a concurrent submit cannot consume the presentation semaphore.
@@ -665,8 +684,6 @@ QueueSubmissionToken Device::executeCommandLists(
         }
         : QueueSubmissionToken{}
     ;
-    if(!hookResolution.resolve(submissionToken))
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Exact queue submission hook rejected its resolution token"));
 
     if(!expectedCommandLists.empty()){
         if(submissionAccepted){
@@ -674,13 +691,15 @@ QueueSubmissionToken Device::executeCommandLists(
                 executionQueue,
                 submittedID,
                 expectedCommandLists.data(),
-                expectedCommandLists.size()
+                expectedCommandLists.size(),
+                submittedOwners
             );
             m_scratchManager.submitChunks(
                 executionQueue,
                 submittedID,
                 expectedCommandLists.data(),
-                expectedCommandLists.size()
+                expectedCommandLists.size(),
+                submittedOwners
             );
         }
         else{
@@ -718,6 +737,9 @@ QueueSubmissionToken Device::executeCommandLists(
             }
         }
     }
+
+    if(!hookResolution.resolve(submissionToken))
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Exact queue submission hook rejected its resolution token"));
 
     if(!submissionAccepted)
         return {};

@@ -1144,7 +1144,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     transaction.reset(compiledGraph);
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> liveBuffers(m_arena);
     collectLiveSkinningStateBuffers(liveBuffers);
-    Core::GpuPersistentResourceStateCache::Candidate acceptedStateCandidate(m_arena);
+    Core::GpuPersistentResourceStateCache::Candidate acceptedStateCandidate(m_acceptedSkinningState);
     struct SkinningStateContext{
         Core::GpuPersistentResourceStateCache* cache = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* candidate = nullptr;

@@ -570,6 +570,25 @@ bool CommandListResourceStateHandoff::copyFrom(const CommandListResourceStateHan
     return true;
 }
 
+bool CommandListResourceStateHandoff::exchangeSnapshot(CommandListResourceStateHandoff& snapshot)noexcept{
+    if(
+        this == &snapshot
+        || m_textureStates.get_allocator() != snapshot.m_textureStates.get_allocator()
+        || m_bufferStates.get_allocator() != snapshot.m_bufferStates.get_allocator()
+        || m_permanentTextureStates.get_allocator() != snapshot.m_permanentTextureStates.get_allocator()
+        || m_permanentBufferStates.get_allocator() != snapshot.m_permanentBufferStates.get_allocator()
+    )
+        return false;
+
+    m_textureStates.swap(snapshot.m_textureStates);
+    m_bufferStates.swap(snapshot.m_bufferStates);
+    m_permanentTextureStates.swap(snapshot.m_permanentTextureStates);
+    m_permanentBufferStates.swap(snapshot.m_permanentBufferStates);
+    Swap(m_deviceGeneration, snapshot.m_deviceGeneration);
+    Swap(m_valid, snapshot.m_valid);
+    return true;
+}
+
 bool CommandListResourceStateHandoff::empty()const noexcept{
     return m_textureStates.empty()
         && m_bufferStates.empty()

@@ -326,6 +326,9 @@ public:
     // Copies a valid state snapshot without exposing backend tracker storage.  Packet recording uses this to retain
     // graph-owned producer seeds while legacy consumers still request their own final handoff.
     [[nodiscard]] bool copyFrom(const CommandListResourceStateHandoff& source);
+    // Exchanges complete snapshot storage without allocating. Both snapshots must be backed by the same arena so
+    // each vector remains paired with the allocator that owns its storage after the exchange.
+    [[nodiscard]] bool exchangeSnapshot(CommandListResourceStateHandoff& snapshot)noexcept;
     [[nodiscard]] bool empty()const noexcept;
 
 

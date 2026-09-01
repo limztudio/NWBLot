@@ -1601,7 +1601,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // The declaration-owned source imports the prior cache. The normal executor builds the sparse
     // AS/software-BVH candidate after recording every ordinary packet and commits it only when Shadow Preparation
     // accepts.
-    Core::GpuPersistentResourceStateCache::Candidate shadowPrepareAcceptedStateCandidate(m_arena);
+    Core::GpuPersistentResourceStateCache::Candidate shadowPrepareAcceptedStateCandidate(m_shadowPreparePersistentState);
     m_avboitSystem.markFrameTargetUsage(hasTransparentRenderers);
 
     const auto submitFrameRecoveryPacket = [&]() -> bool {
@@ -1698,11 +1698,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         ;
         if(!context || !context->renderer || !context->stateCandidate || !finalState)
             return false;
-        if(context->bufferCount == 0u){
-            context->statePrepared = !context->stateCandidateRequired;
-            return context->statePrepared;
-        }
-        if(!context->buffers)
+        if(context->bufferCount != 0u && !context->buffers)
             return false;
 
         const bool candidateBuilt = context->renderer->m_shadowPreparePersistentState.buildMergedBufferSubset(
@@ -1737,15 +1733,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         }
 
         RendererFramePipeline& renderer = *context->renderer;
-        if(context->bufferCount == 0u){
-            renderer.m_shadowPreparePersistentState.reset();
-            return true;
-        }
-        if(!context->stateCandidate->valid() || context->stateCandidate->empty()){
-            if(!context->stateCandidateRequired){
-                renderer.m_shadowPreparePersistentState.reset();
-                return true;
-            }
+        if(
+            !context->stateCandidate->valid()
+            || (context->stateCandidate->empty() && context->stateCandidateRequired)
+        ){
             context->stateReady = false;
             renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();
             return false;
@@ -1789,8 +1780,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         rayTracingShadowResources.swShadowEdgeListBuffer,
         rayTracingShadowResources.swShadowIndirectArgsBuffer,
     };
-    Core::GpuPersistentResourceStateCache::Candidate shadowVisibilityReturnStateCandidate(m_arena);
-    Core::GpuPersistentResourceStateCache::Candidate shadowComputeScratchStateCandidate(m_arena);
+    Core::GpuPersistentResourceStateCache::Candidate shadowVisibilityReturnStateCandidate(m_shadowVisibilityReturnState);
+    Core::GpuPersistentResourceStateCache::Candidate shadowComputeScratchStateCandidate(m_shadowComputePersistentState);
     struct ShadowVisibilityStateLifecycleContext{
         RendererFramePipeline* renderer = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -1897,8 +1888,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const Core::TextureHandle causticIrradianceTextures[] = {
         deferredTargets.causticIrradiance,
     };
-    Core::GpuPersistentResourceStateCache::Candidate causticReturnStateCandidate(m_arena);
-    Core::GpuPersistentResourceStateCache::Candidate causticsScratchStateCandidate(m_arena);
+    Core::GpuPersistentResourceStateCache::Candidate causticReturnStateCandidate(m_causticIrradianceReturnState);
+    Core::GpuPersistentResourceStateCache::Candidate causticsScratchStateCandidate(m_causticsComputePersistentState);
     struct SoftwareCausticsStateLifecycleContext{
         RendererFramePipeline* renderer = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* returnStateCandidate = nullptr;
@@ -2004,9 +1995,9 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         rayTracingSurfelResources.poolSnapshotBuffer,
         rayTracingSurfelResources.cellHeadSnapshotBuffer,
     };
-    Core::GpuPersistentResourceStateCache::Candidate surfelIrradianceReturnStateCandidate(m_arena);
-    Core::GpuPersistentResourceStateCache::Candidate surfelGiCounterStateCandidate(m_arena);
-    Core::GpuPersistentResourceStateCache::Candidate surfelGiComputeStateCandidate(m_arena);
+    Core::GpuPersistentResourceStateCache::Candidate surfelIrradianceReturnStateCandidate(m_surfelIrradianceReturnState);
+    Core::GpuPersistentResourceStateCache::Candidate surfelGiCounterStateCandidate(m_surfelGiCounterPersistentState);
+    Core::GpuPersistentResourceStateCache::Candidate surfelGiComputeStateCandidate(m_surfelGiComputePersistentState);
     struct SurfelGiStateLifecycleContext{
         RendererFramePipeline* renderer = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* returnStateCandidate = nullptr;
@@ -2111,7 +2102,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const Core::TextureHandle hardwareCausticAccumulatorTextures[] = {
         deferredTargets.causticAccumulator,
     };
-    Core::GpuPersistentResourceStateCache::Candidate hardwareCausticAccumulatorStateCandidate(m_arena);
+    Core::GpuPersistentResourceStateCache::Candidate hardwareCausticAccumulatorStateCandidate(m_hardwareCausticAccumulatorPersistentState);
     struct HardwareCausticsStateLifecycleContext{
         RendererFramePipeline* renderer = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* accumulatorStateCandidate = nullptr;
@@ -2186,9 +2177,9 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const Core::TextureHandle deferredLightingSurfelReturnTextures[] = {
         deferredTargets.surfelIrradiance,
     };
-    Core::GpuPersistentResourceStateCache::Candidate deferredLightingShadowReturnStateCandidate(m_arena);
-    Core::GpuPersistentResourceStateCache::Candidate deferredLightingCausticReturnStateCandidate(m_arena);
-    Core::GpuPersistentResourceStateCache::Candidate deferredLightingSurfelReturnStateCandidate(m_arena);
+    Core::GpuPersistentResourceStateCache::Candidate deferredLightingShadowReturnStateCandidate(m_shadowVisibilityReturnState);
+    Core::GpuPersistentResourceStateCache::Candidate deferredLightingCausticReturnStateCandidate(m_causticIrradianceReturnState);
+    Core::GpuPersistentResourceStateCache::Candidate deferredLightingSurfelReturnStateCandidate(m_surfelIrradianceReturnState);
     struct DeferredLightingStateLifecycleContext{
         RendererFramePipeline* renderer = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -2720,7 +2711,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback tail was unavailable"));
         }
         else{
-            Core::GpuPersistentResourceStateCache::Candidate readbackCounterStateCandidate(m_arena);
+            Core::GpuPersistentResourceStateCache::Candidate readbackCounterStateCandidate(m_surfelGiCounterPersistentState);
             const Core::BufferHandle readbackCounterBuffers[] = {
                 rayTracingSurfelResources.counterBuffer,
             };
@@ -2853,9 +2844,9 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             invalidateLaggedLightingHistorySubmission();
         }
         else{
-            Core::GpuPersistentResourceStateCache::Candidate shadowHistoryReturnStateCandidate(m_arena);
-            Core::GpuPersistentResourceStateCache::Candidate causticHistoryReturnStateCandidate(m_arena);
-            Core::GpuPersistentResourceStateCache::Candidate surfelHistoryReturnStateCandidate(m_arena);
+            Core::GpuPersistentResourceStateCache::Candidate shadowHistoryReturnStateCandidate(m_shadowVisibilityReturnState);
+            Core::GpuPersistentResourceStateCache::Candidate causticHistoryReturnStateCandidate(m_causticIrradianceReturnState);
+            Core::GpuPersistentResourceStateCache::Candidate surfelHistoryReturnStateCandidate(m_surfelIrradianceReturnState);
             struct HistoryCopyAcceptanceContext{
                 RendererFramePipeline* renderer = nullptr;
                 DeferredFrameTargets* targets = nullptr;

@@ -56,6 +56,7 @@ void GpuPersistentResourceStateCache::Candidate::reset()noexcept{
     m_states.reset();
     m_textures.clear();
     m_buffers.clear();
+    m_consumed = false;
 }
 
 bool GpuPersistentResourceStateCache::buildFilteredCandidate(
@@ -66,6 +67,9 @@ bool GpuPersistentResourceStateCache::buildFilteredCandidate(
     const BufferHandle* const buffers,
     const usize bufferCount
 )const{
+    if(&outCandidate.m_owner != this)
+        return false;
+
     outCandidate.reset();
     if(
         !source.valid()
@@ -131,7 +135,7 @@ bool GpuPersistentResourceStateCache::replaceResourceSubset(
     const BufferHandle* const buffers,
     const usize bufferCount
 ){
-    Candidate candidate(m_arena);
+    Candidate candidate(*this);
     if(!buildFilteredCandidate(
         candidate,
         source,
@@ -158,7 +162,7 @@ bool GpuPersistentResourceStateCache::mergeResourceSubset(
     const BufferHandle* const buffers,
     const usize bufferCount
 ){
-    Candidate candidate(m_arena);
+    Candidate candidate(*this);
     if(!buildMergedResourceSubset(candidate, source, textures, textureCount, buffers, bufferCount))
         return false;
 
@@ -184,7 +188,10 @@ bool GpuPersistentResourceStateCache::buildMergedResourceSubset(
     const BufferHandle* const buffers,
     const usize bufferCount
 )const{
-    Candidate sourceCandidate(m_arena);
+    if(&outCandidate.m_owner != this)
+        return false;
+
+    Candidate sourceCandidate(*this);
     if(!buildFilteredCandidate(
         sourceCandidate,
         source,
@@ -197,7 +204,7 @@ bool GpuPersistentResourceStateCache::buildMergedResourceSubset(
 
     outCandidate.reset();
     if(m_states.valid()){
-        Candidate retainedCandidate(m_arena);
+        Candidate retainedCandidate(*this);
         if(!buildFilteredCandidate(
             retainedCandidate,
             m_states,
@@ -221,17 +228,21 @@ bool GpuPersistentResourceStateCache::buildMergedResourceSubset(
     return true;
 }
 
-bool GpuPersistentResourceStateCache::commit(Candidate& candidate){
-    if(!candidate.valid() || !m_states.copyFrom(candidate.m_states))
+bool GpuPersistentResourceStateCache::commit(Candidate& candidate)noexcept{
+    if(
+        &candidate.m_owner != this
+        || !candidate.valid()
+        || m_textures.get_allocator() != candidate.m_textures.get_allocator()
+        || m_buffers.get_allocator() != candidate.m_buffers.get_allocator()
+    )
         return false;
 
-    m_textures.clear();
-    for(TextureHandle& texture : candidate.m_textures)
-        m_textures.push_back(Move(texture));
-    m_buffers.clear();
-    for(BufferHandle& buffer : candidate.m_buffers)
-        m_buffers.push_back(Move(buffer));
-    candidate.reset();
+    if(!m_states.exchangeSnapshot(candidate.m_states))
+        return false;
+
+    m_textures.swap(candidate.m_textures);
+    m_buffers.swap(candidate.m_buffers);
+    candidate.m_consumed = true;
     return true;
 }
 

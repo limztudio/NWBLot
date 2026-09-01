@@ -57104,6 +57104,8 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferOwnershipReleaseFailsClosed
 // generations. This is the shared cache used by runtime skinning instead of renderer-owned raw handoff fan-in.
 TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheFiltersAndMergesAcceptedBufferStates){
     auto& device = DescriptorBufferRoundTripTest::device();
+    Alloc::GlobalArena persistentStateArena(Name("tests/descriptor_buffer/persistent_state_cache"));
+    Alloc::GlobalArena foreignStateArena(Name("tests/descriptor_buffer/persistent_state_cache_foreign"));
     auto liveBuffer = device.createBuffer(
         BufferDesc()
             .setByteSize(256u)
@@ -57121,8 +57123,8 @@ TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheFiltersAndMergesA
     ASSERT_NE(liveBuffer.get(), nullptr);
     ASSERT_NE(retiredBuffer.get(), nullptr);
 
-    CommandListResourceStateHandoff initialStates(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff finalStates(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff initialStates(persistentStateArena);
+    CommandListResourceStateHandoff finalStates(persistentStateArena);
     auto initialProducer = device.createCommandList();
     auto finalProducer = device.createCommandList();
     auto preAcceptanceConsumer = device.createCommandList();
@@ -57138,13 +57140,21 @@ TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheFiltersAndMergesA
     initialProducer->close(&initialStates);
     ASSERT_TRUE(initialStates.valid());
 
-    GpuPersistentResourceStateCache acceptedState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff foreignArenaStates(foreignStateArena);
+    ASSERT_TRUE(foreignArenaStates.buildResourceSubset(initialStates, nullptr, 0u, nullptr, 0u));
+    ASSERT_TRUE(foreignArenaStates.valid());
+    ASSERT_TRUE(foreignArenaStates.empty());
+    EXPECT_FALSE(initialStates.exchangeSnapshot(foreignArenaStates));
+    EXPECT_FALSE(initialStates.empty());
+    EXPECT_TRUE(foreignArenaStates.empty());
+
+    GpuPersistentResourceStateCache acceptedState(persistentStateArena);
     {
         const BufferHandle initialLiveBuffers[] = { liveBuffer, retiredBuffer };
         ASSERT_TRUE(acceptedState.replaceBufferSubset(initialStates, initialLiveBuffers, LengthOf(initialLiveBuffers)));
     }
     EXPECT_EQ(acceptedState.retainedBufferCount(), 2u);
-    GpuPersistentResourceStateCache::Candidate recordingSource(DescriptorBufferRoundTripTest::arena());
+    GpuPersistentResourceStateCache::Candidate recordingSource(acceptedState);
     {
         const BufferHandle recordingLiveBuffers[] = { liveBuffer, retiredBuffer };
         ASSERT_TRUE(acceptedState.buildFilteredBufferSubset(
@@ -57165,7 +57175,7 @@ TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheFiltersAndMergesA
     ASSERT_TRUE(finalStates.valid());
 
     const BufferHandle currentLiveBuffers[] = { liveBuffer };
-    GpuPersistentResourceStateCache::Candidate acceptedCandidate(DescriptorBufferRoundTripTest::arena());
+    GpuPersistentResourceStateCache::Candidate acceptedCandidate(acceptedState);
     ASSERT_TRUE(acceptedState.buildMergedBufferSubset(
         acceptedCandidate,
         finalStates,
@@ -57174,17 +57184,69 @@ TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheFiltersAndMergesA
     ));
     ASSERT_TRUE(acceptedCandidate.valid());
     ASSERT_FALSE(acceptedCandidate.empty());
+    GpuPersistentResourceStateCache foreignState(persistentStateArena);
+    EXPECT_FALSE(foreignState.commit(acceptedCandidate));
+    EXPECT_FALSE(foreignState.valid());
+    EXPECT_TRUE(acceptedCandidate.valid());
     // Candidate construction alone must not publish a state from a packet that could still be rejected.
     preAcceptanceConsumer->open(acceptedState.source());
     EXPECT_EQ(preAcceptanceConsumer->getBufferState(liveBuffer.get()), ResourceStates::UnorderedAccess);
     preAcceptanceConsumer->close();
-    ASSERT_TRUE(acceptedState.commit(acceptedCandidate));
+    const ArenaMemoryStats memoryBeforeCommit = persistentStateArena.memoryStats();
+    const bool stateCommitted = acceptedState.commit(acceptedCandidate);
+    const ArenaMemoryStats memoryAfterCommit = persistentStateArena.memoryStats();
+    ASSERT_TRUE(stateCommitted);
+    EXPECT_EQ(memoryAfterCommit.allocationCount, memoryBeforeCommit.allocationCount);
+    EXPECT_EQ(memoryAfterCommit.reallocationCount, memoryBeforeCommit.reallocationCount);
+    EXPECT_EQ(memoryAfterCommit.deallocationCount, memoryBeforeCommit.deallocationCount);
+    EXPECT_EQ(memoryAfterCommit.usedBytes, memoryBeforeCommit.usedBytes);
+    EXPECT_FALSE(acceptedCandidate.valid());
+    EXPECT_TRUE(acceptedCandidate.empty());
+    EXPECT_EQ(acceptedCandidate.source(), nullptr);
     ASSERT_NE(acceptedState.source(), nullptr);
     EXPECT_EQ(acceptedState.retainedBufferCount(), 1u);
 
     consumer->open(acceptedState.source());
     EXPECT_EQ(consumer->getBufferState(liveBuffer.get()), ResourceStates::ShaderResource);
     consumer->close();
+
+    u64 displacedStorageDeallocationCount = 0u;
+    u64 displacedStorageUsedBytes = 0u;
+    {
+        GpuPersistentResourceStateCache::Candidate emptyCandidate(acceptedState);
+        ASSERT_TRUE(acceptedState.buildMergedBufferSubset(emptyCandidate, finalStates, nullptr, 0u));
+        ASSERT_TRUE(emptyCandidate.valid());
+        ASSERT_TRUE(emptyCandidate.empty());
+        const ArenaMemoryStats memoryBeforeEmptyCommit = persistentStateArena.memoryStats();
+        const bool emptyStateCommitted = acceptedState.commit(emptyCandidate);
+        const ArenaMemoryStats memoryAfterEmptyCommit = persistentStateArena.memoryStats();
+        ASSERT_TRUE(emptyStateCommitted);
+        EXPECT_EQ(memoryAfterEmptyCommit.allocationCount, memoryBeforeEmptyCommit.allocationCount);
+        EXPECT_EQ(memoryAfterEmptyCommit.reallocationCount, memoryBeforeEmptyCommit.reallocationCount);
+        EXPECT_EQ(memoryAfterEmptyCommit.deallocationCount, memoryBeforeEmptyCommit.deallocationCount);
+        EXPECT_EQ(memoryAfterEmptyCommit.usedBytes, memoryBeforeEmptyCommit.usedBytes);
+        EXPECT_TRUE(acceptedState.valid());
+        EXPECT_TRUE(acceptedState.empty());
+        EXPECT_EQ(acceptedState.retainedBufferCount(), 0u);
+        EXPECT_FALSE(emptyCandidate.valid());
+        EXPECT_TRUE(emptyCandidate.empty());
+        EXPECT_EQ(emptyCandidate.source(), nullptr);
+
+        const ArenaMemoryStats memoryBeforeRejectedRecommit = persistentStateArena.memoryStats();
+        EXPECT_FALSE(acceptedState.commit(emptyCandidate));
+        const ArenaMemoryStats memoryAfterRejectedRecommit = persistentStateArena.memoryStats();
+        EXPECT_EQ(memoryAfterRejectedRecommit.allocationCount, memoryBeforeRejectedRecommit.allocationCount);
+        EXPECT_EQ(memoryAfterRejectedRecommit.reallocationCount, memoryBeforeRejectedRecommit.reallocationCount);
+        EXPECT_EQ(memoryAfterRejectedRecommit.deallocationCount, memoryBeforeRejectedRecommit.deallocationCount);
+        EXPECT_EQ(memoryAfterRejectedRecommit.usedBytes, memoryBeforeRejectedRecommit.usedBytes);
+        EXPECT_TRUE(acceptedState.valid());
+        EXPECT_TRUE(acceptedState.empty());
+        displacedStorageDeallocationCount = memoryAfterRejectedRecommit.deallocationCount;
+        displacedStorageUsedBytes = memoryAfterRejectedRecommit.usedBytes;
+    }
+    const ArenaMemoryStats memoryAfterDisplacedStorageRetirement = persistentStateArena.memoryStats();
+    EXPECT_GT(memoryAfterDisplacedStorageRetirement.deallocationCount, displacedStorageDeallocationCount);
+    EXPECT_LT(memoryAfterDisplacedStorageRetirement.usedBytes, displacedStorageUsedBytes);
 
     CommandList* commandLists[] = { initialProducer.get(), finalProducer.get(), consumer.get() };
     bool submitted = false;

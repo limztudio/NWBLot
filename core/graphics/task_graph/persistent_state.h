@@ -24,23 +24,26 @@ NWB_CORE_BEGIN
 // renderer-specific packet or state-tracker policy escapes into this utility.
 class GpuPersistentResourceStateCache final : NoCopy{
 public:
-    // A pre-submission candidate built from a recorded packet's final state. It retains its own typed backings until
-    // the containing packet is accepted, at which point the cache atomically adopts it through commit().
+    // A pre-submission candidate built for one cache from a recorded packet's final state. On commit, the cache
+    // exchanges storage with it. The consumed candidate keeps the displaced accepted storage alive until its caller
+    // has unwound outside the accepted-submission gate.
     class Candidate final : NoCopy{
         friend class GpuPersistentResourceStateCache;
 
     public:
-        explicit Candidate(GraphicsArena& arena)
-            : m_states(arena)
-            , m_textures(arena)
-            , m_buffers(arena)
+        explicit Candidate(const GpuPersistentResourceStateCache& owner)
+            : m_owner(owner)
+            , m_states(owner.m_arena)
+            , m_textures(owner.m_arena)
+            , m_buffers(owner.m_arena)
         {}
+        Candidate(const GpuPersistentResourceStateCache&&) = delete;
 
 
     public:
-        [[nodiscard]] bool valid()const noexcept{ return m_states.valid(); }
-        [[nodiscard]] bool empty()const noexcept{ return !m_states.valid() || m_states.empty(); }
-        [[nodiscard]] const CommandListResourceStateHandoff* source()const noexcept{ return m_states.valid() ? &m_states : nullptr; }
+        [[nodiscard]] bool valid()const noexcept{ return !m_consumed && m_states.valid(); }
+        [[nodiscard]] bool empty()const noexcept{ return !valid() || m_states.empty(); }
+        [[nodiscard]] const CommandListResourceStateHandoff* source()const noexcept{ return valid() ? &m_states : nullptr; }
 
 
     private:
@@ -48,9 +51,11 @@ public:
 
 
     private:
+        const GpuPersistentResourceStateCache& m_owner;
         CommandListResourceStateHandoff m_states;
         GraphicsVector<TextureHandle> m_textures;
         GraphicsVector<BufferHandle> m_buffers;
+        bool m_consumed = false;
     };
 
 
@@ -61,6 +66,7 @@ public:
         , m_textures(arena)
         , m_buffers(arena)
     {}
+    GpuPersistentResourceStateCache(GpuPersistentResourceStateCache&&) = delete;
 
 
 public:
@@ -114,7 +120,7 @@ public:
         usize bufferCount
     )const;
 
-    [[nodiscard]] bool commit(Candidate& candidate);
+    [[nodiscard]] bool commit(Candidate& candidate)noexcept;
 
     [[nodiscard]] bool replaceBufferSubset(
         const CommandListResourceStateHandoff& source,

@@ -403,7 +403,7 @@ TEST_F(CommandListSubmissionProvenanceTest, InjectedNativeFailureRecyclesWorkerO
         device().getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, queue).pointer
     );
     ASSERT_NE(nativeQueue, VK_NULL_HANDLE);
-    VulkanTestQueueSubmit2Observer submissionObserver;
+    VulkanTestQueueSubmit2Observer submissionObserver(device());
     ASSERT_TRUE(submissionObserver.valid());
 
     BufferHandle oldDestination = device().createBuffer(

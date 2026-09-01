@@ -1280,6 +1280,72 @@ TEST(Global, LoggerMacrosBehaveAsSingleStatements){
 #endif
 }
 
+TEST(Global, CapturingLoggerSerializesConcurrentWritersAndReaders){
+    constexpr u32 s_ThreadCount = 4u;
+    constexpr u32 s_MessagesPerThread = 512u;
+    constexpr u32 s_ExpectedMessageCount = s_ThreadCount * s_MessagesPerThread;
+    constexpr u32 s_ExpectedErrorCount = s_ExpectedMessageCount / 2u;
+    CapturingLogger logger;
+    Latch startGate(s_ThreadCount + 2u);
+    Atomic<u32> activeWriters{ s_ThreadCount };
+    Atomic<bool> invalidObservation{ false };
+    bool sawConcurrentMessage = false;
+    bool sawConcurrentError = false;
+    Thread reader([&](){
+        startGate.arrive_and_wait();
+        do{
+            const u32 messageCount = logger.messageCount();
+            const u32 errorCount = logger.errorCount();
+            const NWB::Core::Common::LogType::Enum lastType = logger.lastType();
+            if(
+                messageCount > s_ExpectedMessageCount
+                || errorCount > s_ExpectedErrorCount
+                || (
+                    lastType != NWB::Core::Common::LogType::Info
+                    && lastType != NWB::Core::Common::LogType::Error
+                )
+            )
+                invalidObservation.store(true, MemoryOrder::relaxed);
+            if(logger.sawMessageContaining(NWB_TEXT("parallel logger message")))
+                sawConcurrentMessage = true;
+            if(logger.sawErrorContaining(NWB_TEXT("parallel logger message")))
+                sawConcurrentError = true;
+            YieldThread();
+        }while(activeWriters.load(MemoryOrder::acquire) != 0u);
+    });
+    Thread writers[s_ThreadCount];
+    for(u32 threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
+        writers[threadIndex] = Thread([&logger, &startGate, &activeWriters](){
+            startGate.arrive_and_wait();
+            for(u32 messageIndex = 0u; messageIndex < s_MessagesPerThread; ++messageIndex){
+                const NWB::Core::Common::LogType::Enum type = (messageIndex & 1u) == 0u
+                    ? NWB::Core::Common::LogType::Info
+                    : NWB::Core::Common::LogType::Error
+                ;
+                NWB::Core::Common::LoggerDetail::EnqueueMessage(
+                    logger,
+                    type,
+                    NWB_TEXT("parallel logger message")
+                );
+            }
+            activeWriters.fetch_sub(1u, MemoryOrder::release);
+        });
+    }
+
+    startGate.arrive_and_wait();
+    for(Thread& writer : writers)
+        writer.join();
+    reader.join();
+
+    EXPECT_FALSE(invalidObservation.load(MemoryOrder::relaxed));
+    EXPECT_TRUE(sawConcurrentMessage);
+    EXPECT_TRUE(sawConcurrentError);
+    EXPECT_EQ(logger.messageCount(), s_ExpectedMessageCount);
+    EXPECT_EQ(logger.errorCount(), s_ExpectedErrorCount);
+    EXPECT_TRUE(logger.sawMessageContaining(NWB_TEXT("parallel logger message")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("parallel logger message")));
+}
+
 TEST(Global, LoggerDiagnosticCaptureUsesFormattedMessage){
     ResetDiagnosticEventCapture();
 

@@ -49,10 +49,21 @@ public:
         record(str, type);
     }
 
-    [[nodiscard]] u32 messageCount()const{ return m_messageCount; }
-    [[nodiscard]] u32 errorCount()const{ return m_errorCount; }
-    [[nodiscard]] Core::Common::LogType::Enum lastType()const{ return m_lastType; }
+    [[nodiscard]] u32 messageCount()const{
+        ScopedLock lock(m_mutex);
+        return m_messageCount;
+    }
+    [[nodiscard]] u32 errorCount()const{
+        ScopedLock lock(m_mutex);
+        return m_errorCount;
+    }
+    [[nodiscard]] Core::Common::LogType::Enum lastType()const{
+        ScopedLock lock(m_mutex);
+        return m_lastType;
+    }
     [[nodiscard]] bool sawMessageContaining(const TStringView text)const{
+        ScopedLock lock(m_mutex);
+
         for(const LogString& message : m_messages){
             if(message.find(text) != LogString::npos)
                 return true;
@@ -60,6 +71,8 @@ public:
         return false;
     }
     [[nodiscard]] bool sawErrorContaining(const TStringView text)const{
+        ScopedLock lock(m_mutex);
+
         for(const LogString& error : m_errors){
             if(error.find(text) != LogString::npos)
                 return true;
@@ -69,12 +82,16 @@ public:
     // Standalone test tools normally retain errors for assertions.  Give target-hardware probes a way to preserve
     // the underlying Vulkan/validation diagnostics in their captured process logs when they fail.
     void emitErrorsToStderr()const{
+        ScopedLock lock(m_mutex);
+
         for(const LogString& error : m_errors)
             NWB_TCERR << error.c_str() << '\n';
     }
 
 private:
     void record(const TStringView str, const Core::Common::LogType::Enum type){
+        ScopedLock lock(m_mutex);
+
         ++m_messageCount;
         m_lastType = type;
         m_messages.emplace_back(str, m_arena);
@@ -86,6 +103,7 @@ private:
     }
 
 private:
+    mutable Futex m_mutex;
     LogArena m_arena;
     u32 m_messageCount = 0;
     u32 m_errorCount = 0;

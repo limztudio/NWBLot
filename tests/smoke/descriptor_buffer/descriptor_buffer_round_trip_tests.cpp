@@ -25661,20 +25661,19 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierSerializesFailedPacketDiscard
     EXPECT_FALSE(state.overlappingDiscardObserved.load(MemoryOrder::relaxed));
 
     const u64 firstRecordingAttempt = recordedGraph.recordingAttemptGeneration();
-    GpuRecordedGraph retryRecordedGraph(DescriptorBufferRoundTripTest::arena());
     failedPacket = {};
     EXPECT_FALSE(recorder.recordPacketRangeInReadyFrontiers(
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        retryRecordedGraph,
+        recordedGraph,
         recordingWorkers,
         &failedPacket
     ));
     EXPECT_EQ(failedPacket, firstPacket);
-    EXPECT_NE(retryRecordedGraph.recordingAttemptGeneration(), firstRecordingAttempt);
-    EXPECT_EQ(retryRecordedGraph.find(firstPacket), nullptr);
-    EXPECT_EQ(retryRecordedGraph.find(secondPacket), nullptr);
+    EXPECT_NE(recordedGraph.recordingAttemptGeneration(), firstRecordingAttempt);
+    EXPECT_EQ(recordedGraph.find(firstPacket), nullptr);
+    EXPECT_EQ(recordedGraph.find(secondPacket), nullptr);
     EXPECT_EQ(state.recordingArrivalCount.load(MemoryOrder::relaxed), 4u);
     EXPECT_EQ(state.nextDiscardIndex.load(MemoryOrder::relaxed), 4u);
     EXPECT_EQ(state.activeDiscardCount.load(MemoryOrder::relaxed), 0u);

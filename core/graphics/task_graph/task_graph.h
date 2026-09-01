@@ -171,6 +171,43 @@ private:
     };
 
 private:
+    // A failed parallel recorder transfers its exact packet claim into this capability before leaving its worker.
+    // The ready-frontier owner can then invoke typed discard callbacks serially after every worker has joined.
+    class PacketRecordingAbort final : NoCopy{
+        friend class GpuTaskGraph;
+
+    public:
+        PacketRecordingAbort() = default;
+        PacketRecordingAbort(PacketRecordingAbort&& other)noexcept;
+        ~PacketRecordingAbort();
+
+
+    public:
+        [[nodiscard]] bool valid()const noexcept{
+            return m_packet.valid()
+                && m_planGeneration != 0u
+                && m_recordingAttemptGeneration != 0u
+                && m_claimGeneration != 0u
+            ;
+        }
+
+
+    private:
+        void reset()noexcept{
+            m_packet = {};
+            m_planGeneration = 0u;
+            m_recordingAttemptGeneration = 0u;
+            m_claimGeneration = 0u;
+        }
+
+
+    private:
+        GpuSubmissionPacketId m_packet;
+        u64 m_planGeneration = 0u;
+        u64 m_recordingAttemptGeneration = 0u;
+        u64 m_claimGeneration = 0u;
+    };
+
     // A packet claim is an opaque runtime capability. Only the recorder that acquired it can invoke task thunks,
     // complete native recording, or abandon that exact packet attempt.
     class PacketRecordingLease final : NoCopy{
@@ -602,6 +639,18 @@ private:
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
         PacketRecordingLease& lease
+    )const noexcept;
+    // Transfers a failed recorder's exact claim without invoking user code or changing task lifecycle on its worker.
+    [[nodiscard]] bool deferPacketRecordingAbort(
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        PacketRecordingLease& lease,
+        PacketRecordingAbort& outAbort
+    )const noexcept;
+    // Invokes typed discard callbacks and finalizes one transferred abort. Callers choose the serial drain order.
+    [[nodiscard]] bool completePacketRecordingAbort(
+        const GpuCompiledGraph& compiledGraph,
+        PacketRecordingAbort& abort
     )const noexcept;
     // Abandons an active packet claim after its owning recorder has stopped invoking task thunks. Ordinary
     // transaction cleanup deliberately cannot discard a Recording packet, because that would allow a retry to

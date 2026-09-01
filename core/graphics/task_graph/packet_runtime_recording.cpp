@@ -267,8 +267,13 @@ bool GpuNativePacketRecorder::recordPacket(
     GpuRecordedGraph::PacketRecordingScratch& scratch,
     GpuCommandIrCapture* const commandIrCapture,
     const u64 recordingWorkerDomain,
-    const u32 recordingWorkerIndex
+    const u32 recordingWorkerIndex,
+    GpuTaskGraph::PacketRecordingAbort* const deferredAbort
 )const{
+    if(deferredAbort && deferredAbort->valid()){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Packet recording abort output must be fresh"));
+        return false;
+    }
     if(
         !compiledGraph.validFor(graph)
         || !graph.validForDeviceGeneration(compiledGraph.deviceGeneration())
@@ -322,6 +327,11 @@ bool GpuNativePacketRecorder::recordPacket(
     const CommandListResourceStateHandoff* initialStates = nullptr;
     GpuTaskGraph::PacketRecordingLease recordingLease;
     const auto abortPacketRecording = [&]{
+        if(deferredAbort){
+            if(!graph.deferPacketRecordingAbort(compiledGraph, packetID, recordingLease, *deferredAbort))
+                NWB_ASSERT_MSG(false, NWB_TEXT("Failed to transfer an active packet recording abort"));
+            return;
+        }
         outRecordedGraph.discardPacketTimingTicket(packetID);
         graph.abortPacketRecording(compiledGraph, packetID, recordingLease);
     };

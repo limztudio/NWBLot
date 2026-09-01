@@ -15,6 +15,23 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+GpuTaskGraph::PacketRecordingAbort::PacketRecordingAbort(PacketRecordingAbort&& other)noexcept
+    : m_packet(other.m_packet)
+    , m_planGeneration(other.m_planGeneration)
+    , m_recordingAttemptGeneration(other.m_recordingAttemptGeneration)
+    , m_claimGeneration(other.m_claimGeneration)
+{
+    other.reset();
+}
+
+GpuTaskGraph::PacketRecordingAbort::~PacketRecordingAbort(){
+    NWB_ASSERT(!valid());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool GpuTaskGraph::recordTask(
     const GpuTaskId& taskID,
     CommandList& commandList,
@@ -196,44 +213,65 @@ bool GpuTaskGraph::completePacketRecording(
 }
 
 
-void GpuTaskGraph::abortPacketRecording(
+bool GpuTaskGraph::deferPacketRecordingAbort(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packet,
-    PacketRecordingLease& lease
+    PacketRecordingLease& lease,
+    PacketRecordingAbort& outAbort
 )const noexcept{
     if(
         !compiledGraph.validFor(*this)
         || !compiledGraph.validPacket(packet)
         || !lease.valid()
+        || outAbort.valid()
         || lease.m_packet != packet
         || lease.m_planGeneration != compiledGraph.planGeneration()
     )
-        return;
-    const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
-    const GpuTaskId* const tasks = compiledGraph.packetTasks(packet);
+        return false;
+    outAbort.m_packet = lease.m_packet;
+    outAbort.m_planGeneration = lease.m_planGeneration;
+    outAbort.m_recordingAttemptGeneration = lease.m_recordingAttemptGeneration;
+    outAbort.m_claimGeneration = lease.m_claimGeneration;
+    lease.reset();
+    return true;
+}
+
+
+bool GpuTaskGraph::completePacketRecordingAbort(
+    const GpuCompiledGraph& compiledGraph,
+    PacketRecordingAbort& abort
+)const noexcept{
+    if(
+        !compiledGraph.validFor(*this)
+        || !abort.valid()
+        || !compiledGraph.validPacket(abort.m_packet)
+        || abort.m_planGeneration != compiledGraph.planGeneration()
+    )
+        return false;
+    const GpuSubmissionPacket& packetPlan = compiledGraph.packet(abort.m_packet);
+    const GpuTaskId* const tasks = compiledGraph.packetTasks(abort.m_packet);
     if(!tasks || packetPlan.taskCount == 0u)
-        return;
+        return false;
 
     {
         ScopedLock lock(m_lifecycleMutex);
         if(
             m_teardownInProgress
             || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
-            || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
+            || m_activeRecordingAttemptGeneration != abort.m_recordingAttemptGeneration
         )
-            return;
-
+            return false;
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
             if(!validTask(tasks[taskIndex]))
-                return;
+                return false;
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
             if(
                 task.lifecycleState != TaskLifecycleState::Recording
-                || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
-                || task.recordingClaimGeneration != lease.m_claimGeneration
+                || task.lifecycleAttemptGeneration != abort.m_recordingAttemptGeneration
+                || task.recordingClaimGeneration != abort.m_claimGeneration
                 || task.recordThunkInProgress
             )
-                return;
+                return false;
         }
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex)
             m_tasks[tasks[taskIndex].index].lifecycleState = TaskLifecycleState::Discarding;
@@ -250,19 +288,19 @@ void GpuTaskGraph::abortPacketRecording(
         if(
             m_teardownInProgress
             || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
-            || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
+            || m_activeRecordingAttemptGeneration != abort.m_recordingAttemptGeneration
         )
-            return;
+            return false;
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
             if(!validTask(tasks[taskIndex]))
-                return;
+                return false;
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
             if(
                 task.lifecycleState != TaskLifecycleState::Discarding
-                || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
-                || task.recordingClaimGeneration != lease.m_claimGeneration
+                || task.lifecycleAttemptGeneration != abort.m_recordingAttemptGeneration
+                || task.recordingClaimGeneration != abort.m_claimGeneration
             )
-                return;
+                return false;
         }
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
             m_tasks[tasks[taskIndex].index].lifecycleState = TaskLifecycleState::Discarded;
@@ -271,7 +309,21 @@ void GpuTaskGraph::abortPacketRecording(
             m_tasks[tasks[taskIndex].index].recordThunkCompleted = false;
         }
     }
-    lease.reset();
+    abort.reset();
+    return true;
+}
+
+
+void GpuTaskGraph::abortPacketRecording(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId packet,
+    PacketRecordingLease& lease
+)const noexcept{
+    PacketRecordingAbort abort;
+    if(!deferPacketRecordingAbort(compiledGraph, packet, lease, abort))
+        return;
+    if(!completePacketRecordingAbort(compiledGraph, abort))
+        NWB_ASSERT_MSG(false, NWB_TEXT("Failed to complete an active packet recording abort"));
 }
 
 

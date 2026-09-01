@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 
 #include <global/global.h>
+#include <global/process.h>
 #include <global/unique_ptr.h>
 #include <global/thread.h>
 #include <core/common/module.h>
@@ -1895,6 +1896,62 @@ struct RecordingOverlapResultTask{
         payload.recordingStarted->count_down();
         payload.recordingStarted->wait();
         return payload.shouldRecord && commandList.isRecording();
+    }
+};
+
+
+struct ParallelRecordingDiscardState{
+    u32 expectedThreadId = 0u;
+    Atomic<u32> recordingArrivalCount{ 0u };
+    Atomic<u32> completedRecordingPhaseCount{ 0u };
+    Atomic<u32> nextDiscardIndex{ 0u };
+    Atomic<u32> activeDiscardCount{ 0u };
+    Atomic<bool> foreignThreadObserved{ false };
+    Atomic<bool> outOfOrderObserved{ false };
+    Atomic<bool> overlappingDiscardObserved{ false };
+};
+
+
+struct ParallelRecordingDiscardTask{
+    struct Payload{
+        ParallelRecordingDiscardState* state = nullptr;
+        u32 discardIndex = 0u;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext&
+    ){
+        if(!payload.state || !commandList.isRecording())
+            return false;
+        const u32 arrivalIndex = payload.state->recordingArrivalCount.fetch_add(1u, MemoryOrder::acq_rel);
+        const u32 recordingPhase = arrivalIndex / 2u;
+        if((arrivalIndex & 1u) != 0u){
+            payload.state->completedRecordingPhaseCount.store(recordingPhase + 1u, MemoryOrder::release);
+            payload.state->completedRecordingPhaseCount.notify_all();
+        }
+        else{
+            u32 completedPhaseCount = payload.state->completedRecordingPhaseCount.load(MemoryOrder::acquire);
+            while(completedPhaseCount <= recordingPhase){
+                payload.state->completedRecordingPhaseCount.wait(completedPhaseCount, MemoryOrder::relaxed);
+                completedPhaseCount = payload.state->completedRecordingPhaseCount.load(MemoryOrder::acquire);
+            }
+        }
+        return false;
+    }
+
+    static void discarded(Payload& payload){
+        if(!payload.state)
+            return;
+        if(payload.state->activeDiscardCount.fetch_add(1u, MemoryOrder::acq_rel) != 0u)
+            payload.state->overlappingDiscardObserved.store(true, MemoryOrder::relaxed);
+        if(CurrentThreadId() != payload.state->expectedThreadId)
+            payload.state->foreignThreadObserved.store(true, MemoryOrder::relaxed);
+        const u32 discardIndex = payload.state->nextDiscardIndex.fetch_add(1u, MemoryOrder::relaxed);
+        if(discardIndex % 2u != payload.discardIndex)
+            payload.state->outOfOrderObserved.store(true, MemoryOrder::relaxed);
+        payload.state->activeDiscardCount.fetch_sub(1u, MemoryOrder::release);
     }
 };
 
@@ -25507,6 +25564,123 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecordingOverlapCacheKeepsPub
         compiledGraph,
         recordedGraph.recordingAttemptGeneration()
     ));
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierSerializesFailedPacketDiscardCallbacksAfterWorkerJoin){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    ParallelRecordingDiscardState state;
+    state.expectedThreadId = CurrentThreadId();
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    scheduling.allowParallelRecording = true;
+    const GpuQueueRequest queueRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const auto addTask = [&](const Name& identity, const AStringView label, const u32 discardIndex){
+        GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(queueRequest)
+            .setScheduling(scheduling)
+        ;
+        return graph.addTask<ParallelRecordingDiscardTask>(
+            desc,
+            ParallelRecordingDiscardTask::Payload{
+                .state = &state,
+                .discardIndex = discardIndex,
+            }
+        );
+    };
+    const GpuTaskId firstTask = addTask(
+        Name("tests/descriptor_buffer/parallel_recording_discard_first"),
+        "Parallel Recording Discard First",
+        0u
+    );
+    const GpuTaskId secondTask = addTask(
+        Name("tests/descriptor_buffer/parallel_recording_discard_second"),
+        "Parallel Recording Discard Second",
+        1u
+    );
+    ASSERT_TRUE(firstTask.valid());
+    ASSERT_TRUE(secondTask.valid());
+
+    const GpuPhysicalQueueInfo graphicsQueue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(GpuQueueCapability::Graphics),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &graphicsQueue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/parallel_recording_discard_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(firstTask);
+    const GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(secondTask);
+    ASSERT_TRUE(firstPacket.valid());
+    ASSERT_TRUE(secondPacket.valid());
+    ASSERT_EQ(compiledGraph.packet(firstPacket).recordingFrontier, 0u);
+    ASSERT_EQ(compiledGraph.packet(secondPacket).recordingFrontier, 0u);
+
+    Alloc::ThreadPool recordingWorkers(1u, CpuAffinity::Any);
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    EXPECT_FALSE(recorder.recordPacketRangeInReadyFrontiers(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        recordedGraph,
+        recordingWorkers,
+        &failedPacket
+    ));
+    EXPECT_EQ(failedPacket, firstPacket);
+    EXPECT_EQ(recordedGraph.find(firstPacket), nullptr);
+    EXPECT_EQ(recordedGraph.find(secondPacket), nullptr);
+    EXPECT_EQ(state.nextDiscardIndex.load(MemoryOrder::relaxed), 2u);
+    EXPECT_EQ(state.activeDiscardCount.load(MemoryOrder::relaxed), 0u);
+    EXPECT_FALSE(state.foreignThreadObserved.load(MemoryOrder::relaxed));
+    EXPECT_FALSE(state.outOfOrderObserved.load(MemoryOrder::relaxed));
+    EXPECT_FALSE(state.overlappingDiscardObserved.load(MemoryOrder::relaxed));
+
+    const u64 firstRecordingAttempt = recordedGraph.recordingAttemptGeneration();
+    GpuRecordedGraph retryRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    failedPacket = {};
+    EXPECT_FALSE(recorder.recordPacketRangeInReadyFrontiers(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        retryRecordedGraph,
+        recordingWorkers,
+        &failedPacket
+    ));
+    EXPECT_EQ(failedPacket, firstPacket);
+    EXPECT_NE(retryRecordedGraph.recordingAttemptGeneration(), firstRecordingAttempt);
+    EXPECT_EQ(retryRecordedGraph.find(firstPacket), nullptr);
+    EXPECT_EQ(retryRecordedGraph.find(secondPacket), nullptr);
+    EXPECT_EQ(state.recordingArrivalCount.load(MemoryOrder::relaxed), 4u);
+    EXPECT_EQ(state.nextDiscardIndex.load(MemoryOrder::relaxed), 4u);
+    EXPECT_EQ(state.activeDiscardCount.load(MemoryOrder::relaxed), 0u);
+    EXPECT_FALSE(state.foreignThreadObserved.load(MemoryOrder::relaxed));
+    EXPECT_FALSE(state.outOfOrderObserved.load(MemoryOrder::relaxed));
+    EXPECT_FALSE(state.overlappingDiscardObserved.load(MemoryOrder::relaxed));
 }
 
 

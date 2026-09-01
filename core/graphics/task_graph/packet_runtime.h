@@ -298,7 +298,8 @@ private:
         GpuRecordedGraph::PacketRecordingScratch& scratch,
         GpuCommandIrCapture* commandIrCapture,
         u64 recordingWorkerDomain = 0u,
-        u32 recordingWorkerIndex = 0u
+        u32 recordingWorkerIndex = 0u,
+        GpuTaskGraph::PacketRecordingAbort* deferredAbort = nullptr
     )const;
     [[nodiscard]] bool prepareRecordingAttempt(
         const GpuTaskGraph& graph,

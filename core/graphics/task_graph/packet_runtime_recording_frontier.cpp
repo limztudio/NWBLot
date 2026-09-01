@@ -296,8 +296,10 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
 
     Vector<u32, Alloc::ScratchArena> parallelPacketIndices(scratchArena);
     Vector<u8, Alloc::ScratchArena> parallelResults(scratchArena);
+    Vector<GpuTaskGraph::PacketRecordingAbort, Alloc::ScratchArena> parallelAborts(scratchArena);
     parallelPacketIndices.reserve(recordingEntries.size());
     parallelResults.reserve(recordingEntries.size());
+    parallelAborts.reserve(recordingEntries.size());
     usize frontierBegin = 0u;
     while(frontierBegin < recordingEntries.size()){
         usize frontierEnd = frontierBegin + 1u;
@@ -333,6 +335,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
 
         if(!parallelPacketIndices.empty()){
             parallelResults.resize(parallelPacketIndices.size());
+            parallelAborts.resize(parallelPacketIndices.size());
             workerPool.parallelFor(0u, parallelPacketIndices.size(), [&](const usize parallelIndex){
                 const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(parallelPacketIndices[parallelIndex]);
                 GpuRecordedGraph::PacketRecordingScratch* const scratch = outRecordedGraph.packetRecordingScratch(packet);
@@ -347,9 +350,19 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                     *scratch,
                     nullptr,
                     workerPool.domainIdentity(),
-                    static_cast<u32>(workerPool.currentWorkerIndex() + 1u)
+                    static_cast<u32>(workerPool.currentWorkerIndex() + 1u),
+                    &parallelAborts[parallelIndex]
                 ) ? 1u : 0u;
             });
+            for(usize parallelIndex = 0u; parallelIndex < parallelAborts.size(); ++parallelIndex){
+                GpuTaskGraph::PacketRecordingAbort& abort = parallelAborts[parallelIndex];
+                if(!abort.valid())
+                    continue;
+                const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(parallelPacketIndices[parallelIndex]);
+                outRecordedGraph.discardPacketTimingTicket(packet);
+                if(!graph.completePacketRecordingAbort(compiledGraph, abort))
+                    NWB_ASSERT_MSG(false, NWB_TEXT("Failed to drain a deferred packet recording abort"));
+            }
             outRecordedGraph.cachePacketRecordingOverlaps(compiledGraph, parallelPacketIndices, scratchArena);
             for(usize parallelIndex = 0u; parallelIndex < parallelResults.size(); ++parallelIndex){
                 if(parallelResults[parallelIndex] != 0u)
@@ -359,6 +372,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 return false;
             }
         }
+        parallelAborts.clear();
         frontierBegin = frontierEnd;
     }
     completeReadyFrontierTelemetry();

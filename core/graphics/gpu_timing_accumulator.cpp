@@ -17,16 +17,35 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool GpuTimingAccumulator::setCaptureEnabled(
+    const bool enabled,
+    const u64 subscriptionIdentityLimit
+)noexcept{
+    if(enabled == m_captureEnabled)
+        return false;
+
+    m_captureEnabled = enabled;
+    if(m_captureEnabled)
+        return false;
+
+    discardFrameReset();
+    ++m_publicationGeneration;
+    if(m_publicationGeneration == 0u)
+        ++m_publicationGeneration;
+    return markAttributionsForRetirement(subscriptionIdentityLimit);
+}
+
 void GpuTimingAccumulator::collect(
     Device& device,
     GpuTimingRecorder& recorder,
     const u32 epoch,
+    const u64 performanceCaptureEpoch,
     const u64 subscriptionIdentityLimit,
     const bool publishPerformanceSamples,
     SampleDispatchVector& completedSamples,
     Alloc::ScratchArena& scratchArena
 ){
-    if(!m_enabled)
+    if(m_pendingAcceptedQueryCount == 0u)
         return;
 
     for(QueryRecord& record : m_queries){
@@ -96,7 +115,15 @@ void GpuTimingAccumulator::collect(
         if(!device.getTimerQueryResult(record.query.get(), result))
             continue;
 
-        const bool publishSample = record.epoch == epoch && record.publishSample;
+        const bool publishSample = record.epoch == epoch
+            && record.publicationGeneration == m_publicationGeneration
+            && record.publishSample
+        ;
+        const bool publishPerformanceSample = publishSample
+            && publishPerformanceSamples
+            && record.performanceCaptureEpoch == performanceCaptureEpoch
+        ;
+        const u64 sourceFrameIndex = record.frameIndex;
         const f64 durationSeconds = result.durationSeconds();
         GpuComparableTimestampRange comparableRange;
         if(publishSample){
@@ -129,14 +156,14 @@ void GpuTimingAccumulator::collect(
             ++m_publishedSampleCount;
         else
             ++m_unpublishedSampleCount;
-        if(!publishSample || !publishPerformanceSamples)
+        if(!publishPerformanceSample)
             continue;
 
-        recorder.m_timing.recordSample(m_timingScope, durationSeconds, record.frameIndex);
+        recorder.m_timing.recordSample(m_timingScope, durationSeconds, sourceFrameIndex);
         if(comparableRange.valid()){
             recorder.m_metricCorrelator.recordTimestampRange(
                 m_scopeName,
-                record.frameIndex,
+                sourceFrameIndex,
                 comparableRange,
                 scratchArena
             );
@@ -145,7 +172,7 @@ void GpuTimingAccumulator::collect(
 }
 
 void GpuTimingAccumulator::recordFrameReset(CommandList& commandList){
-    if(!m_enabled)
+    if(!m_captureEnabled)
         return;
 
     const bool canReset = commandList.canResetTimerQueryHere();
@@ -188,7 +215,7 @@ void GpuTimingAccumulator::confirmFrameReset(const QueueSubmissionToken& token){
             )
         ;
         record.frameResetRecordingQueue = {};
-        if(m_enabled && record.state == QueryState::Available && matchesResetQueue){
+        if(m_captureEnabled && record.state == QueryState::Available && matchesResetQueue){
             record.frameResetSubmission = token;
             record.deviceReady = true;
         }
@@ -212,20 +239,21 @@ void GpuTimingAccumulator::requestQueries(const u32 queryCount){
 }
 
 bool GpuTimingAccumulator::materializeRequestedQueries(Device& device){
-    return m_requestedQueryCount == 0u || reserveQueries(device, m_requestedQueryCount);
+    return !m_captureEnabled || m_requestedQueryCount == 0u || reserveQueries(device, m_requestedQueryCount);
 }
 
 bool GpuTimingAccumulator::beginQuery(
     CommandList& commandList,
     const u64 frameIndex,
     const u32 epoch,
+    const u64 performanceCaptureEpoch,
     const GpuTimingSampleAttribution attribution,
     GpuTimingScope& outScope,
     QueueSubmissionToken& outResetSubmission
 ){
     outScope = {};
     outResetSubmission = {};
-    if(!m_enabled){
+    if(!m_captureEnabled){
         ++m_skippedScopeCountByReason[GpuTimingScopeSkipReason::CollectionInactive];
         return true;
     }
@@ -274,6 +302,8 @@ bool GpuTimingAccumulator::beginQuery(
     record.frameIndex = frameIndex;
     record.attribution = attribution;
     record.epoch = epoch;
+    record.publicationGeneration = m_publicationGeneration;
+    record.performanceCaptureEpoch = performanceCaptureEpoch;
     record.retirementNotificationPending = false;
     outResetSubmission = record.frameResetSubmission;
     ++m_nextReservation;
@@ -383,6 +413,7 @@ bool GpuTimingAccumulator::confirmQuery(
     }
     else
         return false;
+    ++m_pendingAcceptedQueryCount;
     ++m_acceptedScopeCount;
     return true;
 }
@@ -403,6 +434,7 @@ bool GpuTimingAccumulator::retireQuery(const GpuTimingScope& scope, const QueueS
     record.acceptedSubmission = token;
     record.state = QueryState::PendingRetirementAccepted;
     record.publishSample = false;
+    ++m_pendingAcceptedQueryCount;
     ++m_acceptedScopeCount;
     return true;
 }
@@ -469,6 +501,11 @@ bool GpuTimingAccumulator::quarantineRecord(
     const u64 subscriptionIdentityLimit
 )noexcept{
     if(record.state != QueryState::Quarantined){
+        if(record.state == QueryState::PendingAccepted || record.state == QueryState::PendingRetirementAccepted){
+            NWB_ASSERT(m_pendingAcceptedQueryCount > 0u);
+            if(m_pendingAcceptedQueryCount > 0u)
+                --m_pendingAcceptedQueryCount;
+        }
         record.state = QueryState::Quarantined;
         record.publishSample = false;
         record.frameResetRecorded = false;
@@ -518,6 +555,11 @@ void GpuTimingAccumulator::releaseQuery(QueryRecord& record){
     const GpuTimingSampleAttribution retirementAttribution = record.attribution;
     const u64 retirementSubscriptionIdentityLimit = record.retirementSubscriptionIdentityLimit;
     const bool retirementNotificationPending = record.retirementNotificationPending;
+    if(record.state == QueryState::PendingAccepted || record.state == QueryState::PendingRetirementAccepted){
+        NWB_ASSERT(m_pendingAcceptedQueryCount > 0u);
+        if(m_pendingAcceptedQueryCount > 0u)
+            --m_pendingAcceptedQueryCount;
+    }
 
     record.physicalQueue = {};
     record.acceptedSubmission = {};
@@ -526,6 +568,8 @@ void GpuTimingAccumulator::releaseQuery(QueryRecord& record){
     record.frameIndex = 0u;
     record.epoch = 0u;
     record.reservation = 0u;
+    record.publicationGeneration = 0u;
+    record.performanceCaptureEpoch = 0u;
     record.retirementSubscriptionIdentityLimit = 0u;
     record.queueClass = CommandQueue::kCount;
     record.state = QueryState::Available;
@@ -565,13 +609,16 @@ usize GpuTimingAccumulator::pendingAttributionCount()const noexcept{
     return result;
 }
 
-void GpuTimingAccumulator::markAttributionsForRetirement(const u64 subscriptionIdentityLimit)noexcept{
+bool GpuTimingAccumulator::markAttributionsForRetirement(const u64 subscriptionIdentityLimit)noexcept{
+    bool retirementPending = false;
     for(QueryRecord& record : m_queries){
         if(record.attribution != s_NoGpuTimingSampleAttribution && !record.retirementNotificationPending){
             record.retirementNotificationPending = true;
             record.retirementSubscriptionIdentityLimit = subscriptionIdentityLimit;
         }
+        retirementPending = retirementPending || record.retirementNotificationPending;
     }
+    return retirementPending;
 }
 
 bool GpuTimingAccumulator::retireMarkedAttribution(SampleDispatch& outDispatch)noexcept{

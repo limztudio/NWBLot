@@ -92,12 +92,24 @@ struct GpuTimingSubscriptionCapture{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(GpuTimingSampleSubscriptions, AggregateIndependentCollectionRequests){
+TEST(GpuTimingSampleSubscriptions, ScopedDemandsReplaceAtomicallyAndRemainSubscriptionIsolated){
     TestArena testArena;
     Core::Perf::TimingRecorder timingSink(testArena.arena);
     Core::GpuTimingRecorder recorder(testArena.arena, timingSink);
     GpuTimingSubscriptionCapture firstCapture;
     GpuTimingSubscriptionCapture secondCapture;
+    const Name firstScope("tests.gpu_timing.feedback.first");
+    const Name sharedScope("tests.gpu_timing.feedback.shared");
+    const Name secondScope("tests.gpu_timing.feedback.second");
+    const Name metricFirstInput("tests.gpu_timing.feedback.metric_first_input");
+    const Name metricSecondInput("tests.gpu_timing.feedback.metric_second_input");
+    const Name metricAlternateFirstInput("tests.gpu_timing.feedback.metric_alternate_first_input");
+    const Name metricAlternateSecondInput("tests.gpu_timing.feedback.metric_alternate_second_input");
+    const Name metricOutput("tests.gpu_timing.feedback.metric_output");
+    const Name firstScopes[] = { firstScope, sharedScope };
+    const Name secondScopes[] = { sharedScope, secondScope };
+    const Name invalidScopes[] = { firstScope, NAME_NONE };
+    const Name duplicateScopes[] = { firstScope, firstScope };
     const Core::GpuTimingSampleSubscription first = recorder.subscribeSampleListener(Core::GpuTimingSampleListener{
         .context = &firstCapture,
         .invoke = &GpuTimingSubscriptionCapture::Invoke,
@@ -112,19 +124,36 @@ TEST(GpuTimingSampleSubscriptions, AggregateIndependentCollectionRequests){
     static_assert(noexcept(recorder.unsubscribeSampleListener(first)));
     EXPECT_NE(first, second);
     EXPECT_FALSE(recorder.collectionActive());
-    ASSERT_TRUE(recorder.setFeedbackCollectionEnabled(first, true));
+    ASSERT_TRUE(recorder.setFeedbackCollectionScopes(first, MakeNotNull(&firstScopes[0u]), LengthOf(firstScopes)));
+    ASSERT_TRUE(recorder.setFeedbackCollectionScopes(first, MakeNotNull(&firstScopes[0u]), LengthOf(firstScopes)));
     EXPECT_TRUE(recorder.collectionActive());
-    ASSERT_TRUE(recorder.setFeedbackCollectionEnabled(second, true));
-    ASSERT_TRUE(recorder.setFeedbackCollectionEnabled(first, false));
+    EXPECT_FALSE(recorder.setFeedbackCollectionScopes(first, MakeNotNull(&invalidScopes[0u]), LengthOf(invalidScopes)));
     EXPECT_TRUE(recorder.collectionActive());
-    ASSERT_TRUE(recorder.setFeedbackCollectionEnabled(first, false));
+    EXPECT_FALSE(recorder.setFeedbackCollectionScopes(first, MakeNotNull(&duplicateScopes[0u]), LengthOf(duplicateScopes)));
+    EXPECT_TRUE(recorder.collectionActive());
+    EXPECT_FALSE(recorder.prepareOverlapMetric(metricFirstInput, metricSecondInput, firstScope));
+    ASSERT_TRUE(recorder.prepareOverlapMetric(metricFirstInput, metricSecondInput, metricOutput));
+    EXPECT_FALSE(recorder.setFeedbackCollectionScopes(first, MakeNotNull(&metricOutput), 1u));
+    EXPECT_TRUE(recorder.collectionActive());
+    EXPECT_FALSE(recorder.prepareOverlapMetric(metricAlternateFirstInput, metricAlternateSecondInput, firstScope));
+    ASSERT_TRUE(recorder.setFeedbackCollectionScopes(second, MakeNotNull(&secondScopes[0u]), LengthOf(secondScopes)));
+    ASSERT_TRUE(recorder.setFeedbackCollectionScopes(first, MakeNotNull(&firstScope), 1u));
+    ASSERT_TRUE(recorder.clearFeedbackCollectionScopes(first));
     EXPECT_TRUE(recorder.collectionActive());
 
+    ASSERT_TRUE(recorder.setFeedbackCollectionScopes(first, MakeNotNull(&firstScope), 1u));
     recorder.unsubscribeSampleListener(second);
+    EXPECT_TRUE(recorder.collectionActive());
+    EXPECT_FALSE(recorder.setFeedbackCollectionScopes(second, MakeNotNull(&secondScope), 1u));
+    EXPECT_FALSE(recorder.clearFeedbackCollectionScopes(second));
+
+    ASSERT_TRUE(recorder.clearFeedbackCollectionScopes(first));
     EXPECT_FALSE(recorder.collectionActive());
-    EXPECT_FALSE(recorder.setFeedbackCollectionEnabled(second, true));
-    recorder.unsubscribeSampleListener(second);
+    EXPECT_TRUE(recorder.clearFeedbackCollectionScopes(first));
+
     recorder.unsubscribeSampleListener(first);
+    EXPECT_FALSE(recorder.setFeedbackCollectionScopes(first, MakeNotNull(&firstScope), 1u));
+    EXPECT_FALSE(recorder.clearFeedbackCollectionScopes(first));
 }
 
 TEST(GpuTimingSampleAttribution, IssuesUniqueProcessIdentitiesAcrossRecorderResetAndRecreation){

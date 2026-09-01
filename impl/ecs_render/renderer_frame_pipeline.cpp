@@ -5,6 +5,7 @@
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_render/kernel/timing_names.h>
 
 #include <core/graphics/gpu_timing.h>
 
@@ -13,6 +14,27 @@
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_renderer_frame_pipeline{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr Name s_DeferredTaskTimingFeedbackScopes[] = {
+    RendererGpuTimingScope::s_AvboitDepthWarp.identity,
+    RendererGpuTimingScope::s_AvboitIntegration.identity,
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -84,7 +106,12 @@ RendererFramePipeline::RendererFramePipeline(
         m_materialSystem,
         m_rayTracingState
     )
-    , m_deferredTaskTimingFeedback(arena, graphics)
+    , m_deferredTaskTimingFeedback(
+        arena,
+        graphics,
+        NotNull<const Name*>(__hidden_renderer_frame_pipeline::s_DeferredTaskTimingFeedbackScopes),
+        LengthOf(__hidden_renderer_frame_pipeline::s_DeferredTaskTimingFeedbackScopes)
+    )
     , m_deferredLightingTaskGraph(arena)
     , m_deferredLightingTaskGraphAnalysis(arena)
     , m_deferredLightingTaskGraphQueueAssignments(arena)

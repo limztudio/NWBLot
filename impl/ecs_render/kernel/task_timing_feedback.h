@@ -126,7 +126,12 @@ private:
 
 
 public:
-    RendererTaskTimingFeedback(Core::Alloc::GlobalArena& arena, Core::Graphics& graphics);
+    RendererTaskTimingFeedback(
+        Core::Alloc::GlobalArena& arena,
+        Core::Graphics& graphics,
+        NotNull<const Name*> feedbackCollectionScopes,
+        usize feedbackCollectionScopeCount
+    );
     ~RendererTaskTimingFeedback()noexcept;
 
 
@@ -150,6 +155,7 @@ public:
 
 
 private:
+    [[nodiscard]] bool collectsScope(const Name& scopeName)const noexcept;
     void onGpuTimingSample(const Core::GpuTimingSample& sample)noexcept;
 
 
@@ -158,6 +164,7 @@ private:
     RendererTaskTimingFeedbackState m_state;
     Core::GpuTaskTimingHistoryStore m_history;
     Core::GpuTaskTimingHistorySnapshot m_snapshot;
+    Vector<Name, Core::Alloc::GlobalArena> m_feedbackCollectionScopes;
     Futex m_lifecycleMutex;
     Futex m_mutex;
     Core::GpuTaskTimingFeedbackPolicy m_policy;

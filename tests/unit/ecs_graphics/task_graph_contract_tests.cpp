@@ -689,7 +689,33 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
     EXPECT_FALSE(ContainsText(timing, "m_heldSubmissionCompletion"));
     EXPECT_TRUE(ContainsText(timingAccumulator, "++m_publishedSampleCount;"));
     EXPECT_TRUE(ContainsText(timingAccumulator, "++m_unpublishedSampleCount;"));
-    EXPECT_TRUE(ContainsText(timing, "const bool publishPerformanceSamples = m_enabled && m_timing.enabled();"));
+    EXPECT_TRUE(ContainsText(timingHeader, "bool m_performanceCollectionActive = false;"));
+    EXPECT_TRUE(ContainsText(timing, "const bool performanceCollectionActive = m_enabled && m_timing.enabled();"));
+    EXPECT_TRUE(ContainsText(timing, "m_performanceCollectionActive = performanceCollectionActive;"));
+    EXPECT_TRUE(ContainsText(
+        timing,
+        "m_accumulatorsActive = m_performanceCollectionActive || !m_feedbackScopeDemands.empty();"
+    ));
+
+    const usize collectLockedOffset = timing.find("void GpuTimingRecorder::collectLocked(");
+    const usize submissionCompletedOffset = timing.find("bool GpuTimingRecorder::submissionCompleted(", collectLockedOffset);
+    ASSERT_NE(collectLockedOffset, AStringView::npos);
+    ASSERT_NE(submissionCompletedOffset, AStringView::npos);
+    const AStringView collectLocked = timing.substr(collectLockedOffset, submissionCompletedOffset - collectLockedOffset);
+    EXPECT_TRUE(ContainsText(collectLocked, "const bool publishPerformanceSamples = m_performanceCollectionActive;"));
+    EXPECT_FALSE(ContainsText(collectLocked, "m_enabled && m_timing.enabled()"));
+    EXPECT_FALSE(ContainsText(collectLocked, "m_feedbackScopeDemands"));
+
+    const usize resetQueriesOffset = timing.find("void GpuTimingRecorder::resetQueries(){");
+    const usize collectOffset = timing.find("void GpuTimingRecorder::collect(", resetQueriesOffset);
+    ASSERT_NE(resetQueriesOffset, AStringView::npos);
+    ASSERT_NE(collectOffset, AStringView::npos);
+    const AStringView resetQueries = timing.substr(resetQueriesOffset, collectOffset - resetQueriesOffset);
+    const usize advanceEpochOffset = resetQueries.find("advanceEpoch();");
+    const usize resetPerformanceCaptureOffset = resetQueries.find("m_performanceCollectionActive = false;");
+    ASSERT_NE(advanceEpochOffset, AStringView::npos);
+    ASSERT_NE(resetPerformanceCaptureOffset, AStringView::npos);
+    EXPECT_LT(advanceEpochOffset, resetPerformanceCaptureOffset);
     EXPECT_TRUE(ContainsText(timing, "if(publishPerformanceSamples)\n        m_timing.publishFrame(publishFrameIndex);"));
     EXPECT_TRUE(ContainsText(timing, "++m_statistics.scopeAttemptCount;"));
     EXPECT_TRUE(ContainsText(timing, "GpuTimingScopeSkipReason::CollectionInactive"));
@@ -4541,9 +4567,21 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     EXPECT_TRUE(ContainsText(timingFeedbackHeader, "class RendererTaskTimingFeedbackState final"));
     EXPECT_TRUE(ContainsText(timingFeedbackHeader, "class RendererTaskTimingFeedback final"));
     EXPECT_TRUE(ContainsText(timingFeedbackHeader, "Core::GpuTimingSampleSubscription m_subscription"));
+    EXPECT_TRUE(ContainsText(
+        timingFeedbackHeader,
+        "Vector<Name, Core::Alloc::GlobalArena> m_feedbackCollectionScopes"
+    ));
     EXPECT_FALSE(ContainsText(timingFeedbackHeader, "m_nextAttribution"));
     EXPECT_TRUE(ContainsText(timingFeedback, "subscribeSampleListener(Core::GpuTimingSampleListener{"));
     EXPECT_TRUE(ContainsText(timingFeedback, "unsubscribeSampleListener(subscription)"));
+    EXPECT_TRUE(ContainsText(
+        timingFeedback,
+        "m_feedbackCollectionScopes.assign(scopeNames, scopeNames + feedbackCollectionScopeCount);"
+    ));
+    EXPECT_EQ(CountText(timingFeedback, "setFeedbackCollectionScopes("), 2u);
+    EXPECT_EQ(CountText(timingFeedback, "clearFeedbackCollectionScopes("), 1u);
+    EXPECT_FALSE(ContainsText(timingFeedback, "setFeedbackCollectionEnabled("));
+    EXPECT_TRUE(ContainsText(timingFeedback, "!scopeName || !collectsScope(scopeName)"));
     EXPECT_TRUE(ContainsText(timingFeedback, "PrepareRendererTaskTimingFeedbackPolicyTransition(m_policy, policy, m_active)"));
     EXPECT_TRUE(ContainsText(
         timingFeedback,
@@ -4562,6 +4600,24 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     EXPECT_TRUE(ContainsText(timingFeedback, "options.queueAssignmentOptions.timingFrameIndex = 0u;"));
     EXPECT_TRUE(ContainsText(systemHeader, "RendererTaskTimingFeedback m_deferredTaskTimingFeedback"));
     EXPECT_TRUE(ContainsText(timingFeedback, "m_active && m_subscription.valid() && m_policy.enabled"));
+
+    const usize feedbackScopesOffset = system.find("static constexpr Name s_DeferredTaskTimingFeedbackScopes[] = {");
+    const usize feedbackScopesEnd = system.find("};", feedbackScopesOffset);
+    ASSERT_NE(feedbackScopesOffset, AStringView::npos);
+    ASSERT_NE(feedbackScopesEnd, AStringView::npos);
+    const AStringView feedbackScopes = system.substr(feedbackScopesOffset, feedbackScopesEnd - feedbackScopesOffset);
+    EXPECT_EQ(CountText(feedbackScopes, "RendererGpuTimingScope::"), 2u);
+    EXPECT_TRUE(ContainsText(feedbackScopes, "RendererGpuTimingScope::s_AvboitDepthWarp.identity"));
+    EXPECT_TRUE(ContainsText(feedbackScopes, "RendererGpuTimingScope::s_AvboitIntegration.identity"));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "NotNull<const Name*>(__hidden_renderer_frame_pipeline::s_DeferredTaskTimingFeedbackScopes)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "LengthOf(__hidden_renderer_frame_pipeline::s_DeferredTaskTimingFeedbackScopes)"
+    ));
+
     const usize feedbackDeclarationOffset = systemHeader.find("RendererTaskTimingFeedback m_deferredTaskTimingFeedback");
     const usize graphDeclarationOffset = systemHeader.find("Core::GpuTaskGraph m_deferredLightingTaskGraph");
     const usize rayTracingSystemDeclarationOffset = systemHeader.find("RendererRayTracingSystem m_raytracingSystem");

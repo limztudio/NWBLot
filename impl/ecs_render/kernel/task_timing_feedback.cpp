@@ -230,12 +230,22 @@ void RendererTaskTimingFeedback::onGpuTimingSampleCallback(
 }
 
 
-RendererTaskTimingFeedback::RendererTaskTimingFeedback(Core::Alloc::GlobalArena& arena, Core::Graphics& graphics)
+RendererTaskTimingFeedback::RendererTaskTimingFeedback(
+    Core::Alloc::GlobalArena& arena,
+    Core::Graphics& graphics,
+    const NotNull<const Name*> feedbackCollectionScopes,
+    const usize feedbackCollectionScopeCount
+)
     : m_graphics(graphics)
     , m_state(arena)
     , m_history(arena)
     , m_snapshot(arena)
-{}
+    , m_feedbackCollectionScopes(arena)
+{
+    NWB_ASSERT(feedbackCollectionScopeCount != 0u);
+    const Name* const scopeNames = feedbackCollectionScopes.get();
+    m_feedbackCollectionScopes.assign(scopeNames, scopeNames + feedbackCollectionScopeCount);
+}
 RendererTaskTimingFeedback::~RendererTaskTimingFeedback()noexcept{
     deactivate();
 }
@@ -263,7 +273,11 @@ void RendererTaskTimingFeedback::activate(){
     }
     if(feedbackCollectionEnabled){
         try{
-            if(!timing.setFeedbackCollectionEnabled(subscription, true)){
+            if(!timing.setFeedbackCollectionScopes(
+                subscription,
+                NotNull<const Name*>(m_feedbackCollectionScopes.data()),
+                m_feedbackCollectionScopes.size()
+            )){
                 timing.unsubscribeSampleListener(subscription);
                 NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback failed to enable GPU sample collection."));
                 return;
@@ -321,10 +335,15 @@ bool RendererTaskTimingFeedback::setPolicy(const Core::GpuTaskTimingFeedbackPoli
 
     bool collectionUpdated = false;
     try{
-        collectionUpdated = m_graphics.gpuTiming().setFeedbackCollectionEnabled(
-            subscription,
-            transition.action == RendererTaskTimingFeedbackCollectionAction::Enable
-        );
+        if(transition.action == RendererTaskTimingFeedbackCollectionAction::Enable){
+            collectionUpdated = m_graphics.gpuTiming().setFeedbackCollectionScopes(
+                subscription,
+                NotNull<const Name*>(m_feedbackCollectionScopes.data()),
+                m_feedbackCollectionScopes.size()
+            );
+        }else{
+            collectionUpdated = m_graphics.gpuTiming().clearFeedbackCollectionScopes(subscription);
+        }
     }
     catch(...){
         ScopedLock lock(m_mutex);
@@ -344,7 +363,7 @@ Core::GpuTimingSampleAttribution RendererTaskTimingFeedback::beginSample(
     const Core::GpuPhysicalQueueId& expectedQueue,
     const bool recordsNonCommittingTimingSample
 ){
-    if(!scopeName || !key.valid() || !expectedQueue.valid())
+    if(!scopeName || !collectsScope(scopeName) || !key.valid() || !expectedQueue.valid())
         return Core::s_NoGpuTimingSampleAttribution;
 
     ScopedLock lock(m_mutex);
@@ -421,6 +440,14 @@ void RendererTaskTimingFeedback::reset()noexcept{
     m_history.reset(m_snapshot);
 }
 
+
+bool RendererTaskTimingFeedback::collectsScope(const Name& scopeName)const noexcept{
+    for(const Name& feedbackCollectionScope : m_feedbackCollectionScopes){
+        if(feedbackCollectionScope == scopeName)
+            return true;
+    }
+    return false;
+}
 
 void RendererTaskTimingFeedback::onGpuTimingSample(const Core::GpuTimingSample& sample)noexcept{
     if(sample.attribution == Core::s_NoGpuTimingSampleAttribution)

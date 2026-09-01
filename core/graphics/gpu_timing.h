@@ -254,6 +254,8 @@ private:
         GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution;
         u32 epoch = 0u;
         u64 reservation = 0u;
+        u64 publicationGeneration = 0u;
+        u64 performanceCaptureEpoch = 0u;
         u64 retirementSubscriptionIdentityLimit = 0u;
         CommandQueue::Enum queueClass = CommandQueue::kCount;
         QueryState state = QueryState::Available;
@@ -287,16 +289,12 @@ public:
 
 
 public:
-    void setEnabled(const bool enabled)noexcept{
-        m_enabled = enabled;
-        if(!m_enabled)
-            discardFrameReset();
-    }
-
+    [[nodiscard]] bool setCaptureEnabled(bool enabled, u64 subscriptionIdentityLimit)noexcept;
     void collect(
         Device& device,
         GpuTimingRecorder& recorder,
         u32 epoch,
+        u64 performanceCaptureEpoch,
         u64 subscriptionIdentityLimit,
         bool publishPerformanceSamples,
         SampleDispatchVector& completedSamples,
@@ -311,6 +309,7 @@ public:
         CommandList& commandList,
         u64 frameIndex,
         u32 epoch,
+        u64 performanceCaptureEpoch,
         GpuTimingSampleAttribution attribution,
         GpuTimingScope& outScope,
         QueueSubmissionToken& outResetSubmission
@@ -330,14 +329,14 @@ public:
 
 
 private:
+    [[nodiscard]] bool quarantineRecord(QueryRecord& record, u64 subscriptionIdentityLimit)noexcept;
     [[nodiscard]] bool reserveQueries(Device& device, u32 queryCount);
     [[nodiscard]] u32 findAvailableQuery()const;
     [[nodiscard]] u32 appendQuery(Device& device);
-    [[nodiscard]] bool quarantineRecord(QueryRecord& record, u64 subscriptionIdentityLimit)noexcept;
     void releaseQuery(QueryRecord& record);
     void releaseUnacceptedQuery(QueryRecord& record);
     [[nodiscard]] usize pendingAttributionCount()const noexcept;
-    void markAttributionsForRetirement(u64 subscriptionIdentityLimit)noexcept;
+    [[nodiscard]] bool markAttributionsForRetirement(u64 subscriptionIdentityLimit)noexcept;
     [[nodiscard]] bool retireMarkedAttribution(SampleDispatch& outDispatch)noexcept;
     void discardMarkedAttributions()noexcept;
     void retireAttributions(SampleDispatchVector& outSamples, u64 subscriptionIdentityLimit);
@@ -350,6 +349,8 @@ private:
     Perf::TimingScopeId m_timingScope;
     u32 m_requestedQueryCount = 0u;
     u64 m_nextReservation = 0u;
+    u64 m_publicationGeneration = 1u;
+    usize m_pendingAcceptedQueryCount = 0u;
     u64 m_recordedScopeCount = 0u;
     u64 m_acceptedScopeCount = 0u;
     u64 m_publishedSampleCount = 0u;
@@ -357,7 +358,7 @@ private:
     u64 m_discardedScopeCount = 0u;
     u64 m_quarantinedScopeCount = 0u;
     u64 m_skippedScopeCountByReason[GpuTimingScopeSkipReason::kCount]{};
-    bool m_enabled = false;
+    bool m_captureEnabled = false;
 };
 
 
@@ -377,11 +378,21 @@ private:
     };
 
     struct SampleListenerRecordData{
+        Vector<Name, Alloc::GlobalArena> feedbackScopes;
         GpuTimingSampleSubscription subscription;
         GpuTimingSampleListener listener;
         u32 activeCallbackCount = 0u;
-        bool feedbackCollectionEnabled = false;
         bool removing = false;
+
+
+        explicit SampleListenerRecordData(Alloc::GlobalArena& arena)
+            : feedbackScopes(arena)
+        {}
+    };
+
+    struct FeedbackScopeDemand{
+        Name scopeName = NAME_NONE;
+        u64 ownerCount = 0u;
     };
 
     using AccumulatorPtr = GlobalUniquePtr<GpuTimingAccumulator>;
@@ -392,6 +403,7 @@ private:
         ::ArenaRefDeleter<SampleListenerRecord, Alloc::GlobalArena>
     >;
     using SampleListenerVector = Vector<SampleListenerRecordPtr, Alloc::GlobalArena>;
+    using FeedbackScopeDemandVector = Vector<FeedbackScopeDemand, Alloc::GlobalArena>;
     using SampleDispatch = GpuTimingAccumulator::SampleDispatch;
     using SampleDispatchVector = GpuTimingAccumulator::SampleDispatchVector;
 
@@ -406,13 +418,14 @@ public:
     // the next batch; removing one registration never replaces or clears another consumer.
     [[nodiscard]] GpuTimingSampleSubscription subscribeSampleListener(const GpuTimingSampleListener& listener);
     void unsubscribeSampleListener(const GpuTimingSampleSubscription& subscription)noexcept;
-    // A higher-level adaptive policy may collect only the scopes it needs even while general Perf capture is off.
-    // Demand belongs to one subscription, and collection remains active until every requesting subscription clears
-    // its demand. This does not enable Perf publication.
-    [[nodiscard]] bool setFeedbackCollectionEnabled(
+    // Atomically replaces one listener's feedback-only query scopes. Names are copied and must be valid and unique.
+    // Broad Perf capture still enables every prepared scope; feedback demand only enables its named query scopes.
+    [[nodiscard]] bool setFeedbackCollectionScopes(
         const GpuTimingSampleSubscription& subscription,
-        bool enabled
+        NotNull<const Name*> scopeNames,
+        usize scopeCount
     );
+    [[nodiscard]] bool clearFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription);
     // Globally unique attribution identities remain unique across recorder reset, destruction, and recreation.
     // Allocation is lock-free so packet-recording workers can issue identities without taking listener/query locks.
     [[nodiscard]] GpuTimingSampleAttribution allocateSampleAttribution()noexcept;
@@ -463,6 +476,15 @@ public:
 
 
 private:
+    [[nodiscard]] bool replaceFeedbackCollectionScopes(
+        const GpuTimingSampleSubscription& subscription,
+        const Name* scopeNames,
+        usize scopeCount
+    );
+    [[nodiscard]] usize findFeedbackScopeDemandLocked(const Name& scopeName)const noexcept;
+    [[nodiscard]] bool feedbackScopeDemandedLocked(const Name& scopeName)const noexcept;
+    void addFeedbackScopeDemandsLocked(const Vector<Name, Alloc::GlobalArena>& scopeNames)noexcept;
+    void removeFeedbackScopeDemandsLocked(const Vector<Name, Alloc::GlobalArena>& scopeNames)noexcept;
     [[nodiscard]] bool beginScope(
         const Name& scopeName,
         Device& device,
@@ -510,15 +532,15 @@ private:
     void dispatchCompletedSample(const GpuTimingSample& sample, u64 subscriptionIdentityLimit)noexcept;
     void dispatchCompletedSamples(const SampleDispatchVector& samples)noexcept;
     void reservePendingAttributionSamplesLocked(SampleDispatchVector& outSamples)const;
-    void markPendingAttributionsForRetirementLocked(u64 subscriptionIdentityLimit)noexcept;
     [[nodiscard]] bool retireMarkedPendingAttributionLocked(SampleDispatch& outDispatch)noexcept;
     void retireMarkedPendingAttributionsLocked(SampleDispatchVector& outSamples);
     void discardMarkedPendingAttributionsLocked()noexcept;
     void retirePendingAttributionsLocked(SampleDispatchVector& outSamples, u64 subscriptionIdentityLimit);
     void discardFrameResetLocked();
     void noteSkippedScope(GpuTimingScopeSkipReason::Enum reason);
-    void setActiveState(bool active)noexcept;
+    void syncActiveState(u64 subscriptionIdentityLimit)noexcept;
     void syncActiveState()noexcept;
+    void advancePerformanceCaptureEpoch()noexcept;
     void advanceEpoch()noexcept;
 
 
@@ -531,6 +553,7 @@ private:
     AccumulatorMap m_accumulators;
     Vector<QueueCompletion, Alloc::GlobalArena> m_queueCompletions;
     SampleListenerVector m_sampleListeners;
+    FeedbackScopeDemandVector m_feedbackScopeDemands;
     // Callbacks execute outside this registration lock. Whenever both state locks are needed, acquire this lock
     // first and m_mutex second; no path retains m_mutex while acquiring this lock.
     Futex m_sampleListenerMutex;
@@ -541,12 +564,13 @@ private:
     // recorder-map access. Worker command-list recordings may share a ticket and begin timing scopes concurrently.
     mutable Futex m_mutex;
     Atomic<u64> m_sampleSubscriptionIdentityLimit{ 0u };
+    u64 m_performanceCaptureEpoch = 1u;
     u64 m_currentFrameIndex = 0u;
-    u64 m_feedbackCollectionRequestCount = 0u;
     u32 m_epoch = 1u;
     GpuTimingRecorderStatistics m_statistics;
     bool m_pendingAttributionRetirements = false;
     bool m_accumulatorsActive = false;
+    bool m_performanceCollectionActive = false;
     bool m_enabled = false;
 };
 

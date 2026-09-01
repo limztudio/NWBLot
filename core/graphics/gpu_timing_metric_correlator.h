@@ -119,7 +119,7 @@ public:
         Alloc::ScratchArena& scratchArena
     );
     [[nodiscard]] bool hasOutputRole(const Name& scopeName)const;
-    void discardPendingRanges();
+    void discardPendingRanges()noexcept;
     void reset();
 
 

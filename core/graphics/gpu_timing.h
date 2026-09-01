@@ -118,10 +118,12 @@ struct GpuTimingSample{
     GpuComparableTimestampRange comparableRange;
 };
 
-// The listener context belongs to its caller. Unsubscription serializes with any active callback, so the caller may
-// release its context after unsubscribeSampleListener() returns. A callback may unsubscribe itself, but must keep its
-// own context alive until that callback returns. A false GpuTimingSample::published notification only retires caller
-// attribution; it never represents usable timing data.
+// The listener context belongs to its caller. Callbacks run without the registration or query-state locks; a
+// recursive callback gate serializes their context access. External unsubscription waits for active callbacks
+// before returning, so the caller may then release its context. Unsubscription from a thread whose callback stack
+// already contains that registration cannot wait for itself; its context must remain alive until that callback stack
+// unwinds. Callback exceptions are isolated and counted by the recorder. A false GpuTimingSample::published
+// notification only retires caller attribution; it never represents usable timing data.
 struct GpuTimingSampleListener{
     void* context = nullptr;
     void (*invoke)(void* context, const GpuTimingSample& sample) = nullptr;
@@ -200,6 +202,7 @@ struct GpuTimingRecorderStatistics{
     u64 discardedScopeCount = 0u;
     u64 quarantinedScopeCount = 0u;
     u64 beginFailureCount = 0u;
+    u64 sampleListenerFailureCount = 0u;
     u64 skippedScopeCountByReason[GpuTimingScopeSkipReason::kCount]{};
     bool queryCollectionEnabled = false;
     bool timingSinkEnabled = false;
@@ -236,6 +239,11 @@ private:
         RetirementRequired,
     };
 
+    struct SampleDispatch{
+        GpuTimingSample sample;
+        u64 subscriptionIdentityLimit = 0u;
+    };
+
     struct QueryRecord{
         TimerQueryHandle query;
         GpuPhysicalQueueId physicalQueue;
@@ -246,6 +254,7 @@ private:
         GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution;
         u32 epoch = 0u;
         u64 reservation = 0u;
+        u64 retirementSubscriptionIdentityLimit = 0u;
         CommandQueue::Enum queueClass = CommandQueue::kCount;
         QueryState state = QueryState::Available;
         // A recovery endpoint completes an accepted begin after a later frame packet was rejected. The query must
@@ -258,8 +267,10 @@ private:
         // only consumes pools declared during preparation; render-pass scopes must use pools that have already passed
         // through recordFrameReset().
         bool deviceReady = false;
+        bool retirementNotificationPending = false;
     };
 
+    using SampleDispatchVector = Vector<SampleDispatch, Alloc::ScratchArena>;
     using QueryVector = Vector<QueryRecord, Alloc::GlobalArena>;
 
 
@@ -276,7 +287,7 @@ public:
 
 
 public:
-    void setEnabled(const bool enabled){
+    void setEnabled(const bool enabled)noexcept{
         m_enabled = enabled;
         if(!m_enabled)
             discardFrameReset();
@@ -286,15 +297,16 @@ public:
         Device& device,
         GpuTimingRecorder& recorder,
         u32 epoch,
-        Vector<GpuTimingSample, Alloc::GlobalArena>* completedSamples,
+        u64 subscriptionIdentityLimit,
+        bool publishPerformanceSamples,
+        SampleDispatchVector& completedSamples,
         Alloc::ScratchArena& scratchArena
     );
     void recordFrameReset(CommandList& commandList);
     void confirmFrameReset(const QueueSubmissionToken& token);
-    void discardFrameReset();
+    void discardFrameReset()noexcept;
     void requestQueries(u32 queryCount);
     [[nodiscard]] bool materializeRequestedQueries(Device& device);
-    [[nodiscard]] bool reserveQueries(Device& device, u32 queryCount);
     [[nodiscard]] bool beginQuery(
         CommandList& commandList,
         u64 frameIndex,
@@ -313,16 +325,22 @@ public:
     );
     [[nodiscard]] bool retireQuery(const GpuTimingScope& scope, const QueueSubmissionToken& token);
     [[nodiscard]] bool prepareQueryForRecovery(const GpuTimingScope& scope);
-    void discardQuery(const GpuTimingScope& scope);
-    void quarantineQuery(const GpuTimingScope& scope);
+    [[nodiscard]] bool discardQuery(const GpuTimingScope& scope, u64 subscriptionIdentityLimit);
+    [[nodiscard]] bool quarantineQuery(const GpuTimingScope& scope, u64 subscriptionIdentityLimit)noexcept;
 
 
 private:
+    [[nodiscard]] bool reserveQueries(Device& device, u32 queryCount);
     [[nodiscard]] u32 findAvailableQuery()const;
     [[nodiscard]] u32 appendQuery(Device& device);
+    [[nodiscard]] bool quarantineRecord(QueryRecord& record, u64 subscriptionIdentityLimit)noexcept;
     void releaseQuery(QueryRecord& record);
     void releaseUnacceptedQuery(QueryRecord& record);
-    void retireAttributions(Vector<GpuTimingSample, Alloc::GlobalArena>& outSamples);
+    [[nodiscard]] usize pendingAttributionCount()const noexcept;
+    void markAttributionsForRetirement(u64 subscriptionIdentityLimit)noexcept;
+    [[nodiscard]] bool retireMarkedAttribution(SampleDispatch& outDispatch)noexcept;
+    void discardMarkedAttributions()noexcept;
+    void retireAttributions(SampleDispatchVector& outSamples, u64 subscriptionIdentityLimit);
     void appendStatistics(GpuTimingRecorderStatistics& outStatistics)const noexcept;
 
 
@@ -353,23 +371,29 @@ class GpuTimingRecorder final : NoCopy{
     friend class GpuTimingSubmissionTicket;
 
 private:
-    using AccumulatorPtr = GlobalUniquePtr<GpuTimingAccumulator>;
-    using AccumulatorMap = HashMap<Name, AccumulatorPtr, Hasher<Name>, EqualTo<Name>, Alloc::GlobalArena>;
-
     struct QueueCompletion{
         GpuPhysicalQueueId queue;
         u64 value = 0u;
     };
 
-    struct SampleListenerRecord{
+    struct SampleListenerRecordData{
         GpuTimingSampleSubscription subscription;
         GpuTimingSampleListener listener;
+        u32 activeCallbackCount = 0u;
         bool feedbackCollectionEnabled = false;
+        bool removing = false;
     };
 
-    using SampleListenerVector = Vector<SampleListenerRecord, Alloc::GlobalArena>;
-    using SampleSubscriptionVector = Vector<GpuTimingSampleSubscription, Alloc::GlobalArena>;
-    using SampleVector = Vector<GpuTimingSample, Alloc::GlobalArena>;
+    using AccumulatorPtr = GlobalUniquePtr<GpuTimingAccumulator>;
+    using AccumulatorMap = HashMap<Name, AccumulatorPtr, Hasher<Name>, EqualTo<Name>, Alloc::GlobalArena>;
+    using SampleListenerRecord = RefCounter<SampleListenerRecordData>;
+    using SampleListenerRecordPtr = RefCountPtr<
+        SampleListenerRecord,
+        ::ArenaRefDeleter<SampleListenerRecord, Alloc::GlobalArena>
+    >;
+    using SampleListenerVector = Vector<SampleListenerRecordPtr, Alloc::GlobalArena>;
+    using SampleDispatch = GpuTimingAccumulator::SampleDispatch;
+    using SampleDispatchVector = GpuTimingAccumulator::SampleDispatchVector;
 
 
 public:
@@ -381,7 +405,7 @@ public:
     // Every valid registration receives attributed samples captured in a dispatch batch. New listeners begin with
     // the next batch; removing one registration never replaces or clears another consumer.
     [[nodiscard]] GpuTimingSampleSubscription subscribeSampleListener(const GpuTimingSampleListener& listener);
-    void unsubscribeSampleListener(const GpuTimingSampleSubscription& subscription);
+    void unsubscribeSampleListener(const GpuTimingSampleSubscription& subscription)noexcept;
     // A higher-level adaptive policy may collect only the scopes it needs even while general Perf capture is off.
     // Demand belongs to one subscription, and collection remains active until every requesting subscription clears
     // its demand. This does not enable Perf publication.
@@ -472,22 +496,30 @@ private:
     void collectLocked(
         Device& device,
         u64 publishFrameIndex,
-        Vector<GpuTimingSample, Alloc::GlobalArena>* completedSamples
+        u64 subscriptionIdentityLimit,
+        SampleDispatchVector& completedSamples,
+        Alloc::ScratchArena& scratchArena
     );
     [[nodiscard]] bool submissionCompleted(Device& device, const QueueSubmissionToken& token);
-    [[nodiscard]] SampleListenerRecord* findSampleListenerLocked(
+    [[nodiscard]] SampleListenerRecordPtr findSampleListenerLocked(
         const GpuTimingSampleSubscription& subscription
     )noexcept;
-    void snapshotSampleSubscriptionsLocked(SampleSubscriptionVector& outSubscriptions)const;
-    void dispatchCompletedSamples(
-        const SampleVector& samples,
-        const SampleSubscriptionVector& subscriptions
-    );
-    void retirePendingAttributionsLocked(SampleVector& outSamples);
+    [[nodiscard]] u64 sampleSubscriptionIdentityLimitLocked()const noexcept;
+    void publishSampleSubscriptionIdentityLimitLocked()noexcept;
+    void eraseSampleListenerLocked(SampleListenerRecord& record)noexcept;
+    void dispatchCompletedSample(const GpuTimingSample& sample, u64 subscriptionIdentityLimit)noexcept;
+    void dispatchCompletedSamples(const SampleDispatchVector& samples)noexcept;
+    void reservePendingAttributionSamplesLocked(SampleDispatchVector& outSamples)const;
+    void markPendingAttributionsForRetirementLocked(u64 subscriptionIdentityLimit)noexcept;
+    [[nodiscard]] bool retireMarkedPendingAttributionLocked(SampleDispatch& outDispatch)noexcept;
+    void retireMarkedPendingAttributionsLocked(SampleDispatchVector& outSamples);
+    void discardMarkedPendingAttributionsLocked()noexcept;
+    void retirePendingAttributionsLocked(SampleDispatchVector& outSamples, u64 subscriptionIdentityLimit);
     void discardFrameResetLocked();
     void noteSkippedScope(GpuTimingScopeSkipReason::Enum reason);
-    void syncActiveState();
-    void advanceEpoch();
+    void setActiveState(bool active)noexcept;
+    void syncActiveState()noexcept;
+    void advanceEpoch()noexcept;
 
 
 private:
@@ -499,16 +531,21 @@ private:
     AccumulatorMap m_accumulators;
     Vector<QueueCompletion, Alloc::GlobalArena> m_queueCompletions;
     SampleListenerVector m_sampleListeners;
-    // Listener mutation may re-enter from a callback. Whenever both recorder locks are needed, acquire this listener
-    // lock first and m_mutex second; no path retains m_mutex while acquiring this lock.
-    RecursiveMutex m_sampleListenerMutex;
+    // Callbacks execute outside this registration lock. Whenever both state locks are needed, acquire this lock
+    // first and m_mutex second; no path retains m_mutex while acquiring this lock.
+    Futex m_sampleListenerMutex;
+    // A separate recursive gate preserves caller-owned context lifetime while allowing a callback to synchronously
+    // dispatch or remove registrations. No path acquires it while retaining either recorder state lock.
+    RecursiveMutex m_sampleCallbackMutex;
     // A submission ticket protects its own rollback list, while this lock serializes every query-pool mutation and
     // recorder-map access. Worker command-list recordings may share a ticket and begin timing scopes concurrently.
     mutable Futex m_mutex;
+    Atomic<u64> m_sampleSubscriptionIdentityLimit{ 0u };
     u64 m_currentFrameIndex = 0u;
     u64 m_feedbackCollectionRequestCount = 0u;
     u32 m_epoch = 1u;
     GpuTimingRecorderStatistics m_statistics;
+    bool m_pendingAttributionRetirements = false;
     bool m_accumulatorsActive = false;
     bool m_enabled = false;
 };

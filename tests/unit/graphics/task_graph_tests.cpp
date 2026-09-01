@@ -714,6 +714,13 @@ struct PacketLifecycleTask{
     }
 };
 
+struct NoexceptAcceptedLifecycleTask{
+    struct Payload{};
+
+    static void accepted(Payload&, const Graphics::QueueSubmissionToken&)noexcept{
+    }
+};
+
 struct NativeRecordProbeTask{
     struct Payload{
         u32* recordCount = nullptr;
@@ -2027,6 +2034,23 @@ TEST(GpuTaskGraph, RegistersOnlyExactTypedPayloadLifecycleSignatures){
     EXPECT_EQ(recordCount, 0u);
     EXPECT_EQ(acceptedCount, 0u);
     EXPECT_EQ(discardedCount, 0u);
+}
+
+TEST(GpuTaskGraph, RegistersNoexceptTypedAcceptedPayloadLifecycle){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/noexcept_accepted_lifecycle"))
+        .setMarkerLabel("Noexcept Accepted Lifecycle")
+    ;
+    const Graphics::GpuTaskId task = graph.addTask<NoexceptAcceptedLifecycleTask>(
+        desc,
+        NoexceptAcceptedLifecycleTask::Payload{}
+    );
+    ASSERT_TRUE(task.valid());
+    EXPECT_TRUE(graph.taskAt(task.index).hasPayload);
+    EXPECT_TRUE(graph.taskAt(task.index).hasAcceptedPayload);
 }
 
 TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
@@ -10428,7 +10452,7 @@ TEST(GpuTaskGraph, AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOption
     timingPolicy.minimumFramesBetweenSwitches = 10u;
     Graphics::GpuTaskGraphQueueAssignmentOptions assignmentOptions;
     assignmentOptions.timingHistory = &timingSnapshot;
-    assignmentOptions.timingFeedbackPolicy = &timingPolicy;
+    assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 9u;
 
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
@@ -10441,6 +10465,7 @@ TEST(GpuTaskGraph, AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOption
     EXPECT_FALSE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback);
 
     timingPolicy.enabled = true;
+    assignmentOptions.timingFeedbackPolicy = timingPolicy;
     // The accepted primary route switched at frame five, so the configured dwell period still retains it.
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
     assignment = assignments.find(task);
@@ -10450,6 +10475,7 @@ TEST(GpuTaskGraph, AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOption
     EXPECT_FALSE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback);
 
     timingPolicy.minimumFramesBetweenSwitches = 0u;
+    assignmentOptions.timingFeedbackPolicy = timingPolicy;
     Graphics::GpuTaskGraphCompileOptions compileOptions;
     compileOptions.queueAssignmentOptions = assignmentOptions;
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
@@ -10540,7 +10566,7 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     timingPolicy.calibrationIntervalFrames = 1u;
     Graphics::GpuTaskGraphQueueAssignmentOptions assignmentOptions;
     assignmentOptions.timingHistory = &timingSnapshot;
-    assignmentOptions.timingFeedbackPolicy = &timingPolicy;
+    assignmentOptions.timingFeedbackPolicy = timingPolicy;
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     const Graphics::GpuTaskTimingKey timingKey{
         .task = taskIdentity,
@@ -10629,7 +10655,7 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     intervalTimingPolicy.calibrationIntervalFrames = 2u;
     Graphics::GpuTaskGraphQueueAssignmentOptions intervalAssignmentOptions;
     intervalAssignmentOptions.timingHistory = &intervalTimingSnapshot;
-    intervalAssignmentOptions.timingFeedbackPolicy = &intervalTimingPolicy;
+    intervalAssignmentOptions.timingFeedbackPolicy = intervalTimingPolicy;
     intervalAssignmentOptions.timingFrameIndex = 12u;
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, intervalAssignmentOptions));
     assignment = assignments.find(task);
@@ -10765,7 +10791,7 @@ TEST(GpuTaskGraph, RoutesOptInTimingFeedbackAcrossGraphicsAndComputeClasses){
         timingPolicy.minimumFramesBetweenSwitches = 0u;
         Graphics::GpuTaskGraphQueueAssignmentOptions assignmentOptions;
         assignmentOptions.timingHistory = &timingSnapshot;
-        assignmentOptions.timingFeedbackPolicy = &timingPolicy;
+        assignmentOptions.timingFeedbackPolicy = timingPolicy;
         assignmentOptions.timingFrameIndex = 10u;
         ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
         assignment = assignments.find(task);
@@ -10789,6 +10815,7 @@ TEST(GpuTaskGraph, RoutesOptInTimingFeedbackAcrossGraphicsAndComputeClasses){
         EXPECT_EQ(assignmentState->lastSwitchFrameIndex, 10u);
         timingHistory.snapshot(timingSnapshot);
         timingPolicy.minimumFramesBetweenSwitches = 10u;
+        assignmentOptions.timingFeedbackPolicy = timingPolicy;
         assignmentOptions.timingFrameIndex = 12u;
         ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
         assignment = assignments.find(task);
@@ -10881,7 +10908,7 @@ TEST(GpuTaskGraph, CrossClassTimingCalibrationPreservesStaticBaselineAndHonorsHy
     timingPolicy.minimumFramesBetweenSwitches = 0u;
     Graphics::GpuTaskGraphQueueAssignmentOptions assignmentOptions;
     assignmentOptions.timingHistory = &timingSnapshot;
-    assignmentOptions.timingFeedbackPolicy = &timingPolicy;
+    assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 0u;
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
     const Graphics::GpuTaskQueueAssignment* assignment = assignments.find(task);
@@ -10926,6 +10953,7 @@ TEST(GpuTaskGraph, CrossClassTimingCalibrationPreservesStaticBaselineAndHonorsHy
     timingHistory.snapshot(timingSnapshot);
 
     timingPolicy.minimumAbsoluteBenefitSeconds = 0.007;
+    assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 20u;
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
     assignment = assignments.find(task);
@@ -10935,6 +10963,7 @@ TEST(GpuTaskGraph, CrossClassTimingCalibrationPreservesStaticBaselineAndHonorsHy
 
     timingPolicy.minimumAbsoluteBenefitSeconds = 0.001;
     timingPolicy.minimumFramesBetweenSwitches = 10u;
+    assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 5u;
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
     assignment = assignments.find(task);
@@ -10990,7 +11019,7 @@ TEST(GpuTaskGraph, IgnoresTimingFeedbackWithoutAnyEnabledRoute){
     timingPolicy.calibrationIntervalFrames = 1u;
     Graphics::GpuTaskGraphQueueAssignmentOptions assignmentOptions;
     assignmentOptions.timingHistory = &timingSnapshot;
-    assignmentOptions.timingFeedbackPolicy = &timingPolicy;
+    assignmentOptions.timingFeedbackPolicy = timingPolicy;
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
     const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
@@ -11094,7 +11123,7 @@ TEST(GpuTaskGraph, RejectsCrossClassTimingRoutesWithoutEveryRequiredOptIn){
         timingPolicy.minimumFramesBetweenSwitches = 0u;
         Graphics::GpuTaskGraphQueueAssignmentOptions assignmentOptions;
         assignmentOptions.timingHistory = &timingSnapshot;
-        assignmentOptions.timingFeedbackPolicy = &timingPolicy;
+        assignmentOptions.timingFeedbackPolicy = timingPolicy;
         assignmentOptions.timingFrameIndex = 20u;
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
@@ -11109,7 +11138,7 @@ TEST(GpuTaskGraph, RejectsCrossClassTimingRoutesWithoutEveryRequiredOptIn){
             .queue = queues[candidateQueueIndex].id,
         };
         assignmentOptions.timingHistory = nullptr;
-        assignmentOptions.timingFeedbackPolicy = nullptr;
+        assignmentOptions.timingFeedbackPolicy = {};
         assignmentOptions.timingQueueOverrides = &forcedOverride;
         assignmentOptions.timingQueueOverrideCount = 1u;
         EXPECT_FALSE(Assign(graph, analysis, topology, assignments, assignmentOptions));
@@ -11252,7 +11281,7 @@ TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
     };
     Graphics::GpuTaskGraphQueueAssignmentOptions options;
     options.timingHistory = &timingSnapshot;
-    options.timingFeedbackPolicy = &timingPolicy;
+    options.timingFeedbackPolicy = timingPolicy;
     options.timingQueueOverrides = timingOverrides;
     options.timingQueueOverrideCount = LengthOf(timingOverrides);
     options.timingFrameIndex = 12u;
@@ -11353,7 +11382,7 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
     timingPolicy.minimumFramesBetweenSwitches = 0u;
     Graphics::GpuTaskGraphQueueAssignmentOptions assignmentOptions;
     assignmentOptions.timingHistory = &timingSnapshot;
-    assignmentOptions.timingFeedbackPolicy = &timingPolicy;
+    assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 12u;
 
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
@@ -11374,7 +11403,7 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
         },
     };
     assignmentOptions.timingHistory = nullptr;
-    assignmentOptions.timingFeedbackPolicy = nullptr;
+    assignmentOptions.timingFeedbackPolicy = {};
     assignmentOptions.timingQueueOverrides = forcedOverride;
     assignmentOptions.timingQueueOverrideCount = LengthOf(forcedOverride);
     Graphics::GpuTaskGraphCompileOptions forcedCompileOptions;
@@ -11403,7 +11432,7 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
     timingHistory.snapshot(timingSnapshot);
     timingPolicy.minimumFramesBetweenSwitches = 30u;
     assignmentOptions.timingHistory = &timingSnapshot;
-    assignmentOptions.timingFeedbackPolicy = &timingPolicy;
+    assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingQueueOverrides = nullptr;
     assignmentOptions.timingQueueOverrideCount = 0u;
     assignmentOptions.timingFrameIndex = 14u;
@@ -11577,7 +11606,7 @@ TEST(GpuTaskGraph, RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnershipH
     timingPolicy.minimumFramesBetweenSwitches = 0u;
     Graphics::GpuTaskGraphQueueAssignmentOptions assignmentOptions;
     assignmentOptions.timingHistory = &timingSnapshot;
-    assignmentOptions.timingFeedbackPolicy = &timingPolicy;
+    assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 8u;
     Graphics::GpuTaskGraphCompileOptions compileOptions;
     compileOptions.queueAssignmentOptions = assignmentOptions;
@@ -39035,7 +39064,7 @@ TEST(GpuTaskGraph, PlacesNaturalAvboitStagesAcrossCollapsedHybridAndSplitPackets
         Graphics::GpuTaskGraphCompileOptions compileOptions;
         compileOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
         compileOptions.queueAssignmentOptions.timingHistory = &timingSnapshot;
-        compileOptions.queueAssignmentOptions.timingFeedbackPolicy = &timingPolicy;
+        compileOptions.queueAssignmentOptions.timingFeedbackPolicy = timingPolicy;
         compileOptions.queueAssignmentOptions.timingFrameIndex = 20u;
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);

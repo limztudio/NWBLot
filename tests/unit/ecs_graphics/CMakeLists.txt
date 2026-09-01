@@ -5,6 +5,7 @@ target_sources(nwb_ecs_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/ray_tracing_shader_table_renderer_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_subsystem_boundary_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_contract_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_timing_feedback_tests.cpp"
     "${CMAKE_SOURCE_DIR}/tests/common/meshlet_ref_test_data.h"
 )
 target_link_libraries(nwb_ecs_graphics_tests PRIVATE

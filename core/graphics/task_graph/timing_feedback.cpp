@@ -255,6 +255,11 @@ void GpuTaskTimingHistoryStore::reset()noexcept{
     m_deviceGeneration = 0u;
 }
 
+void GpuTaskTimingHistoryStore::reset(GpuTaskTimingHistorySnapshot& outSnapshot)noexcept{
+    reset();
+    outSnapshot.reset();
+}
+
 
 void GpuTaskTimingHistoryStore::resetForDeviceGeneration(const u16 deviceGeneration)noexcept{
     if(deviceGeneration == 0u){

@@ -447,7 +447,7 @@ bool GpuTimingMetricCorrelator::hasOutputRole(const Name& scopeName)const{
     return false;
 }
 
-void GpuTimingMetricCorrelator::discardPendingRanges(){
+void GpuTimingMetricCorrelator::discardPendingRanges()noexcept{
     for(OverlapRecord& record : m_overlapRecords)
         record.pendingFrames.clear();
     m_pendingPacketEnvelopeMetrics.clear();

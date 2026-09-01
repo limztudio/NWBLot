@@ -32,14 +32,6 @@ RendererFramePipeline::RendererFramePipeline(
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_csgShapeRegistry(arena)
     , m_frameGraphRendererLabel(arena)
-    , m_deferredLightingTaskGraph(arena)
-    , m_deferredLightingTaskGraphAnalysis(arena)
-    , m_deferredLightingTaskGraphQueueAssignments(arena)
-    , m_deferredLightingTaskGraphQueueAssignmentTelemetry(arena)
-    , m_deferredLightingCompiledGraph(arena)
-    , m_deferredLightingRecordedGraph(arena)
-    , m_deferredLightingSubmissionTransaction(arena)
-    , m_deferredTaskTimingFeedback(arena, graphics)
     , m_meshState(arena)
     , m_materialState(arena)
     , m_rayTracingState(arena)
@@ -92,6 +84,14 @@ RendererFramePipeline::RendererFramePipeline(
         m_materialSystem,
         m_rayTracingState
     )
+    , m_deferredTaskTimingFeedback(arena, graphics)
+    , m_deferredLightingTaskGraph(arena)
+    , m_deferredLightingTaskGraphAnalysis(arena)
+    , m_deferredLightingTaskGraphQueueAssignments(arena)
+    , m_deferredLightingTaskGraphQueueAssignmentTelemetry(arena)
+    , m_deferredLightingCompiledGraph(arena)
+    , m_deferredLightingRecordedGraph(arena)
+    , m_deferredLightingSubmissionTransaction(arena)
 {
     if(!RegisterBuiltInCsgShapeTypes(m_csgShapeRegistry))
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register built-in CSG shape types"));
@@ -99,6 +99,9 @@ RendererFramePipeline::RendererFramePipeline(
     m_deferredTaskTimingFeedback.activate();
 }
 RendererFramePipeline::~RendererFramePipeline(){
+    // Resolve graph payloads eagerly while every callback owner is alive. Declaration order independently keeps graph
+    // storage destruction ahead of those owners after the externally serialized render lifecycle has quiesced.
+    m_deferredLightingTaskGraph.reset();
     m_deferredTaskTimingFeedback.deactivate();
 }
 

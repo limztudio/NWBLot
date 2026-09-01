@@ -213,7 +213,7 @@ struct AvboitDepthWarpGraphTask{
         const Core::GpuTaskRecordContext& context
     );
 
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token);
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
 
     static void discarded(Payload& payload);
 };

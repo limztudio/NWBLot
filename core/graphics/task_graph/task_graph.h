@@ -52,6 +52,7 @@ struct GpuTaskGraphTaskView{
     usize resourceVersionUseCount = 0u;
     bool hasPayload = false;
     bool hasRecordPayload = false;
+    bool hasAcceptedPayload = false;
 };
 
 // Graph-owned immutable view of one texture range released by external work. State sources are copied while the
@@ -431,7 +432,7 @@ public:
 
         GpuTaskAcceptedThunk acceptPayload = nullptr;
         if constexpr(requires{
-            { &TaskT::accepted } -> SameAs<void (*)(Payload&, const QueueSubmissionToken&)>;
+            static_cast<void (*)(Payload&, const QueueSubmissionToken&)>(&TaskT::accepted);
         })
             acceptPayload = &AcceptPayload<TaskT>;
 

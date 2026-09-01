@@ -202,9 +202,8 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraphQueueAssignmentOptions& options,
     const u16 deviceGeneration
 )noexcept{
-    return options.timingFeedbackPolicy
-        && options.timingFeedbackPolicy->enabled
-        && options.timingFeedbackPolicy->valid()
+    return options.timingFeedbackPolicy.enabled
+        && options.timingFeedbackPolicy.valid()
         && options.timingHistory
         && options.timingHistory->valid()
         && options.timingHistory->deviceGeneration() == deviceGeneration
@@ -438,9 +437,8 @@ bool GpuTaskGraphCompiler::assignQueues(
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidQueueTopology);
 
     if(
-        options.timingFeedbackPolicy
-        && options.timingFeedbackPolicy->enabled
-        && !options.timingFeedbackPolicy->valid()
+        options.timingFeedbackPolicy.enabled
+        && !options.timingFeedbackPolicy.valid()
     )
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidTimingFeedback);
 
@@ -830,7 +828,7 @@ bool GpuTaskGraphCompiler::assignQueues(
                 *timingIncumbent,
                 timingAssignmentKey,
                 *options.timingHistory,
-                *options.timingFeedbackPolicy,
+                options.timingFeedbackPolicy,
                 options.timingFrameIndex
             );
             if(calibrationQueue){
@@ -848,7 +846,7 @@ bool GpuTaskGraphCompiler::assignQueues(
                 *timingIncumbent,
                 timingAssignmentKey,
                 *options.timingHistory,
-                *options.timingFeedbackPolicy,
+                options.timingFeedbackPolicy,
                 options.timingFrameIndex
             )){
                 selectedQueue = timingQueue;

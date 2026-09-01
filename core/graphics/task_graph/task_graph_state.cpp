@@ -272,6 +272,7 @@ GpuTaskGraphTaskView GpuTaskGraph::taskAt(const usize index)const{
         .resourceVersionUseCount = task.resourceVersionUseCount,
         .hasPayload = task.payload != nullptr,
         .hasRecordPayload = task.recordPayload != nullptr,
+        .hasAcceptedPayload = task.acceptPayload != nullptr,
     };
 }
 

@@ -16,13 +16,227 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(
+    Core::GpuTaskTimingFeedbackPolicy& currentPolicy,
+    const Core::GpuTaskTimingFeedbackPolicy& requestedPolicy,
+    const bool rendererActive
+)noexcept{
+    RendererTaskTimingFeedbackPolicyTransition transition{
+        .previousPolicy = currentPolicy,
+        .requestedPolicy = requestedPolicy,
+    };
+    if(!rendererActive || currentPolicy.enabled == requestedPolicy.enabled){
+        currentPolicy = requestedPolicy;
+        return transition;
+    }
+
+    transition.action = requestedPolicy.enabled
+        ? RendererTaskTimingFeedbackCollectionAction::Enable
+        : RendererTaskTimingFeedbackCollectionAction::Disable
+    ;
+    if(transition.action == RendererTaskTimingFeedbackCollectionAction::Disable)
+        currentPolicy = requestedPolicy;
+    return transition;
+}
+
+void ResolveRendererTaskTimingFeedbackPolicyTransition(
+    Core::GpuTaskTimingFeedbackPolicy& currentPolicy,
+    const RendererTaskTimingFeedbackPolicyTransition& transition,
+    const bool collectionUpdated
+)noexcept{
+    if(transition.action == RendererTaskTimingFeedbackCollectionAction::None)
+        return;
+
+    NWB_ASSERT(transition.action < RendererTaskTimingFeedbackCollectionAction::kCount);
+    if(transition.action >= RendererTaskTimingFeedbackCollectionAction::kCount)
+        return;
+    currentPolicy = collectionUpdated ? transition.requestedPolicy : transition.previousPolicy;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RendererTaskTimingFeedbackState::trackSample(
+    const Core::GpuTimingSampleAttribution attribution,
+    const Name& scopeName,
+    const Core::GpuTaskTimingKey& key,
+    const Core::GpuPhysicalQueueId& expectedQueue,
+    const u64 sourceFrameIndex,
+    const bool recordsNonCommittingTimingSample
+){
+    if(!attribution.valid() || !scopeName || !key.valid() || !expectedQueue.valid())
+        return false;
+    if(findPendingSample(attribution) != m_pendingSamples.size())
+        return false;
+
+    m_pendingSamples.push_back(PendingSample{
+        .attribution = attribution,
+        .scopeName = scopeName,
+        .key = key,
+        .expectedQueue = expectedQueue,
+        .sourceFrameIndex = sourceFrameIndex,
+        .recordsNonCommittingTimingSample = recordsNonCommittingTimingSample,
+    });
+    return true;
+}
+
+void RendererTaskTimingFeedbackState::acceptSubmission(
+    const Core::GpuTimingSampleAttribution attribution,
+    const Core::QueueSubmissionToken& token,
+    const bool feedbackActive
+)noexcept{
+    const usize pendingIndex = findPendingSample(attribution);
+    if(pendingIndex == m_pendingSamples.size())
+        return;
+
+    PendingSample& pending = m_pendingSamples[pendingIndex];
+    if(pending.submissionResolved)
+        return;
+
+    const Core::GpuPhysicalQueueId acceptedQueue{
+        token.physicalQueueIndex,
+        token.deviceGeneration,
+    };
+    pending.submissionResolved = true;
+    pending.accepted = feedbackActive
+        && token.valid()
+        && token.hasPhysicalQueueIdentity()
+        && token.queue == pending.key.queue
+        && acceptedQueue == pending.expectedQueue
+    ;
+}
+
+void RendererTaskTimingFeedbackState::discardRecording(const Core::GpuTimingSampleAttribution attribution)noexcept{
+    const usize pendingIndex = findPendingSample(attribution);
+    if(pendingIndex == m_pendingSamples.size())
+        return;
+
+    PendingSample& pending = m_pendingSamples[pendingIndex];
+    if(pending.submissionResolved)
+        return;
+
+    pending.submissionResolved = true;
+    pending.accepted = false;
+}
+
+void RendererTaskTimingFeedbackState::completeSample(
+    const Core::GpuTimingSample& sample,
+    const bool feedbackActive
+)noexcept{
+    const usize pendingIndex = findPendingSample(sample.attribution);
+    if(pendingIndex == m_pendingSamples.size())
+        return;
+
+    PendingSample& pending = m_pendingSamples[pendingIndex];
+    if(pending.sampleResolved)
+        return;
+
+    // Every matching notification is terminal, including unpublished and malformed results. Acceptance still owns
+    // route assignment independently, while only a complete positive duration is eligible for history.
+    pending.sampleResolved = true;
+    if(
+        !feedbackActive
+        || !sample.published
+        || sample.scopeName != pending.scopeName
+        || sample.sourceFrameIndex != pending.sourceFrameIndex
+        || sample.physicalQueue != pending.expectedQueue
+        || !IsFinite(sample.durationSeconds)
+        || sample.durationSeconds <= 0.0
+        || sample.durationSeconds >= Limit<f64>::s_Max
+    )
+        return;
+
+    pending.durationSeconds = sample.durationSeconds;
+    pending.hasUsableSample = true;
+}
+
+RendererTaskTimingFeedbackDrainResult RendererTaskTimingFeedbackState::drain(
+    Core::GpuTaskTimingHistoryStore& history,
+    const u16 deviceGeneration
+){
+    RendererTaskTimingFeedbackDrainResult result;
+    usize pendingIndex = 0u;
+    while(pendingIndex < m_pendingSamples.size()){
+        PendingSample& pending = m_pendingSamples[pendingIndex];
+        if(pending.expectedQueue.deviceGeneration != deviceGeneration){
+            retirePendingSample(pendingIndex);
+            ++result.retiredSampleCount;
+            continue;
+        }
+        if(!pending.submissionResolved){
+            ++pendingIndex;
+            continue;
+        }
+        if(!pending.accepted){
+            retirePendingSample(pendingIndex);
+            ++result.retiredSampleCount;
+            continue;
+        }
+
+        if(!pending.recordsNonCommittingTimingSample && !pending.assignmentRecorded){
+            if(!history.noteAcceptedAssignment(pending.key, pending.expectedQueue, pending.sourceFrameIndex)){
+                retirePendingSample(pendingIndex);
+                ++result.retiredSampleCount;
+                ++result.rejectedAssignmentCount;
+                continue;
+            }
+            pending.assignmentRecorded = true;
+            ++result.acceptedAssignmentCount;
+        }
+
+        if(!pending.sampleResolved){
+            ++pendingIndex;
+            continue;
+        }
+        if(pending.hasUsableSample){
+            if(history.recordNonCommittingSample(pending.key, pending.expectedQueue, pending.durationSeconds))
+                ++result.recordedSampleCount;
+            else
+                ++result.rejectedSampleCount;
+        }
+        retirePendingSample(pendingIndex);
+        ++result.retiredSampleCount;
+    }
+    return result;
+}
+
+usize RendererTaskTimingFeedbackState::findPendingSample(
+    const Core::GpuTimingSampleAttribution attribution
+)const noexcept{
+    for(usize pendingIndex = 0u; pendingIndex < m_pendingSamples.size(); ++pendingIndex){
+        if(m_pendingSamples[pendingIndex].attribution == attribution)
+            return pendingIndex;
+    }
+    return m_pendingSamples.size();
+}
+
+void RendererTaskTimingFeedbackState::retirePendingSample(const usize pendingIndex){
+    NWB_ASSERT(pendingIndex < m_pendingSamples.size());
+    m_pendingSamples.erase(m_pendingSamples.begin() + static_cast<isize>(pendingIndex));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererTaskTimingFeedback::onGpuTimingSampleCallback(
+    void* const context,
+    const Core::GpuTimingSample& sample
+)noexcept{
+    RendererTaskTimingFeedback* const feedback = static_cast<RendererTaskTimingFeedback*>(context);
+    if(feedback)
+        feedback->onGpuTimingSample(sample);
+}
+
+
 RendererTaskTimingFeedback::RendererTaskTimingFeedback(Core::Alloc::GlobalArena& arena, Core::Graphics& graphics)
     : m_graphics(graphics)
+    , m_state(arena)
     , m_history(arena)
     , m_snapshot(arena)
-    , m_pendingSamples(arena)
 {}
-RendererTaskTimingFeedback::~RendererTaskTimingFeedback(){
+RendererTaskTimingFeedback::~RendererTaskTimingFeedback()noexcept{
     deactivate();
 }
 
@@ -41,16 +255,24 @@ void RendererTaskTimingFeedback::activate(){
     Core::GpuTimingRecorder& timing = m_graphics.gpuTiming();
     const Core::GpuTimingSampleSubscription subscription = timing.subscribeSampleListener(Core::GpuTimingSampleListener{
         .context = this,
-        .invoke = &OnGpuTimingSample,
+        .invoke = &onGpuTimingSampleCallback,
     });
     if(!subscription.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback failed to subscribe to GPU timing samples."));
         return;
     }
-    if(feedbackCollectionEnabled && !timing.setFeedbackCollectionEnabled(subscription, true)){
-        timing.unsubscribeSampleListener(subscription);
-        NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback failed to enable GPU sample collection."));
-        return;
+    if(feedbackCollectionEnabled){
+        try{
+            if(!timing.setFeedbackCollectionEnabled(subscription, true)){
+                timing.unsubscribeSampleListener(subscription);
+                NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback failed to enable GPU sample collection."));
+                return;
+            }
+        }
+        catch(...){
+            timing.unsubscribeSampleListener(subscription);
+            throw;
+        }
     }
 
     ScopedLock lock(m_mutex);
@@ -58,7 +280,7 @@ void RendererTaskTimingFeedback::activate(){
     m_active = true;
 }
 
-void RendererTaskTimingFeedback::deactivate(){
+void RendererTaskTimingFeedback::deactivate()noexcept{
     ScopedLock lifecycleLock(m_lifecycleMutex);
 
     Core::GpuTimingSampleSubscription subscription;
@@ -81,21 +303,39 @@ bool RendererTaskTimingFeedback::setPolicy(const Core::GpuTaskTimingFeedbackPoli
         return false;
 
     ScopedLock lifecycleLock(m_lifecycleMutex);
-    Core::GpuTaskTimingFeedbackPolicy previousPolicy;
+    RendererTaskTimingFeedbackPolicyTransition transition;
     Core::GpuTimingSampleSubscription subscription;
     {
         ScopedLock lock(m_mutex);
-        previousPolicy = m_policy;
-        m_policy = policy;
-        if(m_active)
-            subscription = m_subscription;
+        transition = PrepareRendererTaskTimingFeedbackPolicyTransition(m_policy, policy, m_active);
+        if(transition.action == RendererTaskTimingFeedbackCollectionAction::None)
+            return true;
+
+        NWB_ASSERT(m_active && m_subscription.valid());
+        if(!m_active || !m_subscription.valid()){
+            ResolveRendererTaskTimingFeedbackPolicyTransition(m_policy, transition, false);
+            return false;
+        }
+        subscription = m_subscription;
     }
-    if(subscription.valid() && !m_graphics.gpuTiming().setFeedbackCollectionEnabled(subscription, policy.enabled)){
+
+    bool collectionUpdated = false;
+    try{
+        collectionUpdated = m_graphics.gpuTiming().setFeedbackCollectionEnabled(
+            subscription,
+            transition.action == RendererTaskTimingFeedbackCollectionAction::Enable
+        );
+    }
+    catch(...){
         ScopedLock lock(m_mutex);
-        m_policy = previousPolicy;
-        return false;
+        ResolveRendererTaskTimingFeedbackPolicyTransition(m_policy, transition, false);
+        throw;
     }
-    return true;
+    {
+        ScopedLock lock(m_mutex);
+        ResolveRendererTaskTimingFeedbackPolicyTransition(m_policy, transition, collectionUpdated);
+    }
+    return collectionUpdated;
 }
 
 Core::GpuTimingSampleAttribution RendererTaskTimingFeedback::beginSample(
@@ -115,161 +355,79 @@ Core::GpuTimingSampleAttribution RendererTaskTimingFeedback::beginSample(
     if(!attribution.valid())
         return Core::s_NoGpuTimingSampleAttribution;
 
-    m_pendingSamples.push_back(PendingSample{
-        .attribution = attribution,
-        .scopeName = scopeName,
-        .key = key,
-        .expectedQueue = expectedQueue,
-        .sourceFrameIndex = m_graphics.getFrameIndex(),
-        .recordsNonCommittingTimingSample = recordsNonCommittingTimingSample,
-    });
+    if(!m_state.trackSample(
+        attribution,
+        scopeName,
+        key,
+        expectedQueue,
+        m_graphics.getFrameIndex(),
+        recordsNonCommittingTimingSample
+    ))
+        return Core::s_NoGpuTimingSampleAttribution;
     return attribution;
 }
 
 void RendererTaskTimingFeedback::acceptSubmission(
     const Core::GpuTimingSampleAttribution attribution,
     const Core::QueueSubmissionToken& token
-){
+)noexcept{
     if(attribution == Core::s_NoGpuTimingSampleAttribution)
         return;
 
     ScopedLock lock(m_mutex);
-    const usize pendingIndex = findPendingSample(attribution);
-    if(pendingIndex == m_pendingSamples.size())
-        return;
-
-    PendingSample& pending = m_pendingSamples[pendingIndex];
-    const Core::GpuPhysicalQueueId acceptedQueue{
-        token.physicalQueueIndex,
-        token.deviceGeneration,
-    };
-    if(
-        !m_active
-        || !token.valid()
-        || !token.hasPhysicalQueueIdentity()
-        || token.queue != pending.key.queue
-        || acceptedQueue != pending.expectedQueue
-    ){
-        m_pendingSamples.erase(m_pendingSamples.begin() + static_cast<isize>(pendingIndex));
-        return;
-    }
-
-    m_history.resetForDeviceGeneration(acceptedQueue.deviceGeneration);
-    if(
-        !pending.recordsNonCommittingTimingSample
-        && !m_history.noteAcceptedAssignment(pending.key, acceptedQueue, pending.sourceFrameIndex)
-    ){
-        m_pendingSamples.erase(m_pendingSamples.begin() + static_cast<isize>(pendingIndex));
-        return;
-    }
-
-    pending.accepted = true;
-    tryRecordSample(pendingIndex);
+    m_state.acceptSubmission(attribution, token, m_active);
 }
 
-void RendererTaskTimingFeedback::discardRecording(const Core::GpuTimingSampleAttribution attribution){
+void RendererTaskTimingFeedback::discardRecording(const Core::GpuTimingSampleAttribution attribution)noexcept{
     if(attribution == Core::s_NoGpuTimingSampleAttribution)
         return;
 
     ScopedLock lock(m_mutex);
-    const usize pendingIndex = findPendingSample(attribution);
-    if(pendingIndex != m_pendingSamples.size())
-        m_pendingSamples.erase(m_pendingSamples.begin() + static_cast<isize>(pendingIndex));
+    m_state.discardRecording(attribution);
 }
 
 void RendererTaskTimingFeedback::configureCompileOptions(Core::GpuTaskGraphCompileOptions& options, const u64 frameIndex){
+    options.queueAssignmentOptions.timingHistory = nullptr;
+    options.queueAssignmentOptions.timingFeedbackPolicy = {};
+    options.queueAssignmentOptions.timingFrameIndex = 0u;
+
+    RendererTaskTimingFeedbackDrainResult drainResult;
+    {
+        ScopedLock lock(m_mutex);
+        const u16 deviceGeneration = m_graphics.getDevice().getDeviceGeneration();
+        m_history.resetForDeviceGeneration(deviceGeneration);
+        drainResult = m_state.drain(m_history, deviceGeneration);
+
+        if(m_active && m_subscription.valid() && m_policy.enabled){
+            m_history.snapshot(m_snapshot);
+            if(m_snapshot.valid()){
+                options.queueAssignmentOptions.timingHistory = &m_snapshot;
+                options.queueAssignmentOptions.timingFeedbackPolicy = m_policy;
+                options.queueAssignmentOptions.timingFrameIndex = frameIndex;
+            }
+        }
+    }
+    if(drainResult.rejectedAssignmentCount != 0u || drainResult.rejectedSampleCount != 0u){
+        NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback rejected {} assignment(s) and {} terminal sample(s).")
+            , drainResult.rejectedAssignmentCount
+            , drainResult.rejectedSampleCount
+        );
+    }
+}
+
+void RendererTaskTimingFeedback::reset()noexcept{
     ScopedLock lock(m_mutex);
-    const u16 deviceGeneration = m_graphics.getDevice().getDeviceGeneration();
-    m_history.resetForDeviceGeneration(deviceGeneration);
-    if(!m_policy.enabled)
-        return;
-
-    m_history.snapshot(m_snapshot);
-    if(!m_snapshot.valid())
-        return;
-
-    options.queueAssignmentOptions.timingHistory = &m_snapshot;
-    options.queueAssignmentOptions.timingFeedbackPolicy = &m_policy;
-    options.queueAssignmentOptions.timingFrameIndex = frameIndex;
-}
-
-void RendererTaskTimingFeedback::reset(){
-    ScopedLock lock(m_mutex);
-    m_pendingSamples.clear();
-    m_history.reset();
-    m_history.snapshot(m_snapshot);
+    m_state.reset();
+    m_history.reset(m_snapshot);
 }
 
 
-void RendererTaskTimingFeedback::OnGpuTimingSample(void* const context, const Core::GpuTimingSample& sample){
-    RendererTaskTimingFeedback* const feedback = static_cast<RendererTaskTimingFeedback*>(context);
-    if(feedback)
-        feedback->onGpuTimingSample(sample);
-}
-
-
-void RendererTaskTimingFeedback::onGpuTimingSample(const Core::GpuTimingSample& sample){
+void RendererTaskTimingFeedback::onGpuTimingSample(const Core::GpuTimingSample& sample)noexcept{
     if(sample.attribution == Core::s_NoGpuTimingSampleAttribution)
         return;
 
     ScopedLock lock(m_mutex);
-    const usize pendingIndex = findPendingSample(sample.attribution);
-    if(pendingIndex == m_pendingSamples.size())
-        return;
-
-    PendingSample& pending = m_pendingSamples[pendingIndex];
-    if(!sample.published){
-        m_pendingSamples.erase(m_pendingSamples.begin() + static_cast<isize>(pendingIndex));
-        return;
-    }
-    if(
-        !m_active
-        || sample.scopeName != pending.scopeName
-        || sample.sourceFrameIndex != pending.sourceFrameIndex
-        || sample.physicalQueue != pending.expectedQueue
-    ){
-        m_pendingSamples.erase(m_pendingSamples.begin() + static_cast<isize>(pendingIndex));
-        return;
-    }
-
-    pending.durationSeconds = sample.durationSeconds;
-    pending.hasSample = true;
-    tryRecordSample(pendingIndex);
-}
-
-usize RendererTaskTimingFeedback::findPendingSample(const Core::GpuTimingSampleAttribution attribution)const noexcept{
-    for(usize pendingIndex = 0u; pendingIndex < m_pendingSamples.size(); ++pendingIndex){
-        if(m_pendingSamples[pendingIndex].attribution == attribution)
-            return pendingIndex;
-    }
-    return m_pendingSamples.size();
-}
-
-void RendererTaskTimingFeedback::tryRecordSample(const usize pendingIndex){
-    NWB_ASSERT(pendingIndex < m_pendingSamples.size());
-    if(pendingIndex >= m_pendingSamples.size())
-        return;
-
-    const PendingSample& pending = m_pendingSamples[pendingIndex];
-    if(!pending.accepted || !pending.hasSample)
-        return;
-
-    const bool recorded = pending.recordsNonCommittingTimingSample
-        ? m_history.recordNonCommittingSample(
-            pending.key,
-            pending.expectedQueue,
-            pending.durationSeconds
-        )
-        : m_history.recordSample(
-            pending.key,
-            pending.expectedQueue,
-            pending.durationSeconds,
-            pending.sourceFrameIndex
-        )
-    ;
-    if(!recorded)
-        NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback rejected an accepted GPU timing sample."));
-    m_pendingSamples.erase(m_pendingSamples.begin() + static_cast<isize>(pendingIndex));
+    m_state.completeSample(sample, m_active);
 }
 
 

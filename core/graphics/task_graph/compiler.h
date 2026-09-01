@@ -128,7 +128,9 @@ namespace GpuTaskGraphPacketizationPolicy{
 // validation and packet/barrier correctness remain independent from late query completion and history mutation.
 struct GpuTaskGraphQueueAssignmentOptions{
     const GpuTaskTimingHistorySnapshot* timingHistory = nullptr;
-    const GpuTaskTimingFeedbackPolicy* timingFeedbackPolicy = nullptr;
+    // Scalar policy is copied into one compile request so concurrent runtime policy changes cannot mutate an
+    // in-progress queue assignment. The history remains an explicitly immutable snapshot owned by its producer.
+    GpuTaskTimingFeedbackPolicy timingFeedbackPolicy;
     const GpuTaskTimingQueueOverride* timingQueueOverrides = nullptr;
     usize timingQueueOverrideCount = 0u;
     u64 timingFrameIndex = 0u;

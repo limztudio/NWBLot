@@ -258,6 +258,7 @@ public:
 
 public:
     void reset()noexcept;
+    void reset(GpuTaskTimingHistorySnapshot& outSnapshot)noexcept;
     void resetForDeviceGeneration(u16 deviceGeneration)noexcept;
     // A successfully collected query represents accepted GPU work.  The source frame updates route dwell state only
     // when it is newer than the previous observation, so late completion can never move that state backwards.
@@ -267,14 +268,14 @@ public:
         f64 durationSeconds,
         u64 sourceFrameIndex
     );
-    // A bounded calibration observation contributes route statistics but is not a committed adaptive assignment.
-    // This keeps a slow or under-sampled route from changing incumbent retention or restarting switch dwell.
+    // Adds duration statistics without changing adaptive assignment state. This records both bounded calibration
+    // observations and accepted samples whose assignment was committed separately at submission resolution.
     [[nodiscard]] bool recordNonCommittingSample(
         const GpuTaskTimingKey& key,
         const GpuPhysicalQueueId& physicalQueue,
         f64 durationSeconds
     );
-    // Future packet-acceptance integrations may report a route even when timestamp capacity was unavailable.
+    // Packet acceptance reports the selected route even when timestamp capacity was unavailable.
     [[nodiscard]] bool noteAcceptedAssignment(
         const GpuTaskTimingKey& key,
         const GpuPhysicalQueueId& physicalQueue,

@@ -75,7 +75,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool enabled()const = 0;
+    [[nodiscard]] virtual bool enabled()const noexcept = 0;
     [[nodiscard]] virtual TimingScopeId registerScope(const Name& scopeName) = 0;
     virtual void recordSample(TimingScopeId scope, f64 seconds, u64 sampleFrameIndex) = 0;
     virtual void publishFrame(u64 publishFrameIndex) = 0;
@@ -112,7 +112,7 @@ public:
 
 public:
     void setEnabled(bool enabled);
-    [[nodiscard]] virtual bool enabled()const override{ return m_enabled; }
+    [[nodiscard]] virtual bool enabled()const noexcept override{ return m_enabled; }
     void clear();
     [[nodiscard]] virtual TimingScopeId registerScope(const Name& scopeName)override;
     virtual void recordSample(TimingScopeId scope, f64 seconds, u64 sampleFrameIndex)override;

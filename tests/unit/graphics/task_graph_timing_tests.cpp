@@ -90,6 +90,31 @@ inline constexpr Name s_TaskGraphTimingScratchArena("tests/graphics/task_graph_t
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST(GpuTaskTimingHistoryStore, ResetInvalidatesOwnedSnapshot){
+    TestArena testArena;
+    Graphics::GpuTaskTimingHistoryStore history(testArena.arena);
+    Graphics::GpuTaskTimingHistorySnapshot snapshot(testArena.arena);
+    const Graphics::GpuPhysicalQueueId queue{ .index = 1u, .deviceGeneration = 21u };
+    const Graphics::GpuTaskTimingKey key{
+        .task = Name("tests/task_graph/timing_snapshot_reset"),
+        .queue = Graphics::CommandQueue::Compute,
+    };
+
+    history.resetForDeviceGeneration(queue.deviceGeneration);
+    ASSERT_TRUE(history.recordSample(key, queue, 0.002, 4u));
+    history.snapshot(snapshot);
+    ASSERT_TRUE(snapshot.valid());
+    ASSERT_NE(snapshot.find(key, queue), nullptr);
+
+    history.reset(snapshot);
+    EXPECT_FALSE(snapshot.valid());
+    EXPECT_EQ(snapshot.deviceGeneration(), 0u);
+    EXPECT_EQ(snapshot.find(key, queue), nullptr);
+    EXPECT_EQ(history.deviceGeneration(), 0u);
+    EXPECT_EQ(history.historyCount(), 0u);
+}
+
+
 TEST(GpuTaskGraphTiming, CompilesInclusivePacketEnvelopeWithoutChangingTaskPolicies){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

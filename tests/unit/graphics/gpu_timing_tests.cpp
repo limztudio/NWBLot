@@ -44,7 +44,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool enabled()const override{ return true; }
+    [[nodiscard]] virtual bool enabled()const noexcept override{ return true; }
     [[nodiscard]] virtual Core::Perf::TimingScopeId registerScope(const Name& scopeName)override{
         static_cast<void>(scopeName);
         const usize attempt = m_registrationAttempt;
@@ -109,6 +109,7 @@ TEST(GpuTimingSampleSubscriptions, AggregateIndependentCollectionRequests){
 
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
+    static_assert(noexcept(recorder.unsubscribeSampleListener(first)));
     EXPECT_NE(first, second);
     EXPECT_FALSE(recorder.collectionActive());
     ASSERT_TRUE(recorder.setFeedbackCollectionEnabled(first, true));
@@ -174,6 +175,7 @@ TEST(GpuTimingRecorderStatistics, DefaultsToUnknownDeviceAndExplicitZeroOutcomes
     EXPECT_EQ(statistics.discardedScopeCount, 0u);
     EXPECT_EQ(statistics.quarantinedScopeCount, 0u);
     EXPECT_EQ(statistics.beginFailureCount, 0u);
+    EXPECT_EQ(statistics.sampleListenerFailureCount, 0u);
     for(u8 reason = 0u; reason < Core::GpuTimingScopeSkipReason::kCount; ++reason)
         EXPECT_EQ(statistics.skippedScopeCountByReason[reason], 0u);
     EXPECT_FALSE(statistics.queryCollectionEnabled);

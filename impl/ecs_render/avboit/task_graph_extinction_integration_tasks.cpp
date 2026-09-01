@@ -341,7 +341,7 @@ void AvboitExtinctionGraphTask::discarded(Payload& payload){
     return true;
 }
 
-void AvboitIntegrationGraphTask::accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+void AvboitIntegrationGraphTask::accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
     if(payload.timingFeedback)
         payload.timingFeedback->acceptSubmission(payload.timingAttribution, token);
     payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;

@@ -382,21 +382,6 @@ private:
     // FrameGraphBuilder retains labels by view until the capture payload is encoded, so this storage must outlive
     // appendFrameGraph() rather than using its task-graph scratch arena.
     AString<Core::Alloc::GlobalArena> m_frameGraphRendererLabel;
-    // Shadow Preparation, the native Graphics prefix, Shadow Visibility, Software Caustics, Surfel GI, AVBOIT, Hardware Caustics,
-    // Deferred Lighting, Composite, Present, optional lagged-history copy, and recovery share one packet graph. The
-    // prefix's five command lists remain a temporary recording bridge inside its first Graphics packet.
-    Core::GpuTaskGraph m_deferredLightingTaskGraph;
-    Core::GpuTaskGraphAnalysis m_deferredLightingTaskGraphAnalysis;
-    Core::GpuTaskGraphQueueAssignments m_deferredLightingTaskGraphQueueAssignments;
-    // Accepted-route history survives ordinary per-frame graph resets so telemetry can distinguish first, unchanged,
-    // and changed assignments. Device/resource invalidation clears the tracker with the artifacts it describes.
-    Core::GpuTaskGraphQueueAssignmentTelemetryTracker m_deferredLightingTaskGraphQueueAssignmentTelemetry;
-    Core::GpuCompiledGraph m_deferredLightingCompiledGraph;
-    Core::GpuRecordedGraph m_deferredLightingRecordedGraph;
-    Core::GpuGraphSubmissionTransaction m_deferredLightingSubmissionTransaction;
-    // Query completion is asynchronous, so this bridge owns accepted-route attribution and exposes only immutable
-    // history to the next graph compile. Its policy is disabled by default.
-    RendererTaskTimingFeedback m_deferredTaskTimingFeedback;
     // Optional immutable target-generation selector upload. It must merge into Shadow Preparation's first
     // Graphics packet so its acceptance commits the CPU residency bit atomically with the first consumer.
     Core::GpuTaskId m_deferredBindlessSlotsUploadTask;
@@ -618,6 +603,25 @@ private:
     RendererDeferredSystem m_deferredSystem;
     RendererAvboitSystem m_avboitSystem;
     RendererRayTracingSystem m_raytracingSystem;
+
+private:
+    // Declare every callback owner before graph storage. Reverse member destruction keeps graph storage lifetime
+    // strictly inside those owners during normal destruction and constructor unwinding. Active graph lifecycle is
+    // externally quiesced before pipeline teardown.
+    RendererTaskTimingFeedback m_deferredTaskTimingFeedback;
+    // Shadow Preparation, the native Graphics prefix, Shadow Visibility, Software Caustics, Surfel GI, AVBOIT,
+    // Hardware Caustics, Deferred Lighting, Composite, Present, optional lagged-history copy, and recovery share one
+    // packet graph. The prefix's five command lists remain a temporary recording bridge inside its first Graphics
+    // packet.
+    Core::GpuTaskGraph m_deferredLightingTaskGraph;
+    Core::GpuTaskGraphAnalysis m_deferredLightingTaskGraphAnalysis;
+    Core::GpuTaskGraphQueueAssignments m_deferredLightingTaskGraphQueueAssignments;
+    // Accepted-route history survives ordinary per-frame graph resets so telemetry can distinguish first, unchanged,
+    // and changed assignments. Device/resource invalidation clears the tracker with the artifacts it describes.
+    Core::GpuTaskGraphQueueAssignmentTelemetryTracker m_deferredLightingTaskGraphQueueAssignmentTelemetry;
+    Core::GpuCompiledGraph m_deferredLightingCompiledGraph;
+    Core::GpuRecordedGraph m_deferredLightingRecordedGraph;
+    Core::GpuGraphSubmissionTransaction m_deferredLightingSubmissionTransaction;
 };
 
 

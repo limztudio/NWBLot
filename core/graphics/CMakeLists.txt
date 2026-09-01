@@ -14,6 +14,8 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir_replay_preflight.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir_stream.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_accumulator.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_listener.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_metric_correlator.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_metrics.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_submission.cpp"

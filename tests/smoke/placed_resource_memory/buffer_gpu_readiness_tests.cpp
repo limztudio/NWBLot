@@ -112,13 +112,16 @@ public:
             !m_context.valid()
             || byteSize == 0u
             || usage == 0u
-            || !vkCreateBuffer
-            || !vkDestroyBuffer
-            || !vkGetBufferMemoryRequirements
-            || !vkAllocateMemory
-            || !vkFreeMemory
-            || !vkBindBufferMemory
-            || ((usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0u && !vkGetBufferDeviceAddress)
+            || !m_context.deviceDispatch->vkCreateBuffer
+            || !m_context.deviceDispatch->vkDestroyBuffer
+            || !m_context.deviceDispatch->vkGetBufferMemoryRequirements
+            || !m_context.deviceDispatch->vkAllocateMemory
+            || !m_context.deviceDispatch->vkFreeMemory
+            || !m_context.deviceDispatch->vkBindBufferMemory
+            || (
+                (usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0u
+                && !m_context.deviceDispatch->vkGetBufferDeviceAddress
+            )
         )
             return;
 
@@ -132,13 +135,18 @@ public:
             .queueFamilyIndexCount = 0u,
             .pQueueFamilyIndices = nullptr,
         };
-        if(vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &m_buffer) != VK_SUCCESS){
+        if(m_context.deviceDispatch->vkCreateBuffer(
+            m_context.device,
+            &bufferInfo,
+            m_context.allocationCallbacks,
+            &m_buffer
+        ) != VK_SUCCESS){
             m_buffer = VK_NULL_HANDLE;
             return;
         }
 
         VkMemoryRequirements memoryRequirements{};
-        vkGetBufferMemoryRequirements(m_context.device, m_buffer, &memoryRequirements);
+        m_context.deviceDispatch->vkGetBufferMemoryRequirements(m_context.device, m_buffer, &memoryRequirements);
         u32 memoryTypeIndex = VK_MAX_MEMORY_TYPES;
         for(u32 candidateIndex = 0u; candidateIndex < VK_MAX_MEMORY_TYPES; ++candidateIndex){
             if((memoryRequirements.memoryTypeBits & (1u << candidateIndex)) != 0u){
@@ -161,7 +169,7 @@ public:
             .allocationSize = memoryRequirements.size,
             .memoryTypeIndex = memoryTypeIndex,
         };
-        if(vkAllocateMemory(
+        if(m_context.deviceDispatch->vkAllocateMemory(
             m_context.device,
             &allocationInfo,
             m_context.allocationCallbacks,
@@ -170,17 +178,17 @@ public:
             m_memory = VK_NULL_HANDLE;
             return;
         }
-        if(vkBindBufferMemory(m_context.device, m_buffer, m_memory, 0u) != VK_SUCCESS)
+        if(m_context.deviceDispatch->vkBindBufferMemory(m_context.device, m_buffer, m_memory, 0u) != VK_SUCCESS)
             return;
         m_bound = true;
     }
     ~CallerOwnedVulkanBuffer(){
         if(m_buffer != VK_NULL_HANDLE){
-            vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
+            m_context.deviceDispatch->vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
             m_buffer = VK_NULL_HANDLE;
         }
         if(m_memory != VK_NULL_HANDLE){
-            vkFreeMemory(m_context.device, m_memory, m_context.allocationCallbacks);
+            m_context.deviceDispatch->vkFreeMemory(m_context.device, m_memory, m_context.allocationCallbacks);
             m_memory = VK_NULL_HANDLE;
         }
     }
@@ -200,7 +208,7 @@ public:
             .pNext = nullptr,
             .buffer = m_buffer,
         };
-        return vkGetBufferDeviceAddress(m_context.device, &addressInfo);
+        return m_context.deviceDispatch->vkGetBufferDeviceAddress(m_context.device, &addressInfo);
     }
 
 

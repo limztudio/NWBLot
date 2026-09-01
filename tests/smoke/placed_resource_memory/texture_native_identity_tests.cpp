@@ -63,12 +63,12 @@ public:
             || height == 0u
             || format == VK_FORMAT_UNDEFINED
             || usage == 0u
-            || !vkCreateImage
-            || !vkDestroyImage
-            || !vkGetImageMemoryRequirements2
-            || !vkAllocateMemory
-            || !vkFreeMemory
-            || !vkBindImageMemory
+            || !m_context.deviceDispatch->vkCreateImage
+            || !m_context.deviceDispatch->vkDestroyImage
+            || !m_context.deviceDispatch->vkGetImageMemoryRequirements2
+            || !m_context.deviceDispatch->vkAllocateMemory
+            || !m_context.deviceDispatch->vkFreeMemory
+            || !m_context.deviceDispatch->vkBindImageMemory
         )
             return;
 
@@ -89,7 +89,12 @@ public:
             .pQueueFamilyIndices = nullptr,
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         };
-        if(vkCreateImage(m_context.device, &imageInfo, m_context.allocationCallbacks, &m_image) != VK_SUCCESS){
+        if(m_context.deviceDispatch->vkCreateImage(
+            m_context.device,
+            &imageInfo,
+            m_context.allocationCallbacks,
+            &m_image
+        ) != VK_SUCCESS){
             m_image = VK_NULL_HANDLE;
             return;
         }
@@ -110,7 +115,7 @@ public:
             .pNext = nullptr,
             .image = m_image,
         };
-        vkGetImageMemoryRequirements2(m_context.device, &requirementsInfo, &memoryRequirements);
+        m_context.deviceDispatch->vkGetImageMemoryRequirements2(m_context.device, &requirementsInfo, &memoryRequirements);
         u32 memoryTypeIndex = VK_MAX_MEMORY_TYPES;
         for(u32 candidateIndex = 0u; candidateIndex < VK_MAX_MEMORY_TYPES; ++candidateIndex){
             if((memoryRequirements.memoryRequirements.memoryTypeBits & (1u << candidateIndex)) != 0u){
@@ -135,7 +140,7 @@ public:
             .allocationSize = memoryRequirements.memoryRequirements.size,
             .memoryTypeIndex = memoryTypeIndex,
         };
-        if(vkAllocateMemory(
+        if(m_context.deviceDispatch->vkAllocateMemory(
             m_context.device,
             &allocationInfo,
             m_context.allocationCallbacks,
@@ -144,17 +149,17 @@ public:
             m_memory = VK_NULL_HANDLE;
             return;
         }
-        if(vkBindImageMemory(m_context.device, m_image, m_memory, 0u) != VK_SUCCESS)
+        if(m_context.deviceDispatch->vkBindImageMemory(m_context.device, m_image, m_memory, 0u) != VK_SUCCESS)
             return;
         m_bound = true;
     }
     ~CallerOwnedVulkanImage(){
         if(m_image != VK_NULL_HANDLE){
-            vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
+            m_context.deviceDispatch->vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
             m_image = VK_NULL_HANDLE;
         }
         if(m_memory != VK_NULL_HANDLE){
-            vkFreeMemory(m_context.device, m_memory, m_context.allocationCallbacks);
+            m_context.deviceDispatch->vkFreeMemory(m_context.device, m_memory, m_context.allocationCallbacks);
             m_memory = VK_NULL_HANDLE;
         }
     }

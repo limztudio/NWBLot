@@ -7,6 +7,8 @@
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 
+#include <global/overflow.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1594,15 +1596,17 @@ bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(Core::Al
         const Name identity = DeriveName(mesh.meshName, identitySuffix);
         if(!identity)
             return false;
+        const bool normalizedByAcceptedPacket = wasNormalizedByAcceptedPacket(buffer.get());
         m_preparedShadowTraceGeometryBuffers.push_back(PreparedShadowTraceGeometryBuffer{
             .buffer = buffer,
             .identity = identity,
             // Fresh/preflight-created buffers retain their creation state (normally Common).  Only a buffer that an
             // accepted preparation/prefix tail explicitly normalized may enter the next graph as ShaderResource.
-            .initialState = wasNormalizedByAcceptedPacket(buffer.get())
+            .initialState = normalizedByAcceptedPacket
                 ? Core::ResourceStates::ShaderResource
                 : buffer->getCreationDescription().initialState,
             .roles = role,
+            .normalizationPending = !normalizedByAcceptedPacket,
         });
         return true;
     };
@@ -1738,11 +1742,24 @@ bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(Core::Al
             && appendPendingSwBvhBuildInputs()
         ;
     }
-    if(!collected)
+    if(!collected){
         m_preparedShadowTraceGeometryBuffers.clear();
-    else
-        m_acceptedShadowTraceGeometryBuffers.reserve(m_preparedShadowTraceGeometryBuffers.size());
-    return collected;
+        return false;
+    }
+
+    if(AddOverflows<usize>(m_acceptedShadowTraceGeometryBuffers.size(), m_preparedShadowTraceGeometryBuffers.size())){
+        m_preparedShadowTraceGeometryBuffers.clear();
+        return false;
+    }
+    const usize acceptedCapacity = m_acceptedShadowTraceGeometryBuffers.size() + m_preparedShadowTraceGeometryBuffers.size();
+    if(acceptedCapacity > m_acceptedShadowTraceGeometryBuffers.max_size()){
+        m_preparedShadowTraceGeometryBuffers.clear();
+        return false;
+    }
+    // Acceptance only publishes handles whose frozen state was not already normalized. Reserve the full retained
+    // union so this noexcept tail remains allocation-free even when invisible accepted meshes occupy existing slots.
+    m_acceptedShadowTraceGeometryBuffers.reserve(acceptedCapacity);
+    return true;
 }
 
 const PreparedShadowTraceGeometryBufferVector& RendererRayTracingSystem::preparedShadowTraceGeometryBuffers()const noexcept{
@@ -1789,16 +1806,12 @@ void RendererRayTracingSystem::clearPreparedShadowTraceMaterialSampledTextures()
 }
 
 void RendererRayTracingSystem::confirmPreparedShadowTraceGeometryNormalization()noexcept{
-    for(const PreparedShadowTraceGeometryBuffer& resource : m_preparedShadowTraceGeometryBuffers){
-        bool known = false;
-        for(const Core::BufferHandle& acceptedBuffer : m_acceptedShadowTraceGeometryBuffers){
-            if(acceptedBuffer.get() == resource.buffer.get()){
-                known = true;
-                break;
-            }
-        }
-        if(resource.buffer && !known)
+    for(PreparedShadowTraceGeometryBuffer& resource : m_preparedShadowTraceGeometryBuffers){
+        if(resource.buffer && resource.normalizationPending){
+            NWB_ASSERT(m_acceptedShadowTraceGeometryBuffers.size() < m_acceptedShadowTraceGeometryBuffers.capacity());
             m_acceptedShadowTraceGeometryBuffers.push_back(resource.buffer);
+            resource.normalizationPending = false;
+        }
     }
 }
 

@@ -85,6 +85,7 @@ struct PreparedShadowTraceGeometryBuffer{
     Name identity;
     Core::ResourceStates::Mask initialState = Core::ResourceStates::Common;
     u8 roles = 0u;
+    bool normalizationPending = false;
 };
 
 using PreparedShadowTraceGeometryBufferVector = Vector<

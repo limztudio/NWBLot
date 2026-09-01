@@ -5912,6 +5912,53 @@ TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
 }
 
 
+// The native submission gate may only publish already-preflighted storage. Retained invisible meshes consume the
+// accepted prefix of that storage, while each newly frozen geometry buffer consumes at most one additional slot.
+TEST(EcsGraphics, ShadowTraceGeometryAcceptancePreflightsUnionCapacityAndPublishesLinearly){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString rayTracingHeaderSource;
+    AString rayTracingSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
+
+    const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
+    const AStringView rayTracing(rayTracingSource.data(), rayTracingSource.size());
+    EXPECT_TRUE(ContainsText(rayTracingHeader, "bool normalizationPending = false;"));
+
+    const usize freezeOffset = rayTracing.find(
+        "bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers("
+    );
+    const usize confirmOffset = rayTracing.find(
+        "void RendererRayTracingSystem::confirmPreparedShadowTraceGeometryNormalization()noexcept",
+        freezeOffset
+    );
+    const usize invalidateOffset = rayTracing.find(
+        "void RendererRayTracingSystem::invalidatePreparedShadowTraceGeometryBuffers()noexcept",
+        confirmOffset
+    );
+    ASSERT_NE(freezeOffset, AStringView::npos);
+    ASSERT_NE(confirmOffset, AStringView::npos);
+    ASSERT_NE(invalidateOffset, AStringView::npos);
+
+    const AStringView freeze = rayTracing.substr(freezeOffset, confirmOffset - freezeOffset);
+    EXPECT_TRUE(ContainsText(freeze, "const bool normalizedByAcceptedPacket = wasNormalizedByAcceptedPacket(buffer.get());"));
+    EXPECT_TRUE(ContainsText(freeze, ".normalizationPending = !normalizedByAcceptedPacket,"));
+    EXPECT_TRUE(ContainsText(freeze, "AddOverflows<usize>(m_acceptedShadowTraceGeometryBuffers.size(), m_preparedShadowTraceGeometryBuffers.size())"));
+    EXPECT_TRUE(ContainsText(freeze, "const usize acceptedCapacity = m_acceptedShadowTraceGeometryBuffers.size() + m_preparedShadowTraceGeometryBuffers.size();"));
+    EXPECT_TRUE(ContainsText(freeze, "m_acceptedShadowTraceGeometryBuffers.reserve(acceptedCapacity);"));
+
+    const AStringView confirm = rayTracing.substr(confirmOffset, invalidateOffset - confirmOffset);
+    EXPECT_TRUE(ContainsText(confirm, "if(resource.buffer && resource.normalizationPending)"));
+    EXPECT_TRUE(ContainsText(confirm, "m_acceptedShadowTraceGeometryBuffers.size() < m_acceptedShadowTraceGeometryBuffers.capacity()"));
+    EXPECT_TRUE(ContainsText(confirm, "resource.normalizationPending = false;"));
+    EXPECT_EQ(CountText(confirm, "m_acceptedShadowTraceGeometryBuffers.push_back(resource.buffer);"), 1u);
+    EXPECT_FALSE(ContainsText(confirm, "for(const Core::BufferHandle& acceptedBuffer"));
+    EXPECT_FALSE(ContainsText(confirm, ".reserve("));
+}
+
+
 // Accepted static scene-BVH and software-material cache hits have no upload bytes, but they still freeze the exact
 // storage identities and traversal table during preflight. Pure software consumes that snapshot or rejects the
 // packet; hybrid consumes it or restores HW. Neither route regathers ECS/material data after graph declaration.

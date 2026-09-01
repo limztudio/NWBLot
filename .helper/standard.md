@@ -367,13 +367,11 @@ Updated: 2026-07-08
 - Validate and log all external API failure paths.
 - When iterating ECS views with structured bindings, prefer reference-preserving bindings (`auto&&`) unless copying is explicitly intended.
 
-## 11. New project layout (Visual Studio)
-- New project source files must be listed in a `.vcxitems` file.
-- The project `.vcxproj` must include/import the `.vcxitems`.
-- Always separate source listing and project properties.
-- `.vcxitems` contains source file entries only.
-- `.vcxproj` contains project property/configuration definitions only.
-- Design for reuse: one shared `.vcxitems` with multiple platform-specific `.vcxproj` files.
+## 11. New project layout (CMake)
+- Register new project targets and source files in the owning `CMakeLists.txt`.
+- Use CMake target commands such as `add_library`, `add_executable`, and `target_sources`; generated IDE projects are build artifacts, not authored source manifests.
+- Do not add or maintain `.vcxitems` or `.vcxproj` files for source registration.
+- Express platform, architecture, and configuration variants through CMake target conditions and checked-in configure/build presets.
 
 ## 12. Class/Struct Layout and Order
 - `struct` layout rule: declare member variables first, then member functions.

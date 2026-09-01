@@ -5079,6 +5079,85 @@ struct NativeTaskSubmissionSerializationTask{
         context->releaseTaskCallback.wait(false, MemoryOrder::acquire);
     return false;
 }
+
+
+struct NativeTaskAcceptancePublicationBlocker{
+    AtomicFlag callbackEntered;
+    AtomicFlag releaseCallback;
+    QueueSubmissionToken acceptedToken;
+};
+
+[[nodiscard]] static bool BlockIndependentTaskAcceptancePublication(
+    void* const rawContext,
+    const QueueSubmissionToken& token
+){
+    NativeTaskAcceptancePublicationBlocker* const context =
+        static_cast<NativeTaskAcceptancePublicationBlocker*>(rawContext)
+    ;
+    if(!context || !token.valid())
+        return false;
+
+    context->acceptedToken = token;
+    context->callbackEntered.test_and_set(MemoryOrder::release);
+    context->callbackEntered.notify_all();
+    while(!context->releaseCallback.test(MemoryOrder::acquire))
+        context->releaseCallback.wait(false, MemoryOrder::acquire);
+    return true;
+}
+
+
+struct NativeCrossTransactionSubmissionContext{
+    GpuTaskGraph* graph = nullptr;
+    const GpuCompiledGraph* compiledGraph = nullptr;
+    const GpuRecordedGraph* recordedGraph = nullptr;
+    GpuTaskId nestedTask;
+    GpuGraphSubmissionTransaction* transaction = nullptr;
+    const GpuTaskGraphSubmitter* submitter = nullptr;
+    Alloc::ScratchArena* scratchArena = nullptr;
+    AtomicFlag callbackEntered;
+    AtomicFlag callbackReturned;
+    bool nestedSubmissionResult = true;
+};
+
+[[nodiscard]] static bool SubmitCrossTransactionTaskFromAcceptance(
+    void* const rawContext,
+    const QueueSubmissionToken& token
+){
+    NativeCrossTransactionSubmissionContext* const context =
+        static_cast<NativeCrossTransactionSubmissionContext*>(rawContext)
+    ;
+    if(
+        !context
+        || !token.valid()
+        || !context->graph
+        || !context->compiledGraph
+        || !context->recordedGraph
+        || !context->nestedTask.valid()
+        || !context->transaction
+        || !context->submitter
+        || !context->scratchArena
+    )
+        return false;
+
+    context->callbackEntered.test_and_set(MemoryOrder::release);
+    context->callbackEntered.notify_all();
+    context->nestedSubmissionResult = context->submitter->submitTaskRangeInCompileOrder(
+        *context->graph,
+        *context->compiledGraph,
+        *context->recordedGraph,
+        context->nestedTask,
+        context->nestedTask,
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        *context->transaction,
+        *context->scratchArena
+    );
+    context->callbackReturned.test_and_set(MemoryOrder::release);
+    context->callbackReturned.notify_all();
+    return true;
+}
 #endif
 
 
@@ -55213,6 +55292,476 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
 
 
 #if !defined(NWB_FINAL)
+
+// Independent ordinary packets may enter Vulkan while another packet is resolving its accepted callback. The
+// transaction keeps the irreversible CPU resolution tail atomic, so neither packet token publishes until the
+// blocked callback releases even though both native submissions have already completed their host call.
+TEST_F(DescriptorBufferRoundTripTest, IndependentPacketsOverlapNativeSubmitBeforeSerializedPublication){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Tiny;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+
+    bool firstShouldRecord = true;
+    bool firstRecorded = false;
+    const GpuTaskId firstTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/concurrent_native_submit_first"))
+            .setMarkerLabel("Concurrent Native Submit First")
+            .setQueue(graphicsRequest)
+            .setScheduling(scheduling),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &firstShouldRecord,
+            .attempted = &firstRecorded,
+        }
+    );
+    bool secondShouldRecord = true;
+    bool secondRecorded = false;
+    const GpuTaskId secondTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/concurrent_native_submit_second"))
+            .setMarkerLabel("Concurrent Native Submit Second")
+            .setQueue(graphicsRequest)
+            .setScheduling(scheduling),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &secondShouldRecord,
+            .attempted = &secondRecorded,
+        }
+    );
+    ASSERT_TRUE(firstTask.valid());
+    ASSERT_TRUE(secondTask.valid());
+
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena compileScratch(Name("tests/descriptor_buffer/concurrent_native_submit_compile_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(
+        graph,
+        analysis,
+        device.getPhysicalQueueTopology(),
+        assignments,
+        compiledGraph,
+        compileScratch
+    ));
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(firstTask);
+    const GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(secondTask);
+    ASSERT_TRUE(firstPacket.valid());
+    ASSERT_TRUE(secondPacket.valid());
+    ASSERT_NE(firstPacket, secondPacket);
+    EXPECT_EQ(compiledGraph.packet(firstPacket).queue, graphicsQueue);
+    EXPECT_EQ(compiledGraph.packet(secondPacket).queue, graphicsQueue);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordTaskRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        firstTask,
+        secondTask,
+        recordedGraph
+    ));
+    EXPECT_TRUE(firstRecorded);
+    EXPECT_TRUE(secondRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    NativeTaskAcceptancePublicationBlocker publicationBlocker;
+    const GpuTaskGraphTaskAcceptedCallback firstAcceptedCallback{
+        .task = firstTask,
+        .context = &publicationBlocker,
+        .invoke = BlockIndependentTaskAcceptancePublication,
+    };
+    VulkanTestQueueSubmit2Observer submissionObserver(device);
+    ASSERT_TRUE(submissionObserver.valid());
+
+    bool firstSubmissionResult = false;
+    bool secondSubmissionResult = false;
+    GpuSubmissionPacketId firstFailedPacket;
+    GpuSubmissionPacketId secondFailedPacket;
+    Thread firstSubmissionThread([&](){
+        Alloc::ScratchArena submissionScratch(
+            Name("tests/descriptor_buffer/concurrent_native_submit_first_thread_scratch")
+        );
+        firstSubmissionResult = submitter.submitTaskRangeInCompileOrder(
+            graph,
+            compiledGraph,
+            recordedGraph,
+            firstTask,
+            firstTask,
+            nullptr,
+            0u,
+            nullptr,
+            0u,
+            transaction,
+            submissionScratch,
+            &firstFailedPacket,
+            &firstAcceptedCallback,
+            1u
+        );
+    });
+    const Timer firstCallbackWaitBegin = TimerNow();
+    while(
+        !publicationBlocker.callbackEntered.test(MemoryOrder::acquire)
+        && DurationInSeconds<f64>(TimerNow(), firstCallbackWaitBegin) < 5.0
+    )
+        YieldThread();
+    const bool firstCallbackEntered = publicationBlocker.callbackEntered.test(MemoryOrder::acquire);
+    if(!firstCallbackEntered){
+        publicationBlocker.releaseCallback.test_and_set(MemoryOrder::release);
+        publicationBlocker.releaseCallback.notify_all();
+        firstSubmissionThread.join();
+        EXPECT_TRUE(firstCallbackEntered);
+        return;
+    }
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 1u);
+    EXPECT_FALSE(transaction.packetToken(firstPacket).valid());
+
+    Thread secondSubmissionThread([&](){
+        Alloc::ScratchArena submissionScratch(
+            Name("tests/descriptor_buffer/concurrent_native_submit_second_thread_scratch")
+        );
+        secondSubmissionResult = submitter.submitTaskRangeInCompileOrder(
+            graph,
+            compiledGraph,
+            recordedGraph,
+            secondTask,
+            secondTask,
+            nullptr,
+            0u,
+            nullptr,
+            0u,
+            transaction,
+            submissionScratch,
+            &secondFailedPacket
+        );
+    });
+    const Timer overlapWaitBegin = TimerNow();
+    while(
+        submissionObserver.capturedSubmissionCount() < 2u
+        && DurationInSeconds<f64>(TimerNow(), overlapWaitBegin) < 5.0
+    )
+        YieldThread();
+    const bool nativeSubmissionsOverlapped = submissionObserver.capturedSubmissionCount() >= 2u;
+
+    EXPECT_FALSE(transaction.packetToken(firstPacket).valid());
+    EXPECT_FALSE(transaction.packetToken(secondPacket).valid());
+    publicationBlocker.releaseCallback.test_and_set(MemoryOrder::release);
+    publicationBlocker.releaseCallback.notify_all();
+    firstSubmissionThread.join();
+    secondSubmissionThread.join();
+
+    EXPECT_TRUE(nativeSubmissionsOverlapped);
+    EXPECT_TRUE(firstSubmissionResult);
+    EXPECT_TRUE(secondSubmissionResult);
+    EXPECT_FALSE(firstFailedPacket.valid());
+    EXPECT_FALSE(secondFailedPacket.valid());
+    const QueueSubmissionToken firstToken = transaction.packetToken(firstPacket);
+    const QueueSubmissionToken secondToken = transaction.packetToken(secondPacket);
+    ASSERT_TRUE(firstToken.valid());
+    ASSERT_TRUE(secondToken.valid());
+    EXPECT_EQ(firstToken.value, publicationBlocker.acceptedToken.value);
+    EXPECT_TRUE(firstToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
+    EXPECT_TRUE(secondToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
+    EXPECT_GT(secondToken.value, firstToken.value);
+    EXPECT_FALSE(submissionObserver.overflowed());
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
+    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 2u);
+    const GpuTaskGraphSubmissionStatistics statistics = transaction.submissionStatistics();
+    EXPECT_EQ(statistics.acceptedPacketCount, 2u);
+    EXPECT_EQ(statistics.nativeSubmissionCount, 2u);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// One transaction is held inside its accepted callback while another accepted callback attempts nested work in it.
+// Cross-transaction nesting must fail before the held callback is released; bounded observation and unconditional
+// cleanup make the test report a blocking regression instead of deadlocking the suite.
+TEST_F(DescriptorBufferRoundTripTest, CrossTransactionAcceptanceReentryReturnsWhenTargetBusy){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Tiny;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+
+    GpuTaskGraph firstGraph(DescriptorBufferRoundTripTest::arena());
+    bool firstOuterShouldRecord = true;
+    bool firstOuterRecorded = false;
+    const GpuTaskId firstOuterTask = firstGraph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/cross_transaction_first_outer"))
+            .setMarkerLabel("Cross Transaction First Outer")
+            .setQueue(graphicsRequest)
+            .setScheduling(scheduling),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &firstOuterShouldRecord,
+            .attempted = &firstOuterRecorded,
+        }
+    );
+    bool firstNestedShouldRecord = true;
+    bool firstNestedRecorded = false;
+    const GpuTaskId firstNestedTask = firstGraph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/cross_transaction_first_nested"))
+            .setMarkerLabel("Cross Transaction First Nested")
+            .setQueue(graphicsRequest)
+            .setScheduling(scheduling),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &firstNestedShouldRecord,
+            .attempted = &firstNestedRecorded,
+        }
+    );
+    ASSERT_TRUE(firstOuterTask.valid());
+    ASSERT_TRUE(firstNestedTask.valid());
+
+    GpuTaskGraph secondGraph(DescriptorBufferRoundTripTest::arena());
+    bool secondOuterShouldRecord = true;
+    bool secondOuterRecorded = false;
+    const GpuTaskId secondOuterTask = secondGraph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/cross_transaction_second_outer"))
+            .setMarkerLabel("Cross Transaction Second Outer")
+            .setQueue(graphicsRequest)
+            .setScheduling(scheduling),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &secondOuterShouldRecord,
+            .attempted = &secondOuterRecorded,
+        }
+    );
+    bool secondNestedShouldRecord = true;
+    bool secondNestedRecorded = false;
+    const GpuTaskId secondNestedTask = secondGraph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/cross_transaction_second_nested"))
+            .setMarkerLabel("Cross Transaction Second Nested")
+            .setQueue(graphicsRequest)
+            .setScheduling(scheduling),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &secondNestedShouldRecord,
+            .attempted = &secondNestedRecorded,
+        }
+    );
+    ASSERT_TRUE(secondOuterTask.valid());
+    ASSERT_TRUE(secondNestedTask.valid());
+
+    const GpuTaskGraphCompiler compiler;
+    GpuTaskGraphAnalysis firstAnalysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments firstAssignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph firstCompiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena firstCompileScratch(
+        Name("tests/descriptor_buffer/cross_transaction_first_compile_scratch")
+    );
+    ASSERT_TRUE(compiler.compile(
+        firstGraph,
+        firstAnalysis,
+        device.getPhysicalQueueTopology(),
+        firstAssignments,
+        firstCompiledGraph,
+        firstCompileScratch
+    ));
+    GpuTaskGraphAnalysis secondAnalysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments secondAssignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph secondCompiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena secondCompileScratch(
+        Name("tests/descriptor_buffer/cross_transaction_second_compile_scratch")
+    );
+    ASSERT_TRUE(compiler.compile(
+        secondGraph,
+        secondAnalysis,
+        device.getPhysicalQueueTopology(),
+        secondAssignments,
+        secondCompiledGraph,
+        secondCompileScratch
+    ));
+    ASSERT_EQ(firstCompiledGraph.packetCount(), 2u);
+    ASSERT_EQ(secondCompiledGraph.packetCount(), 2u);
+
+    GpuRecordedGraph firstRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuRecordedGraph secondRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordTaskRangeInCompileOrder(
+        firstGraph,
+        firstCompiledGraph,
+        firstOuterTask,
+        firstNestedTask,
+        firstRecordedGraph
+    ));
+    ASSERT_TRUE(recorder.recordTaskRangeInCompileOrder(
+        secondGraph,
+        secondCompiledGraph,
+        secondOuterTask,
+        secondNestedTask,
+        secondRecordedGraph
+    ));
+    EXPECT_TRUE(firstOuterRecorded);
+    EXPECT_TRUE(firstNestedRecorded);
+    EXPECT_TRUE(secondOuterRecorded);
+    EXPECT_TRUE(secondNestedRecorded);
+
+    GpuGraphSubmissionTransaction firstTransaction(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction secondTransaction(DescriptorBufferRoundTripTest::arena());
+    firstTransaction.reset(firstCompiledGraph);
+    secondTransaction.reset(secondCompiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    NativeCrossTransactionSubmissionContext firstContext;
+    firstContext.graph = &secondGraph;
+    firstContext.compiledGraph = &secondCompiledGraph;
+    firstContext.recordedGraph = &secondRecordedGraph;
+    firstContext.nestedTask = secondNestedTask;
+    firstContext.transaction = &secondTransaction;
+    firstContext.submitter = &submitter;
+    NativeTaskAcceptancePublicationBlocker secondPublicationBlocker;
+    const GpuTaskGraphTaskAcceptedCallback firstCallback{
+        .task = firstOuterTask,
+        .context = &firstContext,
+        .invoke = SubmitCrossTransactionTaskFromAcceptance,
+    };
+    const GpuTaskGraphTaskAcceptedCallback secondCallback{
+        .task = secondOuterTask,
+        .context = &secondPublicationBlocker,
+        .invoke = BlockIndependentTaskAcceptancePublication,
+    };
+
+    bool firstOuterSubmissionResult = false;
+    bool secondOuterSubmissionResult = false;
+    Thread secondOuterSubmissionThread([&](){
+        Alloc::ScratchArena submissionScratch(
+            Name("tests/descriptor_buffer/cross_transaction_second_outer_thread_scratch")
+        );
+        secondOuterSubmissionResult = submitter.submitTaskRangeInCompileOrder(
+            secondGraph,
+            secondCompiledGraph,
+            secondRecordedGraph,
+            secondOuterTask,
+            secondOuterTask,
+            nullptr,
+            0u,
+            nullptr,
+            0u,
+            secondTransaction,
+            submissionScratch,
+            nullptr,
+            &secondCallback,
+            1u
+        );
+    });
+    const Timer secondCallbackWaitBegin = TimerNow();
+    while(
+        !secondPublicationBlocker.callbackEntered.test(MemoryOrder::acquire)
+        && DurationInSeconds<f64>(TimerNow(), secondCallbackWaitBegin) < 5.0
+    )
+        YieldThread();
+    const bool secondCallbackEntered = secondPublicationBlocker.callbackEntered.test(MemoryOrder::acquire);
+    if(!secondCallbackEntered){
+        secondPublicationBlocker.releaseCallback.test_and_set(MemoryOrder::release);
+        secondPublicationBlocker.releaseCallback.notify_all();
+        secondOuterSubmissionThread.join();
+        EXPECT_TRUE(secondCallbackEntered);
+        return;
+    }
+
+    Thread firstOuterSubmissionThread([&](){
+        Alloc::ScratchArena submissionScratch(
+            Name("tests/descriptor_buffer/cross_transaction_first_outer_thread_scratch")
+        );
+        firstContext.scratchArena = &submissionScratch;
+        firstOuterSubmissionResult = submitter.submitTaskRangeInCompileOrder(
+            firstGraph,
+            firstCompiledGraph,
+            firstRecordedGraph,
+            firstOuterTask,
+            firstOuterTask,
+            nullptr,
+            0u,
+            nullptr,
+            0u,
+            firstTransaction,
+            submissionScratch,
+            nullptr,
+            &firstCallback,
+            1u
+        );
+    });
+    const Timer nestedAttemptWaitBegin = TimerNow();
+    while(
+        !firstContext.callbackReturned.test(MemoryOrder::acquire)
+        && DurationInSeconds<f64>(TimerNow(), nestedAttemptWaitBegin) < 5.0
+    )
+        YieldThread();
+    const bool nestedAttemptReturnedBeforeRelease = firstContext.callbackReturned.test(MemoryOrder::acquire);
+
+    secondPublicationBlocker.releaseCallback.test_and_set(MemoryOrder::release);
+    secondPublicationBlocker.releaseCallback.notify_all();
+    secondOuterSubmissionThread.join();
+    firstOuterSubmissionThread.join();
+
+    EXPECT_TRUE(nestedAttemptReturnedBeforeRelease);
+    EXPECT_TRUE(firstOuterSubmissionResult);
+    EXPECT_TRUE(secondOuterSubmissionResult);
+    EXPECT_FALSE(firstContext.nestedSubmissionResult);
+    EXPECT_TRUE(firstContext.callbackEntered.test(MemoryOrder::acquire));
+    EXPECT_TRUE(firstContext.callbackReturned.test(MemoryOrder::acquire));
+    EXPECT_FALSE(firstTransaction.taskToken(firstCompiledGraph, firstNestedTask).valid());
+    EXPECT_FALSE(secondTransaction.taskToken(secondCompiledGraph, secondNestedTask).valid());
+
+    Alloc::ScratchArena firstRetryScratch(
+        Name("tests/descriptor_buffer/cross_transaction_first_retry_scratch")
+    );
+    Alloc::ScratchArena secondRetryScratch(
+        Name("tests/descriptor_buffer/cross_transaction_second_retry_scratch")
+    );
+    EXPECT_TRUE(submitter.submitTaskRangeInCompileOrder(
+        firstGraph,
+        firstCompiledGraph,
+        firstRecordedGraph,
+        firstNestedTask,
+        firstNestedTask,
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        firstTransaction,
+        firstRetryScratch
+    ));
+    EXPECT_TRUE(submitter.submitTaskRangeInCompileOrder(
+        secondGraph,
+        secondCompiledGraph,
+        secondRecordedGraph,
+        secondNestedTask,
+        secondNestedTask,
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        secondTransaction,
+        secondRetryScratch
+    ));
+    EXPECT_TRUE(firstTransaction.taskToken(firstCompiledGraph, firstNestedTask).valid());
+    EXPECT_TRUE(secondTransaction.taskToken(secondCompiledGraph, secondNestedTask).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
 
 // The native Transfer packet has accepted and both typed hooks have reached graph Accepted before the first semantic
 // task callback blocks. The transaction token/frontier must remain hidden until every task callback finishes;

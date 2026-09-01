@@ -237,6 +237,7 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
     resolvedTimingTickets.reserve(packetTimingTickets.size());
     for(usize packetIndex = range.first.index; packetIndex < rangeEnd; ++packetIndex){
         const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
+        const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
         resolvedTimingTickets.clear();
         for(const ResolvedTaskTimingTicket& ticket : packetTimingTickets){
             if(ticket.packet == packet)
@@ -249,7 +250,12 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
                 break;
             }
         }
-        GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(transaction);
+        GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(
+            transaction,
+            packetPlan.joinsAcceptedQueueFrontier || preSubmitHook
+                ? GpuGraphSubmissionTransaction::SubmissionOperationMode::ExclusiveBarrier
+                : GpuGraphSubmissionTransaction::SubmissionOperationMode::OrdinaryPacket
+        );
         if(
             !submissionOperation.valid()
             || !submitPacketWithinSubmissionOperation(

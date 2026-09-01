@@ -595,6 +595,11 @@ private:
         Rejected,
     };
 
+    enum class SubmissionOperationMode : u8{
+        OrdinaryPacket,
+        ExclusiveBarrier,
+    };
+
     struct PacketRuntime{
         PacketRuntimeState state = PacketRuntimeState::Declared;
         QueueSubmissionToken token;
@@ -617,7 +622,10 @@ private:
 
 
     public:
-        explicit SubmissionOperation(const GpuGraphSubmissionTransaction& transaction)noexcept;
+        SubmissionOperation(
+            const GpuGraphSubmissionTransaction& transaction,
+            SubmissionOperationMode mode
+        )noexcept;
         ~SubmissionOperation();
 
 
@@ -628,6 +636,7 @@ private:
     private:
         const GpuGraphSubmissionTransaction* m_transaction = nullptr;
         const SubmissionOperation* m_previousOperation = nullptr;
+        SharedQueuingMutex::scoped_lock m_gateLock;
     };
 
 private:
@@ -839,7 +848,12 @@ private:
     u64 m_acceptanceRevision = 0u;
     GpuTaskGraphSubmissionStatistics m_submissionStatistics;
     bool m_valid = false;
-    mutable Futex m_submissionMutex;
+    // Ordinary packets may reach independent native queues concurrently. Frontier joins and lifecycle mutations use
+    // the fair writer side so they observe one complete publication boundary without starving behind new readers.
+    mutable SharedQueuingMutex m_submissionGate;
+    // Native submission returns before timing, graph payload, compatibility callback, and token/frontier resolution.
+    // Keep that indivisible publication tail serialized while native queue work remains free to overlap.
+    mutable Futex m_resolutionMutex;
     mutable Futex m_mutex;
 };
 

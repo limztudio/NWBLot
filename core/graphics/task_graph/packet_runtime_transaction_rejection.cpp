@@ -22,7 +22,8 @@ void GpuGraphSubmissionTransaction::rejectTask(
     const GpuTaskId task,
     const u64 recordingAttemptGeneration
 )noexcept{
-    if(!validFor(compiledGraph))
+    SubmissionOperation submissionOperation(*this, SubmissionOperationMode::ExclusiveBarrier);
+    if(!submissionOperation.valid() || !validFor(compiledGraph))
         return;
     rejectPacket(graph, compiledGraph, compiledGraph.packetForTask(task), recordingAttemptGeneration);
 }
@@ -32,8 +33,10 @@ bool GpuGraphSubmissionTransaction::discardUnaccepted(
     const GpuCompiledGraph& compiledGraph,
     const u64 recordingAttemptGeneration
 )noexcept{
+    SubmissionOperation submissionOperation(*this, SubmissionOperationMode::ExclusiveBarrier);
     if(
-        !validFor(compiledGraph)
+        !submissionOperation.valid()
+        || !validFor(compiledGraph)
         || recordingAttemptGeneration == 0u
         || !bindRecordingAttempt(graph, compiledGraph, recordingAttemptGeneration)
     )

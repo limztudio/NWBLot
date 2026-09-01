@@ -46,21 +46,25 @@ thread_local const GpuGraphSubmissionTransaction::SubmissionOperation* GpuGraphS
 
 
 GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(
-    const GpuGraphSubmissionTransaction& transaction
+    const GpuGraphSubmissionTransaction& transaction,
+    const SubmissionOperationMode mode
 )noexcept{
     for(const SubmissionOperation* operation = s_activeOperation; operation; operation = operation->m_previousOperation){
         if(operation->m_transaction == &transaction)
             return;
     }
 
-    // Top-level callers wait for the transaction publication boundary. Nested work on another transaction may use
-    // an uncontended gate, but never waits while retaining its outer gate and therefore cannot form an ABBA cycle.
+    const bool exclusive = mode == SubmissionOperationMode::ExclusiveBarrier;
+    // A nested cross-transaction operation must acquire the target as a writer even when it submits an ordinary
+    // packet. Acquiring another reader could succeed while the target resolution mutex is held, then form an ABBA
+    // cycle with a symmetric callback. Writer try-acquire proves both the target gate and its inner resolution tail
+    // are free without waiting while this thread retains its outer transaction.
     if(s_activeOperation){
-        if(!transaction.m_submissionMutex.try_lock())
+        if(!m_gateLock.try_acquire(transaction.m_submissionGate, true))
             return;
     }
-    else if(!transaction.m_submissionMutex.try_lock())
-        transaction.m_submissionMutex.lock();
+    else
+        m_gateLock.acquire(transaction.m_submissionGate, exclusive);
     m_transaction = &transaction;
     m_previousOperation = s_activeOperation;
     s_activeOperation = this;
@@ -72,7 +76,7 @@ GpuGraphSubmissionTransaction::SubmissionOperation::~SubmissionOperation(){
 
     NWB_ASSERT(s_activeOperation == this);
     s_activeOperation = m_previousOperation;
-    m_transaction->m_submissionMutex.unlock();
+    m_gateLock.release();
 }
 
 
@@ -89,7 +93,7 @@ bool GpuGraphSubmissionTransaction::validForLocked(const GpuCompiledGraph& compi
 
 
 bool GpuGraphSubmissionTransaction::waitForSubmissionPublicationAndHasAcceptedPackets()const noexcept{
-    SubmissionOperation submissionOperation(*this);
+    SubmissionOperation submissionOperation(*this, SubmissionOperationMode::ExclusiveBarrier);
     if(!submissionOperation.valid())
         return false;
 
@@ -99,7 +103,7 @@ bool GpuGraphSubmissionTransaction::waitForSubmissionPublicationAndHasAcceptedPa
 
 
 void GpuGraphSubmissionTransaction::reset(const GpuCompiledGraph& compiledGraph){
-    SubmissionOperation submissionOperation(*this);
+    SubmissionOperation submissionOperation(*this, SubmissionOperationMode::ExclusiveBarrier);
     if(!submissionOperation.valid())
         return;
 
@@ -113,6 +117,10 @@ void GpuGraphSubmissionTransaction::reset(const GpuCompiledGraph& compiledGraph)
             return;
         }
     }
+    const GpuPhysicalQueueTopology queueTopology = compiledGraph.queueTopology();
+    // Allocate the exact physical-frontier bound before changing the prior transaction so an allocation failure
+    // cannot leave reset half-applied and no accepted native submission can grow this storage later.
+    m_latestAcceptedQueueTokens.reserve(queueTopology.queueCount);
     m_packets.clear();
     m_latestAcceptedQueueTokens.clear();
     m_externalResourceHandoffScratch.clear();
@@ -457,6 +465,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
         }
     }
     if(!foundLatestQueue){
+        NWB_ASSERT(m_latestAcceptedQueueTokens.size() < m_latestAcceptedQueueTokens.capacity());
         m_latestAcceptedQueueTokens.push_back(LatestAcceptedQueueToken{
             .queue = packet.queue,
             .token = token,

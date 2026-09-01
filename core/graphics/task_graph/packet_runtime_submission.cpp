@@ -404,6 +404,10 @@ bool GpuTaskGraphSubmitter::submitPacketWithinSubmissionOperation(
         packet.queue,
         submitDesc
     );
+    // Device has released its native Queue locks. Serialize only the irreversible CPU publication tail so another
+    // ordinary packet may already enter Vulkan without exposing timing, payload, or transaction state out of order.
+    ScopedLock resolutionLock(transaction.m_resolutionMutex);
+
     for(usize timingTicketIndex = 0u; timingTicketIndex < submissionTimingTickets.size(); ++timingTicketIndex)
         submissionTimingTickets[timingTicketIndex]->resolveSubmission(token);
     if(!token.valid()){

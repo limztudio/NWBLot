@@ -270,6 +270,7 @@ inline bool operator==(const DescriptorWriteItem& lhs, const DescriptorWriteItem
 inline bool operator!=(const DescriptorWriteItem& lhs, const DescriptorWriteItem& rhs){ return !(lhs == rhs); }
 static_assert(sizeof(DescriptorWriteItem) == DescriptorWriteItem::s_ByteSize, "sizeof(DescriptorWriteItem) is supposed to be 40 bytes");
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

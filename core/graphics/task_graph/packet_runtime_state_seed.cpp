@@ -3,6 +3,7 @@
 
 
 #include "packet_runtime.h"
+#include "packet_runtime_internal.h"
 
 #include "task_graph.h"
 
@@ -13,73 +14,6 @@
 
 
 NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_gpu_packet_runtime_state_seed{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static u64 TextureRangeEnd(
-    const u32 base,
-    const u32 count,
-    const u32 all
-)noexcept{
-    return count == all ? Limit<u64>::s_Max : static_cast<u64>(base) + static_cast<u64>(count);
-}
-
-[[nodiscard]] static bool TextureRangeContains(
-    const TextureSubresourceSet& outer,
-    const TextureSubresourceSet& inner
-)noexcept{
-    return outer.baseMipLevel <= inner.baseMipLevel
-        && TextureRangeEnd(outer.baseMipLevel, outer.numMipLevels, TextureSubresourceSet::AllMipLevels)
-            >= TextureRangeEnd(inner.baseMipLevel, inner.numMipLevels, TextureSubresourceSet::AllMipLevels)
-        && outer.baseArraySlice <= inner.baseArraySlice
-        && TextureRangeEnd(outer.baseArraySlice, outer.numArraySlices, TextureSubresourceSet::AllArraySlices)
-            >= TextureRangeEnd(inner.baseArraySlice, inner.numArraySlices, TextureSubresourceSet::AllArraySlices)
-    ;
-}
-
-[[nodiscard]] static const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(
-    const GpuTaskGraphResourceView& resource,
-    const GpuCompiledBarrier& barrier
-)noexcept{
-    if(
-        resource.initialOwnerHandoffSourceCount == 0u
-        || !resource.initialOwnerHandoffSources
-        || resource.type != GpuGraphResourceType::Texture
-    )
-        return nullptr;
-
-    const GpuTaskGraphInitialOwnerHandoffSourceView* result = nullptr;
-    for(usize sourceIndex = 0u;
-        sourceIndex < resource.initialOwnerHandoffSourceCount;
-        ++sourceIndex
-    ){
-        const GpuTaskGraphInitialOwnerHandoffSourceView& source = resource.initialOwnerHandoffSources[sourceIndex];
-        if(
-            source.sourceQueue != barrier.sourceQueue
-            || source.destinationQueue != barrier.destinationQueue
-            || !TextureRangeContains(source.range.textureSubresources, barrier.range.textureSubresources)
-        )
-            continue;
-        if(result)
-            return nullptr;
-        result = &source;
-    }
-    return result;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -215,9 +149,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
 
     const auto appendInitialOwnerStateSource = [&](const GpuCompiledBarrier& barrier){
         const GpuTaskGraphResourceView resource = graph.resourceAt(barrier.resource.index);
-        const GpuTaskGraphInitialOwnerHandoffSourceView* const multiSource =
-            __hidden_gpu_packet_runtime_state_seed::FindInitialOwnerHandoffSource(resource, barrier)
-        ;
+        const GpuTaskGraphInitialOwnerHandoffSourceView* const multiSource = GpuPacketRuntimeDetail::FindInitialOwnerHandoffSource(resource, barrier);
         if(resource.initialOwnerHandoffSourceCount != 0u && !multiSource)
             return false;
         const CommandListResourceStateHandoff* const sourceStates = multiSource
@@ -328,9 +260,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             )
                 continue;
             const GpuTaskGraphResourceView resource = graph.resourceAt(barrier.resource.index);
-            const GpuTaskGraphInitialOwnerHandoffSourceView* const multiSource =
-                __hidden_gpu_packet_runtime_state_seed::FindInitialOwnerHandoffSource(resource, barrier)
-            ;
+            const GpuTaskGraphInitialOwnerHandoffSourceView* const multiSource = GpuPacketRuntimeDetail::FindInitialOwnerHandoffSource(resource, barrier);
             if(resource.initialOwnerHandoffSourceCount != 0u && !multiSource)
                 return false;
             if(!multiSource && !resource.initialOwnerCompletion.valid())

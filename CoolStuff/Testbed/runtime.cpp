@@ -64,26 +64,10 @@ static constexpr f32 s_UiInitialPositionX = 18.0f;
 static constexpr f32 s_UiInitialPositionY = 18.0f;
 static constexpr f32 s_UiInitialWidth = 360.0f;
 static constexpr f32 s_UiInitialHeightAuto = 0.0f;
-static constexpr TestbedModelRef s_FemaleModel = []() constexpr{
-    TestbedModelRef result;
-    result.virtualPath = Name("project/characters/female/model");
-    return result;
-}();
-static constexpr TestbedMaterialRef s_ModelMaterial = []() constexpr{
-    TestbedMaterialRef result;
-    result.virtualPath = Name("project/materials/mat_skinned_uv");
-    return result;
-}();
-static constexpr TestbedModelRef s_GroundPlaneModel = []() constexpr{
-    TestbedModelRef result;
-    result.virtualPath = Name("project/meshes/ground_plane/model");
-    return result;
-}();
-static constexpr TestbedMaterialRef s_GroundPlaneMaterial = []() constexpr{
-    TestbedMaterialRef result;
-    result.virtualPath = Name("project/materials/mat_white_opaque");
-    return result;
-}();
+static constexpr TestbedModelRef s_FemaleModel{"project/characters/female/model"};
+static constexpr TestbedMaterialRef s_ModelMaterial{"project/materials/mat_skinned_uv"};
+static constexpr TestbedModelRef s_GroundPlaneModel{"project/meshes/ground_plane/model"};
+static constexpr TestbedMaterialRef s_GroundPlaneMaterial{"project/materials/mat_white_opaque"};
 static constexpr tchar s_DefaultSceneDescription[] = NWB_TEXT("45-degree directional + point light, female skinned character on a white ground plane");
 
 

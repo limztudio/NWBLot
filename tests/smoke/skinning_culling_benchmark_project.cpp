@@ -88,16 +88,8 @@ static constexpr f32 s_FarCameraDistance = 5.6f;
 static constexpr f32 s_CameraHeight = 1.1f;
 static constexpr u32 s_AnimatedJointModulo = 16u;
 static constexpr u32 s_StaticPreviewAnimatedJointModulo = 2u;
-static constexpr BenchmarkModelRef s_BenchmarkModel = []() constexpr{
-    BenchmarkModelRef result;
-    result.virtualPath = Name("project/characters/body/model");
-    return result;
-}();
-static constexpr BenchmarkMaterialRef s_SkinningBenchmarkMaterial = []() constexpr{
-    BenchmarkMaterialRef result;
-    result.virtualPath = Name("project/smoke/skinning_culling_benchmark/materials/solid");
-    return result;
-}();
+static constexpr BenchmarkModelRef s_BenchmarkModel{"project/characters/body/model"};
+static constexpr BenchmarkMaterialRef s_SkinningBenchmarkMaterial{"project/smoke/skinning_culling_benchmark/materials/solid"};
 static constexpr StringView s_StaticPreviewEnv = "NWB_SKINNING_CULLING_STATIC_PREVIEW";
 static constexpr StringView s_FastSmokeEnv = "NWB_SKINNING_CULLING_FAST_SMOKE";
 static constexpr Name s_ModelSkeletonObject("skeleton");

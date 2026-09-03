@@ -3,6 +3,7 @@
 
 
 #include "system.h"
+#include "ui_internal.h"
 
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/module.h>
@@ -34,7 +35,6 @@ static constexpr usize s_TextureNameBufferBytes = 64u;
 static constexpr usize s_RgbaPixelBytes = 4u;
 static constexpr usize s_RgbaAlphaByteOffset = 3u;
 static constexpr u8 s_OpaqueAlpha = 255u;
-static constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
 static constexpr Name s_FallbackTextureName("ecs_ui/imgui_texture");
 static constexpr AStringView s_TextureNamePrefix("ecs_ui/imgui_texture_");
 
@@ -97,50 +97,6 @@ static bool BuildUploadPixels(ImTextureData& textureData, ByteVector& scratch, c
     outPixels = scratch.data();
     outRowPitch = rowPitch;
     return true;
-}
-
-[[nodiscard]] static Core::GpuQueueRequest UploadQueueRequest(){
-    return Core::GpuQueueRequest{
-        Core::GpuQueueCapability::Transfer,
-        Core::GpuQueuePreference::Transfer,
-        true,
-        true,
-    };
-}
-
-[[nodiscard]] static Core::GpuTaskSchedulingHint UploadScheduling(const usize byteCount){
-    const bool preferDedicatedTransport = byteCount >= s_TransferPreferredUploadMinimumBytes;
-    Core::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = preferDedicatedTransport ? Core::GpuTaskCostHint::Medium : Core::GpuTaskCostHint::Tiny;
-    scheduling.overlapPreferred = preferDedicatedTransport;
-    scheduling.avoidQueueCrossing = !preferDedicatedTransport;
-    scheduling.forceSubmissionBoundary = true;
-    scheduling.allowPacketMerge = false;
-    // Imported UI textures are created for all graph upload classes. Large immutable updates may therefore offload
-    // across explicitly opted-in same-class physical queues; the graph-owned UI completion task still consumes the
-    // texture from primary Graphics before any direct compatibility rasterization can proceed.
-    scheduling.allowSameClassQueueRouting = preferDedicatedTransport;
-    scheduling.preferNonPrimarySameClassQueue = preferDedicatedTransport;
-    scheduling.allowCrossFamilySameClassQueueRouting = preferDedicatedTransport;
-    // Texture bytes are copied into graph-owned blobs before declaration; this built-in upload has no mutable ImGui
-    // state during native recording and is safe to join other ready upload packets on worker threads.
-    scheduling.allowParallelRecording = true;
-    return scheduling;
-}
-
-[[nodiscard]] static Core::GpuGraphResourceDesc TextureResourceDesc(
-    const Core::TextureDesc& textureDesc,
-    const bool initialUploadAccepted
-){
-    Core::GpuGraphResourceDesc desc;
-    desc
-        .setIdentity(textureDesc.name)
-        .setMarkerLabel("ImGui Texture")
-        .setType(Core::GpuGraphResourceType::Texture)
-        .setInitialState(initialUploadAccepted ? textureDesc.initialState : Core::ResourceStates::Unknown)
-        .setQueueSharing(textureDesc.queueSharing)
-    ;
-    return desc;
 }
 
 
@@ -346,7 +302,7 @@ Core::GpuGraphResourceId UiSystem::importTaskGraphTexture(
 
     const Core::GpuGraphResourceId imported = graph.importTexture(
         resource.texture,
-        __hidden_ui::TextureResourceDesc(resource.texture->getCreationDescription(), resource.initialUploadAccepted)
+        UiDetail::TextureResourceDesc(resource.texture->getCreationDescription(), resource.initialUploadAccepted)
     );
     if(imported.valid()){
         resource.taskGraphResource = imported;
@@ -403,8 +359,8 @@ bool UiSystem::declareTaskGraphTextureUploads(
         desc
             .setIdentity(Name("ui.imgui_texture_upload"))
             .setMarkerLabel("ImGui Texture Upload")
-            .setQueue(__hidden_ui::UploadQueueRequest())
-            .setScheduling(__hidden_ui::UploadScheduling(uploadByteCount))
+            .setQueue(UiDetail::UploadQueueRequest())
+            .setScheduling(UiDetail::UploadScheduling(uploadByteCount))
         ;
         if(previousTask.valid())
             desc.setDependencies(&previousTask, 1u);

@@ -7,24 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from return_value_handling import blank_non_code, line_number
-
-
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-
-
-SOURCE_DIRECTORIES = (
-    "CoolStuff",
-    "core",
-    "global",
-    "impl",
-    "loader",
-    "logger",
-    "resource_cooker",
-    "tests",
-    "utilities",
-)
-SOURCE_SUFFIXES = frozenset((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ixx"))
+from policy_scan import REPOSITORY_ROOT, SOURCE_SUFFIXES, blank_non_code, first_party_source_files, line_number
 RETIRED_RECORD_DESCRIPTOR = re.compile(r"\bGpuNativePacketRecordDesc\b")
 RETIRED_RECORDING_LEASE = re.compile(r"\bGpuTaskPacketRecordingLease\b")
 RETIRED_TASK_LIFECYCLE_STATE = re.compile(r"\bGpuTaskLifecycleState\b")
@@ -130,12 +113,7 @@ def find_public_single_packet_recording(source: str) -> list[tuple[int, str]]:
 
 
 def source_files(source_root: Path) -> list[Path]:
-    return sorted(
-        path
-        for relative_directory in SOURCE_DIRECTORIES
-        for path in (source_root / relative_directory).rglob("*")
-        if path.is_file() and path.suffix in SOURCE_SUFFIXES
-    )
+    return first_party_source_files(source_root)
 
 
 def run_self_test() -> int:

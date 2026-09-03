@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "task_contract.h"
 #include "task_desc.h"
 
 #include <core/alloc/scratch.h>
@@ -526,21 +527,15 @@ public:
             return {};
 
         GpuTaskRecordThunk recordPayload = nullptr;
-        if constexpr(requires{
-            static_cast<bool (*)(const Payload&, CommandList&, const GpuTaskRecordContext&)>(&TaskT::record);
-        })
+        if constexpr(GpuGraphTaskContract::RecordApi<TaskT>)
             recordPayload = &RecordPayload<TaskT>;
 
         GpuTaskAcceptedThunk acceptPayload = nullptr;
-        if constexpr(requires{
-            static_cast<void (*)(Payload&, const QueueSubmissionToken&)>(&TaskT::accepted);
-        })
+        if constexpr(GpuGraphTaskContract::AcceptedApi<TaskT>)
             acceptPayload = &AcceptPayload<TaskT>;
 
         GpuTaskDiscardedThunk discardPayload = nullptr;
-        if constexpr(requires{
-            static_cast<void (*)(Payload&)>(&TaskT::discarded);
-        })
+        if constexpr(GpuGraphTaskContract::DiscardedApi<TaskT>)
             discardPayload = &DiscardPayload<TaskT>;
 
         const GpuTaskId task = appendTask(

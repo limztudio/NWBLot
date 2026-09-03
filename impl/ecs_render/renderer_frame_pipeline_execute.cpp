@@ -5,9 +5,7 @@
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
-#include <impl/ecs_render/avboit/task_graph_clear_timing_state.h>
-#include <impl/ecs_render/csg/task_graph_clear_timing.h>
-#include <impl/ecs_render/deferred/task_graph_clear_timing_state.h>
+#include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/shared/renderer_scene_private.h>
 
 #include <impl/ecs_scene/components.h>
@@ -390,20 +388,22 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     bool asyncPrefixTimingSpansOnePacket = true;
     Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
     Optional<Core::GpuTimingMeasure> deferredClearTiming;
-    ECSRenderDetail::DeferredClearTimingRecordState deferredClearTimingState{
+    GraphClearTimingRecordState deferredClearTimingState{
         .graphics = &m_graphics,
         .timing = &deferredClearTiming,
-        .timingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(
+        .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(
             ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::DeferredClear
         )],
+        .scope = RendererGpuTimingScope::s_DeferredClear,
     };
     Optional<Core::GpuTimingMeasure> opaqueCsgIntervalClearTiming;
-    ECSRenderDetail::CsgIntervalClearTimingRecordState opaqueCsgIntervalClearTimingState{
+    GraphClearTimingRecordState opaqueCsgIntervalClearTimingState{
         .graphics = &m_graphics,
         .timing = &opaqueCsgIntervalClearTiming,
         .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(
             ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::Gbuffer
         )],
+        .scope = RendererGpuTimingScope::s_CsgIntervalClear,
     };
     // The small shared-output opaque sequence spans G-buffer's mesh prelude and four, six, eight, or ten graph callbacks.
     // Keep its measurement alive through graph declaration, recording, submission, and rejection just like CSG
@@ -434,16 +434,18 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const bool clearAvboitTargets = m_avboitSystem.shouldClearTargets(hasTransparentRenderers);
     Core::GpuTimingSubmissionTicket avboitPreTimingTicket(m_graphics.gpuTiming());
     Optional<Core::GpuTimingMeasure> avboitClearTiming;
-    ECSRenderDetail::AvboitClearTimingRecordState avboitClearTimingState{
+    GraphClearTimingRecordState avboitClearTimingState{
         .graphics = &m_graphics,
         .timing = &avboitClearTiming,
         .timingTicket = &avboitPreTimingTicket,
+        .scope = RendererGpuTimingScope::s_AvboitClear,
     };
     Optional<Core::GpuTimingMeasure> transparentCsgIntervalClearTiming;
-    ECSRenderDetail::CsgIntervalClearTimingRecordState transparentCsgIntervalClearTimingState{
+    GraphClearTimingRecordState transparentCsgIntervalClearTimingState{
         .graphics = &m_graphics,
         .timing = &transparentCsgIntervalClearTiming,
         .timingTicket = &avboitPreTimingTicket,
+        .scope = RendererGpuTimingScope::s_CsgIntervalClear,
     };
     // Prepared transparent CSG begins this interval in AVBOIT Pre and closes it in its graph-owned Combine callback.
     Optional<Core::GpuTimingMeasure> transparentCsgIntervalsTiming;
@@ -1492,50 +1494,17 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         );
     };
     const auto discardRenderPackets = [&](){
-        if(asyncPrefixTiming){
-            asyncPrefixTiming->discardTiming();
-            asyncPrefixTiming.reset();
-        }
-        if(deferredClearTiming){
-            deferredClearTiming->discardTiming();
-            deferredClearTiming.reset();
-        }
-        if(asyncFinalTiming){
-            asyncFinalTiming->discardTiming();
-            asyncFinalTiming.reset();
-        }
-        if(causticPhotonTiming){
-            causticPhotonTiming->discardTiming();
-            causticPhotonTiming.reset();
-        }
-        if(causticResolveTiming){
-            causticResolveTiming->discardTiming();
-            causticResolveTiming.reset();
-        }
-        if(transparentCsgIntervalsTiming){
-            transparentCsgIntervalsTiming->discardTiming();
-            transparentCsgIntervalsTiming.reset();
-        }
-        if(avboitOccupancyComputeEmulationTiming){
-            avboitOccupancyComputeEmulationTiming->discardTiming();
-            avboitOccupancyComputeEmulationTiming.reset();
-        }
-        if(avboitExtinctionComputeEmulationTiming){
-            avboitExtinctionComputeEmulationTiming->discardTiming();
-            avboitExtinctionComputeEmulationTiming.reset();
-        }
-        if(avboitAccumulationComputeEmulationTiming){
-            avboitAccumulationComputeEmulationTiming->discardTiming();
-            avboitAccumulationComputeEmulationTiming.reset();
-        }
-        if(opaqueRegularSharedComputeEmulationTiming){
-            opaqueRegularSharedComputeEmulationTiming->discardTiming();
-            opaqueRegularSharedComputeEmulationTiming.reset();
-        }
-        if(opaqueCsgIntervalSampleComputeEmulationTiming){
-            opaqueCsgIntervalSampleComputeEmulationTiming->discardTiming();
-            opaqueCsgIntervalSampleComputeEmulationTiming.reset();
-        }
+        DiscardGpuTimingMeasure(&asyncPrefixTiming);
+        DiscardGpuTimingMeasure(&deferredClearTiming);
+        DiscardGpuTimingMeasure(&asyncFinalTiming);
+        DiscardGpuTimingMeasure(&causticPhotonTiming);
+        DiscardGpuTimingMeasure(&causticResolveTiming);
+        DiscardGpuTimingMeasure(&transparentCsgIntervalsTiming);
+        DiscardGpuTimingMeasure(&avboitOccupancyComputeEmulationTiming);
+        DiscardGpuTimingMeasure(&avboitExtinctionComputeEmulationTiming);
+        DiscardGpuTimingMeasure(&avboitAccumulationComputeEmulationTiming);
+        DiscardGpuTimingMeasure(&opaqueRegularSharedComputeEmulationTiming);
+        DiscardGpuTimingMeasure(&opaqueCsgIntervalSampleComputeEmulationTiming);
         frameTimingTransaction.discard();
         discardTimingTickets();
         if(!discardUnacceptedGraphPackets()){

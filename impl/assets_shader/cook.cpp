@@ -1139,69 +1139,6 @@ static bool ValidatePairedSourceExtension(
     return false;
 }
 
-static bool FindOptionalStringField(
-    const Path& nwbFilePath,
-    const Metascript::Value& asset,
-    const AStringView fieldName,
-    const Metascript::Value*& outFieldValue
-){
-    outFieldValue = asset.findField(fieldName);
-    if(!outFieldValue)
-        return true;
-
-    if(!outFieldValue->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': field '{}' must be a string")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    return true;
-}
-
-static bool ParseStringField(
-    const Path& nwbFilePath,
-    const Metascript::Value& asset,
-    const AStringView fieldName,
-    CookString& outValue
-){
-    const Metascript::Value* fieldValue = nullptr;
-    if(!FindOptionalStringField(nwbFilePath, asset, fieldName, fieldValue))
-        return false;
-    if(!fieldValue)
-        return true;
-
-    const Metascript::MStringView text = fieldValue->asString();
-    const AStringView textView(text.data(), text.size());
-    outValue.assign(textView.data(), textView.size());
-    return true;
-}
-
-static bool ParseCompactStringField(
-    const Path& nwbFilePath,
-    const Metascript::Value& asset,
-    const AStringView fieldName,
-    ACompactString& outValue
-){
-    const Metascript::Value* fieldValue = nullptr;
-    if(!FindOptionalStringField(nwbFilePath, asset, fieldName, fieldValue))
-        return false;
-    if(!fieldValue)
-        return true;
-
-    const AStringView fieldText(fieldValue->asString().data(), fieldValue->asString().size());
-    if(!outValue.assign(fieldText)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': field '{}' exceeds ACompactString capacity")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    return true;
-}
-
 static bool ParseOptionalIntegerFlagField(
     const Path& nwbFilePath,
     const Metascript::Value& asset,
@@ -1349,10 +1286,10 @@ bool ShaderCook::parseShaderMeta(
         { "stage", "target_profile", "optimization_level", "entry_point", "include_roots", "defines", "emit_mesh_compute_shadow" }
     ))
         return false;
-    if(!__hidden_shader_cook::ParseCompactStringField(nwbFilePath, asset, "stage", outEntry.stage))
+    if(!Assets::ReadMetadataCompactStringField(nwbFilePath, asset, "Meta", "stage", false, outEntry.stage))
         return false;
     outEntry.archiveStage = outEntry.stage;
-    if(!__hidden_shader_cook::ParseCompactStringField(nwbFilePath, asset, "target_profile", outEntry.targetProfile))
+    if(!Assets::ReadMetadataCompactStringField(nwbFilePath, asset, "Meta", "target_profile", false, outEntry.targetProfile))
         return false;
     AStringView slangTargetProfile;
     AStringView targetProfileCapability;
@@ -1367,29 +1304,35 @@ bool ShaderCook::parseShaderMeta(
         );
         return false;
     }
-    const Metascript::Value* optimizationLevelValue = nullptr;
-    if(!__hidden_shader_cook::FindOptionalStringField(
+    AStringView optimizationLevelText;
+    bool optimizationLevelPresent = false;
+    if(!Assets::ReadMetadataStringField(
         nwbFilePath,
         asset,
+        "Meta",
         "optimization_level",
-        optimizationLevelValue
+        false,
+        optimizationLevelText,
+        &optimizationLevelPresent
     ))
         return false;
     if(
-        optimizationLevelValue
+        optimizationLevelPresent
         && !__hidden_shader_cook::TryParseShaderOptimizationLevel(
-            AStringView(optimizationLevelValue->asString().data(), optimizationLevelValue->asString().size()),
+            optimizationLevelText,
             outEntry.optimizationLevel
         )
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported optimization_level '{}'"),
             PathToString<tchar>(nwbFilePath),
-            StringConvert(AStringView(optimizationLevelValue->asString().data(), optimizationLevelValue->asString().size()))
+            StringConvert(optimizationLevelText)
         );
         return false;
     }
-    if(!__hidden_shader_cook::ParseStringField(nwbFilePath, asset, "entry_point", outEntry.entryPoint))
+    AStringView entryPointText;
+    if(!Assets::ReadMetadataStringField(nwbFilePath, asset, "Meta", "entry_point", false, entryPointText))
         return false;
+    outEntry.entryPoint.assign(entryPointText.data(), entryPointText.size());
     if(outEntry.entryPoint.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': entry_point must not be empty"), PathToString<tchar>(nwbFilePath));
         return false;

@@ -14,8 +14,7 @@
 #include <core/graphics/task_graph/packet_runtime.h>
 #include <core/graphics/task_graph/task_graph.h>
 #include <core/graphics/vulkan/backend.h>
-#include <tests/common/capturing_logger.h>
-#include <tests/common/headless_graphics_scope.h>
+#include <tests/common/headless_gtest_fixture.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -289,50 +288,15 @@ struct LeaseProvenanceGraph{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class CommandListProvenanceTest : public ::testing::Test{
-protected:
-    static void SetUpTestSuite(){
-        s_logger.emplace();
-        s_loggerGuard.emplace(*s_logger);
-
-        s_scope = MakeUnique<HeadlessGraphicsScope>();
-        if(
-            !s_scope->setTransferQueueEnabled(true)
-            || !s_scope->setSameClassMultiQueueEnabled(true)
-            || !s_scope->initialize()
-        ){
-            GTEST_SKIP() << "Command-list provenance: no validation-enabled headless Vulkan device.";
-            return;
-        }
-        s_validationBackedDeviceInitialized = true;
-    }
-
-    static void TearDownTestSuite(){
-        s_scope.reset();
-        if(s_validationBackedDeviceInitialized && s_logger.has_value()){
-            EXPECT_FALSE(s_logger->sawMessageContaining(NWB_TEXT("Vulkan debug: [severity=error")))
-                << "command-list provenance tests emitted a Vulkan severity=error message";
-        }
-        s_loggerGuard.reset();
-        s_logger.reset();
-        s_validationBackedDeviceInitialized = false;
-    }
-
-    [[nodiscard]] static GraphicsBackend::Device& device(){ return s_scope->graphics().getDevice(); }
-    [[nodiscard]] static Core::Alloc::GlobalArena& arena(){ return s_scope->arena(); }
-
-
-protected:
-    static bool s_validationBackedDeviceInitialized;
-    static UniquePtr<HeadlessGraphicsScope> s_scope;
-    static Optional<CapturingLogger> s_logger;
-    static Optional<Common::LoggerRegistrationGuard> s_loggerGuard;
+struct CommandListProvenanceTestConfig : HeadlessGraphicsTestConfig{
+    static constexpr bool s_TransferQueueEnabled = true;
+    static constexpr bool s_SameClassMultiQueueEnabled = true;
+    static constexpr const char* s_SkipMessage = "Command-list provenance: no validation-enabled headless Vulkan device.";
+    static constexpr const tchar* s_VulkanErrorMessage = NWB_TEXT("command-list provenance tests emitted a Vulkan severity=error message");
 };
 
-bool CommandListProvenanceTest::s_validationBackedDeviceInitialized = false;
-UniquePtr<HeadlessGraphicsScope> CommandListProvenanceTest::s_scope;
-Optional<CapturingLogger> CommandListProvenanceTest::s_logger;
-Optional<Common::LoggerRegistrationGuard> CommandListProvenanceTest::s_loggerGuard;
+class CommandListProvenanceTest : public HeadlessGraphicsTest<CommandListProvenanceTestConfig>{
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

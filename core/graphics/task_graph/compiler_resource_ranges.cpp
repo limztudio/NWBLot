@@ -31,7 +31,7 @@ namespace GpuTaskGraphCompilerDetail{
 }
 
 [[nodiscard]] bool IsValidTextureRange(const TextureSubresourceSet& range)noexcept{
-    return range.numMipLevels != 0u && range.numArraySlices != 0u;
+    return range.hasExtent();
 }
 
 // Typed imports retain the physical Texture descriptor, so compile-time state planning must use the same finite
@@ -62,10 +62,6 @@ namespace GpuTaskGraphCompilerDetail{
     ;
 }
 
-[[nodiscard]] static u64 RangeEnd(const u32 base, const u32 count, const u32 all)noexcept{
-    return count == all ? Limit<u64>::s_Max : static_cast<u64>(base) + static_cast<u64>(count);
-}
-
 [[nodiscard]] bool RangesOverlap(
     const GpuTaskGraphResourceView& resource,
     const GpuTaskResourceRange& lhs,
@@ -76,16 +72,7 @@ namespace GpuTaskGraphCompilerDetail{
     if(resource.type != GpuGraphResourceType::Texture)
         return true;
 
-    const TextureSubresourceSet& left = lhs.textureSubresources;
-    const TextureSubresourceSet& right = rhs.textureSubresources;
-    const u64 leftMipEnd = RangeEnd(left.baseMipLevel, left.numMipLevels, TextureSubresourceSet::AllMipLevels);
-    const u64 rightMipEnd = RangeEnd(right.baseMipLevel, right.numMipLevels, TextureSubresourceSet::AllMipLevels);
-    const u64 leftArrayEnd = RangeEnd(left.baseArraySlice, left.numArraySlices, TextureSubresourceSet::AllArraySlices);
-    const u64 rightArrayEnd = RangeEnd(right.baseArraySlice, right.numArraySlices, TextureSubresourceSet::AllArraySlices);
-    return left.baseMipLevel < rightMipEnd
-        && right.baseMipLevel < leftMipEnd
-        && left.baseArraySlice < rightArrayEnd
-        && right.baseArraySlice < leftArrayEnd;
+    return lhs.textureSubresources.overlaps(rhs.textureSubresources);
 }
 
 [[nodiscard]] bool RangeContains(
@@ -96,29 +83,7 @@ namespace GpuTaskGraphCompilerDetail{
     if(resource.type != GpuGraphResourceType::Texture)
         return true;
 
-    const TextureSubresourceSet& outerTexture = outer.textureSubresources;
-    const TextureSubresourceSet& innerTexture = inner.textureSubresources;
-    return outerTexture.baseMipLevel <= innerTexture.baseMipLevel
-        && RangeEnd(
-            outerTexture.baseMipLevel,
-            outerTexture.numMipLevels,
-            TextureSubresourceSet::AllMipLevels
-        ) >= RangeEnd(
-            innerTexture.baseMipLevel,
-            innerTexture.numMipLevels,
-            TextureSubresourceSet::AllMipLevels
-        )
-        && outerTexture.baseArraySlice <= innerTexture.baseArraySlice
-        && RangeEnd(
-            outerTexture.baseArraySlice,
-            outerTexture.numArraySlices,
-            TextureSubresourceSet::AllArraySlices
-        ) >= RangeEnd(
-            innerTexture.baseArraySlice,
-            innerTexture.numArraySlices,
-            TextureSubresourceSet::AllArraySlices
-        )
-    ;
+    return outer.textureSubresources.contains(inner.textureSubresources);
 }
 
 
@@ -142,9 +107,9 @@ struct TextureRangeBounds{
     const TextureSubresourceSet& texture = range.textureSubresources;
     outBounds = TextureRangeBounds{
         .mipBegin = texture.baseMipLevel,
-        .mipEnd = RangeEnd(texture.baseMipLevel, texture.numMipLevels, TextureSubresourceSet::AllMipLevels),
+        .mipEnd = texture.mipEnd(),
         .arrayBegin = texture.baseArraySlice,
-        .arrayEnd = RangeEnd(texture.baseArraySlice, texture.numArraySlices, TextureSubresourceSet::AllArraySlices),
+        .arrayEnd = texture.arrayEnd(),
     };
     return outBounds.mipBegin < outBounds.mipEnd && outBounds.arrayBegin < outBounds.arrayEnd;
 }

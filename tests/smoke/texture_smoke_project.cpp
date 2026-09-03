@@ -43,27 +43,11 @@ using TextureSmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TextureSmokeMeshRef s_GroundPlaneMesh = []() constexpr{
-    TextureSmokeMeshRef result;
-    result.virtualPath = Name("project/meshes/shadow_plane");
-    return result;
-}();
-static constexpr TextureSmokeMeshRef s_TexturedSphereMesh = []() constexpr{
-    TextureSmokeMeshRef result;
-    result.virtualPath = Name("project/meshes/caustic_sphere");
-    return result;
-}();
-static constexpr TextureSmokeMaterialRef s_WhiteGroundMaterial = []() constexpr{
-    TextureSmokeMaterialRef result;
-    result.virtualPath = Name("project/smoke/texture/materials/white_ground");
-    return result;
-}();
+static constexpr TextureSmokeMeshRef s_GroundPlaneMesh{"project/meshes/shadow_plane"};
+static constexpr TextureSmokeMeshRef s_TexturedSphereMesh{"project/meshes/caustic_sphere"};
+static constexpr TextureSmokeMaterialRef s_WhiteGroundMaterial{"project/smoke/texture/materials/white_ground"};
 static constexpr AStringView s_WhiteGroundMaterialInterface = "project/shaders/smoke_surface";
-static constexpr TextureSmokeMaterialRef s_TextureMaterial = []() constexpr{
-    TextureSmokeMaterialRef result;
-    result.virtualPath = Name("project/smoke/texture/materials/pattern");
-    return result;
-}();
+static constexpr TextureSmokeMaterialRef s_TextureMaterial{"project/smoke/texture/materials/pattern"};
 static constexpr AStringView s_TextureMaterialInterface = "project/shaders/texture_smoke_surface";
 static constexpr AStringView s_TextureRuntimeTintParameter = "texture_runtime.color_tint";
 static constexpr f32 s_CameraHeight = 3.1f;

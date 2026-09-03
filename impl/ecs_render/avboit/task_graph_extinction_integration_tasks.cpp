@@ -30,13 +30,6 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AvboitExtinctionComputeEmulationGraphTask::discardTiming(Optional<Core::GpuTimingMeasure>* const timing){
-    if(!timing || !timing->has_value())
-        return;
-    timing->value().discardTiming();
-    timing->reset();
-}
-
 [[nodiscard]] bool AvboitExtinctionComputeEmulationGraphTask::record(
     const Payload& payload,
     Core::CommandList& commandList,
@@ -126,15 +119,6 @@ void AvboitExtinctionComputeEmulationGraphTask::discardTiming(Optional<Core::Gpu
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
-}
-
-void AvboitExtinctionComputeEmulationGraphTask::discarded(Payload& payload){ discardTiming(payload.extinctionTiming); }
-
-void AvboitExtinctionSharedComputeEmulationGraphTask::discardTiming(Optional<Core::GpuTimingMeasure>* const timing){
-    if(!timing || !timing->has_value())
-        return;
-    timing->value().discardTiming();
-    timing->reset();
 }
 
 [[nodiscard]] bool AvboitExtinctionSharedComputeEmulationGraphTask::record(
@@ -233,8 +217,6 @@ void AvboitExtinctionSharedComputeEmulationGraphTask::discardTiming(Optional<Cor
     return true;
 }
 
-void AvboitExtinctionSharedComputeEmulationGraphTask::discarded(Payload& payload){ discardTiming(payload.extinctionTiming); }
-
 [[nodiscard]] bool AvboitExtinctionGraphTask::record(
     const Payload& payload,
     Core::CommandList& commandList,
@@ -288,16 +270,6 @@ void AvboitExtinctionSharedComputeEmulationGraphTask::discarded(Payload& payload
         );
     }
     return true;
-}
-
-void AvboitExtinctionGraphTask::discarded(Payload& payload){
-    if(
-        !payload.extinctionComputeEmulationTiming
-        || !payload.extinctionComputeEmulationTiming->has_value()
-    )
-        return;
-    payload.extinctionComputeEmulationTiming->value().discardTiming();
-    payload.extinctionComputeEmulationTiming->reset();
 }
 
 [[nodiscard]] bool AvboitIntegrationGraphTask::record(

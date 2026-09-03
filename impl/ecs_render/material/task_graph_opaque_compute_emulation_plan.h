@@ -71,11 +71,9 @@ struct OpaqueRegularComputeEmulationGraphPlan{
             // The original callback interleaves dispatch and raster specifically because a second instance can
             // overwrite this whole persistent buffer.  This first graph-owned slice deliberately declines that
             // case rather than moving either draw across a potentially aliasing producer.
-            for(const Core::BufferHandle& existing : outputBuffers){
-                if(existing.get() == mesh.emulationVertexBuffer.get()){
-                    reset();
-                    return false;
-                }
+            if(MaterialPassEmulationOutputBufferCaptured(outputBuffers, mesh.emulationVertexBuffer)){
+                reset();
+                return false;
             }
             drawItems.push_back(drawItem);
             outputBuffers.push_back(mesh.emulationVertexBuffer);

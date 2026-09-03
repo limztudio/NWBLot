@@ -551,9 +551,10 @@ void AppendFrameGraphRecordingRuntimeStatisticsJson(
     );
 }
 
-void AppendFrameGraphSubmissionRuntimeStatisticsJson(
+template<typename Statistics>
+void AppendSubmissionRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphSubmissionRuntimeStatistics& statistics,
+    const Statistics& statistics,
     const bool recoverySubmissionCountPresent
 ){
     StringAppendFormat(
@@ -580,6 +581,14 @@ void AppendFrameGraphSubmissionRuntimeStatisticsJson(
     else
         out += ", \"recoverySubmissionCount\": null";
     StringAppendFormat(out, ", \"submissionSeconds\": {:.9}}}", statistics.submissionSeconds);
+}
+
+void AppendFrameGraphSubmissionRuntimeStatisticsJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphSubmissionRuntimeStatistics& statistics,
+    const bool recoverySubmissionCountPresent
+){
+    AppendSubmissionRuntimeStatisticsJson(out, statistics, recoverySubmissionCountPresent);
 }
 
 void AppendFrameGraphPhysicalQueueCompileRuntimeStatisticsJson(
@@ -645,30 +654,7 @@ void AppendFrameGraphPhysicalQueueSubmissionRuntimeStatisticsJson(
     const Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics& statistics,
     const bool recoverySubmissionCountPresent
 ){
-    StringAppendFormat(
-        out,
-        "{{\"acceptedPacketCount\": {}, \"acceptedTaskCount\": {}, \"rejectedPacketCount\": {}, "
-        "\"rejectedTaskCount\": {}, \"nativeSubmissionCount\": {}, \"rejectedSubmissionCount\": {}, "
-        "\"nativeCommandListCount\": {}, \"plannedWaitTokenCount\": {}, \"sameQueueWaitElisionCount\": {}, "
-        "\"timelineWaitCount\": {}, \"mergedTimelineWaitCount\": {}, \"acceptedFrontierSubmissionCount\": {}",
-        statistics.acceptedPacketCount,
-        statistics.acceptedTaskCount,
-        statistics.rejectedPacketCount,
-        statistics.rejectedTaskCount,
-        statistics.nativeSubmissionCount,
-        statistics.rejectedSubmissionCount,
-        statistics.nativeCommandListCount,
-        statistics.plannedWaitTokenCount,
-        statistics.sameQueueWaitElisionCount,
-        statistics.timelineWaitCount,
-        statistics.mergedTimelineWaitCount,
-        statistics.acceptedFrontierSubmissionCount
-    );
-    if(recoverySubmissionCountPresent)
-        StringAppendFormat(out, ", \"recoverySubmissionCount\": {}", statistics.recoverySubmissionCount);
-    else
-        out += ", \"recoverySubmissionCount\": null";
-    StringAppendFormat(out, ", \"submissionSeconds\": {:.9}}}", statistics.submissionSeconds);
+    AppendSubmissionRuntimeStatisticsJson(out, statistics, recoverySubmissionCountPresent);
 }
 
 void AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(

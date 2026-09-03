@@ -17,60 +17,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_gpu_task_graph_storage{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static bool ValidTextureRange(const TextureSubresourceSet& range)noexcept{
-    return range.numMipLevels != 0u && range.numArraySlices != 0u;
-}
-
-[[nodiscard]] static u64 TextureRangeEnd(const u32 base, const u32 count, const u32 all)noexcept{
-    return count == all ? Limit<u64>::s_Max : static_cast<u64>(base) + static_cast<u64>(count);
-}
-
-[[nodiscard]] static bool TextureRangesOverlap(
-    const TextureSubresourceSet& lhs,
-    const TextureSubresourceSet& rhs
-)noexcept{
-    const u64 lhsMipEnd = TextureRangeEnd(
-        lhs.baseMipLevel,
-        lhs.numMipLevels,
-        TextureSubresourceSet::AllMipLevels
-    );
-    const u64 rhsMipEnd = TextureRangeEnd(
-        rhs.baseMipLevel,
-        rhs.numMipLevels,
-        TextureSubresourceSet::AllMipLevels
-    );
-    const u64 lhsArrayEnd = TextureRangeEnd(
-        lhs.baseArraySlice,
-        lhs.numArraySlices,
-        TextureSubresourceSet::AllArraySlices
-    );
-    const u64 rhsArrayEnd = TextureRangeEnd(
-        rhs.baseArraySlice,
-        rhs.numArraySlices,
-        TextureSubresourceSet::AllArraySlices
-    );
-    return lhs.baseMipLevel < rhsMipEnd
-        && rhs.baseMipLevel < lhsMipEnd
-        && lhs.baseArraySlice < rhsArrayEnd
-        && rhs.baseArraySlice < lhsArrayEnd;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 GpuTaskId GpuTaskGraph::appendTask(
     const GpuTaskDesc& desc,
     void* const payload,
@@ -348,7 +294,7 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
         for(usize sourceIndex = 0u; sourceIndex < desc.initialOwnerHandoffSourceCount; ++sourceIndex){
             const GpuGraphInitialOwnerHandoffSourceDesc& source = desc.initialOwnerHandoffSources[sourceIndex];
             if(
-                !__hidden_gpu_task_graph_storage::ValidTextureRange(source.range.textureSubresources)
+                !source.range.textureSubresources.hasExtent()
                 || !source.sourceQueue.valid()
                 || !source.destinationQueue.valid()
                 || !source.completion.valid()
@@ -373,10 +319,7 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
                     && source.sourceQueue != previousSource.sourceQueue
                 )
                     return {};
-                if(__hidden_gpu_task_graph_storage::TextureRangesOverlap(
-                    source.range.textureSubresources,
-                    previousSource.range.textureSubresources
-                ))
+                if(source.range.textureSubresources.overlaps(previousSource.range.textureSubresources))
                     return {};
             }
         }

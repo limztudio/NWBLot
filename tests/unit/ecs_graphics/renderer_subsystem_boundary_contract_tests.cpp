@@ -21,6 +21,7 @@ namespace __hidden_renderer_subsystem_boundary_contract_tests{
 
 using AString = NWB::Tests::TestAString;
 using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
+using NWB::Tests::CountText;
 
 struct RendererSubsystemBoundaryContractTestArenaTag{};
 using TestArena = NWB::Tests::TestArena<RendererSubsystemBoundaryContractTestArenaTag>;
@@ -28,23 +29,6 @@ using TestArena = NWB::Tests::TestArena<RendererSubsystemBoundaryContractTestAre
 
 static bool ContainsText(const AStringView text, const AStringView expected){
     return text.find(expected) != AStringView::npos;
-}
-
-
-static usize CountText(const AStringView text, const AStringView expected){
-    if(expected.empty())
-        return 0u;
-
-    usize count = 0u;
-    usize offset = 0u;
-    while(offset < text.size()){
-        const usize found = text.find(expected, offset);
-        if(found == AStringView::npos)
-            break;
-        ++count;
-        offset = found + expected.size();
-    }
-    return count;
 }
 
 

@@ -23,6 +23,7 @@
 
 #include "csg_smoke_helpers.h"
 #include "fps_probe.h"
+#include "smoke_project_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
 
@@ -43,6 +44,8 @@ using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::FindSpawnedModelObject;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
+using NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame;
+using NWB::Tests::Smoke::RendererBaselineFixedDelta;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
 using CsgSkinnedModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
@@ -52,23 +55,11 @@ using CsgSkinnedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr CsgSkinnedModelRef s_Model = []() constexpr{
-    CsgSkinnedModelRef result;
-    result.virtualPath = Name("project/characters/body/model");
-    return result;
-}();
+static constexpr CsgSkinnedModelRef s_Model{"project/characters/body/model"};
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-static constexpr CsgSkinnedMaterialRef s_ReceiverMaterial = []() constexpr{
-    CsgSkinnedMaterialRef result;
-    result.virtualPath = Name("project/smoke/transparent_multi/materials/shared");
-    return result;
-}();
+static constexpr CsgSkinnedMaterialRef s_ReceiverMaterial{"project/smoke/transparent_multi/materials/shared"};
 #else
-static constexpr CsgSkinnedMaterialRef s_ReceiverMaterial = []() constexpr{
-    CsgSkinnedMaterialRef result;
-    result.virtualPath = Name("project/smoke/csg_visible/materials/solid");
-    return result;
-}();
+static constexpr CsgSkinnedMaterialRef s_ReceiverMaterial{"project/smoke/csg_visible/materials/solid"};
 #endif
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 static constexpr Name s_ReceiverGroup("project/smoke/csg_skinned_visible/female_receiver");
@@ -156,34 +147,11 @@ static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f)
 class CsgSkinnedVisibleSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     [[nodiscard]] static u32 rendererBaselineCaptureFreezeFrame(){
-        static const u32 s_captureFrame = [](){
-            f32 configuredFrame = 0.0f;
-            if(
-                !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", configuredFrame)
-                || !IsFinite(configuredFrame)
-                || configuredFrame < 1.0f
-            ){
-                return 0u;
-            }
-            return static_cast<u32>(Min(configuredFrame, 1000000.0f));
-        }();
-        return s_captureFrame;
+        return RendererBaselineCaptureFreezeFrame();
     }
 
     [[nodiscard]] static f32 rendererBaselineFixedDelta(){
-        static const f32 s_fixedDelta = [](){
-            f32 configuredDelta = 0.0f;
-            if(
-                !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS", configuredDelta)
-                || !IsFinite(configuredDelta)
-                || configuredDelta <= 0.0f
-                || configuredDelta > 1.0f
-            ){
-                return 0.0f;
-            }
-            return configuredDelta;
-        }();
-        return s_fixedDelta;
+        return RendererBaselineFixedDelta();
     }
 
 

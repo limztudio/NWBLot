@@ -4,13 +4,9 @@
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
 
-from return_value_handling import blank_non_code, line_number
-
-
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+from policy_scan import find_regex_matches, run_policy
 
 
 INTEROP_BOUNDARIES = (
@@ -23,45 +19,26 @@ INTEROP_BOUNDARIES = (
 DIRECT_INTEROP_CONTAINER = re.compile(r"\bstd\s*::\s*(?:string|vector)\b")
 
 
-def find_direct_interop_containers(source: str) -> list[int]:
-    code = blank_non_code(source)
-    return [line_number(code, match.start()) for match in DIRECT_INTEROP_CONTAINER.finditer(code)]
+def find_direct_interop_containers(source: str):
+    return find_regex_matches(source, DIRECT_INTEROP_CONTAINER)
 
 
-def run_self_test() -> int:
-    cases = (
-        ("direct string", "std::string value;", (1,)),
-        ("direct vector", "std :: vector<int> values;", (1,)),
-        ("comment", "// std::string value;", ()),
-        ("literal", 'const char* text = "std::vector";', ()),
-    )
-    failed = False
-    for name, source, expected in cases:
-        actual = tuple(find_direct_interop_containers(source))
-        if actual != expected:
-            print(f"{name}: expected {expected}, got {actual}", file=sys.stderr)
-            failed = True
-    return 1 if failed else 0
-
-
-def main() -> int:
-    if len(sys.argv) == 2 and sys.argv[1] == "--self-test":
-        return run_self_test()
-
-    source_root = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else REPOSITORY_ROOT
-    violations: list[str] = []
-    for relative_path in INTEROP_BOUNDARIES:
-        path = source_root / relative_path
-        source = path.read_text(encoding="utf-8", errors="replace")
-        for line in find_direct_interop_containers(source):
-            violations.append(f"{relative_path}:{line}: direct std::string/std::vector reference")
-
-    if violations:
-        print("Interop boundaries must use project-owned aliases instead of direct std::string/std::vector names:", file=sys.stderr)
-        print("\n".join(violations), file=sys.stderr)
-        return 1
-    return 0
+def interop_files(source_root: Path):
+    return [source_root / relative_path for relative_path in INTEROP_BOUNDARIES]
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(
+        run_policy(
+            finder=find_direct_interop_containers,
+            files_for=interop_files,
+            error_header="Interop boundaries must use project-owned aliases instead of direct std::string/std::vector names:",
+            violation_format="{path}:{line}: direct std::string/std::vector reference",
+            self_test_cases=(
+                ("direct string", "std::string value;", ((1, "std::string"),)),
+                ("direct vector", "std :: vector<int> values;", ((1, "std :: vector"),)),
+                ("comment", "// std::string value;", ()),
+                ("literal", 'const char* text = "std::vector";', ()),
+            ),
+        )
+    )

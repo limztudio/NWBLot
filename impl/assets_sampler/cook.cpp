@@ -47,58 +47,6 @@ static constexpr AStringView s_MaxAnisotropyField = "max_anisotropy";
 static constexpr AStringView s_MipBiasField = "mip_bias";
 static constexpr AStringView s_BorderColorField = "border_color";
 
-[[nodiscard]] static bool ReadFiniteF32Value(
-    const Path& nwbFilePath,
-    const Value& value,
-    const AStringView fieldName,
-    f32& outValue
-){
-    outValue = 0.0f;
-    if(!value.isNumeric()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be numeric")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    const f64 numericValue = value.toDouble();
-    if(
-        !IsFinite(numericValue)
-        || numericValue < static_cast<f64>(Limit<f32>::s_Min)
-        || numericValue > static_cast<f64>(Limit<f32>::s_Max)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is outside the supported float range")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    outValue = static_cast<f32>(numericValue);
-    return true;
-}
-
-[[nodiscard]] static bool ReadRequiredFiniteF32Field(
-    const Path& nwbFilePath,
-    const Value& asset,
-    const AStringView fieldName,
-    f32& outValue
-){
-    const Value* const field = asset.findField(fieldName);
-    if(!field){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-    return ReadFiniteF32Value(nwbFilePath, *field, fieldName, outValue);
-}
-
 [[nodiscard]] static bool ParseFilter(
     const Path& nwbFilePath,
     const Value& asset,
@@ -210,7 +158,7 @@ static constexpr AStringView s_BorderColorField = "border_color";
     f32 components[4u] = {};
     const auto& values = field->asList();
     for(usize index = 0u; index < LengthOf(components); ++index){
-        if(!ReadFiniteF32Value(nwbFilePath, values[index], s_BorderColorField, components[index]))
+        if(!Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, values[index], s_DiagnosticPrefix, s_BorderColorField, components[index]))
             return false;
     }
     outColor = Core::Color(components[0u], components[1u], components[2u], components[3u]);
@@ -312,8 +260,8 @@ bool ParseSamplerCookMetadata(
         || !ParseAddressMode(nwbFilePath, asset, s_AddressVField, description.addressV)
         || !ParseAddressMode(nwbFilePath, asset, s_AddressWField, description.addressW)
         || !ParseReductionType(nwbFilePath, asset, description.reductionType)
-        || !ReadRequiredFiniteF32Field(nwbFilePath, asset, s_MaxAnisotropyField, description.maxAnisotropy)
-        || !ReadRequiredFiniteF32Field(nwbFilePath, asset, s_MipBiasField, description.mipBias)
+        || !Core::Assets::ReadMetadataFiniteF32Field(nwbFilePath, asset, s_DiagnosticPrefix, s_MaxAnisotropyField, true, description.maxAnisotropy)
+        || !Core::Assets::ReadMetadataFiniteF32Field(nwbFilePath, asset, s_DiagnosticPrefix, s_MipBiasField, true, description.mipBias)
         || !ParseBorderColor(nwbFilePath, asset, description.borderColor)
     )
         return false;

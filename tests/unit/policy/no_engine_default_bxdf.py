@@ -7,10 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from return_value_handling import blank_non_code, line_number
-
-
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+from policy_scan import REPOSITORY_ROOT, find_regex_matches, run_self_test
 
 
 ENGINE_SHADER_SUFFIXES = frozenset((".slang", ".slangi", ".surface", ".bxdf"))
@@ -18,11 +15,7 @@ FORBIDDEN_DEFAULT_HELPER = re.compile(r"\b(?:nwbSceneApplyLighting|nwbSceneShade
 
 
 def find_forbidden_default_helpers(source: str) -> list[tuple[int, str]]:
-    code = blank_non_code(source)
-    return [
-        (line_number(code, match.start()), match.group())
-        for match in FORBIDDEN_DEFAULT_HELPER.finditer(code)
-    ]
+    return find_regex_matches(source, FORBIDDEN_DEFAULT_HELPER)
 
 
 def engine_shader_files(source_root: Path) -> list[Path]:
@@ -46,27 +39,23 @@ def append_violations(paths: list[Path], source_root: Path, owner: str, out_viol
             out_violations.append(f"{path.relative_to(source_root)}:{line}: {owner} references retired default BXDF helper '{helper}'")
 
 
-def run_self_test() -> int:
-    cases = (
-        ("engine default", "half3 nwbSceneApplyLighting(){ return half3(0.0h); }", ((1, "nwbSceneApplyLighting"),)),
-        ("engine BRDF lobe", "half3 nwbSceneShadeLight(){ return half3(0.0h); }", ((1, "nwbSceneShadeLight"),)),
-        ("engine tonemap", "half3 nwbSceneTonemap(){ return half3(0.0h); }", ((1, "nwbSceneTonemap"),)),
-        ("transport helper", "half3 nwbSceneResolveLight(){ return half3(0.0h); }", ()),
-        ("comment", "// nwbSceneApplyLighting()", ()),
-        ("literal", 'const char* text = "nwbSceneApplyLighting";', ()),
+def local_self_test() -> int:
+    return run_self_test(
+        find_forbidden_default_helpers,
+        (
+            ("engine default", "half3 nwbSceneApplyLighting(){ return half3(0.0h); }", ((1, "nwbSceneApplyLighting"),)),
+            ("engine BRDF lobe", "half3 nwbSceneShadeLight(){ return half3(0.0h); }", ((1, "nwbSceneShadeLight"),)),
+            ("engine tonemap", "half3 nwbSceneTonemap(){ return half3(0.0h); }", ((1, "nwbSceneTonemap"),)),
+            ("transport helper", "half3 nwbSceneResolveLight(){ return half3(0.0h); }", ()),
+            ("comment", "// nwbSceneApplyLighting()", ()),
+            ("literal", 'const char* text = "nwbSceneApplyLighting";', ()),
+        ),
     )
-    failed = False
-    for name, source, expected in cases:
-        actual = tuple(find_forbidden_default_helpers(source))
-        if actual != expected:
-            print(f"{name}: expected {expected}, got {actual}", file=sys.stderr)
-            failed = True
-    return 1 if failed else 0
 
 
 def main() -> int:
     if len(sys.argv) == 2 and sys.argv[1] == "--self-test":
-        return run_self_test()
+        return local_self_test()
 
     source_root = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else REPOSITORY_ROOT
     violations: list[str] = []

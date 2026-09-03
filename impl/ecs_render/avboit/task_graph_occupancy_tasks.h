@@ -75,7 +75,9 @@ struct AvboitPreGraphTask{
         const Core::GpuTaskRecordContext& context
     );
 
-    static void discarded(Payload& payload);
+    static void discarded(Payload& payload){
+        Core::DiscardGpuTimingMeasure(payload.transparentCsgIntervalsTiming);
+    }
 };
 
 
@@ -108,15 +110,15 @@ struct AvboitOccupancyComputeEmulationGraphTask{
         {}
     };
 
-    static void discardTiming(Optional<Core::GpuTimingMeasure>* const timing);
-
     [[nodiscard]] static bool record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
 
-    static void discarded(Payload& payload);
+    static void discarded(Payload& payload){
+        Core::DiscardGpuTimingMeasure(payload.occupancyTiming);
+    }
 };
 
 
@@ -149,15 +151,15 @@ struct AvboitOccupancySharedComputeEmulationGraphTask{
         Phase phase = Phase::Generate;
     };
 
-    static void discardTiming(Optional<Core::GpuTimingMeasure>* const timing);
-
     [[nodiscard]] static bool record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
 
-    static void discarded(Payload& payload);
+    static void discarded(Payload& payload){
+        Core::DiscardGpuTimingMeasure(payload.occupancyTiming);
+    }
 };
 
 
@@ -193,7 +195,9 @@ struct AvboitOccupancyGraphTask{
         const Core::GpuTaskRecordContext& context
     );
 
-    static void discarded(Payload& payload);
+    static void discarded(Payload& payload){
+        Core::DiscardGpuTimingMeasure(payload.occupancyComputeEmulationTiming);
+    }
 };
 
 

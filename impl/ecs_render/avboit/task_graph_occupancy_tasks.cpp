@@ -90,20 +90,6 @@ namespace RendererTaskGraphDetail{
     return true;
 }
 
-void AvboitPreGraphTask::discarded(Payload& payload){
-    if(payload.transparentCsgIntervalsTiming && payload.transparentCsgIntervalsTiming->has_value()){
-        payload.transparentCsgIntervalsTiming->value().discardTiming();
-        payload.transparentCsgIntervalsTiming->reset();
-    }
-}
-
-void AvboitOccupancyComputeEmulationGraphTask::discardTiming(Optional<Core::GpuTimingMeasure>* const timing){
-    if(!timing || !timing->has_value())
-        return;
-    timing->value().discardTiming();
-    timing->reset();
-}
-
 [[nodiscard]] bool AvboitOccupancyComputeEmulationGraphTask::record(
     const Payload& payload,
     Core::CommandList& commandList,
@@ -193,15 +179,6 @@ void AvboitOccupancyComputeEmulationGraphTask::discardTiming(Optional<Core::GpuT
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
-}
-
-void AvboitOccupancyComputeEmulationGraphTask::discarded(Payload& payload){ discardTiming(payload.occupancyTiming); }
-
-void AvboitOccupancySharedComputeEmulationGraphTask::discardTiming(Optional<Core::GpuTimingMeasure>* const timing){
-    if(!timing || !timing->has_value())
-        return;
-    timing->value().discardTiming();
-    timing->reset();
 }
 
 [[nodiscard]] bool AvboitOccupancySharedComputeEmulationGraphTask::record(
@@ -302,8 +279,6 @@ void AvboitOccupancySharedComputeEmulationGraphTask::discardTiming(Optional<Core
     return true;
 }
 
-void AvboitOccupancySharedComputeEmulationGraphTask::discarded(Payload& payload){ discardTiming(payload.occupancyTiming); }
-
 [[nodiscard]] bool AvboitOccupancyGraphTask::record(
     const Payload& payload,
     Core::CommandList& commandList,
@@ -361,16 +336,6 @@ void AvboitOccupancySharedComputeEmulationGraphTask::discarded(Payload& payload)
     // The declared sampled G-buffer uses remain authoritative here. Occupancy's low-resolution framebuffer
     // does not attach any deferred target, so the graph-established states remain valid for either continuation.
     return true;
-}
-
-void AvboitOccupancyGraphTask::discarded(Payload& payload){
-    if(
-        !payload.occupancyComputeEmulationTiming
-        || !payload.occupancyComputeEmulationTiming->has_value()
-    )
-        return;
-    payload.occupancyComputeEmulationTiming->value().discardTiming();
-    payload.occupancyComputeEmulationTiming->reset();
 }
 
 [[nodiscard]] bool AvboitDepthWarpGraphTask::record(

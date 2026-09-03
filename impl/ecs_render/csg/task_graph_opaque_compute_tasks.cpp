@@ -120,16 +120,6 @@ OpaqueCsgIntervalSampleComputeEmulationGraphTask::Payload::Payload(Core::Alloc::
 {}
 
 
-void OpaqueCsgIntervalSampleComputeEmulationGraphTask::discardTiming(
-    Optional<Core::GpuTimingMeasure>* const timing
-){
-    if(!timing || !timing->has_value())
-        return;
-    timing->value().discardTiming();
-    timing->reset();
-}
-
-
 bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
     const Payload& payload,
     Core::CommandList& commandList,
@@ -219,11 +209,6 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
-}
-
-
-void OpaqueCsgIntervalSampleComputeEmulationGraphTask::discarded(Payload& payload){
-    discardTiming(payload.opaqueCsgTiming);
 }
 
 

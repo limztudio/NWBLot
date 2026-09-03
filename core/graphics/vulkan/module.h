@@ -21,6 +21,7 @@ NWB_VULKAN_BEGIN
 
 inline constexpr u32 s_DefaultUploadSuballocationAlignment = s_ConstantBufferOffsetSizeAlignment;
 inline constexpr u64 s_AccelerationStructureAlignment = s_ConstantBufferOffsetSizeAlignment;
+inline constexpr u64 s_TlasInstanceDataAlignment = 16u;
 
 namespace ObjectTypes{
     inline constexpr ObjectType VK_Queue                               = 0x00030004;

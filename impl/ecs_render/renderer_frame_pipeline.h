@@ -67,6 +67,7 @@ NWB_IMPL_BEGIN
 
 class Shader;
 class Mesh;
+struct GraphClearTimingRecordState;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,9 +82,6 @@ namespace ECSRenderDetail{
 #if defined(NWB_DEBUG)
 struct MaterialTypedInstanceRangeVector;
 #endif
-struct DeferredClearTimingRecordState;
-struct AvboitClearTimingRecordState;
-struct CsgIntervalClearTimingRecordState;
 // These semantic prefix stages may coalesce into one native submission or split at a compiler-derived
 // cross-queue frontier. Each stage points at a rebindable timing slot so the renderer can attach one ticket
 // to every actual packet after compilation.
@@ -233,8 +231,8 @@ private:
         Core::GpuGraphResourceSetId shadowTraceGeometrySet,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
         Optional<Core::GpuTimingMeasure>& deferredClearTiming,
-        ECSRenderDetail::DeferredClearTimingRecordState& deferredClearTimingState,
-        ECSRenderDetail::CsgIntervalClearTimingRecordState& csgIntervalClearTimingState,
+        GraphClearTimingRecordState& deferredClearTimingState,
+        GraphClearTimingRecordState& csgIntervalClearTimingState,
         Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
         Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
         Core::GpuTimingSubmissionTicket** timingTickets,
@@ -326,8 +324,8 @@ private:
         Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
         Optional<Core::GpuTimingMeasure>& deferredClearTiming,
-        ECSRenderDetail::DeferredClearTimingRecordState& deferredClearTimingState,
-        ECSRenderDetail::CsgIntervalClearTimingRecordState& opaqueCsgIntervalClearTimingState,
+        GraphClearTimingRecordState& deferredClearTimingState,
+        GraphClearTimingRecordState& opaqueCsgIntervalClearTimingState,
         Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
         Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
         Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
@@ -335,8 +333,8 @@ private:
         const bool* asyncPrefixTimingSpansOnePacket,
         Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
         Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
-        ECSRenderDetail::AvboitClearTimingRecordState& avboitClearTimingState,
-        ECSRenderDetail::CsgIntervalClearTimingRecordState& transparentCsgIntervalClearTimingState,
+        GraphClearTimingRecordState& avboitClearTimingState,
+        GraphClearTimingRecordState& transparentCsgIntervalClearTimingState,
         Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTiming,
         Optional<Core::GpuTimingMeasure>& avboitOccupancyComputeEmulationTiming,
         Optional<Core::GpuTimingMeasure>& avboitExtinctionComputeEmulationTiming,

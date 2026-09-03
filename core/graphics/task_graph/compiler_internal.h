@@ -90,6 +90,17 @@ struct GpuTaskGraphResourceStatePlan{
     GpuQueueCapability::Mask required
 )noexcept;
 
+[[nodiscard]] inline bool IsBetterQueue(
+    const GpuPhysicalQueueInfo& candidate,
+    const GpuPhysicalQueueInfo* const current
+)noexcept{
+    if(!current)
+        return true;
+    if(candidate.id.index != current->id.index)
+        return candidate.id.index < current->id.index;
+    return candidate.queueClass < current->queueClass;
+}
+
 [[nodiscard]] bool ResourceSharingAdmitsQueue(
     const GpuTaskGraphResourceView& resource,
     const GpuTaskGraphQueueTopology& topology,

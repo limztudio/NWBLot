@@ -121,23 +121,6 @@ private:
     }
 }
 
-[[nodiscard]] inline constexpr GpuQueueCapability::Mask DeviceQueueCapabilitiesForQueueFlags(
-    const VkQueueFlags queueFlags
-)noexcept{
-    u8 capabilities = 0u;
-    if((queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0u){
-        capabilities |= static_cast<u8>(GpuQueueCapability::Graphics);
-        capabilities |= static_cast<u8>(GpuQueueCapability::Transfer);
-    }
-    if((queueFlags & VK_QUEUE_COMPUTE_BIT) != 0u){
-        capabilities |= static_cast<u8>(GpuQueueCapability::Compute);
-        capabilities |= static_cast<u8>(GpuQueueCapability::Transfer);
-    }
-    if((queueFlags & VK_QUEUE_TRANSFER_BIT) != 0u)
-        capabilities |= static_cast<u8>(GpuQueueCapability::Transfer);
-    return static_cast<GpuQueueCapability::Mask>(capabilities);
-}
-
 [[nodiscard]] inline constexpr bool SubmissionCommandListMatchesExecutionQueue(
     const CommandListParameters& commandList,
     const GpuPhysicalQueueId& executionQueue,

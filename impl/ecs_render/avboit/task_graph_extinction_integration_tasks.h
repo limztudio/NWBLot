@@ -69,15 +69,15 @@ struct AvboitExtinctionComputeEmulationGraphTask{
         {}
     };
 
-    static void discardTiming(Optional<Core::GpuTimingMeasure>* const timing);
-
     [[nodiscard]] static bool record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
 
-    static void discarded(Payload& payload);
+    static void discarded(Payload& payload){
+        Core::DiscardGpuTimingMeasure(payload.extinctionTiming);
+    }
 };
 
 
@@ -110,15 +110,15 @@ struct AvboitExtinctionSharedComputeEmulationGraphTask{
         Phase phase = Phase::Generate;
     };
 
-    static void discardTiming(Optional<Core::GpuTimingMeasure>* const timing);
-
     [[nodiscard]] static bool record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
 
-    static void discarded(Payload& payload);
+    static void discarded(Payload& payload){
+        Core::DiscardGpuTimingMeasure(payload.extinctionTiming);
+    }
 };
 
 
@@ -151,7 +151,9 @@ struct AvboitExtinctionGraphTask{
         const Core::GpuTaskRecordContext& context
     );
 
-    static void discarded(Payload& payload);
+    static void discarded(Payload& payload){
+        Core::DiscardGpuTimingMeasure(payload.extinctionComputeEmulationTiming);
+    }
 };
 
 

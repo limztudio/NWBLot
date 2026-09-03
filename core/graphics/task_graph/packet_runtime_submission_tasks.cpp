@@ -3,6 +3,7 @@
 
 
 #include "packet_runtime.h"
+#include "packet_runtime_internal.h"
 
 #include "task_graph.h"
 
@@ -21,27 +22,6 @@ namespace __hidden_gpu_packet_runtime_submission_tasks{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] bool ValidateExternalCompletionBindings(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuTaskGraphExternalCompletionToken* const bindings,
-    const usize bindingCount
-){
-    if(bindingCount != 0u && !bindings)
-        return false;
-
-    for(usize bindingIndex = 0u; bindingIndex < bindingCount; ++bindingIndex){
-        const GpuTaskGraphExternalCompletionToken& binding = bindings[bindingIndex];
-        if(!binding.validFallbackFor(graph, compiledGraph))
-            return false;
-        for(usize previousIndex = 0u; previousIndex < bindingIndex; ++previousIndex){
-            if(bindings[previousIndex].completion == binding.completion)
-                return false;
-        }
-    }
-    return true;
-}
 
 [[nodiscard]] bool ValidateTaskAcceptedCallbacks(
     const GpuTaskGraph& graph,
@@ -209,7 +189,7 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderWithOperationPolicy(
         || !transaction.validFor(compiledGraph)
         || (taskTimingTicketCount != 0u && !taskTimingTickets)
         || (taskSubmissionHookCount != 0u && !taskSubmissionHooks)
-        || !__hidden_gpu_packet_runtime_submission_tasks::ValidateExternalCompletionBindings(
+        || !GpuPacketRuntimeDetail::ValidateExternalCompletionBindings(
             graph,
             compiledGraph,
             externalCompletionTokens,

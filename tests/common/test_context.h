@@ -72,6 +72,22 @@ using TestAString = DefaultAString<Core::Alloc::GlobalArena, TestDetail::Arena>;
     return Abs(lhs - rhs) <= epsilon;
 }
 
+[[nodiscard]] inline usize CountText(const AStringView text, const AStringView expected){
+    if(expected.empty())
+        return 0u;
+
+    usize count = 0u;
+    usize offset = 0u;
+    while(offset < text.size()){
+        const usize found = text.find(expected, offset);
+        if(found == AStringView::npos)
+            break;
+        ++count;
+        offset = found + expected.size();
+    }
+    return count;
+}
+
 [[nodiscard]] inline bool NearlyEqual3(const SIMDVector value, const f32 x, const f32 y, const f32 z, const f32 epsilon = s_DefaultNearlyEqualEpsilon){
     return NearlyEqual(VectorGetX(value), x, epsilon) && NearlyEqual(VectorGetY(value), y, epsilon) && NearlyEqual(VectorGetZ(value), z, epsilon);
 }

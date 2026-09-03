@@ -9,6 +9,8 @@
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 
+#include <impl/ecs_render/kernel/timing_names.h>
+
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
 
@@ -91,19 +93,10 @@ bool AvboitCsgReceiverSpanGraphTask::record(
     else{
         // Pre and Span use the same frozen readiness snapshot. A defensive mismatch must not leave a timestamp
         // reservation open or let Combine consume an unbuilt span image.
-        payload.transparentCsgIntervalsTiming->value().discardTiming();
-        payload.transparentCsgIntervalsTiming->reset();
+        DiscardGpuTimingMeasure(payload.transparentCsgIntervalsTiming);
     }
     commandList.endRenderPass();
     return true;
-}
-
-
-void AvboitCsgReceiverSpanGraphTask::discarded(Payload& payload){
-    if(payload.transparentCsgIntervalsTiming && payload.transparentCsgIntervalsTiming->has_value()){
-        payload.transparentCsgIntervalsTiming->value().discardTiming();
-        payload.transparentCsgIntervalsTiming->reset();
-    }
 }
 
 
@@ -172,19 +165,10 @@ bool AvboitCsgIntervalCombineGraphTask::record(
     else{
         // Pre and Combine use the same frozen readiness snapshot. A defensive mismatch must not leave a
         // timestamp reservation open or publish a stale removed-interval image.
-        payload.transparentCsgIntervalsTiming->value().discardTiming();
-        payload.transparentCsgIntervalsTiming->reset();
+        DiscardGpuTimingMeasure(payload.transparentCsgIntervalsTiming);
     }
     commandList.endRenderPass();
     return true;
-}
-
-
-void AvboitCsgIntervalCombineGraphTask::discarded(Payload& payload){
-    if(payload.transparentCsgIntervalsTiming && payload.transparentCsgIntervalsTiming->has_value()){
-        payload.transparentCsgIntervalsTiming->value().discardTiming();
-        payload.transparentCsgIntervalsTiming->reset();
-    }
 }
 
 

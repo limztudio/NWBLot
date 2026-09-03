@@ -15,6 +15,7 @@
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 #include <core/graphics/module.h>
+#include <global/algorithm.h>
 #include <global/math/frame.h>
 #include <global/simplemath.h>
 #include <impl/ecs_scene/module.h>
@@ -70,6 +71,37 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
 [[nodiscard]] inline f32 ReadSmokeFrozenYawFromEnvironment(const char* const variableName){
     f32 parsed = -1.0f;
     return ReadSmokeEnvironmentF32(variableName, parsed) ? parsed : -1.0f;
+}
+
+[[nodiscard]] inline u32 RendererBaselineCaptureFreezeFrame(){
+    static const u32 s_captureFrame = [](){
+        f32 configuredFrame = 0.0f;
+        if(
+            !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", configuredFrame)
+            || !IsFinite(configuredFrame)
+            || configuredFrame < 1.0f
+        ){
+            return 0u;
+        }
+        return static_cast<u32>(Min(configuredFrame, 1000000.0f));
+    }();
+    return s_captureFrame;
+}
+
+[[nodiscard]] inline f32 RendererBaselineFixedDelta(){
+    static const f32 s_fixedDelta = [](){
+        f32 configuredDelta = 0.0f;
+        if(
+            !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS", configuredDelta)
+            || !IsFinite(configuredDelta)
+            || configuredDelta <= 0.0f
+            || configuredDelta > 1.0f
+        ){
+            return 0.0f;
+        }
+        return configuredDelta;
+    }();
+    return s_fixedDelta;
 }
 
 class YawSpinController final{

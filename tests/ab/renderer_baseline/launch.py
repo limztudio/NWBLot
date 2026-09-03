@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import List, Sequence, Tuple
+from typing import List, Sequence
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -42,10 +42,6 @@ class BaselinePaths:
     output_directory: Path
 
 
-def resolve_path(root: Path, path: Path) -> Path:
-    return path if path.is_absolute() else root / path
-
-
 def default_output_directory(root: Path, profile_name: str) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return root / ".cozter" / "out" / "ab-results" / "renderer-baseline" / profile_name / stamp
@@ -57,12 +53,12 @@ def resolve_paths(args: argparse.Namespace, settings) -> BaselinePaths:
         settings, profile.target, args.executable, None, args.dry_run
     )
     runtime_directory = (
-        resolve_path(settings.root, args.runtime_dir)
+        ROOT_LAUNCHER.resolve_path(settings.root, args.runtime_dir)
         if args.runtime_dir is not None
         else settings.build_dir / profile.runtime_directory / settings.config
     )
     output_directory = (
-        resolve_path(settings.root, args.output_dir)
+        ROOT_LAUNCHER.resolve_path(settings.root, args.output_dir)
         if args.output_dir is not None
         else default_output_directory(settings.root, args.profile)
     )
@@ -92,17 +88,9 @@ def runner_command(args: argparse.Namespace, paths: BaselinePaths) -> List[objec
     if args.no_logserver:
         command.append("--no-logserver")
     elif args.logserver_executable is not None:
-        command += ["--logserver-executable", resolve_path(REPO, args.logserver_executable)]
+        command += ["--logserver-executable", ROOT_LAUNCHER.resolve_path(REPO, args.logserver_executable)]
     command += list(args.runner_args)
     return command
-
-
-def split_runner_args(argv: Sequence[str]) -> Tuple[List[str], List[str]]:
-    values = list(argv)
-    if "--" not in values:
-        return values, []
-    separator = values.index("--")
-    return values[:separator], values[separator + 1 :]
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -127,7 +115,7 @@ def make_parser() -> argparse.ArgumentParser:
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
-    launcher_args, runner_args = split_runner_args(argv)
+    launcher_args, runner_args = ROOT_LAUNCHER.split_application_args(argv)
     args = make_parser().parse_args(launcher_args)
     args.runner_args = runner_args
     if not args.self_test and args.profile is None:

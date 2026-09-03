@@ -758,6 +758,13 @@ private:
     bool m_markerOpen = false;
 };
 
+inline void DiscardGpuTimingMeasure(Optional<GpuTimingMeasure>* const timing){
+    if(!timing || !timing->has_value())
+        return;
+    timing->value().discardTiming();
+    timing->reset();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

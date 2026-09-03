@@ -145,14 +145,8 @@ struct ShadowVisibilityOpaqueGraphTask{
     static void discarded(Payload& payload){
         if(payload.opaqueProduced)
             *payload.opaqueProduced = false;
-        if(payload.asyncTiming && payload.asyncTiming->has_value()){
-            payload.asyncTiming->value().discardTiming();
-            payload.asyncTiming->reset();
-        }
-        if(payload.shadowVisibilityTiming && payload.shadowVisibilityTiming->has_value()){
-            payload.shadowVisibilityTiming->value().discardTiming();
-            payload.shadowVisibilityTiming->reset();
-        }
+        Core::DiscardGpuTimingMeasure(payload.asyncTiming);
+        Core::DiscardGpuTimingMeasure(payload.shadowVisibilityTiming);
     }
 };
 
@@ -250,18 +244,9 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
     static void discarded(Payload& payload){
         if(payload.opaqueProduced)
             *payload.opaqueProduced = false;
-        if(payload.asyncTiming && payload.asyncTiming->has_value()){
-            payload.asyncTiming->value().discardTiming();
-            payload.asyncTiming->reset();
-        }
-        if(payload.shadowVisibilityTiming && payload.shadowVisibilityTiming->has_value()){
-            payload.shadowVisibilityTiming->value().discardTiming();
-            payload.shadowVisibilityTiming->reset();
-        }
-        if(payload.opaqueResolveTiming && payload.opaqueResolveTiming->has_value()){
-            payload.opaqueResolveTiming->value().discardTiming();
-            payload.opaqueResolveTiming->reset();
-        }
+        Core::DiscardGpuTimingMeasure(payload.asyncTiming);
+        Core::DiscardGpuTimingMeasure(payload.shadowVisibilityTiming);
+        Core::DiscardGpuTimingMeasure(payload.opaqueResolveTiming);
     }
 };
 
@@ -343,18 +328,9 @@ struct ShadowVisibilityOpaqueResolveTailGraphTask{
     static void discarded(Payload& payload){
         if(payload.opaqueProduced)
             *payload.opaqueProduced = false;
-        if(payload.asyncTiming && payload.asyncTiming->has_value()){
-            payload.asyncTiming->value().discardTiming();
-            payload.asyncTiming->reset();
-        }
-        if(payload.shadowVisibilityTiming && payload.shadowVisibilityTiming->has_value()){
-            payload.shadowVisibilityTiming->value().discardTiming();
-            payload.shadowVisibilityTiming->reset();
-        }
-        if(payload.opaqueResolveTiming && payload.opaqueResolveTiming->has_value()){
-            payload.opaqueResolveTiming->value().discardTiming();
-            payload.opaqueResolveTiming->reset();
-        }
+        Core::DiscardGpuTimingMeasure(payload.asyncTiming);
+        Core::DiscardGpuTimingMeasure(payload.shadowVisibilityTiming);
+        Core::DiscardGpuTimingMeasure(payload.opaqueResolveTiming);
     }
 };
 
@@ -488,10 +464,7 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
     static void discarded(Payload& payload){
         if(payload.transparentTraceProduced)
             *payload.transparentTraceProduced = false;
-        if(payload.transparentResolveTiming && payload.transparentResolveTiming->has_value()){
-            payload.transparentResolveTiming->value().discardTiming();
-            payload.transparentResolveTiming->reset();
-        }
+        Core::DiscardGpuTimingMeasure(payload.transparentResolveTiming);
     }
 };
 
@@ -579,10 +552,7 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
     static void discarded(Payload& payload){
         if(payload.transparentTraceProduced)
             *payload.transparentTraceProduced = false;
-        if(payload.transparentResolveTiming && payload.transparentResolveTiming->has_value()){
-            payload.transparentResolveTiming->value().discardTiming();
-            payload.transparentResolveTiming->reset();
-        }
+        Core::DiscardGpuTimingMeasure(payload.transparentResolveTiming);
     }
 };
 
@@ -672,18 +642,9 @@ struct ShadowTransparentSoftFoldGraphTask{
     static void discarded(Payload& payload){
         if(payload.transparentTraceProduced)
             *payload.transparentTraceProduced = false;
-        if(payload.asyncTiming && payload.asyncTiming->has_value()){
-            payload.asyncTiming->value().discardTiming();
-            payload.asyncTiming->reset();
-        }
-        if(payload.shadowVisibilityTiming && payload.shadowVisibilityTiming->has_value()){
-            payload.shadowVisibilityTiming->value().discardTiming();
-            payload.shadowVisibilityTiming->reset();
-        }
-        if(payload.transparentResolveTiming && payload.transparentResolveTiming->has_value()){
-            payload.transparentResolveTiming->value().discardTiming();
-            payload.transparentResolveTiming->reset();
-        }
+        Core::DiscardGpuTimingMeasure(payload.asyncTiming);
+        Core::DiscardGpuTimingMeasure(payload.shadowVisibilityTiming);
+        Core::DiscardGpuTimingMeasure(payload.transparentResolveTiming);
         if(payload.raytracingSystem)
             payload.raytracingSystem->discardSoftShadowTemporalHistory();
     }

@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "module.h"
+#include "native_resource_provenance.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,14 +20,7 @@ NWB_VULKAN_BEGIN
 // Immutable facts supplied by the owner of an imported VkImage. The owner must report the values used to create
 // the image; a concurrent queue-family list is borrowed for this call and copied by Texture. initialStateKnown
 // describes whether TextureDesc::initialState already reflects the image's current state.
-struct NativeTextureProvenance{
-    VkImageUsageFlags usage = 0u;
-    VkImageCreateFlags flags = 0u;
-    VkSharingMode sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    u32 queueFamilyIndexCount = 0u;
-    const u32* queueFamilyIndices = nullptr;
-    bool initialStateKnown = true;
-};
+using NativeTextureProvenance = NativeResourceProvenance<VkImageUsageFlags, VkImageCreateFlags>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

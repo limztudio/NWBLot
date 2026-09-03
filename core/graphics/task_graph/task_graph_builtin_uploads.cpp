@@ -4,6 +4,7 @@
 
 #include "task_graph.h"
 #include "compiled_graph.h"
+#include "task_graph_builtin_internal.h"
 
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/rhi/command.h>
@@ -141,27 +142,6 @@ struct UploadTextureTask{
             *payload.acceptedToken = {};
     }
 };
-template<typename ResourceDesc>
-[[nodiscard]] static bool BuiltInTaskCanMaterializeRetainedState(
-    const ResourceDesc& resourceDesc,
-    const ResourceStates::Mask graphInitialState,
-    const ResourceStates::Mask externalFinalState
-)noexcept{
-    // Retained resources restore to their descriptor state when a native packet closes. The graph may still use a
-    // different built-in state when it explicitly starts from that descriptor state: compiler-owned barriers then
-    // establish the primitive state and the recorded packet exports the restored state for the next packet. A
-    // mismatched graph declaration has no native source that this helper can prove, and a terminal external state
-    // must agree with the close-time restoration before the graph publishes its handoff.
-    if(!resourceDesc.keepInitialState)
-        return true;
-    return resourceDesc.initialState != ResourceStates::Unknown
-        && graphInitialState == resourceDesc.initialState
-        && (
-            externalFinalState == ResourceStates::Unknown
-            || externalFinalState == resourceDesc.initialState
-        )
-    ;
-}
 
 [[nodiscard]] static bool UploadTextureTaskCanMaterializeRetainedState(
     const TextureDesc& resourceDesc,
@@ -342,7 +322,7 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
         // only during late packet recording.
         || (uploadDesc.destinationOffsetBytes & (sizeof(u32) - 1u)) != 0u
         || (source->bytes.size() & (sizeof(u32) - 1u)) != 0u
-        || !__hidden_gpu_task_graph_builtin_uploads::BuiltInTaskCanMaterializeRetainedState(
+        || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
             destinationDesc,
             destinationResource.initialState,
             destinationResource.externalFinalState

@@ -3,6 +3,7 @@
 
 
 #include "packet_runtime.h"
+#include "packet_runtime_internal.h"
 
 #include "task_graph.h"
 
@@ -27,76 +28,6 @@ namespace __hidden_gpu_packet_runtime_submission{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 TextureRangeEnd(
-    const u32 base,
-    const u32 count,
-    const u32 all
-)noexcept{
-    return count == all ? Limit<u64>::s_Max : static_cast<u64>(base) + static_cast<u64>(count);
-}
-
-[[nodiscard]] static bool TextureRangeContains(
-    const TextureSubresourceSet& outer,
-    const TextureSubresourceSet& inner
-)noexcept{
-    return outer.baseMipLevel <= inner.baseMipLevel
-        && TextureRangeEnd(outer.baseMipLevel, outer.numMipLevels, TextureSubresourceSet::AllMipLevels)
-            >= TextureRangeEnd(inner.baseMipLevel, inner.numMipLevels, TextureSubresourceSet::AllMipLevels)
-        && outer.baseArraySlice <= inner.baseArraySlice
-        && TextureRangeEnd(outer.baseArraySlice, outer.numArraySlices, TextureSubresourceSet::AllArraySlices)
-            >= TextureRangeEnd(inner.baseArraySlice, inner.numArraySlices, TextureSubresourceSet::AllArraySlices)
-    ;
-}
-
-[[nodiscard]] static const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(
-    const GpuTaskGraphResourceView& resource,
-    const GpuCompiledBarrier& barrier
-)noexcept{
-    if(
-        resource.initialOwnerHandoffSourceCount == 0u
-        || !resource.initialOwnerHandoffSources
-        || resource.type != GpuGraphResourceType::Texture
-    )
-        return nullptr;
-
-    const GpuTaskGraphInitialOwnerHandoffSourceView* result = nullptr;
-    for(usize sourceIndex = 0u;
-        sourceIndex < resource.initialOwnerHandoffSourceCount;
-        ++sourceIndex
-    ){
-        const GpuTaskGraphInitialOwnerHandoffSourceView& source = resource.initialOwnerHandoffSources[sourceIndex];
-        if(
-            source.sourceQueue != barrier.sourceQueue
-            || source.destinationQueue != barrier.destinationQueue
-            || !TextureRangeContains(source.range.textureSubresources, barrier.range.textureSubresources)
-        )
-            continue;
-        if(result)
-            return nullptr;
-        result = &source;
-    }
-    return result;
-}
-[[nodiscard]] bool ValidateExternalCompletionBindings(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuTaskGraphExternalCompletionToken* const bindings,
-    const usize bindingCount
-){
-    if(bindingCount != 0u && !bindings)
-        return false;
-
-    for(usize bindingIndex = 0u; bindingIndex < bindingCount; ++bindingIndex){
-        const GpuTaskGraphExternalCompletionToken& binding = bindings[bindingIndex];
-        if(!binding.validFallbackFor(graph, compiledGraph))
-            return false;
-        for(usize previousIndex = 0u; previousIndex < bindingIndex; ++previousIndex){
-            if(bindings[previousIndex].completion == binding.completion)
-                return false;
-        }
-    }
-    return true;
-}
 // Ordinary external completions may originate on any current-device queue. A completion paired with an imported
 // ownership acquire is narrower: it must prove the exact physical source queue that released the resource, or the
 // consumer could wait an unrelated timeline and race the Vulkan acquire.
@@ -129,7 +60,7 @@ namespace __hidden_gpu_packet_runtime_submission{
                 return false;
 
             const GpuTaskGraphResourceView resource = graph.resourceAt(barrier.resource.index);
-            const GpuTaskGraphInitialOwnerHandoffSourceView* const multiSource = FindInitialOwnerHandoffSource(resource, barrier);
+            const GpuTaskGraphInitialOwnerHandoffSourceView* const multiSource = GpuPacketRuntimeDetail::FindInitialOwnerHandoffSource(resource, barrier);
             if(resource.initialOwnerHandoffSourceCount != 0u && !multiSource)
                 return false;
             if(multiSource && multiSource->completion != completion)
@@ -206,7 +137,7 @@ bool GpuTaskGraphSubmitter::submitPacketWithinSubmissionOperation(
         || !compiledGraph.validPacket(packetID)
         || !recordedGraph.validFor(graph, compiledGraph)
         || !transaction.validFor(compiledGraph)
-        || !__hidden_gpu_packet_runtime_submission::ValidateExternalCompletionBindings(
+        || !GpuPacketRuntimeDetail::ValidateExternalCompletionBindings(
             graph,
             compiledGraph,
             externalCompletionTokens,

@@ -273,6 +273,38 @@ struct TextureSubresourceSet{
     constexpr TextureSubresourceSet& setBaseArraySlice(ArraySlice value){ baseArraySlice = value; return *this; }
     constexpr TextureSubresourceSet& setNumArraySlices(ArraySlice value){ numArraySlices = value; return *this; }
     constexpr TextureSubresourceSet& setArraySlices(ArraySlice base, ArraySlice num){ baseArraySlice = base; numArraySlices = num; return *this; }
+
+    [[nodiscard]] static constexpr u64 rangeEnd(const u32 base, const u32 count, const u32 all)noexcept{
+        return count == all ? Limit<u64>::s_Max : static_cast<u64>(base) + static_cast<u64>(count);
+    }
+
+    [[nodiscard]] constexpr bool hasExtent()const noexcept{
+        return numMipLevels != 0u && numArraySlices != 0u;
+    }
+
+    [[nodiscard]] constexpr u64 mipEnd()const noexcept{
+        return rangeEnd(baseMipLevel, numMipLevels, AllMipLevels);
+    }
+
+    [[nodiscard]] constexpr u64 arrayEnd()const noexcept{
+        return rangeEnd(baseArraySlice, numArraySlices, AllArraySlices);
+    }
+
+    [[nodiscard]] constexpr bool contains(const TextureSubresourceSet& inner)const noexcept{
+        return baseMipLevel <= inner.baseMipLevel
+            && mipEnd() >= inner.mipEnd()
+            && baseArraySlice <= inner.baseArraySlice
+            && arrayEnd() >= inner.arrayEnd()
+        ;
+    }
+
+    [[nodiscard]] constexpr bool overlaps(const TextureSubresourceSet& other)const noexcept{
+        return baseMipLevel < other.mipEnd()
+            && other.baseMipLevel < mipEnd()
+            && baseArraySlice < other.arrayEnd()
+            && other.baseArraySlice < arrayEnd()
+        ;
+    }
 };
 inline bool operator==(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{
     return

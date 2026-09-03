@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "module.h"
+#include "native_resource_provenance.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,14 +20,7 @@ NWB_VULKAN_BEGIN
 // Immutable facts supplied by the owner of an imported VkBuffer. The owner must report the values used to create
 // the buffer; a concurrent queue-family list is borrowed for this call and copied by Buffer. initialStateKnown
 // describes whether BufferDesc::initialState already reflects the buffer's current state.
-struct NativeBufferProvenance{
-    VkBufferUsageFlags usage = 0u;
-    VkBufferCreateFlags flags = 0u;
-    VkSharingMode sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    u32 queueFamilyIndexCount = 0u;
-    const u32* queueFamilyIndices = nullptr;
-    bool initialStateKnown = true;
-};
+using NativeBufferProvenance = NativeResourceProvenance<VkBufferUsageFlags, VkBufferCreateFlags>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -4,6 +4,8 @@
 
 #include "task_graph.h"
 #include "compiled_graph.h"
+#include "task_graph_builtin_internal.h"
+#include "texture_clear_value.h"
 
 #include <core/graphics/capture/command_ir.h>
 #include <core/graphics/backend_selection.h>
@@ -244,70 +246,6 @@ struct ClearTextureRectUIntTask{
             payload.clearDesc.recordHooks.discarded(payload.clearDesc.recordHooks.context);
     }
 };
-template<typename ResourceDesc>
-[[nodiscard]] static bool BuiltInTaskCanMaterializeRetainedState(
-    const ResourceDesc& resourceDesc,
-    const ResourceStates::Mask graphInitialState,
-    const ResourceStates::Mask externalFinalState
-)noexcept{
-    // Retained resources restore to their descriptor state when a native packet closes. The graph may still use a
-    // different built-in state when it explicitly starts from that descriptor state: compiler-owned barriers then
-    // establish the primitive state and the recorded packet exports the restored state for the next packet. A
-    // mismatched graph declaration has no native source that this helper can prove, and a terminal external state
-    // must agree with the close-time restoration before the graph publishes its handoff.
-    if(!resourceDesc.keepInitialState)
-        return true;
-    return resourceDesc.initialState != ResourceStates::Unknown
-        && graphInitialState == resourceDesc.initialState
-        && (
-            externalFinalState == ResourceStates::Unknown
-            || externalFinalState == resourceDesc.initialState
-        )
-    ;
-}
-
-[[nodiscard]] static bool CopyOrClearTextureDestinationCanMaterializeRetainedState(
-    const TextureDesc& resourceDesc,
-    const ResourceStates::Mask graphInitialState,
-    const ResourceStates::Mask externalFinalState
-)noexcept{
-    if(!resourceDesc.keepInitialState)
-        return true;
-    if(
-        resourceDesc.initialState == ResourceStates::Unknown
-        || (
-            externalFinalState != ResourceStates::Unknown
-            && externalFinalState != resourceDesc.initialState
-        )
-    )
-        return false;
-    // An Unknown write-only destination never invents an input state. Fresh managed subresources lower from
-    // Undefined; accepted retained subresources are restored to descriptor state at packet close and reused by
-    // StateTracker on later packets.
-    return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
-}
-
-[[nodiscard]] static bool TryMapTextureClearValueKind(
-    const GpuClearTextureTaskValueType::Enum valueType,
-    GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Enum& outValueKind
-)noexcept{
-    outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Float;
-    switch(valueType){
-    case GpuClearTextureTaskValueType::Float:
-        return true;
-    case GpuClearTextureTaskValueType::UInt:
-        outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::UInt;
-        return true;
-    case GpuClearTextureTaskValueType::Int:
-        outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Int;
-        return true;
-    case GpuClearTextureTaskValueType::DepthStencil:
-        outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::DepthStencil;
-        return true;
-    default:
-        return false;
-    }
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -339,7 +277,7 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
         || !destinationResource.buffer
         || destinationResource.buffer->getCreationDescription().byteSize == 0u
         || (destinationResource.buffer->getCreationDescription().byteSize & (sizeof(u32) - 1u)) != 0u
-        || !__hidden_gpu_task_graph_builtin_clears::BuiltInTaskCanMaterializeRetainedState(
+        || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
             destinationResource.buffer->getCreationDescription(),
             destinationResource.initialState,
             destinationResource.externalFinalState
@@ -406,7 +344,7 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
     if(
         destinationResource.type != GpuGraphResourceType::Texture
         || !destinationResource.texture
-        || !__hidden_gpu_task_graph_builtin_clears::CopyOrClearTextureDestinationCanMaterializeRetainedState(
+        || !GpuTaskGraphBuiltinDetail::CopyOrClearTextureDestinationCanMaterializeRetainedState(
             destinationResource.texture->getCreationDescription(),
             destinationResource.initialState,
             destinationResource.externalFinalState
@@ -416,7 +354,7 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
     GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Enum valueKind;
     GraphicsBackend::VulkanTextureDetail::TextureClearContract clearContract;
     if(
-        !__hidden_gpu_task_graph_builtin_clears::TryMapTextureClearValueKind(clearDesc.valueType, valueKind)
+        !GpuTaskGraphClearDetail::TryMapTextureClearValueKind(clearDesc.valueType, valueKind)
         || !GraphicsBackend::VulkanTextureDetail::ResolveTextureClearContract(
             destinationResource.texture->getCreationDescription(),
             clearDesc.subresources,
@@ -505,7 +443,7 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
         // Bounded multisample clears require an active attachment. Graph recording ends rendering before this
         // primitive and has no framebuffer lowering, so every multisample rectangle remains unsupported.
         || destinationResource.texture->getCreationDescription().sampleCount != 1u
-        || !__hidden_gpu_task_graph_builtin_clears::BuiltInTaskCanMaterializeRetainedState(
+        || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
             destinationResource.texture->getCreationDescription(),
             destinationResource.initialState,
             destinationResource.externalFinalState

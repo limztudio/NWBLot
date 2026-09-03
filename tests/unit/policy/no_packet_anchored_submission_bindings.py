@@ -7,23 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from return_value_handling import blank_non_code, line_number
-
-
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-
-
-PRODUCTION_DIRECTORIES = (
-    "CoolStuff",
-    "core",
-    "global",
-    "impl",
-    "loader",
-    "logger",
-    "resource_cooker",
-    "utilities",
-)
-SOURCE_SUFFIXES = frozenset((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ixx"))
+from policy_scan import REPOSITORY_ROOT, blank_non_code, line_number, production_source_files
 RETIRED_IDENTIFIER = re.compile(
     r"\b(?:GpuTaskGraphPacketTimingTicket|GpuTaskGraphPacketSubmissionHook|"
     r"GpuTaskGraphPacketAcceptedCallback|submitPacketRangeInCompileOrderFromTasks|"
@@ -105,15 +89,6 @@ def find_packet_anchored_submission_references(source: str) -> list[tuple[int, s
         for match in RETIRED_SUBMIT_PACKET_BINDING.finditer(code, start, end):
             references.append((line_number(code, match.start()), f"submitPacket/{match.group()}"))
     return sorted(references)
-
-
-def production_source_files(source_root: Path) -> list[Path]:
-    return sorted(
-        path
-        for relative_directory in PRODUCTION_DIRECTORIES
-        for path in (source_root / relative_directory).rglob("*")
-        if path.is_file() and path.suffix in SOURCE_SUFFIXES
-    )
 
 
 def run_self_test() -> int:

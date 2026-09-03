@@ -5,6 +5,7 @@
 #include <impl/ecs_render/material/task_graph_opaque_compute_tasks.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 
@@ -100,16 +101,6 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
 }
 
 
-void OpaqueRegularSharedComputeEmulationGraphTask::discardTiming(
-    Optional<Core::GpuTimingMeasure>* const timing
-){
-    if(!timing || !timing->has_value())
-        return;
-    timing->value().discardTiming();
-    timing->reset();
-}
-
-
 bool OpaqueRegularSharedComputeEmulationGraphTask::record(
     const Payload& payload,
     Core::CommandList& commandList,
@@ -156,7 +147,7 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::record(
         )
         || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
     ){
-        discardTiming(payload.opaqueRegularTiming);
+        DiscardGpuTimingMeasure(payload.opaqueRegularTiming);
         if(payload.phase == Phase::Raster)
             commandList.endRenderPass();
         return true;
@@ -196,11 +187,6 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::record(
         commandList.endRenderPass();
     }
     return true;
-}
-
-
-void OpaqueRegularSharedComputeEmulationGraphTask::discarded(Payload& payload){
-    discardTiming(payload.opaqueRegularTiming);
 }
 
 

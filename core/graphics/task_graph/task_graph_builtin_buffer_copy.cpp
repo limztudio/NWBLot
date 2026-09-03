@@ -4,6 +4,7 @@
 
 #include "task_graph.h"
 #include "compiled_graph.h"
+#include "task_graph_builtin_internal.h"
 
 #include <core/graphics/capture/command_ir.h>
 #include <core/graphics/backend_selection.h>
@@ -93,27 +94,6 @@ struct CopyBufferTask{
             *payload.acceptedToken = {};
     }
 };
-template<typename ResourceDesc>
-[[nodiscard]] static bool BuiltInTaskCanMaterializeRetainedState(
-    const ResourceDesc& resourceDesc,
-    const ResourceStates::Mask graphInitialState,
-    const ResourceStates::Mask externalFinalState
-)noexcept{
-    // Retained resources restore to their descriptor state when a native packet closes. The graph may still use a
-    // different built-in state when it explicitly starts from that descriptor state: compiler-owned barriers then
-    // establish the primitive state and the recorded packet exports the restored state for the next packet. A
-    // mismatched graph declaration has no native source that this helper can prove, and a terminal external state
-    // must agree with the close-time restoration before the graph publishes its handoff.
-    if(!resourceDesc.keepInitialState)
-        return true;
-    return resourceDesc.initialState != ResourceStates::Unknown
-        && graphInitialState == resourceDesc.initialState
-        && (
-            externalFinalState == ResourceStates::Unknown
-            || externalFinalState == resourceDesc.initialState
-        )
-    ;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -190,12 +170,12 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
             && destinationResource.type == GpuGraphResourceType::Buffer
             && sourceResource.buffer
             && destinationResource.buffer
-            && __hidden_gpu_task_graph_builtin_buffer_copy::BuiltInTaskCanMaterializeRetainedState(
+            && GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
                 sourceResource.buffer->getCreationDescription(),
                 sourceResource.initialState,
                 sourceResource.externalFinalState
             )
-            && __hidden_gpu_task_graph_builtin_buffer_copy::BuiltInTaskCanMaterializeRetainedState(
+            && GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
                 destinationResource.buffer->getCreationDescription(),
                 destinationResource.initialState,
                 destinationResource.externalFinalState

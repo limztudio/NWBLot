@@ -56,26 +56,10 @@ using SkinnedCausticMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 // per-frame skinned-normal repack (repack_normals_cs / dispatchRepackNormals): the RT shadow + caustic must bend on
 // the LIVE deformed normals -- if they read the bind pose instead, the refractive shadow + caustic would not track
 // the animation. Reuses the existing refractive glass + ground materials (no new assets).
-static constexpr SkinnedCausticModelRef s_Model = []() constexpr{
-    SkinnedCausticModelRef result;
-    result.virtualPath = Name("project/characters/body/model");
-    return result;
-}();
-static constexpr SkinnedCausticMaterialRef s_GlassMaterial = []() constexpr{
-    SkinnedCausticMaterialRef result;
-    result.virtualPath = Name("project/smoke/transparent_multi/materials/shared");
-    return result;
-}();
-static constexpr SkinnedCausticMaterialRef s_GroundMaterial = []() constexpr{
-    SkinnedCausticMaterialRef result;
-    result.virtualPath = Name("project/smoke/transparent_multi/materials/ground");
-    return result;
-}();
-static constexpr SkinnedCausticMeshRef s_GroundMesh = []() constexpr{
-    SkinnedCausticMeshRef result;
-    result.virtualPath = Name("project/meshes/shadow_plane");
-    return result;
-}();
+static constexpr SkinnedCausticModelRef s_Model{"project/characters/body/model"};
+static constexpr SkinnedCausticMaterialRef s_GlassMaterial{"project/smoke/transparent_multi/materials/shared"};
+static constexpr SkinnedCausticMaterialRef s_GroundMaterial{"project/smoke/transparent_multi/materials/ground"};
+static constexpr SkinnedCausticMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 static constexpr Name s_ModelSkeletonObject("skeleton");
 

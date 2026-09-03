@@ -108,13 +108,15 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
         explicit Payload(Core::Alloc::GlobalArena& arena);
     };
 
-    static void discardTiming(Optional<Core::GpuTimingMeasure>* timing);
     [[nodiscard]] static bool record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
-    static void discarded(Payload& payload);
+
+    static void discarded(Payload& payload){
+        Core::DiscardGpuTimingMeasure(payload.opaqueCsgTiming);
+    }
 };
 
 

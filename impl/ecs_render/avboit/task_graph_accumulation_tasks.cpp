@@ -28,13 +28,6 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AvboitAccumulationComputeEmulationGraphTask::discardTiming(Optional<Core::GpuTimingMeasure>* const timing){
-    if(!timing || !timing->has_value())
-        return;
-    timing->value().discardTiming();
-    timing->reset();
-}
-
 [[nodiscard]] bool AvboitAccumulationComputeEmulationGraphTask::record(
     const Payload& payload,
     Core::CommandList& commandList,
@@ -124,15 +117,6 @@ void AvboitAccumulationComputeEmulationGraphTask::discardTiming(Optional<Core::G
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
-}
-
-void AvboitAccumulationComputeEmulationGraphTask::discarded(Payload& payload){ discardTiming(payload.accumulationTiming); }
-
-void AvboitAccumulationSharedComputeEmulationGraphTask::discardTiming(Optional<Core::GpuTimingMeasure>* const timing){
-    if(!timing || !timing->has_value())
-        return;
-    timing->value().discardTiming();
-    timing->reset();
 }
 
 [[nodiscard]] bool AvboitAccumulationSharedComputeEmulationGraphTask::record(
@@ -233,8 +217,6 @@ void AvboitAccumulationSharedComputeEmulationGraphTask::discardTiming(Optional<C
     return true;
 }
 
-void AvboitAccumulationSharedComputeEmulationGraphTask::discarded(Payload& payload){ discardTiming(payload.accumulationTiming); }
-
 [[nodiscard]] bool AvboitAccumulationGraphTask::record(
     const Payload& payload,
     Core::CommandList& commandList,
@@ -290,16 +272,6 @@ void AvboitAccumulationSharedComputeEmulationGraphTask::discarded(Payload& paylo
         );
     }
     return true;
-}
-
-void AvboitAccumulationGraphTask::discarded(Payload& payload){
-    if(
-        !payload.accumulationComputeEmulationTiming
-        || !payload.accumulationComputeEmulationTiming->has_value()
-    )
-        return;
-    payload.accumulationComputeEmulationTiming->value().discardTiming();
-    payload.accumulationComputeEmulationTiming->reset();
 }
 
 [[nodiscard]] bool AvboitAccumulationFinalizeGraphTask::record(

@@ -13,8 +13,7 @@
 #include <global/thread.h>
 #include <global/unique_ptr.h>
 #include <core/graphics/vulkan/backend.h>
-#include <tests/common/capturing_logger.h>
-#include <tests/common/headless_graphics_scope.h>
+#include <tests/common/headless_gtest_fixture.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,53 +34,14 @@ namespace Tests{
 using namespace Core;
 
 
-class PlacedResourceMemoryTest : public ::testing::Test{
-protected:
-    static void SetUpTestSuite(){
-#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
-        // Re-exec death tests instead of forking the live multi-threaded Vulkan fixture.
-        GTEST_FLAG_SET(death_test_style, "threadsafe");
-#endif
-
-        // Install logging before device creation because backend diagnostics require a live logger.
-        s_logger.emplace();
-        s_loggerGuard.emplace(*s_logger);
-
-        s_scope = MakeUnique<HeadlessGraphicsScope>();
-        if(!s_scope->initialize()){
-            GTEST_SKIP() << "Placed resource memory: no usable validation-enabled headless Vulkan device on this host; "
-                            "skipping suite.";
-            return;
-        }
-        s_validationBackedDeviceInitialized = true;
-    }
-
-    static void TearDownTestSuite(){
-        s_scope.reset();
-        if(s_validationBackedDeviceInitialized && s_logger.has_value()){
-            EXPECT_FALSE(s_logger->sawMessageContaining(NWB_TEXT("Vulkan debug: [severity=error")))
-                << "validation-enabled placed resource-memory smoke emitted a Vulkan severity=error message";
-        }
-        s_loggerGuard.reset();
-        s_logger.reset();
-        s_validationBackedDeviceInitialized = false;
-    }
-
-    [[nodiscard]] static GraphicsBackend::Device& device(){
-        return s_scope->graphics().getDevice();
-    }
-
-protected:
-    static bool s_validationBackedDeviceInitialized;
-    static UniquePtr<HeadlessGraphicsScope> s_scope;
-    static Optional<CapturingLogger> s_logger;
-    static Optional<Common::LoggerRegistrationGuard> s_loggerGuard;
+struct PlacedResourceMemoryTestConfig : HeadlessGraphicsTestConfig{
+    static constexpr bool s_DeathTestThreadsafe = true;
+    static constexpr const char* s_SkipMessage = "Placed resource memory: no usable validation-enabled headless Vulkan device on this host; skipping suite.";
+    static constexpr const tchar* s_VulkanErrorMessage = NWB_TEXT("validation-enabled placed resource-memory smoke emitted a Vulkan severity=error message");
 };
 
-bool PlacedResourceMemoryTest::s_validationBackedDeviceInitialized = false;
-UniquePtr<HeadlessGraphicsScope> PlacedResourceMemoryTest::s_scope;
-Optional<CapturingLogger> PlacedResourceMemoryTest::s_logger;
-Optional<Common::LoggerRegistrationGuard> PlacedResourceMemoryTest::s_loggerGuard;
+class PlacedResourceMemoryTest : public HeadlessGraphicsTest<PlacedResourceMemoryTestConfig>{
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

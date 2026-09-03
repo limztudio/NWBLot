@@ -3,6 +3,7 @@
 
 
 #include "system.h"
+#include "ui_internal.h"
 
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
@@ -30,7 +31,6 @@ namespace __hidden_ui{
 
 static constexpr f32 s_FallbackDeltaSeconds = 1.0f / 60.0f;
 static constexpr f32 s_DefaultFramebufferScale = 1.0f;
-static constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
 static constexpr usize s_UploadAlignmentBytes = sizeof(u32);
 static constexpr Name s_TaskGraphDeclarationArena("impl/ecs_ui/task_graph");
 
@@ -121,37 +121,6 @@ static bool HasPendingTextureUploads(const ImDrawData& drawData){
     return true;
 }
 
-[[nodiscard]] static Core::GpuQueueRequest UploadQueueRequest(){
-    return Core::GpuQueueRequest{
-        Core::GpuQueueCapability::Transfer,
-        Core::GpuQueuePreference::Transfer,
-        true,
-        true,
-    };
-}
-
-[[nodiscard]] static Core::GpuTaskSchedulingHint UploadScheduling(const usize byteCount){
-    const bool preferDedicatedTransport = byteCount >= s_TransferPreferredUploadMinimumBytes;
-    Core::GpuTaskSchedulingHint scheduling;
-    // Preserve the setup-upload policy for the frame graph: tiny UI deltas stay on Graphics, while a large font
-    // or texture refresh may use Transfer first and a dedicated Compute queue second.
-    scheduling.cost = preferDedicatedTransport ? Core::GpuTaskCostHint::Medium : Core::GpuTaskCostHint::Tiny;
-    scheduling.overlapPreferred = preferDedicatedTransport;
-    scheduling.avoidQueueCrossing = !preferDedicatedTransport;
-    scheduling.forceSubmissionBoundary = true;
-    scheduling.allowPacketMerge = false;
-    // UI buffers and textures are created with the full graph-upload sharing contract below. A large immutable
-    // upload may therefore use an explicitly registered same-class physical queue, including an opt-in alternate
-    // Vulkan family, while the terminal overlay remains on primary Graphics.
-    scheduling.allowSameClassQueueRouting = preferDedicatedTransport;
-    scheduling.preferNonPrimarySameClassQueue = preferDedicatedTransport;
-    scheduling.allowCrossFamilySameClassQueueRouting = preferDedicatedTransport;
-    // Built-in graph uploads capture immutable blobs and create a fresh native command list, so independent vertex
-    // and index packets may record together once their shared scene-output dependency is ready.
-    scheduling.allowParallelRecording = true;
-    return scheduling;
-}
-
 // This is intentionally broader than the immutable overlay task. An ImGui callback is opaque to the backend, and
 // the graph must preserve the existing primary-Graphics command-list contract while capability tracking remains on.
 [[nodiscard]] static Core::GpuQueueRequest OpaquePresentationQueueRequest(){
@@ -202,21 +171,6 @@ static bool HasPendingTextureUploads(const ImDrawData& drawData){
         .requiredState = Core::ResourceStates::ShaderResource,
         .access = Core::GpuTaskResourceAccess::Read,
     };
-}
-
-[[nodiscard]] static Core::GpuGraphResourceDesc TextureResourceDesc(
-    const Core::TextureDesc& textureDesc,
-    const bool initialUploadAccepted
-){
-    Core::GpuGraphResourceDesc desc;
-    desc
-        .setIdentity(textureDesc.name)
-        .setMarkerLabel("ImGui Texture")
-        .setType(Core::GpuGraphResourceType::Texture)
-        .setInitialState(initialUploadAccepted ? textureDesc.initialState : Core::ResourceStates::Unknown)
-        .setQueueSharing(textureDesc.queueSharing)
-    ;
-    return desc;
 }
 
 [[nodiscard]] static bool ValidAcquiredPresentationFrame(const Core::AcquiredPresentationFrame& frame){
@@ -1011,8 +965,8 @@ bool UiSystem::declareTaskGraphDrawUploads(
         desc
             .setIdentity(identity)
             .setMarkerLabel(label)
-            .setQueue(__hidden_ui::UploadQueueRequest())
-            .setScheduling(__hidden_ui::UploadScheduling(bytes.size()))
+            .setQueue(UiDetail::UploadQueueRequest())
+            .setScheduling(UiDetail::UploadScheduling(bytes.size()))
         ;
         if(previousTask.valid())
             desc.setDependencies(&previousTask, 1u);
@@ -1295,7 +1249,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         if(!textureResource.valid()){
             textureResource = graph.importTexture(
                 drawCommand.texture,
-                __hidden_ui::TextureResourceDesc(
+                UiDetail::TextureResourceDesc(
                     drawCommand.texture->getCreationDescription(),
                     drawCommand.textureInitialUploadAccepted
                 )

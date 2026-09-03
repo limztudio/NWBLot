@@ -61,6 +61,14 @@ static TestPath RepoRoot(TestArena& testArena){
     return TestPath(testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path().lexically_normal();
 }
 
+static void ExpectRendererBaselineEnvOwnedBySmokeHelper(const TestPath& repoRoot){
+    AString helperSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "smoke_project_helpers.h", helperSource));
+    const AStringView helpers(helperSource.data(), helperSource.size());
+    EXPECT_TRUE(ContainsText(helpers, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"));
+    EXPECT_TRUE(ContainsText(helpers, "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"));
+}
+
 
 // Source contracts name only their implementation owners. Do not sweep every task-graph source here: an unrelated
 // file split must not change a contract that has no dependency on it.
@@ -2966,20 +2974,18 @@ TEST(EcsGraphics, UiGraphUploadsDeclareConcurrentProducerFamilies){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
-    AString uiSystemSource;
+    AString uiInternalSource;
     AString uiTextureSource;
     AString uiGraphicsResourceSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "ui_internal.h", uiInternalSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "texture_resources.cpp", uiTextureSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "graphics_resources.cpp", uiGraphicsResourceSource));
-    const AStringView uiSystem(uiSystemSource.data(), uiSystemSource.size());
+    const AStringView uiInternal(uiInternalSource.data(), uiInternalSource.size());
     const AStringView uiTextures(uiTextureSource.data(), uiTextureSource.size());
     const AStringView uiGraphicsResources(uiGraphicsResourceSource.data(), uiGraphicsResourceSource.size());
 
-    EXPECT_TRUE(ContainsText(uiSystem, "allowSameClassQueueRouting = preferDedicatedTransport"));
-    EXPECT_TRUE(ContainsText(uiSystem, "allowCrossFamilySameClassQueueRouting = preferDedicatedTransport"));
-    EXPECT_TRUE(ContainsText(uiTextures, "allowSameClassQueueRouting = preferDedicatedTransport"));
-    EXPECT_TRUE(ContainsText(uiTextures, "allowCrossFamilySameClassQueueRouting = preferDedicatedTransport"));
+    EXPECT_TRUE(ContainsText(uiInternal, "allowSameClassQueueRouting = preferDedicatedTransport"));
+    EXPECT_TRUE(ContainsText(uiInternal, "allowCrossFamilySameClassQueueRouting = preferDedicatedTransport"));
     EXPECT_TRUE(ContainsText(uiTextures, "ResourceQueueSharing::GraphicsAsyncComputeAndTransfer"));
     EXPECT_TRUE(ContainsText(uiGraphicsResources, "ResourceQueueSharing::GraphicsAsyncComputeAndTransfer"));
 }
@@ -3340,9 +3346,9 @@ TEST(EcsGraphics, TransparentAvboitBaselineCaptureIsFrameLockedAndTestOwned){
     EXPECT_TRUE(ContainsText(runner, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"));
     EXPECT_TRUE(ContainsText(runner, "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"));
     EXPECT_TRUE(ContainsText(runner, "wait_for_log_message("));
+    ExpectRendererBaselineEnvOwnedBySmokeHelper(repoRoot);
     EXPECT_TRUE(ContainsText(smoke, "rendererBaselineCaptureFreezeFrame"));
     EXPECT_TRUE(ContainsText(smoke, "rendererBaselineFixedDelta"));
-    EXPECT_TRUE(ContainsText(smoke, "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"));
     EXPECT_TRUE(ContainsText(smoke, "m_context.graphics.setFrameSubmissionSuspended(true)"));
     EXPECT_TRUE(ContainsText(smoke, "renderer baseline capture ready after {} rendered frames; render submission suspended"));
     EXPECT_TRUE(ContainsText(smoke, "m_context.graphics.setFrameSubmissionSuspended(false)"));
@@ -3365,10 +3371,9 @@ TEST(EcsGraphics, SkinnedCsgBaselineCaptureIsFrameLockedAndTestOwned){
     EXPECT_TRUE(ContainsText(profiles, "window_title=\"NWB Skinned CSG Smoke\""));
     EXPECT_TRUE(ContainsText(profiles, "capture_ready_log=\"CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after\""));
     EXPECT_TRUE(ContainsText(profiles, "fixed_delta_seconds=1.0 / 60.0"));
+    ExpectRendererBaselineEnvOwnedBySmokeHelper(repoRoot);
     EXPECT_TRUE(ContainsText(smoke, "rendererBaselineCaptureFreezeFrame"));
-    EXPECT_TRUE(ContainsText(smoke, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"));
     EXPECT_TRUE(ContainsText(smoke, "rendererBaselineFixedDelta"));
-    EXPECT_TRUE(ContainsText(smoke, "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"));
     EXPECT_TRUE(ContainsText(smoke, "m_context.graphics.setFrameSubmissionSuspended(true)"));
     EXPECT_TRUE(ContainsText(smoke, "CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"));
     EXPECT_TRUE(ContainsText(smoke, "m_context.graphics.setFrameSubmissionSuspended(false)"));
@@ -3421,10 +3426,9 @@ TEST(EcsGraphics, SurfelGiBaselineUsesFixedTemporalWarmup){
     EXPECT_TRUE(ContainsText(surfel, "capture_freeze_frame=360"));
     EXPECT_TRUE(ContainsText(surfel, "capture_ready_log=\"GiTestSmokeProject: renderer baseline capture ready after\""));
     EXPECT_TRUE(ContainsText(surfel, "fixed_delta_seconds=1.0 / 60.0"));
+    ExpectRendererBaselineEnvOwnedBySmokeHelper(repoRoot);
     EXPECT_TRUE(ContainsText(smoke, "rendererBaselineCaptureFreezeFrame"));
     EXPECT_TRUE(ContainsText(smoke, "rendererBaselineFixedDelta"));
-    EXPECT_TRUE(ContainsText(smoke, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"));
-    EXPECT_TRUE(ContainsText(smoke, "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"));
     EXPECT_TRUE(ContainsText(smoke, "GiTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"));
 }
 
@@ -3486,10 +3490,9 @@ TEST(EcsGraphics, SoftShadowBaselineUsesFixedTemporalWarmup){
     EXPECT_TRUE(ContainsText(softShadows, "capture_freeze_frame=360"));
     EXPECT_TRUE(ContainsText(softShadows, "capture_ready_log=\"SoftShadowTestSmokeProject: renderer baseline capture ready after\""));
     EXPECT_TRUE(ContainsText(softShadows, "fixed_delta_seconds=1.0 / 60.0"));
+    ExpectRendererBaselineEnvOwnedBySmokeHelper(repoRoot);
     EXPECT_TRUE(ContainsText(smoke, "rendererBaselineCaptureFreezeFrame"));
     EXPECT_TRUE(ContainsText(smoke, "rendererBaselineFixedDelta"));
-    EXPECT_TRUE(ContainsText(smoke, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"));
-    EXPECT_TRUE(ContainsText(smoke, "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"));
     EXPECT_TRUE(ContainsText(smoke, "SoftShadowTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"));
 }
 
@@ -3514,12 +3517,12 @@ TEST(EcsGraphics, StressBaselineUsesSeparateFixedTemporalWarmup){
     EXPECT_TRUE(ContainsText(stress, "capture_freeze_frame=96"));
     EXPECT_TRUE(ContainsText(stress, "capture_ready_log=\"StressTestSmokeProject: renderer baseline capture ready after\""));
     EXPECT_TRUE(ContainsText(stress, "fixed_delta_seconds=1.0 / 60.0"));
+    ExpectRendererBaselineEnvOwnedBySmokeHelper(repoRoot);
     EXPECT_TRUE(ContainsText(smoke, "m4PixelCaptureFreezeFrame"));
     EXPECT_TRUE(ContainsText(smoke, "rendererBaselineCaptureFreezeFrame"));
     EXPECT_TRUE(ContainsText(smoke, "rendererBaselineFixedDelta"));
     EXPECT_TRUE(ContainsText(smoke, "StressTestSmokeProject: M4 pixel capture ready after {} rendered frames; render submission suspended"));
     EXPECT_TRUE(ContainsText(smoke, "StressTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"));
-    EXPECT_TRUE(ContainsText(smoke, "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"));
 }
 
 
@@ -5059,7 +5062,7 @@ TEST(EcsGraphics, CsgGraphResourcesAreFrozenOnceAndOwnedByEveryRecordPayload){
         EXPECT_GE(CountText(record, "payload.csgResources"), 1u);
         EXPECT_FALSE(ContainsText(record, "csgGraphResourceSnapshot("));
     };
-    expectRecordUsesOwnedSnapshot(taskRecords, "bool GbufferGraphTask::record(", "void GbufferGraphTask::discarded(");
+    expectRecordUsesOwnedSnapshot(taskRecords, "bool GbufferGraphTask::record(", "NWB_IMPL_END");
     expectRecordUsesOwnedSnapshot(
         taskRecords,
         "bool OpaqueCsgReceiverComputeEmulationGraphTask::record(",
@@ -5068,40 +5071,40 @@ TEST(EcsGraphics, CsgGraphResourcesAreFrozenOnceAndOwnedByEveryRecordPayload){
     expectRecordUsesOwnedSnapshot(
         taskRecords,
         "bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(",
-        "void OpaqueCsgIntervalSampleComputeEmulationGraphTask::discarded("
+        "NWB_IMPL_END"
     );
     expectRecordUsesOwnedSnapshot(taskRecords, "bool CsgReceiverSpanBuildGraphTask::record(", "bool CsgIntervalCombineGraphTask::record(");
     expectRecordUsesOwnedSnapshot(taskRecords, "bool CsgIntervalCombineGraphTask::record(", "bool CsgIntervalSampleGraphTask::record(");
-    expectRecordUsesOwnedSnapshot(taskRecords, "bool CsgIntervalSampleGraphTask::record(", "void CsgIntervalSampleGraphTask::discarded(");
+    expectRecordUsesOwnedSnapshot(taskRecords, "bool CsgIntervalSampleGraphTask::record(", "NWB_IMPL_END");
     expectRecordUsesOwnedSnapshot(
         taskRecords,
         "bool AvboitCsgReceiverSpanGraphTask::record(",
-        "void AvboitCsgReceiverSpanGraphTask::discarded("
+        "bool AvboitCsgIntervalCombineGraphTask::record("
     );
     expectRecordUsesOwnedSnapshot(
         taskRecords,
         "bool AvboitCsgIntervalCombineGraphTask::record(",
-        "void AvboitCsgIntervalCombineGraphTask::discarded("
+        "NWB_IMPL_END"
     );
-    expectRecordUsesOwnedSnapshot(taskRecords, "bool AvboitPreGraphTask::record(", "void AvboitPreGraphTask::discarded(");
+    expectRecordUsesOwnedSnapshot(taskRecords, "bool AvboitPreGraphTask::record(", "bool AvboitOccupancyComputeEmulationGraphTask::record(");
     expectRecordUsesOwnedSnapshot(
         taskRecords,
         "bool AvboitOccupancyComputeEmulationGraphTask::record(",
-        "void AvboitOccupancyComputeEmulationGraphTask::discarded("
+        "bool AvboitOccupancySharedComputeEmulationGraphTask::record("
     );
-    expectRecordUsesOwnedSnapshot(taskRecords, "bool AvboitOccupancyGraphTask::record(", "void AvboitOccupancyGraphTask::discarded(");
+    expectRecordUsesOwnedSnapshot(taskRecords, "bool AvboitOccupancyGraphTask::record(", "bool AvboitDepthWarpGraphTask::record(");
     expectRecordUsesOwnedSnapshot(
         taskRecords,
         "bool AvboitExtinctionComputeEmulationGraphTask::record(",
-        "void AvboitExtinctionComputeEmulationGraphTask::discarded("
+        "bool AvboitExtinctionSharedComputeEmulationGraphTask::record("
     );
-    expectRecordUsesOwnedSnapshot(taskRecords, "bool AvboitExtinctionGraphTask::record(", "void AvboitExtinctionGraphTask::discarded(");
+    expectRecordUsesOwnedSnapshot(taskRecords, "bool AvboitExtinctionGraphTask::record(", "bool AvboitIntegrationGraphTask::record(");
     expectRecordUsesOwnedSnapshot(
         taskRecords,
         "bool AvboitAccumulationComputeEmulationGraphTask::record(",
-        "void AvboitAccumulationComputeEmulationGraphTask::discarded("
+        "bool AvboitAccumulationSharedComputeEmulationGraphTask::record("
     );
-    expectRecordUsesOwnedSnapshot(taskRecords, "bool AvboitAccumulationGraphTask::record(", "void AvboitAccumulationGraphTask::discarded(");
+    expectRecordUsesOwnedSnapshot(taskRecords, "bool AvboitAccumulationGraphTask::record(", "bool AvboitAccumulationFinalizeGraphTask::record(");
 
     EXPECT_EQ(CountText(rootGraph, "m_csgSystem.csgGraphResourceSnapshot()"), 1u);
     EXPECT_EQ(CountText(rootPrefix, "m_csgSystem.csgGraphResourceSnapshot()"), 0u);
@@ -5839,8 +5842,8 @@ TEST(EcsGraphics, GbufferClearsUseFirstTilePassAndContinuationLoads){
     EXPECT_FALSE(ContainsText(prefix, "render.graphics_prefix.deferred_clear_depth"));
     EXPECT_TRUE(ContainsText(prefix, "render.graphics_prefix.deferred_clear_opaque_color"));
     EXPECT_FALSE(ContainsText(prefix, "m_graphicsPrefixDeferredClearFirstTask"));
-    EXPECT_TRUE(ContainsText(prefix, ".beforeClear = &ECSRenderDetail::BeginDeferredClearTiming,"));
-    EXPECT_TRUE(ContainsText(prefix, ".afterClear = &ECSRenderDetail::EndDeferredClearTiming,"));
+    EXPECT_TRUE(ContainsText(prefix, ".beforeClear = &BeginGraphClearTimingRecord,"));
+    EXPECT_TRUE(ContainsText(prefix, ".afterClear = &EndGraphClearTimingRecord,"));
     EXPECT_TRUE(ContainsText(prefix, "G-buffer timing owns that fused work."));
     EXPECT_TRUE(ContainsText(
         prefix,

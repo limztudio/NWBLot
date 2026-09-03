@@ -421,6 +421,104 @@ template<typename MetadataValue>
 }
 
 template<typename MetadataValue>
+[[nodiscard]] inline bool TryDecodeMetadataFiniteF32(const MetadataValue& value, f32& outValue){
+    outValue = 0.0f;
+    if(!value.isNumeric())
+        return false;
+
+    const f64 numericValue = value.toDouble();
+    if(
+        !IsFinite(numericValue)
+        || numericValue < static_cast<f64>(Limit<f32>::s_Min)
+        || numericValue > static_cast<f64>(Limit<f32>::s_Max)
+    )
+        return false;
+
+    outValue = static_cast<f32>(numericValue);
+    return true;
+}
+
+template<typename MetadataValue>
+[[nodiscard]] inline bool ReadMetadataFiniteF32Value(
+    const Path& nwbFilePath,
+    const MetadataValue& value,
+    const AStringView diagnosticPrefix,
+    const AStringView fieldName,
+    f32& outValue
+){
+    if(TryDecodeMetadataFiniteF32(value, outValue))
+        return true;
+
+    if(!value.isNumeric()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be numeric")
+            , StringConvert(diagnosticPrefix)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+
+    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is outside the supported float range")
+        , StringConvert(diagnosticPrefix)
+        , PathToString<tchar>(nwbFilePath)
+        , StringConvert(fieldName)
+    );
+    return false;
+}
+
+template<typename MetadataValue>
+[[nodiscard]] inline bool ReadMetadataFiniteF32Field(
+    const Path& nwbFilePath,
+    const MetadataValue& object,
+    const AStringView diagnosticPrefix,
+    const AStringView fieldName,
+    const bool required,
+    f32& outValue
+){
+    outValue = 0.0f;
+    const auto* fieldValue = object.findField(fieldName);
+    if(!fieldValue){
+        if(!required)
+            return true;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required")
+            , StringConvert(diagnosticPrefix)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+    return ReadMetadataFiniteF32Value(nwbFilePath, *fieldValue, diagnosticPrefix, fieldName, outValue);
+}
+
+template<typename MetadataValue>
+[[nodiscard]] inline bool ReadMetadataCompactStringField(
+    const Path& nwbFilePath,
+    const MetadataValue& object,
+    const AStringView diagnosticPrefix,
+    const AStringView fieldName,
+    const bool required,
+    ACompactString& outValue
+){
+    outValue = {};
+    AStringView text;
+    bool present = false;
+    if(!ReadMetadataStringField(nwbFilePath, object, diagnosticPrefix, fieldName, required, text, &present))
+        return false;
+    if(!present)
+        return true;
+    if(!outValue.assign(text)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' exceeds ACompactString capacity")
+            , StringConvert(diagnosticPrefix)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+    return true;
+}
+
+template<typename MetadataValue>
 [[nodiscard]] inline bool ReadMetadataNameField(
     const Path& nwbFilePath,
     const MetadataValue& object,

@@ -24,6 +24,9 @@ struct AssetRef{
 
 public:
     constexpr AssetRef() = default;
+    explicit constexpr AssetRef(const char* path)
+        : virtualPath(path)
+    {}
 
 
 public:

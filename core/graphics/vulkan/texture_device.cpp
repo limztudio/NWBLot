@@ -23,18 +23,6 @@ namespace __hidden_texture_device{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool TextureQueueFamilyListContains(
-    const u32* const familyIndices,
-    const u32 familyIndexCount,
-    const u32 expectedFamilyIndex
-)noexcept{
-    for(u32 familyIndex = 0u; familyIndex < familyIndexCount; ++familyIndex){
-        if(familyIndices[familyIndex] == expectedFamilyIndex)
-            return true;
-    }
-    return false;
-}
-
 [[nodiscard]] static bool ValidateNativeTextureSharing(
     const Device& device,
     const VolkInstanceTable& instanceDispatch,
@@ -112,7 +100,7 @@ namespace __hidden_texture_device{
         if(!ResourceQueueSharing::IncludesQueueClass(desc.queueSharing, queue.queueClass))
             continue;
         hasLogicalQueue = true;
-        if(!TextureQueueFamilyListContains(
+        if(!ResourceQueueSharing::QueueFamilyIndexListContains(
             provenance.queueFamilyIndices,
             provenance.queueFamilyIndexCount,
             queue.familyIndex

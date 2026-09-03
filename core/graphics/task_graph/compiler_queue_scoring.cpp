@@ -76,17 +76,6 @@ bool GpuTaskSchedulingReachability::transitivelyIndependent(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool IsBetterQueue(
-    const GpuPhysicalQueueInfo& candidate,
-    const GpuPhysicalQueueInfo* const current
-)noexcept{
-    if(!current)
-        return true;
-    if(candidate.id.index != current->id.index)
-        return candidate.id.index < current->id.index;
-    return candidate.queueClass < current->queueClass;
-}
-
 [[nodiscard]] static i32 SaturateQueueScoreTerm(const u64 value)noexcept{
     return value > static_cast<u64>(Limit<i32>::s_Max)
         ? Limit<i32>::s_Max

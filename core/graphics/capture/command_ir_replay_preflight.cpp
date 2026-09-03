@@ -5,6 +5,7 @@
 #include "command_ir_internal.h"
 
 #include <core/graphics/backend_selection.h>
+#include <core/graphics/task_graph/texture_clear_value.h>
 #include <core/graphics/task_graph/compiled_graph.h>
 #include <core/graphics/task_graph/task_graph.h>
 #include <core/graphics/vulkan/texture_clear_contract.h>
@@ -151,28 +152,6 @@ namespace __hidden_gpu_command_ir_replay_preflight{
             return true;
     }
     return false;
-}
-
-[[nodiscard]] static bool TryMapTextureClearValueKind(
-    const GpuClearTextureTaskValueType::Enum valueType,
-    GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Enum& outValueKind
-)noexcept{
-    outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Float;
-    switch(valueType){
-    case GpuClearTextureTaskValueType::Float:
-        return true;
-    case GpuClearTextureTaskValueType::UInt:
-        outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::UInt;
-        return true;
-    case GpuClearTextureTaskValueType::Int:
-        outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Int;
-        return true;
-    case GpuClearTextureTaskValueType::DepthStencil:
-        outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::DepthStencil;
-        return true;
-    default:
-        return false;
-    }
 }
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateRecordContext(
@@ -454,7 +433,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
             description,
             record.destinationSubresources
         )
-        || !TryMapTextureClearValueKind(record.clearTextureValueType, valueKind)
+        || !GpuTaskGraphClearDetail::TryMapTextureClearValueKind(record.clearTextureValueType, valueKind)
         || !GraphicsBackend::VulkanTextureDetail::ResolveTextureClearContract(
             description,
             record.destinationSubresources,

@@ -4,6 +4,7 @@
 
 #include "task_graph.h"
 #include "compiled_graph.h"
+#include "task_graph_builtin_internal.h"
 
 #include <core/graphics/capture/command_ir.h>
 #include <core/graphics/backend_selection.h>
@@ -145,52 +146,6 @@ struct ResolveTextureTask{
             *payload.acceptedToken = {};
     }
 };
-[[nodiscard]] static bool ValidTextureRange(const TextureSubresourceSet& range)noexcept{
-    return range.numMipLevels != 0u && range.numArraySlices != 0u;
-}
-
-template<typename ResourceDesc>
-[[nodiscard]] static bool BuiltInTaskCanMaterializeRetainedState(
-    const ResourceDesc& resourceDesc,
-    const ResourceStates::Mask graphInitialState,
-    const ResourceStates::Mask externalFinalState
-)noexcept{
-    // Retained resources restore to their descriptor state when a native packet closes. The graph may still use a
-    // different built-in state when it explicitly starts from that descriptor state: compiler-owned barriers then
-    // establish the primitive state and the recorded packet exports the restored state for the next packet. A
-    // mismatched graph declaration has no native source that this helper can prove, and a terminal external state
-    // must agree with the close-time restoration before the graph publishes its handoff.
-    if(!resourceDesc.keepInitialState)
-        return true;
-    return resourceDesc.initialState != ResourceStates::Unknown
-        && graphInitialState == resourceDesc.initialState
-        && (
-            externalFinalState == ResourceStates::Unknown
-            || externalFinalState == resourceDesc.initialState
-        )
-    ;
-}
-
-[[nodiscard]] static bool CopyOrClearTextureDestinationCanMaterializeRetainedState(
-    const TextureDesc& resourceDesc,
-    const ResourceStates::Mask graphInitialState,
-    const ResourceStates::Mask externalFinalState
-)noexcept{
-    if(!resourceDesc.keepInitialState)
-        return true;
-    if(
-        resourceDesc.initialState == ResourceStates::Unknown
-        || (
-            externalFinalState != ResourceStates::Unknown
-            && externalFinalState != resourceDesc.initialState
-        )
-    )
-        return false;
-    // An Unknown write-only destination never invents an input state. Fresh managed subresources lower from
-    // Undefined; accepted retained subresources are restored to descriptor state at packet close and reused by
-    // StateTracker on later packets.
-    return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
-}
 
 [[nodiscard]] static bool ResolveTextureContractValid(
     const TextureDesc& sourceDesc,
@@ -231,8 +186,8 @@ template<typename ResourceDesc>
         TextureSubresourceMipResolve::Range
     );
     if(
-        !ValidTextureRange(outResolvedSourceSubresources)
-        || !ValidTextureRange(outResolvedDestinationSubresources)
+        !outResolvedSourceSubresources.hasExtent()
+        || !outResolvedDestinationSubresources.hasExtent()
         || outResolvedSourceSubresources.numMipLevels != outResolvedDestinationSubresources.numMipLevels
         || outResolvedSourceSubresources.numArraySlices != outResolvedDestinationSubresources.numArraySlices
     )
@@ -341,12 +296,12 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
             && destinationResource.type == GpuGraphResourceType::Texture
             && sourceResource.texture
             && destinationResource.texture
-            && __hidden_gpu_task_graph_builtin_texture_transfers::BuiltInTaskCanMaterializeRetainedState(
+            && GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
                 sourceResource.texture->getCreationDescription(),
                 sourceResource.initialState,
                 sourceResource.externalFinalState
             )
-            && __hidden_gpu_task_graph_builtin_texture_transfers::CopyOrClearTextureDestinationCanMaterializeRetainedState(
+            && GpuTaskGraphBuiltinDetail::CopyOrClearTextureDestinationCanMaterializeRetainedState(
                 destinationResource.texture->getCreationDescription(),
                 destinationResource.initialState,
                 destinationResource.externalFinalState
@@ -501,12 +456,12 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
             && destinationResource.type == GpuGraphResourceType::Texture
             && sourceResource.texture
             && destinationResource.texture
-            && __hidden_gpu_task_graph_builtin_texture_transfers::BuiltInTaskCanMaterializeRetainedState(
+            && GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
                 sourceResource.texture->getCreationDescription(),
                 sourceResource.initialState,
                 sourceResource.externalFinalState
             )
-            && __hidden_gpu_task_graph_builtin_texture_transfers::BuiltInTaskCanMaterializeRetainedState(
+            && GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(
                 destinationResource.texture->getCreationDescription(),
                 destinationResource.initialState,
                 destinationResource.externalFinalState

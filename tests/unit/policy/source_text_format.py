@@ -7,20 +7,10 @@ import sys
 from pathlib import Path
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+from policy_scan import FIRST_PARTY_CODE_DIRECTORIES, REPOSITORY_ROOT
 
 
-SOURCE_DIRECTORIES = (
-    "CoolStuff/Testbed",
-    "core",
-    "global",
-    "impl",
-    "loader",
-    "logger",
-    "resource_cooker",
-    "tests",
-    "utilities",
-)
+SOURCE_DIRECTORIES = FIRST_PARTY_CODE_DIRECTORIES
 CPP_SUFFIXES = frozenset((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ixx"))
 SHADER_SUFFIXES = frozenset((".slang", ".slangi", ".bind", ".surface", ".bxdf"))
 METADATA_SUFFIXES = frozenset((".nwb",))

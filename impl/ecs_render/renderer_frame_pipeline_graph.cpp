@@ -26,16 +26,14 @@
 #include <impl/ecs_render/kernel/task_graph_queue_lookup.h>
 #include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
-#include <impl/ecs_render/deferred/task_graph_clear_timing.h>
+#include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/deferred/task_graph_prefix_tasks.h>
 #include <impl/ecs_render/deferred/task_graph_gbuffer_task.h>
 #include <impl/ecs_render/deferred/task_graph_present_task.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
-#include <impl/ecs_render/csg/task_graph_clear_timing.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
-#include <impl/ecs_render/csg/task_graph_resource_sets.h>
 
 #include <impl/ecs_render/mesh/task_graph_prefix_tasks.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_tasks.h>
@@ -43,12 +41,10 @@
 #include <impl/ecs_render/csg/task_graph_opaque_interval_tasks.h>
 #include <impl/ecs_render/csg/task_graph_transparent_interval_tasks.h>
 
-#include <impl/ecs_render/avboit/task_graph_clear_timing.h>
 #include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/avboit/task_graph_occupancy_tasks.h>
 #include <impl/ecs_render/avboit/task_graph_extinction_integration_tasks.h>
 #include <impl/ecs_render/avboit/task_graph_accumulation_tasks.h>
-#include <impl/ecs_render/avboit/task_graph_resource_sets.h>
 #include <impl/ecs_render/avboit/task_graph_timing_metadata.h>
 
 
@@ -144,8 +140,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
     Optional<Core::GpuTimingMeasure>& deferredClearTiming,
-    ECSRenderDetail::DeferredClearTimingRecordState& deferredClearTimingState,
-    ECSRenderDetail::CsgIntervalClearTimingRecordState& opaqueCsgIntervalClearTimingState,
+    GraphClearTimingRecordState& deferredClearTimingState,
+    GraphClearTimingRecordState& opaqueCsgIntervalClearTimingState,
     Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
     Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
     Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
@@ -153,8 +149,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const bool* const asyncPrefixTimingSpansOnePacket,
     Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
     Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
-    ECSRenderDetail::AvboitClearTimingRecordState& avboitClearTimingState,
-    ECSRenderDetail::CsgIntervalClearTimingRecordState& transparentCsgIntervalClearTimingState,
+    GraphClearTimingRecordState& avboitClearTimingState,
+    GraphClearTimingRecordState& transparentCsgIntervalClearTimingState,
     Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTiming,
     Optional<Core::GpuTimingMeasure>& avboitOccupancyComputeEmulationTiming,
     Optional<Core::GpuTimingMeasure>& avboitExtinctionComputeEmulationTiming,
@@ -2412,13 +2408,13 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         );
         const Core::GpuClearTextureTaskRecordHooks transparentCsgIntervalClearBeginHooks{
             .context = &transparentCsgIntervalClearTimingState,
-            .beforeClear = &ECSRenderDetail::BeginCsgIntervalClearTiming,
-            .discarded = &ECSRenderDetail::DiscardCsgIntervalClearTiming,
+            .beforeClear = &BeginGraphClearTimingRecord,
+            .discarded = &DiscardGraphClearTimingRecord,
         };
         const Core::GpuClearTextureTaskRecordHooks transparentCsgIntervalClearEndHooks{
             .context = &transparentCsgIntervalClearTimingState,
-            .afterClear = &ECSRenderDetail::EndCsgIntervalClearTiming,
-            .discarded = &ECSRenderDetail::DiscardCsgIntervalClearTiming,
+            .afterClear = &EndGraphClearTimingRecord,
+            .discarded = &DiscardGraphClearTimingRecord,
         };
         m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearFirstTask =
             m_deferredLightingTaskGraph.addClearTextureRectUIntTask(
@@ -3154,13 +3150,13 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         };
         const Core::GpuClearTextureTaskRecordHooks avboitClearBeginHooks{
             .context = &avboitClearTimingState,
-            .beforeClear = &ECSRenderDetail::BeginAvboitClearTiming,
-            .discarded = &ECSRenderDetail::DiscardAvboitClearTiming,
+            .beforeClear = &BeginGraphClearTimingRecord,
+            .discarded = &DiscardGraphClearTimingRecord,
         };
         const Core::GpuClearTextureTaskRecordHooks avboitClearEndHooks{
             .context = &avboitClearTimingState,
-            .afterClear = &ECSRenderDetail::EndAvboitClearTiming,
-            .discarded = &ECSRenderDetail::DiscardAvboitClearTiming,
+            .afterClear = &EndGraphClearTimingRecord,
+            .discarded = &DiscardGraphClearTimingRecord,
         };
         const Core::Color transparentBlack(0.f, 0.f, 0.f, 0.f);
         avboitClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
@@ -3306,7 +3302,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     ;
     bool occupancyComputeEmulationOutputStatesGraphOwned = false;
     if(occupancyRegularComputeEmulationPlanCaptured){
-        occupancyComputeEmulationOutputStatesGraphOwned = GatherAvboitAliasFreeComputeEmulationResourceSet(
+        occupancyComputeEmulationOutputStatesGraphOwned = GatherImportedOutputBufferResourceSet(
             m_deferredLightingTaskGraph,
             avboitOccupancyComputeEmulationPayload.plan,
             occupancyComputeEmulationResourceScratch,
@@ -3317,7 +3313,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
     else if(occupancyCsgComputeEmulationPlanCaptured){
         occupancyComputeEmulationOutputStatesGraphOwned =
-            GatherOpaqueCsgIntervalSampleComputeEmulationResourceSet(
+            GatherImportedOutputBufferResourceSet(
                 m_deferredLightingTaskGraph,
                 avboitOccupancyComputeEmulationPayload.csgPlan,
                 occupancyComputeEmulationResourceScratch,
@@ -4237,7 +4233,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     ;
     bool extinctionComputeEmulationOutputStatesGraphOwned = false;
     if(extinctionRegularComputeEmulationPlanCaptured){
-        extinctionComputeEmulationOutputStatesGraphOwned = GatherAvboitAliasFreeComputeEmulationResourceSet(
+        extinctionComputeEmulationOutputStatesGraphOwned = GatherImportedOutputBufferResourceSet(
             m_deferredLightingTaskGraph,
             avboitExtinctionComputeEmulationPayload.plan,
             extinctionComputeEmulationResourceScratch,
@@ -4248,7 +4244,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
     else if(extinctionCsgComputeEmulationPlanCaptured){
         extinctionComputeEmulationOutputStatesGraphOwned =
-            GatherOpaqueCsgIntervalSampleComputeEmulationResourceSet(
+            GatherImportedOutputBufferResourceSet(
                 m_deferredLightingTaskGraph,
                 avboitExtinctionComputeEmulationPayload.csgPlan,
                 extinctionComputeEmulationResourceScratch,
@@ -5164,7 +5160,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     ;
     bool accumulationComputeEmulationOutputStatesGraphOwned = false;
     if(accumulationRegularComputeEmulationPlanCaptured){
-        accumulationComputeEmulationOutputStatesGraphOwned = GatherAvboitAliasFreeComputeEmulationResourceSet(
+        accumulationComputeEmulationOutputStatesGraphOwned = GatherImportedOutputBufferResourceSet(
             m_deferredLightingTaskGraph,
             avboitAccumulationComputeEmulationPayload.plan,
             accumulationComputeEmulationResourceScratch,
@@ -5175,7 +5171,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
     else if(accumulationCsgComputeEmulationPlanCaptured){
         accumulationComputeEmulationOutputStatesGraphOwned =
-            GatherOpaqueCsgIntervalSampleComputeEmulationResourceSet(
+            GatherImportedOutputBufferResourceSet(
                 m_deferredLightingTaskGraph,
                 avboitAccumulationComputeEmulationPayload.csgPlan,
                 accumulationComputeEmulationResourceScratch,

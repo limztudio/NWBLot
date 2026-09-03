@@ -17,96 +17,31 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_LIST_DIR}/repository_launcher_tests.py"
     )
-    add_test(
-        NAME nwb_command_ir_harness_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/command_ir/run.py"
-            "--self-test"
+    # Parser/report self-tests stay in ordinary CTest. The matching GPU runs remain opt-in: M4 and lagged lighting
+    # need a distinct compute family plus a window, hybrid capture is target-hardware, and transfer-queue needs a
+    # Transfer-only family plus an external bandwidth capture.
+    set(_nwb_ab_self_test_harnesses
+        command_ir
+        renderer_baseline
+        async_shadow_m4
+        hybrid_shadow_boundary
+        frame_lagged_async_lighting
+        transfer_queue
     )
-    add_test(
-        NAME nwb_command_ir_launcher_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/command_ir/launch.py"
-            "--self-test"
-    )
-    add_test(
-        NAME nwb_renderer_baseline_harness_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/renderer_baseline/run.py"
-            "--self-test"
-    )
-    add_test(
-        NAME nwb_renderer_baseline_launcher_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/renderer_baseline/launch.py"
-            "--self-test"
-    )
-    # Pure-Python parser/verdict coverage for the manual M4 runner. The actual benchmark deliberately remains an
-    # opt-in target-hardware workflow because it requires a distinct Vulkan compute family and a visible window.
-    add_test(
-        NAME nwb_async_shadow_m4_harness_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/async_shadow_m4/run.py"
-            "--self-test"
-    )
-    add_test(
-        NAME nwb_async_shadow_m4_launcher_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/async_shadow_m4/launch.py"
-            "--self-test"
-    )
-    # Keep the natural hybrid-versus-opaque report schema, route diagnostics, and shared-binary launcher contract
-    # under ordinary CTest. The window/timestamp capture remains an opt-in target-hardware workflow.
-    add_test(
-        NAME nwb_hybrid_shadow_boundary_harness_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/hybrid_shadow_boundary/run.py"
-            "--self-test"
-    )
-    add_test(
-        NAME nwb_hybrid_shadow_boundary_launcher_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/hybrid_shadow_boundary/launch.py"
-            "--self-test"
-    )
-    # Parser/state-machine coverage for the opt-in target-hardware lagged-lighting smoke. The actual run remains
-    # manual because it requires a dedicated Vulkan compute family plus an interactive native window.
-    add_test(
-        NAME nwb_frame_lagged_async_lighting_harness_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/frame_lagged_async_lighting/run.py"
-            "--self-test"
-    )
-    add_test(
-        NAME nwb_frame_lagged_async_lighting_launcher_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/frame_lagged_async_lighting/launch.py"
-            "--self-test"
-    )
-    # The transfer-upload A/B stays opt-in because a meaningful run needs a distinct Transfer-only family and an
-    # external bandwidth capture. Keep its parser/report contracts in regular unit coverage.
-    add_test(
-        NAME nwb_transfer_queue_harness_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/transfer_queue/run.py"
-            "--self-test"
-    )
-    add_test(
-        NAME nwb_transfer_queue_launcher_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/transfer_queue/launch.py"
-            "--self-test"
-    )
+    foreach(_nwb_ab_harness IN LISTS _nwb_ab_self_test_harnesses)
+        add_test(
+            NAME nwb_${_nwb_ab_harness}_harness_unit
+            COMMAND
+                "${Python3_EXECUTABLE}"
+                "${CMAKE_SOURCE_DIR}/tests/ab/${_nwb_ab_harness}/run.py"
+                "--self-test"
+        )
+        add_test(
+            NAME nwb_${_nwb_ab_harness}_launcher_unit
+            COMMAND
+                "${Python3_EXECUTABLE}"
+                "${CMAKE_SOURCE_DIR}/tests/ab/${_nwb_ab_harness}/launch.py"
+                "--self-test"
+        )
+    endforeach()
 endif()

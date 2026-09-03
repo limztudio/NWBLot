@@ -13,6 +13,7 @@
 
 #include "joint_types.h"
 
+#include <core/assets/paths.h>
 #include <core/common/log.h>
 #include <core/metascript/parser.h>
 
@@ -67,23 +68,18 @@ namespace AssetsSkeletonCookDetail{
         const auto& columns = row.asList();
         for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
             const Core::Metascript::Value& column = columns[columnIndex];
-            if(!column.isNumeric()){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' row {} column {} must be numeric")
-                    , StringConvert(metaKind)
-                    , PathToString<tchar>(nwbFilePath)
-                    , StringConvert(label)
-                    , rowIndex
-                    , columnIndex
-                );
-                return false;
-            }
+            if(!Core::Assets::TryDecodeMetadataFiniteF32(column, rowValues[columnIndex])){
+                if(!column.isNumeric()){
+                    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' row {} column {} must be numeric")
+                        , StringConvert(metaKind)
+                        , PathToString<tchar>(nwbFilePath)
+                        , StringConvert(label)
+                        , rowIndex
+                        , columnIndex
+                    );
+                    return false;
+                }
 
-            const f64 numericValue = column.toDouble();
-            if(
-                !IsFinite(numericValue)
-                || numericValue < static_cast<f64>(Limit<f32>::s_Min)
-                || numericValue > static_cast<f64>(Limit<f32>::s_Max)
-            ){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' row {} column {} is non-finite or outside f32 range")
                     , StringConvert(metaKind)
                     , PathToString<tchar>(nwbFilePath)
@@ -93,8 +89,6 @@ namespace AssetsSkeletonCookDetail{
                 );
                 return false;
             }
-
-            rowValues[columnIndex] = static_cast<f32>(numericValue);
         }
 
         outMatrix.rows[rowIndex] = Float4(rowValues[0u], rowValues[1u], rowValues[2u], rowValues[3u]);

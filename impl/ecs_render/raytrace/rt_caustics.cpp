@@ -74,10 +74,7 @@ struct CausticAccumulatorDecayGraphTask{
 
         // A prior rejected record can retry this task before its graph transaction gets discarded.  Release the
         // incomplete query reservation before starting the retry's one caustic-photons interval.
-        if(payload.causticPhotonTiming->has_value()){
-            payload.causticPhotonTiming->value().discardTiming();
-            payload.causticPhotonTiming->reset();
-        }
+        DiscardGpuTimingMeasure(payload.causticPhotonTiming);
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
         payload.causticPhotonTiming->emplace(
             payload.graphics->gpuTiming(),
@@ -93,18 +90,14 @@ struct CausticAccumulatorDecayGraphTask{
             payload.graphEntryStatesOwned
         );
         if(!dispatched){
-            payload.causticPhotonTiming->value().discardTiming();
-            payload.causticPhotonTiming->reset();
+            DiscardGpuTimingMeasure(payload.causticPhotonTiming);
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned caustic accumulator decay pass failed"));
         }
         return true;
     }
 
     static void discarded(Payload& payload){
-        if(payload.causticPhotonTiming && payload.causticPhotonTiming->has_value()){
-            payload.causticPhotonTiming->value().discardTiming();
-            payload.causticPhotonTiming->reset();
-        }
+        DiscardGpuTimingMeasure(payload.causticPhotonTiming);
     }
 };
 
@@ -156,10 +149,8 @@ struct SoftwareCausticsGraphTask{
                 payload.graphOwnsResolve,
                 payload.causticPhotonTiming
             );
-            if(!causticsDispatched && payload.causticPhotonTiming && payload.causticPhotonTiming->has_value()){
-                payload.causticPhotonTiming->value().discardTiming();
-                payload.causticPhotonTiming->reset();
-            }
+            if(!causticsDispatched)
+                DiscardGpuTimingMeasure(payload.causticPhotonTiming);
             if(payload.causticProducerDispatched)
                 *payload.causticProducerDispatched = causticsDispatched;
             if(!causticsDispatched && payload.raytracingSystem->hasCausticWork(payload.meshView))
@@ -184,10 +175,7 @@ struct SoftwareCausticsGraphTask{
     static void discarded(Payload& payload){
         if(payload.causticProducerDispatched)
             *payload.causticProducerDispatched = false;
-        if(payload.causticPhotonTiming && payload.causticPhotonTiming->has_value()){
-            payload.causticPhotonTiming->value().discardTiming();
-            payload.causticPhotonTiming->reset();
-        }
+        Core::DiscardGpuTimingMeasure(payload.causticPhotonTiming);
     }
 };
 
@@ -238,10 +226,8 @@ struct HardwareCausticsGraphTask{
                 payload.graphOwnsResolve,
                 payload.causticPhotonTiming
             );
-            if(!causticsDispatched && payload.causticPhotonTiming && payload.causticPhotonTiming->has_value()){
-                payload.causticPhotonTiming->value().discardTiming();
-                payload.causticPhotonTiming->reset();
-            }
+            if(!causticsDispatched)
+                DiscardGpuTimingMeasure(payload.causticPhotonTiming);
             if(payload.causticProducerDispatched)
                 *payload.causticProducerDispatched = causticsDispatched;
             if(!causticsDispatched && payload.raytracingSystem->hasHwCausticWork(payload.meshView))
@@ -266,10 +252,7 @@ struct HardwareCausticsGraphTask{
     static void discarded(Payload& payload){
         if(payload.causticProducerDispatched)
             *payload.causticProducerDispatched = false;
-        if(payload.causticPhotonTiming && payload.causticPhotonTiming->has_value()){
-            payload.causticPhotonTiming->value().discardTiming();
-            payload.causticPhotonTiming->reset();
-        }
+        Core::DiscardGpuTimingMeasure(payload.causticPhotonTiming);
     }
 };
 
@@ -294,10 +277,7 @@ struct CausticGeometryDownsampleGraphTask{
         static_cast<void>(context);
         if(!payload.raytracingSystem || !payload.graphics || !payload.targets || !payload.timingTicket || !payload.causticResolveTiming)
             return false;
-        if(payload.causticResolveTiming->has_value()){
-            payload.causticResolveTiming->value().discardTiming();
-            payload.causticResolveTiming->reset();
-        }
+        DiscardGpuTimingMeasure(payload.causticResolveTiming);
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
             return true;
 
@@ -320,10 +300,7 @@ struct CausticGeometryDownsampleGraphTask{
     }
 
     static void discarded(Payload& payload){
-        if(payload.causticResolveTiming && payload.causticResolveTiming->has_value()){
-            payload.causticResolveTiming->value().discardTiming();
-            payload.causticResolveTiming->reset();
-        }
+        DiscardGpuTimingMeasure(payload.causticResolveTiming);
     }
 };
 
@@ -558,10 +535,7 @@ struct CausticResolveGraphTask{
         // Preserve the existing no-producer contract: the graph-owned irradiance clear remains authoritative and
         // no resolve dispatch is emitted when the selected photon producer did not record.
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched){
-            if(payload.causticResolveTiming->has_value()){
-                payload.causticResolveTiming->value().discardTiming();
-                payload.causticResolveTiming->reset();
-            }
+            DiscardGpuTimingMeasure(payload.causticResolveTiming);
             return true;
         }
         if(!payload.causticResolveTiming->has_value())
@@ -574,10 +548,7 @@ struct CausticResolveGraphTask{
     }
 
     static void discarded(Payload& payload){
-        if(payload.causticResolveTiming && payload.causticResolveTiming->has_value()){
-            payload.causticResolveTiming->value().discardTiming();
-            payload.causticResolveTiming->reset();
-        }
+        DiscardGpuTimingMeasure(payload.causticResolveTiming);
     }
 };
 

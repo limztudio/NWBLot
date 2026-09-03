@@ -45,6 +45,8 @@ using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::DestroySmokeRenderWorld;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
+using NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame;
+using NWB::Tests::Smoke::RendererBaselineFixedDelta;
 using NWB::Tests::Smoke::SetSmokeYawWindowTitle;
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 using NWB::Tests::Smoke::AddStaticCsgMeshReceiver;
@@ -66,30 +68,14 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 30.0f;
 // key still sweeps a full turn in a few seconds -- enough control to park on the exact angle an artifact appears at.
 static constexpr f32 s_ManualYawSpeed = 0.6f;
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-static constexpr TransparentMeshRef s_TransparentShapeMesh = []() constexpr{
-    TransparentMeshRef result;
-    result.virtualPath = Name("project/meshes/caustic_sphere");
-    return result;
-}();
+static constexpr TransparentMeshRef s_TransparentShapeMesh{"project/meshes/caustic_sphere"};
 #else
 // Three DISTINCT spinning glass refractors (left/center/right): a cylinder, an octahedron, and a cone. The cylinder
 // + cone have smooth curved silhouettes while the octahedron is faceted, giving the transparent-shadow test a mix of
 // curved and hard-edged tinted occlusion without enabling the additive caustic photon pass.
-static constexpr TransparentMeshRef s_TransparentLeftMesh = []() constexpr{
-    TransparentMeshRef result;
-    result.virtualPath = Name("project/meshes/cylinder");
-    return result;
-}();
-static constexpr TransparentMeshRef s_TransparentCenterMesh = []() constexpr{
-    TransparentMeshRef result;
-    result.virtualPath = Name("project/meshes/octahedron");
-    return result;
-}();
-static constexpr TransparentMeshRef s_TransparentRightMesh = []() constexpr{
-    TransparentMeshRef result;
-    result.virtualPath = Name("project/meshes/cone");
-    return result;
-}();
+static constexpr TransparentMeshRef s_TransparentLeftMesh{"project/meshes/cylinder"};
+static constexpr TransparentMeshRef s_TransparentCenterMesh{"project/meshes/octahedron"};
+static constexpr TransparentMeshRef s_TransparentRightMesh{"project/meshes/cone"};
 #endif
 // Scene rotation. The plain transparent-shadow scene spins for overlap inspection; the caustic sphere stays static so
 // its focused photon result is easy to inspect.
@@ -98,22 +84,10 @@ static constexpr f32 s_TransparentSceneRotationSpeed = 0.0f;
 #else
 static constexpr f32 s_TransparentSceneRotationSpeed = 0.55f;
 #endif
-static constexpr TransparentMeshRef s_ShadowPlaneMesh = []() constexpr{
-    TransparentMeshRef result;
-    result.virtualPath = Name("project/meshes/shadow_plane");
-    return result;
-}();
+static constexpr TransparentMeshRef s_ShadowPlaneMesh{"project/meshes/shadow_plane"};
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
-static constexpr TransparentMaterialRef s_TransparentSharedMaterial = []() constexpr{
-    TransparentMaterialRef result;
-    result.virtualPath = Name("project/smoke/transparent_multi/materials/shared");
-    return result;
-}();
-static constexpr TransparentMaterialRef s_GroundMaterial = []() constexpr{
-    TransparentMaterialRef result;
-    result.virtualPath = Name("project/smoke/transparent_multi/materials/ground");
-    return result;
-}();
+static constexpr TransparentMaterialRef s_TransparentSharedMaterial{"project/smoke/transparent_multi/materials/shared"};
+static constexpr TransparentMaterialRef s_GroundMaterial{"project/smoke/transparent_multi/materials/ground"};
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_multi/center_receiver");
 #endif
@@ -307,34 +281,11 @@ static void ApplyTransparentCsgSceneTransform(
 class TransparentMultiSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     [[nodiscard]] static u32 rendererBaselineCaptureFreezeFrame(){
-        static const u32 s_captureFrame = [](){
-            f32 configuredFrame = 0.0f;
-            if(
-                !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", configuredFrame)
-                || !IsFinite(configuredFrame)
-                || configuredFrame < 1.0f
-            ){
-                return 0u;
-            }
-            return static_cast<u32>(Min(configuredFrame, 1000000.0f));
-        }();
-        return s_captureFrame;
+        return RendererBaselineCaptureFreezeFrame();
     }
 
     [[nodiscard]] static f32 rendererBaselineFixedDelta(){
-        static const f32 s_fixedDelta = [](){
-            f32 configuredDelta = 0.0f;
-            if(
-                !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS", configuredDelta)
-                || !IsFinite(configuredDelta)
-                || configuredDelta <= 0.0f
-                || configuredDelta > 1.0f
-            ){
-                return 0.0f;
-            }
-            return configuredDelta;
-        }();
-        return s_fixedDelta;
+        return RendererBaselineFixedDelta();
     }
 
 

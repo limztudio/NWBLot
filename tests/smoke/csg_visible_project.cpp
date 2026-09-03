@@ -58,16 +58,8 @@ static constexpr f32 s_ReceiverBaseScale = 0.72f;
 static constexpr f32 s_ReceiverScale = 1.08f;
 static constexpr f32 s_CutterScale = s_ReceiverScale / s_ReceiverBaseScale;
 static constexpr usize s_CsgVisibleShapeCount = 4u;
-static constexpr CsgVisibleMeshRef s_CubeMesh = []() constexpr{
-    CsgVisibleMeshRef result;
-    result.virtualPath = Name("project/meshes/cube_hard_edges");
-    return result;
-}();
-static constexpr CsgVisibleMaterialRef s_SolidMaterial = []() constexpr{
-    CsgVisibleMaterialRef result;
-    result.virtualPath = Name("project/smoke/csg_visible/materials/solid");
-    return result;
-}();
+static constexpr CsgVisibleMeshRef s_CubeMesh{"project/meshes/cube_hard_edges"};
+static constexpr CsgVisibleMaterialRef s_SolidMaterial{"project/smoke/csg_visible/materials/solid"};
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 namespace CsgVisibleShapeSlot{

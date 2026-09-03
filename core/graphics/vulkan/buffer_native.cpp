@@ -24,18 +24,6 @@ namespace __hidden_buffer_native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool BufferQueueFamilyListContains(
-    const u32* const familyIndices,
-    const u32 familyIndexCount,
-    const u32 expectedFamilyIndex
-)noexcept{
-    for(u32 familyIndex = 0u; familyIndex < familyIndexCount; ++familyIndex){
-        if(familyIndices[familyIndex] == expectedFamilyIndex)
-            return true;
-    }
-    return false;
-}
-
 [[nodiscard]] static bool ValidateNativeBufferSharing(
     const Device& device,
     const VolkInstanceTable& instanceDispatch,
@@ -110,7 +98,7 @@ namespace __hidden_buffer_native{
         if(!ResourceQueueSharing::IncludesQueueClass(desc.queueSharing, queue.queueClass))
             continue;
         hasLogicalQueue = true;
-        if(!BufferQueueFamilyListContains(
+        if(!ResourceQueueSharing::QueueFamilyIndexListContains(
             provenance.queueFamilyIndices,
             provenance.queueFamilyIndexCount,
             queue.familyIndex

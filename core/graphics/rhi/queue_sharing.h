@@ -44,6 +44,20 @@ namespace ResourceQueueSharing{
     return queueBit != Exclusive && (sharing & queueBit) != Exclusive;
 }
 
+[[nodiscard]] constexpr bool QueueFamilyIndexListContains(
+    const u32* const familyIndices,
+    const u32 familyIndexCount,
+    const u32 expectedFamilyIndex
+)noexcept{
+    if(!familyIndices)
+        return false;
+    for(u32 familyIndex = 0u; familyIndex < familyIndexCount; ++familyIndex){
+        if(familyIndices[familyIndex] == expectedFamilyIndex)
+            return true;
+    }
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -65,11 +79,11 @@ namespace ResourceQueueSharing{
     if(!ResourceQueueSharing::IncludesQueueClass(admission.admittedQueueClasses, queue.queueClass))
         return false;
 
-    for(u32 familyIndex = 0u; familyIndex < admission.queueFamilyIndexCount; ++familyIndex){
-        if(admission.queueFamilyIndices[familyIndex] == queue.familyIndex)
-            return true;
-    }
-    return false;
+    return ResourceQueueSharing::QueueFamilyIndexListContains(
+        admission.queueFamilyIndices,
+        admission.queueFamilyIndexCount,
+        queue.familyIndex
+    );
 }
 
 

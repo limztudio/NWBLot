@@ -233,14 +233,14 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
                 reset();
                 return false;
             }
-            for(usize outputIndex = 0u; outputIndex < outputBuffers.size(); ++outputIndex){
-                if(
-                    outputBuffers[outputIndex].get() == mesh.emulationVertexBuffer.get()
-                    || outputHeapSlots[outputIndex] == mesh.emulationVertexHeapHandle.slot()
-                ){
-                    reset();
-                    return false;
-                }
+            if(MaterialPassEmulationOutputCaptured(
+                outputBuffers,
+                outputHeapSlots,
+                mesh.emulationVertexBuffer,
+                mesh.emulationVertexHeapHandle.slot()
+            )){
+                reset();
+                return false;
             }
             drawItems.push_back(drawItem);
             outputBuffers.push_back(mesh.emulationVertexBuffer);

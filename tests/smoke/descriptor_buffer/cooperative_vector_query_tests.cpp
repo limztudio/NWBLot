@@ -8,8 +8,7 @@
 #include <global/unique_ptr.h>
 #include <core/graphics/api.h>
 #include <core/graphics/vulkan/backend.h>
-#include <tests/common/capturing_logger.h>
-#include <tests/common/headless_graphics_scope.h>
+#include <tests/common/headless_gtest_fixture.h>
 #include <tests/common/vulkan_test_sync.h>
 
 
@@ -31,45 +30,14 @@ namespace Tests{
 using namespace Core;
 
 
-class CooperativeVectorQueryTest : public ::testing::Test{
-protected:
-    static void SetUpTestSuite(){
-        s_logger.emplace();
-        s_loggerGuard.emplace(*s_logger);
-        s_scope = MakeUnique<HeadlessGraphicsScope>();
-        s_runtimeReady = s_scope->initialize();
-    }
-
-    static void TearDownTestSuite(){
-        s_scope.reset();
-        if(s_runtimeReady && s_logger.has_value()){
-            EXPECT_FALSE(s_logger->sawMessageContaining(NWB_TEXT("Vulkan debug: [severity=error")))
-                << "validation-enabled cooperative-vector queries emitted a Vulkan error";
-        }
-        s_loggerGuard.reset();
-        s_logger.reset();
-        s_runtimeReady = false;
-    }
-
-    [[nodiscard]] static GraphicsBackend::Device& device(){ return s_scope->graphics().getDevice(); }
-
-    virtual void SetUp()override{
-        if(!s_runtimeReady)
-            GTEST_SKIP() << "Cooperative-vector query: no usable headless graphics device.";
-    }
-
-
-protected:
-    static bool s_runtimeReady;
-    static UniquePtr<HeadlessGraphicsScope> s_scope;
-    static Optional<CapturingLogger> s_logger;
-    static Optional<Common::LoggerRegistrationGuard> s_loggerGuard;
+struct CooperativeVectorQueryTestConfig : HeadlessGraphicsTestConfig{
+    static constexpr bool s_SkipInSetUpTestSuite = false;
+    static constexpr const char* s_SkipMessage = "Cooperative-vector query: no usable headless graphics device.";
+    static constexpr const tchar* s_VulkanErrorMessage = NWB_TEXT("validation-enabled cooperative-vector queries emitted a Vulkan error");
 };
 
-bool CooperativeVectorQueryTest::s_runtimeReady = false;
-UniquePtr<HeadlessGraphicsScope> CooperativeVectorQueryTest::s_scope;
-Optional<CapturingLogger> CooperativeVectorQueryTest::s_logger;
-Optional<Common::LoggerRegistrationGuard> CooperativeVectorQueryTest::s_loggerGuard;
+class CooperativeVectorQueryTest : public HeadlessGraphicsTest<CooperativeVectorQueryTestConfig>{
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

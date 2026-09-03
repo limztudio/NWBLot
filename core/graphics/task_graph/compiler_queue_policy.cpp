@@ -137,17 +137,6 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     ;
 }
 
-[[nodiscard]] static bool IsBetterQueue(
-    const GpuPhysicalQueueInfo& candidate,
-    const GpuPhysicalQueueInfo* const current
-)noexcept{
-    if(!current)
-        return true;
-    if(candidate.id.index != current->id.index)
-        return candidate.id.index < current->id.index;
-    return candidate.queueClass < current->queueClass;
-}
-
 [[nodiscard]] bool IsValidQueueTopology(const GpuTaskGraphQueueTopology& topology)noexcept{
     if(!topology.queues || topology.queueCount == 0u)
         return false;

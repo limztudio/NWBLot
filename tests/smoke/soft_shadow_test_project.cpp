@@ -41,6 +41,8 @@ using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::MakeSmokeYawDisplay;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
+using NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame;
+using NWB::Tests::Smoke::RendererBaselineFixedDelta;
 using NWB::Tests::Smoke::ReadSmokeFrozenYawFromEnvironment;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
@@ -72,26 +74,10 @@ using SoftShadowMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 //   - Arrow keys (Left/Right) scrub the character yaw so the sweeping soft edge can be checked for crawl (it should NOT
 //     crawl -- a soft edge has nothing to alias); NWB_SOFT_SHADOW_TEST_SPIN_ANGLE pins a fixed yaw for a deterministic A/B.
 // Reuses the benchmark's cooked body model + ground material (no new assets).
-static constexpr SoftShadowModelRef s_Model = []() constexpr{
-    SoftShadowModelRef result;
-    result.virtualPath = Name("project/characters/body/model");
-    return result;
-}();
-static constexpr SoftShadowMaterialRef s_OpaqueMaterial = []() constexpr{
-    SoftShadowMaterialRef result;
-    result.virtualPath = Name("project/smoke/transparent_multi/materials/ground");
-    return result;
-}();
-static constexpr SoftShadowMaterialRef s_TransparentMaterial = []() constexpr{
-    SoftShadowMaterialRef result;
-    result.virtualPath = Name("project/smoke/transparent_multi/materials/shared");
-    return result;
-}();
-static constexpr SoftShadowMeshRef s_GroundMesh = []() constexpr{
-    SoftShadowMeshRef result;
-    result.virtualPath = Name("project/meshes/shadow_plane");
-    return result;
-}();
+static constexpr SoftShadowModelRef s_Model{"project/characters/body/model"};
+static constexpr SoftShadowMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
+static constexpr SoftShadowMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"};
+static constexpr SoftShadowMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 static constexpr f32 s_GroundScale = 8.0f;
@@ -133,34 +119,11 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;                  // clamp hu
 class SoftShadowTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     [[nodiscard]] static u32 rendererBaselineCaptureFreezeFrame(){
-        static const u32 s_captureFrame = [](){
-            f32 configuredFrame = 0.0f;
-            if(
-                !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", configuredFrame)
-                || !IsFinite(configuredFrame)
-                || configuredFrame < 1.0f
-            ){
-                return 0u;
-            }
-            return static_cast<u32>(Min(configuredFrame, 1000000.0f));
-        }();
-        return s_captureFrame;
+        return RendererBaselineCaptureFreezeFrame();
     }
 
     [[nodiscard]] static f32 rendererBaselineFixedDelta(){
-        static const f32 s_fixedDelta = [](){
-            f32 configuredDelta = 0.0f;
-            if(
-                !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS", configuredDelta)
-                || !IsFinite(configuredDelta)
-                || configuredDelta <= 0.0f
-                || configuredDelta > 1.0f
-            ){
-                return 0.0f;
-            }
-            return configuredDelta;
-        }();
-        return s_fixedDelta;
+        return RendererBaselineFixedDelta();
     }
 
 

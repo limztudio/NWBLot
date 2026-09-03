@@ -145,7 +145,10 @@ struct CsgIntervalSampleGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
-    static void discarded(Payload& payload);
+
+    static void discarded(Payload& payload){
+        Core::DiscardGpuTimingMeasure(payload.opaqueCsgComputeEmulationTiming);
+    }
 };
 
 

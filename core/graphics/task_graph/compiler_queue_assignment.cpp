@@ -20,17 +20,6 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool IsBetterQueue(
-    const GpuPhysicalQueueInfo& candidate,
-    const GpuPhysicalQueueInfo* const current
-)noexcept{
-    if(!current)
-        return true;
-    if(candidate.id.index != current->id.index)
-        return candidate.id.index < current->id.index;
-    return candidate.queueClass < current->queueClass;
-}
-
 // Physical queues in one Vulkan family can exchange work through a timeline semaphore without a queue-family
 // ownership transfer. Cross-family balancing is deliberately separate: opted-in tasks may use it, and resource
 // planning below then emits the paired exclusive ownership handoff when required.

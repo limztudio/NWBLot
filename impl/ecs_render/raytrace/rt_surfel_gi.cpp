@@ -125,10 +125,7 @@ struct SurfelGiAgeFreeGraphTask{
     }
 
     static void discarded(Payload& payload){
-        if(payload.asyncTiming && payload.asyncTiming->has_value()){
-            payload.asyncTiming->value().discardTiming();
-            payload.asyncTiming->reset();
-        }
+        DiscardGpuTimingMeasure(payload.asyncTiming);
     }
 };
 
@@ -181,10 +178,7 @@ struct SurfelGiHashBuildGraphTask{
     }
 
     static void discarded(Payload& payload){
-        if(payload.asyncTiming && payload.asyncTiming->has_value()){
-            payload.asyncTiming->value().discardTiming();
-            payload.asyncTiming->reset();
-        }
+        DiscardGpuTimingMeasure(payload.asyncTiming);
     }
 };
 
@@ -237,10 +231,7 @@ struct SurfelGiSpawnGraphTask{
     }
 
     static void discarded(Payload& payload){
-        if(payload.asyncTiming && payload.asyncTiming->has_value()){
-            payload.asyncTiming->value().discardTiming();
-            payload.asyncTiming->reset();
-        }
+        DiscardGpuTimingMeasure(payload.asyncTiming);
     }
 };
 
@@ -293,10 +284,7 @@ struct SurfelGiTraceBuildArgsGraphTask{
     }
 
     static void discarded(Payload& payload){
-        if(payload.asyncTiming && payload.asyncTiming->has_value()){
-            payload.asyncTiming->value().discardTiming();
-            payload.asyncTiming->reset();
-        }
+        DiscardGpuTimingMeasure(payload.asyncTiming);
     }
 };
 
@@ -349,10 +337,7 @@ struct SurfelGiTraceGraphTask{
     }
 
     static void discarded(Payload& payload){
-        if(payload.asyncTiming && payload.asyncTiming->has_value()){
-            payload.asyncTiming->value().discardTiming();
-            payload.asyncTiming->reset();
-        }
+        DiscardGpuTimingMeasure(payload.asyncTiming);
     }
 };
 
@@ -405,10 +390,7 @@ struct SurfelGiResolveGraphTask{
     }
 
     static void discarded(Payload& payload){
-        if(payload.asyncTiming && payload.asyncTiming->has_value()){
-            payload.asyncTiming->value().discardTiming();
-            payload.asyncTiming->reset();
-        }
+        DiscardGpuTimingMeasure(payload.asyncTiming);
     }
 };
 
@@ -500,10 +482,7 @@ struct SurfelGiGraphTask{
     }
 
     static void discarded(Payload& payload){
-        if(payload.asyncTiming && payload.asyncTiming->has_value()){
-            payload.asyncTiming->value().discardTiming();
-            payload.asyncTiming->reset();
-        }
+        DiscardGpuTimingMeasure(payload.asyncTiming);
     }
 
 };

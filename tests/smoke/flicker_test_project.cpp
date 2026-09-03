@@ -58,26 +58,10 @@ using FlickerMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 // sweep. Arrow keys (Left/Right) scrub the yaw by hand; the live angle shows in the title bar so the exact orientation a
 // flicker appears at can be read off and reproduced via NWB_FLICKER_TEST_SPIN_ANGLE. Reuses the benchmark's cooked body
 // model + ground material (no new assets).
-static constexpr FlickerModelRef s_Model = []() constexpr{
-    FlickerModelRef result;
-    result.virtualPath = Name("project/characters/body/model");
-    return result;
-}();
-static constexpr FlickerMaterialRef s_OpaqueMaterial = []() constexpr{
-    FlickerMaterialRef result;
-    result.virtualPath = Name("project/smoke/transparent_multi/materials/ground");
-    return result;
-}();
-static constexpr FlickerMaterialRef s_TransparentMaterial = []() constexpr{
-    FlickerMaterialRef result;
-    result.virtualPath = Name("project/smoke/transparent_multi/materials/shared");
-    return result;
-}();
-static constexpr FlickerMeshRef s_GroundMesh = []() constexpr{
-    FlickerMeshRef result;
-    result.virtualPath = Name("project/meshes/shadow_plane");
-    return result;
-}();
+static constexpr FlickerModelRef s_Model{"project/characters/body/model"};
+static constexpr FlickerMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
+static constexpr FlickerMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"};
+static constexpr FlickerMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 static constexpr f32 s_GroundScale = 8.0f;

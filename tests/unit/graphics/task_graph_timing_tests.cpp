@@ -3,6 +3,7 @@
 
 
 #include <tests/common/test_context.h>
+#include "task_graph_resource_version_test_utils.h"
 
 #include <gtest/gtest.h>
 
@@ -35,21 +36,8 @@ namespace Graphics = Core;
 
 inline constexpr Name s_TaskGraphTimingScratchArena("tests/graphics/task_graph_timing_scratch");
 
+using TaskGraphResourceVersionTestUtils::GraphicsQueue;
 
-[[nodiscard]] Graphics::GpuPhysicalQueueInfo GraphicsQueue(){
-    return Graphics::GpuPhysicalQueueInfo{
-        .id = Graphics::GpuPhysicalQueueId{ 0u, 1u },
-        .queueClass = Graphics::CommandQueue::Graphics,
-        .capabilities = static_cast<Graphics::GpuQueueCapability::Mask>(
-            static_cast<u8>(Graphics::GpuQueueCapability::Graphics)
-            | static_cast<u8>(Graphics::GpuQueueCapability::Compute)
-            | static_cast<u8>(Graphics::GpuQueueCapability::Transfer)
-        ),
-        .familyIndex = 0u,
-        .queueIndex = 0u,
-        .dedicated = false,
-    };
-}
 
 [[nodiscard]] Graphics::GpuTaskId AddTask(
     Graphics::GpuTaskGraph& graph,

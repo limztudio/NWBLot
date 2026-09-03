@@ -11,6 +11,7 @@
 #include <global/unique_ptr.h>
 #include <core/graphics/vulkan/backend.h>
 #include <tests/common/capturing_logger.h>
+#include <tests/common/graphics_metadata_test_objects.h>
 #include <tests/common/headless_graphics_scope.h>
 #include <tests/common/test_context.h>
 
@@ -32,21 +33,7 @@ namespace Tests{
 
 using namespace Core;
 using PermanentStateTestArena = ::NWB::Tests::TestArena<struct PermanentStateTestArenaTag>;
-
-
-[[nodiscard]] static Buffer* NewMetadataOnlyBuffer(
-    Core::Alloc::GlobalArena& arena,
-    GraphicsBackend::VulkanContext& context,
-    GraphicsBackend::VulkanAllocator& allocator,
-    const BufferDesc& description
-){
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = Max<u64>(description.byteSize, 1u);
-    bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    return NewArenaObject<Buffer>(arena, context, allocator, description, bufferInfo, false);
-}
+using ::NWB::Tests::NewMetadataOnlyBuffer;
 
 
 class PermanentStateLifetimeTest : public ::testing::Test{

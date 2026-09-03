@@ -172,7 +172,9 @@ static constexpr AStringView s_TransformField = "transform";
     const AStringView fieldName,
     f32& outValue
 ){
-    outValue = 0.0f;
+    if(Core::Assets::TryDecodeMetadataFiniteF32(value, outValue))
+        return true;
+
     if(!value.isNumeric()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must contain only numeric matrix values")
             , StringConvert(objectKind)
@@ -182,18 +184,12 @@ static constexpr AStringView s_TransformField = "transform";
         return false;
     }
 
-    const f64 numericValue = value.toDouble();
-    if(!IsFinite(numericValue) || numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' contains a non-finite or out-of-range matrix value")
-            , StringConvert(objectKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    outValue = static_cast<f32>(numericValue);
-    return true;
+    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' contains a non-finite or out-of-range matrix value")
+        , StringConvert(objectKind)
+        , PathToString<tchar>(nwbFilePath)
+        , StringConvert(fieldName)
+    );
+    return false;
 }
 
 [[nodiscard]] bool ReadTransformField(

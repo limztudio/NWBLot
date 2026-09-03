@@ -338,8 +338,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: acceleration structure storage is not ready"), operationName);
         return false;
     }
-    constexpr VkDeviceAddress s_InstanceDataAlignment = 16u;
-    if(instanceDataAddress == 0u || instanceDataAddress % s_InstanceDataAlignment != 0u){
+    if(instanceDataAddress == 0u || instanceDataAddress % s_TlasInstanceDataAlignment != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: instance data device address must be 16-byte aligned"), operationName);
         return false;
     }
@@ -1155,8 +1154,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
         }
     }
 
-    constexpr u64 s_InstanceDataAlignment = 16u;
-    constexpr u64 s_InstanceDataPadding = s_InstanceDataAlignment - 1u;
+    constexpr u64 s_InstanceDataPadding = s_TlasInstanceDataAlignment - 1u;
     u64 instanceDataSize = 0u;
     if(
         !TryMultiply<u64>(static_cast<u64>(numInstances), sizeof(VkAccelerationStructureInstanceKHR), instanceDataSize)
@@ -1189,7 +1187,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
     VkDeviceAddress instanceDataAddress = 0u;
     if(
         instanceBufferAddress == 0u
-        || !AlignUpChecked(instanceBufferAddress, s_InstanceDataAlignment, instanceDataAddress)
+        || !AlignUpChecked(instanceBufferAddress, s_TlasInstanceDataAlignment, instanceDataAddress)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: instance buffer device address is null or cannot be aligned"));
         return;

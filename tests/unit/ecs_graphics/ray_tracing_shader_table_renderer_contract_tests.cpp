@@ -20,26 +20,11 @@ namespace __hidden_ray_tracing_shader_table_renderer_contract_tests{
 
 using AString = NWB::Tests::TestAString;
 using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
+using NWB::Tests::CountText;
 
 struct RendererShaderTableContractTestArenaTag{};
 using TestArena = NWB::Tests::TestArena<RendererShaderTableContractTestArenaTag>;
 
-
-static usize CountText(const AStringView text, const AStringView expected){
-    if(expected.empty())
-        return 0u;
-
-    usize count = 0u;
-    usize offset = 0u;
-    while(offset < text.size()){
-        const usize found = text.find(expected, offset);
-        if(found == AStringView::npos)
-            break;
-        ++count;
-        offset = found + expected.size();
-    }
-    return count;
-}
 
 static TestPath RepoRoot(TestArena& testArena){
     return TestPath(testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path().lexically_normal();

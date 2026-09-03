@@ -20,15 +20,13 @@
 #include <impl/ecs_render/kernel/task_graph_queue_lookup.h>
 #include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
-#include <impl/ecs_render/deferred/task_graph_clear_timing.h>
+#include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/deferred/task_graph_prefix_tasks.h>
 #include <impl/ecs_render/deferred/task_graph_gbuffer_task.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
-#include <impl/ecs_render/csg/task_graph_clear_timing.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
-#include <impl/ecs_render/csg/task_graph_resource_sets.h>
 
 #include <impl/ecs_render/mesh/task_graph_prefix_tasks.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_tasks.h>
@@ -87,8 +85,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const Core::GpuGraphResourceSetId shadowTraceGeometrySet,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
     Optional<Core::GpuTimingMeasure>& deferredClearTiming,
-    ECSRenderDetail::DeferredClearTimingRecordState& deferredClearTimingState,
-    ECSRenderDetail::CsgIntervalClearTimingRecordState& csgIntervalClearTimingState,
+    GraphClearTimingRecordState& deferredClearTimingState,
+    GraphClearTimingRecordState& csgIntervalClearTimingState,
     Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
     Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
     Core::GpuTimingSubmissionTicket** const timingTickets,
@@ -150,7 +148,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         || !asyncPrefixTimingSpansOnePacket
         || !deferredClearTimingState.graphics
         || deferredClearTimingState.timing != &deferredClearTiming
-        || !deferredClearTimingState.timingTicket
+        || !deferredClearTimingState.rebindableTimingTicket
         || (shadowTraceGeometryResourceCount != 0u && !shadowTraceGeometryResources)
     )
         return false;
@@ -417,9 +415,9 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     clearScheduling.mergeWithPrevious = true;
     const Core::GpuClearTextureTaskRecordHooks deferredClearHooks{
         .context = &deferredClearTimingState,
-        .beforeClear = &ECSRenderDetail::BeginDeferredClearTiming,
-        .afterClear = &ECSRenderDetail::EndDeferredClearTiming,
-        .discarded = &ECSRenderDetail::DiscardDeferredClearTiming,
+        .beforeClear = &BeginGraphClearTimingRecord,
+        .afterClear = &EndGraphClearTimingRecord,
+        .discarded = &DiscardGraphClearTimingRecord,
     };
     Core::GpuTaskDesc deferredClearDesc;
     deferredClearDesc
@@ -848,13 +846,13 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         const Core::Rect csgClearRect = csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height);
         const Core::GpuClearTextureTaskRecordHooks csgIntervalClearBeginHooks{
             .context = &csgIntervalClearTimingState,
-            .beforeClear = &ECSRenderDetail::BeginCsgIntervalClearTiming,
-            .discarded = &ECSRenderDetail::DiscardCsgIntervalClearTiming,
+            .beforeClear = &BeginGraphClearTimingRecord,
+            .discarded = &DiscardGraphClearTimingRecord,
         };
         const Core::GpuClearTextureTaskRecordHooks csgIntervalClearEndHooks{
             .context = &csgIntervalClearTimingState,
-            .afterClear = &ECSRenderDetail::EndCsgIntervalClearTiming,
-            .discarded = &ECSRenderDetail::DiscardCsgIntervalClearTiming,
+            .afterClear = &EndGraphClearTimingRecord,
+            .discarded = &DiscardGraphClearTimingRecord,
         };
         m_graphicsPrefixCsgIntervalClearFirstTask = m_deferredLightingTaskGraph.addClearTextureRectUIntTask(
             makeCsgIntervalClearTaskDesc(
@@ -980,7 +978,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         && opaqueComputeEmulationPayload.plan.capture(opaqueDrawItems.regular)
     ;
     const bool opaqueComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationPlanCaptured
-        && GatherOpaqueRegularComputeEmulationResourceSet(
+        && GatherImportedOutputBufferResourceSet(
             m_deferredLightingTaskGraph,
             opaqueComputeEmulationPayload.plan,
             gbufferResourceScratch,
@@ -1053,7 +1051,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     ;
     const bool opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned =
         opaqueCsgReceiverComputeEmulationPlanCaptured
-        && GatherOpaqueCsgReceiverComputeEmulationResourceSet(
+        && GatherImportedOutputBufferResourceSet(
             m_deferredLightingTaskGraph,
             opaqueCsgReceiverComputeEmulationPayload.plan,
             gbufferResourceScratch,
@@ -1729,7 +1727,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         ;
         const bool opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned =
             opaqueCsgIntervalSampleComputeEmulationPlanCaptured
-            && GatherOpaqueCsgIntervalSampleComputeEmulationResourceSet(
+            && GatherImportedOutputBufferResourceSet(
                 m_deferredLightingTaskGraph,
                 opaqueCsgIntervalSampleComputeEmulationPayload.plan,
                 csgIntervalSampleResourceScratch,

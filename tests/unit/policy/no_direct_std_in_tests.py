@@ -4,65 +4,34 @@
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
 
-from return_value_handling import blank_non_code, line_number
+from policy_scan import SOURCE_SUFFIXES, files_under, find_regex_matches, run_policy
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-
-
-SOURCE_SUFFIXES = frozenset((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ixx"))
 DIRECT_STD = re.compile(r"\bstd\s*::")
 
 
-def find_direct_std_references(source: str) -> list[int]:
-    code = blank_non_code(source)
-    return [line_number(code, match.start()) for match in DIRECT_STD.finditer(code)]
+def find_direct_std_references(source: str):
+    return find_regex_matches(source, DIRECT_STD)
 
 
-def source_files(source_root: Path) -> list[Path]:
-    return sorted(
-        path
-        for path in (source_root / "tests").rglob("*")
-        if path.is_file() and path.suffix in SOURCE_SUFFIXES
-    )
-
-
-def run_self_test() -> int:
-    cases = (
-        ("direct reference", "std::vector<int> values;", (1,)),
-        ("spaced reference", "std  :: vector<int> values;", (1,)),
-        ("comment", "// std::vector<int> values;", ()),
-        ("literal", 'const char* text = "std::vector";', ()),
-    )
-    failed = False
-    for name, source, expected in cases:
-        actual = tuple(find_direct_std_references(source))
-        if actual != expected:
-            print(f"{name}: expected {expected}, got {actual}", file=sys.stderr)
-            failed = True
-    return 1 if failed else 0
-
-
-def main() -> int:
-    if len(sys.argv) == 2 and sys.argv[1] == "--self-test":
-        return run_self_test()
-
-    source_root = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else REPOSITORY_ROOT
-    violations: list[str] = []
-    for path in source_files(source_root):
-        source = path.read_text(encoding="utf-8", errors="replace")
-        for line in find_direct_std_references(source):
-            violations.append(f"{path.relative_to(source_root)}:{line}: direct std:: reference")
-
-    if violations:
-        print("Project-owned C++ test sources must use global features instead of direct std:: names:", file=sys.stderr)
-        print("\n".join(violations), file=sys.stderr)
-        return 1
-    return 0
+def source_files(source_root: Path):
+    return files_under(source_root, ("tests",), SOURCE_SUFFIXES)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(
+        run_policy(
+            finder=find_direct_std_references,
+            files_for=source_files,
+            error_header="Project-owned C++ test sources must use global features instead of direct std:: names:",
+            violation_format="{path}:{line}: direct std:: reference",
+            self_test_cases=(
+                ("direct reference", "std::vector<int> values;", ((1, "std::"),)),
+                ("spaced reference", "std  :: vector<int> values;", ((1, "std  ::"),)),
+                ("comment", "// std::vector<int> values;", ()),
+                ("literal", 'const char* text = "std::vector";', ()),
+            ),
+        )
+    )

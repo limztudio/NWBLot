@@ -329,17 +329,6 @@ bool CsgIntervalSampleGraphTask::record(
 }
 
 
-void CsgIntervalSampleGraphTask::discarded(Payload& payload){
-    if(
-        !payload.opaqueCsgComputeEmulationTiming
-        || !payload.opaqueCsgComputeEmulationTiming->has_value()
-    )
-        return;
-    payload.opaqueCsgComputeEmulationTiming->value().discardTiming();
-    payload.opaqueCsgComputeEmulationTiming->reset();
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

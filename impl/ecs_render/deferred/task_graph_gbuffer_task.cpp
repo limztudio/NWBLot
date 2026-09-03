@@ -239,17 +239,6 @@ namespace ECSRenderDetail{
 }
 
 
-void GbufferGraphTask::discarded(Payload& payload){
-    if(
-        !payload.regularSharedComputeEmulationTiming
-        || !payload.regularSharedComputeEmulationTiming->has_value()
-    )
-        return;
-    payload.regularSharedComputeEmulationTiming->value().discardTiming();
-    payload.regularSharedComputeEmulationTiming->reset();
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

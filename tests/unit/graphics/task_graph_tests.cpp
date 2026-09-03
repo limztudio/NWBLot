@@ -3,6 +3,7 @@
 
 
 #include <tests/common/capturing_logger.h>
+#include <tests/common/graphics_metadata_test_objects.h>
 #include <tests/common/test_context.h>
 
 #include <cstddef>
@@ -64,42 +65,8 @@ static void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const Arena
 }
 
 
-[[nodiscard]] static Graphics::Texture* NewMetadataOnlyTexture(
-    Graphics::Alloc::GlobalArena& arena,
-    Graphics::GraphicsBackend::VulkanContext& context,
-    Graphics::GraphicsBackend::VulkanAllocator& allocator,
-    const Graphics::TextureDesc& description
-){
-    return NewArenaObject<Graphics::Texture>(
-        arena,
-        context,
-        allocator,
-        description,
-        VkImageCreateInfo{},
-        false
-    );
-}
-
-
-[[nodiscard]] static Graphics::Buffer* NewMetadataOnlyBuffer(
-    Graphics::Alloc::GlobalArena& arena,
-    Graphics::GraphicsBackend::VulkanContext& context,
-    Graphics::GraphicsBackend::VulkanAllocator& allocator,
-    const Graphics::BufferDesc& description,
-    const bool initialStateKnown = false,
-    const VkSharingMode sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-    const u32 queueFamilyIndexCount = 0u,
-    const u32* const queueFamilyIndices = nullptr
-){
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = Max<u64>(description.byteSize, 1u);
-    bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    bufferInfo.sharingMode = sharingMode;
-    bufferInfo.queueFamilyIndexCount = queueFamilyIndexCount;
-    bufferInfo.pQueueFamilyIndices = queueFamilyIndices;
-    return NewArenaObject<Graphics::Buffer>(arena, context, allocator, description, bufferInfo, initialStateKnown);
-}
+using ::NWB::Tests::NewMetadataOnlyBuffer;
+using ::NWB::Tests::NewMetadataOnlyTexture;
 
 
 struct ImportedTexturePair{

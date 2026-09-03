@@ -67,6 +67,35 @@ struct MaterialPassMeshResourceSnapshot{
     }
 };
 
+template<typename BufferVector>
+[[nodiscard]] inline bool MaterialPassEmulationOutputBufferCaptured(
+    const BufferVector& outputBuffers,
+    const Core::BufferHandle& buffer
+)noexcept{
+    for(const Core::BufferHandle& existing : outputBuffers){
+        if(existing.get() == buffer.get())
+            return true;
+    }
+    return false;
+}
+
+template<typename BufferVector, typename SlotVector>
+[[nodiscard]] inline bool MaterialPassEmulationOutputCaptured(
+    const BufferVector& outputBuffers,
+    const SlotVector& outputHeapSlots,
+    const Core::BufferHandle& buffer,
+    const u32 heapSlot
+)noexcept{
+    for(usize outputIndex = 0u; outputIndex < outputBuffers.size(); ++outputIndex){
+        if(
+            outputBuffers[outputIndex].get() == buffer.get()
+            || outputHeapSlots[outputIndex] == heapSlot
+        )
+            return true;
+    }
+    return false;
+}
+
 struct MaterialPassPipelineResourceSnapshot{
     Core::GraphicsPipelineHandle emulationPipeline;
     Core::MeshletPipelineHandle meshletPipeline;

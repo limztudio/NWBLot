@@ -43,6 +43,8 @@ using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
+using NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame;
+using NWB::Tests::Smoke::RendererBaselineFixedDelta;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentFlag;
 using NWB::Tests::Smoke::ReadSmokeFrozenYawFromEnvironment;
 using NWB::Tests::Smoke::SetSmokeYawWindowTitle;
@@ -63,31 +65,11 @@ using StressMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 // changes every frame -- exercising the per-frame scene BVH/TLAS rebuild + the hybrid shadow path (opaque->HW binary,
 // transparent->SW colored) across TWO shadowed lights as the occluders sweep. Reuses the body model + transparent_multi
 // glass/ground materials (no new assets).
-static constexpr StressModelRef s_Model = []() constexpr{
-    StressModelRef result;
-    result.virtualPath = Name("project/characters/body/model");
-    return result;
-}();
-static constexpr StressMaterialRef s_TransparentMaterial = []() constexpr{
-    StressMaterialRef result;
-    result.virtualPath = Name("project/smoke/transparent_multi/materials/shared");
-    return result;
-}(); // glass
-static constexpr StressMaterialRef s_OpaqueMaterial = []() constexpr{
-    StressMaterialRef result;
-    result.virtualPath = Name("project/smoke/transparent_multi/materials/ground");
-    return result;
-}(); // opaque lambert
-static constexpr StressMaterialRef s_GroundMaterial = []() constexpr{
-    StressMaterialRef result;
-    result.virtualPath = Name("project/smoke/transparent_multi/materials/ground");
-    return result;
-}();
-static constexpr StressMeshRef s_GroundMesh = []() constexpr{
-    StressMeshRef result;
-    result.virtualPath = Name("project/meshes/shadow_plane");
-    return result;
-}();
+static constexpr StressModelRef s_Model{"project/characters/body/model"};
+static constexpr StressMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"}; // glass
+static constexpr StressMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"}; // opaque lambert
+static constexpr StressMaterialRef s_GroundMaterial{"project/smoke/transparent_multi/materials/ground"};
+static constexpr StressMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 static constexpr u32 s_CharactersPerClass = 5u;                       // 5 transparent + 5 opaque
@@ -175,34 +157,11 @@ private:
     }
 
     [[nodiscard]] static u32 rendererBaselineCaptureFreezeFrame(){
-        static const u32 s_captureFrame = [](){
-            f32 configuredFrame = 0.0f;
-            if(
-                !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", configuredFrame)
-                || !IsFinite(configuredFrame)
-                || configuredFrame < 1.0f
-            ){
-                return 0u;
-            }
-            return static_cast<u32>(Min(configuredFrame, 1000000.0f));
-        }();
-        return s_captureFrame;
+        return RendererBaselineCaptureFreezeFrame();
     }
 
     [[nodiscard]] static f32 rendererBaselineFixedDelta(){
-        static const f32 s_fixedDelta = [](){
-            f32 configuredDelta = 0.0f;
-            if(
-                !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS", configuredDelta)
-                || !IsFinite(configuredDelta)
-                || configuredDelta <= 0.0f
-                || configuredDelta > 1.0f
-            ){
-                return 0.0f;
-            }
-            return configuredDelta;
-        }();
-        return s_fixedDelta;
+        return RendererBaselineFixedDelta();
     }
 
     [[nodiscard]] static bool hybridShadowOpaqueBaseline(){

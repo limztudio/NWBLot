@@ -58,7 +58,10 @@ struct AvboitCsgReceiverSpanGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
-    static void discarded(Payload& payload);
+
+    static void discarded(Payload& payload){
+        Core::DiscardGpuTimingMeasure(payload.transparentCsgIntervalsTiming);
+    }
 };
 
 
@@ -85,7 +88,10 @@ struct AvboitCsgIntervalCombineGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
-    static void discarded(Payload& payload);
+
+    static void discarded(Payload& payload){
+        Core::DiscardGpuTimingMeasure(payload.transparentCsgIntervalsTiming);
+    }
 };
 
 

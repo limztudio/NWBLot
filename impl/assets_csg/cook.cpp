@@ -68,27 +68,28 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     CookString& outText
 ){
     outText.clear();
-
-    const Metascript::Value* fieldValue = asset.findField(fieldName);
-    if(!fieldValue)
-        return true;
-    if(!fieldValue->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must be a string")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
+    AStringView text;
+    bool present = false;
+    if(!Core::Assets::ReadMetadataStringField(
+        nwbFilePath,
+        asset,
+        s_CsgShapeMetaDiagnosticPrefix,
+        fieldName,
+        false,
+        text,
+        &present
+    ))
         return false;
-    }
-
-    const Metascript::MStringView text = fieldValue->asString();
-    outText.assign(text.data(), text.size());
-    if(TrimView(AStringView(outText)).empty()){
+    if(!present)
+        return true;
+    if(TrimView(text).empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must not be empty")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
         return false;
     }
+    outText.assign(text.data(), text.size());
     return true;
 }
 
@@ -98,14 +99,25 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     const AStringView fieldName,
     CookString& outText
 ){
-    if(!asset.findField(fieldName)){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' is required")
+    AStringView text;
+    if(!Core::Assets::ReadMetadataStringField(
+        nwbFilePath,
+        asset,
+        s_CsgShapeMetaDiagnosticPrefix,
+        fieldName,
+        true,
+        text
+    ))
+        return false;
+    if(TrimView(text).empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must not be empty")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
         return false;
     }
-    return ParseOptionalStringField(nwbFilePath, asset, fieldName, outText);
+    outText.assign(text.data(), text.size());
+    return true;
 }
 
 [[nodiscard]] static bool ValidateIncludePath(

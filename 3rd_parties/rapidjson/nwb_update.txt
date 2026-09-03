@@ -1,5 +1,5 @@
 package: rapidjson
-version: 1.1.0 (Tencent v1.1.0; system_info_utils v2.3 snapshot)
-updated_utc: 2026-06-20T15:40:47Z
-source: https://github.com/GPUOpen-Tools/system_info_utils/releases/tag/v2.3 (source/third_party/rapidjson)
-notes: Header-only RapidJSON. Flattened out of system_info_utils/source/third_party because system_info_utils v2.3 includes <rapidjson/...> directly. Retains AMD patches: GenericStringRef self-assignment; MSVC enum-bitwise casts; ARM64EC _umul128 softintrin fallback; ARM64 little-endian detection. Registered as nwb::rapidjson.
+version: 1.1.0 (tag v1.1.0, commit f54b0e47a08782a6131cc3d60f94d038fa6e0a51)
+updated_utc: 2026-09-03T04:35:00Z
+source: https://github.com/Tencent/rapidjson/releases/tag/v1.1.0
+notes: Header-only RapidJSON from official Tencent/rapidjson v1.1.0 include/. Originally flattened out of system_info_utils/source/third_party; subsequent updates come from Tencent/rapidjson. NWB-local patches: GenericStringRef self-assignment via destructor/placement-new (const members); MSVC enum-bitwise casts; ARM64EC _umul128 softintrin fallback; ARM64 little-endian detection. Registered as nwb::rapidjson. Consumers include <rapidjson/...>.

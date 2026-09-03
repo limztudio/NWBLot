@@ -1,5 +1,5 @@
 package: tinyexr
-version: Basis Universal snapshot 9bebe16726b3a61c8c213eeee3b7cffb462ef34e
-updated_utc: 2026-08-01T14:10:30Z
-source: https://github.com/BinomialLLC/basis_universal/tree/9bebe16726b3a61c8c213eeee3b7cffb462ef34e/encoder/3rdparty
-notes: TinyEXR headers and its stream readers lifted out of Basis Universal. Retains the upstream Basis Universal UBSAN fixes documented in the header; the implementation is compiled by basisu_tinyexr.cpp against the shared top-level miniz package.
+version: 3.2.0 (tag v3.2.0, commit 6f470c9ab24bf3992bc512ce07e8ecb00d9bf105)
+updated_utc: 2026-09-03T04:35:00Z
+source: https://github.com/syoyo/tinyexr/releases/tag/v3.2.0
+notes: Official syoyo/tinyexr v1 single-header API (tinyexr.h + exr_reader.hh + streamreader.hh). v3.2.0 still ships the v1 header used by Basis Universal; the v3 C11 rewrite is not vendored. Implementation is compiled by basisu_tinyexr.cpp against the shared top-level miniz package (TINYEXR_USE_MINIZ=0 with zlib-style shims). LICENSE and NOTICE from official. NWB CMake wrapper exposes nwb::tinyexr.

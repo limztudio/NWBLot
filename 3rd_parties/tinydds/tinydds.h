@@ -684,7 +684,6 @@ static TinyDDS_Format TinyImageFormat_ToTinyDDSFormat(TinyImageFormat fmt) {
 #endif
 
 TinyDDS_Format TinyDDS_GetFormat(TinyDDS_ContextHandle handle);
-
 bool TinyDDS_WriteImage(TinyDDS_WriteCallbacks const *callbacks,
 												void *user,
 												uint32_t width,
@@ -828,9 +827,9 @@ typedef struct TinyDDS_Context {
 
 #define TINYDDS_MAKE_RIFFCODE(a, b, c, d) (a | (b << 8) | (c << 16) | (d << 24))
 
-//static uint32_t TinyDDS_fileIdentifier = TINYDDS_MAKE_RIFFCODE('D', 'D', 'S', ' ');
+static uint32_t TinyDDS_fileIdentifier = TINYDDS_MAKE_RIFFCODE('D', 'D', 'S', ' ');
 
-static void TinyDDS_NullErrorFunc(void *user, char const *msg) { BASISU_NOTE_UNUSED(user); BASISU_NOTE_UNUSED(msg); }
+static void TinyDDS_NullErrorFunc(void *user, char const *msg) {}
 
 TinyDDS_ContextHandle TinyDDS_CreateContext(TinyDDS_Callbacks const *callbacks, void *user) {
 	TinyDDS_Context *ctx = (TinyDDS_Context *) callbacks->allocFn(user, sizeof(TinyDDS_Context));
@@ -1368,38 +1367,9 @@ bool TinyDDS_ReadHeader(TinyDDS_ContextHandle handle) {
 		return false;
 	}
 
-	// rg: The original tinydds mipmap-count "correction" below is WRONG and is
-	// disabled. For COMPRESSED formats it stopped counting at the 4x4 block size
-	// (w <= 4 || h <= 4) and truncated mipMapCount there, which drops the perfectly
-	// valid sub-block mip levels (e.g. 2x2 and 1x1) -- those levels are legal and are
-	// simply stored padded to a single 4x4 block. ANY DDS file, block-compressed or
-	// uncompressed, can carry a full mip chain down to 1x1.
-	//
-	// Original (incorrect) code:
-	//
-	// if(ctx->header.mipMapCount > 1) {
-	// 	uint32_t w = ctx->header.width;
-	// 	uint32_t h = ctx->header.height;
-	//
-	// 	for(uint32_t i = 0; i < ctx->header.mipMapCount;++i) {
-	// 		if (TinyDDS_IsCompressed(ctx->format)) {
-	// 			if (w <= 4 || h <= 4) {
-	// 				ctx->header.mipMapCount = i + 1;
-	// 				break;
-	// 			}
-	// 		} else if (w <= 1 || h <= 1) {
-	// 			ctx->header.mipMapCount = i + 1;
-	// 			break;
-	// 		}
-	//
-	// 		w = w / 2;
-	// 		h = h / 2;
-	// 	}
-	// }
-	//
-	// Replacement: count the true maximum number of mip levels for these dimensions
-	// (halving each axis down to 1x1, for every format) and clamp the header's count
-	// to it ONLY if the file claims MORE levels than are dimensionally possible.
+	// NWB local: official tinydds truncates compressed mip chains at 4x4, dropping
+	// legal 2x2/1x1 levels (stored as a padded 4x4 block). Clamp only when the
+	// header claims more levels than width/height can produce down to 1x1.
 	if(ctx->header.mipMapCount > 1) {
 		uint32_t w = ctx->header.width;
 		uint32_t h = ctx->header.height;
@@ -1592,7 +1562,6 @@ bool TinyDDS_NeedsGenerationOfMipmaps(TinyDDS_ContextHandle handle) {
 
 bool TinyDDS_NeedsEndianCorrecting(TinyDDS_ContextHandle handle) {
 	// TODO should return true if this file is compiled on big endian machines
-	BASISU_NOTE_UNUSED(handle);
 	return false;
 }
 
@@ -1992,8 +1961,8 @@ bool TinyDDS_WriteImage(TinyDDS_WriteCallbacks const *callbacks,
 												void *user,
 												uint32_t width,
 												uint32_t height,
-												uint32_t depth,	 // 3D texture depth
-												uint32_t slices, // Array slices
+												uint32_t depth,
+												uint32_t slices,
 												uint32_t mipmaplevels,
 												TinyDDS_Format format,
 												bool cubemap,
@@ -2026,28 +1995,23 @@ bool TinyDDS_WriteImage(TinyDDS_WriteCallbacks const *callbacks,
 		header.formatFourCC = TINYDDS_MAKE_RIFFCODE('D','X','1','0');
 		headerDX10.arraySize = slices;
 	}
-	header.flags = TINYDDS_DDSD_CAPS | TINYDDS_DDSD_PIXELFORMAT | TINYDDS_DDSD_MIPMAPCOUNT | TINYDDS_DDSD_WIDTH | TINYDDS_DDSD_HEIGHT;
+	header.flags = TINYDDS_DDSD_CAPS | TINYDDS_DDSD_PIXELFORMAT | TINYDDS_DDSD_MIPMAPCOUNT;
 	header.caps1 = TINYDDS_DDSCAPS_TEXTURE | TINYDDS_DDSCAPS_COMPLEX | TINYDDS_DDSCAPS_MIPMAP;
 
-	if(depth > 1) 
-	{
+	if(depth > 1) {
 		headerDX10.resourceDimension = TINYDDS_D3D10_RESOURCE_DIMENSION_TEXTURE3D;
 		header.flags |= TINYDDS_DDSD_DEPTH;
 		header.caps2 |= TINYDDS_DDSCAPS2_VOLUME;
 	}
-	else if(height > 1) 
-	{
+	else if(height > 1) {
 		headerDX10.resourceDimension = TINYDDS_D3D10_RESOURCE_DIMENSION_TEXTURE2D;
-		//header.flags |= TINYDDS_DDSD_HEIGHT;
+		header.flags |= TINYDDS_DDSD_HEIGHT;
 	}
-	else if(width > 1) 
-	{
+	else if(width > 1) {
 		headerDX10.resourceDimension = TINYDDS_D3D10_RESOURCE_DIMENSION_TEXTURE1D;
-		//header.flags |= TINYDDS_DDSD_WIDTH;
+		header.flags |= TINYDDS_DDSD_WIDTH;
 	}
-
-	if(cubemap) 
-	{
+	if(cubemap) {
 		headerDX10.miscFlag |= TINYDDS_D3D10_RESOURCE_MISC_TEXTURECUBE;
 		header.caps2 |= TINYDDS_DDSCAPS2_CUBEMAP | TINYDDS_DDSCAPS2_CUBEMAP_ALL;
 	}
@@ -2066,14 +2030,10 @@ bool TinyDDS_WriteImage(TinyDDS_WriteCallbacks const *callbacks,
 		callbacks->write(user, &headerDX10, sizeof(TinyDDS_HeaderDX10));
 	}
 
-	// rg 8/27/2024: The original tinydds.h code is wrong for mipmapped cubemaps.
-	// I'm going to work around this by having the caller compose the top mip data correctly.
-	// https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dds-file-layout-for-cubic-environment-maps
-	for (uint32_t mipMapLevel = 0; mipMapLevel < header.mipMapCount; mipMapLevel++)
-	{
-		// rg: Adding this check, in case the caller wants to compose all the data themselves.
-		if (mipmapsizes[mipMapLevel])
-		{
+	// NWB local: skip empty mip payloads so the caller can compose cubemap face
+	// data itself (official writer is wrong for mipmapped cubemaps).
+	for (uint32_t mipMapLevel = 0; mipMapLevel < header.mipMapCount; mipMapLevel++) {
+		if (mipmapsizes[mipMapLevel]) {
 			callbacks->write(user, mipmaps[mipMapLevel], mipmapsizes[mipMapLevel]);
 		}
 	}

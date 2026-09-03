@@ -2,4 +2,4 @@ package: rmv
 version: 1.15
 updated_utc: 2026-06-23T16:02:45Z
 source: https://github.com/GPUOpen-Tools/radeon_memory_visualizer/releases/tag/v1.15
-notes: Top-level CMake wrapper builds only source/parser + source/backend for RGD page-fault resource history. Pruned frontend/assets/cmake/tests/docs. Bundled third_party/pevents flattened to top-level 3rd_parties/pevents and consumed via nwb::pevents_headers.
+notes: Top-level CMake wrapper builds only source/parser + source/backend for RGD page-fault resource history. Pruned frontend/assets/cmake/tests/docs. Bundled third_party/pevents flattened to top-level 3rd_parties/pevents, which tracks official neosmart/pevents and is consumed via nwb::pevents_headers.

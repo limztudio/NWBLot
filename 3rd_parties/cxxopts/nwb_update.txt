@@ -2,4 +2,4 @@ package: cxxopts
 version: 3.3.1
 updated_utc: 2026-06-23T16:02:45Z
 source: https://github.com/jarro2783/cxxopts/releases/tag/v3.3.1
-notes: Header-only command-line parser. Flattened out of isa_spec_manager/source/third_party and registered as nwb::cxxopts_headers. Currently UNUSED by built targets; retained as a top-level package per the flatten policy.
+notes: Header-only command-line parser from official jarro2783/cxxopts. Originally flattened out of isa_spec_manager/source/third_party; subsequent updates come from the official repo. Registered as nwb::cxxopts_headers. Currently UNUSED by built targets; retained as a top-level package per the flatten policy.

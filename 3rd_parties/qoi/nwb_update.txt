@@ -1,5 +1,5 @@
 package: qoi
-version: Basis Universal snapshot 9bebe16726b3a61c8c213eeee3b7cffb462ef34e
-updated_utc: 2026-08-01T14:10:30Z
-source: https://github.com/BinomialLLC/basis_universal/tree/9bebe16726b3a61c8c213eeee3b7cffb462ef34e/encoder/3rdparty
-notes: QOI single-header decoder lifted out of Basis Universal. Upstream header identifies Dominic Szablewski's 2021 QOI implementation under MIT; Basis Universal compiles the implementation in basisu_enc.cpp.
+version: commit 4ab68bbd20618a663255625160c40875713f5485
+updated_utc: 2026-09-03T04:35:00Z
+source: https://github.com/phoboslab/qoi
+notes: Official phoboslab/qoi single-header decoder (qoi.h). MIT license is in the header. Basis Universal compiles the implementation in basisu_enc.cpp via QOI_IMPLEMENTATION. NWB CMake wrapper exposes nwb::qoi.

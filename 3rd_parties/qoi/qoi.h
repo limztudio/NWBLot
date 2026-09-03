@@ -286,7 +286,7 @@ is filled with the description from the file header.
 
 The returned pixel data should be free()d after use. */
 
-void *qoi_decode(const void *data, size_t size, qoi_desc *desc, int channels);
+void *qoi_decode(const void *data, int size, qoi_desc *desc, int channels);
 
 
 #ifdef __cplusplus
@@ -339,13 +339,13 @@ typedef union {
 static const unsigned char qoi_padding[8] = {0,0,0,0,0,0,0,1};
 
 static void qoi_write_32(unsigned char *bytes, int *p, unsigned int v) {
-	bytes[(*p)++] = (uint8_t)((0xff000000 & v) >> 24);
-	bytes[(*p)++] = (uint8_t)((0x00ff0000 & v) >> 16);
-	bytes[(*p)++] = (uint8_t)((0x0000ff00 & v) >> 8);
-	bytes[(*p)++] = (uint8_t)((0x000000ff & v));
+	bytes[(*p)++] = (0xff000000 & v) >> 24;
+	bytes[(*p)++] = (0x00ff0000 & v) >> 16;
+	bytes[(*p)++] = (0x0000ff00 & v) >> 8;
+	bytes[(*p)++] = (0x000000ff & v);
 }
 
-static unsigned int qoi_read_32(const unsigned char *bytes, size_t *p) {
+static unsigned int qoi_read_32(const unsigned char *bytes, int *p) {
 	unsigned int a = bytes[(*p)++];
 	unsigned int b = bytes[(*p)++];
 	unsigned int c = bytes[(*p)++];
@@ -415,7 +415,7 @@ void *qoi_encode(const void *data, const qoi_desc *desc, int *out_len) {
 		if (px.v == px_prev.v) {
 			run++;
 			if (run == 62 || px_pos == px_end) {
-				bytes[p++] = (uint8_t)(QOI_OP_RUN | (run - 1));
+				bytes[p++] = QOI_OP_RUN | (run - 1);
 				run = 0;
 			}
 		}
@@ -423,14 +423,14 @@ void *qoi_encode(const void *data, const qoi_desc *desc, int *out_len) {
 			int index_pos;
 
 			if (run > 0) {
-				bytes[p++] = (uint8_t)(QOI_OP_RUN | (run - 1));
+				bytes[p++] = QOI_OP_RUN | (run - 1);
 				run = 0;
 			}
 
-			index_pos = QOI_COLOR_HASH(px) % 64;
+			index_pos = QOI_COLOR_HASH(px) & (64 - 1);
 
 			if (index[index_pos].v == px.v) {
-				bytes[p++] = (uint8_t)(QOI_OP_INDEX | index_pos);
+				bytes[p++] = QOI_OP_INDEX | index_pos;
 			}
 			else {
 				index[index_pos] = px;
@@ -485,15 +485,14 @@ void *qoi_encode(const void *data, const qoi_desc *desc, int *out_len) {
 	return bytes;
 }
 
-void *qoi_decode(const void *data, size_t size, qoi_desc *desc, int channels) {
+void *qoi_decode(const void *data, int size, qoi_desc *desc, int channels) {
 	const unsigned char *bytes;
 	unsigned int header_magic;
 	unsigned char *pixels;
 	qoi_rgba_t index[64];
 	qoi_rgba_t px;
-	int px_len, px_pos;
-	size_t chunks_len, p = 0;
-	int run = 0;
+	int px_len, chunks_len, px_pos;
+	int p = 0, run = 0;
 
 	if (
 		data == NULL || desc == NULL ||
@@ -567,21 +566,21 @@ void *qoi_decode(const void *data, size_t size, qoi_desc *desc, int channels) {
 			else if ((b1 & QOI_MASK_2) == QOI_OP_LUMA) {
 				int b2 = bytes[p++];
 				int vg = (b1 & 0x3f) - 32;
-				px.rgba.r += (uint8_t)(vg - 8 + ((b2 >> 4) & 0x0f));
-				px.rgba.g += (uint8_t)(vg);
-				px.rgba.b += (uint8_t)(vg - 8 +  (b2       & 0x0f));
+				px.rgba.r += vg - 8 + ((b2 >> 4) & 0x0f);
+				px.rgba.g += vg;
+				px.rgba.b += vg - 8 +  (b2       & 0x0f);
 			}
 			else if ((b1 & QOI_MASK_2) == QOI_OP_RUN) {
 				run = (b1 & 0x3f);
 			}
 
-			index[QOI_COLOR_HASH(px) % 64] = px;
+			index[QOI_COLOR_HASH(px) & (64 - 1)] = px;
 		}
 
 		pixels[px_pos + 0] = px.rgba.r;
 		pixels[px_pos + 1] = px.rgba.g;
 		pixels[px_pos + 2] = px.rgba.b;
-
+		
 		if (channels == 4) {
 			pixels[px_pos + 3] = px.rgba.a;
 		}
@@ -594,12 +593,7 @@ void *qoi_decode(const void *data, size_t size, qoi_desc *desc, int channels) {
 #include <stdio.h>
 
 int qoi_write(const char *filename, const void *data, const qoi_desc *desc) {
-#ifdef _MSC_VER
-	FILE* f = NULL;
-	fopen_s(&f, filename, "wb");
-#else
 	FILE *f = fopen(filename, "wb");
-#endif
 	int size, err;
 	void *encoded;
 
@@ -623,38 +617,17 @@ int qoi_write(const char *filename, const void *data, const qoi_desc *desc) {
 }
 
 void *qoi_read(const char *filename, qoi_desc *desc, int channels) {
-#ifdef _MSC_VER
-	FILE* f = NULL;
-	fopen_s(&f, filename, "rb");
-#else
 	FILE *f = fopen(filename, "rb");
-#endif
-	size_t size, bytes_read;
+	int size, bytes_read;
 	void *pixels, *data;
-	long sz;
 
 	if (!f) {
 		return NULL;
 	}
 
 	fseek(f, 0, SEEK_END);
-
-	sz = ftell(f);
-	if (sz <= 0)
-	{
-		fclose(f);
-		return NULL;
-	}
-
-	size = (size_t)sz;
-
-	if (size != (unsigned long)sz)
-	{
-		fclose(f);
-		return NULL;
-	}
-
-	if (fseek(f, 0, SEEK_SET) != 0) {
+	size = ftell(f);
+	if (size <= 0 || fseek(f, 0, SEEK_SET) != 0) {
 		fclose(f);
 		return NULL;
 	}
@@ -665,7 +638,7 @@ void *qoi_read(const char *filename, qoi_desc *desc, int channels) {
 		return NULL;
 	}
 
-	bytes_read = (int)fread(data, 1, size, f);
+	bytes_read = fread(data, 1, size, f);
 	fclose(f);
 	pixels = (bytes_read != size) ? NULL : qoi_decode(data, bytes_read, desc, channels);
 	QOI_FREE(data);

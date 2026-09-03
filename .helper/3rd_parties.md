@@ -1,6 +1,6 @@
 # NWBLot Third-Party Package Policy
 
-Updated: 2026-06-20
+Updated: 2026-09-03
 
 Rules for everything that lives under `3rd_parties/`. These are hard requirements: when a vendored package
 violates them, fix the package (re-layout it, rewrite its `CMakeLists.txt`, add the missing metadata) rather
@@ -11,8 +11,8 @@ than working around it elsewhere.
 - Every third-party package is a single directory directly under `3rd_parties/` (e.g. `3rd_parties/zstd`,
   `3rd_parties/rdf`, `3rd_parties/rmv`). No package nests another package inside itself.
 - If a package ships its own bundled dependency (a vendored sub-library, an `external/`, `imported/`,
-  `third_party/`, or `single_include/` copy), that dependency is **lifted out** and vendored as its own
-  independent top-level package. The consuming package then depends on the shared top-level copy.
+  `third_party/`, `3rdparty/`, or `single_include/` copy), that dependency is **lifted out** and vendored as
+  its own independent top-level package. The consuming package then depends on the shared top-level copy.
   - Example: rdf used to bundle zstd under `rdf/imported/zstd` and the library itself under `rdf/rdf`. Both
     were flattened: zstd became `3rd_parties/zstd`, and the rdf library moved up to `3rd_parties/rdf`.
 - Do not keep two copies of the same dependency. When two packages each bundle the same library, vendor it
@@ -40,7 +40,26 @@ than working around it elsewhere.
 - Prefer building vendored libraries `STATIC` so nothing has to deploy a vendored `.dll` next to an executable
   (e.g. amdrdf is forced static via `RDF_BUILD_STATIC=1`).
 
-## 2. Every package carries an `nwb_update.txt`
+## 2. Watch the official upstream — never a nested snapshot
+
+Flattening (section 1) does not change **who we watch**. After a nested copy is lifted to `3rd_parties/<name>/`,
+that package tracks the library's own official repository, release archive, or SDK. It must not keep watching
+the parent project's `third_party/`, `3rdparty/`, `external/`, or `imported/` snapshot.
+
+- `source:` in `nwb_update.txt` is the official origin of **this** package, not the repo we first noticed it in.
+  - Example: TinyEXR was first lifted from Basis Universal `encoder/3rdparty`. It now tracks
+    https://github.com/syoyo/tinyexr, not BinomialLLC/basis_universal.
+  - Example: QOI tracks https://github.com/phoboslab/qoi. tinydds tracks https://github.com/DeanoC/tiny_dds.
+    RapidJSON tracks https://github.com/Tencent/rapidjson. zstd tracks https://github.com/facebook/zstd.
+- If the official copy and a nested snapshot differ, take the official copy. Re-apply only NWB-local patches
+  the engine still needs (toolchain, ARM64, documented correctness). Record those patches in `notes:`.
+- If a nested file has no independent official repo — it is owned by the parent project — the parent project's
+  official repo is the source. Example: `dev_driver` `rgdevents.h` is an RGD header, so GPUOpen-Tools/radeon_gpu_detective
+  is official for that package.
+- Binary SDKs (Nsight Aftermath, COMGR runtime archives) use the vendor's official SDK or release, not a copy
+  bundled inside a different tool.
+
+## 3. Every package carries an `nwb_update.txt`
 
 - Each top-level package directory contains a file named `nwb_update.txt` recording when it was last updated
   and where it came from, so the next update is a mechanical re-fetch.
@@ -49,17 +68,18 @@ than working around it elsewhere.
   - `version:` — released version, git tag, or commit hash that was vendored.
   - `updated_utc:` — the vendoring date/time in UTC, ISO-8601 (`YYYY-MM-DDTHH:MM:SSZ`); a bare date
     (`YYYY-MM-DD`) is acceptable when only the day is known.
-  - `source:` — the upstream URL or address the package was fetched from (release archive, repo URL, etc.).
+  - `source:` — the official upstream URL the package was fetched from (release archive, repo URL, SDK page).
+    Do not point this at another project's nested copy.
 - Optional fields:
   - `notes:` — anything done while vendoring that a re-fetch must reproduce: files pruned, sub-dependencies
     lifted out, CMake rewritten, headers patched, runtime libs deployed separately, etc.
 - Keep `nwb_update.txt` in plain ASCII. Update it whenever the package is re-vendored or modified.
 
-### 2.1 Format example
+### 3.1 Format example
 ```
 package: zstd
-version: 1.4.5
-updated_utc: 2026-06-20
-source: https://github.com/GPUOpen-Tools/rdf (vendored via rdf/imported/zstd)
-notes: Flattened out of rdf/imported to top-level. Built STATIC. Only inc/ + src/zstd.c are used.
+version: 1.5.7
+updated_utc: 2026-06-23T16:02:45Z
+source: https://github.com/facebook/zstd/releases/tag/v1.5.7
+notes: Zstandard. Built STATIC from upstream single-file amalgamation. Only inc/ + src/zstd.c are used. Originally flattened out of rdf/imported; subsequent updates come from facebook/zstd.
 ```

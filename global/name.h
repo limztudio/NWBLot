@@ -782,8 +782,8 @@ namespace std{
 
 template<>
 struct hash<Name>{
-    usize operator()(const Name& name)const{
-        return NameDetail::HashValue(name.hash());
+    usize operator()(const Name& name)const noexcept{
+        return NameDetail::HashValue(name.m_hash);
     }
 };
 

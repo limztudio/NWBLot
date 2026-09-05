@@ -591,6 +591,7 @@ TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
     static_assert(noexcept(first == same));
     static_assert(noexcept(first != second));
     static_assert(noexcept(first < second));
+    static_assert(noexcept(std::hash<Name>{}(first)));
 
     NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
     NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
@@ -600,6 +601,7 @@ TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
     EXPECT_EQ(first, same);
     EXPECT_NE(first, second);
     EXPECT_TRUE(first < second || second < first);
+    EXPECT_EQ(std::hash<Name>{}(first), std::hash<NameHash>{}(ComputeNameHash("identity/first")));
     EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 0u);
 
 #if defined(NWB_BUILDMODE)

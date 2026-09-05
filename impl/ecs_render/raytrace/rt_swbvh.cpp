@@ -533,7 +533,7 @@ const PreparedMeshBlasBuildVector& RendererRayTracingSystem::preparedMeshBlasBui
     return m_preparedMeshBlasBuilds;
 }
 
-void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds()noexcept{
+void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
     if(!m_preparedMeshBlasBuildsReady)
         return;
 
@@ -935,7 +935,7 @@ const PreparedMeshSwBvhBuildVector& RendererRayTracingSystem::preparedMeshSwBvhB
     return m_preparedMeshSwBvhBuilds;
 }
 
-void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds()noexcept{
+void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds(){
     if(!m_preparedMeshSwBvhBuildsReady)
         return;
 

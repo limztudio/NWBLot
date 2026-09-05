@@ -532,7 +532,7 @@ public:
     // publishes a frozen plan's mesh-cache progress.
     [[nodiscard]] bool preparedMeshBlasBuildsReady()const noexcept;
     [[nodiscard]] const PreparedMeshBlasBuildVector& preparedMeshBlasBuilds()const noexcept;
-    void confirmPreparedMeshBlasBuilds()noexcept;
+    void confirmPreparedMeshBlasBuilds();
     // Software-only frames and the independent per-mesh portion of hybrid frames freeze selected build/refit work
     // against its shared scratch generation. Hybrid scene/material snapshots remain independently graph-owned while
     // their optional software tail preserves its narrow direct compatibility fallback.
@@ -546,7 +546,7 @@ public:
         Core::CommandList& commandList,
         const PreparedMeshSwBvhBuild& build
     );
-    void confirmPreparedMeshSwBvhBuilds()noexcept;
+    void confirmPreparedMeshSwBvhBuilds();
     void releaseRayTraceMaterialContextHeapHandles();
     void releaseSwBvhScratchHeapHandles();
     void releaseSurfelGiHeapHandles();

@@ -175,7 +175,7 @@ inline NameHash ComputeNameHash(const BasicStringView<CharT> text){
 }
 
 
-[[nodiscard]] inline constexpr bool LessNameHash(const NameHash& lhs, const NameHash& rhs){
+[[nodiscard]] inline constexpr bool LessNameHash(const NameHash& lhs, const NameHash& rhs)noexcept{
     for(u32 i = 0; i < NameDetail::s_HashLaneCount; ++i){
         if(lhs.qwords[i] < rhs.qwords[i])
             return true;
@@ -196,7 +196,7 @@ namespace NameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr bool EqualHash(const NameHash& a, const NameHash& b){
+inline constexpr bool EqualHash(const NameHash& a, const NameHash& b)noexcept{
     for(u32 i = 0; i < s_HashLaneCount; ++i){
         if(a.qwords[i] != b.qwords[i])
             return false;
@@ -204,7 +204,7 @@ inline constexpr bool EqualHash(const NameHash& a, const NameHash& b){
     return true;
 }
 
-inline constexpr bool IsZeroHash(const NameHash& hash){
+inline constexpr bool IsZeroHash(const NameHash& hash)noexcept{
     for(u32 i = 0; i < s_HashLaneCount; ++i){
         if(hash.qwords[i] != 0)
             return false;
@@ -453,10 +453,10 @@ inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callbac
     NameDetail::SetNameSymbolResolveCallback(callback, userData);
 }
 
-inline constexpr bool operator==(const NameHash& a, const NameHash& b){
+inline constexpr bool operator==(const NameHash& a, const NameHash& b)noexcept{
     return NameDetail::EqualHash(a, b);
 }
-inline constexpr bool operator!=(const NameHash& a, const NameHash& b){
+inline constexpr bool operator!=(const NameHash& a, const NameHash& b)noexcept{
     return !(a == b);
 }
 
@@ -466,7 +466,8 @@ inline constexpr bool operator!=(const NameHash& a, const NameHash& b){
 
 class Name{
     friend struct std::hash<Name>;
-    friend constexpr bool operator==(const Name& a, const Name& b);
+    friend constexpr bool operator==(const Name& a, const Name& b)noexcept;
+    friend constexpr bool operator<(const Name& a, const Name& b)noexcept;
 
 
 public:
@@ -558,8 +559,8 @@ public:
 
 
 public:
-    [[nodiscard]] constexpr explicit operator bool()const{
-        return !NameDetail::IsZeroHash(hash());
+    [[nodiscard]] constexpr explicit operator bool()const noexcept{
+        return !NameDetail::IsZeroHash(m_hash);
     }
     [[nodiscard]] constexpr const NameHash& hash()const{
 #if defined(NWB_BUILDMODE)
@@ -620,14 +621,14 @@ private:
 };
 
 
-inline constexpr bool operator==(const Name& a, const Name& b){
-    return a.hash() == b.hash();
+inline constexpr bool operator==(const Name& a, const Name& b)noexcept{
+    return a.m_hash == b.m_hash;
 }
-inline constexpr bool operator!=(const Name& a, const Name& b){
+inline constexpr bool operator!=(const Name& a, const Name& b)noexcept{
     return !(a == b);
 }
-inline constexpr bool operator<(const Name& a, const Name& b){
-    return LessNameHash(a.hash(), b.hash());
+inline constexpr bool operator<(const Name& a, const Name& b)noexcept{
+    return LessNameHash(a.m_hash, b.m_hash);
 }
 
 inline constexpr Name NAME_NONE = {};

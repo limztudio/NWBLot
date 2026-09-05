@@ -583,6 +583,31 @@ TEST(Global, InplaceFunctionInvokesAndMoves){
     EXPECT_FALSE(static_cast<bool>(moved));
 }
 
+TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
+    constexpr Name first("Identity\\First");
+    constexpr Name same("identity/first");
+    constexpr Name second("identity/second");
+    static_assert(noexcept(static_cast<bool>(first)));
+    static_assert(noexcept(first == same));
+    static_assert(noexcept(first != second));
+    static_assert(noexcept(first < second));
+
+    NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
+    NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
+
+    EXPECT_TRUE(static_cast<bool>(first));
+    EXPECT_FALSE(static_cast<bool>(NAME_NONE));
+    EXPECT_EQ(first, same);
+    EXPECT_NE(first, second);
+    EXPECT_TRUE(first < second || second < first);
+    EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 0u);
+
+#if defined(NWB_BUILDMODE)
+    EXPECT_EQ(first.hash(), ComputeNameHash("identity/first"));
+    EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 1u);
+#endif
+}
+
 TEST(Global, RuntimeNameSymbolsRecordStringViewNames){
     NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
     NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
@@ -593,7 +618,12 @@ TEST(Global, RuntimeNameSymbolsRecordStringViewNames){
     EXPECT_STREQ(resolvedText, "runtime/generated");
 
     const Name literalName("Literal\\Name");
+#if defined(NWB_BUILDMODE)
+    EXPECT_TRUE(NWB::Core::Common::NameSymbols::Resolve(literalName.hash(), resolvedText, sizeof(resolvedText)));
+    EXPECT_STREQ(resolvedText, "literal/name");
+#else
     EXPECT_FALSE(NWB::Core::Common::NameSymbols::Resolve(literalName.hash(), resolvedText, sizeof(resolvedText)));
+#endif
 }
 
 TEST(Global, NameHashDebugTextHelpers){

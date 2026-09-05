@@ -15,6 +15,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
+import repository_windows_process
+
 
 CONFIGURATIONS = ("dbg", "opt", "fin")
 SUPPORTED_ARCHITECTURES = ("x64", "arm64")
@@ -33,6 +35,8 @@ PROFILE_LOGSERVER_EXECUTABLE = "logserver"
 PROFILE_LOG_ADDRESS = "http://localhost"
 PROFILE_LOGSERVER_TIMEOUT_SECONDS = 10.0
 PROFILE_LOGSERVER_TERMINATE_TIMEOUT_SECONDS = 5.0
+APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS = 5.0
+APPLICATION_FORCED_STOP_TIMEOUT_SECONDS = 5.0
 PROFILE_LOG_HOST = "127.0.0.1"
 PROFILE_LOG_PORT_AUTO = 0
 PROFILE_LOG_PORT_MIN = 0
@@ -639,8 +643,14 @@ def normalize_application_args(args: Sequence[str]) -> List[str]:
 
 def stop_existing_process(executable: Path, platform_name: str) -> None:
     if platform_name == "windows":
-        command = ["taskkill", "/F", "/IM", executable.name]
-        subprocess.run(command, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        results = repository_windows_process.stop_processes_by_image_path(
+            executable,
+            APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS,
+            APPLICATION_FORCED_STOP_TIMEOUT_SECONDS,
+        )
+        for result in results:
+            stop_kind = "forced" if result.forced else "graceful"
+            print(f"stopped {executable.name} pid={result.pid} ({stop_kind}, exit {result.exit_code})", flush=True)
         return
 
     if shutil.which("pkill") is None:
@@ -673,6 +683,19 @@ def terminate_process(process: Optional[subprocess.Popen], label: str, timeout_s
         print(f"killing {label} pid={process.pid}", flush=True)
         process.kill()
         process.wait()
+
+
+def wait_for_process_exit(process: subprocess.Popen, timeout_seconds: float) -> Optional[int]:
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        exit_code = process.poll()
+        if exit_code is not None:
+            return exit_code
+
+        remaining_seconds = deadline - time.monotonic()
+        if remaining_seconds <= 0.0:
+            return None
+        time.sleep(min(PROFILE_LOG_READY_POLL_SECONDS, remaining_seconds))
 
 
 def choose_free_tcp_port() -> int:
@@ -800,12 +823,28 @@ def launch_process(
 
         run_seconds = getattr(args, "run_seconds", None)
         if run_seconds is not None and run_seconds > 0.0:
-            try:
-                return process.wait(timeout=run_seconds)
-            except subprocess.TimeoutExpired:
-                print(f"run-seconds {run_seconds} elapsed; terminating app", flush=True)
-                terminate_process(process, executable.name)
-                return 0
+            if host_platform_name() == "windows":
+                run_result = repository_windows_process.run_bounded_process(
+                    process,
+                    run_seconds,
+                    APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS,
+                    APPLICATION_FORCED_STOP_TIMEOUT_SECONDS,
+                )
+                if run_result.deadline_reached:
+                    print(f"run-seconds {run_seconds} elapsed; requested graceful app shutdown", flush=True)
+                if run_result.forced:
+                    print(f"forced {executable.name} shutdown pid={process.pid} (exit {run_result.exit_code})", flush=True)
+                return run_result.exit_code
+
+            exit_code = wait_for_process_exit(process, run_seconds)
+            if exit_code is not None:
+                return exit_code
+
+            print(f"run-seconds {run_seconds} elapsed; requesting app shutdown", flush=True)
+            terminate_process(process, executable.name)
+            if process.returncode is None:
+                raise SystemExit(f"{executable.name} did not report an exit status after termination")
+            return process.returncode
 
         return process.wait()
     except KeyboardInterrupt:
@@ -961,9 +1000,18 @@ def add_common_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--executable", type=Path, help="Override executable path.")
     parser.add_argument("--executable-name", help="Override executable base name when CMake metadata is unavailable.")
     parser.add_argument("--gpudbg", action="store_true", help="Append --gpudbg to the launched application.")
-    parser.add_argument("--kill-existing", action="store_true", help="Close any running executable with the same name before launch.")
+    parser.add_argument(
+        "--kill-existing",
+        action="store_true",
+        help="Stop running copies of the selected executable before launch; Windows matches the exact executable image path.",
+    )
     parser.add_argument("--detach", action="store_true", help="Return after launch instead of waiting for the app.")
-    parser.add_argument("--run-seconds", type=float, default=None, help="Terminate the launched app (and logserver) after N seconds instead of waiting for it to close -- for bounded profiling capture.")
+    parser.add_argument(
+        "--run-seconds",
+        type=float,
+        default=None,
+        help="After N seconds, gracefully close the launched app with an exact-process forced fallback after a bounded wait.",
+    )
     parser.add_argument("--with-profile", action="store_true", help="Start nwb_logserver and connect the launched app to it.")
     parser.add_argument(
         "--profile-log-address",

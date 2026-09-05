@@ -11,6 +11,101 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 import launcher
+import repository_windows_process
+
+
+class FakeWindowsProcessApi:
+    def __init__(self, image_paths, wait_results):
+        self.image_paths = image_paths
+        self.wait_results = {pid: list(results) for pid, results in wait_results.items()}
+        self.handles = {}
+        self.events = []
+
+    def process_ids(self):
+        return tuple(self.image_paths)
+
+    def open_process(self, pid):
+        handle = object()
+        self.handles[pid] = handle
+        self.events.append(("open", pid, handle))
+        return handle
+
+    def query_process_image_path(self, handle):
+        self.events.append(("query", handle))
+        return self.image_paths[next(pid for pid, value in self.handles.items() if value is handle)]
+
+    def request_close(self, pid):
+        self.events.append(("close", pid))
+        return True
+
+    def wait_for_exit(self, handle, timeout_seconds):
+        self.events.append(("wait", handle, timeout_seconds))
+        pid = next(pid for pid, value in self.handles.items() if value is handle)
+        return self.wait_results[pid].pop(0)
+
+    def force_terminate(self, handle):
+        self.events.append(("force", handle))
+        return True
+
+    def exit_code(self, handle):
+        return 0
+
+    def close_process(self, handle):
+        self.events.append(("release", handle))
+
+
+class FakeSpawnedProcess:
+    def __init__(self, pid, exit_code, events):
+        self.pid = pid
+        self.exit_code = exit_code
+        self.events = events
+        self.returncode = None
+
+    def wait(self, timeout=None):
+        self.events.append(("wait", timeout))
+        self.returncode = self.exit_code
+        return self.exit_code
+
+    def poll(self):
+        return self.returncode
+
+    def terminate(self):
+        self.events.append(("terminate", self.pid))
+
+    def kill(self):
+        self.events.append(("kill", self.pid))
+
+
+class FakeBoundedProcessApi:
+    def __init__(self, wait_results, events, can_terminate=True):
+        self.wait_results = list(wait_results)
+        self.events = events
+        self.handle = object()
+        self.can_terminate = can_terminate
+
+    def open_process(self, pid):
+        self.events.append(("open", pid, self.handle))
+        return self.handle
+
+    def request_close(self, pid):
+        self.events.append(("close", pid))
+        return True
+
+    def wait_for_exit(self, handle, timeout_seconds):
+        self.events.append(("native_wait", handle, timeout_seconds))
+        return self.wait_results.pop(0)
+
+    def force_terminate(self, handle):
+        self.assert_retained_handle(handle)
+        self.events.append(("force", handle))
+        return self.can_terminate
+
+    def close_process(self, handle):
+        self.events.append(("release", handle))
+
+    def assert_retained_handle(self, handle):
+        if handle is not self.handle:
+            raise AssertionError("hard termination did not use the retained process handle")
 
 
 class LauncherPlatformTests(unittest.TestCase):
@@ -149,6 +244,222 @@ class LauncherPlatformTests(unittest.TestCase):
         args = launcher.make_parser().parse_args(["run", "testbed", "--with-profile", "--profile-log-port", "8123"])
         self.assertTrue(args.with_profile)
         self.assertEqual(8123, args.profile_log_port)
+
+    def test_windows_kill_existing_matches_exact_image_not_same_basename(self):
+        x64_image = r"C:\Build\x64\viewer.exe"
+        arm64_image = r"C:\Build\arm64\viewer.exe"
+        api = FakeWindowsProcessApi(
+            {
+                101: x64_image,
+                202: r"c:\build\ARM64\viewer.exe",
+            },
+            {202: [True]},
+        )
+
+        results = repository_windows_process.stop_processes_by_image_path(
+            arm64_image,
+            3.0,
+            2.0,
+            api=api,
+            resolve_path=lambda path: path,
+            current_process_id=999,
+        )
+
+        self.assertEqual((202,), tuple(result.pid for result in results))
+        self.assertIn(("close", 202), api.events)
+        self.assertNotIn(("close", 101), api.events)
+        self.assertFalse(any(event[0] == "force" for event in api.events))
+
+    def test_windows_existing_forced_shutdown_uses_retained_process_handle(self):
+        api = FakeWindowsProcessApi(
+            {202: r"C:\build\arm64\viewer.exe"},
+            {202: [False, True]},
+        )
+
+        results = repository_windows_process.stop_processes_by_image_path(
+            r"C:\build\arm64\viewer.exe",
+            3.0,
+            2.0,
+            api=api,
+            resolve_path=lambda path: path,
+            current_process_id=999,
+        )
+
+        retained_handle = api.handles[202]
+        self.assertTrue(results[0].forced)
+        self.assertIn(("force", retained_handle), api.events)
+
+    def test_windows_exact_image_query_does_not_require_termination_access(self):
+        self.assertEqual(
+            0,
+            repository_windows_process.PROCESS_QUERY_AND_WAIT_ACCESS & repository_windows_process.PROCESS_TERMINATE,
+        )
+
+    def test_windows_query_only_handle_can_still_complete_gracefully(self):
+        events = []
+        process = FakeSpawnedProcess(302, 0, events)
+
+        result = repository_windows_process.run_bounded_process(
+            process,
+            8.0,
+            4.0,
+            2.0,
+            api=FakeBoundedProcessApi([False, True], events, can_terminate=False),
+        )
+
+        self.assertEqual(0, result.exit_code)
+        self.assertFalse(result.forced)
+        self.assertFalse(any(event[0] == "force" for event in events))
+
+    def test_windows_query_only_handle_reports_live_process_at_hard_boundary(self):
+        events = []
+        process = FakeSpawnedProcess(306, 0, events)
+
+        with self.assertRaisesRegex(repository_windows_process.WindowsProcessError, "did not grant terminate access"):
+            repository_windows_process.run_bounded_process(
+                process,
+                8.0,
+                4.0,
+                2.0,
+                api=FakeBoundedProcessApi([False, False, False], events, can_terminate=False),
+            )
+
+        retained_handle = next(event[2] for event in events if event[0] == "open")
+        self.assertIn(("force", retained_handle), events)
+        self.assertEqual(1, sum(event[0] == "open" for event in events))
+
+    def test_windows_bounded_shutdown_exits_gracefully_without_hard_termination(self):
+        events = []
+        process = FakeSpawnedProcess(303, 0, events)
+
+        result = repository_windows_process.run_bounded_process(
+            process,
+            8.0,
+            4.0,
+            2.0,
+            api=FakeBoundedProcessApi([False, True], events),
+        )
+
+        self.assertEqual(0, result.exit_code)
+        self.assertFalse(result.forced)
+        self.assertEqual(
+            [
+                ("open", 303, mock.ANY),
+                ("native_wait", mock.ANY, 8.0),
+                ("close", 303),
+                ("native_wait", mock.ANY, 4.0),
+                ("wait", None),
+                ("release", mock.ANY),
+            ],
+            events,
+        )
+
+    def test_windows_bounded_shutdown_propagates_nonzero_graceful_exit(self):
+        events = []
+        process = FakeSpawnedProcess(304, 23, events)
+
+        result = repository_windows_process.run_bounded_process(
+            process,
+            8.0,
+            4.0,
+            2.0,
+            api=FakeBoundedProcessApi([False, True], events),
+        )
+
+        self.assertEqual(23, result.exit_code)
+        self.assertFalse(result.forced)
+        self.assertNotIn(("force", 304), events)
+        self.assertNotIn(("terminate", 304), events)
+        self.assertNotIn(("kill", 304), events)
+
+    def test_windows_bounded_shutdown_forces_exact_process_only_after_grace_timeout(self):
+        events = []
+        process = FakeSpawnedProcess(404, 7, events)
+
+        result = repository_windows_process.run_bounded_process(
+            process,
+            9.0,
+            5.0,
+            2.0,
+            api=FakeBoundedProcessApi([False, False, True], events),
+        )
+
+        self.assertEqual(7, result.exit_code)
+        self.assertTrue(result.forced)
+        self.assertEqual(
+            [
+                ("open", 404, mock.ANY),
+                ("native_wait", mock.ANY, 9.0),
+                ("close", 404),
+                ("native_wait", mock.ANY, 5.0),
+                ("force", mock.ANY),
+                ("native_wait", mock.ANY, 2.0),
+                ("wait", None),
+                ("release", mock.ANY),
+            ],
+            events,
+        )
+
+    def test_windows_bounded_shutdown_rejects_success_status_after_forced_termination(self):
+        events = []
+        process = FakeSpawnedProcess(405, 0, events)
+
+        with self.assertRaisesRegex(repository_windows_process.WindowsProcessError, "forced process .* successful"):
+            repository_windows_process.run_bounded_process(
+                process,
+                9.0,
+                5.0,
+                2.0,
+                api=FakeBoundedProcessApi([False, False, True], events),
+            )
+
+        grace_wait_index = next(index for index, event in enumerate(events) if event[0] == "native_wait" and event[2] == 5.0)
+        force_index = next(index for index, event in enumerate(events) if event[0] == "force")
+        self.assertLess(grace_wait_index, force_index)
+
+    def test_launcher_propagates_bounded_windows_process_exit_status(self):
+        events = []
+        process = FakeSpawnedProcess(406, 23, events)
+        args = argparse.Namespace(
+            kill_existing=False,
+            dry_run=False,
+            gpudbg=False,
+            detach=False,
+            run_seconds=9.0,
+        )
+        run_result = repository_windows_process.WindowsBoundedRunResult(406, 23, True, True, False)
+
+        with (
+            mock.patch.object(launcher.subprocess, "Popen", return_value=process),
+            mock.patch.object(launcher, "host_platform_name", return_value="windows"),
+            mock.patch.object(repository_windows_process, "run_bounded_process", return_value=run_result) as bounded,
+            mock.patch.object(launcher, "terminate_process") as generic_terminate,
+        ):
+            exit_code = launcher.launch_process(
+                args,
+                Path(r"C:\build\arm64\viewer.exe"),
+                Path(r"C:\build\arm64"),
+                {},
+                (),
+                paths_validated=True,
+            )
+
+        self.assertEqual(23, exit_code)
+        bounded.assert_called_once_with(
+            process,
+            9.0,
+            launcher.APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS,
+            launcher.APPLICATION_FORCED_STOP_TIMEOUT_SECONDS,
+        )
+        generic_terminate.assert_not_called()
+
+    def test_launcher_help_describes_exact_image_and_graceful_bounded_shutdown(self):
+        parser = launcher.make_parser()
+        run_parser = next(action for action in parser._actions if action.dest == "command").choices["run"]
+        help_by_destination = {action.dest: action.help for action in run_parser._actions}
+        self.assertIn("exact executable image path", help_by_destination["kill_existing"])
+        self.assertIn("gracefully close", help_by_destination["run_seconds"])
+        self.assertIn("forced fallback", help_by_destination["run_seconds"])
 
     def test_discovers_leaf_launchers(self):
         with tempfile.TemporaryDirectory() as temp_dir:

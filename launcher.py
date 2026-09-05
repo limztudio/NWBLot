@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import ctypes
 import json
 import os
 import platform
@@ -17,6 +18,10 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 CONFIGURATIONS = ("dbg", "opt", "fin")
 SUPPORTED_ARCHITECTURES = ("x64", "arm64")
+WINDOWS_NATIVE_MACHINE_NAMES = {
+    0x8664: "AMD64",
+    0xAA64: "ARM64",
+}
 DEFAULT_CONFIG = "dbg"
 DEFAULT_DOMAIN = "full"
 DEFAULT_BUILD_JOBS = "8"
@@ -196,7 +201,39 @@ def host_platform_name(system_name: Optional[str] = None) -> str:
     return sys.platform.lower()
 
 
+def query_windows_native_machine_name() -> Optional[str]:
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    is_wow64_process2 = getattr(kernel32, "IsWow64Process2", None)
+    if is_wow64_process2 is None:
+        return None
+
+    get_current_process = kernel32.GetCurrentProcess
+    get_current_process.argtypes = []
+    get_current_process.restype = ctypes.c_void_p
+    is_wow64_process2.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_ushort),
+        ctypes.POINTER(ctypes.c_ushort),
+    ]
+    is_wow64_process2.restype = ctypes.c_int
+
+    process_machine = ctypes.c_ushort(0)
+    native_machine = ctypes.c_ushort(0)
+    if not is_wow64_process2(get_current_process(), ctypes.byref(process_machine), ctypes.byref(native_machine)):
+        return None
+    return WINDOWS_NATIVE_MACHINE_NAMES.get(native_machine.value)
+
+
+def windows_native_machine_name() -> Optional[str]:
+    machine = query_windows_native_machine_name()
+    if machine:
+        return machine
+    return os.environ.get("PROCESSOR_ARCHITEW6432") or os.environ.get("PROCESSOR_ARCHITECTURE")
+
+
 def host_arch_name(machine_name: Optional[str] = None) -> str:
+    if machine_name is None:
+        machine_name = windows_native_machine_name() if platform.system() == "Windows" else None
     machine = (machine_name or platform.machine()).lower()
     if machine in ("x64", "amd64", "x86_64", "x86-64"):
         return "x64"

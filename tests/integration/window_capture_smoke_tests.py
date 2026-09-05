@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import ctypes
 import os
 import subprocess
 import struct
@@ -838,6 +839,53 @@ class CaptureFocusTests(unittest.TestCase):
 
 
 class GracefulTerminationTests(unittest.TestCase):
+    def test_windows_graceful_exit_preserves_a_high_bit_hwnd(self):
+        process_id = 4321
+        high_bit_hwnd = 0xF234567887654321
+        observed_owner_queries = []
+        observed_posts = []
+
+        class FakeFunction:
+            def __init__(self, implementation):
+                self.implementation = implementation
+                self.argtypes = None
+                self.restype = None
+
+            def __call__(self, *args):
+                return self.implementation(*args)
+
+        class FakeUser32:
+            def __init__(self):
+                self.EnumWindows = FakeFunction(lambda callback, lparam: callback(high_bit_hwnd, lparam))
+                self.GetWindowThreadProcessId = FakeFunction(self.get_window_thread_process_id)
+                self.PostMessageW = FakeFunction(self.post_message)
+
+            @staticmethod
+            def get_window_thread_process_id(hwnd, owner_pid):
+                observed_owner_queries.append(hwnd)
+                owner_pid._obj.value = process_id
+                return 1
+
+            @staticmethod
+            def post_message(hwnd, message, wparam, lparam):
+                observed_posts.append((hwnd, message, wparam, lparam))
+                return 1
+
+        user32 = window_capture_smoke.bind_windows_user32(FakeUser32())
+        with mock.patch.object(window_capture_smoke, "create_windows_user32", return_value=user32):
+            self.assertTrue(window_capture_smoke.request_windows_graceful_exit(process_id))
+
+        self.assertEqual(observed_owner_queries, [high_bit_hwnd])
+        self.assertEqual(observed_posts, [(high_bit_hwnd, 0x0010, 0, 0)])
+        self.assertEqual(
+            user32.GetWindowThreadProcessId.argtypes,
+            [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)],
+        )
+        self.assertEqual(
+            user32.PostMessageW.argtypes,
+            [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t],
+        )
+
     def test_linux_x11_helper_receives_captured_window_handle(self):
         result = mock.Mock(returncode=0)
         with mock.patch.object(window_capture_smoke.subprocess, "run", return_value=result) as run:

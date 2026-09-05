@@ -25,6 +25,24 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertEqual("arm64", launcher.host_arch_name("ARM64"))
         self.assertEqual("arm64", launcher.host_arch_name("aarch64"))
 
+    def test_host_architecture_uses_native_windows_machine_under_emulation(self):
+        with (
+            mock.patch.object(launcher.platform, "system", return_value="Windows"),
+            mock.patch.object(launcher.platform, "machine", return_value="AMD64"),
+            mock.patch.object(launcher, "query_windows_native_machine_name", return_value="ARM64"),
+            mock.patch.dict(launcher.os.environ, {}, clear=True),
+        ):
+            self.assertEqual("arm64", launcher.host_arch_name())
+
+    def test_host_architecture_uses_wow64_environment_when_native_query_is_unavailable(self):
+        with (
+            mock.patch.object(launcher.platform, "system", return_value="Windows"),
+            mock.patch.object(launcher.platform, "machine", return_value="AMD64"),
+            mock.patch.object(launcher, "query_windows_native_machine_name", return_value=None),
+            mock.patch.dict(launcher.os.environ, {"PROCESSOR_ARCHITEW6432": "ARM64"}, clear=True),
+        ):
+            self.assertEqual("arm64", launcher.host_arch_name())
+
     def test_default_build_dirs_follow_platform_domain_and_arch(self):
         root = Path(os.sep) / "repo"
         self.assertEqual(

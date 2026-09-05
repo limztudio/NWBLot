@@ -28,6 +28,11 @@ FRAMEBUFFER_CAPTURE_PATH_ENV = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH"
 FRAMEBUFFER_CAPTURE_FRAME_COUNT_ENV = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT"
 FRAMEBUFFER_CAPTURE_READY_MESSAGE = "FramebufferCapture: capture ready"
 FRAMEBUFFER_CAPTURE_SKIP_MESSAGE = "FramebufferCapture: skipped because swap-chain transfer-source usage is unavailable"
+WINDOWS_ENUM_CALLBACK = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)(
+    ctypes.c_int,
+    ctypes.c_void_p,
+    ctypes.c_void_p,
+)
 
 # The textured-GI smoke has a fixed camera and a white receiver plane.  This client-relative rectangle has a clear gap
 # below the sphere silhouette and covers the nearby root of its foreground opaque direct shadow.  Because the light is
@@ -193,18 +198,32 @@ def wait_for_log_drain(directory, baseline, pattern, timeout_seconds=2.0, quiet_
             return
 
 
+def bind_windows_user32(user32):
+    user32.EnumWindows.argtypes = [WINDOWS_ENUM_CALLBACK, ctypes.c_void_p]
+    user32.EnumWindows.restype = ctypes.c_int
+    user32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+    user32.GetWindowThreadProcessId.restype = ctypes.c_uint32
+    user32.PostMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
+    user32.PostMessageW.restype = ctypes.c_int
+    return user32
+
+
+def create_windows_user32():
+    return bind_windows_user32(ctypes.WinDLL("user32", use_last_error=True))
+
+
 def request_windows_graceful_exit(pid):
     # Post WM_CLOSE to every top-level window the process owns. This drives the app's normal shutdown
     # (WM_CLOSE -> DestroyWindow -> WM_DESTROY -> PostQuitMessage -> message loop returns -> main returns), so its
     # graceful-exit work runs -- notably the NWB_BUILDMODE Name-symbol sidecar write (WriteDefaultFile), which a hard
     # TerminateProcess would skip. Returns True if at least one window was signalled.
-    user32 = ctypes.windll.user32
+    user32 = create_windows_user32()
     wm_close = 0x0010
     targets = []
 
-    @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    @WINDOWS_ENUM_CALLBACK
     def _enum(hwnd, _lparam):
-        owner_pid = ctypes.c_ulong(0)
+        owner_pid = ctypes.c_uint32(0)
         user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner_pid))
         if owner_pid.value == pid:
             targets.append(hwnd)
@@ -1443,7 +1462,7 @@ class WindowsCapture:
     BITMAPINFO = WinBitmapInfo
 
     def __init__(self):
-        self.user32 = ctypes.WinDLL("user32", use_last_error=True)
+        self.user32 = create_windows_user32()
         self.gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
         self.dwmapi = None
         self._bind_functions()
@@ -1452,20 +1471,14 @@ class WindowsCapture:
         pass
 
     def _bind_functions(self):
-        self.user32.EnumWindows.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-        self.user32.EnumWindows.restype = ctypes.c_int
         self.user32.IsWindowVisible.argtypes = [ctypes.c_void_p]
         self.user32.IsWindowVisible.restype = ctypes.c_int
-        self.user32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
-        self.user32.GetWindowThreadProcessId.restype = ctypes.c_ulong
         self.user32.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(self.RECT)]
         self.user32.GetWindowRect.restype = ctypes.c_int
         self.user32.GetClientRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(self.RECT)]
         self.user32.GetClientRect.restype = ctypes.c_int
         self.user32.ClientToScreen.argtypes = [ctypes.c_void_p, ctypes.POINTER(self.POINT)]
         self.user32.ClientToScreen.restype = ctypes.c_int
-        self.user32.PostMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
-        self.user32.PostMessageW.restype = ctypes.c_int
         self.user32.SetForegroundWindow.argtypes = [ctypes.c_void_p]
         self.user32.SetForegroundWindow.restype = ctypes.c_int
         self.user32.SetWindowPos.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_uint]
@@ -1535,13 +1548,11 @@ class WindowsCapture:
     def find_window_for_pid(self, pid):
         matches = []
 
-        callback_type = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)
-
         def enum_callback(hwnd, _):
             if not self.user32.IsWindowVisible(hwnd):
                 return True
 
-            window_pid = ctypes.c_ulong()
+            window_pid = ctypes.c_uint32()
             self.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(window_pid))
             if window_pid.value != pid:
                 return True
@@ -1556,7 +1567,7 @@ class WindowsCapture:
                 matches.append((width * height, hwnd))
             return True
 
-        callback = callback_type(enum_callback)
+        callback = WINDOWS_ENUM_CALLBACK(enum_callback)
         self.user32.EnumWindows(callback, None)
         if not matches:
             return None

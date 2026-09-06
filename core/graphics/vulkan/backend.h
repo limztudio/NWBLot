@@ -3772,8 +3772,7 @@ public:
 
 
 private:
-    // Requires queue.m_submissionWorkspaceMutex. Builds reusable queue submission identity and ownership state.
-    [[nodiscard]] bool prepareSubmissionCommandListWorkspace(
+    [[nodiscard]] bool prepareSubmissionCommandListWorkspaceLocked(
         Queue& queue,
         CommandList* const* pCommandLists,
         usize numCommandLists,
@@ -3782,8 +3781,7 @@ private:
         SubmissionCommandListValidationPolicy validationPolicy,
         bool* outHasSubmittedOwner = nullptr
     );
-    // Requires queue.m_submissionWorkspaceMutex. Publishes accepted chunks or releases rejected recording chunks.
-    void finalizeSubmissionCommandListResources(
+    void finalizeSubmissionCommandListResourcesLocked(
         Queue& queue,
         CommandList* const* pCommandLists,
         usize numCommandLists,

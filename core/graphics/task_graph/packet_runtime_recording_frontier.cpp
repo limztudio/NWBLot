@@ -93,8 +93,7 @@ bool GpuNativePacketRecorder::recordPreparedPacketRangeInCompileOrder(
 )const{
     const usize rangeBegin = range.first.index;
     const usize rangeEnd = rangeBegin + range.packetCount;
-    // The compiler emits packet IDs in stable topological order, so native recording preserves the graph's
-    // internal state-seed chain without requiring renderer-side packet collectors.
+    // Compiler packet IDs are in stable topological order, preserving state-seed dependencies.
     for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
         const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
         if(!recordPacket(

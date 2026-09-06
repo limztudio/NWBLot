@@ -468,9 +468,7 @@ public:
 
 
 private:
-    // Records a range only after its caller owns the artifact operation and has prepared the graph recording
-    // attempt. Both public recorder modes use compiler order for their serial path; timing and mode telemetry stay
-    // with those callers so ready-frontier accounting remains one enclosing operation.
+    // Caller must own artifactAccess and complete prepareRecordingAttempt().
     [[nodiscard]] bool recordPreparedPacketRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -1335,8 +1333,7 @@ public:
 
 
 private:
-    // Native packet recording remains serial unless the caller supplies the Vulkan-only ready-frontier pool. This
-    // centralizes the recording-mode policy shared by normal-graph and semantic-range execution.
+    // A non-null pool opts native recording into Vulkan ready-frontier parallelism.
     [[nodiscard]] bool recordPacketRange(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -1347,9 +1344,7 @@ private:
         GpuCommandIrCapture* commandIrCapture,
         GpuSubmissionPacketId* outFailedPacket
     )const;
-    // Semantic range execution shares one composite graph/recorded-artifact/transaction admission sequence. A
-    // non-null pool opts only native recording into ready-frontier parallelism; compile-order submission and all
-    // recovery-tail ownership remain identical across the two public entry points.
+    // A non-null pool changes only native recording; submission and recovery-tail ownership stay shared.
     [[nodiscard]] bool recordAndSubmitTaskRange(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

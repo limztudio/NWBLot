@@ -415,7 +415,7 @@ u64 Device::executeCommandLists(
     UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);
     auto& expectedCommandLists = queue->m_executeExpectedCommandLists;
     bool hasSubmittedOwner = false;
-    if(!prepareSubmissionCommandListWorkspace(
+    if(!prepareSubmissionCommandListWorkspaceLocked(
         *queue,
         pCommandLists,
         numCommandLists,
@@ -438,7 +438,7 @@ u64 Device::executeCommandLists(
         &nativeSubmissionResult
     );
 
-    finalizeSubmissionCommandListResources(
+    finalizeSubmissionCommandListResourcesLocked(
         *queue,
         pCommandLists,
         numCommandLists,
@@ -480,7 +480,7 @@ QueueSubmissionToken Device::executeCommandLists(
     return executeCommandListsInternal(pCommandLists, numCommandLists, executionQueue, submitDesc, false);
 }
 
-bool Device::prepareSubmissionCommandListWorkspace(
+bool Device::prepareSubmissionCommandListWorkspaceLocked(
     Queue& queue,
     CommandList* const* pCommandLists,
     const usize numCommandLists,
@@ -539,7 +539,7 @@ bool Device::prepareSubmissionCommandListWorkspace(
     return true;
 }
 
-void Device::finalizeSubmissionCommandListResources(
+void Device::finalizeSubmissionCommandListResourcesLocked(
     Queue& queue,
     CommandList* const* pCommandLists,
     const usize numCommandLists,
@@ -715,7 +715,7 @@ QueueSubmissionToken Device::executeCommandListsInternal(
         }
     }
 
-    if(!prepareSubmissionCommandListWorkspace(
+    if(!prepareSubmissionCommandListWorkspaceLocked(
         *queue,
         pCommandLists,
         numCommandLists,
@@ -780,7 +780,7 @@ QueueSubmissionToken Device::executeCommandListsInternal(
         : QueueSubmissionToken{}
     ;
 
-    finalizeSubmissionCommandListResources(
+    finalizeSubmissionCommandListResourcesLocked(
         *queue,
         pCommandLists,
         numCommandLists,

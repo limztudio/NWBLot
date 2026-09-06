@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <core/graphics/task_graph/task_desc.h>
+#include <core/graphics/task_graph/compiled_graph.h>
 
 #include <global/binary.h>
 
@@ -14,10 +14,6 @@
 
 
 NWB_CORE_BEGIN
-
-
-class GpuTaskGraph;
-class GpuCompiledGraph;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -414,8 +410,8 @@ struct GpuCommandIrReplayResult{
 // state compatibility require a replay CommandList and are checked by the replay entry points before lowering.
 [[nodiscard]] GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
     BinaryByteView bytes,
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuCompiledGraph::ReadView& compiledGraph,
     GpuSubmissionPacketId packet
 )noexcept;
 
@@ -426,8 +422,8 @@ struct GpuCommandIrReplayResult{
 // packet-recording contract.
 [[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
     BinaryByteView bytes,
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuCompiledGraph::ReadView& compiledGraph,
     GpuSubmissionPacketId packet,
     CommandList& commandList
 )noexcept;
@@ -441,8 +437,8 @@ struct GpuCommandIrReplayResult{
 // snapshots, or submission.
 [[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
     BinaryByteView bytes,
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuCompiledGraph::ReadView& compiledGraph,
     GpuSubmissionPacketId packet,
     CommandList& commandList
 )noexcept;

@@ -7,6 +7,7 @@
 
 #include <core/common/log.h>
 #include <core/graphics/rhi/queue_sharing.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,7 +88,7 @@ GpuDescriptorHeap::PendingRecordingLease::PendingRecordingLease(GpuDescriptorHea
     m_heap = &heap;
     m_descriptorBufferGeneration = heap.m_descriptorBufferGeneration;
 }
-GpuDescriptorHeap::PendingRecordingLease::~PendingRecordingLease(){
+GpuDescriptorHeap::PendingRecordingLease::~PendingRecordingLease()noexcept{
     if(m_heap)
         m_heap->releasePendingRecordingLease(m_descriptorBufferGeneration);
 }
@@ -111,22 +112,7 @@ GpuDescriptorHeap::GpuDescriptorHeap(Device& device)
     , m_retired(device.m_context.objectArena)
     , m_heapUses(device.m_context.objectArena)
 {}
-GpuDescriptorHeap::~GpuDescriptorHeap(){
-    shutdown();
-    {
-        ScopedLock lock(m_mutex);
-        if(!m_initialized)
-            return;
-    }
-
-    NWB_LOGGER_WARNING(
-        NWB_TEXT("Vulkan: GpuDescriptorHeap destruction is forcing cleanup after public shutdown rejected live uses.")
-    );
-    const bool deviceIdle = m_device.waitForIdle();
-    NWB_FATAL_ASSERT_MSG(
-        deviceIdle || m_device.isDeviceLost(),
-        NWB_TEXT("Vulkan: GpuDescriptorHeap destruction requires either a completed device join or terminal device loss.")
-    );
+GpuDescriptorHeap::~GpuDescriptorHeap()noexcept{
     shutdownForDeviceTeardown();
 }
 
@@ -156,7 +142,7 @@ u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptor
     }
 }
 
-GpuDescriptorHeap::SlotAllocator& GpuDescriptorHeap::allocatorForClass(const GpuDescriptorClass::Enum descriptorClass){
+GpuDescriptorHeap::SlotAllocator& GpuDescriptorHeap::allocatorForClass(const GpuDescriptorClass::Enum descriptorClass)noexcept{
     // Ordinary resources share slots; TLAS selects immutable set-2 blocks.
     if(descriptorClass == GpuDescriptorClass::Sampler)
         return m_samplerSlots;
@@ -266,7 +252,7 @@ bool GpuDescriptorHeap::retainedResourcesReadyForQueue(const GpuPhysicalQueueId&
     if(!queueInfo)
         return false;
 
-    ScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
     return m_initialized && retainedResourcesReadyForQueueLocked(*queueInfo);
 }
 
@@ -300,10 +286,12 @@ bool GpuDescriptorHeap::trackCommandBufferUseLocked(
     return true;
 }
 
-void GpuDescriptorHeap::submitCommandBufferUse(
+bool GpuDescriptorHeap::validateCommandBufferUseSubmissionLocked(
     TrackedCommandBuffer& commandBuffer,
-    const QueueSubmissionToken submissionToken
-)noexcept{
+    const QueueSubmissionToken& submissionToken,
+    usize& outHeapUseIndex
+){
+    outHeapUseIndex = Limit<usize>::s_Max;
     if(
         !submissionToken.valid()
         || !submissionToken.hasPhysicalQueueIdentity()
@@ -312,11 +300,11 @@ void GpuDescriptorHeap::submitCommandBufferUse(
         )
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap received an invalid physical command-buffer submission token."));
-        return;
+        return false;
     }
 
-    ScopedLock lock(m_mutex);
-    for(HeapUse& heapUse : m_heapUses){
+    for(usize heapUseIndex = 0u; heapUseIndex < m_heapUses.size(); ++heapUseIndex){
+        HeapUse& heapUse = m_heapUses[heapUseIndex];
         if(heapUse.commandBuffer != &commandBuffer || heapUse.submissionToken.valid())
             continue;
         if(!submissionToken.matchesPhysicalQueue(
@@ -326,42 +314,71 @@ void GpuDescriptorHeap::submitCommandBufferUse(
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Vulkan: GpuDescriptorHeap command-buffer submission changed its exact physical queue.")
             );
-            return;
+            return false;
         }
 
-        heapUse.submissionToken = submissionToken;
-        return;
+        outHeapUseIndex = heapUseIndex;
+        return true;
     }
 
     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap could not resolve command-buffer heap use for accepted submission {}."), submissionToken.value);
+    return false;
+}
+
+void GpuDescriptorHeap::commitCommandBufferUseSubmissionLocked(
+    TrackedCommandBuffer& commandBuffer,
+    const QueueSubmissionToken& submissionToken,
+    const usize heapUseIndex
+)noexcept{
+    static_assert(IsTriviallyCopyable_V<QueueSubmissionToken>, "accepted descriptor-use publication must remain scalar-only");
+    if(heapUseIndex >= m_heapUses.size())
+        TerminateInvariant();
+
+    HeapUse& heapUse = m_heapUses[heapUseIndex];
+    if(
+        heapUse.commandBuffer != &commandBuffer
+        || heapUse.submissionToken.valid()
+        || !submissionToken.matchesPhysicalQueue(
+            heapUse.physicalQueue.index,
+            heapUse.physicalQueue.deviceGeneration
+        )
+    )
+        TerminateInvariant();
+
+    heapUse.submissionToken = submissionToken;
 }
 
 void GpuDescriptorHeap::discardCommandBufferUse(TrackedCommandBuffer& commandBuffer)noexcept{
-    ScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
     for(HeapUse& heapUse : m_heapUses){
         if(heapUse.commandBuffer == &commandBuffer)
             heapUse.commandBuffer = nullptr;
     }
 }
 
-void GpuDescriptorHeap::releasePendingRecordingLease(const u64 descriptorBufferGeneration){
-    {
-        ScopedLock lock(m_mutex);
+void GpuDescriptorHeap::releasePendingRecordingLease(const u64 descriptorBufferGeneration)noexcept{
+    NothrowScopedLock lock(m_mutex);
+    if(
+        !m_initialized
+        || descriptorBufferGeneration == 0u
+        || descriptorBufferGeneration != m_descriptorBufferGeneration
+        || m_activePendingRecordingLeaseCount == 0u
+    )
+        TerminateInvariant();
+
+    if(m_activePendingRecordingLeaseCount == 1u){
         if(
-            !m_initialized
-            || descriptorBufferGeneration == 0u
-            || descriptorBufferGeneration != m_descriptorBufferGeneration
+            m_pendingRecordingCount > m_pendingRecording.size()
+            || m_retiredCount > m_retired.size()
+            || m_pendingRecordingCount > m_retired.size() - m_retiredCount
         )
-            return;
-        NWB_ASSERT(m_activePendingRecordingLeaseCount > 0u);
-        if(m_activePendingRecordingLeaseCount == 0u)
-            return;
+            TerminateInvariant();
 
-        --m_activePendingRecordingLeaseCount;
-        if(m_activePendingRecordingLeaseCount != 0u)
-            return;
+        for(usize pendingIndex = 0u; pendingIndex < m_pendingRecordingCount; ++pendingIndex){
+            const GpuDescriptorHandle handle = m_pendingRecording[pendingIndex];
+            if(!handle.valid() || handle.descriptorClass() >= GpuDescriptorClass::kCount)
+                TerminateInvariant();
 
-        for(const GpuDescriptorHandle handle : m_pendingRecording){
             SlotAllocator& allocator = allocatorForClass(handle.descriptorClass());
             const u32 slot = handle.slot();
             if(
@@ -369,18 +386,23 @@ void GpuDescriptorHeap::releasePendingRecordingLease(const u64 descriptorBufferG
                 || slot >= allocator.allocatedClasses.size()
                 || allocator.slotStates[slot] != SlotState::PendingRecording
                 || allocator.allocatedClasses[slot] != static_cast<u8>(handle.descriptorClass())
-            ){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap pending-recording lease found an invalid handle {}."), handle.value);
-                continue;
-            }
-
-            allocator.slotStates[slot] = SlotState::Retired;
-            m_retired.push_back(RetiredSlot{ handle, m_lastHeapUseID });
+            )
+                TerminateInvariant();
         }
-        m_pendingRecording.clear();
     }
 
-    collectRetired();
+    --m_activePendingRecordingLeaseCount;
+    if(m_activePendingRecordingLeaseCount != 0u)
+        return;
+
+    for(usize pendingIndex = 0u; pendingIndex < m_pendingRecordingCount; ++pendingIndex){
+        const GpuDescriptorHandle handle = m_pendingRecording[pendingIndex];
+        SlotAllocator& allocator = allocatorForClass(handle.descriptorClass());
+        allocator.slotStates[handle.slot()] = SlotState::Retired;
+        m_retired[m_retiredCount] = RetiredSlot{ handle, m_lastHeapUseID };
+        ++m_retiredCount;
+    }
+    m_pendingRecordingCount = 0u;
 }
 
 void GpuDescriptorHeap::collectRetired(){
@@ -436,7 +458,7 @@ void GpuDescriptorHeap::collectRetired(){
     };
 
     usize keptRetired = 0u;
-    for(usize retiredIndex = 0u; retiredIndex < m_retired.size(); ++retiredIndex){
+    for(usize retiredIndex = 0u; retiredIndex < m_retiredCount; ++retiredIndex){
         const RetiredSlot& retired = m_retired[retiredIndex];
         bool canRetire = true;
         for(const HeapUse& heapUse : m_heapUses){
@@ -456,14 +478,16 @@ void GpuDescriptorHeap::collectRetired(){
                 && slot < allocator.allocatedClasses.size()
                 && allocator.slotStates[slot] == SlotState::Retired
                 && allocator.allocatedClasses[slot] == static_cast<u8>(retired.handle.descriptorClass())
+                && allocator.freeCount < allocator.freeList.size()
             ){
                 releaseRetainedDescriptorResource(retired.handle);
                 allocator.slotStates[slot] = SlotState::Free;
                 allocator.allocatedClasses[slot] = static_cast<u8>(GpuDescriptorClass::kCount);
-                allocator.freeList.push_back(retired.handle.slot());
+                allocator.freeList[allocator.freeCount] = retired.handle.slot();
+                ++allocator.freeCount;
             }
             else{
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::collectRetired found an invalid retired handle {}."), retired.handle.value);
+                TerminateInvariant();
             }
         }
         else{
@@ -471,7 +495,7 @@ void GpuDescriptorHeap::collectRetired(){
             ++keptRetired;
         }
     }
-    m_retired.resize(keptRetired);
+    m_retiredCount = keptRetired;
 
     usize keptHeapUses = 0u;
     for(usize heapUseIndex = 0u; heapUseIndex < m_heapUses.size(); ++heapUseIndex){
@@ -677,6 +701,8 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         m_accelStructBufferBindingOffset = offsetIt->second;
         m_accelStructSlots.capacity = s_AccelStructCapacity;
         m_accelStructSlots.nextFresh = 0u;
+        m_accelStructSlots.freeList.resize(s_AccelStructCapacity);
+        m_accelStructSlots.freeCount = 0u;
         m_accelStructSlots.slotStates.reserve(s_AccelStructCapacity);
         m_accelStructSlots.allocatedClasses.reserve(s_AccelStructCapacity);
         for(u32 slot = 0u; slot < s_AccelStructCapacity; ++slot){
@@ -700,6 +726,8 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
 
     m_resourceSlots.capacity = resourceCapacity;
     m_resourceSlots.nextFresh = 0u;
+    m_resourceSlots.freeList.resize(resourceCapacity);
+    m_resourceSlots.freeCount = 0u;
     m_resourceSlots.slotStates.reserve(resourceCapacity);
     m_resourceSlots.allocatedClasses.reserve(resourceCapacity);
     for(u32 slot = 0u; slot < resourceCapacity; ++slot){
@@ -708,6 +736,8 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     }
     m_samplerSlots.capacity = samplerCapacity;
     m_samplerSlots.nextFresh = 0u;
+    m_samplerSlots.freeList.resize(samplerCapacity);
+    m_samplerSlots.freeCount = 0u;
     m_samplerSlots.slotStates.reserve(samplerCapacity);
     m_samplerSlots.allocatedClasses.reserve(samplerCapacity);
     for(u32 slot = 0u; slot < samplerCapacity; ++slot){
@@ -744,6 +774,13 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     }
     if(!managerGenerationReady)
         return failInitialization();
+    const usize retirementJournalCapacity = static_cast<usize>(resourceCapacity)
+        + static_cast<usize>(samplerCapacity)
+        + static_cast<usize>(m_accelStructSlots.capacity);
+    m_pendingRecording.resize(retirementJournalCapacity);
+    m_retired.resize(retirementJournalCapacity);
+    m_pendingRecordingCount = 0u;
+    m_retiredCount = 0u;
     m_lastHeapUseID = 0u;
     m_initialized = true;
 
@@ -770,39 +807,12 @@ void GpuDescriptorHeap::shutdown(){
     shutdownLocked();
 }
 
-void GpuDescriptorHeap::shutdownForDeviceTeardown(){
-    ScopedLock lock(m_mutex);
-
-    if(m_activePendingRecordingLeaseCount != 0u){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Device teardown is discarding active GpuDescriptorHeap pending-recording leases.")
-        );
-    }
-    if(!m_heapUses.empty()){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Device teardown is discarding command buffers that still reference GpuDescriptorHeap.")
-        );
-    }
-    shutdownLocked();
+void GpuDescriptorHeap::shutdownForDeviceTeardown()noexcept{
+    NothrowScopedLock lock(m_mutex);
+    resetStateForShutdownLocked();
 }
 
 void GpuDescriptorHeap::shutdownLocked(){
-
-    for(HeapUse& heapUse : m_heapUses){
-        if(!heapUse.commandBuffer)
-            continue;
-
-        auto& referencedHeaps = heapUse.commandBuffer->m_referencedDescriptorHeaps;
-        for(usize heapIndex = 0u; heapIndex < referencedHeaps.size(); ++heapIndex){
-            if(referencedHeaps[heapIndex] != this)
-                continue;
-
-            referencedHeaps.erase(referencedHeaps.begin() + heapIndex);
-            break;
-        }
-        heapUse.commandBuffer = nullptr;
-    }
-
     if(m_context.descriptorBufferManager){
         if(m_resourceBufferBlock.valid())
             m_context.descriptorBufferManager->freeForBindingGeneration(
@@ -819,6 +829,26 @@ void GpuDescriptorHeap::shutdownLocked(){
                 m_context.descriptorBufferManager->freeForBindingGeneration(block, m_descriptorBufferGeneration);
         }
     }
+
+    resetStateForShutdownLocked();
+}
+
+void GpuDescriptorHeap::resetStateForShutdownLocked()noexcept{
+    for(HeapUse& heapUse : m_heapUses){
+        if(!heapUse.commandBuffer)
+            continue;
+
+        auto& referencedHeaps = heapUse.commandBuffer->m_referencedDescriptorHeaps;
+        for(usize heapIndex = 0u; heapIndex < referencedHeaps.size(); ++heapIndex){
+            if(referencedHeaps[heapIndex] != this)
+                continue;
+
+            referencedHeaps.erase(referencedHeaps.begin() + heapIndex);
+            break;
+        }
+        heapUse.commandBuffer = nullptr;
+    }
+
     m_resourceBufferBlock = {};
     m_samplerBufferBlock = {};
     m_accelStructBufferBlocks.clear();
@@ -835,16 +865,19 @@ void GpuDescriptorHeap::shutdownLocked(){
     m_accelStructLayout = nullptr;
 
     m_resourceSlots.freeList.clear();
+    m_resourceSlots.freeCount = 0u;
     m_resourceSlots.slotStates.clear();
     m_resourceSlots.allocatedClasses.clear();
     m_resourceSlots.capacity = 0u;
     m_resourceSlots.nextFresh = 0u;
     m_samplerSlots.freeList.clear();
+    m_samplerSlots.freeCount = 0u;
     m_samplerSlots.slotStates.clear();
     m_samplerSlots.allocatedClasses.clear();
     m_samplerSlots.capacity = 0u;
     m_samplerSlots.nextFresh = 0u;
     m_accelStructSlots.freeList.clear();
+    m_accelStructSlots.freeCount = 0u;
     m_accelStructSlots.slotStates.clear();
     m_accelStructSlots.allocatedClasses.clear();
     m_accelStructSlots.capacity = 0u;
@@ -852,6 +885,8 @@ void GpuDescriptorHeap::shutdownLocked(){
     m_pendingRecording.clear();
     m_retired.clear();
     m_heapUses.clear();
+    m_pendingRecordingCount = 0u;
+    m_retiredCount = 0u;
     m_activePendingRecordingLeaseCount = 0u;
     m_lastHeapUseID = 0u;
     m_descriptorBufferGeneration = 0u;
@@ -872,7 +907,7 @@ GpuDescriptorHeapLifecycleStatistics GpuDescriptorHeap::lifecycleStatistics()con
     statistics.resourceCapacity = m_resourceSlots.capacity;
     statistics.samplerCapacity = m_samplerSlots.capacity;
     statistics.accelStructCapacity = m_accelStructSlots.capacity;
-    statistics.pendingRetiredSlotCount = m_pendingRecording.size() + m_retired.size();
+    statistics.pendingRetiredSlotCount = m_pendingRecordingCount + m_retiredCount;
 
     for(const SlotState slotState : m_resourceSlots.slotStates){
         if(slotState == SlotState::Live)
@@ -935,10 +970,12 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
     }
 
     SlotAllocator& allocator = allocatorForClass(descriptorClass);
+    if(allocator.freeCount > allocator.freeList.size())
+        TerminateInvariant();
     u32 slot = Limit<u32>::s_Max;
     bool recycled = false;
-    if(!allocator.freeList.empty()){
-        slot = allocator.freeList.back();
+    if(allocator.freeCount != 0u){
+        slot = allocator.freeList[allocator.freeCount - 1u];
         recycled = true;
     }
     else if(allocator.nextFresh < allocator.capacity)
@@ -967,7 +1004,7 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
         return GpuDescriptorHandle::invalid();
     }
     if(recycled)
-        allocator.freeList.pop_back();
+        --allocator.freeCount;
     else
         ++allocator.nextFresh;
     allocator.slotStates[slot] = SlotState::Live;
@@ -1001,12 +1038,22 @@ void GpuDescriptorHeap::free(const GpuDescriptorHandle handle){
             return;
         }
         if(m_activePendingRecordingLeaseCount != 0u){
+            if(m_pendingRecordingCount >= m_pendingRecording.size()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap pending-recording journal is exhausted."));
+                return;
+            }
             allocator.slotStates[handle.slot()] = SlotState::PendingRecording;
-            m_pendingRecording.push_back(handle);
+            m_pendingRecording[m_pendingRecordingCount] = handle;
+            ++m_pendingRecordingCount;
         }
         else{
+            if(m_retiredCount >= m_retired.size()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap retirement journal is exhausted."));
+                return;
+            }
             allocator.slotStates[handle.slot()] = SlotState::Retired;
-            m_retired.push_back(RetiredSlot{ handle, m_lastHeapUseID });
+            m_retired[m_retiredCount] = RetiredSlot{ handle, m_lastHeapUseID };
+            ++m_retiredCount;
         }
     }
 

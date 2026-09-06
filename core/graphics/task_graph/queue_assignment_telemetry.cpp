@@ -65,22 +65,25 @@ void GpuTaskGraphQueueAssignmentTelemetryTracker::reset(){
 }
 
 bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& declarations,
     const GpuTaskGraphQueueAssignments& assignments,
-    const GpuCompiledGraph& compiledGraph,
+    const GpuCompiledGraph::ReadView& compiledPlan,
     const GpuGraphSubmissionTransaction& transaction,
     Alloc::ScratchArena& scratchArena
 ){
-    const bool currentMatchesPlan = validFor(graph, assignments, compiledGraph);
+    if(!declarations.valid() || !compiledPlan.validFor(declarations))
+        return false;
+
+    const bool currentMatchesPlan = validFor(declarations, assignments, compiledPlan);
     Vector<QueueSubmissionToken, Alloc::ScratchArena> acceptedPacketTokens(
-        compiledGraph.packetCount(),
+        compiledPlan.packetCount(),
         scratchArena
     );
     GpuGraphSubmissionAcceptanceSnapshot acceptanceSnapshot;
-    const bool sourcesValid = assignments.validFor(graph, compiledGraph)
-        && compiledGraph.deviceGeneration() != 0u
+    const bool sourcesValid = assignments.validFor(declarations, compiledPlan)
+        && compiledPlan.deviceGeneration() != 0u
         && transaction.copyAcceptedPacketTokens(
-            compiledGraph,
+            compiledPlan,
             acceptedPacketTokens.data(),
             acceptedPacketTokens.size(),
             acceptanceSnapshot
@@ -113,37 +116,38 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
         EqualTo<Name>(),
         scratchArena
     );
-    taskNames.reserve(graph.taskCount());
-    for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
-        const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
+    taskNames.reserve(declarations.taskCount());
+    for(usize taskIndex = 0u; taskIndex < declarations.taskCount(); ++taskIndex){
+        const GpuTaskGraphTaskView task = declarations.taskAt(taskIndex);
         if(!task.identity || !taskNames.emplace(task.identity, 0u).second)
             return false;
     }
 
-    const bool hasCurrentGenerationHistory = m_deviceGeneration == compiledGraph.deviceGeneration();
+    const bool hasCurrentGenerationHistory = m_deviceGeneration == compiledPlan.deviceGeneration();
     Vector<GpuTaskQueueAssignmentTelemetry, Alloc::ScratchArena> staged(scratchArena);
-    staged.reserve(graph.taskCount());
-    for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
-        const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
+    staged.reserve(declarations.taskCount());
+    for(usize taskIndex = 0u; taskIndex < declarations.taskCount(); ++taskIndex){
+        const GpuTaskGraphTaskView task = declarations.taskAt(taskIndex);
         const GpuTaskQueueAssignment* const assignment = assignments.find(task.id);
-        const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task.id);
+        const GpuSubmissionPacketId packet = compiledPlan.packetForTask(task.id);
+        const GpuCompiledPacketView packetView = compiledPlan.packet(packet);
         if(
             !assignment
-            || !compiledGraph.validPacket(packet)
+            || !packetView.valid()
             || assignment->task != task.id
-            || assignment->queue != compiledGraph.packet(packet).queue
+            || assignment->queue != packetView.plan->queue
         )
             return false;
 
-        const GpuPhysicalQueueInfo* const initialQueueInfo = compiledGraph.queueInfo(assignment->initialQueue);
-        const GpuPhysicalQueueInfo* const queueInfo = compiledGraph.queueInfo(assignment->queue);
+        const GpuPhysicalQueueInfo* const initialQueueInfo = compiledPlan.queueInfo(assignment->initialQueue);
+        const GpuPhysicalQueueInfo* const queueInfo = compiledPlan.queueInfo(assignment->queue);
         if(
             !assignment->initialQueue.valid()
             || !assignment->queue.valid()
             || !initialQueueInfo
             || !queueInfo
-            || assignment->initialQueue.deviceGeneration != compiledGraph.deviceGeneration()
-            || assignment->queue.deviceGeneration != compiledGraph.deviceGeneration()
+            || assignment->initialQueue.deviceGeneration != compiledPlan.deviceGeneration()
+            || assignment->queue.deviceGeneration != compiledPlan.deviceGeneration()
             || assignment->queueClass != queueInfo->queueClass
             || assignment->dedicated != queueInfo->dedicated
         )
@@ -199,7 +203,7 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
 
     if(!hasCurrentGenerationHistory)
         m_history.clear();
-    m_deviceGeneration = compiledGraph.deviceGeneration();
+    m_deviceGeneration = compiledPlan.deviceGeneration();
     m_current.clear();
     m_current.reserve(staged.size());
     for(usize taskIndex = 0u; taskIndex < staged.size(); ++taskIndex){
@@ -208,16 +212,16 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
         if(!telemetry.acceptedQueue.valid())
             continue;
 
-        const Name taskName = graph.taskAt(taskIndex).identity;
+        const Name taskName = declarations.taskAt(taskIndex).identity;
         auto previous = m_history.find(taskName);
         if(previous == m_history.end())
             m_history.emplace(taskName, telemetry.acceptedQueue);
         else
             previous.value() = telemetry.acceptedQueue;
     }
-    m_generation = graph.generation();
-    m_declarationRevision = graph.declarationRevision();
-    m_planGeneration = compiledGraph.planGeneration();
+    m_generation = declarations.generation();
+    m_declarationRevision = declarations.declarationRevision();
+    m_planGeneration = compiledPlan.planGeneration();
     m_recordingAttemptGeneration = acceptanceSnapshot.recordingAttemptGeneration;
     m_acceptanceRevision = acceptanceSnapshot.acceptanceRevision;
     m_valid = true;
@@ -225,23 +229,26 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
 }
 
 bool GpuTaskGraphQueueAssignmentTelemetryTracker::validFor(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& declarations,
     const GpuTaskGraphQueueAssignments& assignments,
-    const GpuCompiledGraph& compiledGraph
-)const noexcept{
+    const GpuCompiledGraph::ReadView& compiledPlan
+)const{
+    if(!declarations.valid() || !compiledPlan.validFor(declarations))
+        return false;
+
     if(
         !m_valid
-        || !assignments.validFor(graph, compiledGraph)
-        || m_generation != graph.generation()
-        || m_declarationRevision != graph.declarationRevision()
-        || m_planGeneration != compiledGraph.planGeneration()
-        || m_deviceGeneration != compiledGraph.deviceGeneration()
-        || m_current.size() != graph.taskCount()
+        || !assignments.validFor(declarations, compiledPlan)
+        || m_generation != declarations.generation()
+        || m_declarationRevision != declarations.declarationRevision()
+        || m_planGeneration != compiledPlan.planGeneration()
+        || m_deviceGeneration != compiledPlan.deviceGeneration()
+        || m_current.size() != declarations.taskCount()
     )
         return false;
 
-    for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
-        const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
+    for(usize taskIndex = 0u; taskIndex < declarations.taskCount(); ++taskIndex){
+        const GpuTaskGraphTaskView task = declarations.taskAt(taskIndex);
         const GpuTaskQueueAssignment* const assignment = assignments.find(task.id);
         if(
             !assignment

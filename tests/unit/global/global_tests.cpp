@@ -36,6 +36,7 @@
 #include <global/overflow.h>
 #include <global/process_execution.h>
 #include <global/process_memory_map.h>
+#include <global/termination.h>
 #include <global/text_utils.h>
 #include <global/type_counter.h>
 
@@ -591,7 +592,7 @@ TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
     static_assert(noexcept(first == same));
     static_assert(noexcept(first != second));
     static_assert(noexcept(first < second));
-    static_assert(noexcept(std::hash<Name>{}(first)));
+    static_assert(noexcept(Hasher<Name>{}(first)));
 
     NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
     NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
@@ -601,7 +602,7 @@ TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
     EXPECT_EQ(first, same);
     EXPECT_NE(first, second);
     EXPECT_TRUE(first < second || second < first);
-    EXPECT_EQ(std::hash<Name>{}(first), std::hash<NameHash>{}(ComputeNameHash("identity/first")));
+    EXPECT_EQ(Hasher<Name>{}(first), Hasher<NameHash>{}(ComputeNameHash("identity/first")));
     EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 0u);
 
 #if defined(NWB_BUILDMODE)
@@ -1471,6 +1472,10 @@ TEST(Global, DiagnosticEventHook){
     EXPECT_EQ(DiagnosticEventNameFromCategory(DiagnosticEventCategory::s_FatalAssert.data()), DiagnosticEventName::s_Assert.data());
     EXPECT_EQ(DiagnosticEventNameFromCategory("unknown"), nullptr);
     EXPECT_EQ(DiagnosticEventNameFromRecord(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data() }), DiagnosticEventName::s_Error.data());
+}
+
+TEST(Global, OwnershipInvariantTerminationIsAlwaysActive){
+    EXPECT_DEATH(TerminateInvariant(), "");
 }
 
 

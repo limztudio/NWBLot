@@ -280,8 +280,10 @@ concept CommandListApi = requires(
     { commandList.resetTimerQuery(timerQuery) }->SameAs<bool>;
     { commandList.beginTimerQuery(timerQuery, timerQueryRecordingToken) }->SameAs<bool>;
     { commandList.endTimerQuery(timerQuery, timerQueryRecordingToken) }->SameAs<bool>;
+    { commandList.endTimerQueryFromExistingClaim(timerQuery, timerQueryRecordingToken) } noexcept -> SameAs<bool>;
     commandList.beginMarker(markerName);
     commandList.endMarker();
+    commandList.abandonMarker();
 
     commandList.setResourceStatesForFramebuffer(framebuffer);
     commandList.setEnableUavBarriersForTexture(texture, bool{});

@@ -28,7 +28,7 @@ namespace ECSRenderDetail{
 ){
     if(!task || !task->valid())
         return nullptr;
-    return context.graph.queueInfoForTask(*task);
+    return context.compiledPlan.queueInfoForTask(*task);
 }
 
 

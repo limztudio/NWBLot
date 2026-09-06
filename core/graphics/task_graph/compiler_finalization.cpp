@@ -21,7 +21,7 @@ namespace GpuTaskGraphCompilerDetail{
 
 
 [[nodiscard]] bool PlanExternalResourceExports(GpuTaskGraphResourceStatePlan& plan){
-    const GpuTaskGraph& graph = plan.graph;
+    const GpuTaskGraph::DeclarationReadView& graph = plan.graph;
     GpuTaskGraphCompiledPlanStorage& compiledPlan = plan.compiledPlan;
     Alloc::ScratchArena& scratchArena = plan.scratchArena;
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedResourceStates = plan.trackedResourceStates;
@@ -310,7 +310,7 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
 }
 
 [[nodiscard]] bool PlanPacketDependencies(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies,
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies,

@@ -29,6 +29,14 @@ struct GpuPacketEnvelopeMetricQueueOutput{
     Name internalIdleScopeName = NAME_NONE;
 };
 
+struct GpuTimingSinkSample{
+    Perf::TimingScopeId scope;
+    f64 durationSeconds = 0.0;
+    u64 sourceFrameIndex = 0u;
+};
+
+using GpuTimingSinkSampleVector = Vector<GpuTimingSinkSample, Alloc::ScratchArena>;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -112,10 +120,12 @@ public:
         NotNull<const GpuPacketEnvelopeMetricQueueOutput*> queueOutputInputs,
         usize queueOutputCount
     );
+    // Stages completed derived samples without invoking the timing sink. The caller owns the observer-publication boundary.
     void recordTimestampRange(
         const Name& scopeName,
         u64 frameIndex,
         const GpuComparableTimestampRange& range,
+        GpuTimingSinkSampleVector& performanceSamples,
         Alloc::ScratchArena& scratchArena
     );
     [[nodiscard]] bool hasOutputRole(const Name& scopeName)const;

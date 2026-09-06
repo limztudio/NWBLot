@@ -44,9 +44,9 @@ static const char* GpuCrashAvailabilityText(const bool available){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void Device::captureDeviceLoss(const AStringView context)noexcept{
+void Device::captureDeviceLoss(const AStringView context){
     // Device-loss state must not depend on optional crash diagnostics.
-    m_deviceLost.store(true, MemoryOrder::release);
+    markDeviceLost();
     if(!m_gpuCrashDiagnosticsEnabled)
         return;
 
@@ -61,8 +61,8 @@ void Device::captureDeviceLoss(const AStringView context)noexcept{
     GpuCrashReport report(m_gpuCrashReportArena);
     Vector<u8, Alloc::PersistentArena> vendorBinary(m_gpuCrashVendorBinaryArena);
 
-    // Fixed crash arena permits partial reports without allocation failure.
-    try{
+    // Bound all temporary capture allocations to the fixed crash arenas.
+    {
         report.details.reserve(s_MaxGpuCrashReportChars);
         report.context.append(context.data(), context.size());
 
@@ -269,14 +269,8 @@ void Device::captureDeviceLoss(const AStringView context)noexcept{
                 , __hidden_vulkan_device_diagnostics::GpuCrashAvailabilityText(Aftermath::IsActive())
             ));
     }
-    catch(...){
-    }
 
-    try{
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: GPU crash detected during {}:\n{}"), StringConvert(report.context.c_str()), StringConvert(report.details.c_str()));
-    }
-    catch(...){
-    }
+    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: GPU crash detected during {}:\n{}"), StringConvert(report.context.c_str()), StringConvert(report.details.c_str()));
 
     // Attach available Aftermath dump while its bytes remain owned by the module.
     if(Aftermath::IsActive()){
@@ -288,11 +282,7 @@ void Device::captureDeviceLoss(const AStringView context)noexcept{
         }
     }
 
-    try{
-        DispatchGpuCrash(report);
-    }
-    catch(...){
-    }
+    DispatchGpuCrash(report);
 }
 
 Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(

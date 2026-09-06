@@ -84,7 +84,7 @@ bool BackendContext::createWindowSurface(){
 // Swap chain management
 
 
-bool BackendContext::preflightSwapChainImageRevocation()noexcept{
+bool BackendContext::prepareSwapChainImageRevocation(){
     for(SwapChainImage& swapChainImage : m_swapChainImages){
         if(
             swapChainImage.rhiHandle
@@ -94,17 +94,24 @@ bool BackendContext::preflightSwapChainImageRevocation()noexcept{
             return false;
         }
     }
+
+    for(SwapChainImage& swapChainImage : m_swapChainImages){
+        if(
+            swapChainImage.rhiHandle
+            && !swapChainImage.rhiHandle->prepareRevokeUnmanagedNativeImage(swapChainImage.image)
+        ){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain Texture wrapper identity could not be prepared for revocation."));
+            return false;
+        }
+    }
     return true;
 }
 
-bool BackendContext::destroySwapChainPrepared()noexcept{
-    if(!preflightSwapChainImageRevocation())
-        return false;
-
+void BackendContext::commitPreparedSwapChainDestruction()noexcept{
     m_swapChainState.swapChainReadbackAvailable = false;
 
     {
-        ScopedLock presentationLock(m_framePresentationMutex);
+        NothrowScopedLock presentationLock(m_framePresentationMutex);
         resetFramePresentationSignal();
     }
     m_frameAcquired = false;
@@ -113,16 +120,8 @@ bool BackendContext::destroySwapChainPrepared()noexcept{
     m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
 
     for(SwapChainImage& swapChainImage : m_swapChainImages){
-        if(
-            swapChainImage.rhiHandle
-            && !swapChainImage.rhiHandle->revokeUnmanagedNativeImage(swapChainImage.image)
-        ){
-            NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Vulkan: Failed to revoke a swapchain Texture wrapper before native destruction")
-            );
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Swapchain Texture wrapper revocation must succeed"));
-            return false;
-        }
+        if(swapChainImage.rhiHandle)
+            swapChainImage.rhiHandle->commitRevokeUnmanagedNativeImage(swapChainImage.image);
     }
 
     if(m_swapChain){
@@ -132,9 +131,17 @@ bool BackendContext::destroySwapChainPrepared()noexcept{
 
     for(SwapChainImage& swapChainImage : m_swapChainImages){
         if(swapChainImage.rhiHandle)
-            swapChainImage.rhiHandle->releaseRevokedNativeImageIdentity(swapChainImage.image);
+            swapChainImage.rhiHandle->releasePreparedRevokeUnmanagedNativeImageIdentity(swapChainImage.image);
     }
+
     m_swapChainImages.clear();
+}
+
+bool BackendContext::destroySwapChainAfterCreateFailure(){
+    if(!prepareSwapChainImageRevocation())
+        return false;
+
+    commitPreparedSwapChainDestruction();
     return true;
 }
 
@@ -201,13 +208,9 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
-    constexpr VkImageUsageFlags s_RequiredSwapChainImageUsage =
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
-    ;
+    constexpr VkImageUsageFlags s_RequiredSwapChainImageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     if((surfaceCaps.supportedUsageFlags & s_RequiredSwapChainImageUsage) != s_RequiredSwapChainImageUsage){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to create swapchain: surface lacks required color, transfer-destination, or sampled image usage")
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create swapchain: surface lacks required color-attachment image usage"));
         return false;
     }
     const bool swapChainReadbackAvailable = m_deviceParams.enableSwapChainReadback
@@ -378,14 +381,14 @@ bool BackendContext::createVulkanSwapChain(){
     res = m_deviceDispatch.vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, nullptr);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query swap chain image count. {}"), ResultToString(res));
-        if(!destroySwapChainPrepared())
+        if(!destroySwapChainAfterCreateFailure())
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy incomplete swapchain after image-count query failure."));
         return false;
     }
 
     if(imageCount == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Swap chain reported zero images."));
-        if(!destroySwapChainPrepared())
+        if(!destroySwapChainAfterCreateFailure())
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy incomplete zero-image swapchain."));
         return false;
     }
@@ -394,7 +397,7 @@ bool BackendContext::createVulkanSwapChain(){
     res = m_deviceDispatch.vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, images.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to retrieve swap chain images. {}"), ResultToString(res));
-        if(!destroySwapChainPrepared())
+        if(!destroySwapChainAfterCreateFailure())
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy incomplete swapchain after image retrieval failure."));
         return false;
     }
@@ -415,6 +418,7 @@ bool BackendContext::createVulkanSwapChain(){
         textureDesc.format = m_swapChainState.backBufferFormat;
         textureDesc.initialState = ResourceStates::Present;
         textureDesc.keepInitialState = true;
+        textureDesc.isShaderResource = false;
         textureDesc.isRenderTarget = true;
         textureDesc.queueSharing = ResourceQueueSharing::Graphics;
         const NativeTextureProvenance nativeProvenance{
@@ -434,7 +438,7 @@ bool BackendContext::createVulkanSwapChain(){
         );
         if(!sci.rhiHandle){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create RHI handle for a swap chain image."));
-            if(!destroySwapChainPrepared())
+            if(!destroySwapChainAfterCreateFailure())
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy incomplete swapchain after image import failure."));
             return false;
         }

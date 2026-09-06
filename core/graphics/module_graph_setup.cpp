@@ -467,27 +467,37 @@ bool SubmitGraphOwnedStandaloneTask(
     GpuGraphSubmissionTransaction transaction(graphArena);
     Alloc::ScratchArena scratchArena(Name("graphics.standalone_task_graph_scratch"));
     const GpuTaskGraphCompiler compiler;
-    if(!compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena))
+    const GpuTaskGraph::DeclarationReadView declarations(graph);
+    if(!compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena))
         return false;
 
-    const GpuSubmissionPacketId terminalPacket = compiledGraph.packetForTask(terminalTask);
-    const GpuSubmissionPacketId recoveryPacket = compiledGraph.packetForTask(recoveryTask);
+    const GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    if(!declarations.valid() || !compiledPlan.validFor(declarations))
+        return false;
+
+    const GpuSubmissionPacketId terminalPacket = compiledPlan.packetForTask(terminalTask);
+    const GpuSubmissionPacketId recoveryPacket = compiledPlan.packetForTask(recoveryTask);
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     if(
         !terminalPacket.valid()
         || !recoveryPacket.valid()
         || !graphicsQueue.valid()
-        || compiledGraph.packetCount() < 2u
+        || compiledPlan.packetCount() < 2u
         || terminalPacket == recoveryPacket
         || recoveryPacket.index == 0u
-        || recoveryPacket != compiledGraph.packetIdAt(compiledGraph.packetCount() - 1u)
-        || !compiledGraph.taskJoinsAcceptedQueueFrontier(recoveryTask)
+        || recoveryPacket != compiledPlan.packetIdAt(compiledPlan.packetCount() - 1u)
+        || !compiledPlan.taskJoinsAcceptedQueueFrontier(recoveryTask)
     )
         return false;
-    if(requiredTerminalQueue.valid() && compiledGraph.packet(terminalPacket).queue != requiredTerminalQueue)
+
+    const GpuCompiledPacketView terminalPacketView = compiledPlan.packet(terminalPacket);
+    const GpuCompiledPacketView recoveryPacketView = compiledPlan.packet(recoveryPacket);
+    if(!terminalPacketView.valid() || !recoveryPacketView.valid())
+        return false;
+    if(requiredTerminalQueue.valid() && terminalPacketView.plan->queue != requiredTerminalQueue)
         return false;
 
-    const GpuSubmissionPacket& recoveryPacketPlan = compiledGraph.packet(recoveryPacket);
+    const GpuSubmissionPacket& recoveryPacketPlan = *recoveryPacketView.plan;
     if(
         recoveryPacketPlan.queue != graphicsQueue
         || recoveryPacketPlan.dependencyCount != 0u
@@ -534,7 +544,7 @@ bool SubmitGraphOwnedStandaloneTask(
         return false;
     }
 
-    outSubmissionToken = transaction.taskToken(compiledGraph, terminalTask);
+    outSubmissionToken = transaction.taskToken(compiledPlan, terminalTask);
     if(!transaction.discardUnaccepted(
         graph,
         compiledGraph,

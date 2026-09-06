@@ -24,8 +24,8 @@ namespace __hidden_gpu_packet_runtime_submission_tasks{
 
 
 [[nodiscard]] bool ValidateTaskAcceptedCallbacks(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskGraph::DeclarationReadView& declarationAccess,
+    const GpuCompiledGraph::ReadView& planAccess,
     const GpuSubmissionPacketRange& range,
     const GpuTaskGraphTaskAcceptedCallback* const callbacks,
     const usize callbackCount
@@ -37,12 +37,12 @@ namespace __hidden_gpu_packet_runtime_submission_tasks{
         const GpuTaskGraphTaskAcceptedCallback& callback = callbacks[callbackIndex];
         if(
             !callback.invoke
-            || !graph.validTask(callback.task)
-            || !compiledGraph.findTask(callback.task)
+            || !declarationAccess.validTask(callback.task)
+            || !planAccess.findTask(callback.task).valid()
         )
             return false;
 
-        const GpuSubmissionPacketId packet = compiledGraph.packetForTask(callback.task);
+        const GpuSubmissionPacketId packet = planAccess.packetForTask(callback.task);
         if(
             !packet.valid()
             || packet.index < range.first.index
@@ -123,11 +123,20 @@ bool GpuTaskGraphSubmitter::submitTaskRangeInCompileOrder(
     const GpuTaskGraphTaskSubmissionHook* const taskSubmissionHooks,
     const usize taskSubmissionHookCount
 )const{
+    if(outFailedPacket)
+        *outFailedPacket = {};
+    GpuSubmissionPacketRange range;
+    {
+        GpuCompiledGraph::ReadView planAccess(compiledGraph);
+        if(!planAccess.valid())
+            return false;
+        range = planAccess.packetRangeForTasks(firstTask, lastTask);
+    }
     return submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        compiledGraph.packetRangeForTasks(firstTask, lastTask),
+        range,
         externalCompletionTokens,
         externalCompletionTokenCount,
         taskTimingTickets,
@@ -163,11 +172,20 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderWithOperationPolicy(
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
+    SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, compiledGraph, recordedGraph, transaction);
+    GpuRecordedGraph::ArtifactOperation artifactOperation(
+        recordedGraph,
+        GpuRecordedGraph::ArtifactOperationMode::Read
+    );
+    if(!artifactOperation.valid()){
+        return false;
+    }
     Optional<GpuGraphSubmissionTransaction::SubmissionOperation> preflightOperation;
     if(operationPolicy == PacketRangeSubmissionOperationPolicy::PerPacket){
         preflightOperation.emplace(
             transaction,
-            GpuGraphSubmissionTransaction::SubmissionOperationMode::OrdinaryPacket
+            GpuGraphSubmissionTransaction::SubmissionOperationMode::OrdinaryPacket,
+            &artifactOperation
         );
     }
     if(
@@ -177,27 +195,49 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderWithOperationPolicy(
             && !GpuGraphSubmissionTransaction::SubmissionOperation::activeExclusiveFor(transaction)
         )
     ){
-        if(outFailedPacket && compiledGraph.validPacketRange(range))
-            *outFailedPacket = range.first;
         return false;
     }
+    GpuCompiledGraph::ReadView planAccess(compiledGraph);
+    if(!planAccess.valid())
+        return false;
+    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+    if(!declarationAccess.valid())
+        return false;
+
+    SubmissionAttemptExceptionScope preflightExceptionScope(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        transaction,
+        outFailedPacket
+    );
+    if(planAccess.validPacketRange(range))
+        preflightExceptionScope.setFailedPacket(range.first);
 
     if(
-        !compiledGraph.validFor(graph)
-        || !compiledGraph.validPacketRange(range)
-        || !recordedGraph.validFor(graph, compiledGraph)
-        || !transaction.validFor(compiledGraph)
+        !planAccess.validFor(declarationAccess)
+        || !planAccess.validPacketRange(range)
+        || !recordedGraph.validForWithinArtifactOperation(
+            graph,
+            declarationAccess,
+            compiledGraph,
+            planAccess,
+            artifactOperation
+        )
+        || !transaction.validFor(planAccess)
         || (taskTimingTicketCount != 0u && !taskTimingTickets)
         || (taskSubmissionHookCount != 0u && !taskSubmissionHooks)
         || !GpuPacketRuntimeDetail::ValidateExternalCompletionBindings(
             graph,
+            declarationAccess,
             compiledGraph,
+            planAccess,
             externalCompletionTokens,
             externalCompletionTokenCount
         )
         || !__hidden_gpu_packet_runtime_submission_tasks::ValidateTaskAcceptedCallbacks(
-            graph,
-            compiledGraph,
+            declarationAccess,
+            planAccess,
             range,
             taskAcceptedCallbacks,
             taskAcceptedCallbackCount
@@ -215,8 +255,8 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderWithOperationPolicy(
         const GpuTaskGraphTaskTimingTicket& binding = taskTimingTickets[bindingIndex];
         if(
             !binding.timingTicket
-            || !graph.validTask(binding.task)
-            || !compiledGraph.findTask(binding.task)
+            || !declarationAccess.validTask(binding.task)
+            || !planAccess.findTask(binding.task).valid()
         )
             return false;
 
@@ -225,7 +265,7 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderWithOperationPolicy(
                 return false;
         }
 
-        const GpuSubmissionPacketId packet = compiledGraph.packetForTask(binding.task);
+        const GpuSubmissionPacketId packet = planAccess.packetForTask(binding.task);
         if(
             !packet.valid()
             || packet.index < range.first.index
@@ -253,9 +293,12 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderWithOperationPolicy(
     }
 
     for(const ResolvedTaskTimingTicket& ticket : packetTimingTickets){
-        for(usize ownerIndex = 0u; ownerIndex < compiledGraph.packetCount(); ++ownerIndex){
-            const GpuSubmissionPacketId ownerPacket = compiledGraph.packetIdAt(ownerIndex);
-            if(ownerPacket != ticket.packet && recordedGraph.packetTimingTicket(ownerPacket) == ticket.timingTicket)
+        for(usize ownerIndex = 0u; ownerIndex < planAccess.packetCount(); ++ownerIndex){
+            const GpuSubmissionPacketId ownerPacket = planAccess.packetIdAt(ownerIndex);
+            if(
+                ownerPacket != ticket.packet
+                && recordedGraph.packetTimingTicket(ownerPacket, artifactOperation) == ticket.timingTicket
+            )
                 return false;
         }
     }
@@ -270,8 +313,8 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderWithOperationPolicy(
         const GpuTaskGraphTaskSubmissionHook& binding = taskSubmissionHooks[bindingIndex];
         if(
             !binding.hook.valid()
-            || !graph.validTask(binding.task)
-            || !compiledGraph.findTask(binding.task)
+            || !declarationAccess.validTask(binding.task)
+            || !planAccess.findTask(binding.task).valid()
         )
             return false;
 
@@ -280,7 +323,7 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderWithOperationPolicy(
                 return false;
         }
 
-        const GpuSubmissionPacketId packet = compiledGraph.packetForTask(binding.task);
+        const GpuSubmissionPacketId packet = planAccess.packetForTask(binding.task);
         if(
             !packet.valid()
             || packet.index < range.first.index
@@ -301,22 +344,39 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderWithOperationPolicy(
     }
 
     const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
+    const u64 recordingAttemptGeneration =
+        recordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactOperation)
+    ;
     for(usize packetIndex = range.first.index; packetIndex < rangeEnd; ++packetIndex){
-        const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
-        const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
-        GpuTimingSubmissionTicket* const ownedTimingTicket = recordedGraph.packetTimingTicket(packet);
-        if(packetPlan.recordsTiming != static_cast<bool>(ownedTimingTicket))
+        const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
+        const GpuCompiledPacketView packetView = planAccess.packet(packet);
+        if(!packetView.valid())
+            return false;
+        const GpuSubmissionPacket& packetPlan = *packetView.plan;
+        GpuTimingSubmissionTicket* const ownedTimingTicket = recordedGraph.packetTimingTicket(
+            packet,
+            artifactOperation
+        );
+        if(
+            packetPlan.recordsTiming != static_cast<bool>(ownedTimingTicket)
+            || !graph.packetReadyForSubmission(compiledGraph, planAccess, packet, recordingAttemptGeneration)
+        )
             return false;
     }
-    // Per-packet admission keeps independent native queues concurrent. Release the range preflight reader only after
-    // every mutable recorded-artifact query is complete; each packet then revalidates the artifact under its own gate.
-    preflightOperation.reset();
-
     Vector<GpuTimingSubmissionTicket*, Alloc::ScratchArena> resolvedTimingTickets{ scratchArena };
     resolvedTimingTickets.reserve(packetTimingTickets.size());
+    // Per-packet admission keeps independent native queues concurrent. Release the range preflight reader only after
+    // every mutable recorded-artifact query and every scratch allocation is complete; packet work cannot allocate
+    // outside the operation that owns its exception cleanup.
+    preflightExceptionScope.complete();
+    preflightOperation.reset();
+
     for(usize packetIndex = range.first.index; packetIndex < rangeEnd; ++packetIndex){
-        const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
-        const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
+        const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
+        const GpuCompiledPacketView packetView = planAccess.packet(packet);
+        if(!packetView.valid())
+            return false;
+        const GpuSubmissionPacket& packetPlan = *packetView.plan;
         resolvedTimingTickets.clear();
         for(const ResolvedTaskTimingTicket& ticket : packetTimingTickets){
             if(ticket.packet == packet)
@@ -334,28 +394,41 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderWithOperationPolicy(
             submissionOperation.emplace(
                 transaction,
                 packetPlan.joinsAcceptedQueueFrontier || preSubmitHook
-                    ? GpuGraphSubmissionTransaction::SubmissionOperationMode::ExclusiveBarrier
-                    : GpuGraphSubmissionTransaction::SubmissionOperationMode::OrdinaryPacket
+                    ? GpuGraphSubmissionTransaction::SubmissionOperationMode::WaitExclusiveBarrier
+                    : GpuGraphSubmissionTransaction::SubmissionOperationMode::OrdinaryPacket,
+                &artifactOperation
             );
         }
-        if(
-            (submissionOperation && !submissionOperation->valid())
-            || !submitPacketWithinSubmissionOperation(
-                graph,
-                compiledGraph,
-                recordedGraph,
-                packet,
-                externalCompletionTokens,
-                externalCompletionTokenCount,
-                transaction,
-                scratchArena,
-                resolvedTimingTickets.data(),
-                resolvedTimingTickets.size(),
-                preSubmitHook,
-                taskAcceptedCallbacks,
-                taskAcceptedCallbackCount
-            )
-        ){
+        if(submissionOperation && !submissionOperation->valid()){
+            if(outFailedPacket)
+                *outFailedPacket = packet;
+            return false;
+        }
+        SubmissionAttemptExceptionScope packetExceptionScope(
+            graph,
+            compiledGraph,
+            recordedGraph,
+            transaction,
+            outFailedPacket
+        );
+        packetExceptionScope.setFailedPacket(packet);
+        if(!submitPacketWithinSubmissionOperation(
+            graph,
+            compiledGraph,
+            planAccess,
+            recordedGraph,
+            artifactOperation,
+            packet,
+            externalCompletionTokens,
+            externalCompletionTokenCount,
+            transaction,
+            scratchArena,
+            resolvedTimingTickets.data(),
+            resolvedTimingTickets.size(),
+            preSubmitHook,
+            taskAcceptedCallbacks,
+            taskAcceptedCallbackCount
+        )){
             if(outFailedPacket)
                 *outFailedPacket = packet;
             return false;

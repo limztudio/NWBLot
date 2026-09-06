@@ -20,11 +20,14 @@ NWB_CORE_BEGIN
 
 bool GpuTaskGraph::applyCompiledBarrier(
     const GpuCompiledGraph& compiledGraph,
+    const GpuCompiledGraph::ReadView& planAccess,
+    const PacketRecordingAccess& recordingAccess,
+    const GpuTaskId& task,
     const GpuCompiledBarrier& barrier,
     CommandList& commandList
 )const{
     if(
-        !compiledGraph.validFor(*this)
+        !recordingAccess.validForTask(*this, compiledGraph, planAccess, task)
         || !validResource(barrier.resource)
         || barrier.type >= GpuCompiledBarrierType::kCount
     )
@@ -32,8 +35,8 @@ bool GpuTaskGraph::applyCompiledBarrier(
 
     const GpuGraphResourceNode& resource = m_resources[barrier.resource.index];
     const auto resolveOwnershipQueues = [&]{
-        const GpuPhysicalQueueInfo* const sourceQueue = compiledGraph.queueInfo(barrier.sourceQueue);
-        const GpuPhysicalQueueInfo* const destinationQueue = compiledGraph.queueInfo(barrier.destinationQueue);
+        const GpuPhysicalQueueInfo* const sourceQueue = planAccess.queueInfo(barrier.sourceQueue);
+        const GpuPhysicalQueueInfo* const destinationQueue = planAccess.queueInfo(barrier.destinationQueue);
         return sourceQueue
             && destinationQueue
             && sourceQueue->queueClass < CommandQueue::kCount
@@ -166,8 +169,8 @@ bool GpuTaskGraph::applyCompiledBarrier(
         return true;
     }
     case GpuCompiledBarrierType::TextureOwnershipRelease:{
-        const GpuPhysicalQueueInfo* const sourceQueue = compiledGraph.queueInfo(barrier.sourceQueue);
-        const GpuPhysicalQueueInfo* const destinationQueue = compiledGraph.queueInfo(barrier.destinationQueue);
+        const GpuPhysicalQueueInfo* const sourceQueue = planAccess.queueInfo(barrier.sourceQueue);
+        const GpuPhysicalQueueInfo* const destinationQueue = planAccess.queueInfo(barrier.destinationQueue);
         if(
             resource.type != GpuGraphResourceType::Texture
             || !resource.texture
@@ -185,8 +188,8 @@ bool GpuTaskGraph::applyCompiledBarrier(
         return true;
     }
     case GpuCompiledBarrierType::BufferOwnershipRelease:{
-        const GpuPhysicalQueueInfo* const sourceQueue = compiledGraph.queueInfo(barrier.sourceQueue);
-        const GpuPhysicalQueueInfo* const destinationQueue = compiledGraph.queueInfo(barrier.destinationQueue);
+        const GpuPhysicalQueueInfo* const sourceQueue = planAccess.queueInfo(barrier.sourceQueue);
+        const GpuPhysicalQueueInfo* const destinationQueue = planAccess.queueInfo(barrier.destinationQueue);
         if(
             resource.type != GpuGraphResourceType::Buffer
             || !resource.buffer
@@ -200,8 +203,8 @@ bool GpuTaskGraph::applyCompiledBarrier(
         return true;
     }
     case GpuCompiledBarrierType::AccelStructOwnershipRelease:{
-        const GpuPhysicalQueueInfo* const sourceQueue = compiledGraph.queueInfo(barrier.sourceQueue);
-        const GpuPhysicalQueueInfo* const destinationQueue = compiledGraph.queueInfo(barrier.destinationQueue);
+        const GpuPhysicalQueueInfo* const sourceQueue = planAccess.queueInfo(barrier.sourceQueue);
+        const GpuPhysicalQueueInfo* const destinationQueue = planAccess.queueInfo(barrier.destinationQueue);
         if(
             resource.type != GpuGraphResourceType::AccelStruct
             || !resource.accelStruct
@@ -220,7 +223,7 @@ bool GpuTaskGraph::applyCompiledBarrier(
     case GpuCompiledBarrierType::TextureOwnershipAcquire:
     case GpuCompiledBarrierType::BufferOwnershipAcquire:
     case GpuCompiledBarrierType::AccelStructOwnershipAcquire:{
-        const GpuPhysicalQueueInfo* const destinationQueue = compiledGraph.queueInfo(barrier.destinationQueue);
+        const GpuPhysicalQueueInfo* const destinationQueue = planAccess.queueInfo(barrier.destinationQueue);
         if(!resolveOwnershipQueues() || commandList.getResolvedDescription().physicalQueue != destinationQueue->id)
             return false;
 
@@ -235,10 +238,13 @@ bool GpuTaskGraph::applyCompiledBarrier(
 }
 
 bool GpuTaskGraph::seedTaskRetainedResourceStates(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuCompiledGraph::ReadView& planAccess,
+    const PacketRecordingAccess& recordingAccess,
     const GpuTaskId& taskID,
     CommandList& commandList
 )const{
-    if(!validTask(taskID))
+    if(!recordingAccess.validForTask(*this, compiledGraph, planAccess, taskID) || !validTask(taskID))
         return false;
 
     const GpuTaskNode& task = m_tasks[taskID.index];

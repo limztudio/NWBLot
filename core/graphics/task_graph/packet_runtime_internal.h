@@ -55,7 +55,9 @@ namespace GpuPacketRuntimeDetail{
 
 [[nodiscard]] inline bool ValidateExternalCompletionBindings(
     const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph& compiledGraph,
+    const GpuCompiledGraph::ReadView& planAccess,
     const GpuTaskGraphExternalCompletionToken* const bindings,
     const usize bindingCount
 ){
@@ -64,7 +66,7 @@ namespace GpuPacketRuntimeDetail{
 
     for(usize bindingIndex = 0u; bindingIndex < bindingCount; ++bindingIndex){
         const GpuTaskGraphExternalCompletionToken& binding = bindings[bindingIndex];
-        if(!binding.validFallbackFor(graph, compiledGraph))
+        if(!binding.validFallbackFor(graph, declarationAccess, compiledGraph, planAccess))
             return false;
         for(usize previousIndex = 0u; previousIndex < bindingIndex; ++previousIndex){
             if(bindings[previousIndex].completion == binding.completion)

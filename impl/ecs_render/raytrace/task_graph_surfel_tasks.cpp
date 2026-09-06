@@ -31,7 +31,7 @@ bool SurfelIrradianceClearGraphTask::record(
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
 ){
-    Core::Texture* const destination = context.taskGraph.textureForResource(payload.destination);
+    Core::Texture* const destination = context.declarations.textureForResource(payload.destination);
     // This Compute-only callback may not end a Graphics render pass. The packet must begin outside rendering,
     // which also preserves the command-IR replay precondition for its captured native texture clear.
     if(!destination || commandList.isRenderPassActive())

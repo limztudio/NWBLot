@@ -33,6 +33,86 @@ static TestPath RepoRoot(TestArena& testArena){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST(SwapChainPresentation, SwapchainImageUsageMatchesPresentationAndOptionalReadbackConsumers){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString surfaceSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "backend_context_surface.cpp",
+        surfaceSource
+    ));
+    const AStringView fullSurfaceSource(surfaceSource.data(), surfaceSource.size());
+    const usize createFunctionBegin = fullSurfaceSource.find("bool BackendContext::createVulkanSwapChain(){");
+    const usize createFunctionEnd = fullSurfaceSource.find("NWB_VULKAN_END", createFunctionBegin);
+    ASSERT_NE(createFunctionBegin, AStringView::npos);
+    ASSERT_NE(createFunctionEnd, AStringView::npos);
+    ASSERT_LT(createFunctionBegin, createFunctionEnd);
+    const AStringView createFunction = fullSurfaceSource.substr(
+        createFunctionBegin,
+        createFunctionEnd - createFunctionBegin
+    );
+
+    const usize requiredUsageOffset = createFunction.find(
+        "constexpr VkImageUsageFlags s_RequiredSwapChainImageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;"
+    );
+    const usize requiredUsageValidationOffset = createFunction.find(
+        "(surfaceCaps.supportedUsageFlags & s_RequiredSwapChainImageUsage) != s_RequiredSwapChainImageUsage",
+        requiredUsageOffset
+    );
+    const usize optionalReadbackOffset = createFunction.find(
+        "const bool swapChainReadbackAvailable = m_deviceParams.enableSwapChainReadback",
+        requiredUsageValidationOffset
+    );
+    const usize readbackSupportOffset = createFunction.find(
+        "(surfaceCaps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u",
+        optionalReadbackOffset
+    );
+    const usize imageUsageOffset = createFunction.find(
+        "desc.imageUsage = s_RequiredSwapChainImageUsage;",
+        readbackSupportOffset
+    );
+    const usize optionalReadbackConditionOffset = createFunction.find(
+        "if(swapChainReadbackAvailable)",
+        imageUsageOffset
+    );
+    const usize optionalReadbackUsageOffset = createFunction.find(
+        "desc.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;",
+        optionalReadbackConditionOffset
+    );
+    const usize logicalNonSampledOffset = createFunction.find(
+        "textureDesc.isShaderResource = false;",
+        optionalReadbackUsageOffset
+    );
+    const usize logicalRenderTargetOffset = createFunction.find(
+        "textureDesc.isRenderTarget = true;",
+        logicalNonSampledOffset
+    );
+    const usize nativeUsageOffset = createFunction.find(".usage = desc.imageUsage", logicalRenderTargetOffset);
+    ASSERT_NE(requiredUsageOffset, AStringView::npos);
+    ASSERT_NE(requiredUsageValidationOffset, AStringView::npos);
+    ASSERT_NE(optionalReadbackOffset, AStringView::npos);
+    ASSERT_NE(readbackSupportOffset, AStringView::npos);
+    ASSERT_NE(imageUsageOffset, AStringView::npos);
+    ASSERT_NE(optionalReadbackConditionOffset, AStringView::npos);
+    ASSERT_NE(optionalReadbackUsageOffset, AStringView::npos);
+    ASSERT_NE(logicalNonSampledOffset, AStringView::npos);
+    ASSERT_NE(logicalRenderTargetOffset, AStringView::npos);
+    ASSERT_NE(nativeUsageOffset, AStringView::npos);
+    EXPECT_LT(requiredUsageOffset, requiredUsageValidationOffset);
+    EXPECT_LT(requiredUsageValidationOffset, optionalReadbackOffset);
+    EXPECT_LT(optionalReadbackOffset, readbackSupportOffset);
+    EXPECT_LT(readbackSupportOffset, imageUsageOffset);
+    EXPECT_LT(imageUsageOffset, optionalReadbackConditionOffset);
+    EXPECT_LT(optionalReadbackConditionOffset, optionalReadbackUsageOffset);
+    EXPECT_LT(optionalReadbackUsageOffset, logicalNonSampledOffset);
+    EXPECT_LT(logicalNonSampledOffset, logicalRenderTargetOffset);
+    EXPECT_LT(logicalRenderTargetOffset, nativeUsageOffset);
+    EXPECT_EQ(createFunction.find("VK_IMAGE_USAGE_TRANSFER_DST_BIT"), AStringView::npos);
+    EXPECT_EQ(createFunction.find("VK_IMAGE_USAGE_SAMPLED_BIT"), AStringView::npos);
+}
+
+
 TEST(SwapChainPresentation, NativeTextureImportReceivesExactSwapchainProvenanceBeforePublication){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -429,20 +509,20 @@ TEST(SwapChainPresentation, CanonicalNativeQueueStateSerializesEveryInternalHost
     AString deviceSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device.cpp", deviceSource));
     const AStringView fullDeviceSource(deviceSource.data(), deviceSource.size());
-    const usize semanticLockListOffset = fullDeviceSource.find("waitMutexes.push_back(&queue->m_mutex);");
-    const usize hostLockListOffset = fullDeviceSource.find(
-        "waitMutexes.push_back(&nativeQueueState->hostMutex);",
-        semanticLockListOffset
-    );
-    const usize lockSetOffset = fullDeviceSource.find("DeviceWaitLockSet lockSet(waitMutexes);", hostLockListOffset);
-    const usize deviceIdleOffset = fullDeviceSource.find("vkDeviceWaitIdle(m_context.device);", lockSetOffset);
-    ASSERT_NE(semanticLockListOffset, AStringView::npos);
-    ASSERT_NE(hostLockListOffset, AStringView::npos);
-    ASSERT_NE(lockSetOffset, AStringView::npos);
+    const usize semanticLockOffset = fullDeviceSource.find("queue->m_mutex.lock();");
+    const usize hostLockOffset = fullDeviceSource.find("nativeQueueState->hostMutex.lock();", semanticLockOffset);
+    const usize deviceIdleOffset = fullDeviceSource.find("vkDeviceWaitIdle(m_context.device);", hostLockOffset);
+    const usize hostUnlockOffset = fullDeviceSource.find("nativeQueueState->hostMutex.unlock();", deviceIdleOffset);
+    const usize semanticUnlockOffset = fullDeviceSource.find("queue->m_mutex.unlock();", hostUnlockOffset);
+    ASSERT_NE(semanticLockOffset, AStringView::npos);
+    ASSERT_NE(hostLockOffset, AStringView::npos);
     ASSERT_NE(deviceIdleOffset, AStringView::npos);
-    EXPECT_LT(semanticLockListOffset, hostLockListOffset);
-    EXPECT_LT(hostLockListOffset, lockSetOffset);
-    EXPECT_LT(lockSetOffset, deviceIdleOffset);
+    ASSERT_NE(hostUnlockOffset, AStringView::npos);
+    ASSERT_NE(semanticUnlockOffset, AStringView::npos);
+    EXPECT_LT(semanticLockOffset, hostLockOffset);
+    EXPECT_LT(hostLockOffset, deviceIdleOffset);
+    EXPECT_LT(deviceIdleOffset, hostUnlockOffset);
+    EXPECT_LT(hostUnlockOffset, semanticUnlockOffset);
 
     AString submissionLifecycleSource;
     ASSERT_TRUE(ReadTextFile(
@@ -499,7 +579,7 @@ TEST(SwapChainPresentation, CanonicalNativeQueueStateSerializesEveryInternalHost
         lifecycleDrainOffset
     );
     const usize transitionIdleOffset = fullOrchestrationSource.find(
-        "const bool deviceIdle = m_rhiDevice->waitForIdle();",
+        "const VkResult idleResult = m_rhiDevice->waitForNativeIdle();",
         acquireProofOffset
     );
     const usize preparedStateOffset = fullOrchestrationSource.find(
@@ -528,24 +608,539 @@ TEST(SwapChainPresentation, CanonicalNativeQueueStateSerializesEveryInternalHost
     ASSERT_NE(querySubmitOffset, AStringView::npos);
     EXPECT_LT(querySemanticLockOffset, queryHostLockOffset);
     EXPECT_LT(queryHostLockOffset, querySubmitOffset);
-    EXPECT_NE(fullQuerySource.find("captureDeviceLoss(\"event query submit\")", querySubmitOffset), AStringView::npos);
+    EXPECT_NE(fullQuerySource.find("deviceLossContext = \"event query submit\";", querySubmitOffset), AStringView::npos);
     EXPECT_NE(fullQuerySource.find("ScopedLock queryLock(query->m_mutex);"), AStringView::npos);
     EXPECT_NE(fullQuerySource.find("if(query->m_started){"), AStringView::npos);
-    EXPECT_NE(fullQuerySource.find("captureDeviceLoss(\"event query reset\")"), AStringView::npos);
+    EXPECT_NE(fullQuerySource.find("deviceLossContext = \"event query reset\";"), AStringView::npos);
+    EXPECT_NE(fullQuerySource.find("captureDeviceLoss(deviceLossContext);", querySubmitOffset), AStringView::npos);
     EXPECT_NE(fullQuerySource.find("captureDeviceLoss(\"event query poll\")"), AStringView::npos);
     EXPECT_NE(fullQuerySource.find("captureDeviceLoss(\"event query wait\")"), AStringView::npos);
 
-    const usize frameQueryWaitOffset = fullPresentationSource.find("if(!m_rhiDevice->waitEventQuery(query.get())){");
+    const usize frameSignalResetOffset = fullPresentationSource.find("resetFramePresentationSignal();");
+    const usize framePresentationUnlockOffset = fullPresentationSource.find(
+        "presentationLock.unlock();",
+        frameSignalResetOffset
+    );
+    const usize frameQueryWaitOffset = fullPresentationSource.find(
+        "if(!m_rhiDevice->waitEventQueryInternal(",
+        framePresentationUnlockOffset
+    );
     const usize frameQueryPopOffset = fullPresentationSource.find("m_framesInFlight.pop();", frameQueryWaitOffset);
-    const usize frameQuerySubmitOffset = fullPresentationSource.find("if(!m_rhiDevice->setEventQuery(query.get()", frameQueryPopOffset);
+    const usize frameQuerySubmitOffset = fullPresentationSource.find(
+        "if(!m_rhiDevice->setEventQueryInternal(",
+        frameQueryPopOffset
+    );
     const usize frameQueryPublishOffset = fullPresentationSource.find("m_framesInFlight.push(query);", frameQuerySubmitOffset);
+    ASSERT_NE(frameSignalResetOffset, AStringView::npos);
+    ASSERT_NE(framePresentationUnlockOffset, AStringView::npos);
     ASSERT_NE(frameQueryWaitOffset, AStringView::npos);
     ASSERT_NE(frameQueryPopOffset, AStringView::npos);
     ASSERT_NE(frameQuerySubmitOffset, AStringView::npos);
     ASSERT_NE(frameQueryPublishOffset, AStringView::npos);
+    EXPECT_LT(frameSignalResetOffset, framePresentationUnlockOffset);
+    EXPECT_LT(framePresentationUnlockOffset, frameQueryWaitOffset);
     EXPECT_LT(frameQueryWaitOffset, frameQueryPopOffset);
     EXPECT_LT(frameQueryPopOffset, frameQuerySubmitOffset);
     EXPECT_LT(frameQuerySubmitOffset, frameQueryPublishOffset);
+}
+
+
+// Presentation-signal retirement must publish a quarantined lifecycle before dropping the presentation and lifecycle
+// locks for the canonical queue join. Exact identity is revalidated before a semaphore can be replaced.
+TEST(SwapChainPresentation, PresentationSignalRetirementJoinsWithoutQueuePresentationLockInversion){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString contextHeaderSource;
+    AString frameSource;
+    AString presentationSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "backend_context.h",
+        contextHeaderSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "backend_context_frame.cpp",
+        frameSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "backend_context_presentation.cpp",
+        presentationSource
+    ));
+    const AStringView contextHeader(contextHeaderSource.data(), contextHeaderSource.size());
+    const AStringView frame(frameSource.data(), frameSource.size());
+    const AStringView presentation(presentationSource.data(), presentationSource.size());
+
+    EXPECT_NE(contextHeader.find("Retiring,"), AStringView::npos);
+    EXPECT_NE(contextHeader.find("RetiringPresentation,"), AStringView::npos);
+    const usize retirementBegin = frame.find("bool BackendContext::cancelFramePresentationSignalDeferred(");
+    const usize retirementEnd = frame.find("void BackendContext::clearSemaphores(", retirementBegin);
+    ASSERT_NE(retirementBegin, AStringView::npos);
+    ASSERT_NE(retirementEnd, AStringView::npos);
+    const AStringView retirement = frame.substr(retirementBegin, retirementEnd - retirementBegin);
+    const usize signalRetiringOffset = retirement.find(
+        "m_framePresentationSignalState = FramePresentationSignalState::Retiring;"
+    );
+    const usize lifecycleRetiringOffset = retirement.find(
+        "m_swapChainLifecycleState = SwapChainLifecycleState::RetiringPresentation;",
+        signalRetiringOffset
+    );
+    const usize presentationUnlockOffset = retirement.find("presentationLock.unlock();", lifecycleRetiringOffset);
+    const usize lifecycleUnlockOffset = retirement.find("lifecycleLock.unlock();", presentationUnlockOffset);
+    const usize nativeIdleOffset = retirement.find("device->waitForNativeIdle();", lifecycleUnlockOffset);
+    const usize lifecycleRelockOffset = retirement.find("lifecycleLock.lock();", nativeIdleOffset);
+    const usize presentationRelockOffset = retirement.find("presentationLock.lock();", lifecycleRelockOffset);
+    const usize identityRevalidationOffset = retirement.find("const bool retirementIdentityMatches", presentationRelockOffset);
+    const usize replacementOffset = retirement.find("replaceFramePresentationSemaphoreAfterIdle()", identityRevalidationOffset);
+    ASSERT_NE(signalRetiringOffset, AStringView::npos);
+    ASSERT_NE(lifecycleRetiringOffset, AStringView::npos);
+    ASSERT_NE(presentationUnlockOffset, AStringView::npos);
+    ASSERT_NE(lifecycleUnlockOffset, AStringView::npos);
+    ASSERT_NE(nativeIdleOffset, AStringView::npos);
+    ASSERT_NE(lifecycleRelockOffset, AStringView::npos);
+    ASSERT_NE(presentationRelockOffset, AStringView::npos);
+    ASSERT_NE(identityRevalidationOffset, AStringView::npos);
+    ASSERT_NE(replacementOffset, AStringView::npos);
+    EXPECT_LT(signalRetiringOffset, lifecycleRetiringOffset);
+    EXPECT_LT(lifecycleRetiringOffset, presentationUnlockOffset);
+    EXPECT_LT(presentationUnlockOffset, lifecycleUnlockOffset);
+    EXPECT_LT(lifecycleUnlockOffset, nativeIdleOffset);
+    EXPECT_LT(nativeIdleOffset, lifecycleRelockOffset);
+    EXPECT_LT(lifecycleRelockOffset, presentationRelockOffset);
+    EXPECT_LT(presentationRelockOffset, identityRevalidationOffset);
+    EXPECT_LT(identityRevalidationOffset, replacementOffset);
+    EXPECT_EQ(retirement.find("captureDeviceLoss("), AStringView::npos);
+
+    const usize abandonBegin = presentation.find("bool BackendContext::abandonAcquiredFrame(){");
+    const usize abandonEnd = presentation.find("bool BackendContext::present(){", abandonBegin);
+    ASSERT_NE(abandonBegin, AStringView::npos);
+    ASSERT_NE(abandonEnd, AStringView::npos);
+    const AStringView abandon = presentation.substr(abandonBegin, abandonEnd - abandonBegin);
+    const usize quarantineIdentityOffset = abandon.find("m_swapChainIndex = Limit<u32>::s_Max;");
+    const usize abandonPresentationUnlockOffset = abandon.find("presentationLock.unlock();", quarantineIdentityOffset);
+    const usize deferredRetirementOffset = abandon.find(
+        "cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)",
+        abandonPresentationUnlockOffset
+    );
+    ASSERT_NE(quarantineIdentityOffset, AStringView::npos);
+    ASSERT_NE(abandonPresentationUnlockOffset, AStringView::npos);
+    ASSERT_NE(deferredRetirementOffset, AStringView::npos);
+    EXPECT_LT(quarantineIdentityOffset, abandonPresentationUnlockOffset);
+    EXPECT_LT(abandonPresentationUnlockOffset, deferredRetirementOffset);
+    EXPECT_EQ(abandon.find("waitForNativeIdle()"), AStringView::npos);
+}
+
+
+// The submission gate is one atomic state machine so its noexcept drain cannot allocate or throw. All fallible
+// validation precedes native acceptance, and the accepted-submit commit path is invariant-only and logger-free.
+TEST(SwapChainPresentation, SubmissionDrainAndAcceptedCommitRemainNoThrowAfterPublication){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString backendHeaderSource;
+    AString lifecycleSource;
+    AString queueSource;
+    AString submissionSource;
+    AString descriptorHeapSource;
+    AString trackedCommandBufferSource;
+    AString stateTrackingSource;
+    AString commandMarkersSource;
+    AString rayTracingBuildSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", backendHeaderSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "device_submission_lifecycle.cpp",
+        lifecycleSource
+    ));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "queue.cpp", queueSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "queue_submission.cpp", submissionSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap.cpp",
+        descriptorHeapSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "tracked_command_buffer.cpp",
+        trackedCommandBufferSource
+    ));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "state_tracking.cpp", stateTrackingSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "command_markers.cpp", commandMarkersSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "raytracing_commands_build.cpp",
+        rayTracingBuildSource
+    ));
+    const AStringView backendHeader(backendHeaderSource.data(), backendHeaderSource.size());
+    const AStringView lifecycle(lifecycleSource.data(), lifecycleSource.size());
+    const AStringView queue(queueSource.data(), queueSource.size());
+    const AStringView submission(submissionSource.data(), submissionSource.size());
+    const AStringView descriptorHeap(descriptorHeapSource.data(), descriptorHeapSource.size());
+    const AStringView trackedCommandBuffer(trackedCommandBufferSource.data(), trackedCommandBufferSource.size());
+    const AStringView stateTracking(stateTrackingSource.data(), stateTrackingSource.size());
+    const AStringView commandMarkers(commandMarkersSource.data(), commandMarkersSource.size());
+    const AStringView rayTracingBuild(rayTracingBuildSource.data(), rayTracingBuildSource.size());
+
+    EXPECT_NE(
+        backendHeader.find("static constexpr u64 s_SubmissionDrainBit = static_cast<u64>(1u) << 63u;"),
+        AStringView::npos
+    );
+    EXPECT_NE(backendHeader.find("Atomic<u64> m_submissionOperationState = 0u;"), AStringView::npos);
+    EXPECT_EQ(backendHeader.find("m_submissionOperationMutex"), AStringView::npos);
+    EXPECT_EQ(backendHeader.find("m_submissionOperationCondition"), AStringView::npos);
+    EXPECT_EQ(backendHeader.find("m_activeSubmissionOperationCount"), AStringView::npos);
+    EXPECT_EQ(backendHeader.find("m_submissionSuspended"), AStringView::npos);
+
+    const usize beginOperationOffset = lifecycle.find("bool Device::beginSubmissionOperation()noexcept{");
+    const usize endOperationOffset = lifecycle.find("void Device::endSubmissionOperation()noexcept{", beginOperationOffset);
+    const usize beginDrainOffset = lifecycle.find("bool Device::beginLifecycleDrain()noexcept{", endOperationOffset);
+    const usize endDrainOffset = lifecycle.find("void Device::endLifecycleDrain()noexcept{", beginDrainOffset);
+    const usize sealDrainOffset = lifecycle.find("bool Device::sealLifecycleDrainForDestruction()noexcept{", endDrainOffset);
+    const usize consumeSemaphoreOffset = lifecycle.find("QueueSubmissionToken Device::consumeAcquiredImageSemaphore", sealDrainOffset);
+    ASSERT_NE(beginOperationOffset, AStringView::npos);
+    ASSERT_NE(endOperationOffset, AStringView::npos);
+    ASSERT_NE(beginDrainOffset, AStringView::npos);
+    ASSERT_NE(endDrainOffset, AStringView::npos);
+    ASSERT_NE(sealDrainOffset, AStringView::npos);
+    ASSERT_NE(consumeSemaphoreOffset, AStringView::npos);
+    const AStringView beginOperation = lifecycle.substr(beginOperationOffset, endOperationOffset - beginOperationOffset);
+    const AStringView endOperation = lifecycle.substr(endOperationOffset, beginDrainOffset - endOperationOffset);
+    const AStringView beginDrain = lifecycle.substr(beginDrainOffset, endDrainOffset - beginDrainOffset);
+    const AStringView endDrain = lifecycle.substr(endDrainOffset, sealDrainOffset - endDrainOffset);
+    const AStringView sealDrain = lifecycle.substr(sealDrainOffset, consumeSemaphoreOffset - sealDrainOffset);
+    EXPECT_NE(beginOperation.find("compare_exchange_weak("), AStringView::npos);
+    EXPECT_NE(endOperation.find("compare_exchange_weak("), AStringView::npos);
+    EXPECT_NE(endOperation.find("if((state & s_SubmissionOperationCountMask) == 0u)"), AStringView::npos);
+    EXPECT_NE(endOperation.find("TerminateInvariant();"), AStringView::npos);
+    EXPECT_EQ(endOperation.find("fetch_sub("), AStringView::npos);
+    EXPECT_NE(endOperation.find("m_submissionOperationState.notify_all();"), AStringView::npos);
+    EXPECT_NE(beginDrain.find("state | s_SubmissionDrainBit"), AStringView::npos);
+    EXPECT_NE(beginDrain.find("m_submissionOperationState.wait(state, MemoryOrder::acquire);"), AStringView::npos);
+    EXPECT_NE(endDrain.find("m_submissionOperationState.store(0u, MemoryOrder::release);"), AStringView::npos);
+    EXPECT_EQ(sealDrain.find("store(0u"), AStringView::npos);
+    EXPECT_EQ(lifecycle.find("ConditionVariable"), AStringView::npos);
+    EXPECT_EQ(lifecycle.find("UniqueLock"), AStringView::npos);
+    EXPECT_EQ(lifecycle.find("catch("), AStringView::npos);
+
+    const usize queuePreflightOffset = submission.find("validateCommandBufferSubmissionState(*tracked)");
+    const usize accelStructPreflightOffset = submission.find(
+        "validatePendingAccelStructBuildCommits()",
+        queuePreflightOffset
+    );
+    const usize heapPreflightOffset = submission.find(
+        "validateCommandBufferUseSubmissionLocked(*tracked, submissionToken, heapUseIndex)",
+        accelStructPreflightOffset
+    );
+    const usize nativeSubmitOffset = submission.find("vkQueueSubmit2(m_nativeQueue.queue", heapPreflightOffset);
+    const usize ownershipSpliceOffset = submission.find(
+        "m_commandBuffersInFlight.splice(m_commandBuffersInFlight.end(), preparedCommandBuffers)",
+        heapPreflightOffset
+    );
+    const usize heapCommitOffset = submission.find(
+        "ticket.heap->commitCommandBufferUseSubmissionLocked(*ticket.commandBuffer, submissionToken, ticket.heapUseIndex)",
+        nativeSubmitOffset
+    );
+    const usize queueCommitOffset = submission.find("commitCommandBufferStateTransition(*tracked", heapCommitOffset);
+    ASSERT_NE(queuePreflightOffset, AStringView::npos);
+    ASSERT_NE(accelStructPreflightOffset, AStringView::npos);
+    ASSERT_NE(heapPreflightOffset, AStringView::npos);
+    ASSERT_NE(ownershipSpliceOffset, AStringView::npos);
+    ASSERT_NE(nativeSubmitOffset, AStringView::npos);
+    ASSERT_NE(queueCommitOffset, AStringView::npos);
+    ASSERT_NE(heapCommitOffset, AStringView::npos);
+    EXPECT_LT(queuePreflightOffset, accelStructPreflightOffset);
+    EXPECT_LT(accelStructPreflightOffset, heapPreflightOffset);
+    EXPECT_LT(heapPreflightOffset, ownershipSpliceOffset);
+    EXPECT_LT(ownershipSpliceOffset, nativeSubmitOffset);
+    EXPECT_LT(nativeSubmitOffset, heapCommitOffset);
+    EXPECT_LT(heapCommitOffset, queueCommitOffset);
+    const usize submitFunctionEnd = submission.find("VkResult Queue::updateLastFinishedID()", nativeSubmitOffset);
+    const usize commandBatchGuardOffset = submission.rfind("if(hasCommands){", ownershipSpliceOffset);
+    ASSERT_NE(submitFunctionEnd, AStringView::npos);
+    ASSERT_NE(commandBatchGuardOffset, AStringView::npos);
+    EXPECT_LT(commandBatchGuardOffset, ownershipSpliceOffset);
+    EXPECT_EQ(
+        submission.substr(nativeSubmitOffset, submitFunctionEnd - nativeSubmitOffset).find(".splice("),
+        AStringView::npos
+    );
+    EXPECT_EQ(submission.find("Alloc::ScratchArena scratchArena"), AStringView::npos);
+    EXPECT_NE(backendHeader.find("m_submitDescriptorHeapUseCommitTickets"), AStringView::npos);
+    EXPECT_NE(backendHeader.find("m_submitValidatedTimerQueryCommandBuffers"), AStringView::npos);
+    EXPECT_NE(backendHeader.find("m_submitWaitInfos"), AStringView::npos);
+    EXPECT_NE(backendHeader.find("m_submitSignalInfos"), AStringView::npos);
+    EXPECT_NE(backendHeader.find("m_submitCommandBufferInfos"), AStringView::npos);
+    EXPECT_NE(backendHeader.find("m_submitPreparedCommandBuffers"), AStringView::npos);
+    EXPECT_EQ(submission.find("CommandBufferList preparedCommandBuffers{"), AStringView::npos);
+    EXPECT_NE(submission.find("for(usize i = 0u; i < numCmd; ++i)", nativeSubmitOffset), AStringView::npos);
+
+    const usize registerBegin = queue.find("void Queue::registerCommandBuffer(");
+    const usize queueValidateBegin = queue.find("bool Queue::validateCommandBufferSubmissionState(", registerBegin);
+    const usize transitionBegin = queue.find("void Queue::transitionCommandBufferState(", queueValidateBegin);
+    const usize queueCommitBegin = queue.find("void Queue::commitCommandBufferStateTransition(", transitionBegin);
+    const usize unregisterBegin = queue.find("void Queue::unregisterCommandBuffer(", queueCommitBegin);
+    ASSERT_NE(registerBegin, AStringView::npos);
+    ASSERT_NE(queueValidateBegin, AStringView::npos);
+    ASSERT_NE(transitionBegin, AStringView::npos);
+    ASSERT_NE(queueCommitBegin, AStringView::npos);
+    ASSERT_NE(unregisterBegin, AStringView::npos);
+    EXPECT_EQ(queue.substr(registerBegin, queueValidateBegin - registerBegin).find("NWB_LOGGER_"), AStringView::npos);
+    EXPECT_EQ(queue.substr(transitionBegin, queueCommitBegin - transitionBegin).find(")noexcept{"), AStringView::npos);
+    EXPECT_EQ(queue.substr(queueCommitBegin, unregisterBegin - queueCommitBegin).find("NWB_LOGGER_"), AStringView::npos);
+    EXPECT_NE(queue.substr(queueCommitBegin, unregisterBegin - queueCommitBegin).find("TerminateInvariant()"), AStringView::npos);
+    EXPECT_NE(queue.substr(queueCommitBegin, unregisterBegin - queueCommitBegin).find("DecrementOrAbort("), AStringView::npos);
+    EXPECT_EQ(queue.substr(queueCommitBegin, unregisterBegin - queueCommitBegin).find("fetch_sub("), AStringView::npos);
+    EXPECT_NE(backendHeader.find("void registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;"), AStringView::npos);
+
+    const usize heapCommitBegin = descriptorHeap.find("void GpuDescriptorHeap::commitCommandBufferUseSubmissionLocked(");
+    const usize heapDiscardBegin = descriptorHeap.find("void GpuDescriptorHeap::discardCommandBufferUse(", heapCommitBegin);
+    ASSERT_NE(heapCommitBegin, AStringView::npos);
+    ASSERT_NE(heapDiscardBegin, AStringView::npos);
+    EXPECT_EQ(
+        descriptorHeap.substr(heapCommitBegin, heapDiscardBegin - heapCommitBegin).find("NWB_LOGGER_"),
+        AStringView::npos
+    );
+
+    const usize accelStructValidationBegin = trackedCommandBuffer.find(
+        "bool TrackedCommandBuffer::validatePendingAccelStructBuildCommits()const noexcept{"
+    );
+    const usize accelStructCommitBegin = trackedCommandBuffer.find(
+        "void TrackedCommandBuffer::commitPendingAccelStructBuildCommits()noexcept{",
+        accelStructValidationBegin
+    );
+    const usize accelStructDiscardBegin = trackedCommandBuffer.find(
+        "void TrackedCommandBuffer::releasePendingAccelStructBuildCommits(){",
+        accelStructCommitBegin
+    );
+    ASSERT_NE(accelStructValidationBegin, AStringView::npos);
+    ASSERT_NE(accelStructCommitBegin, AStringView::npos);
+    ASSERT_NE(accelStructDiscardBegin, AStringView::npos);
+    const AStringView accelStructCommit = trackedCommandBuffer.substr(
+        accelStructCommitBegin,
+        accelStructDiscardBegin - accelStructCommitBegin
+    );
+    EXPECT_NE(accelStructCommit.find("NothrowScopedLock lock("), AStringView::npos);
+    EXPECT_NE(accelStructCommit.find("TerminateInvariant();"), AStringView::npos);
+    EXPECT_NE(accelStructCommit.find("commit.displacedRole = accelStruct.m_acceptedBuildSignatureRole;"), AStringView::npos);
+    EXPECT_NE(accelStructCommit.find("accelStruct.m_acceptedBuildSignatureRole = commit.preparedRole;"), AStringView::npos);
+    EXPECT_NE(accelStructCommit.find("commit.preparedRole = nullptr;"), AStringView::npos);
+    EXPECT_EQ(accelStructCommit.find("NWB_LOGGER_"), AStringView::npos);
+    EXPECT_EQ(accelStructCommit.find(".clear()"), AStringView::npos);
+
+    const usize timerCommitBegin = trackedCommandBuffer.find("void TrackedCommandBuffer::commitTimerQueryRecordingClaims(");
+    const usize timerDiscardBegin = trackedCommandBuffer.find("void TrackedCommandBuffer::discardTimerQueryRecordingClaims()", timerCommitBegin);
+    const usize bufferCommitBegin = trackedCommandBuffer.find("void TrackedCommandBuffer::commitRetainedBufferStateCommits()", timerDiscardBegin);
+    const usize textureCommitBegin = trackedCommandBuffer.find("void TrackedCommandBuffer::commitRetainedTextureStateCommits()", bufferCommitBegin);
+    const usize opacityCommitBegin = trackedCommandBuffer.find("void TrackedCommandBuffer::commitPendingOpacityMicromapBuildCommits()", accelStructDiscardBegin);
+    ASSERT_NE(timerCommitBegin, AStringView::npos);
+    ASSERT_NE(timerDiscardBegin, AStringView::npos);
+    ASSERT_NE(bufferCommitBegin, AStringView::npos);
+    ASSERT_NE(textureCommitBegin, AStringView::npos);
+    ASSERT_NE(opacityCommitBegin, AStringView::npos);
+    EXPECT_NE(trackedCommandBuffer.substr(timerCommitBegin, timerDiscardBegin - timerCommitBegin).find("TerminateInvariant()"), AStringView::npos);
+    EXPECT_NE(trackedCommandBuffer.find("TerminateInvariant()", bufferCommitBegin), AStringView::npos);
+    EXPECT_NE(trackedCommandBuffer.find("TerminateInvariant()", textureCommitBegin), AStringView::npos);
+    EXPECT_NE(trackedCommandBuffer.find("TerminateInvariant()", opacityCommitBegin), AStringView::npos);
+
+    const usize finalizeDetachedBegin = submission.find("const auto finalizeDetachedRecordingAttempts =");
+    const usize finalizeDetachedEnd = submission.find("const auto releaseDescriptorBufferLifecycle =", finalizeDetachedBegin);
+    ASSERT_NE(finalizeDetachedBegin, AStringView::npos);
+    ASSERT_NE(finalizeDetachedEnd, AStringView::npos);
+    const AStringView finalizeDetached = submission.substr(
+        finalizeDetachedBegin,
+        finalizeDetachedEnd - finalizeDetachedBegin
+    );
+    EXPECT_NE(finalizeDetached.find("TerminateInvariant();"), AStringView::npos);
+
+    const usize recordingCommitBegin = stateTracking.find("void StateTracker::commitRecordingAttempt()noexcept{");
+    const usize recordingRollbackBegin = stateTracking.find("void StateTracker::rollbackRecordingAttempt()noexcept{", recordingCommitBegin);
+    ASSERT_NE(recordingCommitBegin, AStringView::npos);
+    ASSERT_NE(recordingRollbackBegin, AStringView::npos);
+    EXPECT_NE(stateTracking.substr(recordingCommitBegin, recordingRollbackBegin - recordingCommitBegin).find("TerminateInvariant();"), AStringView::npos);
+
+    EXPECT_NE(commandMarkers.find("class CrashMarkerRollback final"), AStringView::npos);
+    EXPECT_NE(commandMarkers.find("crashMarkerRollback.disarm();"), AStringView::npos);
+    EXPECT_EQ(commandMarkers.find("catch("), AStringView::npos);
+
+    const usize topLevelAppend = rayTracingBuild.find("appendPendingAccelStructBuildCommit(");
+    const usize topLevelNativeBuild = rayTracingBuild.find("vkCmdBuildAccelerationStructuresKHR(", topLevelAppend);
+    const usize bottomLevelAppend = rayTracingBuild.find("appendPendingAccelStructBuildCommit(", topLevelNativeBuild);
+    const usize bottomLevelNativeBuild = rayTracingBuild.find("vkCmdBuildAccelerationStructuresKHR(", bottomLevelAppend);
+    ASSERT_NE(topLevelAppend, AStringView::npos);
+    ASSERT_NE(topLevelNativeBuild, AStringView::npos);
+    ASSERT_NE(bottomLevelAppend, AStringView::npos);
+    ASSERT_NE(bottomLevelNativeBuild, AStringView::npos);
+    EXPECT_LT(topLevelAppend, topLevelNativeBuild);
+    EXPECT_LT(bottomLevelAppend, bottomLevelNativeBuild);
+    EXPECT_NE(rayTracingBuild.substr(topLevelAppend, topLevelNativeBuild - topLevelAppend).find("rejectCommandRecording("), AStringView::npos);
+    EXPECT_NE(rayTracingBuild.substr(bottomLevelAppend, bottomLevelNativeBuild - bottomLevelAppend).find("rejectCommandRecording("), AStringView::npos);
+}
+
+
+// Upload and scratch chunks remain in one owning ledger, while a stable intrusive chain limits accepted retirement
+// to active recordings. Both the chunk commit and the concrete presentation resolution remain allocation-free.
+TEST(SwapChainPresentation, UploadChunkRetirementIsBoundedAndNoThrowAfterNativeAcceptance){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString backendHeaderSource;
+    AString ownerLookupSource;
+    AString uploadSource;
+    AString deviceQueueSource;
+    AString frameSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", backendHeaderSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "submitted_command_buffer_owner_lookup.h",
+        ownerLookupSource
+    ));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "upload.cpp", uploadSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device_queue.cpp", deviceQueueSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "backend_context_frame.cpp",
+        frameSource
+    ));
+    const AStringView backendHeader(backendHeaderSource.data(), backendHeaderSource.size());
+    const AStringView ownerLookup(ownerLookupSource.data(), ownerLookupSource.size());
+    const AStringView upload(uploadSource.data(), uploadSource.size());
+    const AStringView deviceQueue(deviceQueueSource.data(), deviceQueueSource.size());
+    const AStringView frame(frameSource.data(), frameSource.size());
+
+    EXPECT_NE(backendHeader.find("struct QueueChunkLedger{"), AStringView::npos);
+    EXPECT_NE(backendHeader.find("BufferChunk* previousActiveChunk;"), AStringView::npos);
+    EXPECT_NE(backendHeader.find("BufferChunk* nextActiveChunk;"), AStringView::npos);
+    EXPECT_NE(backendHeader.find("BufferChunk* firstActiveChunk = nullptr;"), AStringView::npos);
+    EXPECT_EQ(backendHeader.find("ChunkRecyclePredicate"), AStringView::npos);
+    EXPECT_EQ(backendHeader.find("m_chunkPool"), AStringView::npos);
+    EXPECT_EQ(backendHeader.find("m_activeChunks"), AStringView::npos);
+
+    EXPECT_NE(ownerLookup.find("using OwnerEntries = Vector<OwnerEntry, Alloc::GlobalArena>;"), AStringView::npos);
+    EXPECT_NE(ownerLookup.find("OwnerEntry* m_ownerEntriesData = nullptr;"), AStringView::npos);
+    EXPECT_NE(ownerLookup.find("m_ownerEntries.resize(tableCapacity);"), AStringView::npos);
+    EXPECT_NE(ownerLookup.find("const OwnerEntry& entry = m_ownerEntriesData[index];"), AStringView::npos);
+    EXPECT_NE(ownerLookup.find("index = (index + 1u) & m_ownerEntryMask;"), AStringView::npos);
+    EXPECT_EQ(ownerLookup.find("HashMap<"), AStringView::npos);
+    EXPECT_EQ(ownerLookup.find("Hasher<"), AStringView::npos);
+    EXPECT_EQ(ownerLookup.find(".find("), AStringView::npos);
+    EXPECT_EQ(ownerLookup.find(".reserve("), AStringView::npos);
+    EXPECT_NE(backendHeader.find("Futex m_submissionWorkspaceMutex;"), AStringView::npos);
+    EXPECT_NE(backendHeader.find("m_executeExpectedCommandLists"), AStringView::npos);
+    EXPECT_NE(backendHeader.find("m_executeSubmittedOwners"), AStringView::npos);
+    EXPECT_EQ(deviceQueue.find("Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CommandListExecuteArena)"), AStringView::npos);
+
+    const usize lookupPrepare = deviceQueue.find("submittedOwners.prepare(expectedCommandLists.size());");
+    const usize nativeSubmission = deviceQueue.find("const u64 submittedID = queue->submit(", lookupPrepare);
+    const usize firstUploadCommit = deviceQueue.find("m_uploadManager.submitChunks(", nativeSubmission);
+    ASSERT_NE(lookupPrepare, AStringView::npos);
+    ASSERT_NE(nativeSubmission, AStringView::npos);
+    ASSERT_NE(firstUploadCommit, AStringView::npos);
+    EXPECT_LT(lookupPrepare, nativeSubmission);
+    EXPECT_LT(nativeSubmission, firstUploadCommit);
+
+    EXPECT_EQ(
+        deviceQueue.find("ScopedLock submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);"),
+        AStringView::npos
+    );
+    const usize firstWorkspaceLock = deviceQueue.find(
+        "UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);"
+    );
+    const usize firstWorkspaceUnlock = deviceQueue.find("submissionWorkspaceLock.unlock();", firstUploadCommit);
+    const usize firstDeviceLossCapture = deviceQueue.find("captureDeviceLoss(\"queue submit\");", firstWorkspaceUnlock);
+    const usize secondWorkspaceLock = deviceQueue.find(
+        "UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);",
+        firstDeviceLossCapture
+    );
+    const usize hookResolution = deviceQueue.find("hookResolution.resolve(submissionToken);", secondWorkspaceLock);
+    const usize secondWorkspaceUnlock = deviceQueue.find("submissionWorkspaceLock.unlock();", hookResolution);
+    const usize secondDeviceLossCapture = deviceQueue.find("captureDeviceLoss(\"queue submit\");", secondWorkspaceUnlock);
+    ASSERT_NE(firstWorkspaceLock, AStringView::npos);
+    ASSERT_NE(firstWorkspaceUnlock, AStringView::npos);
+    ASSERT_NE(firstDeviceLossCapture, AStringView::npos);
+    ASSERT_NE(secondWorkspaceLock, AStringView::npos);
+    ASSERT_NE(hookResolution, AStringView::npos);
+    ASSERT_NE(secondWorkspaceUnlock, AStringView::npos);
+    ASSERT_NE(secondDeviceLossCapture, AStringView::npos);
+    EXPECT_LT(firstWorkspaceLock, firstWorkspaceUnlock);
+    EXPECT_LT(firstWorkspaceUnlock, firstDeviceLossCapture);
+    EXPECT_LT(secondWorkspaceLock, hookResolution);
+    EXPECT_LT(hookResolution, secondWorkspaceUnlock);
+    EXPECT_LT(secondWorkspaceUnlock, secondDeviceLossCapture);
+
+    const usize linkBegin = upload.find("void UploadManager::linkActiveChunkLocked(");
+    const usize retireBegin = upload.find("void UploadManager::retireChunkLocked(", linkBegin);
+    const usize submittedBegin = upload.find("void UploadManager::retireSubmittedChunksLocked(", retireBegin);
+    const usize ownerBegin = upload.find("void UploadManager::retireOwnerChunksLocked(", submittedBegin);
+    const usize suballocateBegin = upload.find("bool UploadManager::suballocateBuffer(", ownerBegin);
+    const usize submitBegin = upload.find("void UploadManager::submitChunks(", suballocateBegin);
+    const usize discardBegin = upload.find("void UploadManager::discardChunks(", submitBegin);
+    const usize abandonBegin = upload.find("void UploadManager::abandonChunks(", discardBegin);
+    ASSERT_NE(linkBegin, AStringView::npos);
+    ASSERT_NE(retireBegin, AStringView::npos);
+    ASSERT_NE(submittedBegin, AStringView::npos);
+    ASSERT_NE(ownerBegin, AStringView::npos);
+    ASSERT_NE(suballocateBegin, AStringView::npos);
+    ASSERT_NE(submitBegin, AStringView::npos);
+    ASSERT_NE(discardBegin, AStringView::npos);
+    ASSERT_NE(abandonBegin, AStringView::npos);
+
+    const AStringView retire = upload.substr(retireBegin, submittedBegin - retireBegin);
+    EXPECT_NE(retire.find("ledger.firstActiveChunk = chunk.nextActiveChunk;"), AStringView::npos);
+    EXPECT_NE(retire.find("chunk.owner = nullptr;"), AStringView::npos);
+    EXPECT_NE(retire.find("chunk.nativeRecordingID = 0u;"), AStringView::npos);
+    EXPECT_EQ(retire.find(".splice("), AStringView::npos);
+    EXPECT_EQ(retire.find(".erase("), AStringView::npos);
+    EXPECT_EQ(retire.find("NWB_LOGGER_"), AStringView::npos);
+
+    const AStringView submitted = upload.substr(submittedBegin, ownerBegin - submittedBegin);
+    EXPECT_NE(submitted.find("BufferChunk* chunk = ledger->firstActiveChunk;"), AStringView::npos);
+    EXPECT_NE(submitted.find("BufferChunk* const nextChunk = chunk->nextActiveChunk;"), AStringView::npos);
+    EXPECT_NE(submitted.find("submittedOwners.contains("), AStringView::npos);
+    EXPECT_EQ(submitted.find("ledger->chunks"), AStringView::npos);
+    EXPECT_EQ(submitted.find(".splice("), AStringView::npos);
+    EXPECT_EQ(submitted.find(".erase("), AStringView::npos);
+    EXPECT_EQ(submitted.find("predicate"), AStringView::npos);
+    EXPECT_EQ(submitted.find("NWB_LOGGER_"), AStringView::npos);
+
+    const AStringView submit = upload.substr(submitBegin, discardBegin - submitBegin);
+    EXPECT_NE(submit.find("static_assert(noexcept(retireSubmittedChunksLocked("), AStringView::npos);
+    EXPECT_NE(submit.find("NothrowScopedLock lock(m_mutex);"), AStringView::npos);
+    EXPECT_NE(submit.find("retireSubmittedChunksLocked("), AStringView::npos);
+    EXPECT_EQ(submit.find(".splice("), AStringView::npos);
+    EXPECT_EQ(submit.find(".erase("), AStringView::npos);
+    EXPECT_EQ(submit.find("NWB_LOGGER_"), AStringView::npos);
+    EXPECT_EQ(upload.find(".splice("), AStringView::npos);
+
+    const AStringView discard = upload.substr(discardBegin, abandonBegin - discardBegin);
+    EXPECT_NE(discard.find("retireOwnerChunksLocked(queue, reusableVersion, true, *owner, nativeRecordingID);"), AStringView::npos);
+    EXPECT_NE(upload.substr(abandonBegin).find("NothrowScopedLock lock(m_mutex);"), AStringView::npos);
+    EXPECT_NE(
+        upload.substr(abandonBegin).find("retireOwnerChunksLocked(queue, 0u, true, *owner, nativeRecordingID);"),
+        AStringView::npos
+    );
+
+    const usize firstScratchCommit = deviceQueue.find("m_scratchManager.submitChunks(", firstUploadCommit);
+    const usize secondUploadCommit = deviceQueue.find("m_uploadManager.submitChunks(", firstScratchCommit);
+    const usize secondScratchCommit = deviceQueue.find("m_scratchManager.submitChunks(", secondUploadCommit);
+    const usize resolution = deviceQueue.find("hookResolution.resolve(submissionToken);", secondScratchCommit);
+    ASSERT_NE(firstUploadCommit, AStringView::npos);
+    ASSERT_NE(firstScratchCommit, AStringView::npos);
+    ASSERT_NE(secondUploadCommit, AStringView::npos);
+    ASSERT_NE(secondScratchCommit, AStringView::npos);
+    ASSERT_NE(resolution, AStringView::npos);
+    EXPECT_LT(firstUploadCommit, firstScratchCommit);
+    EXPECT_LT(firstScratchCommit, secondUploadCommit);
+    EXPECT_LT(secondUploadCommit, secondScratchCommit);
+    EXPECT_LT(secondScratchCommit, resolution);
+
+    const usize resolutionBegin = frame.find("bool BackendContext::resolveFramePresentationSignal(");
+    const usize resolutionEnd = frame.find("bool BackendContext::confirmFramePresentationSignal(", resolutionBegin);
+    ASSERT_NE(resolutionBegin, AStringView::npos);
+    ASSERT_NE(resolutionEnd, AStringView::npos);
+    const AStringView presentationResolution = frame.substr(resolutionBegin, resolutionEnd - resolutionBegin);
+    EXPECT_NE(presentationResolution.find(")noexcept{"), AStringView::npos);
+    EXPECT_NE(presentationResolution.find("NothrowScopedLock presentationLock(m_framePresentationMutex);"), AStringView::npos);
+    EXPECT_NE(presentationResolution.find("m_framePresentationCondition.notify_all();"), AStringView::npos);
+    EXPECT_EQ(presentationResolution.find(".push_back("), AStringView::npos);
+    EXPECT_EQ(presentationResolution.find(".emplace"), AStringView::npos);
+    EXPECT_EQ(presentationResolution.find(".reserve("), AStringView::npos);
+    EXPECT_EQ(presentationResolution.find("NWB_LOGGER_"), AStringView::npos);
+    EXPECT_NE(
+        backendHeader.find("const GpuPhysicalQueueInfo* getPhysicalQueueInfo(const GpuPhysicalQueueId& queue)const noexcept;"),
+        AStringView::npos
+    );
 }
 
 
@@ -556,10 +1151,12 @@ TEST(SwapChainPresentation, LogicalQuarantineRemainsDistinctFromNativeDeviceLoss
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString backendHeaderSource;
+    AString deviceSource;
     AString diagnosticSource;
     AString presentationSource;
     AString submissionLifecycleSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", backendHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device.cpp", deviceSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device_diagnostics.cpp", diagnosticSource));
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "core" / "graphics" / "vulkan" / "backend_context_presentation.cpp",
@@ -570,6 +1167,7 @@ TEST(SwapChainPresentation, LogicalQuarantineRemainsDistinctFromNativeDeviceLoss
         submissionLifecycleSource
     ));
     const AStringView backendHeader(backendHeaderSource.data(), backendHeaderSource.size());
+    const AStringView device(deviceSource.data(), deviceSource.size());
     const AStringView diagnostics(diagnosticSource.data(), diagnosticSource.size());
     const AStringView presentation(presentationSource.data(), presentationSource.size());
     const AStringView submissionLifecycle(submissionLifecycleSource.data(), submissionLifecycleSource.size());
@@ -584,13 +1182,29 @@ TEST(SwapChainPresentation, LogicalQuarantineRemainsDistinctFromNativeDeviceLoss
         backendHeader.find("void quarantineDevice()noexcept{ m_deviceQuarantined.store(true, MemoryOrder::release); }"),
         AStringView::npos
     );
+    EXPECT_NE(backendHeader.find("void markDeviceLost()noexcept{ m_deviceLost.store(true, MemoryOrder::release); }"), AStringView::npos);
+    EXPECT_NE(backendHeader.find("void captureDeviceLoss(AStringView context);"), AStringView::npos);
     EXPECT_NE(diagnostics.find("void Device::captureDeviceLoss("), AStringView::npos);
-    EXPECT_NE(diagnostics.find("m_deviceLost.store(true, MemoryOrder::release);"), AStringView::npos);
+    EXPECT_NE(diagnostics.find("markDeviceLost();"), AStringView::npos);
+    EXPECT_EQ(diagnostics.find("catch("), AStringView::npos);
     EXPECT_EQ(diagnostics.find("m_deviceQuarantined.store"), AStringView::npos);
     EXPECT_EQ(backendHeader.find("captureGpuCrash"), AStringView::npos);
 
-    EXPECT_NE(presentation.find("captureDeviceLoss(\"acquire next image\")"), AStringView::npos);
-    EXPECT_NE(presentation.find("captureDeviceLoss(\"present\")"), AStringView::npos);
+    const usize destructorOffset = device.find("Device::~Device()noexcept{");
+    const usize waitForIdleOffset = device.find("bool Device::waitForIdle(){", destructorOffset);
+    ASSERT_NE(destructorOffset, AStringView::npos);
+    ASSERT_NE(waitForIdleOffset, AStringView::npos);
+    const AStringView destructor = device.substr(destructorOffset, waitForIdleOffset - destructorOffset);
+    EXPECT_NE(destructor.find("waitForNativeIdle()"), AStringView::npos);
+    EXPECT_NE(destructor.find("m_gpuDescriptorHeap.shutdownForDeviceTeardown();"), AStringView::npos);
+    EXPECT_NE(destructor.find("m_descriptorBufferManager.shutdownForDeviceTeardown();"), AStringView::npos);
+    EXPECT_EQ(destructor.find("waitForIdle()"), AStringView::npos);
+    EXPECT_EQ(destructor.find("savePipelineCacheData()"), AStringView::npos);
+    EXPECT_EQ(destructor.find("captureDeviceLoss("), AStringView::npos);
+    EXPECT_EQ(destructor.find("NWB_LOGGER_"), AStringView::npos);
+
+    EXPECT_NE(presentation.find("captureDeviceLossAfterUnlock(\"acquire next image\")"), AStringView::npos);
+    EXPECT_NE(presentation.find("captureDeviceLossAfterUnlock(\"present\", &presentationLock)"), AStringView::npos);
     EXPECT_NE(presentation.find("m_rhiDevice->quarantineDevice();"), AStringView::npos);
     EXPECT_EQ(presentation.find("captureDeviceLoss(\"present semaphore idle\")"), AStringView::npos);
     EXPECT_NE(submissionLifecycle.find("if(submissionsBlocked())"), AStringView::npos);
@@ -614,7 +1228,7 @@ TEST(SwapChainPresentation, TeardownFailureDoesNotPublishADeadOrRecreatedInstanc
 
     AString graphicsHeader;
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.h", graphicsHeader));
-    EXPECT_NE(graphicsHeader.find("~Graphics()noexcept;"), AString::npos);
+    EXPECT_NE(graphicsHeader.find("~Graphics()noexcept(false);"), AString::npos);
 
     AString graphicsSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.cpp", graphicsSource));
@@ -641,7 +1255,7 @@ TEST(SwapChainPresentation, TeardownFailureDoesNotPublishADeadOrRecreatedInstanc
     EXPECT_LT(prepareDestroyOffset, highLevelClearOffset);
     EXPECT_LT(highLevelClearOffset, commitDestroyOffset);
     EXPECT_LT(commitDestroyOffset, instanceDestroyedOffset);
-    const usize graphicsDestructorOffset = fullGraphicsSource.find("Graphics::~Graphics()noexcept{");
+    const usize graphicsDestructorOffset = fullGraphicsSource.find("Graphics::~Graphics()noexcept(false){");
     const usize activeUnwindOffset = fullGraphicsSource.find("if(UncaughtExceptionCount() > 0){", graphicsDestructorOffset);
     const usize destructorJobDrainOffset = fullGraphicsSource.find("m_jobSystem.drain();", activeUnwindOffset);
     const usize destructorPoolDrainOffset = fullGraphicsSource.find("m_threadPool.drain();", destructorJobDrainOffset);
@@ -718,7 +1332,7 @@ TEST(SwapChainPresentation, TeardownFailureDoesNotPublishADeadOrRecreatedInstanc
     const usize resizeCommitOffset = fullOrchestrationSource.find(
         "bool BackendContext::commitSwapChainResize(SwapChainTransitionTicket&& ticket)"
     );
-    const usize resizeDestroyOffset = fullOrchestrationSource.find("if(!destroySwapChainPrepared())", resizeCommitOffset);
+    const usize resizeDestroyOffset = fullOrchestrationSource.find("commitPreparedSwapChainDestruction();", resizeCommitOffset);
     const usize resizeCreateOffset = fullOrchestrationSource.find("if(!createSwapChainResources())", resizeDestroyOffset);
     const usize resizeReadyOffset = fullOrchestrationSource.find(
         "m_swapChainLifecycleState = SwapChainLifecycleState::Ready;",
@@ -763,80 +1377,115 @@ TEST(SwapChainPresentation, NativeTextureRetirementBracketsNativeDestructionAndC
         surfaceSource
     ));
     const AStringView fullSurfaceSource(surfaceSource.data(), surfaceSource.size());
-    const usize destroyFunctionBegin = fullSurfaceSource.find("bool BackendContext::destroySwapChainPrepared()noexcept{");
-    const usize destroyFunctionEnd = fullSurfaceSource.find(
-        "bool BackendContext::createVulkanSwapChain(){",
-        destroyFunctionBegin
+    const usize prepareFunctionBegin = fullSurfaceSource.find("bool BackendContext::prepareSwapChainImageRevocation(){");
+    const usize commitFunctionBegin = fullSurfaceSource.find(
+        "void BackendContext::commitPreparedSwapChainDestruction()noexcept{",
+        prepareFunctionBegin
     );
-    ASSERT_NE(destroyFunctionBegin, AStringView::npos);
-    ASSERT_NE(destroyFunctionEnd, AStringView::npos);
-    ASSERT_LT(destroyFunctionBegin, destroyFunctionEnd);
-    const AStringView destroyFunction = fullSurfaceSource.substr(
-        destroyFunctionBegin,
-        destroyFunctionEnd - destroyFunctionBegin
+    const usize failureCleanupBegin = fullSurfaceSource.find(
+        "bool BackendContext::destroySwapChainAfterCreateFailure(){",
+        commitFunctionBegin
     );
-    const usize revokeOffset = destroyFunction.find(
-        "swapChainImage.rhiHandle->revokeUnmanagedNativeImage(swapChainImage.image)"
+    ASSERT_NE(prepareFunctionBegin, AStringView::npos);
+    ASSERT_NE(commitFunctionBegin, AStringView::npos);
+    ASSERT_NE(failureCleanupBegin, AStringView::npos);
+    const AStringView prepareFunction = fullSurfaceSource.substr(
+        prepareFunctionBegin,
+        commitFunctionBegin - prepareFunctionBegin
     );
-    const usize nativeDestroyOffset = destroyFunction.find(
-        "vkDestroySwapchainKHR(m_vulkanDevice, m_swapChain, nullptr)"
+    const AStringView commitFunction = fullSurfaceSource.substr(
+        commitFunctionBegin,
+        failureCleanupBegin - commitFunctionBegin
     );
-    const usize releaseOffset = destroyFunction.find(
-        "swapChainImage.rhiHandle->releaseRevokedNativeImageIdentity(swapChainImage.image)"
+    const usize canRevokeOffset = prepareFunction.find("canRevokeUnmanagedNativeImage(");
+    const usize prepareRevokeOffset = prepareFunction.find("prepareRevokeUnmanagedNativeImage(", canRevokeOffset);
+    const usize commitRevokeOffset = commitFunction.find("commitRevokeUnmanagedNativeImage(");
+    const usize nativeDestroyOffset = commitFunction.find("vkDestroySwapchainKHR(", commitRevokeOffset);
+    const usize releaseIdentityOffset = commitFunction.find(
+        "releasePreparedRevokeUnmanagedNativeImageIdentity(",
+        nativeDestroyOffset
     );
-    const usize wrapperClearOffset = destroyFunction.find("m_swapChainImages.clear();");
-    ASSERT_NE(revokeOffset, AStringView::npos);
+    const usize wrapperClearOffset = commitFunction.find("m_swapChainImages.clear();", releaseIdentityOffset);
+    ASSERT_NE(canRevokeOffset, AStringView::npos);
+    ASSERT_NE(prepareRevokeOffset, AStringView::npos);
+    ASSERT_NE(commitRevokeOffset, AStringView::npos);
     ASSERT_NE(nativeDestroyOffset, AStringView::npos);
-    ASSERT_NE(releaseOffset, AStringView::npos);
+    ASSERT_NE(releaseIdentityOffset, AStringView::npos);
     ASSERT_NE(wrapperClearOffset, AStringView::npos);
-    EXPECT_LT(revokeOffset, nativeDestroyOffset);
-    EXPECT_LT(nativeDestroyOffset, releaseOffset);
-    EXPECT_LT(releaseOffset, wrapperClearOffset);
-    EXPECT_EQ(destroyFunction.find("waitForIdle()"), AStringView::npos);
+    EXPECT_LT(canRevokeOffset, prepareRevokeOffset);
+    EXPECT_LT(commitRevokeOffset, nativeDestroyOffset);
+    EXPECT_LT(nativeDestroyOffset, releaseIdentityOffset);
+    EXPECT_LT(releaseIdentityOffset, wrapperClearOffset);
+    EXPECT_EQ(commitFunction.find("waitForIdle()"), AStringView::npos);
+    EXPECT_EQ(commitFunction.find("NWB_LOGGER_"), AStringView::npos);
+    EXPECT_EQ(commitFunction.find("unregisterTextureNativeIdentity"), AStringView::npos);
 
     AString textureSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "texture.cpp", textureSource));
     const AStringView fullTextureSource(textureSource.data(), textureSource.size());
-    const usize revokeFunctionBegin = fullTextureSource.find("bool Texture::revokeUnmanagedNativeImage(");
-    const usize releaseFunctionBegin = fullTextureSource.find(
-        "void Texture::releaseRevokedNativeImageIdentity(",
-        revokeFunctionBegin
+    const usize prepareRevokeFunctionBegin = fullTextureSource.find("bool Texture::prepareRevokeUnmanagedNativeImage(");
+    const usize commitRevokeFunctionBegin = fullTextureSource.find(
+        "void Texture::commitRevokeUnmanagedNativeImage(",
+        prepareRevokeFunctionBegin
     );
-    const usize releaseFunctionEnd = fullTextureSource.find(
+    const usize releaseIdentityFunctionBegin = fullTextureSource.find(
+        "void Texture::releasePreparedRevokeUnmanagedNativeImageIdentity(",
+        commitRevokeFunctionBegin
+    );
+    const usize releaseIdentityFunctionEnd = fullTextureSource.find(
         "bool Texture::isRetainedSubresourceStateKnown(",
-        releaseFunctionBegin
+        releaseIdentityFunctionBegin
     );
-    ASSERT_NE(revokeFunctionBegin, AStringView::npos);
-    ASSERT_NE(releaseFunctionBegin, AStringView::npos);
-    ASSERT_NE(releaseFunctionEnd, AStringView::npos);
-    ASSERT_LT(revokeFunctionBegin, releaseFunctionBegin);
-    ASSERT_LT(releaseFunctionBegin, releaseFunctionEnd);
+    ASSERT_NE(prepareRevokeFunctionBegin, AStringView::npos);
+    ASSERT_NE(commitRevokeFunctionBegin, AStringView::npos);
+    ASSERT_NE(releaseIdentityFunctionBegin, AStringView::npos);
+    ASSERT_NE(releaseIdentityFunctionEnd, AStringView::npos);
+    ASSERT_LT(prepareRevokeFunctionBegin, commitRevokeFunctionBegin);
+    ASSERT_LT(commitRevokeFunctionBegin, releaseIdentityFunctionBegin);
+    ASSERT_LT(releaseIdentityFunctionBegin, releaseIdentityFunctionEnd);
 
-    const AStringView revokeFunction = fullTextureSource.substr(
-        revokeFunctionBegin,
-        releaseFunctionBegin - revokeFunctionBegin
+    const AStringView prepareRevokeFunction = fullTextureSource.substr(
+        prepareRevokeFunctionBegin,
+        commitRevokeFunctionBegin - prepareRevokeFunctionBegin
     );
-    const usize viewDestroyOffset = revokeFunction.find("vkDestroyImageView(");
-    const usize viewClearOffset = revokeFunction.find("m_views.clear();");
-    const usize imageClearOffset = revokeFunction.find("m_image = VK_NULL_HANDLE;");
+    const usize prepareIdentityOffset = prepareRevokeFunction.find(
+        "m_allocator.isTextureNativeIdentityRegistered(expectedNativeImage, *this)"
+    );
+    const usize preparedImageOffset = prepareRevokeFunction.find("m_preparedRevokedNativeImage = expectedNativeImage;");
+    ASSERT_NE(prepareIdentityOffset, AStringView::npos);
+    ASSERT_NE(preparedImageOffset, AStringView::npos);
+    EXPECT_LT(prepareIdentityOffset, preparedImageOffset);
+    EXPECT_EQ(prepareRevokeFunction.find("vkDestroyImageView("), AStringView::npos);
+
+    const AStringView commitRevokeFunction = fullTextureSource.substr(
+        commitRevokeFunctionBegin,
+        releaseIdentityFunctionBegin - commitRevokeFunctionBegin
+    );
+    const usize viewDestroyOffset = commitRevokeFunction.find("vkDestroyImageView(");
+    const usize viewClearOffset = commitRevokeFunction.find("m_views.clear();");
+    const usize imageClearOffset = commitRevokeFunction.find("m_image = VK_NULL_HANDLE;");
     ASSERT_NE(viewDestroyOffset, AStringView::npos);
     ASSERT_NE(viewClearOffset, AStringView::npos);
     ASSERT_NE(imageClearOffset, AStringView::npos);
     EXPECT_LT(viewDestroyOffset, viewClearOffset);
     EXPECT_LT(viewClearOffset, imageClearOffset);
-    EXPECT_EQ(revokeFunction.find("unregisterTextureNativeIdentity"), AStringView::npos);
+    EXPECT_NE(commitRevokeFunction.find("TerminateInvariant();"), AStringView::npos);
+    EXPECT_EQ(commitRevokeFunction.find("unregisterTextureNativeIdentity"), AStringView::npos);
+    EXPECT_EQ(commitRevokeFunction.find("NWB_LOGGER_"), AStringView::npos);
 
-    const AStringView releaseFunction = fullTextureSource.substr(
-        releaseFunctionBegin,
-        releaseFunctionEnd - releaseFunctionBegin
+    const AStringView releaseIdentityFunction = fullTextureSource.substr(
+        releaseIdentityFunctionBegin,
+        releaseIdentityFunctionEnd - releaseIdentityFunctionBegin
     );
-    const usize revokedStateCheckOffset = releaseFunction.find("if(m_managed || m_image != VK_NULL_HANDLE)");
-    const usize identityReleaseOffset = releaseFunction.find(
-        "m_allocator.unregisterTextureNativeIdentity(expectedNativeImage, *this);"
+    const usize releaseInvariantOffset = releaseIdentityFunction.find("TerminateInvariant();");
+    const usize unregisterIdentityOffset = releaseIdentityFunction.find(
+        "m_allocator.unregisterTextureNativeIdentity(expectedNativeImage, *this);",
+        releaseInvariantOffset
     );
-    ASSERT_NE(revokedStateCheckOffset, AStringView::npos);
-    ASSERT_NE(identityReleaseOffset, AStringView::npos);
-    EXPECT_LT(revokedStateCheckOffset, identityReleaseOffset);
+    ASSERT_NE(releaseInvariantOffset, AStringView::npos);
+    ASSERT_NE(unregisterIdentityOffset, AStringView::npos);
+    EXPECT_LT(releaseInvariantOffset, unregisterIdentityOffset);
+    EXPECT_EQ(releaseIdentityFunction.find("NWB_LOGGER_"), AStringView::npos);
 }
 
 

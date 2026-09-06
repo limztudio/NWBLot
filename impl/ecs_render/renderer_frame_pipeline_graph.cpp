@@ -64,8 +64,8 @@ namespace __hidden_task_graph_deferred_lighting{
 
 
 [[nodiscard]] bool PreparePacketEnvelopeMetrics(
-    const Core::GpuTaskGraph& graph,
-    const Core::GpuCompiledGraph& compiledGraph,
+    const Core::GpuTaskGraph::DeclarationReadView& graph,
+    const Core::GpuCompiledGraph::ReadView& compiledGraph,
     Core::GpuTimingRecorder& timingRecorder,
     const u64 sourceFrameIndex,
     Core::Alloc::ScratchArena& scratchArena
@@ -80,30 +80,29 @@ namespace __hidden_task_graph_deferred_lighting{
     queueOutputs.reserve(range.packetCount);
     for(usize packetOffset = 0u; packetOffset < range.packetCount; ++packetOffset){
         const Core::GpuSubmissionPacketId packetID = compiledGraph.packetIdAt(range.first.index + packetOffset);
-        const Core::GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
-        const Core::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packetID);
-        if(!packet.recordsPacketEnvelopeTiming || packet.taskCount == 0u || !packetTasks)
+        const Core::GpuCompiledPacketView packetView = compiledGraph.packet(packetID);
+        if(!packetView.valid() || !packetView.plan->recordsPacketEnvelopeTiming || packetView.plan->taskCount == 0u)
             return false;
 
-        const Name packetScopeName = Core::GpuTaskPacketTimingScopeName(graph.taskAt(packetTasks[0u].index).identity);
+        const Name packetScopeName = Core::GpuTaskPacketTimingScopeName(graph.taskAt(packetView.tasks[0u].index).identity);
         if(!packetScopeName)
             return false;
         packetScopes.push_back(Core::GpuPacketEnvelopeMetricScope{
             .scopeName = packetScopeName,
-            .physicalQueue = packet.queue,
+            .physicalQueue = packetView.plan->queue,
         });
 
         bool hasQueueOutput = false;
         for(const Core::GpuPacketEnvelopeMetricQueueOutput& output : queueOutputs)
-            hasQueueOutput = hasQueueOutput || output.physicalQueue == packet.queue;
+            hasQueueOutput = hasQueueOutput || output.physicalQueue == packetView.plan->queue;
         if(hasQueueOutput)
             continue;
 
-        const Name internalIdleScopeName = RendererGpuTimingScope::DeferredGraphQueueInternalIdle(packet.queue, scratchArena);
+        const Name internalIdleScopeName = RendererGpuTimingScope::DeferredGraphQueueInternalIdle(packetView.plan->queue, scratchArena);
         if(!internalIdleScopeName)
             return false;
         queueOutputs.push_back(Core::GpuPacketEnvelopeMetricQueueOutput{
-            .physicalQueue = packet.queue,
+            .physicalQueue = packetView.plan->queue,
             .internalIdleScopeName = internalIdleScopeName,
         });
     }
@@ -281,12 +280,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     m_deferredFrameRecoveryArmed = false;
     m_deferredFrameRecoveryRetiresTiming = false;
     m_deferredPresentationOverlayRequired = false;
-    m_deferredLightingTaskGraph.reset();
-    m_deferredLightingTaskGraphAnalysis.reset();
-    m_deferredLightingTaskGraphQueueAssignments.reset();
-    m_deferredLightingCompiledGraph.reset();
-    m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
-    m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
+    resetDeferredTaskGraphRuntime();
     // This renderer-owned declaration/build attempt starts after stale graph artifacts are discarded and ends
     // immediately before core compilation, whose total duration remains separate.
     const Timer declarationBegin = TimerNow();
@@ -422,7 +416,15 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     // assets through the bindless heap. Reuse a typed preflight import when G-buffer/AVBOIT already owns it, rather
     // than introducing an opaque descriptor domain around the trace paths.
     for(const Core::TextureHandle& texture : preparedTraceMaterialSampledTextures){
-        Core::GpuGraphResourceId resource = m_deferredLightingTaskGraph.findImportedTexture(texture);
+        Core::GpuGraphResourceId resource;
+        {
+            const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
+            if(!declarations.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared trace material texture graph was unavailable"));
+                return;
+            }
+            resource = declarations.findImportedTexture(texture);
+        }
         if(!resource.valid()){
             const Name textureIdentity = texture ? texture->getCreationDescription().name : NAME_NONE;
             if(!textureIdentity){
@@ -6149,8 +6151,9 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     compileOptions.packetTimingEnvelope.lastTask = m_deferredFrameTimingEndTask;
     m_deferredTaskTimingFeedback.configureCompileOptions(compileOptions, m_graphics.getFrameIndex());
     compileOptions.declarationSeconds = DurationInSeconds<f64>(TimerNow(), declarationBegin);
+    const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
     if(!compiler.compile(
-        m_deferredLightingTaskGraph,
+        declarations,
         m_deferredLightingTaskGraphAnalysis,
         topology,
         m_deferredLightingTaskGraphQueueAssignments,
@@ -6161,9 +6164,12 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile deferred AVBOIT/lighting/composite/present task graph"));
         return;
     }
-    if(!__hidden_task_graph_deferred_lighting::PreparePacketEnvelopeMetrics(
-        m_deferredLightingTaskGraph,
-        m_deferredLightingCompiledGraph,
+    const Core::GpuCompiledGraph::ReadView compiledPlan(m_deferredLightingCompiledGraph);
+    if(
+        !compiledPlan.validFor(declarations)
+        || !__hidden_task_graph_deferred_lighting::PreparePacketEnvelopeMetrics(
+        declarations,
+        compiledPlan,
         m_graphics.gpuTiming(),
         m_graphics.getFrameIndex(),
         scratchArena

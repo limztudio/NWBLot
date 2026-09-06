@@ -60,20 +60,20 @@ struct ShadowVisibilityOpaqueGraphTask{
         )
             return false;
 
-        const Core::GpuPhysicalQueueInfo* const queue = context.graph.queueInfo(context.queue);
+        const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
         if(!queue)
             return false;
 
         *payload.opaqueProduced = false;
         *payload.opaqueFrameIndex = 0u;
         // A retry must never retain a timestamp whose producer command list is about to be replaced.
-        if(payload.asyncTiming->has_value()){
-            payload.asyncTiming->value().discardTiming();
-            payload.asyncTiming->reset();
-        }
         if(payload.shadowVisibilityTiming->has_value()){
             payload.shadowVisibilityTiming->value().discardTiming();
             payload.shadowVisibilityTiming->reset();
+        }
+        if(payload.asyncTiming->has_value()){
+            payload.asyncTiming->value().discardTiming();
+            payload.asyncTiming->reset();
         }
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
@@ -124,29 +124,35 @@ struct ShadowVisibilityOpaqueGraphTask{
                 Core::ResourceStates::UnorderedAccess
             );
             commandList.commitBarriers();
+            payload.shadowVisibilityTiming->value().discardTiming();
+            payload.shadowVisibilityTiming->reset();
             if(payload.asyncTiming->has_value()){
                 payload.asyncTiming->value().discardTiming();
                 payload.asyncTiming->reset();
             }
-            payload.shadowVisibilityTiming->value().discardTiming();
-            payload.shadowVisibilityTiming->reset();
             return true;
         }
 
         *payload.opaqueProduced = true;
         // Both timestamp ranges end in the terminal fold callback, but their debug markers must close before this
         // graph task's marker closes.
+        const bool visibilityMarkerFinished = Core::FinishSplitGpuTimingMarker(payload.shadowVisibilityTiming);
+        bool asyncMarkerFinished = true;
         if(payload.asyncTiming->has_value())
-            payload.asyncTiming->value().finishMarker();
-        payload.shadowVisibilityTiming->value().finishMarker();
+            asyncMarkerFinished = Core::FinishSplitGpuTimingMarker(payload.asyncTiming);
+        if(!asyncMarkerFinished || !visibilityMarkerFinished){
+            Core::DiscardGpuTimingMeasure(payload.asyncTiming);
+            Core::DiscardGpuTimingMeasure(payload.shadowVisibilityTiming);
+            return false;
+        }
         return true;
     }
 
     static void discarded(Payload& payload){
         if(payload.opaqueProduced)
             *payload.opaqueProduced = false;
-        Core::DiscardGpuTimingMeasure(payload.asyncTiming);
         Core::DiscardGpuTimingMeasure(payload.shadowVisibilityTiming);
+        Core::DiscardGpuTimingMeasure(payload.asyncTiming);
     }
 };
 
@@ -213,8 +219,7 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
             payload.graphEntryStatesOwned,
             payload.graphOwnsOpaqueTemporalMergeEntryStates
         )){
-            payload.opaqueResolveTiming->value().finishMarker();
-            return true;
+            return Core::FinishSplitGpuTimingMarker(payload.opaqueResolveTiming);
         }
 
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split opaque soft-shadow first wavelet failed; retaining all-lit visibility"));
@@ -450,8 +455,7 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
             payload.graphEntryStatesOwned,
             payload.graphOwnsTransparentTemporalMergeEntryStates
         )){
-            payload.transparentResolveTiming->value().finishMarker();
-            return true;
+            return Core::FinishSplitGpuTimingMarker(payload.transparentResolveTiming);
         }
 
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split transparent soft-shadow temporal merge failed; preserving opaque visibility"));
@@ -535,8 +539,8 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
             payload.graphEntryStatesOwned,
             payload.graphOwnsTransparentWaveletInputBoundary
         )){
-            if(payload.startsTransparentResolveTiming)
-                payload.transparentResolveTiming->value().finishMarker();
+            if(payload.startsTransparentResolveTiming && !Core::FinishSplitGpuTimingMarker(payload.transparentResolveTiming))
+                return false;
             return true;
         }
 
@@ -591,7 +595,7 @@ struct ShadowTransparentSoftFoldGraphTask{
         )
             return false;
 
-        const Core::GpuPhysicalQueueInfo* const queue = context.graph.queueInfo(context.queue);
+        const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
         if(!queue)
             return false;
         if(!*payload.opaqueProduced)
@@ -630,12 +634,12 @@ struct ShadowTransparentSoftFoldGraphTask{
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split transparent soft-shadow trace or first wavelet failed; preserving opaque visibility"));
         }
 
+        payload.shadowVisibilityTiming->value().finishTiming(commandList);
+        payload.shadowVisibilityTiming->reset();
         if(payload.asyncTiming->has_value()){
             payload.asyncTiming->value().finishTiming(commandList);
             payload.asyncTiming->reset();
         }
-        payload.shadowVisibilityTiming->value().finishTiming(commandList);
-        payload.shadowVisibilityTiming->reset();
         return true;
     }
 
@@ -689,7 +693,7 @@ struct ShadowVisibilityGraphTask{
             adaptivePlan.enabled ? &adaptivePlan : nullptr
         ;
 
-        const Core::GpuPhysicalQueueInfo* const queue = context.graph.queueInfo(context.queue);
+        const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
         if(!queue)
             return false;
 

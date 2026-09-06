@@ -133,8 +133,6 @@ inline constexpr u32 s_MaxVolatileConstantBuffersPerLayout = 6;
 inline constexpr u32 s_MaxVolatileConstantBuffers = 32;
 inline constexpr u32 s_MaxPushConstantSize = 128;
 inline constexpr u32 s_ConstantBufferOffsetSizeAlignment = 256;
-inline constexpr u32 s_MaxGpuCrashMarkerStrings = 128;
-
 inline constexpr i32 s_WindowPositionAuto = -1;
 inline constexpr u32 s_BackBufferWidth = 1280;
 inline constexpr u32 s_BackBufferHeight = 720;

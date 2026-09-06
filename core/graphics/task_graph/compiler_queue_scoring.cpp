@@ -114,7 +114,7 @@ const GpuPhysicalQueueInfo* FindPhysicalQueueInfo(
 
 
 bool IsLegalQueueAssignmentCandidate(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& candidate
@@ -137,7 +137,7 @@ bool IsLegalQueueAssignmentCandidate(
 
 
 const GpuPhysicalQueueInfo* FindBestLegalQueueAssignmentCandidate(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     const CommandQueue::Enum requiredClass,
@@ -160,7 +160,7 @@ const GpuPhysicalQueueInfo* FindBestLegalQueueAssignmentCandidate(
 
 
 bool BuildGpuTaskSchedulingReachability(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     GpuTaskSchedulingReachability& outReachability
 ){
@@ -229,7 +229,7 @@ bool BuildGpuTaskSchedulingReachability(
 
 
 bool HasTransitivelyIndependentRequiredGraphicsTask(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskGraphTaskView& task
@@ -264,7 +264,7 @@ const GpuTaskQueueAssignment* FindQueueAssignment(
 
 
 GpuQueueAssignmentScore BuildQueueAssignmentScore(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
     const GraphicsVector<u32>& assignmentIndicesByTask,

@@ -7,6 +7,7 @@
 #include "device_detail.h"
 
 #include <core/common/log.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,47 +27,10 @@ namespace __hidden_vulkan_device_queue{
 
 [[nodiscard]] static VkSemaphore DecodeSubmissionNativeSemaphore(const Object& semaphore)noexcept{
 #if VK_USE_64_BIT_PTR_DEFINES
-    return static_cast<VkSemaphore>(semaphore.pointer);
+    return static_cast<VkSemaphore>(semaphore.pointer());
 #else
     return static_cast<VkSemaphore>(semaphore.integer);
 #endif
-}
-
-enum class SubmissionHookDiagnostic : u8{
-    PreparationRejected,
-    PreparationThrew,
-    PreparationThrowResolutionRejected,
-    InvalidNativeSemaphore,
-    RollbackResolutionRejected,
-    TokenResolutionRejected,
-};
-
-static void ReportSubmissionHookDiagnostic(const SubmissionHookDiagnostic diagnostic)noexcept{
-    try{
-        switch(diagnostic){
-        case SubmissionHookDiagnostic::PreparationRejected:
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to prepare exact queue submission hook"));
-            return;
-        case SubmissionHookDiagnostic::PreparationThrew:
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Exact queue submission hook threw; preparation was rolled back"));
-            return;
-        case SubmissionHookDiagnostic::PreparationThrowResolutionRejected:
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Exact queue submission hook threw and rejected rollback resolution"));
-            return;
-        case SubmissionHookDiagnostic::InvalidNativeSemaphore:
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exact queue submission hook returned an invalid native semaphore"));
-            return;
-        case SubmissionHookDiagnostic::RollbackResolutionRejected:
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Submission hook rejected rollback resolution"));
-            return;
-        case SubmissionHookDiagnostic::TokenResolutionRejected:
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Exact queue submission hook rejected its resolution token"));
-            return;
-        default:
-            return;
-        }
-    }
-    catch(...){}
 }
 
 class ScopedSubmissionHookResolution final : NoCopy{
@@ -75,18 +39,18 @@ public:
         : m_hook(hook)
     {}
     ~ScopedSubmissionHookResolution()noexcept{
-        if(m_armed && !resolve({}))
-            ReportSubmissionHookDiagnostic(SubmissionHookDiagnostic::RollbackResolutionRejected);
+        resolve({});
     }
 
 
 public:
     void arm()noexcept{ m_armed = m_hook.resolved != nullptr; }
-    [[nodiscard]] bool resolve(const QueueSubmissionToken& token)noexcept{
+    void resolve(const QueueSubmissionToken& token)noexcept{
         if(!m_armed)
-            return true;
+            return;
         m_armed = false;
-        return m_hook.resolved(m_hook.context, m_hook.identity, token);
+        if(!m_hook.resolved(m_hook.context, m_hook.identity, token))
+            TerminateInvariant();
     }
 
 
@@ -327,13 +291,20 @@ bool Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const
     )
         return false;
 
-    ScopedLock producerLock(producerQueue->m_mutex);
+    NothrowScopedLock producerLock(producerQueue->m_mutex);
     return producerQueue->m_trackingSemaphore != VK_NULL_HANDLE
         && token.value <= producerQueue->m_lastSubmittedID
     ;
 }
 
-bool Device::waitForSubmissionToken(const QueueSubmissionToken& token)noexcept{
+bool Device::waitForSubmissionToken(const QueueSubmissionToken& token){
+    return waitForSubmissionTokenInternal(token, DeviceLossDiagnosticPolicy::Capture);
+}
+
+bool Device::waitForSubmissionTokenInternal(
+    const QueueSubmissionToken& token,
+    const DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy
+){
     if(
         !token.valid()
         || !token.hasPhysicalQueueIdentity()
@@ -346,31 +317,36 @@ bool Device::waitForSubmissionToken(const QueueSubmissionToken& token)noexcept{
     if(!producerQueue)
         return false;
 
-    ScopedLock producerLock(producerQueue->m_mutex);
-    if(
-        producerQueue->m_trackingSemaphore == VK_NULL_HANDLE
-        || producerQueue->m_queueID != token.queue
-        || token.value > producerQueue->m_lastSubmittedID
-    )
-        return false;
-    if(token.value <= producerQueue->m_lastFinishedID)
-        return true;
+    VkResult result = VK_SUCCESS;
+    {
+        ScopedLock producerLock(producerQueue->m_mutex);
+        if(
+            producerQueue->m_trackingSemaphore == VK_NULL_HANDLE
+            || producerQueue->m_queueID != token.queue
+            || token.value > producerQueue->m_lastSubmittedID
+        )
+            return false;
+        if(token.value <= producerQueue->m_lastFinishedID)
+            return true;
 
-    auto waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreWaitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO);
-    waitInfo.semaphoreCount = 1u;
-    waitInfo.pSemaphores = &producerQueue->m_trackingSemaphore;
-    waitInfo.pValues = &token.value;
-    const VkResult result = m_context.deviceDispatch.vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
-    if(result != VK_SUCCESS){
-        if(result == VK_ERROR_DEVICE_LOST)
-            captureDeviceLoss("submission token wait");
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait for submission token: {}"), ResultToString(result));
-        return false;
+        auto waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreWaitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO);
+        waitInfo.semaphoreCount = 1u;
+        waitInfo.pSemaphores = &producerQueue->m_trackingSemaphore;
+        waitInfo.pValues = &token.value;
+        result = m_context.deviceDispatch.vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
+        if(result == VK_SUCCESS){
+            producerQueue->m_lastFinishedID = Max(producerQueue->m_lastFinishedID, token.value);
+            producerQueue->collectCompletedCommandBuffers();
+        }
+        else if(result == VK_ERROR_DEVICE_LOST)
+            markDeviceLost();
     }
 
-    producerQueue->m_lastFinishedID = Max(producerQueue->m_lastFinishedID, token.value);
-    producerQueue->collectCompletedCommandBuffers();
-    return true;
+    if(result == VK_ERROR_DEVICE_LOST && deviceLossDiagnosticPolicy == DeviceLossDiagnosticPolicy::Capture)
+        captureDeviceLoss("submission token wait");
+    if(result != VK_SUCCESS && deviceLossDiagnosticPolicy == DeviceLossDiagnosticPolicy::Capture)
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait for submission token: {}"), ResultToString(result));
+    return result == VK_SUCCESS;
 }
 
 
@@ -436,26 +412,35 @@ u64 Device::executeCommandLists(
         return 0;
     }
 
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CommandListExecuteArena);
-    Vector<Queue::SubmissionCommandListIdentity, Alloc::ScratchArena> expectedCommandLists{scratchArena};
+    UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);
+    auto& expectedCommandLists = queue->m_executeExpectedCommandLists;
+    auto& submittedOwners = queue->m_executeSubmittedOwners;
+    expectedCommandLists.clear();
     bool hasSubmittedOwner = false;
     if(pCommandLists && numCommandLists > 0){
         expectedCommandLists.reserve(numCommandLists);
         for(usize i = 0; i < numCommandLists; ++i){
             CommandList* const commandList = pCommandLists[i];
-            const TrackedCommandBufferPtr owner = commandList ? commandList->m_currentCmdBuf : nullptr;
+            if(
+                !commandList
+                || &commandList->m_device != this
+                || !commandList->matchesSubmissionLease(executionQueue, queue->m_queueID, false)
+            ){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command-list submission capability is invalid"));
+                return 0u;
+            }
+            TrackedCommandBuffer* const owner = commandList->m_currentCmdBuf.get();
             expectedCommandLists.push_back(Queue::SubmissionCommandListIdentity{
                 .owner = owner,
-                .recordingLeaseSerial = commandList ? commandList->recordingLeaseSerial() : 0u,
-                .nativeRecordingID = commandList ? commandList->m_nativeRecordingID : 0u,
-                .recordingWorkerDomain = commandList ? commandList->m_creationDesc.recordingWorkerDomain : 0u,
-                .recordingWorkerIndex = commandList ? commandList->m_creationDesc.recordingWorkerIndex : 0u,
+                .recordingLeaseSerial = commandList->m_recordingLeaseSerial,
+                .nativeRecordingID = commandList->m_nativeRecordingID,
+                .recordingWorkerDomain = commandList->m_creationDesc.recordingWorkerDomain,
+                .recordingWorkerIndex = commandList->m_creationDesc.recordingWorkerIndex,
             });
             if(owner)
                 hasSubmittedOwner = true;
         }
     }
-    VulkanDetail::SubmittedCommandBufferOwnerLookup submittedOwners{scratchArena};
     submittedOwners.prepare(expectedCommandLists.size());
     if(submittedOwners.indexed()){
         for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
@@ -465,13 +450,15 @@ u64 Device::executeCommandLists(
     }
 
     bool submissionAccepted = false;
+    VkResult nativeSubmissionResult = VK_SUCCESS;
     const u64 submittedID = queue->submit(
         pCommandLists,
         numCommandLists,
         expectedCommandLists.empty() ? nullptr : expectedCommandLists.data(),
         nullptr,
         0u,
-        &submissionAccepted
+        &submissionAccepted,
+        &nativeSubmissionResult
     );
 
     if(!expectedCommandLists.empty()){
@@ -499,7 +486,7 @@ u64 Device::executeCommandLists(
                     auto* cmdList = pCommandLists[i];
                     if(
                         cmdList
-                        && cmdList->m_currentCmdBuf.get() == expected.owner.get()
+                        && cmdList->m_currentCmdBuf.get() == expected.owner
                         && cmdList->m_nativeRecordingID == expected.nativeRecordingID
                     )
                         return true;
@@ -513,13 +500,13 @@ u64 Device::executeCommandLists(
                     continue;
                 m_uploadManager.discardChunks(
                     executionQueue,
-                    expected.owner.get(),
+                    expected.owner,
                     expected.nativeRecordingID,
                     reusableVersion
                 );
                 m_scratchManager.discardChunks(
                     executionQueue,
-                    expected.owner.get(),
+                    expected.owner,
                     expected.nativeRecordingID,
                     reusableVersion
                 );
@@ -529,6 +516,10 @@ u64 Device::executeCommandLists(
 
     if(outCommandListsSubmitted)
         *outCommandListsSubmitted = submissionAccepted && hasSubmittedOwner;
+
+    submissionWorkspaceLock.unlock();
+    if(nativeSubmissionResult == VK_ERROR_DEVICE_LOST)
+        captureDeviceLoss("queue submit");
 
     return submittedID;
 }
@@ -552,6 +543,26 @@ QueueSubmissionToken Device::executeCommandLists(
     const usize numCommandLists,
     const GpuPhysicalQueueId& executionQueue,
     const QueueSubmissionDesc& submitDesc
+){
+    return executeCommandListsInternal(pCommandLists, numCommandLists, executionQueue, submitDesc, false);
+}
+
+QueueSubmissionToken Device::executeGraphCommandLists(
+    CommandList* const* pCommandLists,
+    const usize numCommandLists,
+    const GpuPhysicalQueueId& executionQueue,
+    const QueueSubmissionDesc& submitDesc
+){
+    return executeCommandListsInternal(pCommandLists, numCommandLists, executionQueue, submitDesc, true);
+}
+
+QueueSubmissionToken Device::executeCommandListsInternal(
+    CommandList* const* pCommandLists,
+    const usize numCommandLists,
+    const GpuPhysicalQueueId& executionQueue,
+    const QueueSubmissionDesc& submitDesc,
+    const bool graphSubmissionAuthorized,
+    const DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy
 ){
     SubmissionOperationLease submissionOperation(*this);
     if(!submissionOperation.valid())
@@ -579,26 +590,26 @@ QueueSubmissionToken Device::executeCommandLists(
                 return {};
             }
         }
-        if(
-            !commandList
-            || &commandList->m_device != this
-            || !commandList->hasCommandBuffer()
-        ){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} is null, foreign, or has no native command buffer"), i);
+        if(!commandList || &commandList->m_device != this){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} is null or foreign"), i);
             return {};
         }
-        if(commandList->commandRecordingFailed()){
+        if(!commandList->matchesSubmissionLease(executionQueue, queue->m_queueID, graphSubmissionAuthorized)){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command list {} lease provenance does not match execution queue")
+                , i
+            );
+            return {};
+        }
+        if(!commandList->hasCommandBufferUnchecked()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} has no native command buffer"), i);
+            return {};
+        }
+        if(commandList->m_commandRecordingFailed){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} has a sticky native recording failure"), i);
             return {};
         }
         if(commandList->m_isRecording){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} is still recording"), i);
-            return {};
-        }
-        if(!commandList->matchesSubmissionLease(executionQueue, queue->m_queueID)){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command list {} lease provenance does not match execution queue")
-                , i
-            );
             return {};
         }
     }
@@ -612,8 +623,12 @@ QueueSubmissionToken Device::executeCommandLists(
         return {};
     }
 
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CommandListExecuteArena);
-    Vector<Queue::SubmissionWait, Alloc::ScratchArena> localWaits{scratchArena};
+    UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);
+    auto& localWaits = queue->m_executeLocalWaits;
+    auto& expectedCommandLists = queue->m_executeExpectedCommandLists;
+    auto& submittedOwners = queue->m_executeSubmittedOwners;
+    localWaits.clear();
+    expectedCommandLists.clear();
     if(submitDesc.waitTokenCount > 0u){
         localWaits.reserve(submitDesc.waitTokenCount);
         for(usize i = 0u; i < submitDesc.waitTokenCount; ++i){
@@ -645,22 +660,24 @@ QueueSubmissionToken Device::executeCommandLists(
         }
     }
 
-    Vector<Queue::SubmissionCommandListIdentity, Alloc::ScratchArena> expectedCommandLists{scratchArena};
     if(pCommandLists && numCommandLists > 0u){
         expectedCommandLists.reserve(numCommandLists);
         for(usize i = 0u; i < numCommandLists; ++i){
             CommandList* const commandList = pCommandLists[i];
-            const TrackedCommandBufferPtr owner = commandList->m_currentCmdBuf;
+            TrackedCommandBuffer* const owner = commandList->m_currentCmdBuf.get();
             expectedCommandLists.push_back(Queue::SubmissionCommandListIdentity{
                 .owner = owner,
-                .recordingLeaseSerial = commandList->recordingLeaseSerial(),
+                .recordingLeaseSerial = commandList->m_recordingLeaseSerial,
                 .nativeRecordingID = commandList->m_nativeRecordingID,
                 .recordingWorkerDomain = commandList->m_creationDesc.recordingWorkerDomain,
+                .graphRecordingOwnershipSerial = graphSubmissionAuthorized
+                    ? commandList->m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire)
+                    : 0u,
                 .recordingWorkerIndex = commandList->m_creationDesc.recordingWorkerIndex,
+                .graphSubmissionAuthorized = graphSubmissionAuthorized,
             });
         }
     }
-    VulkanDetail::SubmittedCommandBufferOwnerLookup submittedOwners{scratchArena};
     submittedOwners.prepare(expectedCommandLists.size());
     if(submittedOwners.indexed()){
         for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
@@ -677,40 +694,23 @@ QueueSubmissionToken Device::executeCommandLists(
     __hidden_vulkan_device_queue::ScopedSubmissionHookResolution hookResolution(submitDesc.preSubmitHook);
     if(submitDesc.preSubmitHook.valid()){
         QueueSubmissionNativeSignal nativeSignal;
-        bool hookPrepared = false;
-        try{
-            hookPrepared = submitDesc.preSubmitHook.invoke(
-                submitDesc.preSubmitHook.context,
-                submitDesc.preSubmitHook.identity,
-                executionQueue,
-                nativeSignal
-            );
-        }
-        catch(...){
-            hookResolution.arm();
-            const bool rollbackResolved = hookResolution.resolve({});
-            __hidden_vulkan_device_queue::ReportSubmissionHookDiagnostic(
-                rollbackResolved
-                    ? __hidden_vulkan_device_queue::SubmissionHookDiagnostic::PreparationThrew
-                    : __hidden_vulkan_device_queue::SubmissionHookDiagnostic::PreparationThrowResolutionRejected
-            );
-            return {};
-        }
+        const bool hookPrepared = submitDesc.preSubmitHook.invoke(
+            submitDesc.preSubmitHook.context,
+            submitDesc.preSubmitHook.identity,
+            executionQueue,
+            nativeSignal
+        );
         if(hookPrepared)
             hookResolution.arm();
         if(!hookPrepared || !nativeSignal.valid()){
-            __hidden_vulkan_device_queue::ReportSubmissionHookDiagnostic(
-                __hidden_vulkan_device_queue::SubmissionHookDiagnostic::PreparationRejected
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to prepare exact queue submission hook"));
             return {};
         }
 
         hookSignal.semaphore = __hidden_vulkan_device_queue::DecodeSubmissionNativeSemaphore(nativeSignal.semaphore);
         hookSignal.value = nativeSignal.value;
         if(hookSignal.semaphore == VK_NULL_HANDLE){
-            __hidden_vulkan_device_queue::ReportSubmissionHookDiagnostic(
-                __hidden_vulkan_device_queue::SubmissionHookDiagnostic::InvalidNativeSemaphore
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exact queue submission hook returned an invalid native semaphore"));
             return {};
         }
         localSignals = &hookSignal;
@@ -718,6 +718,7 @@ QueueSubmissionToken Device::executeCommandLists(
     }
 
     bool submissionAccepted = false;
+    VkResult nativeSubmissionResult = VK_SUCCESS;
     const u64 submittedID = queue->submit(
         pCommandLists,
         numCommandLists,
@@ -725,6 +726,7 @@ QueueSubmissionToken Device::executeCommandLists(
         localWaits.empty() ? nullptr : localWaits.data(),
         localWaits.size(),
         &submissionAccepted,
+        &nativeSubmissionResult,
         localSignals,
         localSignalCount,
         submitDesc.forceNativeSubmission
@@ -764,7 +766,7 @@ QueueSubmissionToken Device::executeCommandLists(
                     CommandList* const cmdList = pCommandLists[i];
                     if(
                         cmdList
-                        && cmdList->m_currentCmdBuf.get() == expected.owner.get()
+                        && cmdList->m_currentCmdBuf.get() == expected.owner
                         && cmdList->m_nativeRecordingID == expected.nativeRecordingID
                     )
                         return true;
@@ -778,25 +780,24 @@ QueueSubmissionToken Device::executeCommandLists(
                     continue;
                 m_uploadManager.discardChunks(
                     executionQueue,
-                    expected.owner.get(),
+                    expected.owner,
                     expected.nativeRecordingID,
                     reusableVersion
                 );
                 m_scratchManager.discardChunks(
                     executionQueue,
-                    expected.owner.get(),
+                    expected.owner,
                     expected.nativeRecordingID,
                     reusableVersion
                 );
             }
         }
     }
+    hookResolution.resolve(submissionToken);
 
-    if(!hookResolution.resolve(submissionToken)){
-        __hidden_vulkan_device_queue::ReportSubmissionHookDiagnostic(
-            __hidden_vulkan_device_queue::SubmissionHookDiagnostic::TokenResolutionRejected
-        );
-    }
+    submissionWorkspaceLock.unlock();
+    if(nativeSubmissionResult == VK_ERROR_DEVICE_LOST && deviceLossDiagnosticPolicy == DeviceLossDiagnosticPolicy::Capture)
+        captureDeviceLoss("queue submit");
 
     if(!submissionAccepted)
         return {};

@@ -4,6 +4,9 @@
 
 #include "gpu_timing.h"
 
+#include <global/exception.h>
+#include <global/termination.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -48,6 +51,47 @@ inline constexpr Name s_GpuTimingListenerScratchArena("graphics.gpu_timing.liste
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class GpuTimingRecorder::SampleCallbackCompletionScope final : NoCopy{
+public:
+    SampleCallbackCompletionScope(GpuTimingRecorder& recorder, const SampleListenerRecordPtr& record)noexcept
+        : m_recorder(recorder)
+        , m_record(record)
+        , m_uncaughtExceptionCount(UncaughtExceptionCount())
+    {
+        static_assert(
+            noexcept(SampleListenerRecordPtr(record)),
+            "GPU timing listener completion must retain its callback record without throwing"
+        );
+    }
+    ~SampleCallbackCompletionScope()noexcept{
+        {
+            NothrowScopedLock listenerLock(m_recorder.m_sampleListenerMutex);
+            const bool callbackClaimValid = m_record && m_record->activeCallbackCount != 0u;
+            NWB_FATAL_ASSERT_MSG(callbackClaimValid, "GPU timing listener callback claim underflow");
+            if(!callbackClaimValid)
+                TerminateInvariant();
+            --m_record->activeCallbackCount;
+            m_recorder.eraseSampleListenerLocked(*m_record);
+        }
+
+        if(UncaughtExceptionCount() > m_uncaughtExceptionCount){
+            NothrowScopedLock recorderLock(m_recorder.m_mutex);
+            if(m_recorder.m_statistics.sampleListenerFailureCount != Limit<u64>::s_Max)
+                ++m_recorder.m_statistics.sampleListenerFailureCount;
+        }
+    }
+
+
+private:
+    GpuTimingRecorder& m_recorder;
+    SampleListenerRecordPtr m_record;
+    i32 m_uncaughtExceptionCount = 0;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 GpuTimingSampleSubscription GpuTimingRecorder::subscribeSampleListener(const GpuTimingSampleListener& listener){
     if(!listener.valid())
         return {};
@@ -77,9 +121,8 @@ GpuTimingSampleSubscription GpuTimingRecorder::subscribeSampleListener(const Gpu
 void GpuTimingRecorder::unsubscribeSampleListener(const GpuTimingSampleSubscription& subscription)noexcept{
     SampleListenerRecordPtr record;
     u64 subscriptionIdentityLimit = 0u;
-    bool retirePendingAttributions = false;
     {
-        ScopedLock listenerLock(m_sampleListenerMutex);
+        NothrowScopedLock listenerLock(m_sampleListenerMutex);
         record = findSampleListenerLocked(subscription);
         if(!record)
             return;
@@ -89,17 +132,16 @@ void GpuTimingRecorder::unsubscribeSampleListener(const GpuTimingSampleSubscript
             publishSampleSubscriptionIdentityLimitLocked();
             subscriptionIdentityLimit = sampleSubscriptionIdentityLimitLocked();
             if(!record->feedbackScopes.empty()){
-                ScopedLock recorderLock(m_mutex);
+                NothrowScopedLock recorderLock(m_mutex);
 
                 removeFeedbackScopeDemandsLocked(record->feedbackScopes);
                 record->feedbackScopes.clear();
                 syncActiveState(subscriptionIdentityLimit);
-                retirePendingAttributions = m_pendingAttributionRetirements;
                 if(subscriptionIdentityLimit == 0u)
                     discardMarkedPendingAttributionsLocked();
             }
             else if(subscriptionIdentityLimit == 0u){
-                ScopedLock recorderLock(m_mutex);
+                NothrowScopedLock recorderLock(m_mutex);
 
                 discardMarkedPendingAttributionsLocked();
             }
@@ -107,23 +149,12 @@ void GpuTimingRecorder::unsubscribeSampleListener(const GpuTimingSampleSubscript
     }
 
     {
+        // A callback-lifetime barrier cannot be skipped during unsubscribe. Recursive-mutex acquisition failure is
+        // therefore terminal under this noexcept cleanup contract rather than an ordinary recoverable result.
         ScopedLock callbackLock(m_sampleCallbackMutex);
-        ScopedLock listenerLock(m_sampleListenerMutex);
+        NothrowScopedLock listenerLock(m_sampleListenerMutex);
 
         eraseSampleListenerLocked(*record);
-    }
-
-    if(!retirePendingAttributions || subscriptionIdentityLimit == 0u)
-        return;
-
-    while(true){
-        SampleDispatch retiredSample;
-        {
-            ScopedLock recorderLock(m_mutex);
-            if(!retireMarkedPendingAttributionLocked(retiredSample))
-                return;
-        }
-        dispatchCompletedSample(retiredSample.sample, retiredSample.subscriptionIdentityLimit);
     }
 }
 
@@ -298,7 +329,7 @@ void GpuTimingRecorder::eraseSampleListenerLocked(SampleListenerRecord& record)n
 void GpuTimingRecorder::dispatchCompletedSample(
     const GpuTimingSample& sample,
     const u64 subscriptionIdentityLimit
-)noexcept{
+){
     u64 dispatchedIdentity = 0u;
     while(dispatchedIdentity < subscriptionIdentityLimit){
         SampleListenerRecordPtr nextRecord;
@@ -337,31 +368,13 @@ void GpuTimingRecorder::dispatchCompletedSample(
             listener = nextRecord->listener;
         }
 
-        bool callbackFailed = false;
-        try{
-            listener.invoke(listener.context, sample);
-        }
-        catch(...){
-            callbackFailed = true;
-        }
+        SampleCallbackCompletionScope callbackCompletion(*this, nextRecord);
 
-        {
-            ScopedLock listenerLock(m_sampleListenerMutex);
-            NWB_ASSERT(nextRecord->activeCallbackCount > 0u);
-            if(nextRecord->activeCallbackCount > 0u)
-                --nextRecord->activeCallbackCount;
-            eraseSampleListenerLocked(*nextRecord);
-        }
-
-        if(callbackFailed){
-            ScopedLock recorderLock(m_mutex);
-            if(m_statistics.sampleListenerFailureCount != Limit<u64>::s_Max)
-                ++m_statistics.sampleListenerFailureCount;
-        }
+        listener.invoke(listener.context, sample);
     }
 }
 
-void GpuTimingRecorder::dispatchCompletedSamples(const SampleDispatchVector& samples)noexcept{
+void GpuTimingRecorder::dispatchCompletedSamples(const SampleDispatchVector& samples){
     for(const SampleDispatch& sample : samples)
         dispatchCompletedSample(sample.sample, sample.subscriptionIdentityLimit);
 }

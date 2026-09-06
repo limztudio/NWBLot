@@ -139,8 +139,11 @@ bool RendererFramePipeline::setTaskGraphTimingFeedbackPolicy(const Core::GpuTask
 
 
 Core::GpuTaskGraphRuntimeStatistics RendererFramePipeline::deferredTaskGraphRuntimeStatistics()const noexcept{
+    const Core::GpuCompiledGraph::ReadView deferredCompiledPlan(m_deferredLightingCompiledGraph);
+
     return Core::CollectGpuTaskGraphRuntimeStatistics(
         m_deferredLightingCompiledGraph,
+        deferredCompiledPlan,
         m_deferredLightingRecordedGraph,
         m_deferredLightingSubmissionTransaction
     );

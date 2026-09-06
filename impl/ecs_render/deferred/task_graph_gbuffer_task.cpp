@@ -134,15 +134,16 @@ namespace ECSRenderDetail{
     }
 
     // Attachment clears begin the first raster segment after pre-raster compute. Any barrier-driven continuation
-    // resumes with LOAD, while the implicit STORE operations preserve all G-buffer data for later graph packets.
+    // resumes with LOAD, while the default STORE actions preserve all G-buffer data for later graph packets.
     Core::RenderPassParameters renderPassParameters;
     renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_BASE_COLOR_LOCATION] = ECSRenderDetail::s_ClearColor;
     renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_NORMAL_LOCATION] =
         ECSRenderDetail::s_GBufferNormalClearColor;
     renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION] =
         ECSRenderDetail::s_GBufferWorldPositionClearColor;
-    renderPassParameters.clearColorTargets = true;
-    renderPassParameters.clearDepthTarget = true;
+    for(u32 attachmentIndex = 0u; attachmentIndex < NWB_MESH_GBUFFER_TARGET_COUNT; ++attachmentIndex)
+        renderPassParameters.colorAttachmentActions[attachmentIndex].loadAction = Core::RenderPassLoadAction::Clear;
+    renderPassParameters.depthAttachmentActions.loadAction = Core::RenderPassLoadAction::Clear;
     commandList.beginRenderPass(deferredTargets.framebuffer.get(), renderPassParameters);
 
     if(deferredResourcesReady){
@@ -178,7 +179,8 @@ namespace ECSRenderDetail{
                 );
                 // The timestamps span ordered graph callbacks; the marker must still close in this producer
                 // callback before its command list can be finalized.
-                payload.regularSharedComputeEmulationTiming->value().finishMarker();
+                if(!Core::FinishSplitGpuTimingMarker(payload.regularSharedComputeEmulationTiming))
+                    return false;
                 if(!regularDrawItemsForGbuffer->empty()){
                     materialSystem.renderMaterialPassDrawItems(
                         opaqueDrawContext,

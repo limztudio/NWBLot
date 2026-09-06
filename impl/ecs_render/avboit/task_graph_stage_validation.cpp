@@ -15,7 +15,7 @@ NWB_IMPL_BEGIN
 
 
 RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
-    const Core::GpuCompiledGraph& compiledGraph,
+    const Core::GpuCompiledGraph::ReadView& compiledGraph,
     const bool clearTargets,
     const bool hasTransparentRenderers
 )const{
@@ -30,7 +30,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         ;
     };
     const auto taskIsCompiled = [&compiledGraph](const Core::GpuTaskId task){
-        return compiledGraph.findTask(task) != nullptr;
+        return compiledGraph.findTask(task).valid();
     };
     const auto taskBoundaryIsOrdered = [&compiledGraph](
         const Core::GpuTaskId producerTask,

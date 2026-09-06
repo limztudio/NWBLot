@@ -3,6 +3,7 @@
 
 
 #include <tests/common/test_context.h>
+#include <tests/common/gpu_task_graph_read_views.h>
 
 #include <gtest/gtest.h>
 
@@ -166,7 +167,8 @@ struct TextureClearTestContext{
     Graphics::GpuTaskGraphCompileOptions options;
     options.allowMetadataOnlyTasks = true;
     const Graphics::GpuTaskGraphCompiler compiler;
-    return compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, options);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    return compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, options);
 }
 
 
@@ -204,10 +206,14 @@ TEST(GpuTaskGraph, TextureClearNormalizesPartialRegionsAndPreservesGraphicsAlter
         partialClear
     );
     ASSERT_TRUE(partialTask.valid());
-    EXPECT_EQ(
-        partialGraph.taskAt(partialTask.index).queue.requiredCapabilities,
-        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(partialGraph);
+        ASSERT_TRUE(declarations.valid());
+        EXPECT_EQ(
+            declarations.taskAt(partialTask.index).queue.requiredCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+        );
+    }
 
     {
         const Graphics::GpuPhysicalQueueInfo queue = DedicatedTransferQueue();
@@ -256,10 +262,14 @@ TEST(GpuTaskGraph, TextureClearNormalizesPartialRegionsAndPreservesGraphicsAlter
         graphicsFullClear
     );
     ASSERT_TRUE(graphicsFullTask.valid());
-    EXPECT_EQ(
-        graphicsGraph.taskAt(graphicsFullTask.index).queue.requiredCapabilities,
-        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graphicsGraph);
+        ASSERT_TRUE(declarations.valid());
+        EXPECT_EQ(
+            declarations.taskAt(graphicsFullTask.index).queue.requiredCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+        );
+    }
 
     Graphics::GpuTaskDesc graphicsRectDesc = MakeTransferTaskDesc(
         Name("tests/task_graph/graphics_partial_texture_clear_task"),
@@ -276,10 +286,14 @@ TEST(GpuTaskGraph, TextureClearNormalizesPartialRegionsAndPreservesGraphicsAlter
         graphicsRectClear
     );
     ASSERT_TRUE(graphicsRectTask.valid());
-    EXPECT_EQ(
-        graphicsGraph.taskAt(graphicsRectTask.index).queue.requiredCapabilities,
-        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graphicsGraph);
+        ASSERT_TRUE(declarations.valid());
+        EXPECT_EQ(
+            declarations.taskAt(graphicsRectTask.index).queue.requiredCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+        );
+    }
 }
 
 TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilities){
@@ -313,10 +327,14 @@ TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilitie
         fullRectClear
     );
     ASSERT_TRUE(fullRectTask.valid());
-    ASSERT_EQ(
-        fullRectGraph.taskAt(fullRectTask.index).queue.requiredCapabilities,
-        Graphics::GpuQueueCapability::Transfer
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(fullRectGraph);
+        ASSERT_TRUE(declarations.valid());
+        ASSERT_EQ(
+            declarations.taskAt(fullRectTask.index).queue.requiredCapabilities,
+            Graphics::GpuQueueCapability::Transfer
+        );
+    }
 
     const Graphics::GpuPhysicalQueueInfo graphicsQueue = GraphicsQueue();
     const Graphics::GpuTaskGraphQueueTopology graphicsTopology{
@@ -337,69 +355,75 @@ TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilitie
             scratchArena
         ));
     }
-    const Graphics::GpuSubmissionPacketId fullRectPacket = fullRectCompiledGraph.packetForTask(fullRectTask);
-    ASSERT_TRUE(fullRectPacket.valid());
-    const Graphics::GpuPhysicalQueueId fullRectQueue = fullRectCompiledGraph.packet(fullRectPacket).queue;
-
-    Graphics::GpuCommandIrCapture validFullRectCapture(testContext.testArena.arena);
-    ASSERT_TRUE(validFullRectCapture.captureClearTextureRectUInt(
-        fullRectTask,
-        fullRectPacket,
-        fullRectQueue,
-        fullRectResource,
-        fullRectClear
-    ));
-    EXPECT_EQ(
-        Graphics::PreflightGpuCommandIrPacket(
-            validFullRectCapture.commandBytes(),
-            fullRectGraph,
-            fullRectCompiledGraph,
-            fullRectPacket
-        ).error,
-        Graphics::GpuCommandIrReplayError::None
-    );
-
     Graphics::GpuClearTextureRectUIntTaskDesc undeclaredPartialClear = fullRectClear;
     undeclaredPartialClear.rect = Graphics::Rect(2, 2);
-    Graphics::GpuCommandIrCapture undeclaredPartialCapture(testContext.testArena.arena);
-    ASSERT_TRUE(undeclaredPartialCapture.captureClearTextureRectUInt(
-        fullRectTask,
-        fullRectPacket,
-        fullRectQueue,
-        fullRectResource,
-        undeclaredPartialClear
-    ));
-    EXPECT_EQ(
-        Graphics::PreflightGpuCommandIrPacket(
-            undeclaredPartialCapture.commandBytes(),
-            fullRectGraph,
-            fullRectCompiledGraph,
-            fullRectPacket
-        ).error,
-        Graphics::GpuCommandIrReplayError::InvalidTextureClear
-    );
-
     Graphics::GpuClearTextureTaskDesc undeclaredFullClear;
     undeclaredFullClear.destination = fullRectResource;
     undeclaredFullClear.subresources = fullRectClear.subresources;
     undeclaredFullClear.valueType = Graphics::GpuClearTextureTaskValueType::UInt;
-    Graphics::GpuCommandIrCapture undeclaredFullCapture(testContext.testArena.arena);
-    ASSERT_TRUE(undeclaredFullCapture.captureClearTexture(
-        fullRectTask,
-        fullRectPacket,
-        fullRectQueue,
-        fullRectResource,
-        undeclaredFullClear
-    ));
-    EXPECT_EQ(
-        Graphics::PreflightGpuCommandIrPacket(
-            undeclaredFullCapture.commandBytes(),
-            fullRectGraph,
-            fullRectCompiledGraph,
-            fullRectPacket
-        ).error,
-        Graphics::GpuCommandIrReplayError::InvalidTextureClear
-    );
+    {
+        const GpuTaskGraphReadViews fullRectViews(fullRectGraph, fullRectCompiledGraph);
+        ASSERT_TRUE(fullRectViews.valid());
+        const Graphics::GpuSubmissionPacketId fullRectPacket = fullRectViews.compiled.packetForTask(fullRectTask);
+        ASSERT_TRUE(fullRectPacket.valid());
+        const Graphics::GpuCompiledPacketView fullRectPacketView = fullRectViews.compiled.packet(fullRectPacket);
+        ASSERT_TRUE(fullRectPacketView.valid());
+        const Graphics::GpuPhysicalQueueId fullRectQueue = fullRectPacketView.plan->queue;
+
+        Graphics::GpuCommandIrCapture validFullRectCapture(testContext.testArena.arena);
+        ASSERT_TRUE(validFullRectCapture.captureClearTextureRectUInt(
+            fullRectTask,
+            fullRectPacket,
+            fullRectQueue,
+            fullRectResource,
+            fullRectClear
+        ));
+        EXPECT_EQ(
+            Graphics::PreflightGpuCommandIrPacket(
+                validFullRectCapture.commandBytes(),
+                fullRectViews.declarations,
+                fullRectViews.compiled,
+                fullRectPacket
+            ).error,
+            Graphics::GpuCommandIrReplayError::None
+        );
+
+        Graphics::GpuCommandIrCapture undeclaredPartialCapture(testContext.testArena.arena);
+        ASSERT_TRUE(undeclaredPartialCapture.captureClearTextureRectUInt(
+            fullRectTask,
+            fullRectPacket,
+            fullRectQueue,
+            fullRectResource,
+            undeclaredPartialClear
+        ));
+        EXPECT_EQ(
+            Graphics::PreflightGpuCommandIrPacket(
+                undeclaredPartialCapture.commandBytes(),
+                fullRectViews.declarations,
+                fullRectViews.compiled,
+                fullRectPacket
+            ).error,
+            Graphics::GpuCommandIrReplayError::InvalidTextureClear
+        );
+
+        Graphics::GpuCommandIrCapture undeclaredFullCapture(testContext.testArena.arena);
+        ASSERT_TRUE(undeclaredFullCapture.captureClearTexture(
+            fullRectTask,
+            fullRectPacket,
+            fullRectQueue,
+            fullRectResource,
+            undeclaredFullClear
+        ));
+        EXPECT_EQ(
+            Graphics::PreflightGpuCommandIrPacket(
+                undeclaredFullCapture.commandBytes(),
+                fullRectViews.declarations,
+                fullRectViews.compiled,
+                fullRectPacket
+            ).error,
+            Graphics::GpuCommandIrReplayError::InvalidTextureClear
+        );
+    }
 
     Graphics::GpuTaskGraph partialGraph(testContext.testArena.arena);
     const Graphics::GpuGraphResourceId partialResource = ImportTexture(
@@ -419,10 +443,14 @@ TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilitie
         partialClear
     );
     ASSERT_TRUE(partialTask.valid());
-    ASSERT_EQ(
-        partialGraph.taskAt(partialTask.index).queue.requiredCapabilities,
-        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(partialGraph);
+        ASSERT_TRUE(declarations.valid());
+        ASSERT_EQ(
+            declarations.taskAt(partialTask.index).queue.requiredCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+        );
+    }
 
     const Graphics::GpuPhysicalQueueInfo computeQueue = DedicatedComputeQueue();
     const Graphics::GpuTaskGraphQueueTopology computeTopology{
@@ -443,9 +471,13 @@ TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilitie
             scratchArena
         ));
     }
-    const Graphics::GpuSubmissionPacketId partialPacket = partialCompiledGraph.packetForTask(partialTask);
+    const GpuTaskGraphReadViews partialViews(partialGraph, partialCompiledGraph);
+    ASSERT_TRUE(partialViews.valid());
+    const Graphics::GpuSubmissionPacketId partialPacket = partialViews.compiled.packetForTask(partialTask);
     ASSERT_TRUE(partialPacket.valid());
-    const Graphics::GpuPhysicalQueueId partialQueueId = partialCompiledGraph.packet(partialPacket).queue;
+    const Graphics::GpuCompiledPacketView partialPacketView = partialViews.compiled.packet(partialPacket);
+    ASSERT_TRUE(partialPacketView.valid());
+    const Graphics::GpuPhysicalQueueId partialQueueId = partialPacketView.plan->queue;
 
     Graphics::GpuCommandIrCapture partialCapture(testContext.testArena.arena);
     ASSERT_TRUE(partialCapture.captureClearTextureRectUInt(
@@ -470,8 +502,8 @@ TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilitie
     EXPECT_EQ(
         Graphics::PreflightGpuCommandIrPacket(
             partialCapture.commandBytes(),
-            partialGraph,
-            partialCompiledGraph,
+            partialViews.declarations,
+            partialViews.compiled,
             partialPacket
         ).error,
         Graphics::GpuCommandIrReplayError::None
@@ -479,14 +511,14 @@ TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilitie
     EXPECT_EQ(
         Graphics::PreflightGpuCommandIrPacket(
             fullCapture.commandBytes(),
-            partialGraph,
-            partialCompiledGraph,
+            partialViews.declarations,
+            partialViews.compiled,
             partialPacket
         ).error,
         Graphics::GpuCommandIrReplayError::None
     );
 
-    const Graphics::GpuPhysicalQueueInfo* const compiledQueue = partialCompiledGraph.queueInfo(partialQueueId);
+    const Graphics::GpuPhysicalQueueInfo* const compiledQueue = partialViews.compiled.queueInfo(partialQueueId);
     ASSERT_NE(compiledQueue, nullptr);
     Graphics::GpuPhysicalQueueInfo* const corruptedQueue = const_cast<Graphics::GpuPhysicalQueueInfo*>(compiledQueue);
     const Graphics::GpuQueueCapability::Mask originalCapabilities = corruptedQueue->capabilities;
@@ -497,8 +529,8 @@ TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilitie
     EXPECT_EQ(
         Graphics::PreflightGpuCommandIrPacket(
             partialCapture.commandBytes(),
-            partialGraph,
-            partialCompiledGraph,
+            partialViews.declarations,
+            partialViews.compiled,
             partialPacket
         ).error,
         Graphics::GpuCommandIrReplayError::InvalidTextureClear
@@ -506,8 +538,8 @@ TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilitie
     EXPECT_EQ(
         Graphics::PreflightGpuCommandIrPacket(
             fullCapture.commandBytes(),
-            partialGraph,
-            partialCompiledGraph,
+            partialViews.declarations,
+            partialViews.compiled,
             partialPacket
         ).error,
         Graphics::GpuCommandIrReplayError::InvalidTextureClear
@@ -546,10 +578,14 @@ TEST(GpuTextureClearContract, RejectsUnsupportedStagedFormatsAtDeclarationAndRep
         supportedClear
     );
     ASSERT_TRUE(supportedTask.valid());
-    ASSERT_EQ(
-        supportedGraph.taskAt(supportedTask.index).queue.requiredCapabilities,
-        Graphics::GpuQueueCapability::Transfer
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(supportedGraph);
+        ASSERT_TRUE(declarations.valid());
+        ASSERT_EQ(
+            declarations.taskAt(supportedTask.index).queue.requiredCapabilities,
+            Graphics::GpuQueueCapability::Transfer
+        );
+    }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
     const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
@@ -558,26 +594,32 @@ TEST(GpuTextureClearContract, RejectsUnsupportedStagedFormatsAtDeclarationAndRep
     Graphics::GpuCompiledGraph compiledGraph(testContext.testArena.arena);
     Core::Alloc::ScratchArena scratchArena(s_TextureClearScratchArena);
     ASSERT_TRUE(Compile(supportedGraph, analysis, topology, assignments, compiledGraph, scratchArena));
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(supportedTask);
-    ASSERT_TRUE(packet.valid());
-    const Graphics::GpuPhysicalQueueId queueId = compiledGraph.packet(packet).queue;
-    Graphics::GpuCommandIrCapture capture(testContext.testArena.arena);
-    ASSERT_TRUE(capture.captureClearTexture(
-        supportedTask,
-        packet,
-        queueId,
-        supportedResource,
-        supportedClear
-    ));
-    EXPECT_EQ(
-        Graphics::PreflightGpuCommandIrPacket(
-            capture.commandBytes(),
-            supportedGraph,
-            compiledGraph,
-            packet
-        ).error,
-        Graphics::GpuCommandIrReplayError::None
-    );
+    {
+        const GpuTaskGraphReadViews views(supportedGraph, compiledGraph);
+        ASSERT_TRUE(views.valid());
+        const Graphics::GpuSubmissionPacketId packet = views.compiled.packetForTask(supportedTask);
+        ASSERT_TRUE(packet.valid());
+        const Graphics::GpuCompiledPacketView packetView = views.compiled.packet(packet);
+        ASSERT_TRUE(packetView.valid());
+        const Graphics::GpuPhysicalQueueId queueId = packetView.plan->queue;
+        Graphics::GpuCommandIrCapture capture(testContext.testArena.arena);
+        ASSERT_TRUE(capture.captureClearTexture(
+            supportedTask,
+            packet,
+            queueId,
+            supportedResource,
+            supportedClear
+        ));
+        EXPECT_EQ(
+            Graphics::PreflightGpuCommandIrPacket(
+                capture.commandBytes(),
+                views.declarations,
+                views.compiled,
+                packet
+            ).error,
+            Graphics::GpuCommandIrReplayError::None
+        );
+    }
 
     constexpr Graphics::Format::Enum s_UnsupportedFormats[] = {
         Graphics::Format::BC6H_UFLOAT,
@@ -618,7 +660,11 @@ TEST(GpuTextureClearContract, RejectsUnsupportedStagedFormatsAtDeclarationAndRep
             rejectedClear
         ).valid());
         EXPECT_FALSE(acceptedToken.valid());
-        EXPECT_EQ(rejectedGraph.taskCount(), 0u);
+        {
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(rejectedGraph);
+            ASSERT_TRUE(declarations.valid());
+            EXPECT_EQ(declarations.taskCount(), 0u);
+        }
 
         rejectedClear.acceptedToken = nullptr;
         const Graphics::GpuTaskResourceUse replayUse{
@@ -645,9 +691,13 @@ TEST(GpuTextureClearContract, RejectsUnsupportedStagedFormatsAtDeclarationAndRep
             replayCompiledGraph,
             scratchArena
         ));
-        const Graphics::GpuSubmissionPacketId replayPacket = replayCompiledGraph.packetForTask(replayTask);
+        const GpuTaskGraphReadViews replayViews(rejectedGraph, replayCompiledGraph);
+        ASSERT_TRUE(replayViews.valid());
+        const Graphics::GpuSubmissionPacketId replayPacket = replayViews.compiled.packetForTask(replayTask);
         ASSERT_TRUE(replayPacket.valid());
-        const Graphics::GpuPhysicalQueueId replayQueueId = replayCompiledGraph.packet(replayPacket).queue;
+        const Graphics::GpuCompiledPacketView replayPacketView = replayViews.compiled.packet(replayPacket);
+        ASSERT_TRUE(replayPacketView.valid());
+        const Graphics::GpuPhysicalQueueId replayQueueId = replayPacketView.plan->queue;
         Graphics::GpuCommandIrCapture replayCapture(testContext.testArena.arena);
         ASSERT_TRUE(replayCapture.captureClearTexture(
             replayTask,
@@ -658,8 +708,8 @@ TEST(GpuTextureClearContract, RejectsUnsupportedStagedFormatsAtDeclarationAndRep
         ));
         const Graphics::GpuCommandIrReplayResult replayResult = Graphics::PreflightGpuCommandIrPacket(
             replayCapture.commandBytes(),
-            rejectedGraph,
-            replayCompiledGraph,
+            replayViews.declarations,
+            replayViews.compiled,
             replayPacket
         );
         EXPECT_EQ(replayResult.error, Graphics::GpuCommandIrReplayError::InvalidTextureClear);

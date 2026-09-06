@@ -171,6 +171,8 @@ void CommandList::clearColorTexture(
     const bool integerValue,
     const bool signedIntegerValue
 ){
+    if(!publicCommandStateAccessible())
+        return;
     static_cast<void>(valueName);
     constexpr const tchar* s_OperationName = NWB_TEXT("clear texture");
     if(!textureResource){
@@ -294,6 +296,8 @@ void CommandList::clearColorTextureBox(
     const bool integerValue,
     const bool signedIntegerValue
 ){
+    if(!publicCommandStateAccessible())
+        return;
     if(VulkanTextureDetail::TextureClearBoxEmpty(box))
         return;
     static_cast<void>(valueName);

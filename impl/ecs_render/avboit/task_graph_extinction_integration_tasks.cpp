@@ -96,7 +96,8 @@ namespace RendererTaskGraphDetail{
     );
     // Extinction's raster half records after this producer in the same selected Graphics packet. Close the
     // marker before this command list completes; its consumer owns finishTiming/discard.
-    payload.extinctionTiming->value().finishMarker();
+    if(!Core::FinishSplitGpuTimingMarker(payload.extinctionTiming))
+        return false;
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(
         payload.targets->avboit.lowFramebuffer->getFramebufferInfo().getViewport()
@@ -171,7 +172,8 @@ namespace RendererTaskGraphDetail{
                 graphics.getDevice(),
                 commandList
             );
-            payload.extinctionTiming->value().finishMarker();
+            if(!Core::FinishSplitGpuTimingMarker(payload.extinctionTiming))
+                return false;
         }
         else if(!payload.extinctionTiming->has_value())
             return false;
@@ -283,10 +285,10 @@ namespace RendererTaskGraphDetail{
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     bool timingRecorded = false;
     if(payload.timingFeedback && payload.timingScope){
-        const Core::GpuPhysicalQueueInfo* const queueInfo = context.graph.queueInfo(context.queue);
-        const Core::GpuCompiledTask* const compiledTask = context.graph.findTask(context.task);
-        if(queueInfo && compiledTask){
-            const Core::GpuTaskGraphTaskView task = context.taskGraph.taskAt(context.task.index);
+        const Core::GpuPhysicalQueueInfo* const queueInfo = context.compiledPlan.queueInfo(context.queue);
+        const Core::GpuCompiledTaskView compiledTask = context.compiledPlan.findTask(context.task);
+        if(queueInfo && compiledTask.valid()){
+            const Core::GpuTaskGraphTaskView task = context.declarations.taskAt(context.task.index);
             payload.timingAttribution = payload.timingFeedback->beginSample(
                 payload.timingScope->identity,
                 Core::GpuTaskTimingKey{
@@ -296,7 +298,7 @@ namespace RendererTaskGraphDetail{
                     .queue = queueInfo->queueClass,
                 },
                 context.queue,
-                compiledTask->recordsNonCommittingTimingSample
+                compiledTask.plan->recordsNonCommittingTimingSample
             );
         }
     }

@@ -311,6 +311,7 @@ void GpuTimingMetricCorrelator::recordTimestampRange(
     const Name& scopeName,
     const u64 frameIndex,
     const GpuComparableTimestampRange& range,
+    GpuTimingSinkSampleVector& performanceSamples,
     Alloc::ScratchArena& scratchArena
 ){
     for(OverlapRecord& record : m_overlapRecords){
@@ -355,7 +356,12 @@ void GpuTimingMetricCorrelator::recordTimestampRange(
         u64 overlapTicks = 0u;
         if(TryComputeGpuTimestampOverlap(frame->first, frame->second, overlapTicks)){
             const f64 overlapSeconds = static_cast<f64>(overlapTicks) * frame->first.secondsPerTick;
-            m_timing.recordSample(record.outputScope, overlapSeconds, frameIndex);
+            performanceSamples.reserve(performanceSamples.size() + 1u);
+            performanceSamples.push_back(GpuTimingSinkSample{
+                .scope = record.outputScope,
+                .durationSeconds = overlapSeconds,
+                .sourceFrameIndex = frameIndex,
+            });
         }
         for(auto it = record.pendingFrames.begin(); it != record.pendingFrames.end(); ++it){
             if(&*it == frame){
@@ -395,6 +401,7 @@ void GpuTimingMetricCorrelator::recordTimestampRange(
             continue;
         }
 
+        performanceSamples.reserve(performanceSamples.size() + 1u + it->queueOutputs.size());
         Vector<GpuComparableTimestampRange, Alloc::ScratchArena> packetRanges{scratchArena};
         packetRanges.reserve(it->scopes.size());
         for(const PacketEnvelopeMetricScopeRecord& scope : it->scopes)
@@ -420,13 +427,21 @@ void GpuTimingMetricCorrelator::recordTimestampRange(
         if(aggregated){
             const f64 secondsPerTick = envelopeMetrics.secondsPerTick;
             const f64 overlapSeconds = static_cast<f64>(envelopeMetrics.queueOverlapTicks) * secondsPerTick;
-            m_timing.recordSample(it->queueOverlapScope, overlapSeconds, it->sourceFrameIndex);
+            performanceSamples.push_back(GpuTimingSinkSample{
+                .scope = it->queueOverlapScope,
+                .durationSeconds = overlapSeconds,
+                .sourceFrameIndex = it->sourceFrameIndex,
+            });
             for(const GpuQueuePacketEnvelopeMetrics& queueMetric : queueMetrics){
                 for(const PacketEnvelopeMetricQueueOutputRecord& output : it->queueOutputs){
                     if(output.physicalQueue != queueMetric.physicalQueue)
                         continue;
                     const f64 idleSeconds = static_cast<f64>(queueMetric.internalIdleTicks) * secondsPerTick;
-                    m_timing.recordSample(output.internalIdleScope, idleSeconds, it->sourceFrameIndex);
+                    performanceSamples.push_back(GpuTimingSinkSample{
+                        .scope = output.internalIdleScope,
+                        .durationSeconds = idleSeconds,
+                        .sourceFrameIndex = it->sourceFrameIndex,
+                    });
                     break;
                 }
             }

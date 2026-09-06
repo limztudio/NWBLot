@@ -172,6 +172,19 @@ struct TimerQueryRecordingToken{
     }
 };
 
+// One exact command-list marker. Native recording identity prevents a stale scope from closing a marker on a reused
+// command list, while markerSerial distinguishes owners at the same nesting depth.
+struct CommandMarkerRecordingToken{
+    u64 recordingLeaseSerial = 0u;
+    u64 nativeRecordingID = 0u;
+    u64 markerSerial = 0u;
+
+
+    [[nodiscard]] constexpr bool valid()const noexcept{
+        return recordingLeaseSerial != 0u && nativeRecordingID != 0u && markerSerial != 0u;
+    }
+};
+
 // Raw device-timestamp values for one timer query. Vulkan exposes only the low timestampValidBits from one physical
 // queue family, so ordinary durations use modular tick arithmetic. Absolute endpoints are available only when the
 // logical device enabled and successfully probed calibrated timestamps and the exact queue exposes all 64 bits.
@@ -265,7 +278,7 @@ public:
 
 
 public:
-    void reset(){
+    void reset()noexcept{
         m_textureStates.clear();
         m_bufferStates.clear();
         m_permanentTextureStates.clear();
@@ -286,16 +299,20 @@ public:
     // the base producer before every branch and every branch before the eventual consumer. Only final resource
     // states are merged here: callers must still keep cross-branch read/write hazards disjoint or synchronize them
     // explicitly. Returns false if a branch is invalid or two branches leave the same resource in incompatible final
-    // states. `this` must be distinct from base and every branch.
+    // states. `this` must be distinct from base and every branch. Temporary state indices reuse caller-owned
+    // operation scratch; persistent merged state remains in this handoff's owning graphics arena.
     [[nodiscard]] bool buildFanIn(
         const CommandListResourceStateHandoff& base,
         const CommandListResourceStateHandoff* const* branches,
-        usize branchCount
+        usize branchCount,
+        Alloc::ScratchArena& scratchArena
     );
 
     // Builds a valid handoff containing only the selected resources from `source`. This lets a cross-queue packet
     // import exactly the resources its queue may access instead of accidentally acquiring unrelated exclusive
-    // resources from a broad producer snapshot. Null resource entries are ignored.
+    // resources from a broad producer snapshot. Null resource entries are ignored and `source` may alias `this`.
+    // Construction is failure-atomic: invalid input returns false and allocation exceptions unwind without changing
+    // the destination snapshot.
     [[nodiscard]] bool buildResourceSubset(
         const CommandListResourceStateHandoff& source,
         Texture* const* textures,
@@ -326,6 +343,9 @@ public:
     // Copies a valid state snapshot without exposing backend tracker storage.  Packet recording uses this to retain
     // graph-owned producer seeds while legacy consumers still request their own final handoff.
     [[nodiscard]] bool copyFrom(const CommandListResourceStateHandoff& source);
+    // Compares immutable snapshot contents rather than the address of a producer-owned snapshot. This is suitable
+    // for declaration deduplication across producer-storage retirement and same-address allocator reuse.
+    [[nodiscard]] bool equivalentTo(const CommandListResourceStateHandoff& snapshot)const noexcept;
     // Exchanges complete snapshot storage without allocating. Both snapshots must be backed by the same arena so
     // each vector remains paired with the allocator that owns its storage after the exchange.
     [[nodiscard]] bool exchangeSnapshot(CommandListResourceStateHandoff& snapshot)noexcept;
@@ -345,19 +365,35 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace RenderPassLoadAction{
+    enum Enum : u8{
+        Load,
+        Clear,
+        Discard,
+        Count,
+    };
+};
+
+namespace RenderPassStoreAction{
+    enum Enum : u8{
+        Store,
+        Discard,
+        Count,
+    };
+};
+
+struct RenderPassAttachmentActions{
+    RenderPassLoadAction::Enum loadAction = RenderPassLoadAction::Load;
+    RenderPassStoreAction::Enum storeAction = RenderPassStoreAction::Store;
+};
+
 struct RenderPassParameters{
     Color colorClearValues[s_MaxRenderTargets]{};
+    RenderPassAttachmentActions colorAttachmentActions[s_MaxRenderTargets]{};
     f32 depthClearValue = s_DepthClearValue;
-    bool clearColorTargets = false;
-    u8 colorClearMask = static_cast<u8>((1u << s_MaxRenderTargets) - 1u);
-    bool clearDepthTarget = false;
-    bool clearStencilTarget = false;
+    RenderPassAttachmentActions depthAttachmentActions;
+    RenderPassAttachmentActions stencilAttachmentActions;
     u8 stencilClearValue = 0;
-
-
-    [[nodiscard]] constexpr bool clearColorTarget(const u32 index)const{
-        return index < s_MaxRenderTargets && (colorClearMask & (1u << index)) != 0u;
-    }
 };
 
 struct VertexBufferBinding{

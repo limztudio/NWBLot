@@ -290,7 +290,8 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         if(splitIntervalCombine){
             // No Combine callback will emit the endpoint when its producer skipped. Preserve the legacy short
             // interval instead of retaining an unfinished timestamp reservation across the packet.
-            intervalTiming->value().finishMarker();
+            if(!Core::FinishSplitGpuTimingMarker(intervalTiming))
+                return;
             intervalTiming->value().finishTiming(commandList);
             intervalTiming->reset();
         }
@@ -356,7 +357,8 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     else{
         // The task marker surrounding this callback must close before the following Combine graph task begins its
         // own marker. The timestamp endpoint remains open until that callback records.
-        intervalTiming->value().finishMarker();
+        if(!Core::FinishSplitGpuTimingMarker(intervalTiming))
+            return;
     }
     // A deferred span callback receives graph-lowered prologue barriers before it records. The receiver-surface
     // raster pass must therefore be closed even when the native span dispatch moved out of this callback.

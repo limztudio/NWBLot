@@ -34,9 +34,121 @@ public:
         return device.m_context.allocationCallbacks;
     }
     [[nodiscard]] static VolkDeviceTable& deviceDispatch(Device& device)noexcept{ return device.m_context.deviceDispatch; }
+    [[nodiscard]] static usize currentTimerQueryRecordingClaimCount(const CommandList& commandList)noexcept{
+        return commandList.m_currentCmdBuf ? commandList.m_currentCmdBuf->m_timerQueryRecordingClaims.size() : 0u;
+    }
+    [[nodiscard]] static usize currentRetainedResourceCount(const CommandList& commandList)noexcept{
+        return commandList.m_currentCmdBuf ? commandList.m_currentCmdBuf->m_referencedResources.size() : 0u;
+    }
+    [[nodiscard]] static u32 markerDepth(const CommandList& commandList)noexcept{
+        return static_cast<u32>(commandList.m_markerStack.size());
+    }
+    [[nodiscard]] static usize recordGpuCrashMarkerHistory(CommandList& commandList, const char* name){
+        const usize markerHash = commandList.m_gpuCrashMarkerTracker.pushEvent(name);
+        commandList.m_gpuCrashMarkerTracker.popEvent();
+        return markerHash;
+    }
+    [[nodiscard]] static ResolvedMarker resolveGpuCrashMarkerHistory(CommandList& commandList, const usize markerHash){
+        return commandList.m_device.getGpuCrashTracker().resolveMarker(markerHash);
+    }
     [[nodiscard]] static bool beginLifecycleDrain(Device& device)noexcept{ return device.beginLifecycleDrain(); }
     static void endLifecycleDrain(Device& device)noexcept{ device.endLifecycleDrain(); }
     [[nodiscard]] static bool submissionsBlocked(const Device& device)noexcept{ return device.submissionsBlocked(); }
+    [[nodiscard]] static bool holdGraphCommandListRecording(
+        CommandList& commandList,
+        const u64 recordingLeaseSerial,
+        const CommandList* const foreignCommandList,
+        AtomicFlag& entered,
+        AtomicFlag& beginProbe,
+        AtomicFlag& probeFinished,
+        AtomicFlag& release
+    ){
+        CommandList::GraphRecordingOwnership ownership(commandList, recordingLeaseSerial);
+        entered.test_and_set(MemoryOrder::release);
+        entered.notify_all();
+        while(!beginProbe.test(MemoryOrder::acquire))
+            beginProbe.wait(false, MemoryOrder::acquire);
+
+        bool stateValid = ownership.m_acquired
+            && commandList.isRecording()
+            && commandList.hasCommandBuffer()
+            && !commandList.commandRecordingFailed()
+            && commandList.matchesRecordingLease(recordingLeaseSerial)
+        ;
+        if(foreignCommandList){
+            stateValid = stateValid
+                && !foreignCommandList->isRecording()
+                && !foreignCommandList->hasCommandBuffer()
+                && !foreignCommandList->commandRecordingFailed()
+                && foreignCommandList->recordingLeaseSerial() == 0u
+            ;
+        }
+        probeFinished.test_and_set(MemoryOrder::release);
+        probeFinished.notify_all();
+        while(!release.test(MemoryOrder::acquire))
+            release.wait(false, MemoryOrder::acquire);
+
+        if(!ownership.m_acquired)
+            return false;
+        const bool finishAccepted = ownership.finish(false, nullptr);
+        return stateValid && !finishAccepted;
+    }
+    [[nodiscard]] static bool rejectGraphCommandListOwnerOpenAndCloseBoundaries(
+        CommandList& openBoundaryCommandList,
+        CommandList& closeBoundaryCommandList
+    ){
+        bool openBoundaryRejected = false;
+        {
+            CommandList::GraphRecordingOwnership ownership(
+                openBoundaryCommandList,
+                openBoundaryCommandList.recordingLeaseSerialUnchecked()
+            );
+            if(!ownership.m_acquired)
+                return false;
+            openBoundaryCommandList.open();
+            openBoundaryRejected = openBoundaryCommandList.commandRecordingFailedUnchecked();
+            if(ownership.finish(false, nullptr))
+                return false;
+        }
+
+        bool closeBoundaryRejected = false;
+        {
+            CommandList::GraphRecordingOwnership ownership(
+                closeBoundaryCommandList,
+                closeBoundaryCommandList.recordingLeaseSerialUnchecked()
+            );
+            if(!ownership.m_acquired)
+                return false;
+            closeBoundaryCommandList.close();
+            closeBoundaryRejected = closeBoundaryCommandList.commandRecordingFailedUnchecked();
+            if(ownership.finish(false, nullptr))
+                return false;
+        }
+        return openBoundaryRejected && closeBoundaryRejected;
+    }
+    [[nodiscard]] static bool holdGraphCommandListPublicationRead(
+        CommandList& commandList,
+        AtomicFlag& entered,
+        AtomicFlag& release
+    )noexcept{
+        const CommandList::GraphPublicationReadOwnership ownership(commandList);
+        if(!ownership.m_readable)
+            return false;
+        entered.test_and_set(MemoryOrder::release);
+        entered.notify_all();
+        while(!release.test(MemoryOrder::acquire))
+            YieldThread();
+        return commandList.hasCommandBufferUnchecked();
+    }
+    [[nodiscard]] static bool rejectGraphCommandListPublicationAfterSemanticClose(CommandList& commandList){
+        CommandList::GraphRecordingOwnership ownership(
+            commandList,
+            commandList.recordingLeaseSerialUnchecked()
+        );
+        if(!ownership.m_acquired)
+            return false;
+        return ownership.finish(true, nullptr);
+    }
 };
 
 
@@ -159,6 +271,10 @@ struct VulkanTestQueueSubmit2Capture{
 
 
 class VulkanTestQueueSubmit2Observer final : NoCopy{
+public:
+    using NativeSubmitHook = void(*)(void*)noexcept;
+
+
 private:
     inline static Atomic<VulkanTestQueueSubmit2Observer*> s_activeObserver{ nullptr };
     inline static PFN_vkQueueSubmit2 s_forwardQueueSubmit2 = nullptr;
@@ -202,7 +318,12 @@ private:
             m_overflowed.store(true, MemoryOrder::release);
             if(consumeSubmissionFailure(queue))
                 return VK_ERROR_OUT_OF_HOST_MEMORY;
-            return forward(queue, submitCount, submits, fence);
+            if(m_beforeNativeSubmitHook)
+                m_beforeNativeSubmitHook(m_nativeSubmitHookContext);
+            const VkResult result = forward(queue, submitCount, submits, fence);
+            if(m_afterNativeSubmitHook)
+                m_afterNativeSubmitHook(m_nativeSubmitHookContext);
+            return result;
         }
 
         VulkanTestQueueSubmit2Capture& capture = m_captures[captureIndex];
@@ -285,8 +406,13 @@ private:
 
         if(consumeSubmissionFailure(queue))
             capture.result = VK_ERROR_OUT_OF_HOST_MEMORY;
-        else
+        else{
+            if(m_beforeNativeSubmitHook)
+                m_beforeNativeSubmitHook(m_nativeSubmitHookContext);
             capture.result = forward(queue, submitCount, submits, fence);
+            if(m_afterNativeSubmitHook)
+                m_afterNativeSubmitHook(m_nativeSubmitHookContext);
+        }
         m_captureComplete[captureIndex].store(true, MemoryOrder::release);
         return capture.result;
     }
@@ -340,6 +466,23 @@ public:
 public:
     [[nodiscard]] bool valid()const noexcept{ return m_armed; }
     [[nodiscard]] bool overflowed()const noexcept{ return m_overflowed.load(MemoryOrder::acquire); }
+    [[nodiscard]] bool configureNativeSubmitHooks(
+        void* const context,
+        const NativeSubmitHook beforeNativeSubmit,
+        const NativeSubmitHook afterNativeSubmit
+    )noexcept{
+        if(
+            !m_armed
+            || m_reservedCaptureCount.load(MemoryOrder::acquire) != 0u
+            || ((beforeNativeSubmit || afterNativeSubmit) && !context)
+        )
+            return false;
+
+        m_nativeSubmitHookContext = context;
+        m_beforeNativeSubmitHook = beforeNativeSubmit;
+        m_afterNativeSubmitHook = afterNativeSubmit;
+        return true;
+    }
     [[nodiscard]] bool armSubmissionFailures(VkQueue queue, u32 count = 1u){
         if(!m_armed || queue == VK_NULL_HANDLE || count == 0u)
             return false;
@@ -437,6 +580,9 @@ private:
     VkQueue m_submissionFailureQueue = VK_NULL_HANDLE;
     u32 m_injectedSubmissionFailureCount = 0u;
     u32 m_pendingSubmissionFailureCount = 0u;
+    void* m_nativeSubmitHookContext = nullptr;
+    NativeSubmitHook m_beforeNativeSubmitHook = nullptr;
+    NativeSubmitHook m_afterNativeSubmitHook = nullptr;
     bool m_armed = false;
 };
 

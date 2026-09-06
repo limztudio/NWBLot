@@ -3,6 +3,7 @@
 
 
 #include <tests/common/test_context.h>
+#include <tests/common/gpu_task_graph_read_views.h>
 #include "task_graph_resource_version_test_utils.h"
 
 #include <gtest/gtest.h>
@@ -71,7 +72,8 @@ using TaskGraphResourceVersionTestUtils::GraphicsQueue;
     const Graphics::GpuTaskGraphCompiler compiler;
     Graphics::GpuTaskGraphCompileOptions metadataOptions = options;
     metadataOptions.allowMetadataOnlyTasks = true;
-    return compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    return compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions);
 }
 
 
@@ -166,57 +168,92 @@ TEST(GpuTaskGraphTiming, CompilesInclusivePacketEnvelopeWithoutChangingTaskPolic
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, assignments, compiledGraph, options));
-    ASSERT_TRUE(compiledGraph.validFor(graph));
-    ASSERT_EQ(compiledGraph.packetCount(), 5u);
+    Graphics::GpuSubmissionPacketRange expectedRange;
+    Graphics::GpuSubmissionPacketRange oldRange;
+    u64 oldPlanGeneration = 0u;
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        ASSERT_TRUE(views.valid());
+        ASSERT_EQ(views.compiled.packetCount(), 5u);
 
-    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
-    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(firstEndpoint);
-    const Graphics::GpuSubmissionPacketId middlePacket = compiledGraph.packetForTask(middle);
-    const Graphics::GpuSubmissionPacketId lastPacket = compiledGraph.packetForTask(lastEndpoint);
-    const Graphics::GpuSubmissionPacketId tailPacket = compiledGraph.packetForTask(timedTail);
-    EXPECT_EQ(compiledGraph.packetForTask(firstPacketPrefix), firstPacket);
-    EXPECT_EQ(compiledGraph.packetForTask(lastPacketSuffix), lastPacket);
-    const Graphics::GpuSubmissionPacketRange expectedRange = compiledGraph.packetRange(firstPacket, lastPacket);
-    ASSERT_TRUE(expectedRange.valid());
-    ASSERT_EQ(expectedRange.packetCount, 3u);
-    const Graphics::GpuSubmissionPacketRange compiledRange = compiledGraph.packetTimingEnvelopeRange();
-    EXPECT_EQ(compiledRange.first, expectedRange.first);
-    EXPECT_EQ(compiledRange.packetCount, expectedRange.packetCount);
+        const Graphics::GpuSubmissionPacketId prefixPacket = views.compiled.packetForTask(prefix);
+        const Graphics::GpuSubmissionPacketId firstPacket = views.compiled.packetForTask(firstEndpoint);
+        const Graphics::GpuSubmissionPacketId middlePacket = views.compiled.packetForTask(middle);
+        const Graphics::GpuSubmissionPacketId lastPacket = views.compiled.packetForTask(lastEndpoint);
+        const Graphics::GpuSubmissionPacketId tailPacket = views.compiled.packetForTask(timedTail);
+        EXPECT_EQ(views.compiled.packetForTask(firstPacketPrefix), firstPacket);
+        EXPECT_EQ(views.compiled.packetForTask(lastPacketSuffix), lastPacket);
+        expectedRange = views.compiled.packetRange(firstPacket, lastPacket);
+        ASSERT_TRUE(expectedRange.valid());
+        ASSERT_EQ(expectedRange.packetCount, 3u);
+        const Graphics::GpuSubmissionPacketRange compiledRange = views.compiled.packetTimingEnvelopeRange();
+        EXPECT_EQ(compiledRange.first, expectedRange.first);
+        EXPECT_EQ(compiledRange.packetCount, expectedRange.packetCount);
 
-    EXPECT_FALSE(compiledGraph.packet(prefixPacket).recordsPacketEnvelopeTiming);
-    EXPECT_FALSE(compiledGraph.packet(prefixPacket).recordsTiming);
-    EXPECT_TRUE(compiledGraph.packet(firstPacket).recordsPacketEnvelopeTiming);
-    EXPECT_TRUE(compiledGraph.packet(firstPacket).recordsTiming);
-    EXPECT_TRUE(compiledGraph.packet(middlePacket).recordsPacketEnvelopeTiming);
-    EXPECT_TRUE(compiledGraph.packet(middlePacket).recordsTiming);
-    EXPECT_TRUE(compiledGraph.packet(lastPacket).recordsPacketEnvelopeTiming);
-    EXPECT_TRUE(compiledGraph.packet(lastPacket).recordsTiming);
-    EXPECT_FALSE(compiledGraph.packet(tailPacket).recordsPacketEnvelopeTiming);
-    EXPECT_TRUE(compiledGraph.packet(tailPacket).recordsTiming);
-    ASSERT_NE(compiledGraph.findTask(firstEndpoint), nullptr);
-    ASSERT_NE(compiledGraph.findTask(timedTail), nullptr);
-    EXPECT_EQ(compiledGraph.findTask(firstEndpoint)->timingPolicy, Graphics::GpuTaskTimingPolicy::None);
-    EXPECT_EQ(compiledGraph.findTask(timedTail)->timingPolicy, Graphics::GpuTaskTimingPolicy::PacketOnly);
+        const Graphics::GpuCompiledPacketView prefixPacketView = views.compiled.packet(prefixPacket);
+        const Graphics::GpuCompiledPacketView firstPacketView = views.compiled.packet(firstPacket);
+        const Graphics::GpuCompiledPacketView middlePacketView = views.compiled.packet(middlePacket);
+        const Graphics::GpuCompiledPacketView lastPacketView = views.compiled.packet(lastPacket);
+        const Graphics::GpuCompiledPacketView tailPacketView = views.compiled.packet(tailPacket);
+        ASSERT_TRUE(prefixPacketView.valid());
+        ASSERT_TRUE(firstPacketView.valid());
+        ASSERT_TRUE(middlePacketView.valid());
+        ASSERT_TRUE(lastPacketView.valid());
+        ASSERT_TRUE(tailPacketView.valid());
+        EXPECT_FALSE(prefixPacketView.plan->recordsPacketEnvelopeTiming);
+        EXPECT_FALSE(prefixPacketView.plan->recordsTiming);
+        EXPECT_TRUE(firstPacketView.plan->recordsPacketEnvelopeTiming);
+        EXPECT_TRUE(firstPacketView.plan->recordsTiming);
+        EXPECT_TRUE(middlePacketView.plan->recordsPacketEnvelopeTiming);
+        EXPECT_TRUE(middlePacketView.plan->recordsTiming);
+        EXPECT_TRUE(lastPacketView.plan->recordsPacketEnvelopeTiming);
+        EXPECT_TRUE(lastPacketView.plan->recordsTiming);
+        EXPECT_FALSE(tailPacketView.plan->recordsPacketEnvelopeTiming);
+        EXPECT_TRUE(tailPacketView.plan->recordsTiming);
+        const Graphics::GpuCompiledTaskView firstEndpointView = views.compiled.findTask(firstEndpoint);
+        const Graphics::GpuCompiledTaskView timedTailView = views.compiled.findTask(timedTail);
+        ASSERT_TRUE(firstEndpointView.valid());
+        ASSERT_TRUE(timedTailView.valid());
+        EXPECT_EQ(firstEndpointView.plan->timingPolicy, Graphics::GpuTaskTimingPolicy::None);
+        EXPECT_EQ(timedTailView.plan->timingPolicy, Graphics::GpuTaskTimingPolicy::PacketOnly);
 
-    const Graphics::GpuSubmissionPacketRange oldRange = compiledRange;
-    const u64 oldPlanGeneration = compiledGraph.planGeneration();
+        oldRange = compiledRange;
+        oldPlanGeneration = views.compiled.planGeneration();
+    }
     ASSERT_TRUE(Compile(graph, analysis, assignments, compiledGraph, options));
-    EXPECT_NE(compiledGraph.planGeneration(), oldPlanGeneration);
-    ASSERT_TRUE(compiledGraph.packetTimingEnvelopeRange().valid());
-    EXPECT_EQ(compiledGraph.packetTimingEnvelopeRange().packetCount, expectedRange.packetCount);
-    EXPECT_FALSE(compiledGraph.validPacketRange(oldRange));
-
-    const u64 recompiledPlanGeneration = compiledGraph.planGeneration();
+    u64 recompiledPlanGeneration = 0u;
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        ASSERT_TRUE(views.valid());
+        EXPECT_NE(views.compiled.planGeneration(), oldPlanGeneration);
+        const Graphics::GpuSubmissionPacketRange recompiledRange = views.compiled.packetTimingEnvelopeRange();
+        ASSERT_TRUE(recompiledRange.valid());
+        EXPECT_EQ(recompiledRange.packetCount, expectedRange.packetCount);
+        EXPECT_FALSE(views.compiled.validPacketRange(oldRange));
+        recompiledPlanGeneration = views.compiled.planGeneration();
+    }
     ASSERT_TRUE(Compile(graph, analysis, assignments, compiledGraph));
-    EXPECT_NE(compiledGraph.planGeneration(), recompiledPlanGeneration);
-    EXPECT_FALSE(compiledGraph.packetTimingEnvelopeRange().valid());
-    EXPECT_FALSE(compiledGraph.validPacketRange(oldRange));
-    for(usize packetIndex = 0u; packetIndex < compiledGraph.packetCount(); ++packetIndex)
-        EXPECT_FALSE(compiledGraph.packet(compiledGraph.packetIdAt(packetIndex)).recordsPacketEnvelopeTiming);
-    EXPECT_TRUE(compiledGraph.packet(compiledGraph.packetForTask(timedTail)).recordsTiming);
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        ASSERT_TRUE(views.valid());
+        EXPECT_NE(views.compiled.planGeneration(), recompiledPlanGeneration);
+        EXPECT_FALSE(views.compiled.packetTimingEnvelopeRange().valid());
+        EXPECT_FALSE(views.compiled.validPacketRange(oldRange));
+        for(usize packetIndex = 0u; packetIndex < views.compiled.packetCount(); ++packetIndex){
+            const Graphics::GpuCompiledPacketView packet = views.compiled.packet(views.compiled.packetIdAt(packetIndex));
+            ASSERT_TRUE(packet.valid());
+            EXPECT_FALSE(packet.plan->recordsPacketEnvelopeTiming);
+        }
+        const Graphics::GpuCompiledPacketView tailPacket = views.compiled.packet(views.compiled.packetForTask(timedTail));
+        ASSERT_TRUE(tailPacket.valid());
+        EXPECT_TRUE(tailPacket.plan->recordsTiming);
+    }
 
     compiledGraph.reset();
-    EXPECT_FALSE(compiledGraph.packetTimingEnvelopeRange().valid());
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        EXPECT_FALSE(views.compiled.packetTimingEnvelopeRange().valid());
+    }
 }
 
 TEST(GpuTaskGraphTiming, RejectsIncompleteForeignAndReversedEnvelopeEndpoints){
@@ -237,13 +274,19 @@ TEST(GpuTaskGraphTiming, RejectsIncompleteForeignAndReversedEnvelopeEndpoints){
     options.packetTimingEnvelope.firstTask = first;
     EXPECT_FALSE(options.packetTimingEnvelope.enabled());
     EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
-    EXPECT_FALSE(compiledGraph.valid());
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        EXPECT_FALSE(views.compiled.valid());
+    }
 
     options.packetTimingEnvelope = {};
     options.packetTimingEnvelope.lastTask = third;
     EXPECT_FALSE(options.packetTimingEnvelope.enabled());
     EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
-    EXPECT_FALSE(compiledGraph.valid());
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        EXPECT_FALSE(views.compiled.valid());
+    }
 
     Graphics::GpuTaskGraph foreignGraph(testArena.arena);
     const Graphics::GpuTaskId foreign = AddTask(
@@ -254,16 +297,27 @@ TEST(GpuTaskGraphTiming, RejectsIncompleteForeignAndReversedEnvelopeEndpoints){
     options.packetTimingEnvelope = { .firstTask = first, .lastTask = foreign };
     ASSERT_TRUE(options.packetTimingEnvelope.enabled());
     EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
-    EXPECT_FALSE(compiledGraph.valid());
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        EXPECT_FALSE(views.compiled.valid());
+    }
 
     options.packetTimingEnvelope = { .firstTask = third, .lastTask = first };
     EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
-    EXPECT_FALSE(compiledGraph.valid());
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        EXPECT_FALSE(views.compiled.valid());
+    }
 
     options.packetTimingEnvelope = { .firstTask = second, .lastTask = second };
     ASSERT_TRUE(Compile(graph, analysis, assignments, compiledGraph, options));
-    ASSERT_TRUE(compiledGraph.packetTimingEnvelopeRange().valid());
-    EXPECT_EQ(compiledGraph.packetTimingEnvelopeRange().packetCount, 1u);
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        ASSERT_TRUE(views.valid());
+        const Graphics::GpuSubmissionPacketRange range = views.compiled.packetTimingEnvelopeRange();
+        ASSERT_TRUE(range.valid());
+        EXPECT_EQ(range.packetCount, 1u);
+    }
 
     Graphics::GpuTaskGraph mergedGraph(testArena.arena);
     const Graphics::GpuTaskId mergedFirst = AddTask(
@@ -282,7 +336,10 @@ TEST(GpuTaskGraphTiming, RejectsIncompleteForeignAndReversedEnvelopeEndpoints){
     ASSERT_TRUE(mergedLast.valid());
     options.packetTimingEnvelope = { .firstTask = mergedLast, .lastTask = mergedFirst };
     EXPECT_FALSE(Compile(mergedGraph, analysis, assignments, compiledGraph, options));
-    EXPECT_FALSE(compiledGraph.valid());
+    {
+        const GpuTaskGraphReadViews views(mergedGraph, compiledGraph);
+        EXPECT_FALSE(views.compiled.valid());
+    }
 
     Graphics::GpuTaskGraph staleGraph(testArena.arena);
     const Graphics::GpuTaskId staleEndpoint = AddTask(
@@ -293,7 +350,10 @@ TEST(GpuTaskGraphTiming, RejectsIncompleteForeignAndReversedEnvelopeEndpoints){
     options.packetTimingEnvelope = { .firstTask = staleEndpoint, .lastTask = staleEndpoint };
     staleGraph.reset();
     EXPECT_FALSE(Compile(staleGraph, analysis, assignments, compiledGraph, options));
-    EXPECT_FALSE(compiledGraph.valid());
+    {
+        const GpuTaskGraphReadViews views(staleGraph, compiledGraph);
+        EXPECT_FALSE(views.compiled.valid());
+    }
 }
 
 TEST(GpuTaskGraphTiming, ResolvesEnvelopeByTopologicalPositionInsteadOfTaskIndex){
@@ -303,7 +363,13 @@ TEST(GpuTaskGraphTiming, ResolvesEnvelopeByTopologicalPositionInsteadOfTaskIndex
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
 
-    const Graphics::GpuTaskId futureEarly{ 2u, graph.generation() };
+    u64 graphGeneration = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        graphGeneration = declarations.generation();
+    }
+    const Graphics::GpuTaskId futureEarly{ 2u, graphGeneration };
     const Graphics::GpuTaskId late = AddTask(
         graph,
         Name("tests/task_graph_timing/topological_late"),
@@ -336,13 +402,21 @@ TEST(GpuTaskGraphTiming, ResolvesEnvelopeByTopologicalPositionInsteadOfTaskIndex
     EXPECT_EQ(analysis.topologicalOrder()[0u], prefix);
     EXPECT_EQ(analysis.topologicalOrder()[1u], early);
     EXPECT_EQ(analysis.topologicalOrder()[2u], late);
-    EXPECT_LT(compiledGraph.packetForTask(early).index, compiledGraph.packetForTask(late).index);
-    ASSERT_TRUE(compiledGraph.packetTimingEnvelopeRange().valid());
-    EXPECT_EQ(compiledGraph.packetTimingEnvelopeRange().packetCount, 2u);
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        ASSERT_TRUE(views.valid());
+        EXPECT_LT(views.compiled.packetForTask(early).index, views.compiled.packetForTask(late).index);
+        const Graphics::GpuSubmissionPacketRange range = views.compiled.packetTimingEnvelopeRange();
+        ASSERT_TRUE(range.valid());
+        EXPECT_EQ(range.packetCount, 2u);
+    }
 
     options.packetTimingEnvelope = { .firstTask = late, .lastTask = early };
     EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
-    EXPECT_FALSE(compiledGraph.valid());
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        EXPECT_FALSE(views.compiled.valid());
+    }
 }
 
 TEST(GpuTaskGraphTiming, RejectsEnvelopeRangesAtOrAfterAcceptedQueueFrontierPackets){
@@ -375,17 +449,30 @@ TEST(GpuTaskGraphTiming, RejectsEnvelopeRangesAtOrAfterAcceptedQueueFrontierPack
     Graphics::GpuTaskGraphCompileOptions options;
     options.packetTimingEnvelope = { .firstTask = first, .lastTask = first };
     ASSERT_TRUE(Compile(graph, analysis, assignments, compiledGraph, options));
-    ASSERT_TRUE(compiledGraph.packetTimingEnvelopeRange().valid());
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        ASSERT_TRUE(views.valid());
+        ASSERT_TRUE(views.compiled.packetTimingEnvelopeRange().valid());
+    }
 
     options.packetTimingEnvelope = { .firstTask = first, .lastTask = last };
     EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
-    EXPECT_FALSE(compiledGraph.valid());
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        EXPECT_FALSE(views.compiled.valid());
+    }
     options.packetTimingEnvelope = { .firstTask = recovery, .lastTask = recovery };
     EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
-    EXPECT_FALSE(compiledGraph.valid());
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        EXPECT_FALSE(views.compiled.valid());
+    }
     options.packetTimingEnvelope = { .firstTask = last, .lastTask = last };
     EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
-    EXPECT_FALSE(compiledGraph.valid());
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        EXPECT_FALSE(views.compiled.valid());
+    }
 }
 
 

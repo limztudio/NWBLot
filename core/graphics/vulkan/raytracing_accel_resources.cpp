@@ -149,12 +149,17 @@ AccelStruct::AccelStruct(
     : RefCounter<GraphicsResource>(context.threadPool)
     , m_desc(context.objectArena)
     , m_creationQueueSharing(creationQueueSharing)
-    , m_acceptedBuildGeometrySignatures(context.objectArena)
     , m_context(context)
 {
     m_desc.queueSharing = creationQueueSharing;
 }
-AccelStruct::~AccelStruct(){
+AccelStruct::~AccelStruct()noexcept{
+    collectRetiredBuildSignatureRoles();
+    if(m_acceptedBuildSignatureRole){
+        DestroyArenaObjectNoexcept(m_context.objectArena, m_acceptedBuildSignatureRole);
+        m_acceptedBuildSignatureRole = nullptr;
+    }
+
     if(m_accelStruct){
         m_context.deviceDispatch.vkDestroyAccelerationStructureKHR(m_context.device, m_accelStruct, m_context.allocationCallbacks);
         m_accelStruct = VK_NULL_HANDLE;
@@ -167,6 +172,28 @@ Object AccelStruct::getNativeHandle(ObjectType objectType){
     if(objectType == ObjectTypes::VK_AccelerationStructureKHR)
         return Object(m_accelStruct);
     return Object(nullptr);
+}
+
+void AccelStruct::collectRetiredBuildSignatureRoles()noexcept{
+    AccelStructBuildSignatureRole* retiredRoles = nullptr;
+    {
+        NothrowScopedLock lock(m_acceptedBuildSignatureMutex);
+        retiredRoles = m_retiredBuildSignatureRoles;
+        m_retiredBuildSignatureRoles = nullptr;
+    }
+
+    while(retiredRoles){
+        AccelStructBuildSignatureRole* const nextRole = retiredRoles->nextRetiredRole;
+        retiredRoles->nextRetiredRole = nullptr;
+        DestroyArenaObjectNoexcept(m_context.objectArena, retiredRoles);
+        retiredRoles = nextRole;
+    }
+}
+
+void AccelStruct::retireBuildSignatureRole(AccelStructBuildSignatureRole& role)noexcept{
+    NothrowScopedLock lock(m_acceptedBuildSignatureMutex);
+    role.nextRetiredRole = m_retiredBuildSignatureRoles;
+    m_retiredBuildSignatureRoles = &role;
 }
 
 RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStructDesc& desc){
@@ -621,7 +648,7 @@ bool Device::isAccelStructReadyForGpuUse(RayTracingAccelStruct* accelStructResou
         return false;
 
     const AccelStruct& accelerationStructure = *accelStructResource;
-    ScopedLock resourceLock(accelerationStructure.m_memoryBindingMutex);
+    NothrowScopedLock resourceLock(accelerationStructure.m_memoryBindingMutex);
     Buffer* const backingBuffer = accelerationStructure.m_buffer.get();
     return &accelerationStructure.m_context == &m_context
         && accelerationStructure.m_accelStruct != VK_NULL_HANDLE

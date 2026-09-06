@@ -94,22 +94,32 @@ namespace __hidden_gpu_packet_runtime_preflight{
 
 bool GpuNativePacketRecorder::preflightPacketResources(
     const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph& compiledGraph,
+    const GpuCompiledGraph::ReadView& planAccess,
+    const GpuTaskGraph::PacketRecordingAccess& recordingAccess,
     const GpuSubmissionPacketId packetID,
     const CommandListResourceStateHandoff* const initialStates
 )const noexcept{
-    if(!compiledGraph.validFor(graph) || !compiledGraph.validPacket(packetID))
+    if(
+        !declarationAccess.validFor(graph)
+        || !planAccess.validFor(declarationAccess)
+        || !recordingAccess.validFor(graph, compiledGraph, planAccess, packetID)
+    )
         return false;
 
-    const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
-    const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
-    const GpuPhysicalQueueInfo* const packetQueueInfo = compiledGraph.queueInfo(packet.queue);
+    const GpuCompiledPacketView packetView = planAccess.packet(packetID);
+    if(!packetView.valid())
+        return false;
+    const GpuSubmissionPacket& packet = *packetView.plan;
+    const GpuTaskId* const tasks = packetView.tasks;
+    const GpuPhysicalQueueInfo* const packetQueueInfo = planAccess.queueInfo(packet.queue);
     if(
         !tasks
         || packet.taskCount == 0u
         || !packetQueueInfo
         || !m_device.matchesPhysicalQueueIdentity(packet.queue)
-        || (initialStates && !initialStates->validForDeviceGeneration(compiledGraph.deviceGeneration()))
+        || (initialStates && !initialStates->validForDeviceGeneration(planAccess.deviceGeneration()))
     )
         return false;
 
@@ -349,9 +359,9 @@ bool GpuNativePacketRecorder::preflightPacketResources(
                                            ResourceStates::Mask& outPermanentState,
                                            const ResourceStates::Mask requiredState = ResourceStates::Unknown){
         outPermanentState = ResourceStates::Unknown;
-        if(!graph.validResource(resourceID))
+        if(!declarationAccess.validResource(resourceID))
             return false;
-        const GpuTaskGraphResourceView resource = graph.resourceAt(resourceID.index);
+        const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(resourceID.index);
         if(resource.id != resourceID)
             return false;
         if(resource.type == GpuGraphResourceType::HazardDomain)
@@ -361,18 +371,18 @@ bool GpuNativePacketRecorder::preflightPacketResources(
 
         switch(resource.type){
         case GpuGraphResourceType::Texture:{
-            Texture* const texture = graph.textureForResource(resourceID);
+            Texture* const texture = declarationAccess.textureForResource(resourceID);
             return texture
-                && texture->getDeviceGeneration() == compiledGraph.deviceGeneration()
+                && texture->getDeviceGeneration() == planAccess.deviceGeneration()
                 && texture->getCreationDescription().queueSharing == resource.queueSharing
                 && validateTextureForState(texture, requiredState)
                 && permanentTextureState(texture, outPermanentState)
             ;
         }
         case GpuGraphResourceType::Buffer:{
-            Buffer* const buffer = graph.bufferForResource(resourceID);
+            Buffer* const buffer = declarationAccess.bufferForResource(resourceID);
             return buffer
-                && buffer->getDeviceGeneration() == compiledGraph.deviceGeneration()
+                && buffer->getDeviceGeneration() == planAccess.deviceGeneration()
                 && buffer->getCreationDescription().queueSharing == resource.queueSharing
                 && ResourceQueueAdmissionAdmitsQueue(buffer->getQueueAdmissionSnapshot(), *packetQueueInfo)
                 && (
@@ -384,7 +394,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             ;
         }
         case GpuGraphResourceType::AccelStruct:{
-            RayTracingAccelStruct* const accelStruct = graph.accelStructForResource(resourceID);
+            RayTracingAccelStruct* const accelStruct = declarationAccess.accelStructForResource(resourceID);
             Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
             const ResourceQueueSharing::Mask creationQueueSharing = accelStruct
                 ? accelStruct->getCreationQueueSharing()
@@ -392,7 +402,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             ;
             return accelStruct
                 && backingBuffer
-                && accelStruct->getDeviceGeneration() == compiledGraph.deviceGeneration()
+                && accelStruct->getDeviceGeneration() == planAccess.deviceGeneration()
                 && accelStruct->queueSharingMatchesCreation()
                 && creationQueueSharing == resource.queueSharing
                 && backingBuffer->descriptionMatchesCreation()
@@ -413,9 +423,9 @@ bool GpuNativePacketRecorder::preflightPacketResources(
     };
     const auto validateResourceState = [&](const GpuGraphResourceId resourceID,
                                            const ResourceStates::Mask requiredState){
-        if(!graph.validResource(resourceID))
+        if(!declarationAccess.validResource(resourceID))
             return false;
-        const GpuTaskGraphResourceView resource = graph.resourceAt(resourceID.index);
+        const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(resourceID.index);
         if(resource.type == GpuGraphResourceType::HazardDomain)
             return resource.id == resourceID
                 && !resource.hasBackendResource
@@ -430,23 +440,23 @@ bool GpuNativePacketRecorder::preflightPacketResources(
     };
     const auto resourcePermanentState = [&](const GpuGraphResourceId resourceID,
                                             ResourceStates::Mask& outState){
-        const GpuTaskGraphResourceView resource = graph.resourceAt(resourceID.index);
+        const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(resourceID.index);
         if(resource.type == GpuGraphResourceType::Texture)
-            return permanentTextureState(graph.textureForResource(resourceID), outState);
+            return permanentTextureState(declarationAccess.textureForResource(resourceID), outState);
         if(resource.type == GpuGraphResourceType::Buffer)
-            return permanentBufferState(graph.bufferForResource(resourceID), outState);
+            return permanentBufferState(declarationAccess.bufferForResource(resourceID), outState);
         if(resource.type == GpuGraphResourceType::AccelStruct){
-            RayTracingAccelStruct* const accelStruct = graph.accelStructForResource(resourceID);
+            RayTracingAccelStruct* const accelStruct = declarationAccess.accelStructForResource(resourceID);
             return permanentBufferState(accelStruct ? accelStruct->getBackingBuffer() : nullptr, outState);
         }
         return false;
     };
     const auto hasExplicitInitialState = [&](const GpuCompiledBarrier& barrier){
-        if(!initialStates || !graph.validResource(barrier.resource))
+        if(!initialStates || !declarationAccess.validResource(barrier.resource))
             return false;
-        const GpuTaskGraphResourceView resource = graph.resourceAt(barrier.resource.index);
+        const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
         if(resource.type == GpuGraphResourceType::Texture){
-            Texture* const texture = graph.textureForResource(barrier.resource);
+            Texture* const texture = declarationAccess.textureForResource(barrier.resource);
             if(!validateTextureRange(texture, barrier.range.textureSubresources))
                 return false;
             ResourceStates::Mask permanentState = ResourceStates::Unknown;
@@ -485,9 +495,9 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             return true;
         }
 
-        Buffer* buffer = graph.bufferForResource(barrier.resource);
+        Buffer* buffer = declarationAccess.bufferForResource(barrier.resource);
         if(resource.type == GpuGraphResourceType::AccelStruct){
-            RayTracingAccelStruct* const accelStruct = graph.accelStructForResource(barrier.resource);
+            RayTracingAccelStruct* const accelStruct = declarationAccess.accelStructForResource(barrier.resource);
             buffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
         }
         ResourceStates::Mask permanentState = ResourceStates::Unknown;
@@ -510,24 +520,24 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             const GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
                 barrier.type >= GpuCompiledBarrierType::kCount
-                || !graph.validResource(barrier.resource)
-                || graph.resourceAt(barrier.resource.index).type
+                || !declarationAccess.validResource(barrier.resource)
+                || declarationAccess.resourceAt(barrier.resource.index).type
                     != __hidden_gpu_packet_runtime_preflight::BarrierResourceType(barrier.type)
             )
                 return false;
-            const GpuTaskGraphResourceView barrierResource = graph.resourceAt(barrier.resource.index);
+            const GpuTaskGraphResourceView barrierResource = declarationAccess.resourceAt(barrier.resource.index);
             if(
                 (
                     barrierResource.type == GpuGraphResourceType::Texture
                     && !validateTextureRange(
-                        graph.textureForResource(barrier.resource),
+                        declarationAccess.textureForResource(barrier.resource),
                         barrier.range.textureSubresources
                     )
                 )
                 || (
                     barrierResource.type == GpuGraphResourceType::Buffer
                     && !validateBufferRange(
-                        graph.bufferForResource(barrier.resource),
+                        declarationAccess.bufferForResource(barrier.resource),
                         barrier.range.bufferRange
                     )
                 )
@@ -572,8 +582,8 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             )
                 return false;
             if(
-                !compiledGraph.queueInfo(barrier.sourceQueue)
-                || !compiledGraph.queueInfo(barrier.destinationQueue)
+                !planAccess.queueInfo(barrier.sourceQueue)
+                || !planAccess.queueInfo(barrier.destinationQueue)
                 || (ownershipRelease && barrier.sourceQueue != packet.queue)
                 || (ownershipAcquire && barrier.destinationQueue != packet.queue)
                 || (!ownershipRelease && !ownershipAcquire && barrier.destinationQueue != packet.queue)
@@ -615,12 +625,13 @@ bool GpuNativePacketRecorder::preflightPacketResources(
 
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         const GpuTaskId task = tasks[taskIndex];
-        if(!graph.validTask(task))
+        if(!recordingAccess.validForTask(graph, compiledGraph, planAccess, task))
             return false;
-        const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const GpuTaskGraphTaskView taskView = graph.taskAt(task.index);
+        const GpuCompiledTaskView compiledTaskView = planAccess.findTask(task);
+        const GpuCompiledTask* const compiledTask = compiledTaskView.plan;
+        const GpuTaskGraphTaskView taskView = declarationAccess.taskAt(task.index);
         if(
-            !compiledTask
+            !compiledTaskView.valid()
             || compiledTask->packet != packetID
             || taskView.id != task
             || (taskView.resourceUseCount != 0u && !taskView.resourceUses)
@@ -633,47 +644,47 @@ bool GpuNativePacketRecorder::preflightPacketResources(
                 || !validateResourceState(use.resource, use.requiredState)
             )
                 return false;
-            const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
+            const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(use.resource.index);
             if(
                 resource.type == GpuGraphResourceType::Texture
                 && !validateTextureRange(
-                    graph.textureForResource(use.resource),
+                    declarationAccess.textureForResource(use.resource),
                     use.range.textureSubresources
                 )
             )
                 return false;
             if(
                 resource.type == GpuGraphResourceType::Buffer
-                && !validateBufferRange(graph.bufferForResource(use.resource), use.range.bufferRange)
+                && !validateBufferRange(declarationAccess.bufferForResource(use.resource), use.range.bufferRange)
             )
                 return false;
         }
-        const GpuPacketStateSeed* const stateSeeds = compiledGraph.taskPrologueStateSeeds(task);
+        const GpuPacketStateSeed* const stateSeeds = compiledTaskView.prologueStateSeeds;
         if(compiledTask->prologueStateSeedCount != 0u && !stateSeeds)
             return false;
         for(u32 seedIndex = 0u; seedIndex < compiledTask->prologueStateSeedCount; ++seedIndex){
             const GpuPacketStateSeed& seed = stateSeeds[seedIndex];
             ResourceStates::Mask permanentState = ResourceStates::Unknown;
             if(
-                !compiledGraph.validPacket(seed.sourcePacket)
+                !planAccess.validPacket(seed.sourcePacket)
                 || seed.sourcePacket == packetID
                 || seed.sourcePacket.index >= packetID.index
                 || !validateResourceReady(seed.resource, permanentState)
             )
                 return false;
-            const GpuTaskGraphResourceView resource = graph.resourceAt(seed.resource.index);
+            const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(seed.resource.index);
             if(
                 (
                     resource.type == GpuGraphResourceType::Texture
                     && !validateTextureRange(
-                        graph.textureForResource(seed.resource),
+                        declarationAccess.textureForResource(seed.resource),
                         seed.range.textureSubresources
                     )
                 )
                 || (
                     resource.type == GpuGraphResourceType::Buffer
                     && !validateBufferRange(
-                        graph.bufferForResource(seed.resource),
+                        declarationAccess.bufferForResource(seed.resource),
                         seed.range.bufferRange
                     )
                 )
@@ -681,12 +692,12 @@ bool GpuNativePacketRecorder::preflightPacketResources(
                 return false;
         }
         if(!validateBarrierList(
-            compiledGraph.taskPrologueBarriers(task),
+            compiledTaskView.prologueBarriers,
             compiledTask->prologueBarrierCount
         ))
             return false;
         if(!validateBarrierList(
-            compiledGraph.taskEpilogueBarriers(task),
+            compiledTaskView.epilogueBarriers,
             compiledTask->epilogueBarrierCount
         ))
             return false;

@@ -76,7 +76,7 @@ public:
     [[nodiscard]] bool registerBuffer(VkBuffer buffer);
     void registerDeviceOwnedBuffer(VkBuffer buffer);
     void appendBarriers(Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& barriers)const;
-    void clear();
+    void clear()noexcept;
     [[nodiscard]] usize size()const{ return m_buffers.size(); }
 
 

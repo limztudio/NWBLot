@@ -261,6 +261,10 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
     if(clearDesc.acceptedToken)
         *clearDesc.acceptedToken = {};
 
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(
         desc.resourceUses
         || desc.resourceUseCount != 0u
@@ -286,9 +290,10 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
         return {};
 
     using ClearTask = __hidden_gpu_task_graph_builtin_clears::ClearBufferTask;
-    ClearTask::Payload* const payload = NewArenaObject<ClearTask::Payload>(m_arena);
-    if(!payload)
+    ClearTask::Payload* const payloadObject = NewArenaObject<ClearTask::Payload>(m_arena);
+    if(!payloadObject)
         return {};
+    ProvisionalPayloadOwner<ClearTask::Payload> payload(m_arena, payloadObject);
     payload->destinationResource = clearDesc.destination;
     payload->destination = destinationResource.buffer;
     payload->clearValue = clearDesc.clearValue;
@@ -302,18 +307,21 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
     };
     GpuTaskDesc resolvedDesc = desc;
     resolvedDesc.setResourceUses(&resourceUse, 1u);
-    const GpuTaskId task = appendTask(
+    const GpuTaskId task = appendTaskWithinMutation(
         resolvedDesc,
-        payload,
+        payload.get(),
         &RecordPayload<ClearTask>,
         &AcceptPayload<ClearTask>,
         &DiscardPayload<ClearTask>,
         &DestroyPayload<ClearTask::Payload>,
-        sizeof(ClearTask::Payload)
+        sizeof(ClearTask::Payload),
+        mutation
     );
-    if(!task.valid())
+    if(task.valid())
+        payload.publish();
+    else
         discardAndDestroyUnappendedPayload(
-            payload,
+            payload.release(),
             &DiscardPayload<ClearTask>,
             &DestroyPayload<ClearTask::Payload>
         );
@@ -323,6 +331,10 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
 GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc){
     if(clearDesc.acceptedToken)
         *clearDesc.acceptedToken = {};
+
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
 
     if(
         desc.resourceUses
@@ -368,9 +380,10 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
     const TextureSubresourceSet resolvedSubresources = clearContract.subresources;
 
     using ClearTask = __hidden_gpu_task_graph_builtin_clears::ClearTextureTask;
-    ClearTask::Payload* const payload = NewArenaObject<ClearTask::Payload>(m_arena);
-    if(!payload)
+    ClearTask::Payload* const payloadObject = NewArenaObject<ClearTask::Payload>(m_arena);
+    if(!payloadObject)
         return {};
+    ProvisionalPayloadOwner<ClearTask::Payload> payload(m_arena, payloadObject);
     payload->destinationResource = clearDesc.destination;
     payload->destination = destinationResource.texture;
     payload->clearDesc = clearDesc;
@@ -399,18 +412,21 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
     )
         resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Compute;
     resolvedDesc.setResourceUses(&resourceUse, 1u);
-    const GpuTaskId task = appendTask(
+    const GpuTaskId task = appendTaskWithinMutation(
         resolvedDesc,
-        payload,
+        payload.get(),
         &RecordPayload<ClearTask>,
         &AcceptPayload<ClearTask>,
         &DiscardPayload<ClearTask>,
         &DestroyPayload<ClearTask::Payload>,
-        sizeof(ClearTask::Payload)
+        sizeof(ClearTask::Payload),
+        mutation
     );
-    if(!task.valid())
+    if(task.valid())
+        payload.publish();
+    else
         discardAndDestroyUnappendedPayload(
-            payload,
+            payload.release(),
             &DiscardPayload<ClearTask>,
             &DestroyPayload<ClearTask::Payload>
         );
@@ -423,6 +439,10 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
 ){
     if(clearDesc.acceptedToken)
         *clearDesc.acceptedToken = {};
+
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
 
     if(
         desc.resourceUses
@@ -463,9 +483,10 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
     const TextureSubresourceSet resolvedSubresources = clearContract.subresources;
 
     using ClearTask = __hidden_gpu_task_graph_builtin_clears::ClearTextureRectUIntTask;
-    ClearTask::Payload* const payload = NewArenaObject<ClearTask::Payload>(m_arena);
-    if(!payload)
+    ClearTask::Payload* const payloadObject = NewArenaObject<ClearTask::Payload>(m_arena);
+    if(!payloadObject)
         return {};
+    ProvisionalPayloadOwner<ClearTask::Payload> payload(m_arena, payloadObject);
     payload->destinationResource = clearDesc.destination;
     payload->destination = destinationResource.texture;
     payload->clearDesc = clearDesc;
@@ -497,18 +518,21 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
     )
         resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Compute;
     resolvedDesc.setResourceUses(&resourceUse, 1u);
-    const GpuTaskId task = appendTask(
+    const GpuTaskId task = appendTaskWithinMutation(
         resolvedDesc,
-        payload,
+        payload.get(),
         &RecordPayload<ClearTask>,
         &AcceptPayload<ClearTask>,
         &DiscardPayload<ClearTask>,
         &DestroyPayload<ClearTask::Payload>,
-        sizeof(ClearTask::Payload)
+        sizeof(ClearTask::Payload),
+        mutation
     );
-    if(!task.valid())
+    if(task.valid())
+        payload.publish();
+    else
         discardAndDestroyUnappendedPayload(
-            payload,
+            payload.release(),
             &DiscardPayload<ClearTask>,
             &DestroyPayload<ClearTask::Payload>
         );

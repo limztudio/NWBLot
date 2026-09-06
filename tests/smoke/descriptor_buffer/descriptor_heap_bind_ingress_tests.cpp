@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <global/global.h>
+#include <global/thread.h>
 #include <global/unique_ptr.h>
 #include <core/common/module.h>
 #include <core/graphics/api.h>
@@ -683,6 +684,99 @@ TEST_F(DescriptorHeapBindIngressTest, AcceptedInFlightUsePinsPublicShutdown){
     heap.shutdown();
     EXPECT_FALSE(heap.isInitialized());
     EXPECT_TRUE(heap.initialize(MakeDefaultHeapDesc()));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(DescriptorHeapBindIngressTest, QueueHeapLifecycleHierarchyCompletesContendedTwoCommandSubmission){
+    struct NativeSubmitGate{
+        Atomic<bool> nativeSubmitEntered = false;
+        Atomic<bool> releaseNativeSubmit = false;
+    };
+
+    auto& localDevice = device();
+    auto& heap = localDevice.getDescriptorHeap();
+    const BindingLayoutHandle layouts[] = { heap.getResourceLayout(), heap.getSamplerLayout() };
+    ComputePipelineHandle pipeline = CreateComputePipeline(localDevice, arena(), layouts, LengthOf(layouts));
+    ASSERT_TRUE(pipeline);
+
+    CommandListHandle firstCommandList = localDevice.createCommandList();
+    CommandListHandle secondCommandList = localDevice.createCommandList();
+    ASSERT_TRUE(firstCommandList);
+    ASSERT_TRUE(secondCommandList);
+    for(CommandList* const commandList : { firstCommandList.get(), secondCommandList.get() }){
+        commandList->open();
+        commandList->setComputeState(ComputeState().setPipeline(pipeline.get()));
+        heap.bindCompute(*commandList, *pipeline);
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+        commandList->close();
+    }
+
+    const GpuDescriptorHeapLifecycleStatistics recorded = heap.lifecycleStatistics();
+    ASSERT_EQ(recorded.unsubmittedHeapUseCount, 2u);
+
+    VulkanTestQueueSubmit2Observer submissionObserver(localDevice);
+    ASSERT_TRUE(submissionObserver.valid());
+    NativeSubmitGate nativeSubmitGate;
+    ASSERT_TRUE(submissionObserver.configureNativeSubmitHooks(
+        &nativeSubmitGate,
+        [](void* const context)noexcept{
+            auto& gate = *static_cast<NativeSubmitGate*>(context);
+            gate.nativeSubmitEntered.store(true, MemoryOrder::release);
+            while(!gate.releaseNativeSubmit.load(MemoryOrder::acquire))
+                YieldThread();
+        },
+        nullptr
+    ));
+
+    CommandList* commandLists[] = { firstCommandList.get(), secondCommandList.get() };
+    QueueSubmissionToken submissionToken;
+    Thread submissionThread([&](){
+        submissionToken = localDevice.executeCommandLists(
+            commandLists,
+            LengthOf(commandLists),
+            CommandQueue::Graphics,
+            QueueSubmissionDesc{}
+        );
+    });
+    for(usize iteration = 0u; iteration < 1000000u && !nativeSubmitGate.nativeSubmitEntered.load(MemoryOrder::acquire); ++iteration)
+        YieldThread();
+    if(!nativeSubmitGate.nativeSubmitEntered.load(MemoryOrder::acquire)){
+        nativeSubmitGate.releaseNativeSubmit.store(true, MemoryOrder::release);
+        submissionThread.join();
+        FAIL() << "queue submission did not reach the native boundary";
+        return;
+    }
+
+    Atomic<bool> initializationStarted{ false };
+    Atomic<bool> initializationReturned{ false };
+    bool initializationSucceeded = false;
+    Thread initializationThread([&](){
+        initializationStarted.store(true, MemoryOrder::release);
+        initializationSucceeded = heap.initialize(MakeDefaultHeapDesc());
+        initializationReturned.store(true, MemoryOrder::release);
+    });
+    while(!initializationStarted.load(MemoryOrder::acquire))
+        YieldThread();
+    for(usize iteration = 0u; iteration < 1024u; ++iteration)
+        YieldThread();
+    EXPECT_FALSE(initializationReturned.load(MemoryOrder::acquire))
+        << "heap initialization bypassed the queue -> heap -> descriptor-lifecycle hierarchy";
+
+    nativeSubmitGate.releaseNativeSubmit.store(true, MemoryOrder::release);
+    submissionThread.join();
+    initializationThread.join();
+
+    EXPECT_TRUE(submissionToken.valid());
+    EXPECT_TRUE(initializationSucceeded);
+    const GpuDescriptorHeapLifecycleStatistics accepted = heap.lifecycleStatistics();
+    EXPECT_EQ(accepted.acceptedHeapUseCount, 2u);
+    EXPECT_EQ(accepted.unsubmittedHeapUseCount, 0u);
+    ASSERT_TRUE(localDevice.waitForIdle());
+    heap.collectRetired();
+    EXPECT_EQ(heap.lifecycleStatistics().acceptedHeapUseCount, 0u);
 }
 
 

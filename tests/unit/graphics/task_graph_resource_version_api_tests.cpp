@@ -41,18 +41,20 @@ TEST(GpuTaskGraphResourceVersion, StoresDistinctDeclarationsAndInvalidatesThemOn
         .setOrigin(Graphics::GpuGraphResourceVersionOrigin::ImportedRoot)
     ;
 
-    const u64 initialRevision = graph.declarationRevision();
+    const u64 initialRevision = Graphics::GpuTaskGraph::DeclarationReadView(graph).declarationRevision();
     const Graphics::GpuGraphResourceVersionId first = graph.declareResourceVersion(desc);
-    const u64 firstRevision = graph.declarationRevision();
+    const u64 firstRevision = Graphics::GpuTaskGraph::DeclarationReadView(graph).declarationRevision();
     const Graphics::GpuGraphResourceVersionId second = graph.declareResourceVersion(desc);
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     EXPECT_NE(first, second);
-    EXPECT_EQ(graph.resourceVersionCount(), 2u);
+    EXPECT_EQ(Graphics::GpuTaskGraph::DeclarationReadView(graph).resourceVersionCount(), 2u);
     EXPECT_NE(firstRevision, initialRevision);
-    EXPECT_NE(graph.declarationRevision(), firstRevision);
+    EXPECT_NE(Graphics::GpuTaskGraph::DeclarationReadView(graph).declarationRevision(), firstRevision);
 
-    const Graphics::GpuTaskGraphResourceVersionView firstView = graph.resourceVersionAt(first.index);
+    const Graphics::GpuTaskGraphResourceVersionView firstView =
+        Graphics::GpuTaskGraph::DeclarationReadView(graph).resourceVersionAt(first.index)
+    ;
     EXPECT_EQ(firstView.id, first);
     EXPECT_EQ(firstView.resource, resource);
     EXPECT_EQ(firstView.range.bufferRange, range.bufferRange);
@@ -79,23 +81,30 @@ TEST(GpuTaskGraphResourceVersion, StoresDistinctDeclarationsAndInvalidatesThemOn
     ASSERT_TRUE(task.valid());
     versionUse.version = second;
     versionUse.role = Graphics::GpuTaskResourceVersionRole::Produce;
-    const Graphics::GpuTaskGraphTaskView taskView = graph.taskAt(task.index);
-    ASSERT_EQ(taskView.resourceVersionUseCount, 1u);
-    ASSERT_NE(taskView.resourceVersionUses, nullptr);
-    EXPECT_EQ(taskView.resourceVersionUses[0].version, first);
-    EXPECT_EQ(taskView.resourceVersionUses[0].role, Graphics::GpuTaskResourceVersionRole::Consume);
-
-    const u64 generation = graph.generation();
-    const u64 declarationRevision = graph.declarationRevision();
+    u64 generation = 0u;
+    u64 declarationRevision = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        const Graphics::GpuTaskGraphTaskView taskView = declarations.taskAt(task.index);
+        ASSERT_EQ(taskView.resourceVersionUseCount, 1u);
+        ASSERT_NE(taskView.resourceVersionUses, nullptr);
+        EXPECT_EQ(taskView.resourceVersionUses[0].version, first);
+        EXPECT_EQ(taskView.resourceVersionUses[0].role, Graphics::GpuTaskResourceVersionRole::Consume);
+        generation = declarations.generation();
+        declarationRevision = declarations.declarationRevision();
+    }
     graph.reset();
-    EXPECT_NE(graph.generation(), generation);
-    EXPECT_NE(graph.declarationRevision(), declarationRevision);
-    EXPECT_EQ(graph.taskCount(), 0u);
-    EXPECT_EQ(graph.resourceCount(), 0u);
-    EXPECT_EQ(graph.resourceVersionCount(), 0u);
-    EXPECT_FALSE(graph.validTask(task));
-    EXPECT_FALSE(graph.validResourceVersion(first));
-    EXPECT_FALSE(graph.validResourceVersion(second));
+    const Graphics::GpuTaskGraph::DeclarationReadView resetDeclarations(graph);
+    ASSERT_TRUE(resetDeclarations.valid());
+    EXPECT_NE(resetDeclarations.generation(), generation);
+    EXPECT_NE(resetDeclarations.declarationRevision(), declarationRevision);
+    EXPECT_EQ(resetDeclarations.taskCount(), 0u);
+    EXPECT_EQ(resetDeclarations.resourceCount(), 0u);
+    EXPECT_EQ(resetDeclarations.resourceVersionCount(), 0u);
+    EXPECT_FALSE(resetDeclarations.validTask(task));
+    EXPECT_FALSE(resetDeclarations.validResourceVersion(first));
+    EXPECT_FALSE(resetDeclarations.validResourceVersion(second));
 }
 
 TEST(GpuTaskGraphResourceVersion, RejectsMissingAndDuplicateTaskProducedVersionProducers){

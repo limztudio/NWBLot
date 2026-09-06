@@ -260,7 +260,7 @@ bool CommandList::validateStagingTextureCopyResources(
     const CpuAccessMode::Enum requiredCpuAccess,
     const VkImageUsageFlags requiredImageUsage,
     const tchar* const operationName
-)noexcept{
+){
     if(!validateCommandRecordingScope(operationName))
         return false;
 

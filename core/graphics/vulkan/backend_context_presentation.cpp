@@ -16,16 +16,26 @@ NWB_VULKAN_BEGIN
 
 
 BeginFrameResult BackendContext::beginFrame(){
-    ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
+    UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
     BeginFrameResult result;
+    const auto captureDeviceLossAfterUnlock = [&](const AStringView context){
+        DeviceHandle device = m_rhiDevice;
+        if(!device || !device->isDeviceLost())
+            return;
+        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
+        lifecycleLock.unlock();
+        device->captureDeviceLoss(context);
+    };
 
     if(m_swapChainLifecycleState != SwapChainLifecycleState::Ready || m_frameAcquired){
         NWB_LOGGER_ERROR(NWB_TEXT("Cannot begin a Vulkan frame while the previous acquired swap-chain image remains unresolved"));
         return result;
     }
 
-    if(!cancelFramePresentationSignal()){
+    if(!cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)){
         m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
+        if(m_rhiDevice && m_rhiDevice->isDeviceLost())
+            captureDeviceLossAfterUnlock("presentation signal cancellation");
         return result;
     }
     m_swapChainIndex = Limit<u32>::s_Max;
@@ -40,9 +50,13 @@ BeginFrameResult BackendContext::beginFrame(){
         m_acquireSyncSlotIndex = 0u;
     AcquireSyncSlot& slot = m_acquireSyncSlots[m_acquireSyncSlotIndex];
     if(!prepareAcquireSyncSlot(slot)){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to prepare the next acquire synchronization slot."));
         m_rhiDevice->quarantineDevice();
         m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
+        if(m_rhiDevice->isDeviceLost()){
+            captureDeviceLossAfterUnlock("acquire slot reuse");
+            return result;
+        }
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to prepare the next acquire synchronization slot."));
         return result;
     }
 
@@ -86,8 +100,11 @@ BeginFrameResult BackendContext::beginFrame(){
         return result;
     }
     if(acquireResult != VK_SUCCESS && acquireResult != VK_SUBOPTIMAL_KHR){
-        if(acquireResult == VK_ERROR_DEVICE_LOST)
-            m_rhiDevice->captureDeviceLoss("acquire next image");
+        if(acquireResult == VK_ERROR_DEVICE_LOST){
+            m_rhiDevice->markDeviceLost();
+            captureDeviceLossAfterUnlock("acquire next image");
+            return result;
+        }
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to acquire next swap chain image. {}"), ResultToString(acquireResult));
         return result;
     }
@@ -101,6 +118,10 @@ BeginFrameResult BackendContext::beginFrame(){
         slot.state = AcquireSyncSlotState::Unconsumed;
         m_rhiDevice->quarantineDevice();
         m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
+        if(m_rhiDevice->isDeviceLost()){
+            captureDeviceLossAfterUnlock("acquired image semaphore bridge");
+            return result;
+        }
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to bridge an acquired WSI semaphore into a queue completion token."));
         return result;
     }
@@ -126,8 +147,10 @@ BeginFrameResult BackendContext::beginFrame(){
     return result;
 }
 
-bool BackendContext::abandonAcquiredFrame()noexcept{
-    ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
+bool BackendContext::abandonAcquiredFrame(){
+    UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
+    if(m_swapChainLifecycleState != SwapChainLifecycleState::Ready)
+        return false;
     UniqueLock<Futex> presentationLock(m_framePresentationMutex);
     m_framePresentationCondition.wait(presentationLock, [this](){
         return m_framePresentationSignalState != FramePresentationSignalState::Queued;
@@ -147,6 +170,7 @@ bool BackendContext::abandonAcquiredFrame()noexcept{
     }
     if(m_rhiDevice->requiresRecreation()){
         m_swapChainIndex = Limit<u32>::s_Max;
+        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
         return false;
     }
 
@@ -170,12 +194,6 @@ bool BackendContext::abandonAcquiredFrame()noexcept{
         && m_framePresentationSwapChainIndex == m_swapChainIndex
     ;
     const bool abandonmentReady = currentImageReady && (presentationSignalIdle || presentationSignalTracked);
-    const bool presentationSignalNeedsIdle =
-        m_framePresentationSignalState == FramePresentationSignalState::Queued
-        || m_framePresentationSignalState == FramePresentationSignalState::Accepted
-        || m_framePresentationSignalState == FramePresentationSignalState::Failed
-    ;
-
     // Invalidate presentation identity before touching signal state. Keeping m_frameAcquired set quarantines the
     // WSI image even if retirement or draining fails, so no later beginFrame, claim, or present can reuse it.
     m_swapChainIndex = Limit<u32>::s_Max;
@@ -185,36 +203,58 @@ bool BackendContext::abandonAcquiredFrame()noexcept{
         return false;
     }
 
-    if(presentationSignalNeedsIdle && !m_rhiDevice->waitForIdle()){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to join the abandoned presentation signal; forcing device teardown."));
-        m_rhiDevice->quarantineDevice();
+    presentationLock.unlock();
+    if(!cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)){
+        DeviceHandle device = m_rhiDevice;
+        if(lifecycleLock.owns_lock()){
+            if(m_swapChainLifecycleState == SwapChainLifecycleState::Ready)
+                m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
+            lifecycleLock.unlock();
+        }
+        if(device)
+            device->quarantineDevice();
+        if(device && device->isDeviceLost())
+            device->captureDeviceLoss("abandoned presentation signal idle");
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to retire the abandoned presentation signal; forcing device teardown."));
         return false;
     }
-    if(presentationSignalNeedsIdle && !replaceFramePresentationSemaphoreAfterIdle()){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to quarantine the abandoned presentation signal; forcing device teardown."));
-        m_rhiDevice->quarantineDevice();
-        return false;
-    }
-    resetFramePresentationSignal();
 
     m_frameAbandonmentComplete = true;
     return true;
 }
 
 bool BackendContext::present(){
-    ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
+    UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
     VkResult res = VK_SUCCESS;
+    const auto captureDeviceLossAfterUnlock = [&](const AStringView context, UniqueLock<Futex>* const presentationLock = nullptr){
+        DeviceHandle device = m_rhiDevice;
+        if(!device || !device->isDeviceLost())
+            return;
+        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
+        if(presentationLock && presentationLock->owns_lock())
+            presentationLock->unlock();
+        if(lifecycleLock.owns_lock())
+            lifecycleLock.unlock();
+        device->captureDeviceLoss(context);
+    };
+
+    if(m_swapChainLifecycleState != SwapChainLifecycleState::Ready)
+        return false;
 
     if(!m_rhiDevice || !m_frameAcquired || !m_swapChain || m_presentSemaphores.empty() || m_swapChainImages.empty()){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: present skipped because its device, acquired frame, or swap-chain resources are not ready."));
-        if(!cancelFramePresentationSignal())
+        if(!cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)){
+            captureDeviceLossAfterUnlock("presentation signal cancellation");
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to cancel presentation synchronization after an invalid present."));
+        }
         return false;
     }
 
     if(m_swapChainIndex >= m_presentSemaphores.size() || m_swapChainIndex >= m_swapChainImages.size()){
-        if(!cancelFramePresentationSignal())
+        if(!cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)){
+            captureDeviceLossAfterUnlock("presentation signal cancellation");
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to cancel presentation synchronization for an invalid image index."));
+        }
         NWB_LOGGER_ERROR(NWB_TEXT("Cannot present Vulkan swap-chain image because its acquired index is invalid"));
         return false;
     }
@@ -232,7 +272,8 @@ bool BackendContext::present(){
     }
 
     if(!frameSignalAccepted){
-        if(!cancelFramePresentationSignal()){
+        if(!cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)){
+            captureDeviceLossAfterUnlock("presentation signal cancellation");
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to cancel the previous presentation-signal claim."));
             return false;
         }
@@ -249,8 +290,10 @@ bool BackendContext::present(){
             || transitionPolicy == VulkanDetail::CompatibilityPresentTransitionPolicy::Invalid
             || !primaryGraphicsQueue.valid()
         ){
-            if(!cancelFramePresentationSignal())
+            if(!cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)){
+                captureDeviceLossAfterUnlock("presentation signal cancellation");
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to cancel presentation synchronization after invalid compatibility state."));
+            }
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Compatibility presentation transition preconditions failed."));
             return false;
         }
@@ -307,8 +350,10 @@ bool BackendContext::present(){
 
         const QueueSubmissionPreSubmitHook presentationSignalHook = claimFramePresentationSignal();
         if(!presentationSignalHook.valid()){
-            if(!cancelFramePresentationSignal())
+            if(!cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)){
+                captureDeviceLossAfterUnlock("presentation signal cancellation");
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to cancel presentation synchronization after claim rejection."));
+            }
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to claim compatibility presentation on the primary Graphics queue."));
             return false;
         }
@@ -316,21 +361,25 @@ bool BackendContext::present(){
         QueueSubmissionDesc submitDesc;
         submitDesc.setPreSubmitHook(presentationSignalHook);
         CommandList* const compatibilityCommandLists[] = { compatibilityCommandList.get() };
-        const QueueSubmissionToken fallbackToken = m_rhiDevice->executeCommandLists(
+        const QueueSubmissionToken fallbackToken = m_rhiDevice->executeCommandListsInternal(
             compatibilityCommandLists,
             LengthOf(compatibilityCommandLists),
             primaryGraphicsQueue,
-            submitDesc
+            submitDesc,
+            false,
+            Device::DeviceLossDiagnosticPolicy::Defer
         );
         if(!fallbackToken.valid()){
-            if(!cancelFramePresentationSignal(presentationSignalHook))
+            if(!cancelFramePresentationSignalDeferred(&presentationSignalHook, lifecycleLock))
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to cancel presentation synchronization after submit rejection."));
+            captureDeviceLossAfterUnlock("queue submit");
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Compatibility presentation transition/signal submission was rejected."));
             return false;
         }
         if(!confirmFramePresentationSignal(presentationSignalHook, fallbackToken)){
-            if(!cancelFramePresentationSignal(presentationSignalHook))
+            if(!cancelFramePresentationSignalDeferred(&presentationSignalHook, lifecycleLock))
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to cancel presentation synchronization after confirmation rejection."));
+            captureDeviceLossAfterUnlock("presentation signal cancellation");
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Accepted compatibility presentation submission failed signal confirmation/tracking."));
             return false;
         }
@@ -338,7 +387,7 @@ bool BackendContext::present(){
         frameSignalAccepted = true;
     }
 
-    ScopedLock presentationLock(m_framePresentationMutex);
+    UniqueLock<Futex> presentationLock(m_framePresentationMutex);
     frameSignalAccepted =
         m_framePresentationSignalState == FramePresentationSignalState::Accepted
         && m_framePresentationSwapChainIndex == m_swapChainIndex
@@ -362,8 +411,10 @@ bool BackendContext::present(){
         return false;
     }
     if(!m_rhiDevice->presentNativeQueue(m_presentNativeQueueIndex, presentInfo, res)){
-        if(!cancelFramePresentationSignalLocked())
+        presentationLock.unlock();
+        if(!cancelFramePresentationSignalDeferred(nullptr, lifecycleLock))
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to retire a presentation signal after native present rejection."));
+        captureDeviceLossAfterUnlock("native present admission", &presentationLock);
         return false;
     }
     const VulkanDetail::QueuePresentWaitDisposition::Enum presentWaitDisposition =
@@ -373,31 +424,16 @@ bool BackendContext::present(){
         // Host/device OOM and unknown failures do not prove the accepted binary signal was consumed. Preserve its
         // tracking until successful idle-and-replacement quarantine or terminal teardown.
         if(presentWaitDisposition == VulkanDetail::QueuePresentWaitDisposition::DeviceLost){
-            if(m_rhiDevice)
-                m_rhiDevice->captureDeviceLoss("present");
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue present failed. {}"), ResultToString(res));
+            m_rhiDevice->markDeviceLost();
+            captureDeviceLossAfterUnlock("present", &presentationLock);
             return false;
         }
-        if(!frameSignalAccepted || !m_rhiDevice){
-            NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Vulkan: Queue present lost its accepted signal tracking; forcing device teardown.")
-            );
-            if(m_rhiDevice)
-                m_rhiDevice->quarantineDevice();
+        presentationLock.unlock();
+        if(!cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to retire the unconsumed presentation signal; forcing device teardown."));
+            captureDeviceLossAfterUnlock("unconsumed presentation signal idle", &presentationLock);
             return false;
         }
-        if(!m_rhiDevice->waitForIdle()){
-            NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Vulkan: Failed to join the unconsumed presentation signal; forcing device teardown.")
-            );
-            m_rhiDevice->quarantineDevice();
-            return false;
-        }
-        if(!replaceFramePresentationSemaphoreAfterIdle()){
-            m_rhiDevice->quarantineDevice();
-            return false;
-        }
-        resetFramePresentationSignal();
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue present failed. {}"), ResultToString(res));
         return false;
     }
@@ -408,6 +444,7 @@ bool BackendContext::present(){
     m_frameAbandonmentComplete = false;
     m_swapChainIndex = Limit<u32>::s_Max;
     m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
+    presentationLock.unlock();
     if(!(res == VK_SUCCESS || res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue present consumed synchronization but requires recreation. {}")
             , ResultToString(res)
@@ -417,9 +454,10 @@ bool BackendContext::present(){
 
     while(m_framesInFlight.size() >= m_maxFramesInFlight){
         auto query = m_framesInFlight.front();
-        if(!m_rhiDevice->waitEventQuery(query.get())){
+        if(!m_rhiDevice->waitEventQueryInternal(query.get(), Device::DeviceLossDiagnosticPolicy::Defer)){
             if(!m_rhiDevice->isDeviceLost())
                 m_rhiDevice->quarantineDevice();
+            captureDeviceLossAfterUnlock("frame synchronization query wait", &presentationLock);
             return false;
         }
         m_framesInFlight.pop();
@@ -444,10 +482,15 @@ bool BackendContext::present(){
         return false;
     }
 
-    if(!m_rhiDevice->setEventQuery(query.get(), CommandQueue::Graphics)){
+    if(!m_rhiDevice->setEventQueryInternal(
+        query.get(),
+        CommandQueue::Graphics,
+        Device::DeviceLossDiagnosticPolicy::Defer
+    )){
         m_queryPool.push_back(query);
         if(!m_rhiDevice->isDeviceLost())
             m_rhiDevice->quarantineDevice();
+        captureDeviceLossAfterUnlock("frame synchronization query submit", &presentationLock);
         return false;
     }
     m_framesInFlight.push(query);

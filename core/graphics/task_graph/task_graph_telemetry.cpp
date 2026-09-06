@@ -224,22 +224,22 @@ namespace __hidden_task_graph_telemetry{
 }
 
 [[nodiscard]] static bool BuildCompiledTask(
-    const GpuCompiledGraph& compiledGraph,
+    const GpuCompiledGraph::ReadView& compiledPlan,
     const GpuTaskId task,
     Telemetry::FrameGraphCompiledTask& outCompiledTask
 )noexcept{
-    const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-    if(!compiledTask || !compiledGraph.validPacket(compiledTask->packet))
+    const GpuCompiledTaskView compiledTask = compiledPlan.findTask(task);
+    if(!compiledTask.valid() || !compiledPlan.validPacket(compiledTask.plan->packet))
         return false;
 
     outCompiledTask = {
-        .planGeneration = compiledTask->packet.generation,
-        .packetIndex = compiledTask->packet.index,
+        .planGeneration = compiledTask.plan->packet.generation,
+        .packetIndex = compiledTask.plan->packet.index,
         .packetizationDecision = Telemetry::FrameGraphTaskPacketizationDecision::Unknown,
         .present = true,
     };
     return TranslatePacketizationDecision(
-        compiledTask->packetizationDecision,
+        compiledTask.plan->packetizationDecision,
         outCompiledTask.packetizationDecision
     ) && Telemetry::IsValidFrameGraphCompiledTask(outCompiledTask);
 }
@@ -254,24 +254,27 @@ namespace __hidden_task_graph_telemetry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraph::appendFrameGraphTelemetry(
+bool GpuTaskGraphDeclarationReadView::appendFrameGraphTelemetry(
     Telemetry::FrameGraphBuilder& builder,
     const GpuTaskGraphAnalysis& analysis,
     Alloc::ScratchArena& scratchArena,
     const GpuTaskGraphTelemetryOptions& options
 )const{
+    if(!m_graph)
+        return false;
+
     if(
         !analysis.validFor(*this)
-        || m_tasks.empty()
+        || taskCount() == 0u
     )
         return false;
-    if(options.compiledGraph && !options.compiledGraph->validFor(*this))
+    if(options.compiledPlan && !options.compiledPlan->validFor(*this))
         return false;
     if(
         options.queueAssignments
         && (
-            options.compiledGraph
-            ? !options.queueAssignments->validFor(*this, *options.compiledGraph)
+            options.compiledPlan
+            ? !options.queueAssignments->validFor(*this, *options.compiledPlan)
             : !options.queueAssignments->validFor(*this)
         )
     )
@@ -280,17 +283,17 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
         options.queueAssignmentTelemetry
         && (
             !options.queueAssignments
-            || !options.compiledGraph
+            || !options.compiledPlan
             || !options.queueAssignmentTelemetry->validFor(
                 *this,
                 *options.queueAssignments,
-                *options.compiledGraph
+                *options.compiledPlan
             )
         )
     )
         return false;
     if(options.queueAssignments){
-        for(usize taskIndex = 0u; taskIndex < m_tasks.size(); ++taskIndex){
+        for(usize taskIndex = 0u; taskIndex < taskCount(); ++taskIndex){
             if(!options.queueAssignments->find(taskAt(taskIndex).id))
                 return false;
             if(
@@ -304,26 +307,26 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
     Vector<Telemetry::FrameGraphNodeHandle, Alloc::ScratchArena> resourceNodes(scratchArena);
     Vector<Telemetry::FrameGraphNodeHandle, Alloc::ScratchArena> completionNodes(scratchArena);
     Vector<Telemetry::FrameGraphNodeHandle, Alloc::ScratchArena> taskNodes(scratchArena);
-    resourceNodes.reserve(m_resources.size());
-    completionNodes.reserve(m_externalCompletions.size());
-    taskNodes.reserve(m_tasks.size());
+    resourceNodes.reserve(resourceCount());
+    completionNodes.reserve(externalCompletionCount());
+    taskNodes.reserve(taskCount());
 
-    for(usize resourceIndex = 0u; resourceIndex < m_resources.size(); ++resourceIndex){
+    for(usize resourceIndex = 0u; resourceIndex < resourceCount(); ++resourceIndex){
         const GpuTaskGraphResourceView resource = resourceAt(resourceIndex);
         resourceNodes.push_back(builder.addResource(resource.identity, resource.markerLabel));
     }
-    for(usize completionIndex = 0u; completionIndex < m_externalCompletions.size(); ++completionIndex){
+    for(usize completionIndex = 0u; completionIndex < externalCompletionCount(); ++completionIndex){
         const GpuTaskGraphExternalCompletionView completion = externalCompletionAt(completionIndex);
         completionNodes.push_back(builder.addExternal(completion.identity, completion.markerLabel));
     }
-    for(usize taskIndex = 0u; taskIndex < m_tasks.size(); ++taskIndex){
+    for(usize taskIndex = 0u; taskIndex < taskCount(); ++taskIndex){
         const GpuTaskGraphTaskView task = taskAt(taskIndex);
         u8 flags = GpuTaskGraphTelemetryNodeFlag::None;
         Telemetry::FrameGraphPassMetadata metadata;
         if(
-            options.compiledGraph
+            options.compiledPlan
             && !__hidden_task_graph_telemetry::BuildCompiledTask(
-                *options.compiledGraph,
+                *options.compiledPlan,
                 task.id,
                 metadata.compiledTask
             )
@@ -378,7 +381,7 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
         taskNodes.push_back(builder.addPass(task.identity, task.markerLabel, metadata, flags));
     }
 
-    for(usize taskIndex = 0u; taskIndex < m_tasks.size(); ++taskIndex){
+    for(usize taskIndex = 0u; taskIndex < taskCount(); ++taskIndex){
         const GpuTaskGraphTaskView task = taskAt(taskIndex);
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];

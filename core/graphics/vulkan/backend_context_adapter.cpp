@@ -3,6 +3,7 @@
 
 
 #include "backend_context.h"
+#include "backend_context_capabilities.h"
 #include "backend_context_detail.h"
 
 
@@ -27,79 +28,52 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
     m_graphicsQueueFamily = s_InvalidQueueFamilyIndex;
     m_secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
     m_computeQueueFamily = s_InvalidQueueFamilyIndex;
+    m_asyncComputeQueueFamily = s_InvalidQueueFamilyIndex;
     m_secondaryComputeQueueFamily = s_InvalidQueueFamilyIndex;
     m_transferQueueFamily = s_InvalidQueueFamilyIndex;
     m_secondaryTransferQueueFamily = s_InvalidQueueFamilyIndex;
     m_presentQueueFamily = s_InvalidQueueFamilyIndex;
 
+    const VulkanDetail::RequiredQueueFamilySelection selection = VulkanDetail::SelectRequiredQueueFamilies(
+        props.data(),
+        static_cast<u32>(props.size()),
+        m_deviceParams.enableAsyncComputeLane,
+        m_deviceParams.enableTransferQueue
+    );
+    m_graphicsQueueFamily = selection.graphicsFamily;
+    m_computeQueueFamily = selection.computeFamily;
+    m_asyncComputeQueueFamily = selection.asyncComputeFamily;
+    m_transferQueueFamily = selection.dedicatedTransferFamily;
+
     const bool requirePresentQueue = !m_deviceParams.headlessDevice;
-    // Continue scanning for a dedicated async-compute family.
-    const bool searchAsyncComputeQueue = m_deviceParams.enableAsyncComputeLane;
-    // Transfer fallback is resolved by the task graph. Only expose an independently useful transfer-only family.
-    const bool searchDedicatedTransferQueue = m_deviceParams.enableTransferQueue;
-
-    for(i32 i = 0; i < static_cast<i32>(props.size()); ++i){
-        const auto& queueFamily = props[i];
-
-        if(m_graphicsQueueFamily == s_InvalidQueueFamilyIndex){
-            if(
-                queueFamily.queueCount > 0
-                && (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-                && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
-            )
-                m_graphicsQueueFamily = i;
-        }
-
-        if(m_computeQueueFamily == s_InvalidQueueFamilyIndex){
-            if(
-                queueFamily.queueCount > 0
-                && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
-                && !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-            )
-                m_computeQueueFamily = i;
-        }
-
-        if(m_transferQueueFamily == s_InvalidQueueFamilyIndex){
-            if(
-                queueFamily.queueCount > 0
-                && (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT)
-                && !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-                && !(queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
-            )
-                m_transferQueueFamily = i;
-        }
-
-#ifdef NWB_PLATFORM_WINDOWS
-        if(requirePresentQueue && m_presentQueueFamily == s_InvalidQueueFamilyIndex){
-            if(queueFamily.queueCount > 0){
-                VkBool32 supported = m_instanceDispatch.vkGetPhysicalDeviceWin32PresentationSupportKHR(physicalDevice, i);
-                if(supported)
-                    m_presentQueueFamily = i;
+    const auto familySupportsPresent = [this, physicalDevice](const i32 familyIndex){
+        if(familyIndex == s_InvalidQueueFamilyIndex || !m_windowSurface)
+            return false;
+        VkBool32 supported = VK_FALSE;
+        const VkResult result = m_instanceDispatch.vkGetPhysicalDeviceSurfaceSupportKHR(
+            physicalDevice,
+            static_cast<u32>(familyIndex),
+            m_windowSurface,
+            &supported
+        );
+        return result == VK_SUCCESS && supported == VK_TRUE;
+    };
+    if(requirePresentQueue){
+        if(familySupportsPresent(m_graphicsQueueFamily))
+            m_presentQueueFamily = m_graphicsQueueFamily;
+        else{
+            for(i32 familyIndex = 0; familyIndex < static_cast<i32>(props.size()); ++familyIndex){
+                if(props[familyIndex].queueCount > 0u && familySupportsPresent(familyIndex)){
+                    m_presentQueueFamily = familyIndex;
+                    break;
+                }
             }
         }
-#elif defined(NWB_PLATFORM_LINUX)
-        VkResult res = VK_SUCCESS;
-        if(requirePresentQueue && m_presentQueueFamily == s_InvalidQueueFamilyIndex && m_windowSurface){
-            if(queueFamily.queueCount > 0){
-                VkBool32 supported = VK_FALSE;
-                res = m_instanceDispatch.vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, m_windowSurface, &supported);
-                if(res == VK_SUCCESS && supported)
-                    m_presentQueueFamily = i;
-            }
-        }
-#endif
-
-        if(
-            m_graphicsQueueFamily != s_InvalidQueueFamilyIndex
-            && (!requirePresentQueue || m_presentQueueFamily != s_InvalidQueueFamilyIndex)
-            && (!searchAsyncComputeQueue || m_computeQueueFamily != s_InvalidQueueFamilyIndex)
-            && (!searchDedicatedTransferQueue || m_transferQueueFamily != s_InvalidQueueFamilyIndex)
-        )
-            break;
     }
 
     if(
         m_graphicsQueueFamily == s_InvalidQueueFamilyIndex
+        || m_computeQueueFamily == s_InvalidQueueFamilyIndex
         || (m_presentQueueFamily == s_InvalidQueueFamilyIndex && requirePresentQueue)
     )
         return false;
@@ -123,8 +97,8 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
             }
             if(
                 m_secondaryComputeQueueFamily == s_InvalidQueueFamilyIndex
-                && m_computeQueueFamily != s_InvalidQueueFamilyIndex
-                && i != m_computeQueueFamily
+                && (m_asyncComputeQueueFamily != s_InvalidQueueFamilyIndex || m_computeQueueFamily != m_graphicsQueueFamily)
+                && i != (m_asyncComputeQueueFamily != s_InvalidQueueFamilyIndex ? m_asyncComputeQueueFamily : m_computeQueueFamily)
                 && queueFamily.queueCount > 0u
                 && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
                 && !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
@@ -196,6 +170,7 @@ bool BackendContext::pickPhysicalDevice(){
         i32 graphicsQueueFamily = s_InvalidQueueFamilyIndex;
         i32 secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
         i32 computeQueueFamily = s_InvalidQueueFamilyIndex;
+        i32 asyncComputeQueueFamily = s_InvalidQueueFamilyIndex;
         i32 secondaryComputeQueueFamily = s_InvalidQueueFamilyIndex;
         i32 transferQueueFamily = s_InvalidQueueFamilyIndex;
         i32 secondaryTransferQueueFamily = s_InvalidQueueFamilyIndex;
@@ -207,6 +182,7 @@ bool BackendContext::pickPhysicalDevice(){
         selection.graphicsQueueFamily = m_graphicsQueueFamily;
         selection.secondaryGraphicsQueueFamily = m_secondaryGraphicsQueueFamily;
         selection.computeQueueFamily = m_computeQueueFamily;
+        selection.asyncComputeQueueFamily = m_asyncComputeQueueFamily;
         selection.secondaryComputeQueueFamily = m_secondaryComputeQueueFamily;
         selection.transferQueueFamily = m_transferQueueFamily;
         selection.secondaryTransferQueueFamily = m_secondaryTransferQueueFamily;
@@ -218,6 +194,7 @@ bool BackendContext::pickPhysicalDevice(){
         m_graphicsQueueFamily = selection.graphicsQueueFamily;
         m_secondaryGraphicsQueueFamily = selection.secondaryGraphicsQueueFamily;
         m_computeQueueFamily = selection.computeQueueFamily;
+        m_asyncComputeQueueFamily = selection.asyncComputeQueueFamily;
         m_secondaryComputeQueueFamily = selection.secondaryComputeQueueFamily;
         m_transferQueueFamily = selection.transferQueueFamily;
         m_secondaryTransferQueueFamily = selection.secondaryTransferQueueFamily;
@@ -268,11 +245,36 @@ bool BackendContext::pickPhysicalDevice(){
             deviceIsGood = false;
         }
 
-        VkPhysicalDeviceFeatures deviceFeatures;
-        m_instanceDispatch.vkGetPhysicalDeviceFeatures(dev, &deviceFeatures);
-        if(!deviceFeatures.samplerAnisotropy){
-            errorStream << "\n  - does not support samplerAnisotropy";
-            deviceIsGood = false;
+        if(deviceIsGood){
+            const VulkanDetail::PhysicalDeviceFeatureQueryOptions featureQueryOptions{
+                .apiSupportsVulkan13 = prop.apiVersion >= VK_API_VERSION_1_3,
+                .descriptorBufferExtensionAvailable = VulkanDetail::HasDeviceExtension(
+                    deviceExtensions.data(),
+                    static_cast<u32>(deviceExtensions.size()),
+                    VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME
+                ),
+                .dynamicRenderingExtensionAvailable = VulkanDetail::HasDeviceExtension(
+                    deviceExtensions.data(),
+                    static_cast<u32>(deviceExtensions.size()),
+                    VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME
+                ),
+                .synchronization2ExtensionAvailable = VulkanDetail::HasDeviceExtension(
+                    deviceExtensions.data(),
+                    static_cast<u32>(deviceExtensions.size()),
+                    VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME
+                ),
+                .maintenance4ExtensionAvailable = VulkanDetail::HasDeviceExtension(
+                    deviceExtensions.data(),
+                    static_cast<u32>(deviceExtensions.size()),
+                    VK_KHR_MAINTENANCE_4_EXTENSION_NAME
+                ),
+            };
+            VulkanDetail::PhysicalDeviceFeatureSupport featureSupport;
+            VulkanDetail::QueryPhysicalDeviceFeatureSupport(m_instanceDispatch, dev, featureQueryOptions, featureSupport);
+            if(const char* const missingFeature = VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(featureSupport)){
+                errorStream << "\n  - does not support required feature " << missingFeature;
+                deviceIsGood = false;
+            }
         }
         if(!findQueueFamilies(dev)){
             errorStream << "\n  - does not support the necessary queue types";

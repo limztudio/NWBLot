@@ -19,6 +19,27 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GpuTimingMeasure;
+class GpuTimingSubmissionTicket;
+class GpuRecordedGraph;
+class GpuTaskGraphSubmitter;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_VULKAN_BEGIN
 
 
@@ -819,17 +840,24 @@ struct AccelStructGeometryBuildSignature{
     bool transformDataPresent = false;
 };
 
-struct PendingAccelStructBuildCommit{
-    AccelStruct* accelStruct = nullptr;
+struct AccelStructBuildSignatureRole{
     VkAccelerationStructureTypeKHR accelStructType = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
     VkBuildAccelerationStructureFlagsKHR buildFlags = 0u;
     Vector<AccelStructGeometryBuildSignature, Alloc::GlobalArena> geometrySignatures;
+    AccelStructBuildSignatureRole* nextRetiredRole = nullptr;
 
 
-    explicit PendingAccelStructBuildCommit(Alloc::GlobalArena& arena)
+    explicit AccelStructBuildSignatureRole(Alloc::GlobalArena& arena)
         : geometrySignatures(arena)
     {}
 };
+
+struct PendingAccelStructBuildCommit{
+    AccelStruct* accelStruct = nullptr;
+    AccelStructBuildSignatureRole* preparedRole = nullptr;
+    AccelStructBuildSignatureRole* displacedRole = nullptr;
+};
+static_assert(IsTriviallyCopyable_V<PendingAccelStructBuildCommit>, "accepted acceleration-structure publication must remain scalar-only");
 
 struct PendingOpacityMicromapBuildCommit{
     OpacityMicromap* opacityMicromap = nullptr;
@@ -855,6 +883,7 @@ class TrackedCommandBuffer final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Queue;
     friend class StateTracker;
     friend class GpuDescriptorHeap;
+    friend class VulkanTestDispatchAccess;
 
 
 public:
@@ -889,6 +918,10 @@ private:
 
     void retainResource(GraphicsResource& resource);
     [[nodiscard]] TimerQueryRecordingClaim& findOrAppendTimerQueryRecordingClaim(TimerQuery& query);
+    [[nodiscard]] TimerQueryRecordingClaim* findTimerQueryRecordingClaim(
+        TimerQuery& query,
+        u64 generation
+    )noexcept;
     [[nodiscard]] bool recordsTimerQueryBegin(const TimerQuery& query, u64 generation)const noexcept;
     [[nodiscard]] bool validateTimerQueryRecordingClaims(
         const Queue& submissionQueue,
@@ -909,7 +942,7 @@ private:
     void appendRetainedTextureStateCommit(Texture& texture, MipLevel mipLevel, ArraySlice arraySlice);
     void commitRetainedTextureStateCommits()noexcept;
     void discardRetainedTextureStateCommits()noexcept;
-    void appendPendingAccelStructBuildCommit(
+    [[nodiscard]] bool appendPendingAccelStructBuildCommit(
         AccelStruct& accelStruct,
         VkAccelerationStructureTypeKHR accelStructType,
         VkBuildAccelerationStructureFlagsKHR buildFlags,
@@ -923,8 +956,10 @@ private:
         const AccelStructGeometryBuildSignature*& outGeometrySignatures,
         usize& outGeometrySignatureCount
     )const;
+    [[nodiscard]] bool validatePendingAccelStructBuildCommits()const noexcept;
     void commitPendingAccelStructBuildCommits()noexcept;
-    void discardPendingAccelStructBuildCommits()noexcept;
+    void releasePendingAccelStructBuildCommits();
+    void abandonPendingAccelStructBuildCommits()noexcept;
     void appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap);
     [[nodiscard]] bool hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const;
     void commitPendingOpacityMicromapBuildCommits()noexcept;
@@ -979,9 +1014,17 @@ private:
     using CommandBufferList = List<TrackedCommandBufferPtr, Alloc::GlobalArena>;
 
 
+private:
+    struct DescriptorHeapUseCommitTicket{
+        GpuDescriptorHeap* heap = nullptr;
+        TrackedCommandBuffer* commandBuffer = nullptr;
+        usize heapUseIndex = Limit<usize>::s_Max;
+    };
+
+
 public:
     Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueueInfo& info, NativeQueueState& nativeQueue);
-    ~Queue();
+    ~Queue()noexcept;
 
 
 public:
@@ -1004,11 +1047,13 @@ public:
         u64 value = 0u;
     };
     struct SubmissionCommandListIdentity{
-        TrackedCommandBufferPtr owner;
+        TrackedCommandBuffer* owner = nullptr;
         u64 recordingLeaseSerial = 0u;
         u64 nativeRecordingID = 0u;
         u64 recordingWorkerDomain = 0u;
+        u64 graphRecordingOwnershipSerial = 0u;
         u32 recordingWorkerIndex = 0u;
+        bool graphSubmissionAuthorized = false;
     };
 
     u64 submit(
@@ -1018,11 +1063,12 @@ public:
         const SubmissionWait* localWaits = nullptr,
         usize localWaitCount = 0u,
         bool* outSubmissionAccepted = nullptr,
+        VkResult* outNativeResult = nullptr,
         const SubmissionSignal* localSignals = nullptr,
         usize localSignalCount = 0u,
         bool forceNativeSubmission = false
     );
-    void updateLastFinishedID();
+    [[nodiscard]] VkResult updateLastFinishedID();
 
     void waitForIdle();
 
@@ -1054,7 +1100,12 @@ private:
     static void updateCommandBufferHighWater(Atomic<u64>& highWaterCount, u64 currentCount)noexcept;
     [[nodiscard]] u64 nextRecordingID()noexcept;
     void registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
+    [[nodiscard]] bool validateCommandBufferSubmissionState(const TrackedCommandBuffer& commandBuffer)const;
     void transitionCommandBufferState(
+        TrackedCommandBuffer& commandBuffer,
+        TrackedCommandBufferArenaState::Enum nextState
+    );
+    void commitCommandBufferStateTransition(
         TrackedCommandBuffer& commandBuffer,
         TrackedCommandBufferArenaState::Enum nextState
     )noexcept;
@@ -1070,16 +1121,16 @@ private:
         u64 recordingWorkerDomain,
         u32 recordingWorkerIndex
     );
-    [[nodiscard]] WorkerCommandArena* findWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex)const;
+    [[nodiscard]] WorkerCommandArena* findWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex)const noexcept;
     [[nodiscard]] WorkerCommandArena* getOrCreateWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     [[nodiscard]] TrackedCommandBufferPtr getOrCreateDirectCommandBuffer();
     [[nodiscard]] TrackedCommandBufferPtr getOrCreateWorkerCommandBuffer(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
-    void destroyWorkerCommandArenas();
+    void destroyWorkerCommandArenas()noexcept;
     void clearPendingSemaphores()noexcept;
     [[nodiscard]] CommandBufferList::iterator recycleCommandBuffer(
         CommandBufferList& source,
         CommandBufferList::iterator commandBuffer
-    )noexcept;
+    );
     [[nodiscard]] bool coversTimerQueryPrerequisite(
         const QueueSubmissionToken& prerequisite,
         bool prerequisiteObservedComplete,
@@ -1099,6 +1150,9 @@ private:
     GpuPhysicalQueueId m_physicalQueue;
     u32 m_queueFamilyIndex;
 
+    // Serializes reusable Device::executeCommandLists workspace through accepted post-submit publication.
+    // Acquire before m_mutex when both are required.
+    Futex m_submissionWorkspaceMutex;
     // Protects scheduler semantics. Always acquire before m_nativeQueue.hostMutex when both are required.
     Futex m_mutex;
     Futex m_workerCommandArenasMutex;
@@ -1106,6 +1160,17 @@ private:
     Vector<u64, Alloc::GlobalArena> m_waitSemaphoreValues;
     Vector<VkSemaphore, Alloc::GlobalArena> m_signalSemaphores;
     Vector<u64, Alloc::GlobalArena> m_signalSemaphoreValues;
+    // Queue::submit holds m_mutex throughout, so this persistent high-water workspace can be reused without
+    // allocation or deallocation after vkQueueSubmit2 accepts the submission.
+    Vector<DescriptorHeapUseCommitTicket, Alloc::GlobalArena> m_submitDescriptorHeapUseCommitTickets;
+    Vector<TrackedCommandBuffer*, Alloc::GlobalArena> m_submitValidatedTimerQueryCommandBuffers;
+    Vector<VkSemaphoreSubmitInfo, Alloc::GlobalArena> m_submitWaitInfos;
+    Vector<VkSemaphoreSubmitInfo, Alloc::GlobalArena> m_submitSignalInfos;
+    Vector<VkCommandBufferSubmitInfo, Alloc::GlobalArena> m_submitCommandBufferInfos;
+    CommandBufferList m_submitPreparedCommandBuffers;
+    Vector<SubmissionWait, Alloc::GlobalArena> m_executeLocalWaits;
+    Vector<SubmissionCommandListIdentity, Alloc::GlobalArena> m_executeExpectedCommandLists;
+    VulkanDetail::SubmittedCommandBufferOwnerLookup m_executeSubmittedOwners;
 
     Atomic<u64> m_lastRecordingID = 0u;
     u64 m_lastSubmittedID = 0;
@@ -1149,7 +1214,7 @@ class VulkanAllocator final : NoCopy{
 
 public:
     explicit VulkanAllocator(const VulkanContext& context);
-    ~VulkanAllocator();
+    ~VulkanAllocator()noexcept;
 
 
 public:
@@ -1178,7 +1243,7 @@ public:
         void*& mappedMemory,
         const VkBufferCreateInfo& bufferInfo
     );
-    void destroyHostMappedBuffer(VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory);
+    void destroyHostMappedBuffer(VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory)noexcept;
 
 
 private:
@@ -1263,6 +1328,8 @@ private:
     struct BufferChunk final : public RefCounter<GraphicsResource>{
         BufferHandle buffer;
         TrackedCommandBuffer* owner;
+        BufferChunk* previousActiveChunk;
+        BufferChunk* nextActiveChunk;
         u64 nativeRecordingID;
         GpuPhysicalQueueId physicalQueue;
         u64 size;
@@ -1282,12 +1349,14 @@ private:
     };
     using BufferChunkPtr = RefCountPtr<BufferChunk>;
     using BufferChunkList = List<BufferChunkPtr, Alloc::GlobalArena>;
-    using ChunkRecyclePredicate = bool (*)(TrackedCommandBuffer* owner, u64 nativeRecordingID, const void* context) noexcept;
-    struct ActiveQueueChunks{
+    // The owning list keeps every chunk address stable. Accepted submissions traverse only this intrusive active
+    // chain, so accumulated retired storage cannot increase the post-native-accept commit cost.
+    struct QueueChunkLedger{
         GpuPhysicalQueueId queue;
         BufferChunkList chunks;
+        BufferChunk* firstActiveChunk = nullptr;
 
-        ActiveQueueChunks(GraphicsArena& arena, GpuPhysicalQueueId value)
+        QueueChunkLedger(GraphicsArena& arena, GpuPhysicalQueueId value)
             : queue(value)
             , chunks(arena)
         {}
@@ -1325,25 +1394,38 @@ public:
         u64 nativeRecordingID,
         u64 reusableVersion
     );
+    void abandonChunks(
+        GpuPhysicalQueueId queue,
+        TrackedCommandBuffer* owner,
+        u64 nativeRecordingID
+    )noexcept;
 
 
 private:
     void collectCompletedChunks();
-    void trimChunkPoolLocked();
-    [[nodiscard]] BufferChunkList* findActiveChunksLocked(GpuPhysicalQueueId queue)noexcept;
-    [[nodiscard]] BufferChunkList* findOrCreateActiveChunksLocked(GpuPhysicalQueueId queue);
-    BufferChunkList::iterator recycleActiveChunkLocked(
-        BufferChunkList& activeChunks,
-        BufferChunkList::iterator it,
+    void trimRetiredChunksLocked(GpuPhysicalQueueId queue, u64 completedVersion);
+    [[nodiscard]] QueueChunkLedger* findQueueLedgerLocked(GpuPhysicalQueueId queue)noexcept;
+    [[nodiscard]] QueueChunkLedger* findOrCreateQueueLedgerLocked(GpuPhysicalQueueId queue);
+    void linkActiveChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept;
+    void retireChunkLocked(
+        QueueChunkLedger& ledger,
+        BufferChunk& chunk,
         u64 version,
         bool resetAllocated
     )noexcept;
-    void recycleMatchingActiveChunksLocked(
+    void retireSubmittedChunksLocked(
+        GpuPhysicalQueueId queue,
+        u64 version,
+        const Queue::SubmissionCommandListIdentity* submittedCommandLists,
+        usize submittedCommandListCount,
+        const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners
+    )noexcept;
+    void retireOwnerChunksLocked(
         GpuPhysicalQueueId queue,
         u64 version,
         bool resetAllocated,
-        ChunkRecyclePredicate predicate,
-        const void* predicateContext
+        TrackedCommandBuffer& owner,
+        u64 nativeRecordingID
     )noexcept;
 
 
@@ -1353,10 +1435,9 @@ private:
     u64 m_memoryLimit;
     bool m_isScratchBuffer;
     Futex m_mutex;
-    u64 m_chunkPoolBytes = 0;
+    u64 m_retiredChunkBytes = 0;
 
-    BufferChunkList m_chunkPool;
-    GraphicsDeque<ActiveQueueChunks> m_activeChunks;
+    GraphicsDeque<QueueChunkLedger> m_queueChunkLedgers;
 };
 
 
@@ -1472,6 +1553,8 @@ inline UploadManager::BufferChunk::BufferChunk(
     : RefCounter<GraphicsResource>(pool)
     , buffer(Move(buf))
     , owner(chunkOwner)
+    , previousActiveChunk(nullptr)
+    , nextActiveChunk(nullptr)
     , nativeRecordingID(chunkNativeRecordingID)
     , physicalQueue(queue)
     , size(sz)
@@ -1576,9 +1659,10 @@ public:
 
 
 private:
-    [[nodiscard]] bool canRevokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
-    [[nodiscard]] bool revokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
-    void releaseRevokedNativeImageIdentity(VkImage expectedNativeImage)noexcept;
+    [[nodiscard]] bool canRevokeUnmanagedNativeImage(VkImage expectedNativeImage);
+    [[nodiscard]] bool prepareRevokeUnmanagedNativeImage(VkImage expectedNativeImage);
+    void commitRevokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
+    void releasePreparedRevokeUnmanagedNativeImageIdentity(VkImage expectedNativeImage)noexcept;
     [[nodiscard]] bool isRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel);
     void setRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel, bool known)noexcept;
 
@@ -1591,6 +1675,7 @@ private:
     VkImageAspectFlags m_aspectMask = 0;
 
     VkImage m_image = VK_NULL_HANDLE;
+    VkImage m_preparedRevokedNativeImage = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;
     const Vector<u32, Alloc::GlobalArena> m_imageQueueFamilyIndices;
     const VkImageCreateInfo m_imageInfo{};
@@ -1993,12 +2078,12 @@ private:
 
 public:
     DescriptorBufferManager(Device& device, const VulkanContext& context, VulkanAllocator& allocator);
-    ~DescriptorBufferManager();
+    ~DescriptorBufferManager()noexcept;
 
 
 private:
-    [[nodiscard]] bool shutdownForLifecycleOperation(bool deviceIdleOrLostAlreadyProven = false);
-    [[nodiscard]] bool shutdownAfterDeviceIdleOrLoss();
+    [[nodiscard]] bool shutdownForLifecycleOperation(VkResult& outIdleResult);
+    void shutdownForDeviceTeardown()noexcept;
 
 
 public:
@@ -2057,7 +2142,7 @@ private:
         DescriptorBufferSegmentKind::Enum expectedKind
     )const;
     bool initializeSegment(SegmentStorage& segment, const ACompactString& debugName, u32 capacityBytes);
-    void shutdownSegment(SegmentStorage& segment);
+    void shutdownSegment(SegmentStorage& segment)noexcept;
 
 
 private:
@@ -2100,6 +2185,7 @@ private:
         u32 capacity = 0;
         u32 nextFresh = 0;
         Vector<u32, Alloc::GlobalArena> freeList;
+        usize freeCount = 0u;
         // PendingRecording is the only freed state that native recording may still consume.
         Vector<SlotState, Alloc::GlobalArena> slotStates;
         // Keeps the allocated class authoritative while a slot is live or quarantined.
@@ -2115,6 +2201,7 @@ private:
         GpuDescriptorHandle handle;
         u64 lastRequiredHeapUseID = 0u;
     };
+    static_assert(IsTriviallyCopyable_V<RetiredSlot>, "descriptor retirement publication must remain a scalar journal write");
     struct HeapUse{
         TrackedCommandBuffer* commandBuffer = nullptr;
         QueueSubmissionToken submissionToken;
@@ -2132,7 +2219,7 @@ public:
         explicit PendingRecordingLease(GpuDescriptorHeap& heap);
 
     public:
-        ~PendingRecordingLease();
+        ~PendingRecordingLease()noexcept;
         PendingRecordingLease(const PendingRecordingLease&) = delete;
         PendingRecordingLease(PendingRecordingLease&&) = delete;
         PendingRecordingLease& operator=(const PendingRecordingLease&) = delete;
@@ -2150,7 +2237,7 @@ public:
 
 public:
     explicit GpuDescriptorHeap(Device& device);
-    ~GpuDescriptorHeap();
+    ~GpuDescriptorHeap()noexcept;
 
 
 public:
@@ -2215,7 +2302,7 @@ public:
 
 
 private:
-    [[nodiscard]] SlotAllocator& allocatorForClass(GpuDescriptorClass::Enum descriptorClass);
+    [[nodiscard]] SlotAllocator& allocatorForClass(GpuDescriptorClass::Enum descriptorClass)noexcept;
     void releaseAccelStructDescriptorBlock(u32 slot);
     void releaseRetainedDescriptorResource(GpuDescriptorHandle handle);
     [[nodiscard]] bool isResourceAdmittedToActiveUsesLocked(const ResourceQueueAdmissionSnapshot& admission)const noexcept;
@@ -2225,11 +2312,21 @@ private:
         TrackedCommandBuffer& commandBuffer,
         const GpuPhysicalQueueId& physicalQueue
     );
-    void submitCommandBufferUse(TrackedCommandBuffer& commandBuffer, QueueSubmissionToken submissionToken)noexcept;
+    [[nodiscard]] bool validateCommandBufferUseSubmissionLocked(
+        TrackedCommandBuffer& commandBuffer,
+        const QueueSubmissionToken& submissionToken,
+        usize& outHeapUseIndex
+    );
+    void commitCommandBufferUseSubmissionLocked(
+        TrackedCommandBuffer& commandBuffer,
+        const QueueSubmissionToken& submissionToken,
+        usize heapUseIndex
+    )noexcept;
     void discardCommandBufferUse(TrackedCommandBuffer& commandBuffer)noexcept;
-    void releasePendingRecordingLease(u64 descriptorBufferGeneration);
-    void shutdownForDeviceTeardown();
+    void releasePendingRecordingLease(u64 descriptorBufferGeneration)noexcept;
+    void shutdownForDeviceTeardown()noexcept;
     void shutdownLocked();
+    void resetStateForShutdownLocked()noexcept;
 
     // Allocates persistent resource/sampler blocks; TLAS blocks are per handle.
     bool initializeDescriptorBufferBlocks(u32 offsetAlignmentBytes);
@@ -2267,6 +2364,8 @@ private:
     Vector<GpuDescriptorHandle, Alloc::GlobalArena> m_pendingRecording;
     Vector<RetiredSlot, Alloc::GlobalArena> m_retired;
     Vector<HeapUse, Alloc::GlobalArena> m_heapUses;
+    usize m_pendingRecordingCount = 0u;
+    usize m_retiredCount = 0u;
     usize m_activePendingRecordingLeaseCount = 0u;
     u64 m_lastHeapUseID = 0u;
     u64 m_descriptorBufferGeneration = 0u;
@@ -2601,7 +2700,7 @@ public:
         const VulkanContext& context,
         ResourceQueueSharing::Mask creationQueueSharing = ResourceQueueSharing::Exclusive
     );
-    ~AccelStruct();
+    ~AccelStruct()noexcept;
 
 
 public:
@@ -2618,6 +2717,11 @@ public:
 
 
 private:
+    void collectRetiredBuildSignatureRoles()noexcept;
+    void retireBuildSignatureRole(AccelStructBuildSignatureRole& role)noexcept;
+
+
+private:
     RayTracingAccelStructDesc m_desc;
     const ResourceQueueSharing::Mask m_creationQueueSharing;
     VkAccelerationStructureKHR m_accelStruct = VK_NULL_HANDLE;
@@ -2625,10 +2729,8 @@ private:
     u64 m_deviceAddress = 0;
     mutable Futex m_memoryBindingMutex;
     mutable Futex m_acceptedBuildSignatureMutex;
-    Vector<AccelStructGeometryBuildSignature, Alloc::GlobalArena> m_acceptedBuildGeometrySignatures;
-    VkAccelerationStructureTypeKHR m_acceptedBuildType = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
-    VkBuildAccelerationStructureFlagsKHR m_acceptedBuildFlags = 0u;
-    bool m_hasAcceptedBuild = false;
+    AccelStructBuildSignatureRole* m_acceptedBuildSignatureRole = nullptr;
+    AccelStructBuildSignatureRole* m_retiredBuildSignatureRoles = nullptr;
 
     const VulkanContext& m_context;
     bool m_isTopLevelAtCreation = false;
@@ -2802,8 +2904,8 @@ private:
 private:
     PermanentTextureStateMap m_permanentTextureStates;
     PermanentBufferStateMap m_permanentBufferStates;
-    PermanentTextureStateMap m_attemptPermanentTextureStates;
-    PermanentBufferStateMap m_attemptPermanentBufferStates;
+    Vector<Texture*, Alloc::GlobalArena> m_attemptPermanentTextures;
+    Vector<Buffer*, Alloc::GlobalArena> m_attemptPermanentBuffers;
     HashMap<TextureSubresourceStateKey, ResourceStates::Mask, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureStates;
     HashMap<Buffer*, ResourceStates::Mask, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferStates;
     TextureUavBarrierPolicyMap m_textureUavBarriers;
@@ -2819,14 +2921,116 @@ private:
 
 
 class CommandList final : public RefCounter<GraphicsResource>, NoCopy{
+    friend class ::NWB::Core::GpuRecordedGraph;
+    friend class ::NWB::Core::GpuTimingMeasure;
+    friend class ::NWB::Core::GpuTimingSubmissionTicket;
+    friend class ::NWB::Core::GpuNativePacketRecorder;
+    friend class ::NWB::Core::GpuTaskGraphSubmitter;
     friend class Device;
     friend class GpuDescriptorHeap;
     friend class Queue;
+    friend class VulkanTestDispatchAccess;
+
+
+private:
+    struct MarkerStackEntry{
+        CommandMarkerRecordingToken token;
+        bool usesDebugUtils = false;
+        bool usesGpuMarkers = false;
+    };
+
+
+private:
+    static constexpr u8 s_GraphPublicationUnowned = 0u;
+    static constexpr u8 s_GraphPublicationRecording = 1u;
+    static constexpr u8 s_GraphPublicationRecorded = 2u;
+    static constexpr u8 s_GraphPublicationSubmitting = 3u;
+    static constexpr u8 s_GraphPublicationReading = 4u;
+    static constexpr u8 s_GraphPublicationRevoking = 5u;
+
+
+private:
+    class GraphPublicationReadOwnership final : NoCopy{
+        friend class CommandList;
+        friend class VulkanTestDispatchAccess;
+
+
+    private:
+        explicit GraphPublicationReadOwnership(const CommandList& commandList)noexcept;
+        ~GraphPublicationReadOwnership()noexcept;
+
+
+    private:
+        const CommandList& m_commandList;
+        bool m_readable = false;
+        bool m_acquired = false;
+    };
+
+    class GraphRecordingOwnership final : NoCopy{
+        friend class ::NWB::Core::GpuNativePacketRecorder;
+        friend class CommandList;
+        friend class GraphPublicationReadOwnership;
+        friend class VulkanTestDispatchAccess;
+
+
+    private:
+        struct Capability{
+            const CommandList* commandList = nullptr;
+            u64 recordingLeaseSerial = 0u;
+            Capability* previous = nullptr;
+        };
+
+
+    private:
+        [[nodiscard]] static Capability*& currentCapability()noexcept;
+        [[nodiscard]] static bool hasCapability(const CommandList& commandList, u64 recordingLeaseSerial)noexcept;
+
+
+    private:
+        GraphRecordingOwnership(CommandList& commandList, u64 recordingLeaseSerial);
+        ~GraphRecordingOwnership()noexcept;
+
+
+    private:
+        [[nodiscard]] bool finish(bool semanticSuccess, CommandListResourceStateHandoff* finalStates);
+        void publish()noexcept;
+        void release()noexcept;
+        void attachCapability()noexcept;
+        void detachCapability()noexcept;
+
+
+    private:
+        CommandList& m_commandList;
+        u64 m_recordingLeaseSerial = 0u;
+        Capability m_capability;
+        bool m_acquired = false;
+        bool m_capabilityAttached = false;
+    };
+
+    class GraphSubmissionOwnership final : NoCopy{
+        friend class ::NWB::Core::GpuTaskGraphSubmitter;
+
+
+    public:
+        explicit GraphSubmissionOwnership(CommandList& commandList)noexcept;
+        ~GraphSubmissionOwnership()noexcept;
+
+
+    private:
+        void accept()noexcept;
+        void release()noexcept;
+
+
+    private:
+        CommandList& m_commandList;
+        u64 m_recordingLeaseSerial = 0u;
+        bool m_acquired = false;
+    };
 
 
 public:
     CommandList(Device& device, const CommandListParameters& params);
-    ~CommandList();
+    virtual ~CommandList()noexcept override;
 
 
 public:
@@ -2835,24 +3039,37 @@ public:
     // Final state snapshot follows keepInitialState restoration.
     void close(CommandListResourceStateHandoff* finalStates = nullptr);
     // False when no submit-ready command buffer is owned.
-    [[nodiscard]] bool hasCommandBuffer()const{ return matchesNativeLeaseIdentity(); }
+    [[nodiscard]] bool hasCommandBuffer()const noexcept{
+        const GraphPublicationReadOwnership ownership(*this);
+        return ownership.m_readable && hasCommandBufferUnchecked();
+    }
     // `hasCommandBuffer` remains true after close so queues can submit it. Tooling that emits commands must use
     // this predicate instead of treating ownership as an active recording scope.
-    [[nodiscard]] bool isRecording()const noexcept{ return m_isRecording && matchesNativeLeaseIdentity(); }
+    [[nodiscard]] bool isRecording()const noexcept{
+        const GraphPublicationReadOwnership ownership(*this);
+        return ownership.m_readable && isRecordingUnchecked();
+    }
     // Sticky for the current open/close attempt. A failed native capability or command semantic check invalidates
     // the complete list; close discards its native buffer and open is the only operation that starts a fresh attempt.
-    [[nodiscard]] bool commandRecordingFailed()const noexcept{ return m_commandRecordingFailed; }
+    [[nodiscard]] bool commandRecordingFailed()const noexcept{
+        const GraphPublicationReadOwnership ownership(*this);
+        return ownership.m_readable && commandRecordingFailedUnchecked();
+    }
     // Every open attempt starts a distinct native-buffer lease, including failed attempts. Packet recorders and
     // replay tooling capture this serial before invoking extensible lowering and reject a thunk that closes or
     // replaces the command buffer while claiming success.
-    [[nodiscard]] u64 recordingLeaseSerial()const noexcept{ return m_recordingLeaseSerial; }
-    [[nodiscard]] bool matchesRecordingLease(u64 serial)const noexcept{
-        return serial != 0u
-            && serial == m_recordingLeaseSerial
-            && matchesActiveNativeLeaseIdentity()
-        ;
+    [[nodiscard]] u64 recordingLeaseSerial()const noexcept{
+        const GraphPublicationReadOwnership ownership(*this);
+        return ownership.m_readable ? recordingLeaseSerialUnchecked() : 0u;
     }
-    [[nodiscard]] bool isRenderPassActive()const noexcept{ return m_renderPassActive; }
+    [[nodiscard]] bool matchesRecordingLease(u64 serial)const noexcept{
+        const GraphPublicationReadOwnership ownership(*this);
+        return ownership.m_readable && matchesRecordingLeaseUnchecked(serial);
+    }
+    [[nodiscard]] bool isRenderPassActive()const noexcept{
+        const GraphPublicationReadOwnership ownership(*this);
+        return ownership.m_readable && m_renderPassActive;
+    }
     void clearState();
     void beginRenderPass(Framebuffer* framebuffer, const RenderPassParameters& params);
     void endRenderPass();
@@ -2972,8 +3189,15 @@ public:
     [[nodiscard]] bool canResetTimerQueryHere()const;
     [[nodiscard]] bool beginTimerQuery(TimerQuery* query, TimerQueryRecordingToken& outToken);
     [[nodiscard]] bool endTimerQuery(TimerQuery* query, const TimerQueryRecordingToken& token);
+    // Lifetime closure may only consume the claim created by beginTimerQuery() on this same command buffer. It never
+    // appends retention or claim storage, reports diagnostics, or invokes observers.
+    [[nodiscard]] bool endTimerQueryFromExistingClaim(
+        TimerQuery* query,
+        const TimerQueryRecordingToken& token
+    )noexcept;
     void beginMarker(const AStringView name);
     void endMarker();
+    void abandonMarker()noexcept;
 
 #if defined(NWB_DEBUG)
     // Task-graph recording opens one scope around each record thunk. Command methods report the capabilities they
@@ -2999,45 +3223,80 @@ public:
     [[nodiscard]] CommandListParameters getResolvedDescription()const noexcept{ return m_creationDesc; }
 
 private:
+    [[nodiscard]] bool publicCommandStateAccessible()const noexcept;
+    [[nodiscard]] bool hasCommandBufferUnchecked()const noexcept{ return matchesNativeLeaseIdentity(); }
+    [[nodiscard]] bool isRecordingUnchecked()const noexcept{ return m_isRecording && matchesNativeLeaseIdentity(); }
+    [[nodiscard]] bool commandRecordingFailedUnchecked()const noexcept{ return m_commandRecordingFailed; }
+    [[nodiscard]] u64 recordingLeaseSerialUnchecked()const noexcept{ return m_recordingLeaseSerial; }
+    [[nodiscard]] bool matchesRecordingLeaseUnchecked(u64 serial)const noexcept{
+        return serial != 0u
+            && serial == m_recordingLeaseSerial
+            && matchesActiveNativeLeaseIdentity()
+        ;
+    }
+    [[nodiscard]] bool canRecordTimerQueryHereUnchecked()const noexcept;
+    [[nodiscard]] bool canResetTimerQueryHereUnchecked()const noexcept;
+    // Returns false only when graph publication temporarily prevents inspection. A true result reports whether this
+    // exact native recording lease contains the requested query cycle's begin and end claims.
+    [[nodiscard]] bool inspectExactTimerQueryRecordingEndpoints(
+        const TimerQueryRecordingToken& token,
+        u64 recordingLeaseSerial,
+        bool& outRecordsBegin,
+        bool& outRecordsEnd
+    )const noexcept;
+    [[nodiscard]] bool beginGraphRecordingOwnership(u64 recordingLeaseSerial);
+    void publishGraphRecordingOwnership(u64 recordingLeaseSerial)noexcept;
+    void cancelGraphRecordingOwnership(u64 recordingLeaseSerial)noexcept;
+    // A recorded graph may outlive its own strong reference through a task-retained handle. Revoke only that
+    // graph's exact still-unsubmitted publication; accepted, submitting, or later recording identities are untouched.
+    void revokeGraphRecordingPublication(u64 recordingLeaseSerial)noexcept;
+    [[nodiscard]] bool beginGraphSubmissionOwnership(u64& outRecordingLeaseSerial)noexcept;
+    void acceptGraphSubmissionOwnership(u64 recordingLeaseSerial)noexcept;
+    void endGraphSubmissionOwnership(u64 recordingLeaseSerial)noexcept;
+    void closeInternal(CommandListResourceStateHandoff* finalStates);
+    // Reusable attempt cancellation leaves publication and crash-tracker ownership to the enclosing capability.
+    // It never logs, invokes observers, polls a queue, or archives crash-marker strings.
+    void abortRecordingAttemptWithoutCallbacks()noexcept;
     void clearStateInternal();
     [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
     [[nodiscard]] bool matchesNativeLeaseIdentity()const noexcept;
     [[nodiscard]] bool matchesActiveNativeLeaseIdentity()const noexcept;
     [[nodiscard]] bool matchesSubmissionLease(
         GpuPhysicalQueueId executionQueue,
-        CommandQueue::Enum executionQueueClass
+        CommandQueue::Enum executionQueueClass,
+        bool graphSubmissionAuthorized
     )const noexcept;
-    [[nodiscard]] bool validateFramebufferForRendering(Framebuffer* framebuffer, const tchar* operationName)noexcept;
+    [[nodiscard]] bool validateFramebufferForRendering(Framebuffer* framebuffer, const tchar* operationName);
     [[nodiscard]] bool validateRenderPassBegin(
         Framebuffer* framebuffer,
         const RenderPassParameters& params,
         const tchar* operationName
-    )noexcept;
-    [[nodiscard]] bool prepareFramebufferForRendering(Framebuffer* framebuffer, const tchar* operationName)noexcept;
+    );
+    [[nodiscard]] bool prepareFramebufferForRendering(Framebuffer* framebuffer, const tchar* operationName);
     [[nodiscard]] bool validateViewportState(
         const ViewportState& viewport,
         const tchar* operationName
-    )noexcept;
+    );
     [[nodiscard]] bool validateTextureForGpuState(
         Texture* texture,
         ResourceStates::Mask requiredState,
         const tchar* operationName,
         VkImageUsageFlags requiredUsage = 0u
-    )noexcept;
+    );
     [[nodiscard]] bool validateBufferForGpuState(
         Buffer* buffer,
         ResourceStates::Mask requiredState,
         const tchar* operationName,
         VkBufferUsageFlags explicitRequiredUsage = 0u
-    )noexcept;
-    [[nodiscard]] bool validateGraphicsState(const GraphicsState& state)noexcept;
-    [[nodiscard]] bool validateMeshletState(const MeshletState& state)noexcept;
-    [[nodiscard]] bool validateGraphicsDrawState(const tchar* operationName, bool indexed)noexcept;
+    );
+    [[nodiscard]] bool validateGraphicsState(const GraphicsState& state);
+    [[nodiscard]] bool validateMeshletState(const MeshletState& state);
+    [[nodiscard]] bool validateGraphicsDrawState(const tchar* operationName, bool indexed);
     [[nodiscard]] bool validateGraphicsDrawArguments(
         const DrawArguments& arguments,
         bool indexed,
         const tchar* operationName
-    )noexcept;
+    );
     void setResourceStatesForGraphicsBuffers(const GraphicsState& state);
     [[nodiscard]] bool isTextureAdmittedToCommandQueue(const Texture& texture)const noexcept;
     [[nodiscard]] bool isTextureReadyForCommandQueue(
@@ -3049,9 +3308,9 @@ private:
         Buffer* buffer,
         VkBufferUsageFlags requiredUsage = 0u
     )const noexcept;
-    [[nodiscard]] bool validateTrackedTexturesReadyForClose()noexcept;
-    [[nodiscard]] bool validateTrackedBuffersReadyForClose()noexcept;
-    [[nodiscard]] bool validateTrackedResourcesReadyForSubmission()const noexcept;
+    [[nodiscard]] bool validateTrackedTexturesReadyForClose();
+    [[nodiscard]] bool validateTrackedBuffersReadyForClose();
+    [[nodiscard]] bool validateTrackedResourcesReadyForSubmission()const;
     [[nodiscard]] bool importResourceStateHandoff(const CommandListResourceStateHandoff& states);
     void exportResourceStateHandoff(CommandListResourceStateHandoff& states)const;
     void appendPendingOwnershipReleaseBarriers();
@@ -3094,19 +3353,19 @@ private:
     bool ensureGraphicsRenderPass(Framebuffer* framebuffer);
     void endActiveRenderPass();
     void executePipelineBarrier(const VkDependencyInfo& depInfo);
-    [[nodiscard]] bool validateCommandRecordingScope(const tchar* operationName)noexcept;
-    [[nodiscard]] bool recordAndValidateCommandCapability(GpuQueueCapability::Mask requiredCapabilities, const tchar* operationName)noexcept;
-    [[nodiscard]] bool recordAndValidateAnyCommandCapability(GpuQueueCapability::Mask alternativeCapabilities, const tchar* operationName)noexcept;
-    void rejectCommandRecording(const tchar* operationName, const tchar* reason)noexcept;
+    [[nodiscard]] bool validateCommandRecordingScope(const tchar* operationName);
+    [[nodiscard]] bool recordAndValidateCommandCapability(GpuQueueCapability::Mask requiredCapabilities, const tchar* operationName);
+    [[nodiscard]] bool recordAndValidateAnyCommandCapability(GpuQueueCapability::Mask alternativeCapabilities, const tchar* operationName);
+    void rejectCommandRecording(const tchar* operationName, const tchar* reason);
     void invalidateCommandRecording()noexcept;
-    void discardInvalidCommandBuffer()noexcept;
+    void discardInvalidCommandBuffer();
     [[nodiscard]] bool validateIndirectBuffer(
         Buffer* buffer,
         u64 offsetBytes,
         u64 commandSizeBytes,
         u32 commandCount,
         const tchar* commandName
-    )noexcept;
+    );
     [[nodiscard]] bool prepareDrawIndirect(
         u32 offsetBytes,
         u32 drawCount,
@@ -3115,7 +3374,7 @@ private:
         const tchar* commandName,
         VulkanDetail::IndirectDrawIndexMode::Enum indexMode,
         Buffer*& outIndirectBuffer
-    )noexcept;
+    );
     void clearColorTexture(Texture* textureResource, TextureSubresourceSet subresources, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
     void clearColorTextureBox(Texture* textureResource, TextureSubresourceSet subresources, const Box& box, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
     bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, const tchar* valueName);
@@ -3126,7 +3385,7 @@ private:
         CpuAccessMode::Enum requiredCpuAccess,
         VkImageUsageFlags requiredImageUsage,
         const tchar* operationName
-    )noexcept;
+    );
     bool prepareStagingTextureCopy(
         StagingTexture& stagingResource,
         const TextureSlice& stagingSlice,
@@ -3174,8 +3433,15 @@ private:
         VkBuildAccelerationStructureFlagsKHR vkBuildFlags,
         const tchar* operationName
     );
+    [[nodiscard]] CommandMarkerRecordingToken beginMarkerLease(const AStringView name);
+    [[nodiscard]] bool endMarkerLease(const CommandMarkerRecordingToken& token);
+    void abandonMarkerLease(const CommandMarkerRecordingToken& token)noexcept;
+    [[nodiscard]] bool markerLeaseMatchesTop(const CommandMarkerRecordingToken& token)const noexcept;
+    void closeTopMarkerWithoutCallbacks()noexcept;
     void resetMarkerState();
+    void resetMarkerStateWithoutCallbacks()noexcept;
     void discardUnsubmittedUploadChunks();
+    void abandonUnsubmittedUploadChunks()noexcept;
 
 
 private:
@@ -3188,10 +3454,13 @@ private:
     bool m_isRecording = false;
     bool m_commandRecordingFailed = false;
     u64 m_recordingLeaseSerial = 0u;
+    Atomic<u64> m_graphRecordingOwnershipSerial{ 0u };
+    mutable Atomic<u8> m_graphPublicationState{ s_GraphPublicationUnowned };
     u64 m_nativeRecordingID = 0u;
+    u64 m_nextMarkerSerial = 0u;
     bool m_renderPassActive = false;
     bool m_descriptorBuffersBound = false;
-    u32 m_markerDepth = 0u;
+    GraphicsVector<MarkerStackEntry> m_markerStack;
     Framebuffer* m_renderPassFramebuffer = nullptr;
 #if defined(NWB_DEBUG)
     GpuQueueCapability::Mask m_taskCapabilitiesUsed = GpuQueueCapability::None;
@@ -3302,14 +3571,28 @@ private:
 
 class Device final : public RefCounter<GraphicsResource>, NoCopy{
     friend DeviceHandle CreateDevice(const DeviceDesc& desc);
+    friend class ::NWB::Core::GpuTaskGraphSubmitter;
     friend class VulkanTestDispatchAccess;
     friend class BackendContext;
     friend class Buffer;
     friend class CommandList;
+    friend class DescriptorBufferManager;
     friend class Queue;
     friend class Texture;
     friend class UploadManager;
     friend class GpuDescriptorHeap;
+
+
+private:
+    enum class DeviceLossDiagnosticPolicy : u8{
+        Capture,
+        Defer,
+    };
+
+
+private:
+    static constexpr u64 s_SubmissionDrainBit = static_cast<u64>(1u) << 63u;
+    static constexpr u64 s_SubmissionOperationCountMask = s_SubmissionDrainBit - 1u;
 
 
 private:
@@ -3339,13 +3622,7 @@ private:
             m_previousActiveLease = activeLease();
             activeLease() = this;
         }
-        ~SubmissionOperationLease(){
-            if(!m_device)
-                return;
-            NWB_ASSERT(activeLease() == this);
-            activeLease() = m_previousActiveLease;
-            m_device->endSubmissionOperation();
-        }
+        ~SubmissionOperationLease()noexcept;
 
 
     public:
@@ -3392,7 +3669,7 @@ public:
 
 public:
     explicit Device(const DeviceDesc& desc);
-    ~Device();
+    virtual ~Device()noexcept override;
 
 
 public:
@@ -3488,6 +3765,26 @@ public:
         const GpuPhysicalQueueId& executionQueue,
         const QueueSubmissionDesc& submitDesc
     );
+
+
+private:
+    [[nodiscard]] QueueSubmissionToken executeGraphCommandLists(
+        CommandList* const* pCommandLists,
+        usize numCommandLists,
+        const GpuPhysicalQueueId& executionQueue,
+        const QueueSubmissionDesc& submitDesc
+    );
+    [[nodiscard]] QueueSubmissionToken executeCommandListsInternal(
+        CommandList* const* pCommandLists,
+        usize numCommandLists,
+        const GpuPhysicalQueueId& executionQueue,
+        const QueueSubmissionDesc& submitDesc,
+        bool graphSubmissionAuthorized,
+        DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy = DeviceLossDiagnosticPolicy::Capture
+    );
+
+
+public:
     // The registry owns every active native VkQueue. Broad CommandQueue calls resolve through the designated
     // primary record only for legacy callers; graph recording/submission selects a concrete ID directly.
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_deviceGeneration; }
@@ -3519,7 +3816,7 @@ public:
     [[nodiscard]] bool validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept;
     // Blocks until one exact accepted queue timeline value completes. This is used to prove that a bridged WSI
     // binary semaphore wait has consumed its signal before the acquire slot is reset and reused.
-    [[nodiscard]] bool waitForSubmissionToken(const QueueSubmissionToken& token)noexcept;
+    [[nodiscard]] bool waitForSubmissionToken(const QueueSubmissionToken& token);
     // Native device loss permits loss-aware teardown. Logical quarantine still requires an idle join before freeing.
     [[nodiscard]] bool isDeviceLost()const noexcept{ return m_deviceLost.load(MemoryOrder::acquire); }
     [[nodiscard]] bool requiresRecreation()const noexcept{
@@ -3546,12 +3843,12 @@ public:
     // must not overlap engine submission, presentation, idle, or teardown.
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue);
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue);
-    bool isGpuCrashDiagnosticsEnabled(){ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.NV_device_diagnostic_checkpoints; }
-    bool isAmdBreadcrumbEnabled(){ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.AMD_buffer_marker && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
+    bool isGpuCrashDiagnosticsEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.NV_device_diagnostic_checkpoints; }
+    bool isAmdBreadcrumbEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.AMD_buffer_marker && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
     // NV and AMD marker paths share one command-list tracker.
-    bool isAnyGpuMarkerEnabled(){ return isGpuCrashDiagnosticsEnabled() || isAmdBreadcrumbEnabled(); }
+    bool isAnyGpuMarkerEnabled()const noexcept{ return isGpuCrashDiagnosticsEnabled() || isAmdBreadcrumbEnabled(); }
     [[nodiscard]] GpuCrashTracker& getGpuCrashTracker(){ return m_gpuCrashTracker; }
-    void captureDeviceLoss(AStringView context)noexcept;
+    void captureDeviceLoss(AStringView context);
 
     [[nodiscard]] AmdBreadcrumbWrite reserveAmdBreadcrumb(
         const GpuPhysicalQueueId& queue,
@@ -3573,6 +3870,26 @@ public:
 
 
 private:
+    void markDeviceLost()noexcept{ m_deviceLost.store(true, MemoryOrder::release); }
+    [[nodiscard]] VkResult waitForNativeIdle()noexcept;
+    [[nodiscard]] bool waitForSubmissionTokenInternal(
+        const QueueSubmissionToken& token,
+        DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy
+    );
+    [[nodiscard]] bool setEventQueryInternal(
+        EventQuery* query,
+        CommandQueue::Enum queue,
+        DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy
+    );
+    [[nodiscard]] bool pollEventQueryInternal(
+        EventQuery* query,
+        DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy
+    );
+    [[nodiscard]] bool waitEventQueryInternal(
+        EventQuery* query,
+        DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy
+    );
+    void prepareForDestructionAfterIdleOrLoss();
     [[nodiscard]] bool beginSubmissionOperation()noexcept;
     void endSubmissionOperation()noexcept;
     [[nodiscard]] bool submissionOperationActiveOnCurrentThread()const noexcept{
@@ -3584,7 +3901,9 @@ private:
     // destructor must not issue another fallible Vulkan wait during the commit phase.
     [[nodiscard]] bool sealLifecycleDrainForDestruction()noexcept;
     [[nodiscard]] bool submissionsBlocked()const noexcept{
-        return requiresRecreation() || m_submissionSuspended.load(MemoryOrder::acquire);
+        return requiresRecreation()
+            || (m_submissionOperationState.load(MemoryOrder::acquire) & s_SubmissionDrainBit) != 0u
+        ;
     }
     [[nodiscard]] QueueSubmissionToken consumeAcquiredImageSemaphore(VkSemaphore semaphore);
     [[nodiscard]] bool presentNativeQueue(
@@ -3710,13 +4029,10 @@ private:
     // Actual Vulkan loss and logical quarantine remain distinct so only proven loss may bypass an idle teardown join.
     Atomic<bool> m_deviceLost = false;
     Atomic<bool> m_deviceQuarantined = false;
-    Atomic<bool> m_submissionSuspended = false;
+    Atomic<u64> m_submissionOperationState = 0u;
     Atomic<bool> m_lifecycleDestructionPrepared = false;
     Atomic<bool> m_gpuCrashCaptured = false;
     Atomic<u64> m_nextTimerQueryIncarnation = 0u;
-    Futex m_submissionOperationMutex;
-    ConditionVariableAny m_submissionOperationCondition;
-    u32 m_activeSubmissionOperationCount = 0u;
     GpuCrashTracker m_gpuCrashTracker;
     // Pre-reserved crash-capture arena.
     Alloc::PersistentArena m_gpuCrashReportArena;

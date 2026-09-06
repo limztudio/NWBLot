@@ -6,6 +6,8 @@
 
 #include "backend_selection.h"
 
+#include <global/termination.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -597,94 +599,80 @@ usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum ty
 
 
 static constexpr AStringView s_NotFoundMarkerString = "ERROR: could not resolve marker";
-static constexpr usize s_NumDestroyedMarkerTrackers = 2;
 
 
-GpuCrashMarkerTracker::GpuCrashMarkerTracker(GraphicsArena& arena)
-    : m_arena(arena)
+GpuCrashMarkerTracker::GpuCrashMarkerTracker(GpuCrashTracker& tracker, GraphicsArena& arena)
+    : m_tracker(tracker)
     , m_eventStack(arena)
     , m_eventStackOffsets(arena)
-    , m_eventHashes()
-    , m_oldestHashIndex(0)
-    , m_eventStrings(0, Hasher<usize>(), EqualTo<usize>(), arena)
 {}
 
 usize GpuCrashMarkerTracker::pushEvent(const char* name){
+    GraphicsString nextEventStack(m_eventStack, m_eventStack.get_allocator());
+    if(!nextEventStack.empty())
+        nextEventStack.append("/");
+    nextEventStack.append(name);
+
+    const usize markerHash = m_tracker.internEvent(nextEventStack);
     m_eventStackOffsets.push_back(m_eventStack.size());
-    if(!m_eventStack.empty())
-        m_eventStack.append("/");
-    m_eventStack.append(name);
-
-    GraphicsString eventString(m_eventStack.c_str(), m_arena);
-    const usize hash = Hasher<GraphicsString>{}(eventString);
-
-    if(m_eventStrings.try_emplace(hash, Move(eventString)).second){
-        const usize oldHash = m_eventHashes[m_oldestHashIndex];
-        if(oldHash != hash)
-            m_eventStrings.erase(oldHash);
-        m_eventHashes[m_oldestHashIndex] = hash;
-        m_oldestHashIndex = (m_oldestHashIndex + 1) % s_MaxGpuCrashMarkerStrings;
-    }
-
-    return hash;
+    m_eventStack = Move(nextEventStack);
+    return markerHash;
 }
 
-void GpuCrashMarkerTracker::popEvent(){
+void GpuCrashMarkerTracker::popEvent()noexcept{
     if(m_eventStackOffsets.empty())
         return;
 
-    m_eventStack.resize(m_eventStackOffsets.back());
+    static_assert(noexcept(m_eventStack.pop_back()), "GPU marker stack shrink must remain non-throwing");
+    static_assert(noexcept(m_eventStackOffsets.pop_back()), "GPU marker offset release must remain non-throwing");
+    const usize previousSize = m_eventStackOffsets.back();
+    if(previousSize > m_eventStack.size())
+        TerminateInvariant();
+    while(m_eventStack.size() > previousSize)
+        m_eventStack.pop_back();
     m_eventStackOffsets.pop_back();
 }
 
-void GpuCrashMarkerTracker::resetEventStack(){
+void GpuCrashMarkerTracker::resetEventStack()noexcept{
     m_eventStack.clear();
     m_eventStackOffsets.clear();
 }
 
-ResolvedMarker GpuCrashMarkerTracker::getEventString(usize hash){
-    auto found = m_eventStrings.find(hash);
-    if(found != m_eventStrings.end())
-        return MakePair(true, AStringView(found.value().c_str(), found.value().size()));
-
-    return MakePair(false, s_NotFoundMarkerString);
-}
-
-
 GpuCrashTracker::GpuCrashTracker(GraphicsArena& arena)
-    : m_markerTrackers(arena)
-    , m_destroyedMarkerTrackers(arena)
+    : m_arena(arena)
+    , m_eventStrings(0u, Hasher<usize>(), EqualTo<usize>(), arena)
 {}
 
-void GpuCrashTracker::registerGpuCrashMarkerTracker(GpuCrashMarkerTracker& tracker){
-    ScopedLock lock(m_mutex);
-    m_markerTrackers.insert(&tracker);
-}
-
-void GpuCrashTracker::unRegisterGpuCrashMarkerTracker(GpuCrashMarkerTracker& tracker){
-    ScopedLock lock(m_mutex);
-    if(m_destroyedMarkerTrackers.size() >= s_NumDestroyedMarkerTrackers)
-        m_destroyedMarkerTrackers.pop_front();
-
-    m_destroyedMarkerTrackers.push_back(tracker);
-    m_markerTrackers.erase(&tracker);
-}
-
 ResolvedMarker GpuCrashTracker::resolveMarker(usize markerHash){
-    ScopedLock lock(m_mutex);
-    for(auto* markerTracker : m_markerTrackers){
-        auto result = markerTracker->getEventString(markerHash);
-        if(result.first())
-            return result;
-    }
-
-    for(auto& markerTracker : m_destroyedMarkerTrackers){
-        auto result = markerTracker.getEventString(markerHash);
-        if(result.first())
-            return result;
-    }
+    const auto found = m_eventStrings.find(markerHash);
+    if(found != m_eventStrings.end())
+        return MakePair(true, AStringView(found->second.data(), found->second.size()));
 
     return MakePair(false, s_NotFoundMarkerString);
+}
+
+usize GpuCrashTracker::internEvent(const GraphicsString& eventString){
+    usize markerHash = Hasher<GraphicsString>{}(eventString);
+    if(markerHash == 0u)
+        markerHash = 1u;
+
+    for(;;){
+        const auto found = m_eventStrings.find(markerHash);
+        if(found != m_eventStrings.end()){
+            if(found->second == eventString)
+                return markerHash;
+        }
+        else{
+            GraphicsString storedEvent(eventString.data(), eventString.size(), m_arena);
+            const auto inserted = m_eventStrings.emplace(markerHash, Move(storedEvent));
+            if(inserted.second || inserted.first->second == eventString)
+                return markerHash;
+        }
+
+        ++markerHash;
+        if(markerHash == 0u)
+            ++markerHash;
+    }
 }
 
 

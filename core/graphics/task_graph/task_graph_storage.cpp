@@ -6,6 +6,7 @@
 
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/rhi/command.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,18 +18,115 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTaskId GpuTaskGraph::appendTask(
+namespace __hidden_gpu_task_graph_storage{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UnappendedPayloadDestroyScope final : NoCopy{
+public:
+    UnappendedPayloadDestroyScope(
+        GraphicsArena& arena,
+        void* const payload,
+        const GpuTaskPayloadDestroyThunk destroyPayload
+    )noexcept
+        : m_arena(arena)
+        , m_payload(payload)
+        , m_destroyPayload(destroyPayload)
+    {}
+    ~UnappendedPayloadDestroyScope(){
+        if(m_payload && m_destroyPayload)
+            m_destroyPayload(m_arena, m_payload);
+    }
+
+
+private:
+    GraphicsArena& m_arena;
+    void* m_payload = nullptr;
+    GpuTaskPayloadDestroyThunk m_destroyPayload = nullptr;
+};
+
+template<typename ContainerT>
+class AppendedContainerRollbackScope final : NoCopy{
+public:
+    explicit AppendedContainerRollbackScope(ContainerT& container)noexcept
+        : m_container(container)
+        , m_initialSize(container.size())
+    {}
+    ~AppendedContainerRollbackScope()noexcept{
+        static_assert(noexcept(m_container.size()));
+        static_assert(noexcept(m_container.pop_back()));
+        if(m_committed)
+            return;
+        if(m_container.size() < m_initialSize){
+            NWB_FATAL_ASSERT_MSG(false, "GPU graph declaration rollback cannot restore removed storage");
+            TerminateInvariant();
+        }
+        while(m_container.size() > m_initialSize)
+            m_container.pop_back();
+    }
+
+
+public:
+    void commit()noexcept{ m_committed = true; }
+
+
+private:
+    ContainerT& m_container;
+    usize m_initialSize = 0u;
+    bool m_committed = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GpuTaskGraph::TaskPayloadDestroyScope::TaskPayloadDestroyScope(GpuTaskGraph& graph)noexcept
+    : m_graph(graph)
+{}
+
+GpuTaskGraph::TaskPayloadDestroyScope::~TaskPayloadDestroyScope(){
+    if(m_active)
+        m_graph.destroyTaskPayloadObjects();
+}
+
+void GpuTaskGraph::TaskPayloadDestroyScope::activateWithinLock()noexcept{
+    if(m_active){
+        NWB_FATAL_ASSERT_MSG(false, "GPU task payload destruction ownership cannot be activated twice");
+        TerminateInvariant();
+    }
+    m_active = true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
     const GpuTaskDesc& desc,
     void* const payload,
     const GpuTaskRecordThunk recordPayload,
     const GpuTaskAcceptedThunk acceptPayload,
     const GpuTaskDiscardedThunk discardPayload,
     const GpuTaskPayloadDestroyThunk destroyPayload,
-    const usize payloadObjectSize
+    const usize payloadObjectSize,
+    const DeclarationMutationScope& mutationAccess
 ){
+    if(!mutationAccess.validFor(*this))
+        return {};
+
     if(
         !desc.identity
         || desc.markerLabel.empty()
+        || desc.markerLabel.size() > Limit<u32>::s_Max
+        || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size()
         || m_tasks.size() >= Limit<u32>::s_Max
         || desc.dependencyCount > Limit<u32>::s_Max - m_dependencies.size()
         || desc.externalDependencyCount > Limit<u32>::s_Max - m_externalDependencies.size()
@@ -49,6 +147,7 @@ GpuTaskId GpuTaskGraph::appendTask(
     for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
         if(
             !desc.externalStateSources[sourceIndex].states
+            || !desc.externalStateSources[sourceIndex].states->valid()
             || desc.externalStateSources[sourceIndex].applicableConsumerQueueClass > CommandQueue::kCount
         )
             return {};
@@ -71,36 +170,44 @@ GpuTaskId GpuTaskGraph::appendTask(
         expandedResourceUseCount += resourceSet.memberCount;
     }
 
-    // Task declarations previously retained a borrowed native handoff until late packet recording. Capture each
-    // source when the graph accepts the declaration instead, preserving an invalid source as invalid so its
-    // established record-time diagnostic remains intact for malformed legacy callers.
-    GraphicsVector<CommandListResourceStateHandoff*> externalStateSnapshots(m_arena);
+    // Task declarations capture every valid native handoff when the graph accepts the declaration. Invalid sources
+    // cannot become valid after this immutable copy, so reject them at the declaration boundary.
+    GraphicsVector<GlobalUniquePtr<CommandListResourceStateHandoff>> externalStateSnapshots(m_arena);
     externalStateSnapshots.reserve(desc.externalStateSourceCount);
-    const auto destroyExternalStateSnapshots = [&]{
-        for(CommandListResourceStateHandoff* const states : externalStateSnapshots)
-            DestroyArenaObject(m_arena, states);
-    };
     for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
         const CommandListResourceStateHandoff* const source = desc.externalStateSources[sourceIndex].states;
-        CommandListResourceStateHandoff* const snapshot = NewArenaObject<CommandListResourceStateHandoff>(m_arena, m_arena);
-        if(!snapshot){
-            destroyExternalStateSnapshots();
+        GlobalUniquePtr<CommandListResourceStateHandoff> snapshot =
+            MakeGlobalUnique<CommandListResourceStateHandoff>(m_arena, m_arena)
+        ;
+        if(!snapshot)
             return {};
-        }
-        if(source->valid() && !snapshot->copyFrom(*source)){
-            DestroyArenaObject(m_arena, snapshot);
-            destroyExternalStateSnapshots();
+        if(!snapshot->copyFrom(*source))
             return {};
-        }
-        externalStateSnapshots.push_back(snapshot);
+        externalStateSnapshots.push_back(Move(snapshot));
     }
+
+    m_markerText.reserve(m_markerText.size() + desc.markerLabel.size());
+    m_dependencies.reserve(m_dependencies.size() + desc.dependencyCount);
+    m_externalDependencies.reserve(m_externalDependencies.size() + desc.externalDependencyCount);
+    m_externalStateSources.reserve(m_externalStateSources.size() + desc.externalStateSourceCount);
+    m_externalStateSnapshots.reserve(m_externalStateSnapshots.size() + desc.externalStateSourceCount);
+    m_resourceUses.reserve(m_resourceUses.size() + expandedResourceUseCount);
+    m_resourceVersionUses.reserve(m_resourceVersionUses.size() + desc.resourceVersionUseCount);
+    m_tasks.reserve(m_tasks.size() + 1u);
+
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope markerRollback(m_markerText);
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope dependencyRollback(m_dependencies);
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope externalDependencyRollback(m_externalDependencies);
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope externalStateSourceRollback(m_externalStateSources);
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope externalStateSnapshotRollback(m_externalStateSnapshots);
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope resourceUseRollback(m_resourceUses);
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope resourceVersionUseRollback(m_resourceVersionUses);
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope taskRollback(m_tasks);
 
     u32 markerLabelOffset = 0u;
     u32 markerLabelSize = 0u;
-    if(!appendMarkerLabel(desc.markerLabel, markerLabelOffset, markerLabelSize)){
-        destroyExternalStateSnapshots();
+    if(!appendMarkerLabel(desc.markerLabel, markerLabelOffset, markerLabelSize))
         return {};
-    }
 
     GpuTaskNode task;
     task.identity = desc.identity;
@@ -134,15 +241,13 @@ GpuTaskId GpuTaskGraph::appendTask(
         m_dependencies.push_back(desc.dependencies[dependencyIndex]);
     for(usize dependencyIndex = 0u; dependencyIndex < desc.externalDependencyCount; ++dependencyIndex)
         m_externalDependencies.push_back(desc.externalDependencies[dependencyIndex]);
-    m_externalStateSources.reserve(m_externalStateSources.size() + desc.externalStateSourceCount);
-    m_externalStateSnapshots.reserve(m_externalStateSnapshots.size() + desc.externalStateSourceCount);
     for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
-        const CommandListResourceStateHandoff* const snapshot = externalStateSnapshots[sourceIndex];
+        const CommandListResourceStateHandoff* const snapshot = externalStateSnapshots[sourceIndex].get();
         m_externalStateSources.push_back(GpuTaskExternalStateSource{
             .states = snapshot,
             .applicableConsumerQueueClass = desc.externalStateSources[sourceIndex].applicableConsumerQueueClass,
         });
-        m_externalStateSnapshots.push_back(externalStateSnapshots[sourceIndex]);
+        m_externalStateSnapshots.push_back(externalStateSnapshots[sourceIndex].get());
     }
     for(usize useIndex = 0u; useIndex < desc.resourceUseCount; ++useIndex)
         m_resourceUses.push_back(desc.resourceUses[useIndex]);
@@ -164,6 +269,16 @@ GpuTaskId GpuTaskGraph::appendTask(
 
     const u32 index = static_cast<u32>(m_tasks.size());
     m_tasks.push_back(Move(task));
+    for(GlobalUniquePtr<CommandListResourceStateHandoff>& snapshot : externalStateSnapshots)
+        snapshot.release();
+    markerRollback.commit();
+    dependencyRollback.commit();
+    externalDependencyRollback.commit();
+    externalStateSourceRollback.commit();
+    externalStateSnapshotRollback.commit();
+    resourceUseRollback.commit();
+    resourceVersionUseRollback.commit();
+    taskRollback.commit();
     m_declarationRevision = allocateGeneration();
     return GpuTaskId{ index, m_generation };
 }
@@ -172,42 +287,24 @@ void GpuTaskGraph::discardAndDestroyUnappendedPayload(
     void* const payload,
     const GpuTaskDiscardedThunk discardPayload,
     const GpuTaskPayloadDestroyThunk destroyPayload
-)noexcept{
+){
     if(!payload)
         return;
 
+    __hidden_gpu_task_graph_storage::UnappendedPayloadDestroyScope payloadDestroy(m_arena, payload, destroyPayload);
     if(discardPayload)
         discardPayload(payload);
-    if(destroyPayload)
-        destroyPayload(m_arena, payload);
 }
 
-void GpuTaskGraph::retainResourceQueueAdmission(
-    GpuGraphResourceNode& resource,
-    const ResourceQueueAdmissionSnapshot& admission
+GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
+    const GpuGraphResourceDesc& desc,
+    const ResourceQueueAdmissionSnapshot* const queueAdmission,
+    const DeclarationMutationScope& mutationAccess
 ){
-    NWB_ASSERT(admission.valid());
-    NWB_ASSERT(admission.admittedQueueClasses == resource.queueSharing);
-    NWB_ASSERT(m_queueFamilyIndices.size() <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(
-        admission.queueFamilyIndexCount
-        <= static_cast<usize>(Limit<u32>::s_Max) - m_queueFamilyIndices.size()
-    );
+    if(!mutationAccess.validFor(*this))
+        return {};
 
-    resource.queueFamilyIndexOffset = static_cast<u32>(m_queueFamilyIndices.size());
-    resource.queueFamilyIndexCount = admission.queueFamilyIndexCount;
-    resource.usesConcurrentSharing = admission.usesConcurrentSharing;
-    resource.hasQueueAdmission = true;
-    if(admission.queueFamilyIndexCount != 0u){
-        m_queueFamilyIndices.insert(
-            m_queueFamilyIndices.end(),
-            admission.queueFamilyIndices,
-            admission.queueFamilyIndices + admission.queueFamilyIndexCount
-        );
-    }
-}
-
-GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc){
+    const usize queueFamilyIndexCount = queueAdmission ? queueAdmission->queueFamilyIndexCount : 0u;
     const bool hasInitialOwnerHandoff =
         desc.initialOwnerReleaseDestinationQueue.valid()
         || desc.initialOwnerCompletion.valid()
@@ -222,8 +319,18 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
     if(
         !desc.identity
         || desc.markerLabel.empty()
+        || desc.markerLabel.size() > Limit<u32>::s_Max
+        || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size()
         || desc.type >= GpuGraphResourceType::kCount
         || !ResourceQueueSharing::IsValid(desc.queueSharing)
+        || (
+            queueAdmission
+            && (
+                !queueAdmission->valid()
+                || queueAdmission->admittedQueueClasses != desc.queueSharing
+                || queueFamilyIndexCount > static_cast<usize>(Limit<u32>::s_Max) - m_queueFamilyIndices.size()
+            )
+        )
         || (
             desc.initialAvailabilityCompletion.valid()
             && (
@@ -283,6 +390,7 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
                     desc.initialOwnerQueue.deviceGeneration
                 )
                 || !desc.initialOwnerStateSource
+                || !desc.initialOwnerStateSource->valid()
                 || desc.initialState == ResourceStates::Unknown
             )
         )
@@ -305,6 +413,7 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
                     source.sourceQueue.deviceGeneration
                 )
                 || !source.stateSource
+                || !source.stateSource->valid()
             )
                 return {};
             for(usize previousSourceIndex = 0u; previousSourceIndex < sourceIndex; ++previousSourceIndex){
@@ -325,72 +434,63 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
         }
     }
 
-    // Initial-owner imports previously borrowed this producer snapshot until late recording. Freeze it while the
-    // resource is declared instead, so the declaration owns the exact state metadata. Preserve an invalid snapshot
-    // as invalid so the established record-time diagnostic remains intact for malformed legacy callers.
-    CommandListResourceStateHandoff* initialOwnerStateSnapshot = nullptr;
+    // Initial-owner imports freeze the valid producer snapshot while the resource is declared, so later recording
+    // never depends on producer-owned storage or a state source that could not become usable after publication.
+    GlobalUniquePtr<CommandListResourceStateHandoff> initialOwnerStateSnapshot;
     if(desc.initialOwnerStateSource){
-        initialOwnerStateSnapshot = NewArenaObject<CommandListResourceStateHandoff>(m_arena, m_arena);
+        initialOwnerStateSnapshot = MakeGlobalUnique<CommandListResourceStateHandoff>(m_arena, m_arena);
         if(!initialOwnerStateSnapshot)
             return {};
-        if(
-            desc.initialOwnerStateSource->valid()
-            && !initialOwnerStateSnapshot->copyFrom(*desc.initialOwnerStateSource)
-        ){
-            DestroyArenaObject(m_arena, initialOwnerStateSnapshot);
+        if(!initialOwnerStateSnapshot->copyFrom(*desc.initialOwnerStateSource))
             return {};
-        }
     }
 
     const usize initialOwnerHandoffSourceOffset = m_initialOwnerHandoffSources.size();
-    const auto discardInitialOwnerHandoffSources = [&]{
-        while(m_initialOwnerHandoffSources.size() > initialOwnerHandoffSourceOffset){
-            GpuTaskGraphInitialOwnerHandoffSourceView& source = m_initialOwnerHandoffSources.back();
-            if(source.stateSource)
-                DestroyArenaObject(m_arena, const_cast<CommandListResourceStateHandoff*>(source.stateSource));
-            m_initialOwnerHandoffSources.pop_back();
-        }
-    };
+    GraphicsVector<GlobalUniquePtr<CommandListResourceStateHandoff>> initialOwnerHandoffStateSnapshots(m_arena);
+    initialOwnerHandoffStateSnapshots.reserve(desc.initialOwnerHandoffSourceCount);
     if(hasMultiInitialOwnerHandoff){
-        m_initialOwnerHandoffSources.reserve(
-            m_initialOwnerHandoffSources.size() + desc.initialOwnerHandoffSourceCount
-        );
         for(usize sourceIndex = 0u; sourceIndex < desc.initialOwnerHandoffSourceCount; ++sourceIndex){
             const GpuGraphInitialOwnerHandoffSourceDesc& source = desc.initialOwnerHandoffSources[sourceIndex];
-            CommandListResourceStateHandoff* const stateSnapshot =
-                NewArenaObject<CommandListResourceStateHandoff>(m_arena, m_arena)
+            GlobalUniquePtr<CommandListResourceStateHandoff> stateSnapshot =
+                MakeGlobalUnique<CommandListResourceStateHandoff>(m_arena, m_arena)
             ;
-            if(!stateSnapshot){
-                discardInitialOwnerHandoffSources();
-                if(initialOwnerStateSnapshot)
-                    DestroyArenaObject(m_arena, initialOwnerStateSnapshot);
+            if(!stateSnapshot)
                 return {};
-            }
-            if(source.stateSource->valid() && !stateSnapshot->copyFrom(*source.stateSource)){
-                DestroyArenaObject(m_arena, stateSnapshot);
-                discardInitialOwnerHandoffSources();
-                if(initialOwnerStateSnapshot)
-                    DestroyArenaObject(m_arena, initialOwnerStateSnapshot);
+            if(!stateSnapshot->copyFrom(*source.stateSource))
                 return {};
-            }
-            m_initialOwnerHandoffSources.push_back(GpuTaskGraphInitialOwnerHandoffSourceView{
-                .range = source.range,
-                .sourceQueue = source.sourceQueue,
-                .destinationQueue = source.destinationQueue,
-                .completion = source.completion,
-                .minimumCompletionToken = source.minimumCompletionToken,
-                .stateSource = stateSnapshot,
-            });
+            initialOwnerHandoffStateSnapshots.push_back(Move(stateSnapshot));
         }
     }
 
+    m_initialOwnerHandoffSources.reserve(
+        m_initialOwnerHandoffSources.size() + desc.initialOwnerHandoffSourceCount
+    );
+    m_queueFamilyIndices.reserve(m_queueFamilyIndices.size() + queueFamilyIndexCount);
+    m_markerText.reserve(m_markerText.size() + desc.markerLabel.size());
+    m_resources.reserve(m_resources.size() + 1u);
+
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope initialOwnerSourceRollback(
+        m_initialOwnerHandoffSources
+    );
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope queueFamilyRollback(m_queueFamilyIndices);
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope markerRollback(m_markerText);
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope resourceRollback(m_resources);
+
     u32 markerLabelOffset = 0u;
     u32 markerLabelSize = 0u;
-    if(!appendMarkerLabel(desc.markerLabel, markerLabelOffset, markerLabelSize)){
-        discardInitialOwnerHandoffSources();
-        if(initialOwnerStateSnapshot)
-            DestroyArenaObject(m_arena, initialOwnerStateSnapshot);
+    if(!appendMarkerLabel(desc.markerLabel, markerLabelOffset, markerLabelSize))
         return {};
+
+    for(usize sourceIndex = 0u; sourceIndex < desc.initialOwnerHandoffSourceCount; ++sourceIndex){
+        const GpuGraphInitialOwnerHandoffSourceDesc& source = desc.initialOwnerHandoffSources[sourceIndex];
+        m_initialOwnerHandoffSources.push_back(GpuTaskGraphInitialOwnerHandoffSourceView{
+            .range = source.range,
+            .sourceQueue = source.sourceQueue,
+            .destinationQueue = source.destinationQueue,
+            .completion = source.completion,
+            .minimumCompletionToken = source.minimumCompletionToken,
+            .stateSource = initialOwnerHandoffStateSnapshots[sourceIndex].get(),
+        });
     }
 
     GpuGraphResourceNode resource;
@@ -404,21 +504,39 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
     resource.initialOwnerCompletion = desc.initialOwnerCompletion;
     resource.initialOwnerMinimumCompletionToken = desc.initialOwnerMinimumCompletionToken;
     resource.initialAvailabilityCompletion = desc.initialAvailabilityCompletion;
-    resource.initialOwnerStateSource = initialOwnerStateSnapshot;
-    resource.initialOwnerStateSourceIdentity = desc.initialOwnerStateSource;
+    resource.initialOwnerStateSource = initialOwnerStateSnapshot.get();
     resource.initialOwnerHandoffSourceOffset = static_cast<u32>(initialOwnerHandoffSourceOffset);
     resource.initialOwnerHandoffSourceCount = static_cast<u32>(desc.initialOwnerHandoffSourceCount);
     resource.queueSharing = desc.queueSharing;
     resource.markerLabelOffset = markerLabelOffset;
     resource.markerLabelSize = markerLabelSize;
+    if(queueAdmission){
+        resource.queueFamilyIndexOffset = static_cast<u32>(m_queueFamilyIndices.size());
+        resource.queueFamilyIndexCount = queueAdmission->queueFamilyIndexCount;
+        resource.usesConcurrentSharing = queueAdmission->usesConcurrentSharing;
+        resource.hasQueueAdmission = true;
+        for(usize queueFamilyIndex = 0u; queueFamilyIndex < queueFamilyIndexCount; ++queueFamilyIndex)
+            m_queueFamilyIndices.push_back(queueAdmission->queueFamilyIndices[queueFamilyIndex]);
+    }
 
     const u32 index = static_cast<u32>(m_resources.size());
     m_resources.push_back(Move(resource));
+    initialOwnerStateSnapshot.release();
+    for(GlobalUniquePtr<CommandListResourceStateHandoff>& snapshot : initialOwnerHandoffStateSnapshots)
+        snapshot.release();
+    initialOwnerSourceRollback.commit();
+    queueFamilyRollback.commit();
+    markerRollback.commit();
+    resourceRollback.commit();
     m_declarationRevision = allocateGeneration();
     return GpuGraphResourceId{ index, m_generation };
 }
 
 GpuGraphResourceVersionId GpuTaskGraph::appendResourceVersion(const GpuGraphResourceVersionDesc& desc){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(m_resourceVersions.size() >= Limit<u32>::s_Max)
         return {};
 
@@ -434,9 +552,15 @@ GpuGraphResourceVersionId GpuTaskGraph::appendResourceVersion(const GpuGraphReso
 }
 
 GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetDesc& desc){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(
         !desc.identity
         || desc.markerLabel.empty()
+        || desc.markerLabel.size() > Limit<u32>::s_Max
+        || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size()
         || (desc.memberCount != 0u && !desc.members)
         || desc.memberCount > static_cast<usize>(Limit<u32>::s_Max) - m_resourceSetMembers.size()
         || m_resourceSets.size() >= Limit<u32>::s_Max
@@ -452,6 +576,10 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
                 return {};
         }
     }
+
+    m_markerText.reserve(m_markerText.size() + desc.markerLabel.size());
+    m_resourceSetMembers.reserve(m_resourceSetMembers.size() + desc.memberCount);
+    m_resourceSets.reserve(m_resourceSets.size() + 1u);
 
     u32 markerLabelOffset = 0u;
     u32 markerLabelSize = 0u;
@@ -474,13 +602,22 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
 }
 
 GpuGraphPipelineId GpuTaskGraph::appendPipeline(const GpuGraphPipelineDesc& desc){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(
         !desc.identity
         || desc.markerLabel.empty()
+        || desc.markerLabel.size() > Limit<u32>::s_Max
+        || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size()
         || desc.type >= GpuGraphPipelineType::kCount
         || m_pipelines.size() >= Limit<u32>::s_Max
     )
         return {};
+
+    m_markerText.reserve(m_markerText.size() + desc.markerLabel.size());
+    m_pipelines.reserve(m_pipelines.size() + 1u);
 
     u32 markerLabelOffset = 0u;
     u32 markerLabelSize = 0u;
@@ -500,8 +637,21 @@ GpuGraphPipelineId GpuTaskGraph::appendPipeline(const GpuGraphPipelineDesc& desc
 }
 
 GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternalCompletionDesc& desc){
-    if(!desc.identity || desc.markerLabel.empty() || m_externalCompletions.size() >= Limit<u32>::s_Max)
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
         return {};
+
+    if(
+        !desc.identity
+        || desc.markerLabel.empty()
+        || desc.markerLabel.size() > Limit<u32>::s_Max
+        || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size()
+        || m_externalCompletions.size() >= Limit<u32>::s_Max
+    )
+        return {};
+
+    m_markerText.reserve(m_markerText.size() + desc.markerLabel.size());
+    m_externalCompletions.reserve(m_externalCompletions.size() + 1u);
 
     u32 markerLabelOffset = 0u;
     u32 markerLabelSize = 0u;
@@ -552,74 +702,133 @@ AStringView GpuTaskGraph::markerLabel(const u32 offset, const u32 size)const{
     return AStringView(reinterpret_cast<const char*>(m_markerText.data() + offset), size);
 }
 
-bool GpuTaskGraph::destroyTaskPayloads()noexcept{
+bool GpuTaskGraph::destroyTaskPayloads(){
+    DiscardNotificationScope notification(*this);
+    TaskPayloadDestroyScope payloadDestroy(*this);
+    u64 notificationGeneration = 0u;
     {
         ScopedLock lock(m_lifecycleMutex);
-        if(m_submissionBindingState == SubmissionBindingState::Active)
+        if(
+            !m_teardownInProgress
+            || m_activeDeclarationAccessCount != 0u
+            || m_activeDiscardNotificationCount != 0u
+            || m_submissionBindingState == SubmissionBindingState::Active
+        )
             return false;
         for(const GpuTaskNode& task : m_tasks){
             if(
                 task.lifecycleState == TaskLifecycleState::Submitting
                 || task.lifecycleState == TaskLifecycleState::Accepting
-                || task.lifecycleState == TaskLifecycleState::Discarding
                 || task.lifecycleState == TaskLifecycleState::Recording
             ){
                 return false;
             }
         }
+        bool hasUnacceptedTask = false;
+        for(const GpuTaskNode& task : m_tasks){
+            if(
+                task.lifecycleState == TaskLifecycleState::Declared
+                || task.lifecycleState == TaskLifecycleState::Recorded
+            )
+                hasUnacceptedTask = true;
+        }
+        if(hasUnacceptedTask){
+            notificationGeneration = allocateGeneration();
+            notification.activateWithinLock();
+        }
         for(GpuTaskNode& task : m_tasks){
             if(
                 task.lifecycleState == TaskLifecycleState::Declared
-                || task.lifecycleState == TaskLifecycleState::Recording
                 || task.lifecycleState == TaskLifecycleState::Recorded
-            )
-                task.lifecycleState = TaskLifecycleState::Discarding;
+            ){
+                task.lifecycleState = TaskLifecycleState::Discarded;
+                task.recordingClaimGeneration = 0u;
+                task.submissionClaimGeneration = 0u;
+                task.discardNotificationGeneration = notificationGeneration;
+                task.recordThunkInProgress = false;
+                task.recordThunkCompleted = false;
+            }
         }
+        payloadDestroy.activateWithinLock();
     }
 
     for(GpuTaskNode& task : m_tasks){
-        if(task.lifecycleState == TaskLifecycleState::Discarding && task.payload && task.discardPayload)
+        if(
+            notificationGeneration != 0u
+            && task.discardNotificationGeneration == notificationGeneration
+            && task.payload
+            && task.discardPayload
+        )
             task.discardPayload(task.payload);
     }
+    return true;
+}
 
+bool GpuTaskGraph::destroyTaskPayloadsWithoutCallbacks()noexcept{
     {
-        ScopedLock lock(m_lifecycleMutex);
+        NothrowScopedLock lock(m_lifecycleMutex);
+        if(
+            !m_teardownInProgress
+            || m_activeDeclarationAccessCount != 0u
+            || m_activeDiscardNotificationCount != 0u
+            || m_submissionBindingState == SubmissionBindingState::Active
+        )
+            return false;
+        for(const GpuTaskNode& task : m_tasks){
+            if(
+                task.lifecycleState == TaskLifecycleState::Submitting
+                || task.lifecycleState == TaskLifecycleState::Accepting
+                || task.lifecycleState == TaskLifecycleState::Recording
+            )
+                return false;
+        }
         for(GpuTaskNode& task : m_tasks){
-            if(task.lifecycleState != TaskLifecycleState::Discarding)
-                continue;
-            task.lifecycleState = TaskLifecycleState::Discarded;
+            if(
+                task.lifecycleState == TaskLifecycleState::Declared
+                || task.lifecycleState == TaskLifecycleState::Recorded
+            )
+                task.lifecycleState = TaskLifecycleState::Discarded;
             task.recordingClaimGeneration = 0u;
             task.submissionClaimGeneration = 0u;
+            task.discardNotificationGeneration = 0u;
             task.recordThunkInProgress = false;
             task.recordThunkCompleted = false;
         }
     }
 
+    destroyTaskPayloadObjects();
+    return true;
+}
+
+void GpuTaskGraph::destroyTaskPayloadObjects()noexcept{
     for(GpuTaskNode& task : m_tasks){
         if(task.payload && task.destroyPayload)
             task.destroyPayload(m_arena, task.payload);
         task.payload = nullptr;
+        task.recordPayload = nullptr;
+        task.acceptPayload = nullptr;
+        task.discardPayload = nullptr;
         task.destroyPayload = nullptr;
     }
-    return true;
 }
 
 void GpuTaskGraph::destroyTaskStateSnapshots()noexcept{
+    static_assert(IsNothrowDestructible_V<CommandListResourceStateHandoff>);
     for(CommandListResourceStateHandoff* const states : m_externalStateSnapshots)
-        DestroyArenaObject(m_arena, states);
+        DestroyArenaObjectNoexcept(m_arena, states);
     m_externalStateSnapshots.clear();
 }
 
 void GpuTaskGraph::destroyResourceStateSnapshots()noexcept{
+    static_assert(IsNothrowDestructible_V<CommandListResourceStateHandoff>);
     for(GpuGraphResourceNode& resource : m_resources){
         if(resource.initialOwnerStateSource)
-            DestroyArenaObject(m_arena, resource.initialOwnerStateSource);
+            DestroyArenaObjectNoexcept(m_arena, resource.initialOwnerStateSource);
         resource.initialOwnerStateSource = nullptr;
-        resource.initialOwnerStateSourceIdentity = nullptr;
     }
     for(GpuTaskGraphInitialOwnerHandoffSourceView& source : m_initialOwnerHandoffSources){
         if(source.stateSource)
-            DestroyArenaObject(m_arena, const_cast<CommandListResourceStateHandoff*>(source.stateSource));
+            DestroyArenaObjectNoexcept(m_arena, const_cast<CommandListResourceStateHandoff*>(source.stateSource));
         source.stateSource = nullptr;
     }
     m_initialOwnerHandoffSources.clear();

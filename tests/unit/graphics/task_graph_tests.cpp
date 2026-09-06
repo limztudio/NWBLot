@@ -3,6 +3,7 @@
 
 
 #include <tests/common/capturing_logger.h>
+#include <tests/common/gpu_task_graph_read_views.h>
 #include <tests/common/graphics_metadata_test_objects.h>
 #include <tests/common/test_context.h>
 
@@ -304,7 +305,8 @@ struct ImportedTexturePair{
 ){
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     const Graphics::GpuTaskGraphCompiler compiler;
-    return compiler.analyze(graph, analysis, scratchArena);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    return compiler.analyze(declarations, analysis, scratchArena);
 }
 
 [[nodiscard]] bool Assign(
@@ -316,7 +318,8 @@ struct ImportedTexturePair{
 ){
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     const Graphics::GpuTaskGraphCompiler compiler;
-    return compiler.assignQueues(graph, analysis, topology, assignments, scratchArena, options);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    return compiler.assignQueues(declarations, analysis, topology, assignments, scratchArena, options);
 }
 
 [[nodiscard]] bool Compile(
@@ -333,7 +336,8 @@ struct ImportedTexturePair{
     // Unit packetization fixtures intentionally use metadata-only task nodes to isolate compiler structure from
     // backend recording. Native production compilation keeps the stricter default and is exercised below.
     metadataOptions.allowMetadataOnlyTasks = true;
-    return compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    return compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions);
 }
 
 [[nodiscard]] constexpr Graphics::GpuQueueCapability::Mask QueueCapabilities(
@@ -443,10 +447,10 @@ struct TransferOwnershipPair{
     Graphics::GpuTaskId consumer;
 };
 
-static_assert(requires(const Graphics::GpuCompiledGraph& compiledGraph){
-    { compiledGraph.logicalOwnershipTransferCount() }->SameAs<usize>;
-    { compiledGraph.logicalOwnershipTransfers() }->SameAs<const Graphics::GpuCompiledOwnershipTransfer*>;
-    { compiledGraph.logicalOwnershipTransferAt(0u) }->SameAs<const Graphics::GpuCompiledOwnershipTransfer*>;
+static_assert(requires(const Graphics::GpuCompiledGraph::ReadView& compiledPlan){
+    { compiledPlan.logicalOwnershipTransferCount() }->SameAs<usize>;
+    { compiledPlan.logicalOwnershipTransfers() }->SameAs<const Graphics::GpuCompiledOwnershipTransfer*>;
+    { compiledPlan.logicalOwnershipTransferAt(0u) }->SameAs<const Graphics::GpuCompiledOwnershipTransfer*>;
 });
 
 [[nodiscard]] TransferOwnershipPair AddTransferOwnershipPair(
@@ -681,6 +685,120 @@ struct PacketLifecycleTask{
     }
 };
 
+struct ReentrantCompileDuringDeclarationTask{
+    struct Payload{
+        const Graphics::GpuTaskGraph* graph = nullptr;
+        Graphics::GpuTaskGraphAnalysis* analysis = nullptr;
+        Core::Alloc::ScratchArena* scratchArena = nullptr;
+        bool* compileAttempted = nullptr;
+        bool* compileSucceeded = nullptr;
+
+        Payload() = default;
+        Payload(const Payload&) = delete;
+        Payload(Payload&& other)
+            : graph(other.graph)
+            , analysis(other.analysis)
+            , scratchArena(other.scratchArena)
+            , compileAttempted(other.compileAttempted)
+            , compileSucceeded(other.compileSucceeded)
+        {
+            other.graph = nullptr;
+            other.analysis = nullptr;
+            other.scratchArena = nullptr;
+            other.compileAttempted = nullptr;
+            other.compileSucceeded = nullptr;
+            if(!graph || !analysis || !scratchArena)
+                return;
+
+            if(compileAttempted)
+                *compileAttempted = true;
+            const Graphics::GpuTaskGraphCompiler compiler;
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations =
+                Graphics::GpuTaskGraph::DeclarationReadView::tryAcquire(*graph);
+            bool succeeded = false;
+            if(declarations.valid())
+                succeeded = compiler.analyze(declarations, *analysis, *scratchArena);
+            if(compileSucceeded)
+                *compileSucceeded = succeeded;
+        }
+    };
+};
+
+struct ReentrantTelemetryDuringDeclarationState{
+    const Graphics::GpuTaskGraph* graph = nullptr;
+    const Graphics::GpuTaskGraphAnalysis* analysis = nullptr;
+    const Graphics::GpuTaskGraphQueueAssignments* assignments = nullptr;
+    const Graphics::GpuCompiledGraph* compiledGraph = nullptr;
+    const Graphics::GpuGraphSubmissionTransaction* transaction = nullptr;
+    Graphics::GpuTaskGraphQueueAssignmentTelemetryTracker* tracker = nullptr;
+    Telemetry::FrameGraphBuilder* builder = nullptr;
+    Core::Alloc::ScratchArena* scratchArena = nullptr;
+    bool trackerValidationAttempted = false;
+    bool trackerValidationSucceeded = true;
+    bool trackerUpdateAttempted = false;
+    bool trackerUpdateSucceeded = true;
+    bool appendAttempted = false;
+    bool appendSucceeded = true;
+};
+
+struct ReentrantTelemetryDuringDeclarationTask{
+    struct Payload{
+        ReentrantTelemetryDuringDeclarationState* state = nullptr;
+
+        explicit Payload(ReentrantTelemetryDuringDeclarationState& value)noexcept
+            : state(&value)
+        {}
+        Payload(const Payload&) = delete;
+        Payload(Payload&& other)
+            : state(other.state)
+        {
+            other.state = nullptr;
+            if(
+                !state
+                || !state->graph
+                || !state->analysis
+                || !state->assignments
+                || !state->compiledGraph
+                || !state->transaction
+                || !state->tracker
+                || !state->builder
+                || !state->scratchArena
+            )
+                return;
+
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations =
+                Graphics::GpuTaskGraph::DeclarationReadView::tryAcquire(*state->graph);
+            const Graphics::GpuCompiledGraph::ReadView compiledPlan(*state->compiledGraph);
+            state->trackerValidationAttempted = true;
+            state->trackerValidationSucceeded = state->tracker->validFor(
+                declarations,
+                *state->assignments,
+                compiledPlan
+            );
+            state->trackerUpdateAttempted = true;
+            state->trackerUpdateSucceeded = state->tracker->update(
+                declarations,
+                *state->assignments,
+                compiledPlan,
+                *state->transaction,
+                *state->scratchArena
+            );
+            const Graphics::GpuTaskGraphTelemetryOptions options{
+                .queueAssignments = state->assignments,
+                .compiledPlan = &compiledPlan,
+                .queueAssignmentTelemetry = state->tracker,
+            };
+            state->appendAttempted = true;
+            state->appendSucceeded = declarations.appendFrameGraphTelemetry(
+                *state->builder,
+                *state->analysis,
+                *state->scratchArena,
+                options
+            );
+        }
+    };
+};
+
 struct NoexceptAcceptedLifecycleTask{
     struct Payload{};
 
@@ -883,6 +1001,36 @@ concept HasAcceptedQueueFrontierWaitTokens = requires(
 };
 
 template<typename TransactionT>
+concept HasNoexceptGraphAwareExternalResourceHandoff = requires(
+    const TransactionT& transaction,
+    const Graphics::GpuTaskGraph& graph,
+    const Graphics::GpuCompiledGraph& compiledGraph,
+    const Graphics::GpuRecordedGraph& recordedGraph,
+    const Graphics::GpuGraphResourceId& resource
+){
+    { transaction.externalResourceHandoff(graph, compiledGraph, recordedGraph, resource) } noexcept;
+};
+
+template<typename TransactionT>
+concept HasNoexceptLegacyExternalResourceHandoff = requires(
+    const TransactionT& transaction,
+    const Graphics::GpuCompiledGraph& compiledGraph,
+    const Graphics::GpuRecordedGraph& recordedGraph,
+    const Graphics::GpuGraphResourceId& resource
+){
+    { transaction.externalResourceHandoff(compiledGraph, recordedGraph, resource) } noexcept;
+};
+
+template<typename HandoffT>
+concept HasImplicitScratchFanIn = requires(
+    HandoffT& result,
+    const HandoffT& base,
+    const HandoffT* const* branches
+){
+    result.buildFanIn(base, branches, 0u);
+};
+
+template<typename TransactionT>
 concept HasPublicPacketRuntimeState = requires{
     typename TransactionT::PacketRuntimeState;
 };
@@ -907,6 +1055,9 @@ static_assert(HasAttemptTaskRejection<Graphics::GpuGraphSubmissionTransaction>);
 static_assert(!HasGenerationInferredDiscardUnaccepted<Graphics::GpuGraphSubmissionTransaction>);
 static_assert(HasAttemptDiscardUnaccepted<Graphics::GpuGraphSubmissionTransaction>);
 static_assert(!HasAcceptedQueueFrontierWaitTokens<Graphics::GpuGraphSubmissionTransaction>);
+static_assert(!HasNoexceptGraphAwareExternalResourceHandoff<Graphics::GpuGraphSubmissionTransaction>);
+static_assert(!HasNoexceptLegacyExternalResourceHandoff<Graphics::GpuGraphSubmissionTransaction>);
+static_assert(!HasImplicitScratchFanIn<Graphics::CommandListResourceStateHandoff>);
 static_assert(!HasPublicPacketRuntimeState<Graphics::GpuGraphSubmissionTransaction>);
 static_assert(!HasPublicPacketRuntime<Graphics::GpuGraphSubmissionTransaction>);
 
@@ -1561,42 +1712,6 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
     depthStencilState.setStencilWriteMask(0u);
     EXPECT_TRUE(IsDepthStencilReadOnlyCompatible(depthStencilState, VK_IMAGE_ASPECT_STENCIL_BIT));
 
-    Graphics::RenderPassParameters renderPassParameters;
-    const RenderPassAttachmentOperations defaultColorOperations =
-        GetColorRenderPassAttachmentOperations(renderPassParameters, 0u)
-    ;
-    EXPECT_EQ(defaultColorOperations.loadOp, VK_ATTACHMENT_LOAD_OP_LOAD);
-    EXPECT_EQ(defaultColorOperations.storeOp, VK_ATTACHMENT_STORE_OP_STORE);
-    renderPassParameters.clearColorTargets = true;
-    renderPassParameters.colorClearMask = 1u << 1u;
-    const RenderPassAttachmentOperations unselectedColorOperations =
-        GetColorRenderPassAttachmentOperations(renderPassParameters, 0u)
-    ;
-    const RenderPassAttachmentOperations selectedColorOperations =
-        GetColorRenderPassAttachmentOperations(renderPassParameters, 1u)
-    ;
-    EXPECT_EQ(unselectedColorOperations.loadOp, VK_ATTACHMENT_LOAD_OP_LOAD);
-    EXPECT_EQ(selectedColorOperations.loadOp, VK_ATTACHMENT_LOAD_OP_CLEAR);
-    EXPECT_EQ(selectedColorOperations.storeOp, VK_ATTACHMENT_STORE_OP_STORE);
-    renderPassParameters.clearDepthTarget = true;
-    renderPassParameters.clearStencilTarget = true;
-    EXPECT_EQ(
-        GetDepthRenderPassAttachmentOperations(renderPassParameters).loadOp,
-        VK_ATTACHMENT_LOAD_OP_CLEAR
-    );
-    EXPECT_EQ(
-        GetStencilRenderPassAttachmentOperations(renderPassParameters).loadOp,
-        VK_ATTACHMENT_LOAD_OP_CLEAR
-    );
-    EXPECT_EQ(
-        GetDepthRenderPassAttachmentOperations(renderPassParameters).storeOp,
-        VK_ATTACHMENT_STORE_OP_STORE
-    );
-    EXPECT_EQ(
-        GetStencilRenderPassAttachmentOperations(renderPassParameters).storeOp,
-        VK_ATTACHMENT_STORE_OP_STORE
-    );
-
     Graphics::RasterState rasterState;
     EXPECT_EQ(BuildPipelineRasterizationState(rasterState, VK_POLYGON_MODE_FILL, VK_FALSE).depthBiasEnable, VK_FALSE);
     rasterState.slopeScaledDepthBias = 1.0f;
@@ -1628,6 +1743,57 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
         colorFormats
     ));
 #endif
+}
+
+TEST(VulkanCommandValidation, RenderPassAttachmentActionsLowerExactlyAndPreserveByDefault){
+    using namespace Graphics::GraphicsBackend::VulkanDetail;
+
+    const Graphics::RenderPassParameters defaultParameters;
+    for(u32 attachmentIndex = 0u; attachmentIndex < Graphics::s_MaxRenderTargets; ++attachmentIndex){
+        const Graphics::RenderPassAttachmentActions& actions =
+            defaultParameters.colorAttachmentActions[attachmentIndex]
+        ;
+        EXPECT_TRUE(IsRenderPassAttachmentActionsValid(actions));
+        const RenderPassAttachmentOperations operations = ConvertRenderPassAttachmentActions(actions);
+        EXPECT_EQ(operations.loadOp, VK_ATTACHMENT_LOAD_OP_LOAD);
+        EXPECT_EQ(operations.storeOp, VK_ATTACHMENT_STORE_OP_STORE);
+    }
+    EXPECT_EQ(
+        ConvertRenderPassAttachmentActions(defaultParameters.depthAttachmentActions).loadOp,
+        VK_ATTACHMENT_LOAD_OP_LOAD
+    );
+    EXPECT_EQ(
+        ConvertRenderPassAttachmentActions(defaultParameters.stencilAttachmentActions).storeOp,
+        VK_ATTACHMENT_STORE_OP_STORE
+    );
+
+    Graphics::RenderPassAttachmentActions clearAndDiscard;
+    clearAndDiscard.loadAction = Graphics::RenderPassLoadAction::Clear;
+    clearAndDiscard.storeAction = Graphics::RenderPassStoreAction::Discard;
+    const RenderPassAttachmentOperations clearAndDiscardOperations =
+        ConvertRenderPassAttachmentActions(clearAndDiscard)
+    ;
+    EXPECT_EQ(clearAndDiscardOperations.loadOp, VK_ATTACHMENT_LOAD_OP_CLEAR);
+    EXPECT_EQ(clearAndDiscardOperations.storeOp, VK_ATTACHMENT_STORE_OP_DONT_CARE);
+
+    Graphics::RenderPassAttachmentActions discardAndStore;
+    discardAndStore.loadAction = Graphics::RenderPassLoadAction::Discard;
+    discardAndStore.storeAction = Graphics::RenderPassStoreAction::Store;
+    const RenderPassAttachmentOperations discardAndStoreOperations =
+        ConvertRenderPassAttachmentActions(discardAndStore)
+    ;
+    EXPECT_EQ(discardAndStoreOperations.loadOp, VK_ATTACHMENT_LOAD_OP_DONT_CARE);
+    EXPECT_EQ(discardAndStoreOperations.storeOp, VK_ATTACHMENT_STORE_OP_STORE);
+
+    Graphics::RenderPassAttachmentActions invalidLoad;
+    invalidLoad.loadAction = Graphics::RenderPassLoadAction::Count;
+    EXPECT_FALSE(IsRenderPassAttachmentActionsValid(invalidLoad));
+    EXPECT_EQ(ConvertRenderPassLoadAction(invalidLoad.loadAction), VK_ATTACHMENT_LOAD_OP_MAX_ENUM);
+
+    Graphics::RenderPassAttachmentActions invalidStore;
+    invalidStore.storeAction = Graphics::RenderPassStoreAction::Count;
+    EXPECT_FALSE(IsRenderPassAttachmentActionsValid(invalidStore));
+    EXPECT_EQ(ConvertRenderPassStoreAction(invalidStore.storeAction), VK_ATTACHMENT_STORE_OP_MAX_ENUM);
 }
 
 TEST(VulkanStateTracking, DetectsExactActiveAttachmentBarrierOverlap){
@@ -1850,13 +2016,6 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     ASSERT_TRUE(predecessor.valid());
 
     Graphics::GpuTaskId dependencies[] = { predecessor };
-    Graphics::CommandListResourceStateHandoff externalStateSource(testArena.arena);
-    Graphics::GpuTaskExternalStateSource externalStateSources[] = {
-        Graphics::GpuTaskExternalStateSource{
-            .states = &externalStateSource,
-            .applicableConsumerQueueClass = Graphics::CommandQueue::Compute,
-        },
-    };
     Graphics::GpuTaskResourceUse uses[] = {
         Graphics::GpuTaskResourceUse{
             .resource = resource,
@@ -1871,7 +2030,6 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
         .setIdentity(Name("tests/task_graph/payload"))
         .setMarkerLabel(AStringView(markerLabel))
         .setDependencies(dependencies, LengthOf(dependencies))
-        .setExternalStateSources(externalStateSources, LengthOf(externalStateSources))
         .setResourceUses(uses, LengthOf(uses))
     ;
 
@@ -1881,51 +2039,49 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     ASSERT_TRUE(task.valid());
 
     dependencies[0] = {};
-    externalStateSources[0].states = nullptr;
-    externalStateSources[0].applicableConsumerQueueClass = Graphics::CommandQueue::Graphics;
-    externalStateSource.reset();
     uses[0].resource = {};
     markerLabel[0] = 'X';
-    const Graphics::GpuTaskGraphTaskView stored = graph.taskAt(task.index);
-    ASSERT_EQ(stored.dependencyCount, 1u);
-    ASSERT_EQ(stored.externalStateSourceCount, 1u);
-    ASSERT_EQ(stored.resourceUseCount, 1u);
-    EXPECT_EQ(stored.dependencies[0], predecessor);
-    ASSERT_NE(stored.externalStateSources[0].states, nullptr);
-    EXPECT_NE(stored.externalStateSources[0].states, &externalStateSource);
-    EXPECT_FALSE(stored.externalStateSources[0].states->valid());
-    EXPECT_EQ(stored.externalStateSources[0].applicableConsumerQueueClass, Graphics::CommandQueue::Compute);
-    EXPECT_EQ(stored.resourceUses[0].resource, resource);
-    EXPECT_EQ(stored.markerLabel, AStringView("Stack Marker"));
-    EXPECT_TRUE(stored.hasPayload);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Graphics::GpuTaskGraphTaskView stored = declarations.taskAt(task.index);
+        ASSERT_EQ(stored.dependencyCount, 1u);
+        ASSERT_EQ(stored.resourceUseCount, 1u);
+        EXPECT_EQ(stored.dependencies[0], predecessor);
+        EXPECT_EQ(stored.resourceUses[0].resource, resource);
+        EXPECT_EQ(stored.markerLabel, AStringView("Stack Marker"));
+        EXPECT_TRUE(stored.hasPayload);
+    }
 
     graph.reset();
     EXPECT_EQ(destructionCount, 1u);
-    EXPECT_FALSE(graph.validTask(task));
-    EXPECT_FALSE(graph.validResource(resource));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_FALSE(declarations.validTask(task));
+        EXPECT_FALSE(declarations.validResource(resource));
+    }
 }
 
-TEST(GpuTaskGraph, RejectsInvalidExternalStateConsumerQueueClassWithoutDeclarationMutation){
+TEST(GpuTaskGraph, RejectsInvalidExternalStateSourceWithoutDeclarationMutation){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::CommandListResourceStateHandoff externalStateSource(testArena.arena);
+    ASSERT_FALSE(externalStateSource.valid());
     const Graphics::GpuTaskExternalStateSource externalStateSources[] = {
         Graphics::GpuTaskExternalStateSource{
             .states = &externalStateSource,
-            .applicableConsumerQueueClass = static_cast<Graphics::CommandQueue::Enum>(
-                static_cast<u8>(Graphics::CommandQueue::kCount) + 1u
-            ),
+            .applicableConsumerQueueClass = Graphics::CommandQueue::Compute,
         },
     };
     Graphics::GpuTaskDesc desc;
     desc
-        .setIdentity(Name("tests/task_graph/invalid_external_state_consumer_queue"))
-        .setMarkerLabel("Invalid External State Consumer Queue")
+        .setIdentity(Name("tests/task_graph/invalid_external_state_source"))
+        .setMarkerLabel("Invalid External State Source")
         .setExternalStateSources(externalStateSources, LengthOf(externalStateSources))
     ;
 
     EXPECT_FALSE(graph.addTask(desc).valid());
-    EXPECT_EQ(graph.taskCount(), 0u);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    EXPECT_EQ(declarations.taskCount(), 0u);
 }
 
 TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
@@ -1949,8 +2105,11 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
         PacketLifecycleTask::Payload{ .discardedCount = &discardedCount }
     );
     ASSERT_TRUE(task.valid());
-    EXPECT_TRUE(graph.taskAt(task.index).hasPayload);
-    EXPECT_FALSE(graph.taskAt(task.index).hasRecordPayload);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_TRUE(declarations.taskAt(task.index).hasPayload);
+        EXPECT_FALSE(declarations.taskAt(task.index).hasRecordPayload);
+    }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
     const Graphics::GpuTaskGraphQueueTopology topology{
@@ -1963,19 +2122,35 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     const Graphics::GpuTaskGraphCompiler compiler;
 
-    EXPECT_FALSE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
-    EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::MissingTaskRecordPayload);
-    EXPECT_EQ(analysis.diagnostic().task, task);
-    EXPECT_FALSE(analysis.valid());
-    EXPECT_FALSE(assignments.valid());
-    EXPECT_FALSE(compiledGraph.valid());
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_FALSE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena));
+        EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::MissingTaskRecordPayload);
+        EXPECT_EQ(analysis.diagnostic().task, task);
+        EXPECT_FALSE(analysis.valid());
+        EXPECT_FALSE(assignments.valid());
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        EXPECT_FALSE(compiledPlan.valid());
+    }
 
     Graphics::GpuTaskGraphCompileOptions metadataOptions;
     metadataOptions.allowMetadataOnlyTasks = true;
-    EXPECT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions));
-    EXPECT_TRUE(analysis.valid());
-    EXPECT_TRUE(assignments.valid());
-    EXPECT_TRUE(compiledGraph.validFor(graph));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_TRUE(compiler.compile(
+            declarations,
+            analysis,
+            topology,
+            assignments,
+            compiledGraph,
+            scratchArena,
+            metadataOptions
+        ));
+        EXPECT_TRUE(analysis.valid());
+        EXPECT_TRUE(assignments.valid());
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        EXPECT_TRUE(compiledPlan.validFor(declarations));
+    }
 
     graph.reset();
     EXPECT_EQ(discardedCount, 1u);
@@ -2001,8 +2176,11 @@ TEST(GpuTaskGraph, RegistersOnlyExactTypedPayloadLifecycleSignatures){
         }
     );
     ASSERT_TRUE(task.valid());
-    EXPECT_TRUE(graph.taskAt(task.index).hasPayload);
-    EXPECT_FALSE(graph.taskAt(task.index).hasRecordPayload);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_TRUE(declarations.taskAt(task.index).hasPayload);
+        EXPECT_FALSE(declarations.taskAt(task.index).hasRecordPayload);
+    }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
     const Graphics::GpuTaskGraphQueueTopology topology{
@@ -2033,8 +2211,9 @@ TEST(GpuTaskGraph, RegistersNoexceptTypedAcceptedPayloadLifecycle){
         NoexceptAcceptedLifecycleTask::Payload{}
     );
     ASSERT_TRUE(task.valid());
-    EXPECT_TRUE(graph.taskAt(task.index).hasPayload);
-    EXPECT_TRUE(graph.taskAt(task.index).hasAcceptedPayload);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    EXPECT_TRUE(declarations.taskAt(task.index).hasPayload);
+    EXPECT_TRUE(declarations.taskAt(task.index).hasAcceptedPayload);
 }
 
 TEST(GpuTaskGraph, RegistersNoexceptTypedRecordAndDiscardPayloadLifecycle){
@@ -2055,8 +2234,11 @@ TEST(GpuTaskGraph, RegistersNoexceptTypedRecordAndDiscardPayloadLifecycle){
         }
     );
     ASSERT_TRUE(task.valid());
-    EXPECT_TRUE(graph.taskAt(task.index).hasPayload);
-    EXPECT_TRUE(graph.taskAt(task.index).hasRecordPayload);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_TRUE(declarations.taskAt(task.index).hasPayload);
+        EXPECT_TRUE(declarations.taskAt(task.index).hasRecordPayload);
+    }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
     const Graphics::GpuTaskGraphQueueTopology topology{
@@ -2116,28 +2298,43 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
             NativeRecordProbeTask::Payload{ .recordCount = &recordCount }
         );
         ASSERT_TRUE(task.valid());
-        EXPECT_TRUE(graph.taskAt(task.index).hasPayload);
-        EXPECT_TRUE(graph.taskAt(task.index).hasRecordPayload);
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
-        EXPECT_FALSE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_TRUE(declarations.taskAt(task.index).hasPayload);
+        EXPECT_TRUE(declarations.taskAt(task.index).hasRecordPayload);
+        EXPECT_FALSE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena));
         EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceUse);
         EXPECT_EQ(analysis.diagnostic().task, task);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
         EXPECT_FALSE(analysis.valid());
         EXPECT_FALSE(assignments.valid());
-        EXPECT_FALSE(compiledGraph.valid());
+        {
+            const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+            EXPECT_FALSE(compiledPlan.valid());
+        }
         EXPECT_EQ(recordCount, 0u);
 
         Graphics::GpuTaskGraphCompileOptions metadataOptions;
         metadataOptions.allowMetadataOnlyTasks = true;
-        EXPECT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions));
+        EXPECT_TRUE(compiler.compile(
+            declarations,
+            analysis,
+            topology,
+            assignments,
+            compiledGraph,
+            scratchArena,
+            metadataOptions
+        ));
         EXPECT_TRUE(analysis.valid());
         EXPECT_TRUE(assignments.valid());
-        EXPECT_TRUE(compiledGraph.validFor(graph));
+        {
+            const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+            EXPECT_TRUE(compiledPlan.validFor(declarations));
+        }
         EXPECT_EQ(recordCount, 0u);
     };
 
@@ -2198,11 +2395,15 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
-        EXPECT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
-        EXPECT_TRUE(analysis.valid());
-        EXPECT_TRUE(assignments.valid());
-        EXPECT_TRUE(compiledGraph.validFor(graph));
-        EXPECT_EQ(recordCount, 0u);
+        {
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            EXPECT_TRUE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena));
+            EXPECT_TRUE(analysis.valid());
+            EXPECT_TRUE(assignments.valid());
+            const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+            EXPECT_TRUE(compiledPlan.validFor(declarations));
+            EXPECT_EQ(recordCount, 0u);
+        }
 
         const Graphics::GpuTaskResourceUse invalidTypedUse{
             .resource = unusedTexture,
@@ -2224,11 +2425,22 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
 
         Graphics::GpuTaskGraphCompileOptions metadataOptions;
         metadataOptions.allowMetadataOnlyTasks = true;
-        EXPECT_FALSE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions));
-        EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceUse);
-        EXPECT_EQ(analysis.diagnostic().task, invalidTypedTask);
-        EXPECT_EQ(analysis.diagnostic().resource, unusedTexture);
-        EXPECT_EQ(recordCount, 0u);
+        {
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            EXPECT_FALSE(compiler.compile(
+                declarations,
+                analysis,
+                topology,
+                assignments,
+                compiledGraph,
+                scratchArena,
+                metadataOptions
+            ));
+            EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceUse);
+            EXPECT_EQ(analysis.diagnostic().task, invalidTypedTask);
+            EXPECT_EQ(analysis.diagnostic().resource, unusedTexture);
+            EXPECT_EQ(recordCount, 0u);
+        }
     }
 }
 
@@ -2298,6 +2510,145 @@ TEST(GpuTaskGraph, DiscardsTypedPayloadWhenDeclarationIsRejected){
 
     graph.reset();
     EXPECT_EQ(discardedCount, 1u);
+}
+
+TEST(GpuTaskGraph, RejectsReentrantCompilerReadDuringDeclarationMutation){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
+    bool compileAttempted = false;
+    bool compileSucceeded = true;
+
+    ReentrantCompileDuringDeclarationTask::Payload payload;
+    payload.graph = &graph;
+    payload.analysis = &analysis;
+    payload.scratchArena = &scratchArena;
+    payload.compileAttempted = &compileAttempted;
+    payload.compileSucceeded = &compileSucceeded;
+
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/reentrant_compile_during_declaration"))
+        .setMarkerLabel("Reentrant Compile During Declaration")
+    ;
+    const Graphics::GpuTaskId task = graph.addTask<ReentrantCompileDuringDeclarationTask>(desc, Move(payload));
+
+    ASSERT_TRUE(task.valid());
+    EXPECT_TRUE(compileAttempted);
+    EXPECT_FALSE(compileSucceeded);
+    EXPECT_FALSE(analysis.valid());
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_EQ(declarations.taskCount(), 1u);
+    }
+    EXPECT_TRUE(Analyze(graph, analysis));
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    EXPECT_TRUE(analysis.validFor(declarations));
+}
+
+TEST(GpuTaskGraph, RejectsReentrantTelemetryReadsDuringDeclarationMutationWithoutChangingOutputs){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuTaskId existingTask = AddTask(
+        graph,
+        Name("tests/task_graph/reentrant_telemetry_existing"),
+        "Reentrant Telemetry Existing"
+    );
+    ASSERT_TRUE(existingTask.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
+    transaction.reset(compiledGraph);
+
+    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
+    Graphics::GpuTaskGraphQueueAssignmentTelemetryTracker tracker(testArena.arena);
+    Graphics::GpuTaskQueueAssignmentTelemetry savedTelemetry;
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    Telemetry::FrameGraphPendingNameEdges pendingEdges(testArena.arena);
+    Telemetry::FrameGraphBuilder builder(nodes, edges, pendingEdges);
+    {
+        const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+        ASSERT_TRUE(reads.valid());
+        ASSERT_TRUE(tracker.update(reads.declarations, assignments, reads.compiled, transaction, scratchArena));
+        ASSERT_TRUE(tracker.validFor(reads.declarations, assignments, reads.compiled));
+        const Graphics::GpuTaskQueueAssignmentTelemetry* const initialTelemetry = tracker.find(existingTask);
+        ASSERT_NE(initialTelemetry, nullptr);
+        savedTelemetry = *initialTelemetry;
+        const Graphics::GpuTaskGraphTelemetryOptions options{
+            .queueAssignments = &assignments,
+            .compiledPlan = &reads.compiled,
+            .queueAssignmentTelemetry = &tracker,
+        };
+        ASSERT_TRUE(reads.declarations.appendFrameGraphTelemetry(builder, analysis, scratchArena, options));
+    }
+    const usize nodeCount = nodes.size();
+    const usize edgeCount = edges.size();
+    const usize pendingEdgeCount = pendingEdges.size();
+
+    ReentrantTelemetryDuringDeclarationState state{
+        .graph = &graph,
+        .analysis = &analysis,
+        .assignments = &assignments,
+        .compiledGraph = &compiledGraph,
+        .transaction = &transaction,
+        .tracker = &tracker,
+        .builder = &builder,
+        .scratchArena = &scratchArena,
+    };
+    const Graphics::GpuTaskId probeTask = graph.addTask<ReentrantTelemetryDuringDeclarationTask>(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/reentrant_telemetry_during_declaration"))
+            .setMarkerLabel("Reentrant Telemetry During Declaration"),
+        ReentrantTelemetryDuringDeclarationTask::Payload(state)
+    );
+
+    ASSERT_TRUE(probeTask.valid());
+    EXPECT_TRUE(state.trackerValidationAttempted);
+    EXPECT_FALSE(state.trackerValidationSucceeded);
+    EXPECT_TRUE(state.trackerUpdateAttempted);
+    EXPECT_FALSE(state.trackerUpdateSucceeded);
+    EXPECT_TRUE(state.appendAttempted);
+    EXPECT_FALSE(state.appendSucceeded);
+    EXPECT_EQ(nodes.size(), nodeCount);
+    EXPECT_EQ(edges.size(), edgeCount);
+    EXPECT_EQ(pendingEdges.size(), pendingEdgeCount);
+    const Graphics::GpuTaskQueueAssignmentTelemetry* const retainedTelemetry = tracker.find(existingTask);
+    ASSERT_NE(retainedTelemetry, nullptr);
+    EXPECT_EQ(retainedTelemetry->assignment.task, savedTelemetry.assignment.task);
+    EXPECT_EQ(retainedTelemetry->assignment.queue, savedTelemetry.assignment.queue);
+    EXPECT_EQ(retainedTelemetry->assignment.reason, savedTelemetry.assignment.reason);
+    EXPECT_EQ(retainedTelemetry->assignment.modifiers, savedTelemetry.assignment.modifiers);
+    EXPECT_EQ(retainedTelemetry->acceptedQueue, savedTelemetry.acceptedQueue);
+    EXPECT_EQ(retainedTelemetry->previousAcceptedQueue, savedTelemetry.previousAcceptedQueue);
+    EXPECT_EQ(retainedTelemetry->acceptance, savedTelemetry.acceptance);
+
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    transaction.reset(compiledGraph);
+    Telemetry::FrameGraphNodeDescs recoveredNodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs recoveredEdges(testArena.arena);
+    Telemetry::FrameGraphPendingNameEdges recoveredPendingEdges(testArena.arena);
+    Telemetry::FrameGraphBuilder recoveredBuilder(recoveredNodes, recoveredEdges, recoveredPendingEdges);
+    const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+    ASSERT_TRUE(reads.valid());
+    ASSERT_TRUE(tracker.update(reads.declarations, assignments, reads.compiled, transaction, scratchArena));
+    EXPECT_TRUE(tracker.validFor(reads.declarations, assignments, reads.compiled));
+    const Graphics::GpuTaskGraphTelemetryOptions options{
+        .queueAssignments = &assignments,
+        .compiledPlan = &reads.compiled,
+        .queueAssignmentTelemetry = &tracker,
+    };
+    EXPECT_TRUE(reads.declarations.appendFrameGraphTelemetry(recoveredBuilder, analysis, scratchArena, options));
 }
 
 TEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails){
@@ -2383,25 +2734,31 @@ TEST(GpuTaskGraph, OwnsUploadBlobsAndInvalidatesThemOnReset){
 
     const Graphics::GpuUploadBlobId blob = graph.copyUploadData(sourceBytes, sizeof(sourceBytes), alignof(u32));
     ASSERT_TRUE(blob.valid());
-    EXPECT_TRUE(graph.validUploadBlob(blob));
-    EXPECT_EQ(graph.uploadBlobCount(), 1u);
-
-    sourceBytes[0u] = 0u;
     usize byteSize = 0u;
-    const auto* const storedBytes = static_cast<const u8*>(graph.uploadBlobData(blob, byteSize));
-    ASSERT_NE(storedBytes, nullptr);
-    ASSERT_EQ(byteSize, sizeof(sourceBytes));
-    EXPECT_EQ(storedBytes[0u], 0x17u);
-    EXPECT_EQ(storedBytes[1u], 0x3au);
-    EXPECT_EQ(storedBytes[2u], 0x5cu);
-    EXPECT_EQ(storedBytes[3u], 0x8eu);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_TRUE(declarations.validUploadBlob(blob));
+        EXPECT_EQ(declarations.uploadBlobCount(), 1u);
+
+        sourceBytes[0u] = 0u;
+        const auto* const storedBytes = static_cast<const u8*>(declarations.uploadBlobData(blob, byteSize));
+        ASSERT_NE(storedBytes, nullptr);
+        ASSERT_EQ(byteSize, sizeof(sourceBytes));
+        EXPECT_EQ(storedBytes[0u], 0x17u);
+        EXPECT_EQ(storedBytes[1u], 0x3au);
+        EXPECT_EQ(storedBytes[2u], 0x5cu);
+        EXPECT_EQ(storedBytes[3u], 0x8eu);
+    }
 
     graph.reset();
-    EXPECT_FALSE(graph.validUploadBlob(blob));
-    EXPECT_EQ(graph.uploadBlobCount(), 0u);
-    byteSize = Limit<usize>::s_Max;
-    EXPECT_EQ(graph.uploadBlobData(blob, byteSize), nullptr);
-    EXPECT_EQ(byteSize, 0u);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_FALSE(declarations.validUploadBlob(blob));
+        EXPECT_EQ(declarations.uploadBlobCount(), 0u);
+        byteSize = Limit<usize>::s_Max;
+        EXPECT_EQ(declarations.uploadBlobData(blob, byteSize), nullptr);
+        EXPECT_EQ(byteSize, 0u);
+    }
 
     const Graphics::GpuUploadBlobId replacement = graph.copyUploadData(sourceBytes, sizeof(sourceBytes), alignof(u32));
     ASSERT_TRUE(replacement.valid());
@@ -2436,30 +2793,39 @@ TEST(GpuTaskGraph, OwnsPipelineMetadataAndInvalidatesPipelineIdsOnReset){
     ;
     const Graphics::GpuGraphPipelineId pipeline = graph.importPipeline(desc);
     ASSERT_TRUE(pipeline.valid());
-    EXPECT_TRUE(graph.validPipeline(pipeline));
-    EXPECT_EQ(graph.pipelineCount(), 1u);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_TRUE(declarations.validPipeline(pipeline));
+        EXPECT_EQ(declarations.pipelineCount(), 1u);
+    }
     EXPECT_EQ(graph.importPipeline(desc), pipeline);
 
     markerLabel[0] = 'X';
-    const Graphics::GpuTaskGraphPipelineView stored = graph.pipelineAt(pipeline.index);
-    EXPECT_EQ(stored.id, pipeline);
-    EXPECT_EQ(stored.identity, desc.identity);
-    EXPECT_EQ(stored.markerLabel, AStringView("Deferred Lighting Pipeline"));
-    EXPECT_EQ(stored.type, Graphics::GpuGraphPipelineType::Compute);
-    EXPECT_FALSE(stored.hasBackendPipeline);
-    EXPECT_EQ(graph.graphicsPipelineFor(pipeline), nullptr);
-    EXPECT_EQ(graph.computePipelineFor(pipeline), nullptr);
-    EXPECT_EQ(graph.meshletPipelineFor(pipeline), nullptr);
-    EXPECT_EQ(graph.rayTracingPipelineFor(pipeline), nullptr);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Graphics::GpuTaskGraphPipelineView stored = declarations.pipelineAt(pipeline.index);
+        EXPECT_EQ(stored.id, pipeline);
+        EXPECT_EQ(stored.identity, desc.identity);
+        EXPECT_EQ(stored.markerLabel, AStringView("Deferred Lighting Pipeline"));
+        EXPECT_EQ(stored.type, Graphics::GpuGraphPipelineType::Compute);
+        EXPECT_FALSE(stored.hasBackendPipeline);
+        EXPECT_EQ(declarations.graphicsPipelineFor(pipeline), nullptr);
+        EXPECT_EQ(declarations.computePipelineFor(pipeline), nullptr);
+        EXPECT_EQ(declarations.meshletPipelineFor(pipeline), nullptr);
+        EXPECT_EQ(declarations.rayTracingPipelineFor(pipeline), nullptr);
+    }
 
     Graphics::GpuGraphPipelineDesc mismatchedType = desc;
     mismatchedType.setType(Graphics::GpuGraphPipelineType::Graphics);
     EXPECT_FALSE(graph.importPipeline(mismatchedType).valid());
 
     graph.reset();
-    EXPECT_EQ(graph.pipelineCount(), 0u);
-    EXPECT_FALSE(graph.validPipeline(pipeline));
-    EXPECT_EQ(graph.computePipelineFor(pipeline), nullptr);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_EQ(declarations.pipelineCount(), 0u);
+        EXPECT_FALSE(declarations.validPipeline(pipeline));
+        EXPECT_EQ(declarations.computePipelineFor(pipeline), nullptr);
+    }
 
     const Graphics::GpuGraphPipelineId replacement = AddPipelineMetadata(
         graph,
@@ -2491,52 +2857,81 @@ TEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_TRUE(analysis.validFor(graph));
-    ASSERT_TRUE(assignments.validFor(graph));
-    ASSERT_TRUE(compiledGraph.validFor(graph));
+    {
+        const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+        ASSERT_TRUE(reads.valid());
+        ASSERT_TRUE(analysis.validFor(reads.declarations));
+        ASSERT_TRUE(assignments.validFor(reads.declarations, reads.compiled));
+    }
 
     const auto recompileAfterMutation = [&](){
-        EXPECT_FALSE(analysis.validFor(graph));
-        EXPECT_FALSE(assignments.validFor(graph));
-        EXPECT_FALSE(compiledGraph.validFor(graph));
+        {
+            const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+            EXPECT_FALSE(analysis.validFor(reads.declarations));
+            EXPECT_FALSE(assignments.validFor(reads.declarations));
+            EXPECT_FALSE(reads.compiled.validFor(reads.declarations));
+        }
         ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-        EXPECT_TRUE(analysis.validFor(graph));
-        EXPECT_TRUE(assignments.validFor(graph));
-        EXPECT_TRUE(compiledGraph.validFor(graph));
+        const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+        EXPECT_TRUE(reads.valid());
+        EXPECT_TRUE(analysis.validFor(reads.declarations));
+        EXPECT_TRUE(assignments.validFor(reads.declarations, reads.compiled));
     };
 
-    u64 previousRevision = graph.declarationRevision();
+    u64 previousRevision = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        previousRevision = declarations.declarationRevision();
+    }
     ASSERT_TRUE(AddTask(
         graph,
         Name("tests/task_graph/declaration_revision_task"),
         "Declaration Revision Task"
     ).valid());
-    EXPECT_NE(graph.declarationRevision(), previousRevision);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_NE(declarations.declarationRevision(), previousRevision);
+    }
     recompileAfterMutation();
 
-    previousRevision = graph.declarationRevision();
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        previousRevision = declarations.declarationRevision();
+    }
     const Graphics::GpuGraphResourceId resource = AddBufferMetadata(
         graph,
         Name("tests/task_graph/declaration_revision_resource"),
         "Declaration Revision Resource"
     );
     ASSERT_TRUE(resource.valid());
-    EXPECT_NE(graph.declarationRevision(), previousRevision);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_NE(declarations.declarationRevision(), previousRevision);
+    }
     recompileAfterMutation();
 
     const Graphics::GpuGraphResourceId resourceSetMembers[] = { resource };
-    previousRevision = graph.declarationRevision();
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        previousRevision = declarations.declarationRevision();
+    }
     const Graphics::GpuGraphResourceSetId resourceSet = graph.importResourceSet(
         Graphics::GpuGraphResourceSetDesc{}
             .setIdentity(Name("tests/task_graph/declaration_revision_resource_set"))
             .setMarkerLabel("Declaration Revision Resource Set")
-            .setMembers(resourceSetMembers, LengthOf(resourceSetMembers))
+        .setMembers(resourceSetMembers, LengthOf(resourceSetMembers))
     );
     ASSERT_TRUE(resourceSet.valid());
-    EXPECT_NE(graph.declarationRevision(), previousRevision);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_NE(declarations.declarationRevision(), previousRevision);
+    }
     recompileAfterMutation();
 
-    previousRevision = graph.declarationRevision();
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        previousRevision = declarations.declarationRevision();
+    }
     const Graphics::GpuGraphPipelineId pipeline = AddPipelineMetadata(
         graph,
         Name("tests/task_graph/declaration_revision_pipeline"),
@@ -2544,24 +2939,39 @@ TEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots){
         Graphics::GpuGraphPipelineType::Compute
     );
     ASSERT_TRUE(pipeline.valid());
-    EXPECT_NE(graph.declarationRevision(), previousRevision);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_NE(declarations.declarationRevision(), previousRevision);
+    }
     recompileAfterMutation();
 
-    previousRevision = graph.declarationRevision();
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        previousRevision = declarations.declarationRevision();
+    }
     const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
             .setIdentity(Name("tests/task_graph/declaration_revision_completion"))
             .setMarkerLabel("Declaration Revision Completion")
     );
     ASSERT_TRUE(completion.valid());
-    EXPECT_NE(graph.declarationRevision(), previousRevision);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_NE(declarations.declarationRevision(), previousRevision);
+    }
     recompileAfterMutation();
 
     const u8 uploadBytes[] = { 0x17u, 0x3au, 0x5cu, 0x8eu };
-    previousRevision = graph.declarationRevision();
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        previousRevision = declarations.declarationRevision();
+    }
     const Graphics::GpuUploadBlobId upload = graph.copyUploadData(uploadBytes, sizeof(uploadBytes), alignof(u32));
     ASSERT_TRUE(upload.valid());
-    EXPECT_NE(graph.declarationRevision(), previousRevision);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_NE(declarations.declarationRevision(), previousRevision);
+    }
     recompileAfterMutation();
 }
 
@@ -2615,16 +3025,23 @@ TEST(GpuTaskGraph, FailedAndIdempotentDeclarationsPreserveCompilerSnapshots){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const u64 compiledRevision = graph.declarationRevision();
+    u64 compiledRevision = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        compiledRevision = declarations.declarationRevision();
+    }
 
     EXPECT_EQ(graph.importResource(resourceDesc), resource);
     EXPECT_EQ(graph.importResourceSet(resourceSetDesc), resourceSet);
     EXPECT_EQ(graph.importPipeline(pipelineDesc), pipeline);
     EXPECT_EQ(graph.importExternalCompletion(completionDesc), completion);
-    EXPECT_EQ(graph.declarationRevision(), compiledRevision);
-    EXPECT_TRUE(analysis.validFor(graph));
-    EXPECT_TRUE(assignments.validFor(graph));
-    EXPECT_TRUE(compiledGraph.validFor(graph));
+    {
+        const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+        EXPECT_EQ(reads.declarations.declarationRevision(), compiledRevision);
+        EXPECT_TRUE(analysis.validFor(reads.declarations));
+        EXPECT_TRUE(assignments.validFor(reads.declarations, reads.compiled));
+        EXPECT_TRUE(reads.compiled.validFor(reads.declarations));
+    }
 
     EXPECT_FALSE(graph.addTask(Graphics::GpuTaskDesc{}).valid());
     EXPECT_FALSE(graph.importResource(Graphics::GpuGraphResourceDesc{}).valid());
@@ -2632,10 +3049,11 @@ TEST(GpuTaskGraph, FailedAndIdempotentDeclarationsPreserveCompilerSnapshots){
     EXPECT_FALSE(graph.importPipeline(Graphics::GpuGraphPipelineDesc{}).valid());
     EXPECT_FALSE(graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}).valid());
     EXPECT_FALSE(graph.copyUploadData(nullptr, sizeof(uploadBytes), alignof(u8)).valid());
-    EXPECT_EQ(graph.declarationRevision(), compiledRevision);
-    EXPECT_TRUE(analysis.validFor(graph));
-    EXPECT_TRUE(assignments.validFor(graph));
-    EXPECT_TRUE(compiledGraph.validFor(graph));
+    const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+    EXPECT_EQ(reads.declarations.declarationRevision(), compiledRevision);
+    EXPECT_TRUE(analysis.validFor(reads.declarations));
+    EXPECT_TRUE(assignments.validFor(reads.declarations, reads.compiled));
+    EXPECT_TRUE(reads.compiled.validFor(reads.declarations));
 }
 
 TEST(GpuTaskGraph, ExternalFinalResourceDeclarationInvalidatesPriorCompiledPlan){
@@ -2656,9 +3074,12 @@ TEST(GpuTaskGraph, ExternalFinalResourceDeclarationInvalidatesPriorCompiledPlan)
     Graphics::GpuTaskGraphQueueAssignments priorAssignments(testArena.arena);
     Graphics::GpuCompiledGraph priorCompiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, priorAnalysis, topology, priorAssignments, priorCompiledGraph));
-    ASSERT_TRUE(priorCompiledGraph.validFor(graph));
-
-    const u64 compiledRevision = graph.declarationRevision();
+    u64 compiledRevision = 0u;
+    {
+        const Tests::GpuTaskGraphReadViews reads(graph, priorCompiledGraph);
+        ASSERT_TRUE(reads.valid());
+        compiledRevision = reads.declarations.declarationRevision();
+    }
     const Graphics::GpuGraphResourceId externalFinalResource = graph.importResource(
         Graphics::GpuGraphResourceDesc{}
             .setIdentity(Name("tests/task_graph/external_final_revision_resource"))
@@ -2668,16 +3089,20 @@ TEST(GpuTaskGraph, ExternalFinalResourceDeclarationInvalidatesPriorCompiledPlan)
             .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
     );
     ASSERT_TRUE(externalFinalResource.valid());
-    EXPECT_NE(graph.declarationRevision(), compiledRevision);
-    EXPECT_FALSE(priorAnalysis.validFor(graph));
-    EXPECT_FALSE(priorAssignments.validFor(graph));
-    EXPECT_FALSE(priorCompiledGraph.validFor(graph));
+    {
+        const Tests::GpuTaskGraphReadViews reads(graph, priorCompiledGraph);
+        EXPECT_NE(reads.declarations.declarationRevision(), compiledRevision);
+        EXPECT_FALSE(priorAnalysis.validFor(reads.declarations));
+        EXPECT_FALSE(priorAssignments.validFor(reads.declarations));
+        EXPECT_FALSE(reads.compiled.validFor(reads.declarations));
+    }
 
     Graphics::GpuTaskGraphAnalysis freshAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments freshAssignments(testArena.arena);
     Graphics::GpuCompiledGraph freshCompiledGraph(testArena.arena);
     EXPECT_FALSE(Compile(graph, freshAnalysis, topology, freshAssignments, freshCompiledGraph));
-    EXPECT_FALSE(freshCompiledGraph.valid());
+    const Graphics::GpuCompiledGraph::ReadView freshCompiledPlan(freshCompiledGraph);
+    EXPECT_FALSE(freshCompiledPlan.valid());
 }
 
 TEST(GpuTaskGraph, MarksAndMaterializesDeclaredInitialResourceStates){
@@ -2765,10 +3190,12 @@ TEST(GpuTaskGraph, MarksAndMaterializesDeclaredInitialResourceStates){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const auto findPrologueBarrier = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource) -> const Graphics::GpuCompiledBarrier*{
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         if(!compiledTask || !barriers)
             return nullptr;
         for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
@@ -2991,7 +3418,10 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
     ASSERT_TRUE(accelStructResource.valid());
     ASSERT_TRUE(writeResource.valid());
     ASSERT_TRUE(writeTextureResource.valid());
-    EXPECT_EQ(graph.resourceAt(textureResource.index).initialState, Graphics::ResourceStates::Unknown);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_EQ(declarations.resourceAt(textureResource.index).initialState, Graphics::ResourceStates::Unknown);
+    }
 
     const Graphics::GpuTaskResourceUse uses[]{
         Graphics::GpuTaskResourceUse{
@@ -3047,10 +3477,12 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const auto findPrologueBarrier = [&](const Graphics::GpuGraphResourceId resource) -> const Graphics::GpuCompiledBarrier*{
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         if(!compiledTask || !barriers)
             return nullptr;
         for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
@@ -3116,7 +3548,11 @@ TEST(GpuTaskGraph, AcceptsEveryDefinedQueueSharingMaskForMetadataResources){
             SCOPED_TRACE(static_cast<u32>(queueSharing));
             TestArena testArena;
             Graphics::GpuTaskGraph graph(testArena.arena);
-            const u64 declarationRevision = graph.declarationRevision();
+            u64 declarationRevision = 0u;
+            {
+                const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+                declarationRevision = declarations.declarationRevision();
+            }
             const Graphics::GpuGraphResourceId resource = graph.importResource(
                 Graphics::GpuGraphResourceDesc{}
                     .setIdentity(Name("tests/task_graph/valid_queue_sharing_metadata"))
@@ -3130,9 +3566,10 @@ TEST(GpuTaskGraph, AcceptsEveryDefinedQueueSharingMaskForMetadataResources){
                     .setQueueSharing(queueSharing)
             );
             ASSERT_TRUE(resource.valid());
-            EXPECT_EQ(graph.resourceCount(), 1u);
-            EXPECT_NE(graph.declarationRevision(), declarationRevision);
-            EXPECT_EQ(graph.resourceAt(resource.index).queueSharing, queueSharing);
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            EXPECT_EQ(declarations.resourceCount(), 1u);
+            EXPECT_NE(declarations.declarationRevision(), declarationRevision);
+            EXPECT_EQ(declarations.resourceAt(resource.index).queueSharing, queueSharing);
         }
     }
 }
@@ -3170,8 +3607,13 @@ TEST(GpuTaskGraph, RejectsMalformedQueueSharingWithoutDeclarationMutation){
             )
             .setQueueSharing(queueSharing)
         ;
-        const usize resourceCount = graph.resourceCount();
-        const u64 declarationRevision = graph.declarationRevision();
+        usize resourceCount = 0u;
+        u64 declarationRevision = 0u;
+        {
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            resourceCount = declarations.resourceCount();
+            declarationRevision = declarations.declarationRevision();
+        }
         const ArenaMemoryStats memoryStats = testArena.arena.memoryStats();
         const Graphics::GpuGraphResourceId resource = useHazardDomainWrapper
             ? graph.importHazardDomain(desc)
@@ -3179,8 +3621,9 @@ TEST(GpuTaskGraph, RejectsMalformedQueueSharingWithoutDeclarationMutation){
         ;
 
         EXPECT_FALSE(resource.valid());
-        EXPECT_EQ(graph.resourceCount(), resourceCount);
-        EXPECT_EQ(graph.declarationRevision(), declarationRevision);
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_EQ(declarations.resourceCount(), resourceCount);
+        EXPECT_EQ(declarations.declarationRevision(), declarationRevision);
         ExpectMemoryStatsEqual(memoryStats, testArena.arena.memoryStats());
     };
 
@@ -3307,7 +3750,11 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
     EXPECT_FALSE(texture->descriptionMatchesCreation());
     {
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const u64 declarationRevision = graph.declarationRevision();
+        u64 declarationRevision = 0u;
+        {
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            declarationRevision = declarations.declarationRevision();
+        }
         EXPECT_FALSE(graph.importTexture(
             texture,
             Graphics::GpuGraphResourceDesc{}
@@ -3316,8 +3763,9 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
                 .setType(Graphics::GpuGraphResourceType::Texture)
                 .setInitialState(Graphics::ResourceStates::Common)
         ).valid());
-        EXPECT_EQ(graph.resourceCount(), 0u);
-        EXPECT_EQ(graph.declarationRevision(), declarationRevision);
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_EQ(declarations.resourceCount(), 0u);
+        EXPECT_EQ(declarations.declarationRevision(), declarationRevision);
     }
     textureDesc = texture->getCreationDescription();
     EXPECT_TRUE(texture->descriptionMatchesCreation());
@@ -3326,7 +3774,11 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
     EXPECT_FALSE(buffer->descriptionMatchesCreation());
     {
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const u64 declarationRevision = graph.declarationRevision();
+        u64 declarationRevision = 0u;
+        {
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            declarationRevision = declarations.declarationRevision();
+        }
         EXPECT_FALSE(graph.importBuffer(
             buffer,
             Graphics::GpuGraphResourceDesc{}
@@ -3335,8 +3787,9 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
                 .setType(Graphics::GpuGraphResourceType::Buffer)
                 .setInitialState(Graphics::ResourceStates::Common)
         ).valid());
-        EXPECT_EQ(graph.resourceCount(), 0u);
-        EXPECT_EQ(graph.declarationRevision(), declarationRevision);
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_EQ(declarations.resourceCount(), 0u);
+        EXPECT_EQ(declarations.declarationRevision(), declarationRevision);
     }
     bufferDesc = buffer->getCreationDescription();
     EXPECT_TRUE(buffer->descriptionMatchesCreation());
@@ -3347,7 +3800,11 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
     EXPECT_FALSE(accelStruct->queueSharingMatchesCreation());
     {
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const u64 declarationRevision = graph.declarationRevision();
+        u64 declarationRevision = 0u;
+        {
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            declarationRevision = declarations.declarationRevision();
+        }
         EXPECT_FALSE(graph.importAccelStruct(
             accelStruct,
             Graphics::GpuGraphResourceDesc{}
@@ -3356,8 +3813,9 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
                 .setType(Graphics::GpuGraphResourceType::AccelStruct)
                 .setInitialState(Graphics::ResourceStates::Common)
         ).valid());
-        EXPECT_EQ(graph.resourceCount(), 0u);
-        EXPECT_EQ(graph.declarationRevision(), declarationRevision);
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_EQ(declarations.resourceCount(), 0u);
+        EXPECT_EQ(declarations.declarationRevision(), declarationRevision);
     }
     accelStructDesc.queueSharing = accelStruct->getCreationQueueSharing();
     EXPECT_TRUE(accelStruct->queueSharingMatchesCreation());
@@ -3368,7 +3826,11 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
     accelStructBacking = mismatchedAccelStructBacking;
     {
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const u64 declarationRevision = graph.declarationRevision();
+        u64 declarationRevision = 0u;
+        {
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            declarationRevision = declarations.declarationRevision();
+        }
         EXPECT_FALSE(graph.importAccelStruct(
             accelStruct,
             Graphics::GpuGraphResourceDesc{}
@@ -3377,8 +3839,9 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
                 .setType(Graphics::GpuGraphResourceType::AccelStruct)
                 .setInitialState(Graphics::ResourceStates::Common)
         ).valid());
-        EXPECT_EQ(graph.resourceCount(), 0u);
-        EXPECT_EQ(graph.declarationRevision(), declarationRevision);
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_EQ(declarations.resourceCount(), 0u);
+        EXPECT_EQ(declarations.declarationRevision(), declarationRevision);
     }
     accelStructBacking = buffer;
 
@@ -3399,7 +3862,8 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
                     .setInitialState(Graphics::ResourceStates::Common)
             );
             ASSERT_TRUE(resource.valid());
-            const Graphics::GpuTaskGraphResourceView resourceView = graph.resourceAt(resource.index);
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            const Graphics::GpuTaskGraphResourceView resourceView = declarations.resourceAt(resource.index);
             EXPECT_EQ(resourceView.queueSharing, s_NativeQueueSharing);
             ASSERT_TRUE(resourceView.hasQueueAdmission);
             ASSERT_TRUE(resourceView.queueAdmission.valid());
@@ -3421,7 +3885,8 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
                     .setQueueSharing(s_NativeQueueSharing)
             );
             ASSERT_TRUE(resource.valid());
-            EXPECT_EQ(graph.resourceAt(resource.index).queueSharing, s_NativeQueueSharing);
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            EXPECT_EQ(declarations.resourceAt(resource.index).queueSharing, s_NativeQueueSharing);
         }
 
         {
@@ -3435,7 +3900,8 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
                     .setInitialState(Graphics::ResourceStates::Common)
                     .setQueueSharing(s_MismatchedQueueSharing)
             ).valid());
-            EXPECT_EQ(graph.resourceCount(), 0u);
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            EXPECT_EQ(declarations.resourceCount(), 0u);
         }
     };
 
@@ -3547,11 +4013,12 @@ TEST(GpuTaskGraph, AccelStructImportsInheritBackingBufferStateKnowledge){
     );
     ASSERT_TRUE(managedResource.valid());
     ASSERT_TRUE(unknownResource.valid());
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     EXPECT_EQ(
-        graph.resourceAt(managedResource.index).initialState,
+        declarations.resourceAt(managedResource.index).initialState,
         Graphics::ResourceStates::AccelStructRead
     );
-    EXPECT_EQ(graph.resourceAt(unknownResource.index).initialState, Graphics::ResourceStates::Unknown);
+    EXPECT_EQ(declarations.resourceAt(unknownResource.index).initialState, Graphics::ResourceStates::Unknown);
 }
 
 
@@ -3645,19 +4112,22 @@ TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwner
                 .setInitialState(Graphics::ResourceStates::Common)
         );
         ASSERT_TRUE(resource.valid());
-        const Graphics::GpuTaskGraphResourceView resourceView = graph.resourceAt(resource.index);
-        const Graphics::ResourceQueueAdmissionSnapshot textureAdmission = texture->getQueueAdmissionSnapshot();
-        ASSERT_TRUE(resourceView.hasQueueAdmission);
-        ASSERT_TRUE(resourceView.queueAdmission.valid());
-        EXPECT_TRUE(resourceView.queueAdmission.usesConcurrentSharing);
-        EXPECT_EQ(
-            resourceView.queueAdmission.admittedQueueClasses,
-            Graphics::ResourceQueueSharing::Graphics
-        );
-        ASSERT_EQ(resourceView.queueAdmission.queueFamilyIndexCount, LengthOf(queueFamilyIndices));
-        EXPECT_NE(resourceView.queueAdmission.queueFamilyIndices, textureAdmission.queueFamilyIndices);
-        EXPECT_EQ(resourceView.queueAdmission.queueFamilyIndices[0u], queues[0u].familyIndex);
-        EXPECT_EQ(resourceView.queueAdmission.queueFamilyIndices[1u], queues[1u].familyIndex);
+        {
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            const Graphics::GpuTaskGraphResourceView resourceView = declarations.resourceAt(resource.index);
+            const Graphics::ResourceQueueAdmissionSnapshot textureAdmission = texture->getQueueAdmissionSnapshot();
+            ASSERT_TRUE(resourceView.hasQueueAdmission);
+            ASSERT_TRUE(resourceView.queueAdmission.valid());
+            EXPECT_TRUE(resourceView.queueAdmission.usesConcurrentSharing);
+            EXPECT_EQ(
+                resourceView.queueAdmission.admittedQueueClasses,
+                Graphics::ResourceQueueSharing::Graphics
+            );
+            ASSERT_EQ(resourceView.queueAdmission.queueFamilyIndexCount, LengthOf(queueFamilyIndices));
+            EXPECT_NE(resourceView.queueAdmission.queueFamilyIndices, textureAdmission.queueFamilyIndices);
+            EXPECT_EQ(resourceView.queueAdmission.queueFamilyIndices[0u], queues[0u].familyIndex);
+            EXPECT_EQ(resourceView.queueAdmission.queueFamilyIndices[1u], queues[1u].familyIndex);
+        }
 
         const Graphics::GpuTaskResourceUse use{
             .resource = resource,
@@ -3711,15 +4181,18 @@ TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwner
                 .setInitialState(Graphics::ResourceStates::Common)
         );
         ASSERT_TRUE(resource.valid());
-        const Graphics::GpuTaskGraphResourceView resourceView = graph.resourceAt(resource.index);
-        ASSERT_TRUE(resourceView.hasQueueAdmission);
-        ASSERT_TRUE(resourceView.queueAdmission.valid());
-        EXPECT_TRUE(resourceView.queueAdmission.usesConcurrentSharing);
-        EXPECT_EQ(resourceView.queueAdmission.admittedQueueClasses, Graphics::ResourceQueueSharing::Graphics);
-        ASSERT_EQ(resourceView.queueAdmission.queueFamilyIndexCount, LengthOf(queueFamilyIndices));
-        EXPECT_NE(resourceView.queueAdmission.queueFamilyIndices, sourceAdmission.queueFamilyIndices);
-        EXPECT_EQ(resourceView.queueAdmission.queueFamilyIndices[0u], queues[0u].familyIndex);
-        EXPECT_EQ(resourceView.queueAdmission.queueFamilyIndices[1u], queues[1u].familyIndex);
+        {
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            const Graphics::GpuTaskGraphResourceView resourceView = declarations.resourceAt(resource.index);
+            ASSERT_TRUE(resourceView.hasQueueAdmission);
+            ASSERT_TRUE(resourceView.queueAdmission.valid());
+            EXPECT_TRUE(resourceView.queueAdmission.usesConcurrentSharing);
+            EXPECT_EQ(resourceView.queueAdmission.admittedQueueClasses, Graphics::ResourceQueueSharing::Graphics);
+            ASSERT_EQ(resourceView.queueAdmission.queueFamilyIndexCount, LengthOf(queueFamilyIndices));
+            EXPECT_NE(resourceView.queueAdmission.queueFamilyIndices, sourceAdmission.queueFamilyIndices);
+            EXPECT_EQ(resourceView.queueAdmission.queueFamilyIndices[0u], queues[0u].familyIndex);
+            EXPECT_EQ(resourceView.queueAdmission.queueFamilyIndices[1u], queues[1u].familyIndex);
+        }
 
         const Graphics::GpuTaskResourceUse use{
             .resource = resource,
@@ -3814,8 +4287,10 @@ TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwner
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
-        EXPECT_FALSE(compiledGraph.valid());
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+        EXPECT_FALSE(compiledPlan.valid());
+        EXPECT_EQ(compiledPlan.logicalOwnershipTransferCount(), 0u);
     }
 }
 
@@ -3881,8 +4356,13 @@ TEST(GpuTaskGraph, TypedImportsRejectMalformedInheritedNativeQueueSharing){
         ASSERT_EQ(accelStruct->getCreationQueueSharing(), queueSharing);
 
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const usize resourceCount = graph.resourceCount();
-        const u64 declarationRevision = graph.declarationRevision();
+        usize resourceCount = 0u;
+        u64 declarationRevision = 0u;
+        {
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            resourceCount = declarations.resourceCount();
+            declarationRevision = declarations.declarationRevision();
+        }
         const ArenaMemoryStats memoryStats = testArena.arena.memoryStats();
         EXPECT_FALSE(graph.importTexture(
             texture,
@@ -3908,8 +4388,9 @@ TEST(GpuTaskGraph, TypedImportsRejectMalformedInheritedNativeQueueSharing){
                 .setType(Graphics::GpuGraphResourceType::AccelStruct)
                 .setInitialState(Graphics::ResourceStates::Common)
         ).valid());
-        EXPECT_EQ(graph.resourceCount(), resourceCount);
-        EXPECT_EQ(graph.declarationRevision(), declarationRevision);
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_EQ(declarations.resourceCount(), resourceCount);
+        EXPECT_EQ(declarations.declarationRevision(), declarationRevision);
         ExpectMemoryStatsEqual(memoryStats, testArena.arena.memoryStats());
     }
 }
@@ -4042,7 +4523,11 @@ TEST(GpuTaskGraph, TypedImportsValidateRetainedExternalFinalState){
         setKeepInitialState(true);
         {
             Graphics::GpuTaskGraph graph(testArena.arena);
-            const u64 declarationRevision = graph.declarationRevision();
+            u64 declarationRevision = 0u;
+            {
+                const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+                declarationRevision = declarations.declarationRevision();
+            }
             EXPECT_FALSE(import(
                 graph,
                 Graphics::GpuGraphResourceDesc{}
@@ -4053,8 +4538,9 @@ TEST(GpuTaskGraph, TypedImportsValidateRetainedExternalFinalState){
                     .setExternalFinalState(differingFinalState)
                     .setExternalFinalReleaseDestinationQueue(releaseDestinationQueue)
             ).valid());
-            EXPECT_EQ(graph.resourceCount(), 0u);
-            EXPECT_EQ(graph.declarationRevision(), declarationRevision);
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            EXPECT_EQ(declarations.resourceCount(), 0u);
+            EXPECT_EQ(declarations.declarationRevision(), declarationRevision);
         }
 
         {
@@ -4070,9 +4556,10 @@ TEST(GpuTaskGraph, TypedImportsValidateRetainedExternalFinalState){
                     .setExternalFinalReleaseDestinationQueue(releaseDestinationQueue)
             );
             ASSERT_TRUE(resource.valid());
-            EXPECT_EQ(graph.resourceAt(resource.index).externalFinalState, s_NativeInitialState);
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            EXPECT_EQ(declarations.resourceAt(resource.index).externalFinalState, s_NativeInitialState);
             EXPECT_EQ(
-                graph.resourceAt(resource.index).externalFinalReleaseDestinationQueue,
+                declarations.resourceAt(resource.index).externalFinalReleaseDestinationQueue,
                 releaseDestinationQueue
             );
         }
@@ -4104,7 +4591,8 @@ TEST(GpuTaskGraph, TypedImportsValidateRetainedExternalFinalState){
                     .setExternalFinalReleaseDestinationQueue(releaseDestinationQueue)
             );
             ASSERT_TRUE(resource.valid());
-            EXPECT_EQ(graph.resourceAt(resource.index).externalFinalState, differingFinalState);
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            EXPECT_EQ(declarations.resourceAt(resource.index).externalFinalState, differingFinalState);
         }
         setKeepInitialState(true);
     };
@@ -4262,8 +4750,11 @@ TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
     const auto expectTypedImportMismatch = [&](const auto& import){
         Graphics::GpuTaskGraph graph(testArena.arena);
         ASSERT_TRUE(import(graph).valid());
-        EXPECT_TRUE(graph.validForDeviceGeneration(s_SourceDeviceGeneration));
-        EXPECT_FALSE(graph.validForDeviceGeneration(s_TargetDeviceGeneration));
+        {
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            EXPECT_TRUE(declarations.validForDeviceGeneration(s_SourceDeviceGeneration));
+            EXPECT_FALSE(declarations.validForDeviceGeneration(s_TargetDeviceGeneration));
+        }
         ASSERT_TRUE(AddTask(
             graph,
             Name("tests/task_graph/device_generation_task"),
@@ -4274,9 +4765,13 @@ TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         ASSERT_TRUE(Compile(graph, analysis, sourceTopology, assignments, compiledGraph));
-        EXPECT_TRUE(compiledGraph.valid());
+        {
+            const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+            EXPECT_TRUE(compiledPlan.valid());
+        }
         EXPECT_FALSE(Compile(graph, analysis, targetTopology, assignments, compiledGraph));
-        EXPECT_FALSE(compiledGraph.valid());
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        EXPECT_FALSE(compiledPlan.valid());
     };
 
     expectTypedImportMismatch([&](Graphics::GpuTaskGraph& graph){
@@ -4354,7 +4849,10 @@ TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
         Name("tests/task_graph/device_generation_metadata_task"),
         "Device Generation Metadata Task"
     ).valid());
-    EXPECT_TRUE(metadataGraph.validForDeviceGeneration(s_TargetDeviceGeneration));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(metadataGraph);
+        EXPECT_TRUE(declarations.validForDeviceGeneration(s_TargetDeviceGeneration));
+    }
     Graphics::GpuTaskGraphAnalysis metadataAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments metadataAssignments(testArena.arena);
     Graphics::GpuCompiledGraph metadataCompiledGraph(testArena.arena);
@@ -4407,7 +4905,8 @@ TEST(GpuTaskGraph, CopyTextureTaskRequiresTypedTextureImports){
             .regionCount = 1u,
         }
     ).valid());
-    EXPECT_EQ(graph.taskCount(), 0u);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    EXPECT_EQ(declarations.taskCount(), 0u);
 }
 
 TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
@@ -4477,7 +4976,8 @@ TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
         };
         EXPECT_FALSE(graph.addCopyTextureTask(desc, copyDesc).valid());
         EXPECT_FALSE(acceptedToken.valid());
-        EXPECT_EQ(graph.taskCount(), 0u);
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        EXPECT_EQ(declarations.taskCount(), 0u);
     };
     const auto expectDescriptionsRejected = [&](
         const Graphics::TextureDesc& rejectedSourceDescription,
@@ -4517,7 +5017,8 @@ TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
             }
         ).valid());
         EXPECT_FALSE(rejectedToken.valid());
-        EXPECT_EQ(rejectedGraph.taskCount(), 0u);
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(rejectedGraph);
+        EXPECT_EQ(declarations.taskCount(), 0u);
     };
 
     Graphics::TextureDesc malformedShape = validDescription;
@@ -4713,10 +5214,14 @@ TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
         }
     );
     ASSERT_TRUE(compressedEdgeTask.valid());
-    EXPECT_EQ(
-        compressedEdgeGraph.taskAt(compressedEdgeTask.index).queue.requiredCapabilities,
-        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(compressedEdgeGraph);
+
+        EXPECT_EQ(
+            declarations.taskAt(compressedEdgeTask.index).queue.requiredCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+        );
+    }
 
     region.sourceSlice = {};
     region.destinationSlice = {};
@@ -4751,37 +5256,39 @@ TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
         }
     );
     ASSERT_TRUE(task.valid());
-    EXPECT_EQ(
-        graph.taskAt(task.index).queue.requiredCapabilities,
-        Graphics::GpuQueueCapability::Transfer
-    );
-    ASSERT_EQ(graph.taskAt(task.index).resourceUseCount, 6u);
-    const Graphics::GpuTaskResourceUse* const uses = graph.taskAt(task.index).resourceUses;
-    ASSERT_NE(uses, nullptr);
-    EXPECT_EQ(uses[0u].resource, sourceResource);
-    EXPECT_EQ(uses[0u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
-    EXPECT_EQ(uses[0u].requiredState, Graphics::ResourceStates::CopySource);
-    EXPECT_EQ(uses[0u].access, Graphics::GpuTaskResourceAccess::Read);
-    EXPECT_EQ(uses[1u].resource, destinationResource);
-    EXPECT_EQ(uses[1u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
-    EXPECT_EQ(uses[1u].requiredState, Graphics::ResourceStates::CopyDest);
-    EXPECT_EQ(uses[1u].access, Graphics::GpuTaskResourceAccess::Write);
-    EXPECT_EQ(uses[2u].resource, sourceResource);
-    EXPECT_EQ(uses[2u].range.textureSubresources, Graphics::TextureSubresourceSet(1u, 1u, 1u, 1u));
-    EXPECT_EQ(uses[2u].requiredState, Graphics::ResourceStates::CopySource);
-    EXPECT_EQ(uses[2u].access, Graphics::GpuTaskResourceAccess::Read);
-    EXPECT_EQ(uses[3u].resource, destinationResource);
-    EXPECT_EQ(uses[3u].range.textureSubresources, Graphics::TextureSubresourceSet(1u, 1u, 1u, 1u));
-    EXPECT_EQ(uses[3u].requiredState, Graphics::ResourceStates::CopyDest);
-    EXPECT_EQ(uses[3u].access, Graphics::GpuTaskResourceAccess::Write);
-    EXPECT_EQ(uses[4u].resource, sourceResource);
-    EXPECT_EQ(uses[4u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
-    EXPECT_EQ(uses[4u].requiredState, Graphics::ResourceStates::CopySource);
-    EXPECT_EQ(uses[4u].access, Graphics::GpuTaskResourceAccess::Read);
-    EXPECT_EQ(uses[5u].resource, destinationResource);
-    EXPECT_EQ(uses[5u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
-    EXPECT_EQ(uses[5u].requiredState, Graphics::ResourceStates::CopyDest);
-    EXPECT_EQ(uses[5u].access, Graphics::GpuTaskResourceAccess::Write);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Graphics::GpuTaskGraphTaskView taskView = declarations.taskAt(task.index);
+
+        EXPECT_EQ(taskView.queue.requiredCapabilities, Graphics::GpuQueueCapability::Transfer);
+        ASSERT_EQ(taskView.resourceUseCount, 6u);
+        const Graphics::GpuTaskResourceUse* const uses = taskView.resourceUses;
+        ASSERT_NE(uses, nullptr);
+        EXPECT_EQ(uses[0u].resource, sourceResource);
+        EXPECT_EQ(uses[0u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
+        EXPECT_EQ(uses[0u].requiredState, Graphics::ResourceStates::CopySource);
+        EXPECT_EQ(uses[0u].access, Graphics::GpuTaskResourceAccess::Read);
+        EXPECT_EQ(uses[1u].resource, destinationResource);
+        EXPECT_EQ(uses[1u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
+        EXPECT_EQ(uses[1u].requiredState, Graphics::ResourceStates::CopyDest);
+        EXPECT_EQ(uses[1u].access, Graphics::GpuTaskResourceAccess::Write);
+        EXPECT_EQ(uses[2u].resource, sourceResource);
+        EXPECT_EQ(uses[2u].range.textureSubresources, Graphics::TextureSubresourceSet(1u, 1u, 1u, 1u));
+        EXPECT_EQ(uses[2u].requiredState, Graphics::ResourceStates::CopySource);
+        EXPECT_EQ(uses[2u].access, Graphics::GpuTaskResourceAccess::Read);
+        EXPECT_EQ(uses[3u].resource, destinationResource);
+        EXPECT_EQ(uses[3u].range.textureSubresources, Graphics::TextureSubresourceSet(1u, 1u, 1u, 1u));
+        EXPECT_EQ(uses[3u].requiredState, Graphics::ResourceStates::CopyDest);
+        EXPECT_EQ(uses[3u].access, Graphics::GpuTaskResourceAccess::Write);
+        EXPECT_EQ(uses[4u].resource, sourceResource);
+        EXPECT_EQ(uses[4u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
+        EXPECT_EQ(uses[4u].requiredState, Graphics::ResourceStates::CopySource);
+        EXPECT_EQ(uses[4u].access, Graphics::GpuTaskResourceAccess::Read);
+        EXPECT_EQ(uses[5u].resource, destinationResource);
+        EXPECT_EQ(uses[5u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
+        EXPECT_EQ(uses[5u].requiredState, Graphics::ResourceStates::CopyDest);
+        EXPECT_EQ(uses[5u].access, Graphics::GpuTaskResourceAccess::Write);
+    }
 }
 
 TEST(GpuTaskGraph, ResolveTextureTaskRequiresTypedTextureImports){
@@ -4822,7 +5329,9 @@ TEST(GpuTaskGraph, ResolveTextureTaskRequiresTypedTextureImports){
             .regionCount = 1u,
         }
     ).valid());
-    EXPECT_EQ(graph.taskCount(), 0u);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+    EXPECT_EQ(declarations.taskCount(), 0u);
 }
 
 TEST(GpuTaskGraph, ResolveTextureTaskPreflightsTypedTextureContract){
@@ -4941,7 +5450,9 @@ TEST(GpuTaskGraph, ResolveTextureTaskPreflightsTypedTextureContract){
             }
         ).valid());
         EXPECT_FALSE(rejectedToken.valid());
-        EXPECT_EQ(rejectedGraph.taskCount(), 0u);
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(rejectedGraph);
+
+        EXPECT_EQ(declarations.taskCount(), 0u);
     };
 
     Graphics::TextureDesc rejectedSourceDescription = validSourceDescription;
@@ -5025,7 +5536,11 @@ TEST(GpuTaskGraph, ResolveTextureTaskPreflightsTypedTextureContract){
         {},
         {}
     );
-    EXPECT_EQ(graph.taskCount(), 0u);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        EXPECT_EQ(declarations.taskCount(), 0u);
+    }
 
     const Graphics::GpuResolveTextureTaskRegion validRegions[]{
         Graphics::GpuResolveTextureTaskRegion{
@@ -5050,8 +5565,11 @@ TEST(GpuTaskGraph, ResolveTextureTaskPreflightsTypedTextureContract){
         }
     );
     ASSERT_TRUE(task.valid());
-    ASSERT_EQ(graph.taskAt(task.index).resourceUseCount, 4u);
-    const Graphics::GpuTaskResourceUse* const uses = graph.taskAt(task.index).resourceUses;
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    const Graphics::GpuTaskGraphTaskView taskView = declarations.taskAt(task.index);
+
+    ASSERT_EQ(taskView.resourceUseCount, 4u);
+    const Graphics::GpuTaskResourceUse* const uses = taskView.resourceUses;
     ASSERT_NE(uses, nullptr);
     EXPECT_EQ(uses[0u].resource, sourceResource);
     EXPECT_EQ(uses[0u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
@@ -5143,7 +5661,11 @@ TEST(GpuTaskGraph, UploadBufferTaskPreflightsNativeAlignmentContract){
             .finalState = Graphics::ResourceStates::CopyDest,
         }
     ).valid());
-    EXPECT_EQ(graph.taskCount(), 0u);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        EXPECT_EQ(declarations.taskCount(), 0u);
+    }
 
     const Graphics::GpuTaskId copyDestTask = graph.addUploadBufferTask(
         desc,
@@ -5155,11 +5677,15 @@ TEST(GpuTaskGraph, UploadBufferTaskPreflightsNativeAlignmentContract){
         }
     );
     ASSERT_TRUE(copyDestTask.valid());
-    EXPECT_EQ(graph.taskCount(), 1u);
-    const Graphics::GpuTaskGraphTaskView copyDestView = graph.taskAt(copyDestTask.index);
-    ASSERT_EQ(copyDestView.resourceUseCount, 1u);
-    ASSERT_NE(copyDestView.resourceUses, nullptr);
-    EXPECT_EQ(copyDestView.resourceUses[0u].requiredState, Graphics::ResourceStates::CopyDest);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Graphics::GpuTaskGraphTaskView copyDestView = declarations.taskAt(copyDestTask.index);
+
+        EXPECT_EQ(declarations.taskCount(), 1u);
+        ASSERT_EQ(copyDestView.resourceUseCount, 1u);
+        ASSERT_NE(copyDestView.resourceUses, nullptr);
+        EXPECT_EQ(copyDestView.resourceUses[0u].requiredState, Graphics::ResourceStates::CopyDest);
+    }
 
     Graphics::GpuTaskDesc finalStateDesc = desc;
     finalStateDesc
@@ -5176,7 +5702,9 @@ TEST(GpuTaskGraph, UploadBufferTaskPreflightsNativeAlignmentContract){
         }
     );
     ASSERT_TRUE(finalStateTask.valid());
-    const Graphics::GpuTaskGraphTaskView finalStateView = graph.taskAt(finalStateTask.index);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    const Graphics::GpuTaskGraphTaskView finalStateView = declarations.taskAt(finalStateTask.index);
+
     ASSERT_EQ(finalStateView.resourceUseCount, 2u);
     ASSERT_NE(finalStateView.resourceUses, nullptr);
     EXPECT_EQ(finalStateView.resourceUses[0u].resource, destinationResource);
@@ -5365,7 +5893,11 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){
         .setMarkerLabel("Retained Clear Buffer Bad Destination")
     ;
     EXPECT_FALSE(graph.addClearBufferTask(desc, clearDesc).valid());
-    EXPECT_EQ(graph.taskCount(), 0u);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        EXPECT_EQ(declarations.taskCount(), 0u);
+    }
 
     // A retained descriptor may start in Common while the graph explicitly declares that same state. The compiler
     // then owns the Common -> CopyDest transition instead of requiring primitive callers to create a native bridge.
@@ -5390,7 +5922,12 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){
     // Keep-initial-state restoration happens before a graph packet publishes its terminal handoff. Reject the
     // incompatible typed import itself without mutating graph storage or its declaration revision.
     Graphics::GpuTaskGraph externalFinalGraph(testArena.arena);
-    const u64 externalFinalRevision = externalFinalGraph.declarationRevision();
+    u64 externalFinalRevision = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(externalFinalGraph);
+
+        externalFinalRevision = declarations.declarationRevision();
+    }
     const Graphics::GpuGraphResourceId externalFinalDestination = externalFinalGraph.importBuffer(
         mismatchedDestination,
         Graphics::GpuGraphResourceDesc{}
@@ -5401,8 +5938,12 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){
             .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
     );
     EXPECT_FALSE(externalFinalDestination.valid());
-    EXPECT_EQ(externalFinalGraph.resourceCount(), 0u);
-    EXPECT_EQ(externalFinalGraph.declarationRevision(), externalFinalRevision);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(externalFinalGraph);
+
+        EXPECT_EQ(declarations.resourceCount(), 0u);
+        EXPECT_EQ(declarations.declarationRevision(), externalFinalRevision);
+    }
 
     // An automatic retained resource needs one concrete descriptor state. Unknown cannot be restored by the
     // native tracker or published as a graph initial state, so do not admit a primitive solely because both
@@ -5465,7 +6006,9 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){
     ;
     clearDesc.destination = destinationResource;
     EXPECT_TRUE(graph.addClearBufferTask(desc, clearDesc).valid());
-    EXPECT_EQ(graph.taskCount(), 2u);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+    EXPECT_EQ(declarations.taskCount(), 2u);
 }
 
 TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForTexturePrimitives){
@@ -5856,7 +6399,11 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForTexturePrimitives){
         .setMarkerLabel("Retained Rect Clear Texture Bad Destination")
     ;
     EXPECT_FALSE(graph.addClearTextureRectUIntTask(desc, badClearRectDesc).valid());
-    EXPECT_EQ(graph.taskCount(), 0u);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        EXPECT_EQ(declarations.taskCount(), 0u);
+    }
 
     const Graphics::GpuCopyTextureTaskRegion copyValidRegions[]{
         Graphics::GpuCopyTextureTaskRegion{
@@ -5918,7 +6465,9 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForTexturePrimitives){
         .setMarkerLabel("Retained Rect Clear Texture Valid")
     ;
     EXPECT_TRUE(graph.addClearTextureRectUIntTask(desc, clearRectDesc).valid());
-    EXPECT_EQ(graph.taskCount(), 4u);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+    EXPECT_EQ(declarations.taskCount(), 4u);
 }
 
 TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPublishDescriptorState){
@@ -5955,7 +6504,11 @@ TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPubli
             .setType(Graphics::GpuGraphResourceType::Texture)
     );
     ASSERT_TRUE(freshImport.valid());
-    EXPECT_EQ(freshImportGraph.resourceAt(freshImport.index).initialState, Graphics::ResourceStates::ShaderResource);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(freshImportGraph);
+
+        EXPECT_EQ(declarations.resourceAt(freshImport.index).initialState, Graphics::ResourceStates::ShaderResource);
+    }
 
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId destination = graph.importTexture(
@@ -5990,15 +6543,19 @@ TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPubli
     };
     const Graphics::GpuTaskId uploadTask = graph.addUploadTextureTask(uploadTaskDesc, validUploadDesc);
     ASSERT_TRUE(uploadTask.valid());
-    const Graphics::GpuTaskGraphTaskView uploadTaskView = graph.taskAt(uploadTask.index);
-    ASSERT_EQ(uploadTaskView.resourceUseCount, 2u);
-    ASSERT_NE(uploadTaskView.resourceUses, nullptr);
-    EXPECT_EQ(uploadTaskView.resourceUses[0u].resource, destination);
-    EXPECT_EQ(uploadTaskView.resourceUses[0u].requiredState, Graphics::ResourceStates::CopyDest);
-    EXPECT_EQ(uploadTaskView.resourceUses[0u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
-    EXPECT_EQ(uploadTaskView.resourceUses[1u].resource, destination);
-    EXPECT_EQ(uploadTaskView.resourceUses[1u].requiredState, Graphics::ResourceStates::ShaderResource);
-    EXPECT_EQ(uploadTaskView.resourceUses[1u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Graphics::GpuTaskGraphTaskView uploadTaskView = declarations.taskAt(uploadTask.index);
+
+        ASSERT_EQ(uploadTaskView.resourceUseCount, 2u);
+        ASSERT_NE(uploadTaskView.resourceUses, nullptr);
+        EXPECT_EQ(uploadTaskView.resourceUses[0u].resource, destination);
+        EXPECT_EQ(uploadTaskView.resourceUses[0u].requiredState, Graphics::ResourceStates::CopyDest);
+        EXPECT_EQ(uploadTaskView.resourceUses[0u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
+        EXPECT_EQ(uploadTaskView.resourceUses[1u].resource, destination);
+        EXPECT_EQ(uploadTaskView.resourceUses[1u].requiredState, Graphics::ResourceStates::ShaderResource);
+        EXPECT_EQ(uploadTaskView.resourceUses[1u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
+    }
     EXPECT_FALSE(graph.addUploadTextureTask(
         uploadTaskDesc,
         Graphics::GpuUploadTextureTaskDesc{
@@ -6020,7 +6577,9 @@ TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPubli
         .setMarkerLabel("Fresh Retained Clear")
     ;
     EXPECT_TRUE(graph.addClearTextureTask(clearTaskDesc, clearDesc).valid());
-    EXPECT_EQ(graph.taskCount(), 2u);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+    EXPECT_EQ(declarations.taskCount(), 2u);
 }
 
 
@@ -6205,8 +6764,12 @@ TEST(GpuTaskGraph, AllowsExplicitUnknownRetainedTextureFirstWriteDestinations){
     ASSERT_TRUE(rectClearDestinationResource.valid());
     ASSERT_TRUE(bufferSourceResource.valid());
     ASSERT_TRUE(bufferDestinationResource.valid());
-    EXPECT_EQ(graph.resourceAt(copyDestinationResource.index).initialState, Graphics::ResourceStates::Unknown);
-    EXPECT_EQ(graph.resourceAt(clearDestinationResource.index).initialState, Graphics::ResourceStates::Unknown);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        EXPECT_EQ(declarations.resourceAt(copyDestinationResource.index).initialState, Graphics::ResourceStates::Unknown);
+        EXPECT_EQ(declarations.resourceAt(clearDestinationResource.index).initialState, Graphics::ResourceStates::Unknown);
+    }
 
     Graphics::GpuTaskDesc copyTaskDesc;
     copyTaskDesc
@@ -6303,7 +6866,11 @@ TEST(GpuTaskGraph, AllowsExplicitUnknownRetainedTextureFirstWriteDestinations){
             .destination = bufferDestinationResource,
         }
     ).valid());
-    EXPECT_EQ(graph.taskCount(), 0u);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        EXPECT_EQ(declarations.taskCount(), 0u);
+    }
 
     const Graphics::GpuCopyTextureTaskRegion copyRegion{
         .source = copySourceResource,
@@ -6344,10 +6911,12 @@ TEST(GpuTaskGraph, AllowsExplicitUnknownRetainedTextureFirstWriteDestinations){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const auto findPrologueBarrier = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         if(!compiledTask || !barriers)
             return static_cast<const Graphics::GpuCompiledBarrier*>(nullptr);
         for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
@@ -6474,10 +7043,14 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
     colorClear.valueType = Graphics::GpuClearTextureTaskValueType::UInt;
     const Graphics::GpuTaskId colorTask = colorGraph.addClearTextureTask(transferDesc, colorClear);
     ASSERT_TRUE(colorTask.valid());
-    EXPECT_EQ(
-        colorGraph.taskAt(colorTask.index).queue.requiredCapabilities,
-        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(colorGraph);
+
+        EXPECT_EQ(
+            declarations.taskAt(colorTask.index).queue.requiredCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+        );
+    }
 
     Graphics::GpuClearTextureRectUIntTaskDesc colorRectClear;
     colorRectClear.destination = colorResource;
@@ -6493,10 +7066,14 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         colorRectClear
     );
     ASSERT_TRUE(colorRectTask.valid());
-    EXPECT_EQ(
-        colorGraph.taskAt(colorRectTask.index).queue.requiredCapabilities,
-        Graphics::GpuQueueCapability::Transfer
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(colorGraph);
+
+        EXPECT_EQ(
+            declarations.taskAt(colorRectTask.index).queue.requiredCapabilities,
+            Graphics::GpuQueueCapability::Transfer
+        );
+    }
 
     Graphics::GpuTaskGraph rectGraph(testArena.arena);
     const Graphics::GpuGraphResourceId rectResource = rectGraph.importTexture(
@@ -6515,10 +7092,14 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         isolatedRectClear
     );
     ASSERT_TRUE(isolatedRectTask.valid());
-    EXPECT_EQ(
-        rectGraph.taskAt(isolatedRectTask.index).queue.requiredCapabilities,
-        Graphics::GpuQueueCapability::Transfer
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(rectGraph);
+
+        EXPECT_EQ(
+            declarations.taskAt(isolatedRectTask.index).queue.requiredCapabilities,
+            Graphics::GpuQueueCapability::Transfer
+        );
+    }
 
     Graphics::GpuTaskGraph compressedGraph(testArena.arena);
     const Graphics::GpuGraphResourceId compressedResource = compressedGraph.importTexture(
@@ -6539,10 +7120,14 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         compressedClear
     );
     ASSERT_TRUE(compressedTask.valid());
-    EXPECT_EQ(
-        compressedGraph.taskAt(compressedTask.index).queue.requiredCapabilities,
-        Graphics::GpuQueueCapability::Transfer
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(compressedGraph);
+
+        EXPECT_EQ(
+            declarations.taskAt(compressedTask.index).queue.requiredCapabilities,
+            Graphics::GpuQueueCapability::Transfer
+        );
+    }
 
     Graphics::GpuTaskGraph depthGraph(testArena.arena);
     const Graphics::GpuGraphResourceId depthResource = depthGraph.importTexture(
@@ -6561,10 +7146,14 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
     depthClear.clearDepth = true;
     const Graphics::GpuTaskId depthTask = depthGraph.addClearTextureTask(transferDesc, depthClear);
     ASSERT_TRUE(depthTask.valid());
-    EXPECT_EQ(
-        depthGraph.taskAt(depthTask.index).queue.requiredCapabilities,
-        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(depthGraph);
+
+        EXPECT_EQ(
+            declarations.taskAt(depthTask.index).queue.requiredCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+        );
+    }
 
     Graphics::GpuTaskGraph multisampleColorGraph(testArena.arena);
     const Graphics::GpuGraphResourceId multisampleColorResource = multisampleColorGraph.importTexture(
@@ -6583,10 +7172,14 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         multisampleColorClear
     );
     ASSERT_TRUE(multisampleColorTask.valid());
-    EXPECT_EQ(
-        multisampleColorGraph.taskAt(multisampleColorTask.index).queue.requiredCapabilities,
-        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(multisampleColorGraph);
+
+        EXPECT_EQ(
+            declarations.taskAt(multisampleColorTask.index).queue.requiredCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+        );
+    }
 
     Graphics::GpuTaskGraph multisampleDepthGraph(testArena.arena);
     const Graphics::GpuGraphResourceId multisampleDepthResource = multisampleDepthGraph.importTexture(
@@ -6605,10 +7198,14 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         multisampleDepthClear
     );
     ASSERT_TRUE(multisampleDepthTask.valid());
-    EXPECT_EQ(
-        multisampleDepthGraph.taskAt(multisampleDepthTask.index).queue.requiredCapabilities,
-        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(multisampleDepthGraph);
+
+        EXPECT_EQ(
+            declarations.taskAt(multisampleDepthTask.index).queue.requiredCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+        );
+    }
 
     Graphics::GpuTaskGraph multisampleCompressedGraph(testArena.arena);
     const Graphics::GpuGraphResourceId multisampleCompressedResource = multisampleCompressedGraph.importTexture(
@@ -6635,7 +7232,11 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         multisampleCompressedClear
     ).valid());
     EXPECT_FALSE(compressedRejectedToken.valid());
-    EXPECT_EQ(multisampleCompressedGraph.taskCount(), 0u);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(multisampleCompressedGraph);
+
+        EXPECT_EQ(declarations.taskCount(), 0u);
+    }
 
     Graphics::GpuTaskGraph multisampleRectGraph(testArena.arena);
     const Graphics::GpuGraphResourceId multisampleRectResource = multisampleRectGraph.importTexture(
@@ -6662,7 +7263,11 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         multisampleRectClear
     ).valid());
     EXPECT_FALSE(rectRejectedToken.valid());
-    EXPECT_EQ(multisampleRectGraph.taskCount(), 0u);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(multisampleRectGraph);
+
+        EXPECT_EQ(declarations.taskCount(), 0u);
+    }
 
     const auto expectCompileRejected = [&](const Graphics::GpuTaskGraph& graph, const Graphics::GpuPhysicalQueueInfo& queue){
         const Graphics::GpuPhysicalQueueInfo queues[] = { queue };
@@ -6789,33 +7394,36 @@ TEST(GpuCommandIrReplay, AcceptsOnlyFullUncompressedMultisampleTextureClears){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
-    ASSERT_TRUE(packet.valid());
-    const Graphics::GpuPhysicalQueueId queueId = compiledGraph.packet(packet).queue;
+    {
+        const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+        const Graphics::GpuSubmissionPacketId packet = reads.compiled.packetForTask(task);
+        ASSERT_TRUE(packet.valid());
+        const Graphics::GpuPhysicalQueueId queueId = reads.compiled.packet(packet).plan->queue;
 
-    Graphics::GpuCommandIrCapture fullCapture(testArena.arena);
-    ASSERT_TRUE(fullCapture.captureClearTexture(task, packet, queueId, resource, clearDesc));
-    const Graphics::GpuCommandIrReplayResult fullResult = Graphics::PreflightGpuCommandIrPacket(
-        fullCapture.commandBytes(),
-        graph,
-        compiledGraph,
-        packet
-    );
-    EXPECT_EQ(fullResult.error, Graphics::GpuCommandIrReplayError::None);
+        Graphics::GpuCommandIrCapture fullCapture(testArena.arena);
+        ASSERT_TRUE(fullCapture.captureClearTexture(task, packet, queueId, resource, clearDesc));
+        const Graphics::GpuCommandIrReplayResult fullResult = Graphics::PreflightGpuCommandIrPacket(
+            fullCapture.commandBytes(),
+            reads.declarations,
+            reads.compiled,
+            packet
+        );
+        EXPECT_EQ(fullResult.error, Graphics::GpuCommandIrReplayError::None);
 
-    Graphics::GpuClearTextureRectUIntTaskDesc rectDesc;
-    rectDesc.destination = resource;
-    rectDesc.subresources = clearDesc.subresources;
-    rectDesc.rect = Graphics::Rect(4, 4);
-    Graphics::GpuCommandIrCapture rectCapture(testArena.arena);
-    ASSERT_TRUE(rectCapture.captureClearTextureRectUInt(task, packet, queueId, resource, rectDesc));
-    const Graphics::GpuCommandIrReplayResult rectResult = Graphics::PreflightGpuCommandIrPacket(
-        rectCapture.commandBytes(),
-        graph,
-        compiledGraph,
-        packet
-    );
-    EXPECT_EQ(rectResult.error, Graphics::GpuCommandIrReplayError::InvalidTextureClear);
+        Graphics::GpuClearTextureRectUIntTaskDesc rectDesc;
+        rectDesc.destination = resource;
+        rectDesc.subresources = clearDesc.subresources;
+        rectDesc.rect = Graphics::Rect(4, 4);
+        Graphics::GpuCommandIrCapture rectCapture(testArena.arena);
+        ASSERT_TRUE(rectCapture.captureClearTextureRectUInt(task, packet, queueId, resource, rectDesc));
+        const Graphics::GpuCommandIrReplayResult rectResult = Graphics::PreflightGpuCommandIrPacket(
+            rectCapture.commandBytes(),
+            reads.declarations,
+            reads.compiled,
+            packet
+        );
+        EXPECT_EQ(rectResult.error, Graphics::GpuCommandIrReplayError::InvalidTextureClear);
+    }
 
     const Graphics::TextureDesc compressedDescription = Graphics::TextureDesc()
         .setWidth(4u)
@@ -6875,10 +7483,10 @@ TEST(GpuCommandIrReplay, AcceptsOnlyFullUncompressedMultisampleTextureClears){
         compressedAssignments,
         compressedCompiledGraph
     ));
-    const Graphics::GpuSubmissionPacketId compressedPacket = compressedCompiledGraph.packetForTask(compressedTask);
+    const Tests::GpuTaskGraphReadViews reads(compressedGraph, compressedCompiledGraph);
+    const Graphics::GpuSubmissionPacketId compressedPacket = reads.compiled.packetForTask(compressedTask);
     ASSERT_TRUE(compressedPacket.valid());
-    const Graphics::GpuPhysicalQueueId compressedQueueId =
-        compressedCompiledGraph.packet(compressedPacket).queue;
+    const Graphics::GpuPhysicalQueueId compressedQueueId = reads.compiled.packet(compressedPacket).plan->queue;
     Graphics::GpuCommandIrCapture compressedCapture(testArena.arena);
     ASSERT_TRUE(compressedCapture.captureClearTexture(
         compressedTask,
@@ -6889,8 +7497,8 @@ TEST(GpuCommandIrReplay, AcceptsOnlyFullUncompressedMultisampleTextureClears){
     ));
     const Graphics::GpuCommandIrReplayResult compressedResult = Graphics::PreflightGpuCommandIrPacket(
         compressedCapture.commandBytes(),
-        compressedGraph,
-        compressedCompiledGraph,
+        reads.declarations,
+        reads.compiled,
         compressedPacket
     );
     EXPECT_EQ(compressedResult.error, Graphics::GpuCommandIrReplayError::InvalidTextureClear);
@@ -6967,10 +7575,14 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
         }
     );
     ASSERT_TRUE(uploadTask.valid());
-    EXPECT_EQ(
-        uploadGraph.taskAt(uploadTask.index).queue.requiredCapabilities,
-        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(uploadGraph);
+
+        EXPECT_EQ(
+            declarations.taskAt(uploadTask.index).queue.requiredCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+        );
+    }
 
     Graphics::TextureDesc multisampleDescription = Graphics::TextureDesc()
         .setWidth(4u)
@@ -7023,10 +7635,14 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
         }
     );
     ASSERT_TRUE(copyTask.valid());
-    EXPECT_EQ(
-        copyGraph.taskAt(copyTask.index).queue.requiredCapabilities,
-        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(copyGraph);
+
+        EXPECT_EQ(
+            declarations.taskAt(copyTask.index).queue.requiredCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+        );
+    }
 
     const auto expectCompiledOn = [&](
         const Graphics::GpuTaskGraph& graph,
@@ -7105,10 +7721,14 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
         }
     );
     ASSERT_TRUE(partialTask.valid());
-    EXPECT_EQ(
-        partialGraph.taskAt(partialTask.index).queue.requiredCapabilities,
-        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(partialGraph);
+
+        EXPECT_EQ(
+            declarations.taskAt(partialTask.index).queue.requiredCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+        );
+    }
     expectCompiledOn(partialGraph, partialTask, DedicatedTransferQueue(), Graphics::CommandQueue::Transfer, false);
     expectCompiledOn(partialGraph, partialTask, DedicatedComputeQueue(), Graphics::CommandQueue::Compute, true);
     expectCompiledOn(partialGraph, partialTask, GraphicsQueue(), Graphics::CommandQueue::Graphics, true);
@@ -7148,10 +7768,14 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
         }
     );
     ASSERT_TRUE(partialGraphicsTask.valid());
-    EXPECT_EQ(
-        partialGraphicsGraph.taskAt(partialGraphicsTask.index).queue.requiredCapabilities,
-        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(partialGraphicsGraph);
+
+        EXPECT_EQ(
+            declarations.taskAt(partialGraphicsTask.index).queue.requiredCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+        );
+    }
     expectCompiledOn(
         partialGraphicsGraph,
         partialGraphicsTask,
@@ -7252,7 +7876,11 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
         }
     );
     ASSERT_TRUE(task.valid());
-    ASSERT_EQ(graph.taskAt(task.index).queue.requiredCapabilities, Graphics::GpuQueueCapability::Transfer);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        ASSERT_EQ(declarations.taskAt(task.index).queue.requiredCapabilities, Graphics::GpuQueueCapability::Transfer);
+    }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
     const Graphics::GpuTaskGraphQueueTopology topology{
@@ -7263,9 +7891,15 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
-    ASSERT_TRUE(packet.valid());
-    const Graphics::GpuPhysicalQueueId queueId = compiledGraph.packet(packet).queue;
+    Graphics::GpuSubmissionPacketId packet;
+    Graphics::GpuPhysicalQueueId queueId;
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+        packet = compiledPlan.packetForTask(task);
+        ASSERT_TRUE(packet.valid());
+        queueId = compiledPlan.packet(packet).plan->queue;
+    }
 
     const auto expectPreflight = [&](
         const Graphics::TextureSlice& sourceSlice,
@@ -7282,10 +7916,12 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
             destination,
             destinationSlice
         ));
+        const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+
         const Graphics::GpuCommandIrReplayResult result = Graphics::PreflightGpuCommandIrPacket(
             capture.commandBytes(),
-            graph,
-            compiledGraph,
+            reads.declarations,
+            reads.compiled,
             packet
         );
         EXPECT_EQ(result.error, expectedError);
@@ -7342,9 +7978,10 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
             rejectedAssignments,
             rejectedCompiledGraph
         ));
-        const Graphics::GpuSubmissionPacketId rejectedPacket = rejectedCompiledGraph.packetForTask(rejectedTask);
+        const Tests::GpuTaskGraphReadViews reads(rejectedGraph, rejectedCompiledGraph);
+        const Graphics::GpuSubmissionPacketId rejectedPacket = reads.compiled.packetForTask(rejectedTask);
         ASSERT_TRUE(rejectedPacket.valid());
-        const Graphics::GpuPhysicalQueueId rejectedQueueId = rejectedCompiledGraph.packet(rejectedPacket).queue;
+        const Graphics::GpuPhysicalQueueId rejectedQueueId = reads.compiled.packet(rejectedPacket).plan->queue;
         Graphics::GpuCommandIrCapture rejectedCapture(testArena.arena);
         ASSERT_TRUE(rejectedCapture.captureCopyTexture(
             rejectedTask,
@@ -7357,8 +7994,8 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
         ));
         const Graphics::GpuCommandIrReplayResult rejectedResult = Graphics::PreflightGpuCommandIrPacket(
             rejectedCapture.commandBytes(),
-            rejectedGraph,
-            rejectedCompiledGraph,
+            reads.declarations,
+            reads.compiled,
             rejectedPacket
         );
         EXPECT_EQ(rejectedResult.error, Graphics::GpuCommandIrReplayError::InvalidTextureCopy);
@@ -7417,17 +8054,22 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
         }
     );
     ASSERT_TRUE(partialTask.valid());
-    EXPECT_EQ(
-        partialGraph.taskAt(partialTask.index).queue.requiredCapabilities,
-        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
-    );
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(partialGraph);
+
+        EXPECT_EQ(
+            declarations.taskAt(partialTask.index).queue.requiredCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+        );
+    }
     Graphics::GpuTaskGraphAnalysis partialAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments partialAssignments(testArena.arena);
     Graphics::GpuCompiledGraph partialCompiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(partialGraph, partialAnalysis, topology, partialAssignments, partialCompiledGraph));
-    const Graphics::GpuSubmissionPacketId partialPacket = partialCompiledGraph.packetForTask(partialTask);
+    const Tests::GpuTaskGraphReadViews reads(partialGraph, partialCompiledGraph);
+    const Graphics::GpuSubmissionPacketId partialPacket = reads.compiled.packetForTask(partialTask);
     ASSERT_TRUE(partialPacket.valid());
-    const Graphics::GpuPhysicalQueueId partialQueueId = partialCompiledGraph.packet(partialPacket).queue;
+    const Graphics::GpuPhysicalQueueId partialQueueId = reads.compiled.packet(partialPacket).plan->queue;
     Graphics::GpuCommandIrCapture partialCapture(testArena.arena);
     ASSERT_TRUE(partialCapture.captureCopyTexture(
         partialTask,
@@ -7441,13 +8083,13 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
     EXPECT_EQ(
         Graphics::PreflightGpuCommandIrPacket(
             partialCapture.commandBytes(),
-            partialGraph,
-            partialCompiledGraph,
+            reads.declarations,
+            reads.compiled,
             partialPacket
         ).error,
         Graphics::GpuCommandIrReplayError::None
     );
-    const Graphics::GpuPhysicalQueueInfo* const partialQueue = partialCompiledGraph.queueInfo(partialQueueId);
+    const Graphics::GpuPhysicalQueueInfo* const partialQueue = reads.compiled.queueInfo(partialQueueId);
     ASSERT_NE(partialQueue, nullptr);
     Graphics::GpuPhysicalQueueInfo* const corruptedQueue = const_cast<Graphics::GpuPhysicalQueueInfo*>(
         partialQueue
@@ -7460,8 +8102,8 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
     EXPECT_EQ(
         Graphics::PreflightGpuCommandIrPacket(
             partialCapture.commandBytes(),
-            partialGraph,
-            partialCompiledGraph,
+            reads.declarations,
+            reads.compiled,
             partialPacket
         ).error,
         Graphics::GpuCommandIrReplayError::InvalidTextureCopy
@@ -7508,7 +8150,9 @@ TEST(GpuTaskGraph, CopyBufferTaskRequiresTypedBufferImports){
             .regionCount = 1u,
         }
     ).valid());
-    EXPECT_EQ(graph.taskCount(), 0u);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+    EXPECT_EQ(declarations.taskCount(), 0u);
 }
 
 TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphAndPlanGeneration){
@@ -8422,13 +9066,16 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
-    const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(secondTask);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(task);
+    const Graphics::GpuSubmissionPacketId secondPacket = compiledPlan.packetForTask(secondTask);
     ASSERT_TRUE(packet.valid());
     ASSERT_TRUE(secondPacket.valid());
     ASSERT_NE(secondPacket, packet);
-    const Graphics::GpuPhysicalQueueId queue = compiledGraph.packet(packet).queue;
-    ASSERT_EQ(compiledGraph.packet(secondPacket).queue, queue);
+    const Graphics::GpuPhysicalQueueId queue = compiledPlan.packet(packet).plan->queue;
+    ASSERT_EQ(compiledPlan.packet(secondPacket).plan->queue, queue);
 
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     ASSERT_TRUE(capture.captureCopyBuffer(task, packet, queue, source, 0u, destination, 0u, 4u));
@@ -8436,8 +9083,8 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
     ASSERT_EQ(capture.recordCount(), 2u);
     const Graphics::GpuCommandIrReplayResult validContext = Graphics::PreflightGpuCommandIrPacket(
         capture.commandBytes(),
-        graph,
-        compiledGraph,
+        declarations,
+        compiledPlan,
         packet
     );
     // Metadata-only imports cannot be lowered, but preflight has already established the stream, graph,
@@ -8450,8 +9097,8 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
     // than rejecting the full frame artifact before its requested packet is reached.
     const Graphics::GpuCommandIrReplayResult secondPacketContext = Graphics::PreflightGpuCommandIrPacket(
         capture.commandBytes(),
-        graph,
-        compiledGraph,
+        declarations,
+        compiledPlan,
         secondPacket
     );
     EXPECT_EQ(secondPacketContext.error, Graphics::GpuCommandIrReplayError::MissingBackendResource);
@@ -8460,8 +9107,8 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
 
     const Graphics::GpuCommandIrReplayResult invalidPacket = Graphics::PreflightGpuCommandIrPacket(
         capture.commandBytes(),
-        graph,
-        compiledGraph,
+        declarations,
+        compiledPlan,
         Graphics::GpuSubmissionPacketId{ Limit<u32>::s_Max - 1u, packet.generation }
     );
     EXPECT_EQ(invalidPacket.error, Graphics::GpuCommandIrReplayError::InvalidPacket);
@@ -8480,8 +9127,8 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
     ));
     const Graphics::GpuCommandIrReplayResult wrongQueue = Graphics::PreflightGpuCommandIrPacket(
         wrongQueueCapture.commandBytes(),
-        graph,
-        compiledGraph,
+        declarations,
+        compiledPlan,
         packet
     );
     EXPECT_EQ(wrongQueue.error, Graphics::GpuCommandIrReplayError::RecordQueueMismatch);
@@ -8490,8 +9137,8 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
 
     const Graphics::GpuCommandIrReplayResult malformed = Graphics::PreflightGpuCommandIrPacket(
         BinaryByteView{},
-        graph,
-        compiledGraph,
+        declarations,
+        compiledPlan,
         packet
     );
     EXPECT_EQ(malformed.error, Graphics::GpuCommandIrReplayError::InvalidStream);
@@ -8618,14 +9265,22 @@ TEST(GpuTaskGraph, ExpandsImmutableResourceSetsIntoConcreteHazards){
     ;
     const Graphics::GpuGraphResourceSetId resourceSet = graph.importResourceSet(resourceSetDesc);
     ASSERT_TRUE(resourceSet.valid());
-    EXPECT_EQ(graph.resourceSetCount(), 1u);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        EXPECT_EQ(declarations.resourceSetCount(), 1u);
+    }
     EXPECT_EQ(graph.importResourceSet(resourceSetDesc), resourceSet);
 
-    const Graphics::GpuTaskGraphResourceSetView resourceSetView = graph.resourceSetAt(resourceSet.index);
-    ASSERT_EQ(resourceSetView.id, resourceSet);
-    ASSERT_EQ(resourceSetView.memberCount, LengthOf(members));
-    for(usize memberIndex = 0u; memberIndex < LengthOf(members); ++memberIndex)
-        EXPECT_EQ(resourceSetView.members[memberIndex], members[memberIndex]);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Graphics::GpuTaskGraphResourceSetView resourceSetView = declarations.resourceSetAt(resourceSet.index);
+
+        ASSERT_EQ(resourceSetView.id, resourceSet);
+        ASSERT_EQ(resourceSetView.memberCount, LengthOf(members));
+        for(usize memberIndex = 0u; memberIndex < LengthOf(members); ++memberIndex)
+            EXPECT_EQ(resourceSetView.members[memberIndex], members[memberIndex]);
+    }
 
     const Graphics::GpuGraphResourceId duplicateMembers[] = { textureA, textureA };
     EXPECT_FALSE(graph.importResourceSet(
@@ -8672,12 +9327,16 @@ TEST(GpuTaskGraph, ExpandsImmutableResourceSetsIntoConcreteHazards){
     ASSERT_TRUE(writer.valid());
     ASSERT_TRUE(reader.valid());
 
-    const Graphics::GpuTaskGraphTaskView writerView = graph.taskAt(writer.index);
-    ASSERT_EQ(writerView.resourceUseCount, LengthOf(members));
-    for(usize memberIndex = 0u; memberIndex < LengthOf(members); ++memberIndex){
-        EXPECT_EQ(writerView.resourceUses[memberIndex].resource, members[memberIndex]);
-        EXPECT_EQ(writerView.resourceUses[memberIndex].requiredState, Graphics::ResourceStates::UnorderedAccess);
-        EXPECT_EQ(writerView.resourceUses[memberIndex].access, Graphics::GpuTaskResourceAccess::Write);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Graphics::GpuTaskGraphTaskView writerView = declarations.taskAt(writer.index);
+
+        ASSERT_EQ(writerView.resourceUseCount, LengthOf(members));
+        for(usize memberIndex = 0u; memberIndex < LengthOf(members); ++memberIndex){
+            EXPECT_EQ(writerView.resourceUses[memberIndex].resource, members[memberIndex]);
+            EXPECT_EQ(writerView.resourceUses[memberIndex].requiredState, Graphics::ResourceStates::UnorderedAccess);
+            EXPECT_EQ(writerView.resourceUses[memberIndex].access, Graphics::GpuTaskResourceAccess::Write);
+        }
     }
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
@@ -8698,7 +9357,11 @@ TEST(GpuTaskGraph, ExpandsImmutableResourceSetsIntoConcreteHazards){
     }
 
     graph.reset();
-    EXPECT_FALSE(graph.validResourceSet(resourceSet));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        EXPECT_FALSE(declarations.validResourceSet(resourceSet));
+    }
     const Graphics::GpuTaskResourceSetUse staleSetUse{
         .resourceSet = resourceSet,
         .range = {},
@@ -9135,18 +9798,21 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     Graphics::GpuTaskGraphQueueAssignments separateAssignments(testArena.arena);
     Graphics::GpuCompiledGraph separateGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, separateAnalysis, topology, separateAssignments, separateGraph));
-    ASSERT_EQ(separateGraph.packetCount(), 3u);
-    const Graphics::GpuSubmissionPacketId separateFirstPacket = separateGraph.packetForTask(first);
-    const Graphics::GpuSubmissionPacketId separateSecondPacket = separateGraph.packetForTask(second);
-    const Graphics::GpuSubmissionPacketId separateThirdPacket = separateGraph.packetForTask(third);
-    ASSERT_TRUE(separateFirstPacket.valid());
-    ASSERT_TRUE(separateSecondPacket.valid());
-    ASSERT_TRUE(separateThirdPacket.valid());
-    EXPECT_EQ(separateGraph.packet(separateFirstPacket).dependencyCount, 0u);
-    ASSERT_EQ(separateGraph.packet(separateSecondPacket).dependencyCount, 1u);
-    EXPECT_EQ(separateGraph.packetDependencies(separateSecondPacket)[0u].producer, separateFirstPacket);
-    ASSERT_EQ(separateGraph.packet(separateThirdPacket).dependencyCount, 1u);
-    EXPECT_EQ(separateGraph.packetDependencies(separateThirdPacket)[0u].producer, separateSecondPacket);
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(separateGraph);
+        ASSERT_EQ(compiledPlan.packetCount(), 3u);
+        const Graphics::GpuSubmissionPacketId separateFirstPacket = compiledPlan.packetForTask(first);
+        const Graphics::GpuSubmissionPacketId separateSecondPacket = compiledPlan.packetForTask(second);
+        const Graphics::GpuSubmissionPacketId separateThirdPacket = compiledPlan.packetForTask(third);
+        ASSERT_TRUE(separateFirstPacket.valid());
+        ASSERT_TRUE(separateSecondPacket.valid());
+        ASSERT_TRUE(separateThirdPacket.valid());
+        EXPECT_EQ(compiledPlan.packet(separateFirstPacket).plan->dependencyCount, 0u);
+        ASSERT_EQ(compiledPlan.packet(separateSecondPacket).plan->dependencyCount, 1u);
+        EXPECT_EQ(compiledPlan.packet(separateSecondPacket).dependencies[0u].producer, separateFirstPacket);
+        ASSERT_EQ(compiledPlan.packet(separateThirdPacket).plan->dependencyCount, 1u);
+        EXPECT_EQ(compiledPlan.packet(separateThirdPacket).dependencies[0u].producer, separateSecondPacket);
+    }
 
     Graphics::GpuTaskGraphCompileOptions scoredOptions;
     scoredOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierScored;
@@ -9154,20 +9820,21 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     Graphics::GpuTaskGraphQueueAssignments scoredAssignments(testArena.arena);
     Graphics::GpuCompiledGraph scoredGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, scoredAnalysis, topology, scoredAssignments, scoredGraph, scoredOptions));
-    ASSERT_EQ(scoredGraph.packetCount(), 2u);
-    const Graphics::GpuSubmissionPacketId scoredFirstPacket = scoredGraph.packetForTask(first);
-    const Graphics::GpuSubmissionPacketId scoredSecondPacket = scoredGraph.packetForTask(second);
-    const Graphics::GpuSubmissionPacketId scoredThirdPacket = scoredGraph.packetForTask(third);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(scoredGraph);
+    ASSERT_EQ(compiledPlan.packetCount(), 2u);
+    const Graphics::GpuSubmissionPacketId scoredFirstPacket = compiledPlan.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId scoredSecondPacket = compiledPlan.packetForTask(second);
+    const Graphics::GpuSubmissionPacketId scoredThirdPacket = compiledPlan.packetForTask(third);
     ASSERT_TRUE(scoredFirstPacket.valid());
     ASSERT_TRUE(scoredThirdPacket.valid());
     EXPECT_EQ(scoredFirstPacket, scoredSecondPacket);
     EXPECT_NE(scoredFirstPacket, scoredThirdPacket);
     EXPECT_EQ(
-        scoredGraph.packetizationDecisionForTask(second),
+        compiledPlan.packetizationDecisionForTask(second),
         Graphics::GpuTaskPacketizationDecision::MergedFrontierScored
     );
-    ASSERT_EQ(scoredGraph.packet(scoredThirdPacket).dependencyCount, 1u);
-    EXPECT_EQ(scoredGraph.packetDependencies(scoredThirdPacket)[0u].producer, scoredFirstPacket);
+    ASSERT_EQ(compiledPlan.packet(scoredThirdPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(scoredThirdPacket).dependencies[0u].producer, scoredFirstPacket);
 }
 
 TEST(GpuTaskGraph, ReducesDenseLayeredDagAndPreservesStableTopologicalOrder){
@@ -9197,7 +9864,11 @@ TEST(GpuTaskGraph, ReducesDenseLayeredDagAndPreservesStableTopologicalOrder){
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
-    EXPECT_TRUE(analysis.validFor(graph));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        EXPECT_TRUE(analysis.validFor(declarations));
+    }
     ASSERT_EQ(analysis.edges().size(), s_RawEdgeCount);
     EXPECT_EQ(analysis.explicitEdgeCount(), s_RawEdgeCount);
     EXPECT_EQ(analysis.inferredEdgeCount(), 0u);
@@ -9273,11 +9944,19 @@ TEST(GpuTaskGraph, SchedulingAdjacencyRejectsStaleIdsAndClearsOnReset){
     EXPECT_EQ(consumers[0u], second.index);
     EXPECT_EQ(producers[0u], first.index);
 
+    u32 declaredTaskCount = 0u;
+    u64 graphGeneration = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        declaredTaskCount = static_cast<u32>(declarations.taskCount());
+        graphGeneration = declarations.generation();
+    }
     const Graphics::GpuTaskId outOfRangeTask{
-        static_cast<u32>(graph.taskCount()),
-        graph.generation(),
+        declaredTaskCount,
+        graphGeneration,
     };
-    const Graphics::GpuTaskId staleTask{ first.index, graph.generation() + 1u };
+    const Graphics::GpuTaskId staleTask{ first.index, graphGeneration + 1u };
     Graphics::GpuTaskGraph foreignGraph(testArena.arena);
     const Graphics::GpuTaskId foreignTask = AddTask(
         foreignGraph,
@@ -9296,7 +9975,11 @@ TEST(GpuTaskGraph, SchedulingAdjacencyRejectsStaleIdsAndClearsOnReset){
 
     analysis.reset();
     EXPECT_FALSE(analysis.valid());
-    EXPECT_FALSE(analysis.validFor(graph));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        EXPECT_FALSE(analysis.validFor(declarations));
+    }
     EXPECT_TRUE(analysis.schedulingConsumers(first).empty());
     EXPECT_TRUE(analysis.schedulingProducers(second).empty());
 }
@@ -9329,11 +10012,17 @@ TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordB
         ASSERT_TRUE(Analyze(graph, analysis));
         Core::Alloc::ScratchArena reachabilityScratchArena(Name("tests/graphics/task_graph_packed_reachability_scratch"));
         Graphics::GpuTaskGraphCompilerDetail::GpuTaskSchedulingReachability reachability(reachabilityScratchArena);
-        ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(
-            graph,
-            analysis,
-            reachability
-        ));
+        u64 graphGeneration = 0u;
+        {
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+            ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(
+                declarations,
+                analysis,
+                reachability
+            ));
+            graphGeneration = declarations.generation();
+        }
 
         const usize lastEvenTask = (taskCount & 1u) != 0u ? taskCount - 1u : taskCount - 2u;
         const usize lastOddTask = (taskCount & 1u) != 0u ? taskCount - 2u : taskCount - 1u;
@@ -9358,8 +10047,8 @@ TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordB
             EXPECT_TRUE(reachability.transitivelyIndependent(tasks[secondWordProducer - 1u], tasks[boundaryConsumer]));
         }
 
-        const Graphics::GpuTaskId staleTask{ tasks[0u].index, graph.generation() + 1u };
-        const Graphics::GpuTaskId outOfRangeTask{ static_cast<u32>(taskCount), graph.generation() };
+        const Graphics::GpuTaskId staleTask{ tasks[0u].index, graphGeneration + 1u };
+        const Graphics::GpuTaskId outOfRangeTask{ static_cast<u32>(taskCount), graphGeneration };
         EXPECT_FALSE(reachability.reaches(tasks[0u], tasks[0u]));
         EXPECT_FALSE(reachability.transitivelyIndependent(tasks[0u], tasks[0u]));
         EXPECT_FALSE(reachability.reaches(staleTask, tasks[lastEvenTask]));
@@ -9371,8 +10060,10 @@ TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordB
             Graphics::GpuTaskGraph emptyGraph(testArena.arena);
             Graphics::GpuTaskGraphAnalysis emptyAnalysis(testArena.arena);
             ASSERT_TRUE(Analyze(emptyGraph, emptyAnalysis));
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(emptyGraph);
+
             ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(
-                emptyGraph,
+                declarations,
                 emptyAnalysis,
                 reachability
             ));
@@ -9492,7 +10183,11 @@ TEST(GpuTaskGraph, AssignsOnlyCompatiblePhysicalQueuesAndFallsBackToGraphics){
     };
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
-    ASSERT_TRUE(assignments.validFor(graph));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        ASSERT_TRUE(assignments.validFor(declarations));
+    }
 
     const Graphics::GpuTaskQueueAssignment* const graphicsAssignment = assignments.find(graphicsTask);
     const Graphics::GpuTaskQueueAssignment* const computeAssignment = assignments.find(computeTask);
@@ -10335,6 +11030,8 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
     const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
@@ -10345,30 +11042,30 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
     EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
     EXPECT_TRUE(consumerAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
 
-    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
-    const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumer);
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
     ASSERT_TRUE(producerPacket.valid());
     ASSERT_TRUE(consumerPacket.valid());
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledConsumer, nullptr);
-    EXPECT_NE(compiledGraph.packet(producerPacket).queue, compiledGraph.packet(consumerPacket).queue);
-    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(consumerPacket)[0u].producer, producerPacket);
+    EXPECT_NE(compiledPlan.packet(producerPacket).plan->queue, compiledPlan.packet(consumerPacket).plan->queue);
+    ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(consumerPacket).dependencies[0u].producer, producerPacket);
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
     EXPECT_EQ(compiledProducer->epilogueBarrierCount, 0u);
     ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
     EXPECT_EQ(
-        compiledGraph.taskPrologueBarriers(consumer)[0u].type,
+        compiledPlan.findTask(consumer).prologueBarriers[0u].type,
         Graphics::GpuCompiledBarrierType::BufferTransition
     );
 
     const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics primaryQueueCompileStatistics =
-        compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
+        compiledPlan.physicalQueueCompileStatistics(queues[0u].id)
     ;
     const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics secondaryQueueCompileStatistics =
-        compiledGraph.physicalQueueCompileStatistics(queues[1u].id)
+        compiledPlan.physicalQueueCompileStatistics(queues[1u].id)
     ;
     ASSERT_TRUE(primaryQueueCompileStatistics.valid());
     ASSERT_TRUE(secondaryQueueCompileStatistics.valid());
@@ -10376,7 +11073,7 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
     EXPECT_EQ(secondaryQueueCompileStatistics.queue, queues[1u].id);
     EXPECT_EQ(primaryQueueCompileStatistics.queueClass, Graphics::CommandQueue::Graphics);
     EXPECT_EQ(secondaryQueueCompileStatistics.queueClass, Graphics::CommandQueue::Graphics);
-    const Graphics::GpuTaskGraphCompileStatistics& compileStatistics = compiledGraph.compileStatistics();
+    const Graphics::GpuTaskGraphCompileStatistics& compileStatistics = compiledPlan.compileStatistics();
     EXPECT_EQ(
         primaryQueueCompileStatistics.taskCount + secondaryQueueCompileStatistics.taskCount,
         compileStatistics.taskCount
@@ -10514,10 +11211,12 @@ TEST(GpuTaskGraph, AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOption
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     const Graphics::GpuTaskGraphTelemetryOptions telemetryOptions{
         .queueAssignments = &assignments,
-        .compiledGraph = nullptr,
+        .compiledPlan = nullptr,
         .queueAssignmentTelemetry = nullptr,
     };
-    ASSERT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+    ASSERT_TRUE(declarations.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
     ASSERT_EQ(nodes.size(), 1u);
     EXPECT_EQ(
         nodes[0u].flags,
@@ -10617,9 +11316,13 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     EXPECT_EQ(assignment->queue, auxiliaryGraphicsQueue.id);
     EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
     EXPECT_TRUE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingCalibration);
-    const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-    ASSERT_NE(compiledTask, nullptr);
-    EXPECT_TRUE(compiledTask->recordsNonCommittingTimingSample);
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+
+        ASSERT_NE(compiledTask, nullptr);
+        EXPECT_TRUE(compiledTask->recordsNonCommittingTimingSample);
+    }
 
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(timingKey, auxiliaryGraphicsQueue.id, 0.020));
     const Graphics::GpuTaskTimingAssignmentKey assignmentKey =
@@ -10642,10 +11345,14 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     const Graphics::GpuTaskGraphTelemetryOptions telemetryOptions{
         .queueAssignments = &assignments,
-        .compiledGraph = nullptr,
+        .compiledPlan = nullptr,
         .queueAssignmentTelemetry = nullptr,
     };
-    ASSERT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        ASSERT_TRUE(declarations.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
+    }
     ASSERT_EQ(nodes.size(), 1u);
     EXPECT_EQ(nodes[0u].flags, Graphics::GpuTaskGraphTelemetryNodeFlag::AssignedGraphicsQueue);
 
@@ -11168,7 +11875,11 @@ TEST(GpuTaskGraph, RejectsCrossClassTimingRoutesWithoutEveryRequiredOptIn){
         );
         EXPECT_EQ(assignments.diagnostic().task, task);
         EXPECT_FALSE(assignments.valid());
-        EXPECT_FALSE(assignments.validFor(graph));
+        {
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+            EXPECT_FALSE(assignments.validFor(declarations));
+        }
         EXPECT_EQ(assignments.find(task), nullptr);
     };
 
@@ -11433,9 +12144,13 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
     const Graphics::GpuTaskQueueAssignment* const forcedAssignment = assignments.find(target);
     ASSERT_NE(forcedAssignment, nullptr);
     EXPECT_EQ(forcedAssignment->queue, firstAuxiliaryGraphicsQueue.id);
-    const Graphics::GpuCompiledTask* const forcedCompiledTask = forcedCompiledGraph.findTask(target);
-    ASSERT_NE(forcedCompiledTask, nullptr);
-    EXPECT_TRUE(forcedCompiledTask->recordsNonCommittingTimingSample);
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(forcedCompiledGraph);
+        const Graphics::GpuCompiledTask* const forcedCompiledTask = compiledPlan.findTask(target).plan;
+
+        ASSERT_NE(forcedCompiledTask, nullptr);
+        EXPECT_TRUE(forcedCompiledTask->recordsNonCommittingTimingSample);
+    }
 
     // Debug forcing collects a route observation without replacing the committed policy incumbent. Once the
     // override disappears, ordinary dwell continues from the last adaptive/static assignment.
@@ -11635,6 +12350,8 @@ TEST(GpuTaskGraph, RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnershipH
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, compileOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
     const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
@@ -11645,28 +12362,28 @@ TEST(GpuTaskGraph, RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnershipH
     EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
     EXPECT_TRUE(consumerAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback);
 
-    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
-    const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumer);
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
     ASSERT_TRUE(producerPacket.valid());
     ASSERT_TRUE(consumerPacket.valid());
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledConsumer, nullptr);
     ASSERT_NE(producerPacket, consumerPacket);
-    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(consumerPacket)[0u].producer, producerPacket);
+    ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(consumerPacket).dependencies[0u].producer, producerPacket);
     ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
     ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
 
-    const Graphics::GpuCompiledBarrier& release = compiledGraph.taskEpilogueBarriers(producer)[0u];
+    const Graphics::GpuCompiledBarrier& release = compiledPlan.findTask(producer).epilogueBarriers[0u];
     EXPECT_EQ(release.type, Graphics::GpuCompiledBarrierType::BufferOwnershipRelease);
     EXPECT_EQ(release.resource, buffer);
     EXPECT_EQ(release.sourceQueue, queues[0u].id);
     EXPECT_EQ(release.destinationQueue, auxiliaryGraphicsQueue.id);
 
-    const Graphics::GpuCompiledBarrier* const acquireAndTransition = compiledGraph.taskPrologueBarriers(consumer);
+    const Graphics::GpuCompiledBarrier* const acquireAndTransition = compiledPlan.findTask(consumer).prologueBarriers;
     ASSERT_NE(acquireAndTransition, nullptr);
     EXPECT_EQ(acquireAndTransition[0u].type, Graphics::GpuCompiledBarrierType::BufferOwnershipAcquire);
     EXPECT_EQ(acquireAndTransition[0u].resource, buffer);
@@ -11915,6 +12632,8 @@ TEST(GpuTaskGraph, RoutesIsolatedOffloadToAuxiliaryAndReturnsPrimaryBridge){
 
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     const Graphics::GpuTaskQueueAssignment* const uploadAssignment = assignments.find(upload);
     const Graphics::GpuTaskQueueAssignment* const bridgeAssignment = assignments.find(bridge);
     ASSERT_NE(uploadAssignment, nullptr);
@@ -11925,12 +12644,12 @@ TEST(GpuTaskGraph, RoutesIsolatedOffloadToAuxiliaryAndReturnsPrimaryBridge){
     EXPECT_TRUE(uploadAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::NonPrimaryPreference);
     EXPECT_EQ(bridgeAssignment->queue, queues[0u].id);
 
-    const Graphics::GpuSubmissionPacketId uploadPacket = compiledGraph.packetForTask(upload);
-    const Graphics::GpuSubmissionPacketId bridgePacket = compiledGraph.packetForTask(bridge);
+    const Graphics::GpuSubmissionPacketId uploadPacket = compiledPlan.packetForTask(upload);
+    const Graphics::GpuSubmissionPacketId bridgePacket = compiledPlan.packetForTask(bridge);
     ASSERT_TRUE(uploadPacket.valid());
     ASSERT_TRUE(bridgePacket.valid());
-    ASSERT_EQ(compiledGraph.packet(bridgePacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(bridgePacket)[0u].producer, uploadPacket);
+    ASSERT_EQ(compiledPlan.packet(bridgePacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(bridgePacket).dependencies[0u].producer, uploadPacket);
 }
 
 
@@ -12009,6 +12728,8 @@ TEST(GpuTaskGraph, PreservesAuxiliarySameClassQueueAcrossSerialOffloadChain){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const Graphics::GpuTaskQueueAssignment* const firstAssignment = assignments.find(first);
     const Graphics::GpuTaskQueueAssignment* const secondAssignment = assignments.find(second);
@@ -12022,16 +12743,16 @@ TEST(GpuTaskGraph, PreservesAuxiliarySameClassQueueAcrossSerialOffloadChain){
     EXPECT_TRUE(secondAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DirectDependencyAffinity);
     EXPECT_EQ(bridgeAssignment->queue, queues[0u].id);
 
-    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
-    const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(second);
-    const Graphics::GpuSubmissionPacketId bridgePacket = compiledGraph.packetForTask(bridge);
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId secondPacket = compiledPlan.packetForTask(second);
+    const Graphics::GpuSubmissionPacketId bridgePacket = compiledPlan.packetForTask(bridge);
     ASSERT_TRUE(firstPacket.valid());
     ASSERT_TRUE(secondPacket.valid());
     ASSERT_TRUE(bridgePacket.valid());
-    ASSERT_EQ(compiledGraph.packet(secondPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(secondPacket)[0u].producer, firstPacket);
-    ASSERT_EQ(compiledGraph.packet(bridgePacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(bridgePacket)[0u].producer, secondPacket);
+    ASSERT_EQ(compiledPlan.packet(secondPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(secondPacket).dependencies[0u].producer, firstPacket);
+    ASSERT_EQ(compiledPlan.packet(bridgePacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(bridgePacket).dependencies[0u].producer, secondPacket);
 }
 
 
@@ -12249,6 +12970,8 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
     const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
@@ -12259,28 +12982,28 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
     EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
     EXPECT_TRUE(consumerAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
 
-    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
-    const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumer);
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
     ASSERT_TRUE(producerPacket.valid());
     ASSERT_TRUE(consumerPacket.valid());
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledConsumer, nullptr);
-    EXPECT_NE(compiledGraph.packet(producerPacket).queue, compiledGraph.packet(consumerPacket).queue);
-    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(consumerPacket)[0u].producer, producerPacket);
+    EXPECT_NE(compiledPlan.packet(producerPacket).plan->queue, compiledPlan.packet(consumerPacket).plan->queue);
+    ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(consumerPacket).dependencies[0u].producer, producerPacket);
     ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
     ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
 
-    const Graphics::GpuCompiledBarrier& release = compiledGraph.taskEpilogueBarriers(producer)[0u];
+    const Graphics::GpuCompiledBarrier& release = compiledPlan.findTask(producer).epilogueBarriers[0u];
     EXPECT_EQ(release.type, Graphics::GpuCompiledBarrierType::BufferOwnershipRelease);
     EXPECT_EQ(release.resource, buffer);
     EXPECT_EQ(release.sourceQueue, queues[0u].id);
     EXPECT_EQ(release.destinationQueue, queues[1u].id);
 
-    const Graphics::GpuCompiledBarrier* const acquireAndTransition = compiledGraph.taskPrologueBarriers(consumer);
+    const Graphics::GpuCompiledBarrier* const acquireAndTransition = compiledPlan.findTask(consumer).prologueBarriers;
     ASSERT_NE(acquireAndTransition, nullptr);
     EXPECT_EQ(acquireAndTransition[0u].type, Graphics::GpuCompiledBarrierType::BufferOwnershipAcquire);
     EXPECT_EQ(acquireAndTransition[0u].resource, buffer);
@@ -12289,10 +13012,10 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
     EXPECT_EQ(acquireAndTransition[1u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
 
     const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics producerQueueCompileStatistics =
-        compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
+        compiledPlan.physicalQueueCompileStatistics(queues[0u].id)
     ;
     const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics consumerQueueCompileStatistics =
-        compiledGraph.physicalQueueCompileStatistics(queues[1u].id)
+        compiledPlan.physicalQueueCompileStatistics(queues[1u].id)
     ;
     ASSERT_TRUE(producerQueueCompileStatistics.valid());
     ASSERT_TRUE(consumerQueueCompileStatistics.valid());
@@ -12388,11 +13111,13 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOw
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
     const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
     ASSERT_NE(producerAssignment, nullptr);
     ASSERT_NE(consumerAssignment, nullptr);
     ASSERT_NE(compiledProducer, nullptr);
@@ -12405,7 +13130,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOw
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
     ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
     EXPECT_EQ(
-        compiledGraph.taskPrologueBarriers(consumer)[0u].type,
+        compiledPlan.findTask(consumer).prologueBarriers[0u].type,
         Graphics::GpuCompiledBarrierType::BufferTransition
     );
 }
@@ -12489,11 +13214,13 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
         const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
         const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
-        const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
-        const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+        const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
+        const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
         ASSERT_NE(producerAssignment, nullptr);
         ASSERT_NE(consumerAssignment, nullptr);
         ASSERT_NE(compiledProducer, nullptr);
@@ -12513,8 +13240,8 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
         ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
 
-        const Graphics::GpuCompiledBarrier* const release = compiledGraph.taskEpilogueBarriers(producer);
-        const Graphics::GpuCompiledBarrier* const acquireAndTransition = compiledGraph.taskPrologueBarriers(consumer);
+        const Graphics::GpuCompiledBarrier* const release = compiledPlan.findTask(producer).epilogueBarriers;
+        const Graphics::GpuCompiledBarrier* const acquireAndTransition = compiledPlan.findTask(consumer).prologueBarriers;
         ASSERT_NE(release, nullptr);
         ASSERT_NE(acquireAndTransition, nullptr);
         EXPECT_EQ(release[0u].type, Graphics::GpuCompiledBarrierType::BufferOwnershipRelease);
@@ -12622,21 +13349,23 @@ TEST(GpuTaskGraph, RoutesAccelStructAcrossQueueFamiliesWithOwnershipAndStateSeed
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledConsumer, nullptr);
     EXPECT_EQ(compiledProducer->queue, queues[0u].id);
     EXPECT_EQ(compiledConsumer->queue, queues[1u].id);
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
-    const Graphics::GpuPacketStateSeed* const seeds = compiledGraph.taskPrologueStateSeeds(consumer);
+    const Graphics::GpuPacketStateSeed* const seeds = compiledPlan.findTask(consumer).prologueStateSeeds;
     ASSERT_NE(seeds, nullptr);
     EXPECT_EQ(seeds[0u].resource, accelStruct);
     EXPECT_EQ(seeds[0u].sourcePacket, compiledProducer->packet);
 
     ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
-    const Graphics::GpuCompiledBarrier* const release = compiledGraph.taskEpilogueBarriers(producer);
+    const Graphics::GpuCompiledBarrier* const release = compiledPlan.findTask(producer).epilogueBarriers;
     ASSERT_NE(release, nullptr);
     EXPECT_EQ(release[0u].type, Graphics::GpuCompiledBarrierType::AccelStructOwnershipRelease);
     EXPECT_EQ(release[0u].resource, accelStruct);
@@ -12644,7 +13373,7 @@ TEST(GpuTaskGraph, RoutesAccelStructAcrossQueueFamiliesWithOwnershipAndStateSeed
     EXPECT_EQ(release[0u].destinationQueue, queues[1u].id);
 
     ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
-    const Graphics::GpuCompiledBarrier* const acquireAndTransition = compiledGraph.taskPrologueBarriers(consumer);
+    const Graphics::GpuCompiledBarrier* const acquireAndTransition = compiledPlan.findTask(consumer).prologueBarriers;
     ASSERT_NE(acquireAndTransition, nullptr);
     EXPECT_EQ(acquireAndTransition[0u].type, Graphics::GpuCompiledBarrierType::AccelStructOwnershipAcquire);
     EXPECT_EQ(acquireAndTransition[0u].resource, accelStruct);
@@ -12654,13 +13383,13 @@ TEST(GpuTaskGraph, RoutesAccelStructAcrossQueueFamiliesWithOwnershipAndStateSeed
     EXPECT_EQ(acquireAndTransition[1u].before, Graphics::ResourceStates::AccelStructWrite);
     EXPECT_EQ(acquireAndTransition[1u].after, Graphics::ResourceStates::AccelStructRead);
 
-    ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 1u);
+    ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 1u);
     const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
-        compiledGraph.logicalOwnershipTransfers()
+        compiledPlan.logicalOwnershipTransfers()
     ;
     ASSERT_NE(ownershipTransfers, nullptr);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), ownershipTransfers);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(1u), nullptr);
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), ownershipTransfers);
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(1u), nullptr);
     const Graphics::GpuCompiledOwnershipTransfer& ownershipTransfer = ownershipTransfers[0u];
     EXPECT_TRUE(ownershipTransfer.valid());
     EXPECT_EQ(ownershipTransfer.resource, accelStruct);
@@ -12681,10 +13410,10 @@ TEST(GpuTaskGraph, RoutesAccelStructAcrossQueueFamiliesWithOwnershipAndStateSeed
     EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
 
     const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics producerQueueCompileStatistics =
-        compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
+        compiledPlan.physicalQueueCompileStatistics(queues[0u].id)
     ;
     const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics consumerQueueCompileStatistics =
-        compiledGraph.physicalQueueCompileStatistics(queues[1u].id)
+        compiledPlan.physicalQueueCompileStatistics(queues[1u].id)
     ;
     ASSERT_TRUE(producerQueueCompileStatistics.valid());
     ASSERT_TRUE(consumerQueueCompileStatistics.valid());
@@ -12724,8 +13453,12 @@ TEST(GpuTaskGraph, ExportsRequiredImportedResourceFinalStates){
     ;
     const Graphics::GpuGraphResourceId buffer = graph.importResource(bufferDesc);
     ASSERT_TRUE(buffer.valid());
-    EXPECT_EQ(graph.resourceAt(texture.index).externalFinalState, Graphics::ResourceStates::ShaderResource);
-    EXPECT_EQ(graph.resourceAt(buffer.index).externalFinalState, Graphics::ResourceStates::ShaderResource);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        EXPECT_EQ(declarations.resourceAt(texture.index).externalFinalState, Graphics::ResourceStates::ShaderResource);
+        EXPECT_EQ(declarations.resourceAt(buffer.index).externalFinalState, Graphics::ResourceStates::ShaderResource);
+    }
 
     const Graphics::GpuTaskResourceUse uses[] = {
         Graphics::GpuTaskResourceUse{
@@ -12761,11 +13494,13 @@ TEST(GpuTaskGraph, ExportsRequiredImportedResourceFinalStates){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+
+    const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
     ASSERT_NE(compiledTask, nullptr);
     ASSERT_EQ(compiledTask->epilogueBarrierCount, 2u);
-    const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskEpilogueBarriers(task);
+    const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).epilogueBarriers;
     ASSERT_NE(barriers, nullptr);
     bool exportedTexture = false;
     bool exportedBuffer = false;
@@ -12815,7 +13550,11 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
             .setExternalFinalReleaseDestinationQueue(queues[1u].id)
     );
     ASSERT_TRUE(buffer.valid());
-    EXPECT_EQ(graph.resourceAt(buffer.index).externalFinalReleaseDestinationQueue, queues[1u].id);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        EXPECT_EQ(declarations.resourceAt(buffer.index).externalFinalReleaseDestinationQueue, queues[1u].id);
+    }
 
     const Graphics::GpuTaskResourceUse use{
         .resource = buffer,
@@ -12838,91 +13577,95 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        const Graphics::GpuCompiledTaskView compiledTaskView = compiledPlan.findTask(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledTaskView.plan;
+        ASSERT_NE(compiledTask, nullptr);
+        EXPECT_EQ(compiledTask->queue, queues[0u].id);
+        const Graphics::GpuCompiledExternalResourceExportView exportView = compiledPlan.externalResourceExport(buffer);
+        const Graphics::GpuCompiledExternalResourceExport* const exportInfo = exportView.plan;
+        ASSERT_NE(exportInfo, nullptr);
+        EXPECT_EQ(exportInfo->resource, buffer);
+        EXPECT_EQ(exportInfo->producerTask, task);
+        EXPECT_EQ(exportInfo->sourceQueue, queues[0u].id);
+        EXPECT_EQ(exportInfo->destinationQueue, queues[1u].id);
+        EXPECT_EQ(exportInfo->finalState, Graphics::ResourceStates::ShaderResource);
 
-    const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-    ASSERT_NE(compiledTask, nullptr);
-    EXPECT_EQ(compiledTask->queue, queues[0u].id);
-    const Graphics::GpuCompiledExternalResourceExport* const exportInfo = compiledGraph.externalResourceExport(buffer);
-    ASSERT_NE(exportInfo, nullptr);
-    EXPECT_EQ(exportInfo->resource, buffer);
-    EXPECT_EQ(exportInfo->producerTask, task);
-    EXPECT_EQ(exportInfo->sourceQueue, queues[0u].id);
-    EXPECT_EQ(exportInfo->destinationQueue, queues[1u].id);
-    EXPECT_EQ(exportInfo->finalState, Graphics::ResourceStates::ShaderResource);
+        ASSERT_EQ(compiledTask->epilogueBarrierCount, 2u);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledTaskView.epilogueBarriers;
+        ASSERT_NE(barriers, nullptr);
+        EXPECT_EQ(barriers[0u].type, Graphics::GpuCompiledBarrierType::BufferStateExport);
+        EXPECT_EQ(barriers[0u].resource, buffer);
+        EXPECT_EQ(barriers[0u].before, Graphics::ResourceStates::CopyDest);
+        EXPECT_EQ(barriers[0u].after, Graphics::ResourceStates::ShaderResource);
+        EXPECT_EQ(barriers[0u].range.bufferRange, use.range.bufferRange);
+        EXPECT_EQ(barriers[0u].sourceQueue, queues[0u].id);
+        EXPECT_EQ(barriers[0u].destinationQueue, queues[0u].id);
+        EXPECT_EQ(barriers[1u].type, Graphics::GpuCompiledBarrierType::BufferOwnershipRelease);
+        EXPECT_EQ(barriers[1u].resource, buffer);
+        EXPECT_EQ(barriers[1u].before, Graphics::ResourceStates::ShaderResource);
+        EXPECT_EQ(barriers[1u].after, Graphics::ResourceStates::ShaderResource);
+        EXPECT_EQ(barriers[1u].range.bufferRange, use.range.bufferRange);
+        EXPECT_EQ(barriers[1u].sourceQueue, queues[0u].id);
+        EXPECT_EQ(barriers[1u].destinationQueue, queues[1u].id);
 
-    ASSERT_EQ(compiledTask->epilogueBarrierCount, 2u);
-    const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskEpilogueBarriers(task);
-    ASSERT_NE(barriers, nullptr);
-    EXPECT_EQ(barriers[0u].type, Graphics::GpuCompiledBarrierType::BufferStateExport);
-    EXPECT_EQ(barriers[0u].resource, buffer);
-    EXPECT_EQ(barriers[0u].before, Graphics::ResourceStates::CopyDest);
-    EXPECT_EQ(barriers[0u].after, Graphics::ResourceStates::ShaderResource);
-    EXPECT_EQ(barriers[0u].range.bufferRange, use.range.bufferRange);
-    EXPECT_EQ(barriers[0u].sourceQueue, queues[0u].id);
-    EXPECT_EQ(barriers[0u].destinationQueue, queues[0u].id);
-    EXPECT_EQ(barriers[1u].type, Graphics::GpuCompiledBarrierType::BufferOwnershipRelease);
-    EXPECT_EQ(barriers[1u].resource, buffer);
-    EXPECT_EQ(barriers[1u].before, Graphics::ResourceStates::ShaderResource);
-    EXPECT_EQ(barriers[1u].after, Graphics::ResourceStates::ShaderResource);
-    EXPECT_EQ(barriers[1u].range.bufferRange, use.range.bufferRange);
-    EXPECT_EQ(barriers[1u].sourceQueue, queues[0u].id);
-    EXPECT_EQ(barriers[1u].destinationQueue, queues[1u].id);
+        const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics sourceQueueCompileStatistics =
+            compiledPlan.physicalQueueCompileStatistics(queues[0u].id)
+        ;
+        const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics destinationQueueCompileStatistics =
+            compiledPlan.physicalQueueCompileStatistics(queues[1u].id)
+        ;
+        ASSERT_TRUE(sourceQueueCompileStatistics.valid());
+        ASSERT_TRUE(destinationQueueCompileStatistics.valid());
+        EXPECT_EQ(sourceQueueCompileStatistics.ownershipReleaseBarrierCount, 1u);
+        EXPECT_EQ(sourceQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
+        EXPECT_EQ(destinationQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
+        EXPECT_EQ(destinationQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
 
-    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics sourceQueueCompileStatistics =
-        compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
-    ;
-    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics destinationQueueCompileStatistics =
-        compiledGraph.physicalQueueCompileStatistics(queues[1u].id)
-    ;
-    ASSERT_TRUE(sourceQueueCompileStatistics.valid());
-    ASSERT_TRUE(destinationQueueCompileStatistics.valid());
-    EXPECT_EQ(sourceQueueCompileStatistics.ownershipReleaseBarrierCount, 1u);
-    EXPECT_EQ(sourceQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
-    EXPECT_EQ(destinationQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
-    EXPECT_EQ(destinationQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
+        ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 1u);
+        const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
+            compiledPlan.logicalOwnershipTransfers()
+        ;
+        ASSERT_NE(ownershipTransfers, nullptr);
+        EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), ownershipTransfers);
+        EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(1u), nullptr);
+        const Graphics::GpuCompiledOwnershipTransfer& ownershipTransfer = ownershipTransfers[0u];
+        EXPECT_TRUE(ownershipTransfer.valid());
+        EXPECT_EQ(ownershipTransfer.resource, buffer);
+        EXPECT_EQ(ownershipTransfer.resourceIdentity, Name("tests/task_graph/external_final_release_buffer"));
+        EXPECT_EQ(ownershipTransfer.range.bufferRange, use.range.bufferRange);
+        EXPECT_EQ(ownershipTransfer.sourceTask, task);
+        EXPECT_FALSE(ownershipTransfer.destinationTask.valid());
+        EXPECT_EQ(ownershipTransfer.sourcePacket, compiledTask->packet);
+        EXPECT_FALSE(ownershipTransfer.destinationPacket.valid());
+        EXPECT_EQ(ownershipTransfer.sourceQueue, queues[0u].id);
+        EXPECT_EQ(ownershipTransfer.destinationQueue, queues[1u].id);
+        EXPECT_EQ(ownershipTransfer.sourceQueueFamilyIndex, queues[0u].familyIndex);
+        EXPECT_EQ(ownershipTransfer.destinationQueueFamilyIndex, queues[1u].familyIndex);
+        EXPECT_EQ(ownershipTransfer.declaredQueueSharing, Graphics::ResourceQueueSharing::Exclusive);
+        EXPECT_EQ(ownershipTransfer.resourceType, Graphics::GpuGraphResourceType::Buffer);
+        EXPECT_EQ(ownershipTransfer.route, Graphics::GpuOwnershipTransferRoute::ExternalExport);
+        EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
 
-    ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 1u);
-    const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
-        compiledGraph.logicalOwnershipTransfers()
-    ;
-    ASSERT_NE(ownershipTransfers, nullptr);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), ownershipTransfers);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(1u), nullptr);
-    const Graphics::GpuCompiledOwnershipTransfer& ownershipTransfer = ownershipTransfers[0u];
-    EXPECT_TRUE(ownershipTransfer.valid());
-    EXPECT_EQ(ownershipTransfer.resource, buffer);
-    EXPECT_EQ(ownershipTransfer.resourceIdentity, Name("tests/task_graph/external_final_release_buffer"));
-    EXPECT_EQ(ownershipTransfer.range.bufferRange, use.range.bufferRange);
-    EXPECT_EQ(ownershipTransfer.sourceTask, task);
-    EXPECT_FALSE(ownershipTransfer.destinationTask.valid());
-    EXPECT_EQ(ownershipTransfer.sourcePacket, compiledTask->packet);
-    EXPECT_FALSE(ownershipTransfer.destinationPacket.valid());
-    EXPECT_EQ(ownershipTransfer.sourceQueue, queues[0u].id);
-    EXPECT_EQ(ownershipTransfer.destinationQueue, queues[1u].id);
-    EXPECT_EQ(ownershipTransfer.sourceQueueFamilyIndex, queues[0u].familyIndex);
-    EXPECT_EQ(ownershipTransfer.destinationQueueFamilyIndex, queues[1u].familyIndex);
-    EXPECT_EQ(ownershipTransfer.declaredQueueSharing, Graphics::ResourceQueueSharing::Exclusive);
-    EXPECT_EQ(ownershipTransfer.resourceType, Graphics::GpuGraphResourceType::Buffer);
-    EXPECT_EQ(ownershipTransfer.route, Graphics::GpuOwnershipTransferRoute::ExternalExport);
-    EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
-
-    const Graphics::GpuTaskGraphCompileStatistics& ownershipStatistics = compiledGraph.compileStatistics();
-    ASSERT_TRUE(ownershipStatistics.valid());
-    EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferCount, 1u);
-    EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferSignatureCount, 1u);
-    EXPECT_EQ(ownershipStatistics.repeatedOwnershipTransferSignatureCount, 0u);
-    EXPECT_EQ(ownershipStatistics.concurrentSharingCouldAvoidTransferCount, 1u);
-    EXPECT_EQ(ownershipStatistics.concurrentSharingAdviceResourceCount, 0u);
-    EXPECT_EQ(
-        ownershipStatistics.logicalOwnershipTransferCountByRoute[
-            Graphics::GpuOwnershipTransferRoute::ExternalExport
-        ],
-        1u
-    );
-    EXPECT_EQ(sourceQueueCompileStatistics.outgoingLogicalOwnershipTransferCount, 1u);
-    EXPECT_EQ(sourceQueueCompileStatistics.incomingLogicalOwnershipTransferCount, 0u);
-    EXPECT_EQ(destinationQueueCompileStatistics.outgoingLogicalOwnershipTransferCount, 0u);
-    EXPECT_EQ(destinationQueueCompileStatistics.incomingLogicalOwnershipTransferCount, 1u);
+        const Graphics::GpuTaskGraphCompileStatistics ownershipStatistics = compiledPlan.compileStatistics();
+        ASSERT_TRUE(ownershipStatistics.valid());
+        EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferCount, 1u);
+        EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferSignatureCount, 1u);
+        EXPECT_EQ(ownershipStatistics.repeatedOwnershipTransferSignatureCount, 0u);
+        EXPECT_EQ(ownershipStatistics.concurrentSharingCouldAvoidTransferCount, 1u);
+        EXPECT_EQ(ownershipStatistics.concurrentSharingAdviceResourceCount, 0u);
+        EXPECT_EQ(
+            ownershipStatistics.logicalOwnershipTransferCountByRoute[
+                Graphics::GpuOwnershipTransferRoute::ExternalExport
+            ],
+            1u
+        );
+        EXPECT_EQ(sourceQueueCompileStatistics.outgoingLogicalOwnershipTransferCount, 1u);
+        EXPECT_EQ(sourceQueueCompileStatistics.incomingLogicalOwnershipTransferCount, 0u);
+        EXPECT_EQ(destinationQueueCompileStatistics.outgoingLogicalOwnershipTransferCount, 0u);
+        EXPECT_EQ(destinationQueueCompileStatistics.incomingLogicalOwnershipTransferCount, 1u);
+    }
 
     Graphics::GpuPhysicalQueueInfo sameFamilyQueues[] = { queues[0u], queues[1u] };
     sameFamilyQueues[1u].familyIndex = sameFamilyQueues[0u].familyIndex;
@@ -12932,10 +13675,12 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
         .queueCount = LengthOf(sameFamilyQueues),
     };
     ASSERT_TRUE(Compile(graph, analysis, sameFamilyTopology, assignments, compiledGraph));
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransfers(), nullptr);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), nullptr);
-    EXPECT_EQ(compiledGraph.compileStatistics().logicalOwnershipTransferCount, 0u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransferCount(), 0u);
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransfers(), nullptr);
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), nullptr);
+    EXPECT_EQ(compiledPlan.compileStatistics().logicalOwnershipTransferCount, 0u);
 }
 
 
@@ -12983,10 +13728,12 @@ TEST(GpuTaskGraph, ExportsExclusiveAccelStructOwnershipToExternalQueue){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+
+    const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
     ASSERT_NE(compiledTask, nullptr);
-    const Graphics::GpuCompiledExternalResourceExport* const exportInfo = compiledGraph.externalResourceExport(accelStruct);
+    const Graphics::GpuCompiledExternalResourceExport* const exportInfo = compiledPlan.externalResourceExport(accelStruct).plan;
     ASSERT_NE(exportInfo, nullptr);
     EXPECT_EQ(exportInfo->producerTask, task);
     EXPECT_EQ(exportInfo->sourceQueue, queues[0u].id);
@@ -12994,7 +13741,7 @@ TEST(GpuTaskGraph, ExportsExclusiveAccelStructOwnershipToExternalQueue){
     EXPECT_EQ(exportInfo->finalState, Graphics::ResourceStates::AccelStructRead);
 
     ASSERT_EQ(compiledTask->epilogueBarrierCount, 2u);
-    const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskEpilogueBarriers(task);
+    const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).epilogueBarriers;
     ASSERT_NE(barriers, nullptr);
     EXPECT_EQ(barriers[0u].type, Graphics::GpuCompiledBarrierType::AccelStructStateExport);
     EXPECT_EQ(barriers[0u].resource, accelStruct);
@@ -13082,8 +13829,11 @@ TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledExternalResourceExport* const exportInfo = compiledGraph.externalResourceExport(texture);
+
+    const Graphics::GpuCompiledExternalResourceExportView exportView = compiledPlan.externalResourceExport(texture);
+    const Graphics::GpuCompiledExternalResourceExport* const exportInfo = exportView.plan;
     ASSERT_NE(exportInfo, nullptr);
     EXPECT_EQ(exportInfo->resource, texture);
     EXPECT_EQ(exportInfo->destinationQueue, queues[1u].id);
@@ -13092,9 +13842,7 @@ TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
     EXPECT_FALSE(exportInfo->producerTask.valid());
     EXPECT_FALSE(exportInfo->sourceQueue.valid());
     ASSERT_EQ(exportInfo->sourceCount, 2u);
-    const Graphics::GpuCompiledExternalResourceExportSource* const sources =
-        compiledGraph.externalResourceExportSources(*exportInfo)
-    ;
+    const Graphics::GpuCompiledExternalResourceExportSource* const sources = exportView.sources;
     ASSERT_NE(sources, nullptr);
     EXPECT_EQ(sources[0u].producerTask, graphicsTask);
     EXPECT_EQ(sources[0u].sourceQueue, queues[0u].id);
@@ -13103,16 +13851,16 @@ TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
     EXPECT_EQ(sources[1u].sourceQueue, queues[1u].id);
     EXPECT_EQ(sources[1u].range.textureSubresources, computeUse.range.textureSubresources);
 
-    const Graphics::GpuCompiledTask* const compiledGraphics = compiledGraph.findTask(graphicsTask);
-    const Graphics::GpuCompiledTask* const compiledCompute = compiledGraph.findTask(computeTask);
+    const Graphics::GpuCompiledTask* const compiledGraphics = compiledPlan.findTask(graphicsTask).plan;
+    const Graphics::GpuCompiledTask* const compiledCompute = compiledPlan.findTask(computeTask).plan;
     ASSERT_NE(compiledGraphics, nullptr);
     ASSERT_NE(compiledCompute, nullptr);
     EXPECT_EQ(compiledGraphics->queue, queues[0u].id);
     EXPECT_EQ(compiledCompute->queue, queues[1u].id);
     ASSERT_EQ(compiledGraphics->epilogueBarrierCount, 2u);
     ASSERT_EQ(compiledCompute->epilogueBarrierCount, 1u);
-    const Graphics::GpuCompiledBarrier* const graphicsBarriers = compiledGraph.taskEpilogueBarriers(graphicsTask);
-    const Graphics::GpuCompiledBarrier* const computeBarriers = compiledGraph.taskEpilogueBarriers(computeTask);
+    const Graphics::GpuCompiledBarrier* const graphicsBarriers = compiledPlan.findTask(graphicsTask).epilogueBarriers;
+    const Graphics::GpuCompiledBarrier* const computeBarriers = compiledPlan.findTask(computeTask).epilogueBarriers;
     ASSERT_NE(graphicsBarriers, nullptr);
     ASSERT_NE(computeBarriers, nullptr);
     EXPECT_EQ(graphicsBarriers[0u].type, Graphics::GpuCompiledBarrierType::TextureStateExport);
@@ -13120,13 +13868,13 @@ TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
     EXPECT_EQ(graphicsBarriers[1u].destinationQueue, queues[1u].id);
     EXPECT_EQ(computeBarriers[0u].type, Graphics::GpuCompiledBarrierType::TextureStateExport);
 
-    ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 1u);
+    ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 1u);
     const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
-        compiledGraph.logicalOwnershipTransfers()
+        compiledPlan.logicalOwnershipTransfers()
     ;
     ASSERT_NE(ownershipTransfers, nullptr);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), ownershipTransfers);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(1u), nullptr);
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), ownershipTransfers);
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(1u), nullptr);
     const Graphics::GpuCompiledOwnershipTransfer& ownershipTransfer = ownershipTransfers[0u];
     EXPECT_TRUE(ownershipTransfer.valid());
     EXPECT_EQ(ownershipTransfer.resource, texture);
@@ -13145,7 +13893,7 @@ TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
     EXPECT_EQ(ownershipTransfer.resourceType, Graphics::GpuGraphResourceType::Texture);
     EXPECT_EQ(ownershipTransfer.route, Graphics::GpuOwnershipTransferRoute::ExternalExport);
     EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
-    const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledGraph.compileStatistics();
+    const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledPlan.compileStatistics();
     ASSERT_TRUE(statistics.valid());
     EXPECT_EQ(statistics.logicalOwnershipTransferCount, 1u);
     EXPECT_EQ(statistics.logicalOwnershipTransferSignatureCount, 1u);
@@ -13188,26 +13936,28 @@ TEST(GpuTaskGraph, OrdersExternalFinalTransitionAfterOverlappingConcurrentReader
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     EXPECT_EQ(FindEdge(analysis, pair.earlierReader, pair.finalizingReader), nullptr);
 
-    const Graphics::GpuSubmissionPacketId earlierPacket = compiledGraph.packetForTask(pair.earlierReader);
-    const Graphics::GpuSubmissionPacketId finalizingPacket = compiledGraph.packetForTask(pair.finalizingReader);
+    const Graphics::GpuSubmissionPacketId earlierPacket = compiledPlan.packetForTask(pair.earlierReader);
+    const Graphics::GpuSubmissionPacketId finalizingPacket = compiledPlan.packetForTask(pair.finalizingReader);
     ASSERT_TRUE(earlierPacket.valid());
     ASSERT_TRUE(finalizingPacket.valid());
     ASSERT_NE(earlierPacket, finalizingPacket);
-    const Graphics::GpuCompiledTask* const finalizingTask = compiledGraph.findTask(pair.finalizingReader);
+    const Graphics::GpuCompiledTask* const finalizingTask = compiledPlan.findTask(pair.finalizingReader).plan;
     ASSERT_NE(finalizingTask, nullptr);
     EXPECT_EQ(finalizingTask->prologueStateSeedCount, 0u);
 
-    const Graphics::GpuSubmissionPacket& finalizingPacketInfo = compiledGraph.packet(finalizingPacket);
+    const Graphics::GpuSubmissionPacket& finalizingPacketInfo = *compiledPlan.packet(finalizingPacket).plan;
     ASSERT_EQ(finalizingPacketInfo.dependencyCount, 1u);
-    const Graphics::GpuPacketDependency* const dependencies = compiledGraph.packetDependencies(finalizingPacket);
+    const Graphics::GpuPacketDependency* const dependencies = compiledPlan.packet(finalizingPacket).dependencies;
     ASSERT_NE(dependencies, nullptr);
     EXPECT_EQ(dependencies[0u].producer, earlierPacket);
     EXPECT_EQ(dependencies[0u].consumer, finalizingPacket);
 
     ASSERT_EQ(finalizingTask->epilogueBarrierCount, 1u);
-    const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskEpilogueBarriers(pair.finalizingReader);
+    const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(pair.finalizingReader).epilogueBarriers;
     ASSERT_NE(barriers, nullptr);
     EXPECT_EQ(barriers[0u].type, Graphics::GpuCompiledBarrierType::TextureStateExport);
     EXPECT_EQ(barriers[0u].before, Graphics::ResourceStates::ShaderResource);
@@ -13249,20 +13999,22 @@ TEST(GpuTaskGraph, KeepsSameStateExternalExportConcurrentReadersIndependent){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     EXPECT_EQ(FindEdge(analysis, pair.earlierReader, pair.finalizingReader), nullptr);
 
-    const Graphics::GpuSubmissionPacketId earlierPacket = compiledGraph.packetForTask(pair.earlierReader);
-    const Graphics::GpuSubmissionPacketId finalizingPacket = compiledGraph.packetForTask(pair.finalizingReader);
+    const Graphics::GpuSubmissionPacketId earlierPacket = compiledPlan.packetForTask(pair.earlierReader);
+    const Graphics::GpuSubmissionPacketId finalizingPacket = compiledPlan.packetForTask(pair.finalizingReader);
     ASSERT_TRUE(earlierPacket.valid());
     ASSERT_TRUE(finalizingPacket.valid());
     ASSERT_NE(earlierPacket, finalizingPacket);
-    EXPECT_EQ(compiledGraph.packet(earlierPacket).dependencyCount, 0u);
-    EXPECT_EQ(compiledGraph.packet(finalizingPacket).dependencyCount, 0u);
+    EXPECT_EQ(compiledPlan.packet(earlierPacket).plan->dependencyCount, 0u);
+    EXPECT_EQ(compiledPlan.packet(finalizingPacket).plan->dependencyCount, 0u);
 
-    const Graphics::GpuCompiledTask* const finalizingTask = compiledGraph.findTask(pair.finalizingReader);
+    const Graphics::GpuCompiledTask* const finalizingTask = compiledPlan.findTask(pair.finalizingReader).plan;
     ASSERT_NE(finalizingTask, nullptr);
     ASSERT_EQ(finalizingTask->epilogueBarrierCount, 1u);
-    const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskEpilogueBarriers(pair.finalizingReader);
+    const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(pair.finalizingReader).epilogueBarriers;
     ASSERT_NE(barriers, nullptr);
     EXPECT_EQ(barriers[0u].before, Graphics::ResourceStates::ShaderResource);
     EXPECT_EQ(barriers[0u].after, Graphics::ResourceStates::ShaderResource);
@@ -13304,18 +14056,20 @@ TEST(GpuTaskGraph, KeepsDisjointExternalFinalTextureFragmentsIndependent){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     EXPECT_EQ(FindEdge(analysis, pair.earlierReader, pair.finalizingReader), nullptr);
 
-    const Graphics::GpuSubmissionPacketId earlierPacket = compiledGraph.packetForTask(pair.earlierReader);
-    const Graphics::GpuSubmissionPacketId finalizingPacket = compiledGraph.packetForTask(pair.finalizingReader);
+    const Graphics::GpuSubmissionPacketId earlierPacket = compiledPlan.packetForTask(pair.earlierReader);
+    const Graphics::GpuSubmissionPacketId finalizingPacket = compiledPlan.packetForTask(pair.finalizingReader);
     ASSERT_TRUE(earlierPacket.valid());
     ASSERT_TRUE(finalizingPacket.valid());
     ASSERT_NE(earlierPacket, finalizingPacket);
-    EXPECT_EQ(compiledGraph.packet(earlierPacket).dependencyCount, 0u);
-    EXPECT_EQ(compiledGraph.packet(finalizingPacket).dependencyCount, 0u);
+    EXPECT_EQ(compiledPlan.packet(earlierPacket).plan->dependencyCount, 0u);
+    EXPECT_EQ(compiledPlan.packet(finalizingPacket).plan->dependencyCount, 0u);
 
-    const Graphics::GpuCompiledTask* const earlierTask = compiledGraph.findTask(pair.earlierReader);
-    const Graphics::GpuCompiledTask* const finalizingTask = compiledGraph.findTask(pair.finalizingReader);
+    const Graphics::GpuCompiledTask* const earlierTask = compiledPlan.findTask(pair.earlierReader).plan;
+    const Graphics::GpuCompiledTask* const finalizingTask = compiledPlan.findTask(pair.finalizingReader).plan;
     ASSERT_NE(earlierTask, nullptr);
     ASSERT_NE(finalizingTask, nullptr);
     EXPECT_EQ(earlierTask->epilogueBarrierCount, 1u);
@@ -13357,13 +14111,15 @@ TEST(GpuTaskGraph, ElidesSamePacketExternalFinalTransitionSelfDependency){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     EXPECT_EQ(FindEdge(analysis, pair.earlierReader, pair.finalizingReader), nullptr);
 
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pair.earlierReader);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(pair.earlierReader);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetForTask(pair.finalizingReader), packet);
-    EXPECT_EQ(compiledGraph.packet(packet).dependencyCount, 0u);
-    const Graphics::GpuCompiledTask* const finalizingTask = compiledGraph.findTask(pair.finalizingReader);
+    EXPECT_EQ(compiledPlan.packetForTask(pair.finalizingReader), packet);
+    EXPECT_EQ(compiledPlan.packet(packet).plan->dependencyCount, 0u);
+    const Graphics::GpuCompiledTask* const finalizingTask = compiledPlan.findTask(pair.finalizingReader).plan;
     ASSERT_NE(finalizingTask, nullptr);
     EXPECT_EQ(finalizingTask->epilogueBarrierCount, 1u);
 }
@@ -13419,24 +14175,26 @@ TEST(GpuTaskGraph, OrdersExternalFinalTransitionsForWholeAllocationResources){
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
         EXPECT_EQ(FindEdge(analysis, pair.earlierReader, pair.finalizingReader), nullptr);
 
-        const Graphics::GpuSubmissionPacketId earlierPacket = compiledGraph.packetForTask(pair.earlierReader);
-        const Graphics::GpuSubmissionPacketId finalizingPacket = compiledGraph.packetForTask(pair.finalizingReader);
+        const Graphics::GpuSubmissionPacketId earlierPacket = compiledPlan.packetForTask(pair.earlierReader);
+        const Graphics::GpuSubmissionPacketId finalizingPacket = compiledPlan.packetForTask(pair.finalizingReader);
         ASSERT_TRUE(earlierPacket.valid());
         ASSERT_TRUE(finalizingPacket.valid());
         ASSERT_NE(earlierPacket, finalizingPacket);
-        const Graphics::GpuSubmissionPacket& finalizingPacketInfo = compiledGraph.packet(finalizingPacket);
+        const Graphics::GpuSubmissionPacket& finalizingPacketInfo = *compiledPlan.packet(finalizingPacket).plan;
         ASSERT_EQ(finalizingPacketInfo.dependencyCount, 1u);
-        const Graphics::GpuPacketDependency* const dependencies = compiledGraph.packetDependencies(finalizingPacket);
+        const Graphics::GpuPacketDependency* const dependencies = compiledPlan.packet(finalizingPacket).dependencies;
         ASSERT_NE(dependencies, nullptr);
         EXPECT_EQ(dependencies[0u].producer, earlierPacket);
         EXPECT_EQ(dependencies[0u].consumer, finalizingPacket);
 
-        const Graphics::GpuCompiledTask* const finalizingTask = compiledGraph.findTask(pair.finalizingReader);
+        const Graphics::GpuCompiledTask* const finalizingTask = compiledPlan.findTask(pair.finalizingReader).plan;
         ASSERT_NE(finalizingTask, nullptr);
         ASSERT_EQ(finalizingTask->epilogueBarrierCount, 1u);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskEpilogueBarriers(pair.finalizingReader);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(pair.finalizingReader).epilogueBarriers;
         ASSERT_NE(barriers, nullptr);
         EXPECT_EQ(barriers[0u].before, testCase.readState);
         EXPECT_EQ(barriers[0u].after, testCase.finalState);
@@ -13478,15 +14236,17 @@ TEST(GpuTaskGraph, ElidesSamePacketReleaseOnlyExternalFinalizationSelfDependency
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pair.earlierReader);
+
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(pair.earlierReader);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetForTask(pair.finalizingReader), packet);
-    EXPECT_EQ(compiledGraph.packet(packet).dependencyCount, 0u);
-    const Graphics::GpuCompiledTask* const finalizingTask = compiledGraph.findTask(pair.finalizingReader);
+    EXPECT_EQ(compiledPlan.packetForTask(pair.finalizingReader), packet);
+    EXPECT_EQ(compiledPlan.packet(packet).plan->dependencyCount, 0u);
+    const Graphics::GpuCompiledTask* const finalizingTask = compiledPlan.findTask(pair.finalizingReader).plan;
     ASSERT_NE(finalizingTask, nullptr);
     ASSERT_EQ(finalizingTask->epilogueBarrierCount, 2u);
-    const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskEpilogueBarriers(pair.finalizingReader);
+    const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(pair.finalizingReader).epilogueBarriers;
     ASSERT_NE(barriers, nullptr);
     EXPECT_EQ(barriers[0u].type, Graphics::GpuCompiledBarrierType::TextureStateExport);
     EXPECT_EQ(barriers[0u].before, Graphics::ResourceStates::ShaderResource);
@@ -13557,20 +14317,22 @@ TEST(GpuTaskGraph, AvoidsTransitiveExternalFinalizationPacketDependencies){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     EXPECT_NE(FindEdge(analysis, pair.earlierReader, pair.finalizingReader), nullptr);
     EXPECT_NE(FindEdge(analysis, pair.finalizingReader, terminalReader), nullptr);
     EXPECT_EQ(FindEdge(analysis, pair.earlierReader, terminalReader), nullptr);
 
-    const Graphics::GpuSubmissionPacketId earlierPacket = compiledGraph.packetForTask(pair.earlierReader);
-    const Graphics::GpuSubmissionPacketId middlePacket = compiledGraph.packetForTask(pair.finalizingReader);
-    const Graphics::GpuSubmissionPacketId terminalPacket = compiledGraph.packetForTask(terminalReader);
+    const Graphics::GpuSubmissionPacketId earlierPacket = compiledPlan.packetForTask(pair.earlierReader);
+    const Graphics::GpuSubmissionPacketId middlePacket = compiledPlan.packetForTask(pair.finalizingReader);
+    const Graphics::GpuSubmissionPacketId terminalPacket = compiledPlan.packetForTask(terminalReader);
     ASSERT_TRUE(earlierPacket.valid());
     ASSERT_TRUE(middlePacket.valid());
     ASSERT_TRUE(terminalPacket.valid());
-    ASSERT_EQ(compiledGraph.packet(middlePacket).dependencyCount, 1u);
-    ASSERT_EQ(compiledGraph.packet(terminalPacket).dependencyCount, 1u);
-    const Graphics::GpuPacketDependency* const middleDependencies = compiledGraph.packetDependencies(middlePacket);
-    const Graphics::GpuPacketDependency* const terminalDependencies = compiledGraph.packetDependencies(terminalPacket);
+    ASSERT_EQ(compiledPlan.packet(middlePacket).plan->dependencyCount, 1u);
+    ASSERT_EQ(compiledPlan.packet(terminalPacket).plan->dependencyCount, 1u);
+    const Graphics::GpuPacketDependency* const middleDependencies = compiledPlan.packet(middlePacket).dependencies;
+    const Graphics::GpuPacketDependency* const terminalDependencies = compiledPlan.packet(terminalPacket).dependencies;
     ASSERT_NE(middleDependencies, nullptr);
     ASSERT_NE(terminalDependencies, nullptr);
     EXPECT_EQ(middleDependencies[0u].producer, earlierPacket);
@@ -13662,26 +14424,28 @@ TEST(GpuTaskGraph, OrdersIndependentTerminalFinalizationDependenciesNearestFirst
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_NE(FindEdge(analysis, readers[0u], readers[1u]), nullptr);
     EXPECT_EQ(FindEdge(analysis, readers[0u], readers[3u]), nullptr);
     EXPECT_EQ(FindEdge(analysis, readers[2u], readers[3u]), nullptr);
-    ASSERT_EQ(compiledGraph.packetCount(), LengthOf(readers));
+    ASSERT_EQ(compiledPlan.packetCount(), LengthOf(readers));
 
     Graphics::GpuSubmissionPacketId packets[4u] = {};
     for(usize readerIndex = 0u; readerIndex < LengthOf(readers); ++readerIndex){
-        packets[readerIndex] = compiledGraph.packetForTask(readers[readerIndex]);
+        packets[readerIndex] = compiledPlan.packetForTask(readers[readerIndex]);
         ASSERT_TRUE(packets[readerIndex].valid());
         EXPECT_EQ(packets[readerIndex].index, readerIndex);
-        EXPECT_EQ(compiledGraph.packet(packets[readerIndex]).queue, queues[readerIndex % 2u].id);
+        EXPECT_EQ(compiledPlan.packet(packets[readerIndex]).plan->queue, queues[readerIndex % 2u].id);
     }
 
-    ASSERT_EQ(compiledGraph.packet(packets[0u]).dependencyCount, 0u);
-    ASSERT_EQ(compiledGraph.packet(packets[1u]).dependencyCount, 1u);
-    ASSERT_EQ(compiledGraph.packet(packets[2u]).dependencyCount, 0u);
-    ASSERT_EQ(compiledGraph.packet(packets[3u]).dependencyCount, 2u);
-    const Graphics::GpuPacketDependency* const secondDependencies = compiledGraph.packetDependencies(packets[1u]);
-    const Graphics::GpuPacketDependency* const terminalDependencies = compiledGraph.packetDependencies(packets[3u]);
+    ASSERT_EQ(compiledPlan.packet(packets[0u]).plan->dependencyCount, 0u);
+    ASSERT_EQ(compiledPlan.packet(packets[1u]).plan->dependencyCount, 1u);
+    ASSERT_EQ(compiledPlan.packet(packets[2u]).plan->dependencyCount, 0u);
+    ASSERT_EQ(compiledPlan.packet(packets[3u]).plan->dependencyCount, 2u);
+    const Graphics::GpuPacketDependency* const secondDependencies = compiledPlan.packet(packets[1u]).dependencies;
+    const Graphics::GpuPacketDependency* const terminalDependencies = compiledPlan.packet(packets[3u]).dependencies;
     ASSERT_NE(secondDependencies, nullptr);
     ASSERT_NE(terminalDependencies, nullptr);
     EXPECT_EQ(secondDependencies[0u].producer, packets[0u]);
@@ -13692,14 +14456,14 @@ TEST(GpuTaskGraph, OrdersIndependentTerminalFinalizationDependenciesNearestFirst
     EXPECT_EQ(terminalDependencies[1u].consumer, packets[3u]);
 
     for(usize readerIndex = 1u; readerIndex < LengthOf(readers); ++readerIndex){
-        const Graphics::GpuCompiledTask* const compiledReader = compiledGraph.findTask(readers[readerIndex]);
+        const Graphics::GpuCompiledTask* const compiledReader = compiledPlan.findTask(readers[readerIndex]).plan;
         ASSERT_NE(compiledReader, nullptr);
         EXPECT_EQ(compiledReader->prologueStateSeedCount, 0u);
     }
-    const Graphics::GpuCompiledTask* const terminalReader = compiledGraph.findTask(readers[3u]);
+    const Graphics::GpuCompiledTask* const terminalReader = compiledPlan.findTask(readers[3u]).plan;
     ASSERT_NE(terminalReader, nullptr);
     ASSERT_EQ(terminalReader->epilogueBarrierCount, 1u);
-    const Graphics::GpuCompiledBarrier* const terminalBarriers = compiledGraph.taskEpilogueBarriers(readers[3u]);
+    const Graphics::GpuCompiledBarrier* const terminalBarriers = compiledPlan.findTask(readers[3u]).epilogueBarriers;
     ASSERT_NE(terminalBarriers, nullptr);
     EXPECT_EQ(terminalBarriers[0u].type, Graphics::GpuCompiledBarrierType::TextureStateExport);
     EXPECT_EQ(terminalBarriers[0u].before, Graphics::ResourceStates::ShaderResource);
@@ -13793,21 +14557,23 @@ TEST(GpuTaskGraph, TerminalFinalizationReachabilityCrossesPackedWordBoundaries){
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-        EXPECT_EQ(compiledGraph.packetCount(), prefixPacketCount + 3u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-        const Graphics::GpuSubmissionPacketId earlierPacket = compiledGraph.packetForTask(pair.earlierReader);
-        const Graphics::GpuSubmissionPacketId middlePacket = compiledGraph.packetForTask(pair.finalizingReader);
-        const Graphics::GpuSubmissionPacketId terminalPacket = compiledGraph.packetForTask(terminalReader);
+        EXPECT_EQ(compiledPlan.packetCount(), prefixPacketCount + 3u);
+
+        const Graphics::GpuSubmissionPacketId earlierPacket = compiledPlan.packetForTask(pair.earlierReader);
+        const Graphics::GpuSubmissionPacketId middlePacket = compiledPlan.packetForTask(pair.finalizingReader);
+        const Graphics::GpuSubmissionPacketId terminalPacket = compiledPlan.packetForTask(terminalReader);
         ASSERT_TRUE(earlierPacket.valid());
         ASSERT_TRUE(middlePacket.valid());
         ASSERT_TRUE(terminalPacket.valid());
         EXPECT_EQ(earlierPacket.index, prefixPacketCount);
         EXPECT_EQ(middlePacket.index, prefixPacketCount + 1u);
         EXPECT_EQ(terminalPacket.index, prefixPacketCount + 2u);
-        ASSERT_EQ(compiledGraph.packet(middlePacket).dependencyCount, 1u);
-        ASSERT_EQ(compiledGraph.packet(terminalPacket).dependencyCount, 1u);
-        const Graphics::GpuPacketDependency* const middleDependencies = compiledGraph.packetDependencies(middlePacket);
-        const Graphics::GpuPacketDependency* const terminalDependencies = compiledGraph.packetDependencies(terminalPacket);
+        ASSERT_EQ(compiledPlan.packet(middlePacket).plan->dependencyCount, 1u);
+        ASSERT_EQ(compiledPlan.packet(terminalPacket).plan->dependencyCount, 1u);
+        const Graphics::GpuPacketDependency* const middleDependencies = compiledPlan.packet(middlePacket).dependencies;
+        const Graphics::GpuPacketDependency* const terminalDependencies = compiledPlan.packet(terminalPacket).dependencies;
         ASSERT_NE(middleDependencies, nullptr);
         ASSERT_NE(terminalDependencies, nullptr);
         EXPECT_EQ(middleDependencies[0u].producer, earlierPacket);
@@ -13910,15 +14676,18 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledWholeWriter = compiledGraph.findTask(wholeWriter);
-    const Graphics::GpuCompiledTask* const compiledPartialWriter = compiledGraph.findTask(partialWriter);
+
+    const Graphics::GpuCompiledTask* const compiledWholeWriter = compiledPlan.findTask(wholeWriter).plan;
+    const Graphics::GpuCompiledTask* const compiledPartialWriter = compiledPlan.findTask(partialWriter).plan;
     ASSERT_NE(compiledWholeWriter, nullptr);
     ASSERT_NE(compiledPartialWriter, nullptr);
     EXPECT_EQ(compiledWholeWriter->queue, queues[0u].id);
     EXPECT_EQ(compiledPartialWriter->queue, queues[1u].id);
 
-    const Graphics::GpuCompiledExternalResourceExport* const exportInfo = compiledGraph.externalResourceExport(texture);
+    const Graphics::GpuCompiledExternalResourceExportView exportView = compiledPlan.externalResourceExport(texture);
+    const Graphics::GpuCompiledExternalResourceExport* const exportInfo = exportView.plan;
     ASSERT_NE(exportInfo, nullptr);
     EXPECT_EQ(exportInfo->resource, texture);
     EXPECT_EQ(exportInfo->destinationQueue, queues[2u].id);
@@ -13926,9 +14695,7 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
     EXPECT_FALSE(exportInfo->producerTask.valid());
     EXPECT_FALSE(exportInfo->sourceQueue.valid());
     ASSERT_EQ(exportInfo->sourceCount, 2u);
-    const Graphics::GpuCompiledExternalResourceExportSource* const sources =
-        compiledGraph.externalResourceExportSources(*exportInfo)
-    ;
+    const Graphics::GpuCompiledExternalResourceExportSource* const sources = exportView.sources;
     ASSERT_NE(sources, nullptr);
     bool hasWholeWriterTail = false;
     bool hasPartialWriterMipZero = false;
@@ -13954,8 +14721,8 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
         const Graphics::ResourceStates::Mask before,
         const Graphics::GpuPhysicalQueueId& queue
     ){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskEpilogueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).epilogueBarriers;
         if(!compiledTask || !barriers)
             return false;
         for(u32 barrierIndex = 0u; barrierIndex < compiledTask->epilogueBarrierCount; ++barrierIndex){
@@ -13978,8 +14745,8 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
         const Graphics::TextureSubresourceSet& range,
         const Graphics::GpuPhysicalQueueId& sourceQueue
     ){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskEpilogueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).epilogueBarriers;
         if(!compiledTask || !barriers)
             return false;
         for(u32 barrierIndex = 0u; barrierIndex < compiledTask->epilogueBarrierCount; ++barrierIndex){
@@ -14069,7 +14836,9 @@ TEST(GpuTaskGraph, RejectsUnpublishableExternalFinalStateContracts){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    EXPECT_FALSE(compiledGraph.valid());
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    EXPECT_FALSE(compiledPlan.valid());
 }
 
 
@@ -14145,7 +14914,11 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
             queues[0u].id
         );
         ASSERT_TRUE(resource.valid());
-        EXPECT_EQ(graph.resourceAt(resource.index).initialOwnerQueue, queues[0u].id);
+        {
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+            EXPECT_EQ(declarations.resourceAt(resource.index).initialOwnerQueue, queues[0u].id);
+        }
         const Graphics::GpuTaskId task = addFirstUse(
             graph,
             resource,
@@ -14158,7 +14931,9 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+
         ASSERT_NE(compiledTask, nullptr);
         EXPECT_EQ(compiledTask->queue, queues[0u].id);
     }
@@ -14184,7 +14959,9 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
-        EXPECT_FALSE(compiledGraph.valid());
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+        EXPECT_FALSE(compiledPlan.valid());
     }
 
     {
@@ -14208,7 +14985,9 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
-        EXPECT_FALSE(compiledGraph.valid());
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+        EXPECT_FALSE(compiledPlan.valid());
     }
 
     {
@@ -14233,402 +15012,113 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
-        EXPECT_FALSE(compiledGraph.valid());
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+        EXPECT_FALSE(compiledPlan.valid());
     }
 }
 
-TEST(GpuTaskGraph, CompilesExplicitInitialExclusiveOwnershipHandoff){
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        DedicatedComputeQueue(),
-    };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    const Graphics::GpuQueueRequest graphicsQueue{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest computeQueue{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
-    const auto addFirstUse = [](
-        Graphics::GpuTaskGraph& graph,
-        const Graphics::GpuGraphResourceId resource,
-        const Name& identity,
-        const AStringView label,
-        const Graphics::GpuQueueRequest& queue
-    ){
-        const Graphics::GpuTaskResourceUse use{
-            .resource = resource,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::CopyDest,
-            .access = Graphics::GpuTaskResourceAccess::Write,
-        };
-        Graphics::GpuTaskDesc desc;
-        desc
-            .setIdentity(identity)
-            .setMarkerLabel(label)
-            .setQueue(queue)
-            .setResourceUses(&use, 1u)
-        ;
-        return graph.addTask(desc);
-    };
-
-    {
-        TestArena testArena;
-        Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
-            Graphics::GpuExternalCompletionDesc{}
-                .setIdentity(Name("tests/task_graph/initial_owner_completion"))
-                .setMarkerLabel("Initial Owner Completion")
-        );
-        ASSERT_TRUE(completion.valid());
-        Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
-        const Graphics::QueueSubmissionToken minimumCompletionToken{
-            .queue = Graphics::CommandQueue::Graphics,
-            .value = 7u,
-            .physicalQueueIndex = queues[0u].id.index,
-            .deviceGeneration = queues[0u].id.deviceGeneration,
-        };
-        const Graphics::GpuGraphResourceId resource = graph.importResource(
-            Graphics::GpuGraphResourceDesc{}
-                .setIdentity(Name("tests/task_graph/initial_owner_handoff"))
-                .setMarkerLabel("Initial Owner Handoff")
-                .setType(Graphics::GpuGraphResourceType::Buffer)
-                .setInitialState(Graphics::ResourceStates::Common)
-                .setInitialOwnerQueue(queues[0u].id)
-                .setInitialOwnerReleaseDestinationQueue(queues[1u].id)
-                .setInitialOwnerCompletion(completion)
-                .setInitialOwnerMinimumCompletionToken(minimumCompletionToken)
-                .setInitialOwnerStateSource(&stateSource)
-        );
-        ASSERT_TRUE(resource.valid());
-        const Graphics::GpuTaskGraphResourceView view = graph.resourceAt(resource.index);
-        EXPECT_EQ(view.initialOwnerQueue, queues[0u].id);
-        EXPECT_EQ(view.initialOwnerReleaseDestinationQueue, queues[1u].id);
-        EXPECT_EQ(view.initialOwnerCompletion, completion);
-        EXPECT_EQ(view.initialOwnerMinimumCompletionToken.queue, minimumCompletionToken.queue);
-        EXPECT_EQ(view.initialOwnerMinimumCompletionToken.value, minimumCompletionToken.value);
-        EXPECT_EQ(view.initialOwnerMinimumCompletionToken.physicalQueueIndex, minimumCompletionToken.physicalQueueIndex);
-        EXPECT_EQ(view.initialOwnerMinimumCompletionToken.deviceGeneration, minimumCompletionToken.deviceGeneration);
-        ASSERT_NE(view.initialOwnerStateSource, nullptr);
-        EXPECT_NE(view.initialOwnerStateSource, &stateSource);
-        EXPECT_FALSE(view.initialOwnerStateSource->valid());
-        const Graphics::GpuTaskId task = addFirstUse(
-            graph,
-            resource,
-            Name("tests/task_graph/initial_owner_handoff_use"),
-            "Initial Owner Handoff Use",
-            computeQueue
-        );
-        ASSERT_TRUE(task.valid());
-
-        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        ASSERT_NE(compiledTask, nullptr);
-        EXPECT_EQ(compiledTask->queue, queues[1u].id);
-
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
-        ASSERT_NE(barriers, nullptr);
-        ASSERT_EQ(compiledTask->prologueBarrierCount, 2u);
-        EXPECT_EQ(barriers[0u].type, Graphics::GpuCompiledBarrierType::BufferOwnershipAcquire);
-        EXPECT_EQ(barriers[0u].resource, resource);
-        EXPECT_EQ(barriers[0u].sourceQueue, queues[0u].id);
-        EXPECT_EQ(barriers[0u].destinationQueue, queues[1u].id);
-        EXPECT_TRUE(barriers[0u].isInitialOwnerHandoff);
-        EXPECT_EQ(barriers[1u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
-        EXPECT_TRUE(barriers[1u].isGraphInitialState);
-
-        const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics sourceQueueCompileStatistics =
-            compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
-        ;
-        const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics destinationQueueCompileStatistics =
-            compiledGraph.physicalQueueCompileStatistics(queues[1u].id)
-        ;
-        ASSERT_TRUE(sourceQueueCompileStatistics.valid());
-        ASSERT_TRUE(destinationQueueCompileStatistics.valid());
-        EXPECT_EQ(sourceQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
-        EXPECT_EQ(sourceQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
-        EXPECT_EQ(destinationQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
-        EXPECT_EQ(destinationQueueCompileStatistics.ownershipAcquireBarrierCount, 1u);
-
-        ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 1u);
-        const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
-            compiledGraph.logicalOwnershipTransfers()
-        ;
-        ASSERT_NE(ownershipTransfers, nullptr);
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), ownershipTransfers);
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(1u), nullptr);
-        const Graphics::GpuCompiledOwnershipTransfer& ownershipTransfer = ownershipTransfers[0u];
-        EXPECT_TRUE(ownershipTransfer.valid());
-        EXPECT_EQ(ownershipTransfer.resource, resource);
-        EXPECT_EQ(ownershipTransfer.resourceIdentity, Name("tests/task_graph/initial_owner_handoff"));
-        EXPECT_EQ(ownershipTransfer.range.bufferRange, Graphics::s_EntireBuffer);
-        EXPECT_FALSE(ownershipTransfer.sourceTask.valid());
-        EXPECT_EQ(ownershipTransfer.destinationTask, task);
-        EXPECT_FALSE(ownershipTransfer.sourcePacket.valid());
-        EXPECT_EQ(ownershipTransfer.destinationPacket, compiledTask->packet);
-        EXPECT_EQ(ownershipTransfer.sourceQueue, queues[0u].id);
-        EXPECT_EQ(ownershipTransfer.destinationQueue, queues[1u].id);
-        EXPECT_EQ(ownershipTransfer.sourceQueueFamilyIndex, queues[0u].familyIndex);
-        EXPECT_EQ(ownershipTransfer.destinationQueueFamilyIndex, queues[1u].familyIndex);
-        EXPECT_EQ(ownershipTransfer.declaredQueueSharing, Graphics::ResourceQueueSharing::Exclusive);
-        EXPECT_EQ(ownershipTransfer.resourceType, Graphics::GpuGraphResourceType::Buffer);
-        EXPECT_EQ(ownershipTransfer.route, Graphics::GpuOwnershipTransferRoute::ExternalImport);
-        EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
-
-        const Graphics::GpuTaskGraphCompileStatistics& ownershipStatistics = compiledGraph.compileStatistics();
-        ASSERT_TRUE(ownershipStatistics.valid());
-        EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferCount, 1u);
-        EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferSignatureCount, 1u);
-        EXPECT_EQ(ownershipStatistics.repeatedOwnershipTransferSignatureCount, 0u);
-        EXPECT_EQ(ownershipStatistics.concurrentSharingCouldAvoidTransferCount, 1u);
-        EXPECT_EQ(ownershipStatistics.concurrentSharingAdviceResourceCount, 0u);
-        EXPECT_EQ(
-            ownershipStatistics.logicalOwnershipTransferCountByRoute[
-                Graphics::GpuOwnershipTransferRoute::ExternalImport
-            ],
-            1u
-        );
-        EXPECT_EQ(sourceQueueCompileStatistics.outgoingLogicalOwnershipTransferCount, 1u);
-        EXPECT_EQ(sourceQueueCompileStatistics.incomingLogicalOwnershipTransferCount, 0u);
-        EXPECT_EQ(destinationQueueCompileStatistics.outgoingLogicalOwnershipTransferCount, 0u);
-        EXPECT_EQ(destinationQueueCompileStatistics.incomingLogicalOwnershipTransferCount, 1u);
-
-        const Graphics::GpuSubmissionPacketId packet = compiledTask->packet;
-        ASSERT_TRUE(packet.valid());
-        EXPECT_EQ(compiledGraph.packet(packet).externalDependencyCount, 1u);
-        const Graphics::GpuExternalCompletionId* const externalDependencies = compiledGraph.packetExternalDependencies(packet);
-        ASSERT_NE(externalDependencies, nullptr);
-        EXPECT_EQ(externalDependencies[0u], completion);
-
-        Graphics::GpuPhysicalQueueInfo sameFamilyQueues[] = { queues[0u], queues[1u] };
-        sameFamilyQueues[1u].familyIndex = sameFamilyQueues[0u].familyIndex;
-        sameFamilyQueues[1u].queueIndex = 1u;
-        const Graphics::GpuTaskGraphQueueTopology sameFamilyTopology{
-            .queues = sameFamilyQueues,
-            .queueCount = LengthOf(sameFamilyQueues),
-        };
-        ASSERT_TRUE(Compile(graph, analysis, sameFamilyTopology, assignments, compiledGraph));
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransfers(), nullptr);
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), nullptr);
-        EXPECT_EQ(compiledGraph.compileStatistics().logicalOwnershipTransferCount, 0u);
-    }
-
-    {
-        TestArena testArena;
-        Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
-            Graphics::GpuExternalCompletionDesc{}
-                .setIdentity(Name("tests/task_graph/initial_owner_missing_minimum_completion"))
-                .setMarkerLabel("Initial Owner Missing Minimum Completion")
-        );
-        ASSERT_TRUE(completion.valid());
-        Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
-        EXPECT_FALSE(graph.importResource(
-            Graphics::GpuGraphResourceDesc{}
-                .setIdentity(Name("tests/task_graph/initial_owner_missing_minimum"))
-                .setMarkerLabel("Initial Owner Missing Minimum")
-                .setType(Graphics::GpuGraphResourceType::Buffer)
-                .setInitialState(Graphics::ResourceStates::Common)
-                .setInitialOwnerQueue(queues[0u].id)
-                .setInitialOwnerReleaseDestinationQueue(queues[1u].id)
-                .setInitialOwnerCompletion(completion)
-                .setInitialOwnerStateSource(&stateSource)
-        ).valid());
-
-        const Graphics::QueueSubmissionToken wrongSourceToken{
-            .queue = Graphics::CommandQueue::Compute,
-            .value = 7u,
-            .physicalQueueIndex = queues[1u].id.index,
-            .deviceGeneration = queues[1u].id.deviceGeneration,
-        };
-        EXPECT_FALSE(graph.importResource(
-            Graphics::GpuGraphResourceDesc{}
-                .setIdentity(Name("tests/task_graph/initial_owner_wrong_minimum_source"))
-                .setMarkerLabel("Initial Owner Wrong Minimum Source")
-                .setType(Graphics::GpuGraphResourceType::Buffer)
-                .setInitialState(Graphics::ResourceStates::Common)
-                .setInitialOwnerQueue(queues[0u].id)
-                .setInitialOwnerReleaseDestinationQueue(queues[1u].id)
-                .setInitialOwnerCompletion(completion)
-                .setInitialOwnerMinimumCompletionToken(wrongSourceToken)
-                .setInitialOwnerStateSource(&stateSource)
-        ).valid());
-    }
-
-    {
-        TestArena testArena;
-        Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
-            Graphics::GpuExternalCompletionDesc{}
-                .setIdentity(Name("tests/task_graph/initial_owner_wrong_destination_completion"))
-                .setMarkerLabel("Initial Owner Wrong Destination Completion")
-        );
-        ASSERT_TRUE(completion.valid());
-        Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
-        const Graphics::QueueSubmissionToken minimumCompletionToken{
-            .queue = Graphics::CommandQueue::Graphics,
-            .value = 7u,
-            .physicalQueueIndex = queues[0u].id.index,
-            .deviceGeneration = queues[0u].id.deviceGeneration,
-        };
-        const Graphics::GpuGraphResourceId resource = graph.importResource(
-            Graphics::GpuGraphResourceDesc{}
-                .setIdentity(Name("tests/task_graph/initial_owner_wrong_destination"))
-                .setMarkerLabel("Initial Owner Wrong Destination")
-                .setType(Graphics::GpuGraphResourceType::Buffer)
-                .setInitialState(Graphics::ResourceStates::Common)
-                .setInitialOwnerQueue(queues[0u].id)
-                .setInitialOwnerReleaseDestinationQueue(queues[1u].id)
-                .setInitialOwnerCompletion(completion)
-                .setInitialOwnerMinimumCompletionToken(minimumCompletionToken)
-                .setInitialOwnerStateSource(&stateSource)
-        );
-        ASSERT_TRUE(resource.valid());
-        ASSERT_TRUE(addFirstUse(
-            graph,
-            resource,
-            Name("tests/task_graph/initial_owner_wrong_destination_use"),
-            "Initial Owner Wrong Destination Use",
-            graphicsQueue
-        ).valid());
-
-        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
-        EXPECT_FALSE(compiledGraph.valid());
-    }
-}
-
-TEST(GpuTaskGraph, MaterializesKnownInitialStateAfterInitialOwnerAcquire){
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        DedicatedComputeQueue(),
-    };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    const Graphics::GpuQueueRequest computeQueue{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
-
+TEST(GpuTaskGraph, RejectsInvalidSingleSourceInitialOwnerHandoffAtDeclaration){
+    const Graphics::GpuPhysicalQueueInfo sourceQueue = GraphicsQueue();
+    const Graphics::GpuPhysicalQueueInfo destinationQueue = DedicatedComputeQueue();
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/known_initial_owner_completion"))
-            .setMarkerLabel("Known Initial Owner Completion")
+            .setIdentity(Name("tests/task_graph/invalid_initial_owner_completion"))
+            .setMarkerLabel("Invalid Initial Owner Completion")
     );
     ASSERT_TRUE(completion.valid());
-    Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
     const Graphics::QueueSubmissionToken minimumCompletionToken{
         .queue = Graphics::CommandQueue::Graphics,
         .value = 7u,
-        .physicalQueueIndex = queues[0u].id.index,
-        .deviceGeneration = queues[0u].id.deviceGeneration,
+        .physicalQueueIndex = sourceQueue.id.index,
+        .deviceGeneration = sourceQueue.id.deviceGeneration,
     };
-    const auto importResource = [&](
-        const Graphics::GpuGraphResourceType::Enum type,
-        const Graphics::ResourceStates::Mask initialState,
-        const Name& identity,
-        const AStringView label
-    ){
-        return graph.importResource(
+    Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
+    ASSERT_FALSE(stateSource.valid());
+
+    usize resourceCount = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        resourceCount = declarations.resourceCount();
+    }
+    EXPECT_FALSE(graph.importResource(
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/invalid_initial_owner_handoff"))
+            .setMarkerLabel("Invalid Initial Owner Handoff")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::Common)
+            .setInitialOwnerQueue(sourceQueue.id)
+            .setInitialOwnerReleaseDestinationQueue(destinationQueue.id)
+            .setInitialOwnerCompletion(completion)
+            .setInitialOwnerMinimumCompletionToken(minimumCompletionToken)
+            .setInitialOwnerStateSource(&stateSource)
+    ).valid());
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+    EXPECT_EQ(declarations.resourceCount(), resourceCount);
+}
+
+TEST(GpuTaskGraph, RejectsInvalidSingleSourceInitialOwnerHandoffsForBufferAndAccelStruct){
+    struct ResourceCase{
+        Graphics::GpuGraphResourceType::Enum type;
+        Graphics::ResourceStates::Mask initialState;
+        Name identity;
+        AStringView markerLabel;
+    };
+
+    const Graphics::GpuPhysicalQueueInfo sourceQueue = GraphicsQueue();
+    const Graphics::GpuPhysicalQueueInfo destinationQueue = DedicatedComputeQueue();
+    const ResourceCase resourceCases[] = {
+        ResourceCase{
+            .type = Graphics::GpuGraphResourceType::Buffer,
+            .initialState = Graphics::ResourceStates::ShaderResource,
+            .identity = Name("tests/task_graph/invalid_initial_owner_buffer"),
+            .markerLabel = "Invalid Initial Owner Buffer",
+        },
+        ResourceCase{
+            .type = Graphics::GpuGraphResourceType::AccelStruct,
+            .initialState = Graphics::ResourceStates::AccelStructRead,
+            .identity = Name("tests/task_graph/invalid_initial_owner_accel_struct"),
+            .markerLabel = "Invalid Initial Owner Accel Struct",
+        },
+    };
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
+        Graphics::GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/task_graph/invalid_typed_initial_owner_completion"))
+            .setMarkerLabel("Invalid Typed Initial Owner Completion")
+    );
+    ASSERT_TRUE(completion.valid());
+    const Graphics::QueueSubmissionToken minimumCompletionToken{
+        .queue = Graphics::CommandQueue::Graphics,
+        .value = 7u,
+        .physicalQueueIndex = sourceQueue.id.index,
+        .deviceGeneration = sourceQueue.id.deviceGeneration,
+    };
+    Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
+    ASSERT_FALSE(stateSource.valid());
+
+    for(const ResourceCase& resourceCase : resourceCases){
+        EXPECT_FALSE(graph.importResource(
             Graphics::GpuGraphResourceDesc{}
-                .setIdentity(identity)
-                .setMarkerLabel(label)
-                .setType(type)
-                .setInitialState(initialState)
-                .setInitialOwnerQueue(queues[0u].id)
-                .setInitialOwnerReleaseDestinationQueue(queues[1u].id)
+                .setIdentity(resourceCase.identity)
+                .setMarkerLabel(resourceCase.markerLabel)
+                .setType(resourceCase.type)
+                .setInitialState(resourceCase.initialState)
+                .setInitialOwnerQueue(sourceQueue.id)
+                .setInitialOwnerReleaseDestinationQueue(destinationQueue.id)
                 .setInitialOwnerCompletion(completion)
                 .setInitialOwnerMinimumCompletionToken(minimumCompletionToken)
                 .setInitialOwnerStateSource(&stateSource)
-        );
-    };
-    const Graphics::GpuGraphResourceId buffer = importResource(
-        Graphics::GpuGraphResourceType::Buffer,
-        Graphics::ResourceStates::ShaderResource,
-        Name("tests/task_graph/known_initial_owner_buffer"),
-        "Known Initial Owner Buffer"
-    );
-    const Graphics::GpuGraphResourceId accelStruct = importResource(
-        Graphics::GpuGraphResourceType::AccelStruct,
-        Graphics::ResourceStates::AccelStructRead,
-        Name("tests/task_graph/known_initial_owner_accel_struct"),
-        "Known Initial Owner Accel Struct"
-    );
-    ASSERT_TRUE(buffer.valid());
-    ASSERT_TRUE(accelStruct.valid());
+        ).valid());
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
 
-    const Graphics::GpuTaskResourceUse uses[] = {
-        Graphics::GpuTaskResourceUse{
-            .resource = buffer,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::ShaderResource,
-            .access = Graphics::GpuTaskResourceAccess::Read,
-        },
-        Graphics::GpuTaskResourceUse{
-            .resource = accelStruct,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::AccelStructRead,
-            .access = Graphics::GpuTaskResourceAccess::Read,
-        },
-    };
-    Graphics::GpuTaskDesc taskDesc;
-    taskDesc
-        .setIdentity(Name("tests/task_graph/known_initial_owner_use"))
-        .setMarkerLabel("Known Initial Owner Use")
-        .setQueue(computeQueue)
-        .setResourceUses(uses, LengthOf(uses))
-    ;
-    const Graphics::GpuTaskId task = graph.addTask(taskDesc);
-    ASSERT_TRUE(task.valid());
-
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-    ASSERT_NE(compiledTask, nullptr);
-    EXPECT_EQ(compiledTask->queue, queues[1u].id);
-    ASSERT_EQ(compiledTask->prologueBarrierCount, 4u);
-
-    const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
-    ASSERT_NE(barriers, nullptr);
-    EXPECT_EQ(barriers[0u].type, Graphics::GpuCompiledBarrierType::BufferOwnershipAcquire);
-    EXPECT_EQ(barriers[0u].resource, buffer);
-    EXPECT_TRUE(barriers[0u].isInitialOwnerHandoff);
-    EXPECT_EQ(barriers[1u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
-    EXPECT_EQ(barriers[1u].resource, buffer);
-    EXPECT_EQ(barriers[1u].before, Graphics::ResourceStates::ShaderResource);
-    EXPECT_EQ(barriers[1u].after, Graphics::ResourceStates::ShaderResource);
-    EXPECT_TRUE(barriers[1u].isGraphInitialState);
-    EXPECT_EQ(barriers[2u].type, Graphics::GpuCompiledBarrierType::AccelStructOwnershipAcquire);
-    EXPECT_EQ(barriers[2u].resource, accelStruct);
-    EXPECT_TRUE(barriers[2u].isInitialOwnerHandoff);
-    EXPECT_EQ(barriers[3u].type, Graphics::GpuCompiledBarrierType::AccelStructTransition);
-    EXPECT_EQ(barriers[3u].resource, accelStruct);
-    EXPECT_EQ(barriers[3u].before, Graphics::ResourceStates::AccelStructRead);
-    EXPECT_EQ(barriers[3u].after, Graphics::ResourceStates::AccelStructRead);
-    EXPECT_TRUE(barriers[3u].isGraphInitialState);
+        EXPECT_EQ(declarations.resourceCount(), 0u);
+    }
 }
 
 TEST(GpuTaskGraph, RejectsMultiSourceInitialOwnerCompletionAcrossQueues){
@@ -14698,686 +15188,110 @@ TEST(GpuTaskGraph, RejectsMultiSourceInitialOwnerCompletionAcrossQueues){
 }
 
 
-TEST(GpuTaskGraph, ValidatesInitialOwnerCompletionSourceContractsAtCompileTime){
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        DedicatedComputeQueue(),
-    };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    const Graphics::GpuQueueRequest graphicsQueue{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest computeQueue{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
-    const auto compileSingleOwner = [&](
-        const Graphics::QueueSubmissionToken completionToken,
-        const Graphics::QueueSubmissionToken minimumCompletionToken
-    ){
-        TestArena testArena;
-        Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
-            Graphics::GpuExternalCompletionDesc{}
-                .setIdentity(Name("tests/task_graph/owned_initial_owner_completion"))
-                .setMarkerLabel("Owned Initial Owner Completion")
-                .setToken(completionToken)
-        );
-        EXPECT_TRUE(completion.valid());
-        if(!completion.valid())
-            return false;
-
-        Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
-        const Graphics::GpuGraphResourceId resource = graph.importResource(
-            Graphics::GpuGraphResourceDesc{}
-                .setIdentity(Name("tests/task_graph/owned_initial_owner_buffer"))
-                .setMarkerLabel("Owned Initial Owner Buffer")
-                .setType(Graphics::GpuGraphResourceType::Buffer)
-                .setInitialState(Graphics::ResourceStates::Common)
-                .setInitialOwnerQueue(queues[0u].id)
-                .setInitialOwnerReleaseDestinationQueue(queues[1u].id)
-                .setInitialOwnerCompletion(completion)
-                .setInitialOwnerMinimumCompletionToken(minimumCompletionToken)
-                .setInitialOwnerStateSource(&stateSource)
-        );
-        EXPECT_TRUE(resource.valid());
-        if(!resource.valid())
-            return false;
-
-        const Graphics::GpuTaskResourceUse use{
-            .resource = resource,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::CopyDest,
-            .access = Graphics::GpuTaskResourceAccess::Write,
-        };
-        Graphics::GpuTaskDesc taskDesc;
-        taskDesc
-            .setIdentity(Name("tests/task_graph/owned_initial_owner_use"))
-            .setMarkerLabel("Owned Initial Owner Use")
-            .setQueue(computeQueue)
-            .setResourceUses(&use, 1u)
-        ;
-        const Graphics::GpuTaskId task = graph.addTask(taskDesc);
-        EXPECT_TRUE(task.valid());
-        if(!task.valid())
-            return false;
-
-        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        const bool compiled = Compile(graph, analysis, topology, assignments, compiledGraph);
-        EXPECT_EQ(compiledGraph.valid(), compiled);
-        return compiled;
-    };
-
-    const Graphics::QueueSubmissionToken minimumCompletionToken{
+TEST(GpuTaskGraph, RejectsInvalidInitialOwnerStateSourceWithBoundCompletionToken){
+    const Graphics::GpuPhysicalQueueInfo sourceQueue = GraphicsQueue();
+    const Graphics::GpuPhysicalQueueInfo destinationQueue = DedicatedComputeQueue();
+    const Graphics::QueueSubmissionToken completionToken{
         .queue = Graphics::CommandQueue::Graphics,
         .value = 7u,
-        .physicalQueueIndex = queues[0u].id.index,
-        .deviceGeneration = queues[0u].id.deviceGeneration,
+        .physicalQueueIndex = sourceQueue.id.index,
+        .deviceGeneration = sourceQueue.id.deviceGeneration,
     };
-    EXPECT_TRUE(compileSingleOwner(minimumCompletionToken, minimumCompletionToken));
-
-    const Graphics::QueueSubmissionToken wrongQueueCompletionToken{
-        .queue = Graphics::CommandQueue::Compute,
-        .value = 11u,
-        .physicalQueueIndex = queues[1u].id.index,
-        .deviceGeneration = queues[1u].id.deviceGeneration,
-    };
-    EXPECT_FALSE(compileSingleOwner(wrongQueueCompletionToken, minimumCompletionToken));
-
-    Graphics::QueueSubmissionToken belowMinimumCompletionToken = minimumCompletionToken;
-    --belowMinimumCompletionToken.value;
-    EXPECT_FALSE(compileSingleOwner(belowMinimumCompletionToken, minimumCompletionToken));
-
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuExternalCompletionId sharedCompletion = graph.importExternalCompletion(
+    const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/cross_resource_owner_completion"))
-            .setMarkerLabel("Cross Resource Owner Completion")
+            .setIdentity(Name("tests/task_graph/bound_invalid_initial_owner_completion"))
+            .setMarkerLabel("Bound Invalid Initial Owner Completion")
+            .setToken(completionToken)
     );
-    ASSERT_TRUE(sharedCompletion.valid());
-    Graphics::CommandListResourceStateHandoff graphicsStateSource(testArena.arena);
-    Graphics::CommandListResourceStateHandoff computeStateSource(testArena.arena);
-    const Graphics::QueueSubmissionToken computeMinimumCompletionToken{
-        .queue = Graphics::CommandQueue::Compute,
-        .value = 11u,
-        .physicalQueueIndex = queues[1u].id.index,
-        .deviceGeneration = queues[1u].id.deviceGeneration,
-    };
-    const Graphics::GpuGraphResourceId graphicsOwnedResource = graph.importResource(
+    ASSERT_TRUE(completion.valid());
+    Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
+    ASSERT_FALSE(stateSource.valid());
+
+    EXPECT_FALSE(graph.importResource(
         Graphics::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/cross_resource_graphics_owner"))
-            .setMarkerLabel("Cross Resource Graphics Owner")
+            .setIdentity(Name("tests/task_graph/bound_invalid_initial_owner_buffer"))
+            .setMarkerLabel("Bound Invalid Initial Owner Buffer")
             .setType(Graphics::GpuGraphResourceType::Buffer)
             .setInitialState(Graphics::ResourceStates::Common)
-            .setInitialOwnerQueue(queues[0u].id)
-            .setInitialOwnerReleaseDestinationQueue(queues[1u].id)
-            .setInitialOwnerCompletion(sharedCompletion)
-            .setInitialOwnerMinimumCompletionToken(minimumCompletionToken)
-            .setInitialOwnerStateSource(&graphicsStateSource)
-    );
-    const Graphics::GpuGraphResourceId computeOwnedResource = graph.importResource(
-        Graphics::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/cross_resource_compute_owner"))
-            .setMarkerLabel("Cross Resource Compute Owner")
-            .setType(Graphics::GpuGraphResourceType::Buffer)
-            .setInitialState(Graphics::ResourceStates::Common)
-            .setInitialOwnerQueue(queues[1u].id)
-            .setInitialOwnerReleaseDestinationQueue(queues[0u].id)
-            .setInitialOwnerCompletion(sharedCompletion)
-            .setInitialOwnerMinimumCompletionToken(computeMinimumCompletionToken)
-            .setInitialOwnerStateSource(&computeStateSource)
-    );
-    ASSERT_TRUE(graphicsOwnedResource.valid());
-    ASSERT_TRUE(computeOwnedResource.valid());
+            .setInitialOwnerQueue(sourceQueue.id)
+            .setInitialOwnerReleaseDestinationQueue(destinationQueue.id)
+            .setInitialOwnerCompletion(completion)
+            .setInitialOwnerMinimumCompletionToken(completionToken)
+            .setInitialOwnerStateSource(&stateSource)
+    ).valid());
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
 
-    const Graphics::GpuTaskResourceUse graphicsOwnedUse{
-        .resource = graphicsOwnedResource,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::CopyDest,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
-    Graphics::GpuTaskDesc graphicsOwnedTaskDesc;
-    graphicsOwnedTaskDesc
-        .setIdentity(Name("tests/task_graph/cross_resource_graphics_owner_use"))
-        .setMarkerLabel("Cross Resource Graphics Owner Use")
-        .setQueue(computeQueue)
-        .setResourceUses(&graphicsOwnedUse, 1u)
-    ;
-    const Graphics::GpuTaskResourceUse computeOwnedUse{
-        .resource = computeOwnedResource,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::CopyDest,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
-    Graphics::GpuTaskDesc computeOwnedTaskDesc;
-    computeOwnedTaskDesc
-        .setIdentity(Name("tests/task_graph/cross_resource_compute_owner_use"))
-        .setMarkerLabel("Cross Resource Compute Owner Use")
-        .setQueue(graphicsQueue)
-        .setResourceUses(&computeOwnedUse, 1u)
-    ;
-    ASSERT_TRUE(graph.addTask(graphicsOwnedTaskDesc).valid());
-    ASSERT_TRUE(graph.addTask(computeOwnedTaskDesc).valid());
-
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    EXPECT_FALSE(compiledGraph.valid());
+    EXPECT_EQ(declarations.resourceCount(), 0u);
 }
 
+TEST(GpuTaskGraph, RejectsInvalidMultiSourceInitialTextureOwnershipHandoffAtDeclaration){
+    const Graphics::GpuPhysicalQueueInfo graphicsQueue = GraphicsQueue();
+    const Graphics::GpuPhysicalQueueInfo computeQueue = DedicatedComputeQueue();
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuExternalCompletionId graphicsCompletion = graph.importExternalCompletion(
+        Graphics::GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/task_graph/invalid_multi_owner_graphics_completion"))
+            .setMarkerLabel("Invalid Multi Owner Graphics Completion")
+    );
+    const Graphics::GpuExternalCompletionId computeCompletion = graph.importExternalCompletion(
+        Graphics::GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/task_graph/invalid_multi_owner_compute_completion"))
+            .setMarkerLabel("Invalid Multi Owner Compute Completion")
+    );
+    ASSERT_TRUE(graphicsCompletion.valid());
+    ASSERT_TRUE(computeCompletion.valid());
 
-TEST(GpuTaskGraph, CompilesMultiSourceInitialTextureOwnershipHandoff){
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        DedicatedComputeQueue(),
-    };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    const Graphics::GpuQueueRequest graphicsQueue{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-
-    const auto addTextureUse = [&](
-        Graphics::GpuTaskGraph& graph,
-        const Graphics::GpuGraphResourceId resource,
-        const Graphics::TextureSubresourceSet range,
-        const Name& identity,
-        const AStringView label
-    ){
-        const Graphics::GpuTaskResourceUse use{
-            .resource = resource,
+    Graphics::CommandListResourceStateHandoff graphicsState(testArena.arena);
+    Graphics::CommandListResourceStateHandoff computeState(testArena.arena);
+    ASSERT_FALSE(graphicsState.valid());
+    ASSERT_FALSE(computeState.valid());
+    const Graphics::GpuGraphInitialOwnerHandoffSourceDesc sources[] = {
+        Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
             .range = Graphics::GpuTaskResourceRange{
-                .textureSubresources = range,
+                .textureSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
             },
-            .requiredState = Graphics::ResourceStates::ShaderResource,
-            .access = Graphics::GpuTaskResourceAccess::Read,
-        };
-        Graphics::GpuTaskDesc desc;
-        desc
-            .setIdentity(identity)
-            .setMarkerLabel(label)
-            .setQueue(graphicsQueue)
-            .setResourceUses(&use, 1u)
-        ;
-        return graph.addTask(desc);
+            .sourceQueue = graphicsQueue.id,
+            .destinationQueue = computeQueue.id,
+            .completion = graphicsCompletion,
+            .minimumCompletionToken = Graphics::QueueSubmissionToken{
+                .queue = Graphics::CommandQueue::Graphics,
+                .value = 7u,
+                .physicalQueueIndex = graphicsQueue.id.index,
+                .deviceGeneration = graphicsQueue.id.deviceGeneration,
+            },
+            .stateSource = &graphicsState,
+        },
+        Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
+            .range = Graphics::GpuTaskResourceRange{
+                .textureSubresources = Graphics::TextureSubresourceSet(1u, 1u, 0u, 1u),
+            },
+            .sourceQueue = computeQueue.id,
+            .destinationQueue = graphicsQueue.id,
+            .completion = computeCompletion,
+            .minimumCompletionToken = Graphics::QueueSubmissionToken{
+                .queue = Graphics::CommandQueue::Compute,
+                .value = 11u,
+                .physicalQueueIndex = computeQueue.id.index,
+                .deviceGeneration = computeQueue.id.deviceGeneration,
+            },
+            .stateSource = &computeState,
+        },
     };
 
-    {
-        TestArena testArena;
-        Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuExternalCompletionId graphicsCompletion = graph.importExternalCompletion(
-            Graphics::GpuExternalCompletionDesc{}
-                .setIdentity(Name("tests/task_graph/multi_owner_graphics_completion"))
-                .setMarkerLabel("Multi Owner Graphics Completion")
-        );
-        const Graphics::GpuExternalCompletionId computeCompletion = graph.importExternalCompletion(
-            Graphics::GpuExternalCompletionDesc{}
-                .setIdentity(Name("tests/task_graph/multi_owner_compute_completion"))
-                .setMarkerLabel("Multi Owner Compute Completion")
-        );
-        ASSERT_TRUE(graphicsCompletion.valid());
-        ASSERT_TRUE(computeCompletion.valid());
+    EXPECT_FALSE(graph.importResource(
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/invalid_multi_owner_texture"))
+            .setMarkerLabel("Invalid Multi Owner Texture")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::ShaderResource)
+            .setInitialOwnerHandoffSources(sources, LengthOf(sources))
+    ).valid());
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
 
-        Graphics::CommandListResourceStateHandoff graphicsState(testArena.arena);
-        Graphics::CommandListResourceStateHandoff computeState(testArena.arena);
-        const Graphics::QueueSubmissionToken graphicsToken{
-            .queue = Graphics::CommandQueue::Graphics,
-            .value = 7u,
-            .physicalQueueIndex = queues[0u].id.index,
-            .deviceGeneration = queues[0u].id.deviceGeneration,
-        };
-        const Graphics::QueueSubmissionToken computeToken{
-            .queue = Graphics::CommandQueue::Compute,
-            .value = 11u,
-            .physicalQueueIndex = queues[1u].id.index,
-            .deviceGeneration = queues[1u].id.deviceGeneration,
-        };
-        const Graphics::GpuGraphInitialOwnerHandoffSourceDesc sources[] = {
-            Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
-                .range = Graphics::GpuTaskResourceRange{
-                    .textureSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
-                },
-                .sourceQueue = queues[0u].id,
-                .destinationQueue = queues[0u].id,
-                .completion = graphicsCompletion,
-                .minimumCompletionToken = graphicsToken,
-                .stateSource = &graphicsState,
-            },
-            Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
-                .range = Graphics::GpuTaskResourceRange{
-                    .textureSubresources = Graphics::TextureSubresourceSet(1u, 1u, 0u, 1u),
-                },
-                .sourceQueue = queues[1u].id,
-                .destinationQueue = queues[0u].id,
-                .completion = computeCompletion,
-                .minimumCompletionToken = computeToken,
-                .stateSource = &computeState,
-            },
-        };
-        const Graphics::GpuGraphResourceId texture = graph.importResource(
-            Graphics::GpuGraphResourceDesc{}
-                .setIdentity(Name("tests/task_graph/multi_owner_texture"))
-                .setMarkerLabel("Multi Owner Texture")
-                .setType(Graphics::GpuGraphResourceType::Texture)
-                .setInitialState(Graphics::ResourceStates::ShaderResource)
-                .setInitialOwnerHandoffSources(sources, LengthOf(sources))
-        );
-        ASSERT_TRUE(texture.valid());
-        const Graphics::GpuTaskGraphResourceView imported = graph.resourceAt(texture.index);
-        ASSERT_EQ(imported.initialOwnerHandoffSourceCount, LengthOf(sources));
-        ASSERT_NE(imported.initialOwnerHandoffSources, nullptr);
-        EXPECT_NE(imported.initialOwnerHandoffSources[0u].stateSource, &graphicsState);
-        EXPECT_NE(imported.initialOwnerHandoffSources[1u].stateSource, &computeState);
-        EXPECT_FALSE(imported.initialOwnerHandoffSources[0u].stateSource->valid());
-        EXPECT_FALSE(imported.initialOwnerHandoffSources[1u].stateSource->valid());
-
-        const Graphics::GpuTaskId mip0Task = addTextureUse(
-            graph,
-            texture,
-            sources[0u].range.textureSubresources,
-            Name("tests/task_graph/multi_owner_mip0"),
-            "Multi Owner Mip 0"
-        );
-        const Graphics::GpuTaskId mip1Task = addTextureUse(
-            graph,
-            texture,
-            sources[1u].range.textureSubresources,
-            Name("tests/task_graph/multi_owner_mip1"),
-            "Multi Owner Mip 1"
-        );
-        ASSERT_TRUE(mip0Task.valid());
-        ASSERT_TRUE(mip1Task.valid());
-
-        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-
-        const Graphics::GpuCompiledTask* const compiledMip0 = compiledGraph.findTask(mip0Task);
-        const Graphics::GpuCompiledTask* const compiledMip1 = compiledGraph.findTask(mip1Task);
-        ASSERT_NE(compiledMip0, nullptr);
-        ASSERT_NE(compiledMip1, nullptr);
-        ASSERT_EQ(compiledMip0->prologueBarrierCount, 2u);
-        ASSERT_EQ(compiledMip1->prologueBarrierCount, 2u);
-        const Graphics::GpuCompiledBarrier* const mip0Barriers = compiledGraph.taskPrologueBarriers(mip0Task);
-        const Graphics::GpuCompiledBarrier* const mip1Barriers = compiledGraph.taskPrologueBarriers(mip1Task);
-        ASSERT_NE(mip0Barriers, nullptr);
-        ASSERT_NE(mip1Barriers, nullptr);
-        EXPECT_EQ(mip0Barriers[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire);
-        EXPECT_TRUE(mip0Barriers[0u].isInitialOwnerHandoff);
-        EXPECT_EQ(mip0Barriers[0u].sourceQueue, queues[0u].id);
-        EXPECT_EQ(mip0Barriers[0u].destinationQueue, queues[0u].id);
-        EXPECT_EQ(mip0Barriers[0u].range.textureSubresources, sources[0u].range.textureSubresources);
-        EXPECT_EQ(mip0Barriers[1u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
-        EXPECT_EQ(mip0Barriers[1u].before, Graphics::ResourceStates::ShaderResource);
-        EXPECT_EQ(mip0Barriers[1u].after, Graphics::ResourceStates::ShaderResource);
-        EXPECT_TRUE(mip0Barriers[1u].isGraphInitialState);
-        EXPECT_EQ(mip0Barriers[1u].range.textureSubresources, sources[0u].range.textureSubresources);
-        EXPECT_EQ(mip1Barriers[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire);
-        EXPECT_TRUE(mip1Barriers[0u].isInitialOwnerHandoff);
-        EXPECT_EQ(mip1Barriers[0u].sourceQueue, queues[1u].id);
-        EXPECT_EQ(mip1Barriers[0u].destinationQueue, queues[0u].id);
-        EXPECT_EQ(mip1Barriers[0u].range.textureSubresources, sources[1u].range.textureSubresources);
-        EXPECT_EQ(mip1Barriers[1u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
-        EXPECT_EQ(mip1Barriers[1u].before, Graphics::ResourceStates::ShaderResource);
-        EXPECT_EQ(mip1Barriers[1u].after, Graphics::ResourceStates::ShaderResource);
-        EXPECT_TRUE(mip1Barriers[1u].isGraphInitialState);
-        EXPECT_EQ(mip1Barriers[1u].range.textureSubresources, sources[1u].range.textureSubresources);
-
-        const Graphics::GpuExternalCompletionId* const mip0Dependencies =
-            compiledGraph.packetExternalDependencies(compiledMip0->packet)
-        ;
-        const Graphics::GpuExternalCompletionId* const mip1Dependencies =
-            compiledGraph.packetExternalDependencies(compiledMip1->packet)
-        ;
-        ASSERT_NE(mip0Dependencies, nullptr);
-        ASSERT_NE(mip1Dependencies, nullptr);
-        ASSERT_EQ(compiledGraph.packet(compiledMip0->packet).externalDependencyCount, 1u);
-        ASSERT_EQ(compiledGraph.packet(compiledMip1->packet).externalDependencyCount, 1u);
-        EXPECT_EQ(mip0Dependencies[0u], graphicsCompletion);
-        EXPECT_EQ(mip1Dependencies[0u], computeCompletion);
-
-        ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 1u);
-        const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
-            compiledGraph.logicalOwnershipTransfers()
-        ;
-        ASSERT_NE(ownershipTransfers, nullptr);
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), ownershipTransfers);
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(1u), nullptr);
-        const Graphics::GpuCompiledOwnershipTransfer& ownershipTransfer = ownershipTransfers[0u];
-        EXPECT_TRUE(ownershipTransfer.valid());
-        EXPECT_EQ(ownershipTransfer.resource, texture);
-        EXPECT_EQ(ownershipTransfer.resourceIdentity, Name("tests/task_graph/multi_owner_texture"));
-        EXPECT_EQ(ownershipTransfer.range.textureSubresources, sources[1u].range.textureSubresources);
-        EXPECT_NE(ownershipTransfer.range.textureSubresources, sources[0u].range.textureSubresources);
-        EXPECT_FALSE(ownershipTransfer.sourceTask.valid());
-        EXPECT_EQ(ownershipTransfer.destinationTask, mip1Task);
-        EXPECT_FALSE(ownershipTransfer.sourcePacket.valid());
-        EXPECT_EQ(ownershipTransfer.destinationPacket, compiledMip1->packet);
-        EXPECT_NE(ownershipTransfer.destinationPacket, compiledMip0->packet);
-        EXPECT_EQ(ownershipTransfer.sourceQueue, queues[1u].id);
-        EXPECT_EQ(ownershipTransfer.destinationQueue, queues[0u].id);
-        EXPECT_EQ(ownershipTransfer.sourceQueueFamilyIndex, queues[1u].familyIndex);
-        EXPECT_EQ(ownershipTransfer.destinationQueueFamilyIndex, queues[0u].familyIndex);
-        EXPECT_EQ(ownershipTransfer.declaredQueueSharing, Graphics::ResourceQueueSharing::Exclusive);
-        EXPECT_EQ(ownershipTransfer.resourceType, Graphics::GpuGraphResourceType::Texture);
-        EXPECT_EQ(ownershipTransfer.route, Graphics::GpuOwnershipTransferRoute::ExternalImport);
-        EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
-
-        const Graphics::GpuTaskGraphCompileStatistics& ownershipStatistics = compiledGraph.compileStatistics();
-        ASSERT_TRUE(ownershipStatistics.valid());
-        EXPECT_EQ(ownershipStatistics.ownershipReleaseBarrierCount, 0u);
-        EXPECT_EQ(ownershipStatistics.ownershipAcquireBarrierCount, 2u);
-        EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferCount, 1u);
-        EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferSignatureCount, 1u);
-        EXPECT_EQ(ownershipStatistics.repeatedOwnershipTransferSignatureCount, 0u);
-        EXPECT_EQ(ownershipStatistics.concurrentSharingCouldAvoidTransferCount, 1u);
-        EXPECT_EQ(ownershipStatistics.concurrentSharingAdviceResourceCount, 0u);
-        EXPECT_EQ(
-            ownershipStatistics.logicalOwnershipTransferCountByRoute[
-                Graphics::GpuOwnershipTransferRoute::ExternalImport
-            ],
-            1u
-        );
-        const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics sourceQueueStatistics =
-            compiledGraph.physicalQueueCompileStatistics(queues[1u].id)
-        ;
-        const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics destinationQueueStatistics =
-            compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
-        ;
-        ASSERT_TRUE(sourceQueueStatistics.valid());
-        ASSERT_TRUE(destinationQueueStatistics.valid());
-        EXPECT_EQ(sourceQueueStatistics.outgoingLogicalOwnershipTransferCount, 1u);
-        EXPECT_EQ(sourceQueueStatistics.incomingLogicalOwnershipTransferCount, 0u);
-        EXPECT_EQ(sourceQueueStatistics.outgoingLogicalOwnershipTransferSignatureCount, 1u);
-        EXPECT_EQ(sourceQueueStatistics.outgoingRepeatedOwnershipTransferSignatureCount, 0u);
-        EXPECT_EQ(destinationQueueStatistics.outgoingLogicalOwnershipTransferCount, 0u);
-        EXPECT_EQ(destinationQueueStatistics.incomingLogicalOwnershipTransferCount, 1u);
-        EXPECT_EQ(destinationQueueStatistics.incomingLogicalOwnershipTransferSignatureCount, 1u);
-        EXPECT_EQ(destinationQueueStatistics.incomingRepeatedOwnershipTransferSignatureCount, 0u);
-    }
-
-    {
-        TestArena testArena;
-        Graphics::GpuTaskGraph graph(testArena.arena);
-        Graphics::GpuPhysicalQueueInfo sameFamilyQueues[] = {
-            GraphicsQueue(),
-            DedicatedComputeQueue(),
-        };
-        sameFamilyQueues[1u].familyIndex = sameFamilyQueues[0u].familyIndex;
-        sameFamilyQueues[1u].queueIndex = 1u;
-        ASSERT_NE(sameFamilyQueues[0u].id, sameFamilyQueues[1u].id);
-        ASSERT_EQ(sameFamilyQueues[0u].familyIndex, sameFamilyQueues[1u].familyIndex);
-        const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
-            Graphics::GpuExternalCompletionDesc{}
-                .setIdentity(Name("tests/task_graph/invalid_sharing_same_family_completion"))
-                .setMarkerLabel("Invalid Sharing Same Family Completion")
-        );
-        ASSERT_TRUE(completion.valid());
-        Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
-        const Graphics::QueueSubmissionToken minimumCompletionToken{
-            .queue = Graphics::CommandQueue::Graphics,
-            .value = 13u,
-            .physicalQueueIndex = sameFamilyQueues[0u].id.index,
-            .deviceGeneration = sameFamilyQueues[0u].id.deviceGeneration,
-        };
-        constexpr Graphics::ResourceQueueSharing::Mask s_InvalidQueueSharing =
-            static_cast<Graphics::ResourceQueueSharing::Mask>(1u << 7u)
-        ;
-        const Graphics::GpuGraphResourceDesc bufferDesc = Graphics::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/invalid_sharing_same_family_buffer"))
-            .setMarkerLabel("Invalid Sharing Same Family Buffer")
-            .setType(Graphics::GpuGraphResourceType::Buffer)
-            .setInitialState(Graphics::ResourceStates::Common)
-            .setInitialOwnerQueue(sameFamilyQueues[0u].id)
-            .setInitialOwnerReleaseDestinationQueue(sameFamilyQueues[1u].id)
-            .setInitialOwnerCompletion(completion)
-            .setInitialOwnerMinimumCompletionToken(minimumCompletionToken)
-            .setInitialOwnerStateSource(&stateSource)
-            .setQueueSharing(s_InvalidQueueSharing)
-        ;
-        const usize resourceCount = graph.resourceCount();
-        const u64 declarationRevision = graph.declarationRevision();
-        const ArenaMemoryStats memoryStats = testArena.arena.memoryStats();
-        EXPECT_FALSE(graph.importResource(bufferDesc).valid());
-        EXPECT_EQ(graph.resourceCount(), resourceCount);
-        EXPECT_EQ(graph.declarationRevision(), declarationRevision);
-        ExpectMemoryStatsEqual(memoryStats, testArena.arena.memoryStats());
-    }
-
-    {
-        // A later broad use contains a mip already owned locally by this task and a tail owned by another external
-        // queue. Source matching must use only that first-use tail, not reject the original all-mip declaration.
-        TestArena testArena;
-        Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuExternalCompletionId mipZeroCompletion = graph.importExternalCompletion(
-            Graphics::GpuExternalCompletionDesc{}
-                .setIdentity(Name("tests/task_graph/multi_owner_overlapping_mip_zero_completion"))
-                .setMarkerLabel("Multi Owner Overlapping Mip Zero Completion")
-        );
-        const Graphics::GpuExternalCompletionId tailCompletion = graph.importExternalCompletion(
-            Graphics::GpuExternalCompletionDesc{}
-                .setIdentity(Name("tests/task_graph/multi_owner_overlapping_tail_completion"))
-                .setMarkerLabel("Multi Owner Overlapping Tail Completion")
-        );
-        ASSERT_TRUE(mipZeroCompletion.valid());
-        ASSERT_TRUE(tailCompletion.valid());
-
-        Graphics::CommandListResourceStateHandoff mipZeroState(testArena.arena);
-        Graphics::CommandListResourceStateHandoff tailState(testArena.arena);
-        const Graphics::QueueSubmissionToken mipZeroToken{
-            .queue = Graphics::CommandQueue::Graphics,
-            .value = 7u,
-            .physicalQueueIndex = queues[0u].id.index,
-            .deviceGeneration = queues[0u].id.deviceGeneration,
-        };
-        const Graphics::QueueSubmissionToken tailToken{
-            .queue = Graphics::CommandQueue::Compute,
-            .value = 11u,
-            .physicalQueueIndex = queues[1u].id.index,
-            .deviceGeneration = queues[1u].id.deviceGeneration,
-        };
-        const Graphics::GpuTaskResourceRange mipZeroRange{
-            .textureSubresources = Graphics::TextureSubresourceSet(
-                0u,
-                1u,
-                0u,
-                Graphics::TextureSubresourceSet::AllArraySlices
-            ),
-        };
-        const Graphics::GpuTaskResourceRange tailRange{
-            .textureSubresources = Graphics::TextureSubresourceSet(
-                1u,
-                Graphics::TextureSubresourceSet::AllMipLevels,
-                0u,
-                Graphics::TextureSubresourceSet::AllArraySlices
-            ),
-        };
-        const Graphics::GpuGraphInitialOwnerHandoffSourceDesc sources[] = {
-            Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
-                .range = mipZeroRange,
-                .sourceQueue = queues[0u].id,
-                .destinationQueue = queues[0u].id,
-                .completion = mipZeroCompletion,
-                .minimumCompletionToken = mipZeroToken,
-                .stateSource = &mipZeroState,
-            },
-            Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
-                .range = tailRange,
-                .sourceQueue = queues[1u].id,
-                .destinationQueue = queues[0u].id,
-                .completion = tailCompletion,
-                .minimumCompletionToken = tailToken,
-                .stateSource = &tailState,
-            },
-        };
-        const Graphics::GpuGraphResourceId texture = graph.importResource(
-            Graphics::GpuGraphResourceDesc{}
-                .setIdentity(Name("tests/task_graph/multi_owner_overlapping_texture"))
-                .setMarkerLabel("Multi Owner Overlapping Texture")
-                .setType(Graphics::GpuGraphResourceType::Texture)
-                .setInitialState(Graphics::ResourceStates::ShaderResource)
-                .setInitialOwnerHandoffSources(sources, LengthOf(sources))
-        );
-        ASSERT_TRUE(texture.valid());
-
-        const Graphics::GpuTaskResourceUse uses[] = {
-            Graphics::GpuTaskResourceUse{
-                .resource = texture,
-                .range = mipZeroRange,
-                .requiredState = Graphics::ResourceStates::ShaderResource,
-                .access = Graphics::GpuTaskResourceAccess::Read,
-            },
-            Graphics::GpuTaskResourceUse{
-                .resource = texture,
-                .range = Graphics::GpuTaskResourceRange{
-                    .textureSubresources = Graphics::s_AllSubresources,
-                },
-                .requiredState = Graphics::ResourceStates::ShaderResource,
-                .access = Graphics::GpuTaskResourceAccess::Read,
-            },
-        };
-        Graphics::GpuTaskDesc taskDesc;
-        taskDesc
-            .setIdentity(Name("tests/task_graph/multi_owner_overlapping_task"))
-            .setMarkerLabel("Multi Owner Overlapping Task")
-            .setQueue(graphicsQueue)
-            .setExternalDependencies(&tailCompletion, 1u)
-            .setResourceUses(uses, LengthOf(uses))
-        ;
-        const Graphics::GpuTaskId task = graph.addTask(taskDesc);
-        ASSERT_TRUE(task.valid());
-
-        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        ASSERT_NE(compiledTask, nullptr);
-        ASSERT_EQ(compiledTask->prologueBarrierCount, 4u);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
-        ASSERT_NE(barriers, nullptr);
-        bool hasMipZeroAcquire = false;
-        bool hasTailAcquire = false;
-        for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
-            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
-            hasMipZeroAcquire = hasMipZeroAcquire || (
-                barrier.type == Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire
-                && barrier.isInitialOwnerHandoff
-                && barrier.range.textureSubresources == mipZeroRange.textureSubresources
-                && barrier.sourceQueue == queues[0u].id
-                && barrier.destinationQueue == queues[0u].id
-            );
-            hasTailAcquire = hasTailAcquire || (
-                barrier.type == Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire
-                && barrier.isInitialOwnerHandoff
-                && barrier.range.textureSubresources == tailRange.textureSubresources
-                && barrier.sourceQueue == queues[1u].id
-                && barrier.destinationQueue == queues[0u].id
-            );
-        }
-        EXPECT_TRUE(hasMipZeroAcquire);
-        EXPECT_TRUE(hasTailAcquire);
-
-        const Graphics::GpuExternalCompletionId* const dependencies = compiledGraph.packetExternalDependencies(
-            compiledTask->packet
-        );
-        ASSERT_NE(dependencies, nullptr);
-        ASSERT_EQ(compiledGraph.packet(compiledTask->packet).externalDependencyCount, 2u);
-        EXPECT_EQ(dependencies[0u], tailCompletion);
-        EXPECT_EQ(dependencies[1u], mipZeroCompletion);
-    }
-
-    {
-        TestArena testArena;
-        Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuExternalCompletionId graphicsCompletion = graph.importExternalCompletion(
-            Graphics::GpuExternalCompletionDesc{}
-                .setIdentity(Name("tests/task_graph/multi_owner_ambiguous_graphics_completion"))
-                .setMarkerLabel("Multi Owner Ambiguous Graphics Completion")
-        );
-        const Graphics::GpuExternalCompletionId computeCompletion = graph.importExternalCompletion(
-            Graphics::GpuExternalCompletionDesc{}
-                .setIdentity(Name("tests/task_graph/multi_owner_ambiguous_compute_completion"))
-                .setMarkerLabel("Multi Owner Ambiguous Compute Completion")
-        );
-        ASSERT_TRUE(graphicsCompletion.valid());
-        ASSERT_TRUE(computeCompletion.valid());
-        Graphics::CommandListResourceStateHandoff state(testArena.arena);
-        const Graphics::QueueSubmissionToken graphicsToken{
-            .queue = Graphics::CommandQueue::Graphics,
-            .value = 7u,
-            .physicalQueueIndex = queues[0u].id.index,
-            .deviceGeneration = queues[0u].id.deviceGeneration,
-        };
-        const Graphics::QueueSubmissionToken computeToken{
-            .queue = Graphics::CommandQueue::Compute,
-            .value = 11u,
-            .physicalQueueIndex = queues[1u].id.index,
-            .deviceGeneration = queues[1u].id.deviceGeneration,
-        };
-        const Graphics::GpuGraphInitialOwnerHandoffSourceDesc sources[] = {
-            Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
-                .range = Graphics::GpuTaskResourceRange{
-                    .textureSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
-                },
-                .sourceQueue = queues[0u].id,
-                .destinationQueue = queues[0u].id,
-                .completion = graphicsCompletion,
-                .minimumCompletionToken = graphicsToken,
-                .stateSource = &state,
-            },
-            Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
-                .range = Graphics::GpuTaskResourceRange{
-                    .textureSubresources = Graphics::TextureSubresourceSet(1u, 1u, 0u, 1u),
-                },
-                .sourceQueue = queues[1u].id,
-                .destinationQueue = queues[0u].id,
-                .completion = computeCompletion,
-                .minimumCompletionToken = computeToken,
-                .stateSource = &state,
-            },
-        };
-        const Graphics::GpuGraphResourceId texture = graph.importResource(
-            Graphics::GpuGraphResourceDesc{}
-                .setIdentity(Name("tests/task_graph/multi_owner_ambiguous_texture"))
-                .setMarkerLabel("Multi Owner Ambiguous Texture")
-                .setType(Graphics::GpuGraphResourceType::Texture)
-                .setInitialState(Graphics::ResourceStates::ShaderResource)
-                .setInitialOwnerHandoffSources(sources, LengthOf(sources))
-        );
-        ASSERT_TRUE(texture.valid());
-        ASSERT_TRUE(addTextureUse(
-            graph,
-            texture,
-            Graphics::s_AllSubresources,
-            Name("tests/task_graph/multi_owner_ambiguous_use"),
-            "Multi Owner Ambiguous Use"
-        ).valid());
-        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
-        EXPECT_FALSE(compiledGraph.valid());
-    }
+    EXPECT_EQ(declarations.resourceCount(), 0u);
 }
 
 TEST(GpuTaskGraph, ClampsReadyFrontierWorkerUtilization){
@@ -15415,51 +15329,64 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     );
     ASSERT_TRUE(firstTask.valid());
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(firstTask);
-    ASSERT_TRUE(firstPacket.valid());
-    const Graphics::GpuPhysicalQueueId firstQueue = compiledGraph.packet(firstPacket).queue;
-    ASSERT_TRUE(firstQueue.valid());
+    Graphics::GpuSubmissionPacketId firstPacket;
+    Graphics::GpuPhysicalQueueId firstQueue;
+    u64 firstCompiledGeneration = 0u;
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+        firstPacket = compiledPlan.packetForTask(firstTask);
+        ASSERT_TRUE(firstPacket.valid());
+        firstQueue = compiledPlan.packet(firstPacket).plan->queue;
+        ASSERT_TRUE(firstQueue.valid());
+        firstCompiledGeneration = compiledPlan.generation();
+    }
 
     Graphics::GpuRecordedGraph recordedGraph(testArena.arena);
     Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
     recordedGraph.reset(compiledGraph);
     transaction.reset(compiledGraph);
-    ASSERT_TRUE(recordedGraph.validFor(compiledGraph));
-    ASSERT_TRUE(transaction.validFor(compiledGraph));
-    const Graphics::GpuTaskGraphPhysicalQueueRecordingStatistics firstQueueStatistics =
-        recordedGraph.physicalQueueRecordingStatistics(compiledGraph, firstQueue)
-    ;
-    ASSERT_TRUE(firstQueueStatistics.valid());
-    EXPECT_EQ(firstQueueStatistics.graphGeneration, compiledGraph.generation());
-    EXPECT_EQ(firstQueueStatistics.planGeneration, compiledGraph.planGeneration());
-    EXPECT_EQ(firstQueueStatistics.recordingAttemptGeneration, 0u);
-    EXPECT_EQ(firstQueueStatistics.deviceGeneration, compiledGraph.deviceGeneration());
-    EXPECT_EQ(firstQueueStatistics.queue, firstQueue);
-    EXPECT_EQ(firstQueueStatistics.queueClass, Graphics::CommandQueue::Graphics);
-    EXPECT_EQ(firstQueueStatistics.packetCount, 0u);
-    EXPECT_EQ(firstQueueStatistics.taskCount, 0u);
-    EXPECT_EQ(firstQueueStatistics.commandListCount, 0u);
-    EXPECT_EQ(firstQueueStatistics.barrierCount, 0u);
-    EXPECT_EQ(firstQueueStatistics.workerRoutedPacketCount, 0u);
-    EXPECT_EQ(firstQueueStatistics.parallelPacketCount, 0u);
-    EXPECT_EQ(firstQueueStatistics.commandListAcquisitionSeconds, 0.0);
-    EXPECT_EQ(firstQueueStatistics.graphBarrierRecordingSeconds, 0.0);
-    EXPECT_EQ(firstQueueStatistics.taskRecordSeconds, 0.0);
-    EXPECT_EQ(firstQueueStatistics.recordingSeconds, 0.0);
-    const Graphics::GpuPhysicalQueueId staleFirstQueue{
-        firstQueue.index,
-        static_cast<u16>(
-            firstQueue.deviceGeneration == Limit<u16>::s_Max
-                ? 1u
-                : firstQueue.deviceGeneration + 1u
-        ),
-    };
-    EXPECT_FALSE(recordedGraph.physicalQueueRecordingStatistics(compiledGraph, staleFirstQueue).valid());
-    // A current-generation ID is still invalid when the compiled plan has no matching physical topology entry.
-    const Graphics::GpuPhysicalQueueId nonPlanQueue{ 3u, compiledGraph.deviceGeneration() };
-    EXPECT_TRUE(nonPlanQueue.valid());
-    EXPECT_FALSE(recordedGraph.physicalQueueRecordingStatistics(compiledGraph, nonPlanQueue).valid());
-    const u64 firstCompiledGeneration = compiledGraph.generation();
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+        ASSERT_TRUE(recordedGraph.validFor(compiledGraph, compiledPlan));
+        ASSERT_TRUE(transaction.validFor(compiledPlan));
+        const Graphics::GpuTaskGraphPhysicalQueueRecordingStatistics firstQueueStatistics =
+            recordedGraph.physicalQueueRecordingStatistics(compiledGraph, compiledPlan, firstQueue)
+        ;
+        ASSERT_TRUE(firstQueueStatistics.valid());
+        EXPECT_EQ(firstQueueStatistics.graphGeneration, compiledPlan.generation());
+        EXPECT_EQ(firstQueueStatistics.planGeneration, compiledPlan.planGeneration());
+        EXPECT_EQ(firstQueueStatistics.recordingAttemptGeneration, 0u);
+        EXPECT_EQ(firstQueueStatistics.deviceGeneration, compiledPlan.deviceGeneration());
+        EXPECT_EQ(firstQueueStatistics.queue, firstQueue);
+        EXPECT_EQ(firstQueueStatistics.queueClass, Graphics::CommandQueue::Graphics);
+        EXPECT_EQ(firstQueueStatistics.packetCount, 0u);
+        EXPECT_EQ(firstQueueStatistics.taskCount, 0u);
+        EXPECT_EQ(firstQueueStatistics.commandListCount, 0u);
+        EXPECT_EQ(firstQueueStatistics.barrierCount, 0u);
+        EXPECT_EQ(firstQueueStatistics.workerRoutedPacketCount, 0u);
+        EXPECT_EQ(firstQueueStatistics.parallelPacketCount, 0u);
+        EXPECT_EQ(firstQueueStatistics.commandListAcquisitionSeconds, 0.0);
+        EXPECT_EQ(firstQueueStatistics.graphBarrierRecordingSeconds, 0.0);
+        EXPECT_EQ(firstQueueStatistics.taskRecordSeconds, 0.0);
+        EXPECT_EQ(firstQueueStatistics.recordingSeconds, 0.0);
+        const Graphics::GpuPhysicalQueueId staleFirstQueue{
+            firstQueue.index,
+            static_cast<u16>(
+                firstQueue.deviceGeneration == Limit<u16>::s_Max
+                    ? 1u
+                    : firstQueue.deviceGeneration + 1u
+            ),
+        };
+        EXPECT_FALSE(
+            recordedGraph.physicalQueueRecordingStatistics(compiledGraph, compiledPlan, staleFirstQueue).valid()
+        );
+        // A current-generation ID is still invalid when the compiled plan has no matching physical topology entry.
+        const Graphics::GpuPhysicalQueueId nonPlanQueue{ 3u, compiledPlan.deviceGeneration() };
+        EXPECT_TRUE(nonPlanQueue.valid());
+        EXPECT_FALSE(recordedGraph.physicalQueueRecordingStatistics(compiledGraph, compiledPlan, nonPlanQueue).valid());
+    }
 
     graph.reset();
     const Graphics::GpuTaskId secondTask = AddTask(
@@ -15469,29 +15396,37 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     );
     ASSERT_TRUE(secondTask.valid());
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_NE(compiledGraph.generation(), firstCompiledGeneration);
-    const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(secondTask);
-    ASSERT_TRUE(secondPacket.valid());
-    const Graphics::GpuPhysicalQueueId secondQueue = compiledGraph.packet(secondPacket).queue;
-    ASSERT_TRUE(secondQueue.valid());
-    EXPECT_FALSE(recordedGraph.validFor(compiledGraph));
-    EXPECT_FALSE(transaction.validFor(compiledGraph));
-    EXPECT_FALSE(recordedGraph.physicalQueueRecordingStatistics(compiledGraph, secondQueue).valid());
+    Graphics::GpuSubmissionPacketId secondPacket;
+    Graphics::GpuPhysicalQueueId secondQueue;
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+        ASSERT_NE(compiledPlan.generation(), firstCompiledGeneration);
+        secondPacket = compiledPlan.packetForTask(secondTask);
+        ASSERT_TRUE(secondPacket.valid());
+        secondQueue = compiledPlan.packet(secondPacket).plan->queue;
+        ASSERT_TRUE(secondQueue.valid());
+        EXPECT_FALSE(recordedGraph.validFor(compiledGraph, compiledPlan));
+        EXPECT_FALSE(transaction.validFor(compiledPlan));
+        EXPECT_FALSE(recordedGraph.physicalQueueRecordingStatistics(compiledGraph, compiledPlan, secondQueue).valid());
+    }
 
     // reset() releases old packet-owned command-list handles and reconstructs the serial/per-packet recording
     // scratch for the new immutable graph generation before a future command arena can be leased again.
     recordedGraph.reset(compiledGraph);
     transaction.reset(compiledGraph);
-    EXPECT_TRUE(recordedGraph.validFor(compiledGraph));
-    EXPECT_TRUE(transaction.validFor(compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    EXPECT_TRUE(recordedGraph.validFor(compiledGraph, compiledPlan));
+    EXPECT_TRUE(transaction.validFor(compiledPlan));
     const Graphics::GpuTaskGraphPhysicalQueueRecordingStatistics secondQueueStatistics =
-        recordedGraph.physicalQueueRecordingStatistics(compiledGraph, secondQueue)
+        recordedGraph.physicalQueueRecordingStatistics(compiledGraph, compiledPlan, secondQueue)
     ;
     ASSERT_TRUE(secondQueueStatistics.valid());
-    EXPECT_EQ(secondQueueStatistics.graphGeneration, compiledGraph.generation());
-    EXPECT_EQ(secondQueueStatistics.planGeneration, compiledGraph.planGeneration());
+    EXPECT_EQ(secondQueueStatistics.graphGeneration, compiledPlan.generation());
+    EXPECT_EQ(secondQueueStatistics.planGeneration, compiledPlan.planGeneration());
     EXPECT_EQ(secondQueueStatistics.recordingAttemptGeneration, 0u);
-    EXPECT_EQ(secondQueueStatistics.deviceGeneration, compiledGraph.deviceGeneration());
+    EXPECT_EQ(secondQueueStatistics.deviceGeneration, compiledPlan.deviceGeneration());
     EXPECT_EQ(secondQueueStatistics.queue, secondQueue);
     EXPECT_EQ(secondQueueStatistics.queueClass, Graphics::CommandQueue::Graphics);
     EXPECT_EQ(secondQueueStatistics.packetCount, 0u);
@@ -15540,45 +15475,63 @@ TEST(GpuTaskGraph, InvalidatesPacketRuntimeAndCaptureForSameGraphRecompile){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, firstTopology, assignments, compiledGraph));
-    ASSERT_EQ(compiledGraph.packetCount(), 1u);
-    const u64 graphGeneration = graph.generation();
-    const u64 firstPlanGeneration = compiledGraph.planGeneration();
-    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(task);
-    ASSERT_TRUE(firstPacket.valid());
-    EXPECT_EQ(firstPacket.generation, firstPlanGeneration);
+    u64 graphGeneration = 0u;
+    u64 firstPlanGeneration = 0u;
+    Graphics::GpuSubmissionPacketId firstPacket;
+    Graphics::GpuPhysicalQueueId firstQueue;
+    {
+        const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+
+        ASSERT_TRUE(reads.valid());
+        ASSERT_EQ(reads.compiled.packetCount(), 1u);
+        graphGeneration = reads.declarations.generation();
+        firstPlanGeneration = reads.compiled.planGeneration();
+        firstPacket = reads.compiled.packetForTask(task);
+        ASSERT_TRUE(firstPacket.valid());
+        EXPECT_EQ(firstPacket.generation, firstPlanGeneration);
+        firstQueue = reads.compiled.packet(firstPacket).plan->queue;
+        ASSERT_TRUE(firstQueue.valid());
+    }
 
     Graphics::GpuRecordedGraph recordedGraph(testArena.arena);
     Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
     recordedGraph.reset(compiledGraph);
     transaction.reset(compiledGraph);
-    ASSERT_TRUE(recordedGraph.validFor(compiledGraph));
-    ASSERT_TRUE(transaction.validFor(compiledGraph));
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+        ASSERT_TRUE(recordedGraph.validFor(compiledGraph, compiledPlan));
+        ASSERT_TRUE(transaction.validFor(compiledPlan));
+    }
 
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     ASSERT_TRUE(capture.captureClearBuffer(
         task,
         firstPacket,
-        compiledGraph.packet(firstPacket).queue,
+        firstQueue,
         Graphics::GpuGraphResourceId{ 0u, graphGeneration },
         0xdecafbadU
     ));
     ASSERT_EQ(capture.planGeneration(), firstPlanGeneration);
 
     ASSERT_TRUE(Compile(graph, analysis, secondTopology, assignments, compiledGraph));
-    ASSERT_EQ(compiledGraph.generation(), graphGeneration);
-    ASSERT_EQ(compiledGraph.packetCount(), 1u);
-    const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(task);
+    const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+
+    ASSERT_TRUE(reads.valid());
+    ASSERT_EQ(reads.compiled.generation(), graphGeneration);
+    ASSERT_EQ(reads.compiled.packetCount(), 1u);
+    const Graphics::GpuSubmissionPacketId secondPacket = reads.compiled.packetForTask(task);
     ASSERT_TRUE(secondPacket.valid());
-    EXPECT_NE(compiledGraph.planGeneration(), firstPlanGeneration);
+    EXPECT_NE(reads.compiled.planGeneration(), firstPlanGeneration);
     EXPECT_NE(secondPacket, firstPacket);
-    EXPECT_FALSE(compiledGraph.validPacket(firstPacket));
-    EXPECT_FALSE(recordedGraph.validFor(compiledGraph));
-    EXPECT_FALSE(transaction.validFor(compiledGraph));
+    EXPECT_FALSE(reads.compiled.validPacket(firstPacket));
+    EXPECT_FALSE(recordedGraph.validFor(compiledGraph, reads.compiled));
+    EXPECT_FALSE(transaction.validFor(reads.compiled));
 
     const Graphics::GpuCommandIrReplayResult staleCapture = Graphics::PreflightGpuCommandIrPacket(
         capture.commandBytes(),
-        graph,
-        compiledGraph,
+        reads.declarations,
+        reads.compiled,
         secondPacket
     );
     EXPECT_EQ(staleCapture.error, Graphics::GpuCommandIrReplayError::PlanGenerationMismatch);
@@ -15733,10 +15686,12 @@ TEST(GpuTaskGraph, ExportsInferredEvidenceAndQueueAssignments){
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
     const Graphics::GpuTaskGraphTelemetryOptions telemetryOptions{
         .queueAssignments = &assignments,
-        .compiledGraph = nullptr,
+        .compiledPlan = nullptr,
         .queueAssignmentTelemetry = nullptr,
     };
-    ASSERT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+    ASSERT_TRUE(declarations.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
 
     const u8 expectedFlags =
         Graphics::GpuTaskGraphTelemetryEdgeFlag::ExplicitDependency
@@ -15883,10 +15838,12 @@ TEST(GpuTaskGraph, ExportsDetailedQueueAssignmentTelemetry){
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     const Graphics::GpuTaskGraphTelemetryOptions telemetryOptions{
         .queueAssignments = &assignments,
-        .compiledGraph = nullptr,
+        .compiledPlan = nullptr,
         .queueAssignmentTelemetry = nullptr,
     };
-    ASSERT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+    ASSERT_TRUE(declarations.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
 
     ASSERT_EQ(nodes.size(), 6u);
     EXPECT_EQ(
@@ -15990,26 +15947,33 @@ TEST(GpuTaskGraph, ExportsCompiledPacketMembershipAndPacketizationDecisions){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_EQ(compiledGraph.packetCount(), 1u);
 
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     Telemetry::FrameGraphPendingNameEdges pendingEdges(testArena.arena);
     Telemetry::FrameGraphBuilder builder(nodes, edges, pendingEdges);
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
-    const Graphics::GpuTaskGraphTelemetryOptions telemetryOptions{
-        .queueAssignments = nullptr,
-        .compiledGraph = &compiledGraph,
-        .queueAssignmentTelemetry = nullptr,
-    };
-    ASSERT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
+    u64 planGeneration = 0u;
+    {
+        const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+        const Graphics::GpuTaskGraphTelemetryOptions telemetryOptions{
+            .queueAssignments = nullptr,
+            .compiledPlan = &reads.compiled,
+            .queueAssignmentTelemetry = nullptr,
+        };
+
+        ASSERT_TRUE(reads.valid());
+        ASSERT_EQ(reads.compiled.packetCount(), 1u);
+        ASSERT_TRUE(reads.declarations.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
+        planGeneration = reads.compiled.planGeneration();
+    }
 
     ASSERT_EQ(nodes.size(), 2u);
     EXPECT_FALSE(nodes[prefix.index].queueAssignment.present);
     ASSERT_TRUE(nodes[prefix.index].compiledTask.present);
     ASSERT_TRUE(nodes[suffix.index].compiledTask.present);
-    EXPECT_EQ(nodes[prefix.index].compiledTask.planGeneration, compiledGraph.planGeneration());
-    EXPECT_EQ(nodes[suffix.index].compiledTask.planGeneration, compiledGraph.planGeneration());
+    EXPECT_EQ(nodes[prefix.index].compiledTask.planGeneration, planGeneration);
+    EXPECT_EQ(nodes[suffix.index].compiledTask.planGeneration, planGeneration);
     EXPECT_EQ(nodes[prefix.index].compiledTask.packetIndex, 0u);
     EXPECT_EQ(nodes[suffix.index].compiledTask.packetIndex, 0u);
     EXPECT_EQ(
@@ -16024,12 +15988,17 @@ TEST(GpuTaskGraph, ExportsCompiledPacketMembershipAndPacketizationDecisions){
     Graphics::GpuTaskGraphQueueAssignments replacementAssignments(testArena.arena);
     Graphics::GpuCompiledGraph replacementCompiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, replacementAssignments, replacementCompiledGraph));
-    const Graphics::GpuTaskGraphTelemetryOptions mismatchedOptions{
-        .queueAssignments = &assignments,
-        .compiledGraph = &replacementCompiledGraph,
-        .queueAssignmentTelemetry = nullptr,
-    };
-    EXPECT_FALSE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena, mismatchedOptions));
+    {
+        const Tests::GpuTaskGraphReadViews reads(graph, replacementCompiledGraph);
+        const Graphics::GpuTaskGraphTelemetryOptions mismatchedOptions{
+            .queueAssignments = &assignments,
+            .compiledPlan = &reads.compiled,
+            .queueAssignmentTelemetry = nullptr,
+        };
+
+        ASSERT_TRUE(reads.valid());
+        EXPECT_FALSE(reads.declarations.appendFrameGraphTelemetry(builder, analysis, scratchArena, mismatchedOptions));
+    }
 }
 
 TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
@@ -16081,7 +16050,13 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
 
     // The explicit third -> first edge has to order both inferred resource hazards. Pair-local declaration order
     // would instead infer first -> second -> third and invent a cycle with this valid explicit edge.
-    const Graphics::GpuTaskId futureThird{ 2u, graph.generation() };
+    u64 graphGeneration = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        graphGeneration = declarations.generation();
+    }
+    const Graphics::GpuTaskId futureThird{ 2u, graphGeneration };
     const Graphics::GpuTaskId first = AddTask(
         graph,
         Name("tests/task_graph/explicit_first"),
@@ -16131,15 +16106,17 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    ASSERT_EQ(compiledPlan.packetCount(), 3u);
 
     const Graphics::GpuTaskId topologicalTasks[] = { second, third, first };
     for(usize taskIndex = 0u; taskIndex < LengthOf(topologicalTasks); ++taskIndex){
-        const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetIdAt(taskIndex);
+        const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetIdAt(taskIndex);
         ASSERT_TRUE(packet.valid());
-        ASSERT_EQ(compiledGraph.packet(packet).taskCount, 1u);
-        ASSERT_NE(compiledGraph.packetTasks(packet), nullptr);
-        EXPECT_EQ(compiledGraph.packetTasks(packet)[0u], topologicalTasks[taskIndex]);
+        ASSERT_EQ(compiledPlan.packet(packet).plan->taskCount, 1u);
+        ASSERT_NE(compiledPlan.packet(packet).tasks, nullptr);
+        EXPECT_EQ(compiledPlan.packet(packet).tasks[0u], topologicalTasks[taskIndex]);
     }
 
     const Graphics::GpuTaskId lookupOrder[] = { first, second, third, third, second, first };
@@ -16147,12 +16124,12 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
         const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
         ASSERT_NE(assignment, nullptr);
         EXPECT_EQ(assignment->task, task);
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
         ASSERT_NE(compiledTask, nullptr);
         EXPECT_EQ(compiledTask->task, task);
-        EXPECT_EQ(compiledGraph.packetForTask(task), compiledTask->packet);
-        ASSERT_NE(compiledGraph.packetTasks(compiledTask->packet), nullptr);
-        EXPECT_EQ(compiledGraph.packetTasks(compiledTask->packet)[0u], task);
+        EXPECT_EQ(compiledPlan.packetForTask(task), compiledTask->packet);
+        ASSERT_NE(compiledPlan.packet(compiledTask->packet).tasks, nullptr);
+        EXPECT_EQ(compiledPlan.packet(compiledTask->packet).tasks[0u], task);
     }
 }
 
@@ -16175,29 +16152,45 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_NE(compiledGraph.findTask(first), nullptr);
+    usize graphTaskCount = 0u;
+    u64 graphGeneration = 0u;
+    {
+        const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
 
-    const auto expectMissingTask = [&assignments, &compiledGraph](const Graphics::GpuTaskId task){
+        ASSERT_TRUE(reads.valid());
+        ASSERT_NE(reads.compiled.findTask(first).plan, nullptr);
+        graphTaskCount = reads.declarations.taskCount();
+        graphGeneration = reads.declarations.generation();
+    }
+
+    const auto expectMissingTask = [&assignments](
+        const Graphics::GpuCompiledGraph::ReadView& compiledPlan,
+        const Graphics::GpuTaskId task
+    ){
         EXPECT_EQ(assignments.find(task), nullptr);
-        EXPECT_EQ(compiledGraph.findTask(task), nullptr);
-        EXPECT_FALSE(compiledGraph.packetForTask(task).valid());
+        EXPECT_EQ(compiledPlan.findTask(task).plan, nullptr);
+        EXPECT_FALSE(compiledPlan.packetForTask(task).valid());
         EXPECT_EQ(
-            compiledGraph.packetizationDecisionForTask(task),
+            compiledPlan.packetizationDecisionForTask(task),
             Graphics::GpuTaskPacketizationDecision::Unknown
         );
     };
     const Graphics::GpuTaskId onePastCompiledTasks{
-        static_cast<u32>(graph.taskCount()),
-        graph.generation(),
+        static_cast<u32>(graphTaskCount),
+        graphGeneration,
     };
     const Graphics::GpuTaskId largeSameGenerationTask{
         Limit<u32>::s_Max - 1u,
-        graph.generation(),
+        graphGeneration,
     };
     ASSERT_TRUE(onePastCompiledTasks.valid());
     ASSERT_TRUE(largeSameGenerationTask.valid());
-    expectMissingTask(onePastCompiledTasks);
-    expectMissingTask(largeSameGenerationTask);
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+        expectMissingTask(compiledPlan, onePastCompiledTasks);
+        expectMissingTask(compiledPlan, largeSameGenerationTask);
+    }
 
     Graphics::GpuTaskGraph foreignGraph(testArena.arena);
     const Graphics::GpuTaskId foreign = AddTask(
@@ -16206,8 +16199,12 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
         "Compiled Lookup Foreign"
     );
     ASSERT_TRUE(foreign.valid());
-    ASSERT_NE(foreign.generation, graph.generation());
-    expectMissingTask(foreign);
+    ASSERT_NE(foreign.generation, graphGeneration);
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+        expectMissingTask(compiledPlan, foreign);
+    }
 
     const Graphics::GpuTaskId appended = AddTask(
         graph,
@@ -16215,15 +16212,24 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
         "Compiled Lookup Appended"
     );
     ASSERT_TRUE(appended.valid());
-    EXPECT_FALSE(compiledGraph.validFor(graph));
-    expectMissingTask(appended);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+        EXPECT_FALSE(compiledPlan.validFor(declarations));
+        expectMissingTask(compiledPlan, appended);
+    }
 
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_TRUE(compiledGraph.validFor(graph));
-    ASSERT_NE(assignments.find(first), nullptr);
-    ASSERT_NE(assignments.find(appended), nullptr);
-    ASSERT_NE(compiledGraph.findTask(first), nullptr);
-    ASSERT_NE(compiledGraph.findTask(appended), nullptr);
+    {
+        const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+
+        ASSERT_TRUE(reads.valid());
+        ASSERT_NE(assignments.find(first), nullptr);
+        ASSERT_NE(assignments.find(appended), nullptr);
+        ASSERT_NE(reads.compiled.findTask(first).plan, nullptr);
+        ASSERT_NE(reads.compiled.findTask(appended).plan, nullptr);
+    }
 
     graph.reset();
     const Graphics::GpuTaskId replacement = AddTask(
@@ -16234,11 +16240,16 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
     ASSERT_TRUE(replacement.valid());
     ASSERT_NE(replacement.generation, first.generation);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    expectMissingTask(first);
-    expectMissingTask(appended);
-    ASSERT_NE(assignments.find(replacement), nullptr);
-    ASSERT_NE(compiledGraph.findTask(replacement), nullptr);
-    EXPECT_TRUE(compiledGraph.packetForTask(replacement).valid());
+    {
+        const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+
+        ASSERT_TRUE(reads.valid());
+        expectMissingTask(reads.compiled, first);
+        expectMissingTask(reads.compiled, appended);
+        ASSERT_NE(assignments.find(replacement), nullptr);
+        ASSERT_NE(reads.compiled.findTask(replacement).plan, nullptr);
+        EXPECT_TRUE(reads.compiled.packetForTask(replacement).valid());
+    }
 }
 
 TEST(GpuTaskGraph, CompiledTaskLookupScalesAcrossDenseTaskIds){
@@ -16271,7 +16282,9 @@ TEST(GpuTaskGraph, CompiledTaskLookupScalesAcrossDenseTaskIds){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_EQ(compiledGraph.taskCount(), s_TaskCount);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    ASSERT_EQ(compiledPlan.taskCount(), s_TaskCount);
 
     u64 assignmentChecksum = 0u;
     u64 packetChecksum = 0u;
@@ -16283,7 +16296,7 @@ TEST(GpuTaskGraph, CompiledTaskLookupScalesAcrossDenseTaskIds){
                 ADD_FAILURE() << "Dense queue-assignment lookup failed at task " << taskIndex;
                 return;
             }
-            const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(tasks[taskIndex]);
+            const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(tasks[taskIndex]).plan;
             if(!compiledTask || compiledTask->task != tasks[taskIndex] || !compiledTask->packet.valid()){
                 ADD_FAILURE() << "Dense compiled-task lookup failed at task " << taskIndex;
                 return;
@@ -16366,12 +16379,20 @@ TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites){
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         ASSERT_TRUE(Compile(validGraph, analysis, topology, assignments, compiledGraph));
         ASSERT_TRUE(assignments.valid());
-        ASSERT_TRUE(compiledGraph.validFor(validGraph));
+        {
+            const Tests::GpuTaskGraphReadViews reads(validGraph, compiledGraph);
+
+            ASSERT_TRUE(reads.valid());
+        }
 
         EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
         EXPECT_FALSE(analysis.valid());
         EXPECT_FALSE(assignments.valid());
-        EXPECT_FALSE(compiledGraph.valid());
+        {
+            const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+            EXPECT_FALSE(compiledPlan.valid());
+        }
         EXPECT_EQ(
             analysis.diagnostic().status,
             Graphics::GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask
@@ -16411,6 +16432,7 @@ TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites){
     {
         Graphics::GpuTaskGraph graph(testArena.arena);
         Graphics::CommandListResourceStateHandoff externalStateSource(testArena.arena);
+        ASSERT_FALSE(externalStateSource.valid());
         const Graphics::GpuTaskExternalStateSource externalStateSources[] = {
             Graphics::GpuTaskExternalStateSource{ .states = &externalStateSource },
         };
@@ -16421,16 +16443,10 @@ TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites){
             .setScheduling(frontierScheduling)
             .setExternalStateSources(externalStateSources, LengthOf(externalStateSources))
         ;
-        const Graphics::GpuTaskId recovery = graph.addTask(recoveryDesc);
-        ASSERT_TRUE(recovery.valid());
+        EXPECT_FALSE(graph.addTask(recoveryDesc).valid());
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
 
-        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        EXPECT_FALSE(Analyze(graph, analysis));
-        EXPECT_EQ(
-            analysis.diagnostic().status,
-            Graphics::GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask
-        );
-        EXPECT_EQ(analysis.diagnostic().task, recovery);
+        EXPECT_EQ(declarations.taskCount(), 0u);
     }
 
     {
@@ -16618,15 +16634,18 @@ TEST(GpuTaskGraph, CompilesOnlyIndependentAcceptedQueueFrontierTasks){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_TRUE(compiledGraph.validFor(graph));
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    ASSERT_TRUE(compiledPlan.validFor(declarations));
     ASSERT_NE(FindEdge(analysis, domainRecovery, consumer), nullptr);
 
     const Graphics::GpuTaskId recoveryTasks[] = { noUseRecovery, domainRecovery };
     for(const Graphics::GpuTaskId recovery : recoveryTasks){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(recovery);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(recovery).plan;
         ASSERT_NE(compiledTask, nullptr);
         ASSERT_TRUE(compiledTask->packet.valid());
-        const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(compiledTask->packet);
+        const Graphics::GpuSubmissionPacket& packet = *compiledPlan.packet(compiledTask->packet).plan;
         EXPECT_EQ(packet.taskCount, 1u);
         EXPECT_EQ(packet.dependencyCount, 0u);
         EXPECT_EQ(packet.externalDependencyCount, 0u);
@@ -16707,6 +16726,8 @@ TEST(GpuTaskGraph, DeduplicatesMergedPacketExternalDependenciesInTaskOrder){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const auto& analysisDependencies =
         analysis.externalDependencies()
@@ -16723,18 +16744,18 @@ TEST(GpuTaskGraph, DeduplicatesMergedPacketExternalDependenciesInTaskOrder){
     EXPECT_EQ(analysisDependencies[4u].completion, completions[1u]);
     EXPECT_EQ(analysisDependencies[4u].consumer, second);
 
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(first);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetForTask(second), packet);
-    ASSERT_EQ(compiledGraph.packet(packet).taskCount, 2u);
-    ASSERT_EQ(compiledGraph.packet(packet).externalDependencyCount, 3u);
-    const Graphics::GpuExternalCompletionId* const packetDependencies = compiledGraph.packetExternalDependencies(packet);
+    EXPECT_EQ(compiledPlan.packetForTask(second), packet);
+    ASSERT_EQ(compiledPlan.packet(packet).plan->taskCount, 2u);
+    ASSERT_EQ(compiledPlan.packet(packet).plan->externalDependencyCount, 3u);
+    const Graphics::GpuExternalCompletionId* const packetDependencies = compiledPlan.packet(packet).externalDependencies;
     ASSERT_NE(packetDependencies, nullptr);
     EXPECT_EQ(packetDependencies[0u], completions[1u]);
     EXPECT_EQ(packetDependencies[1u], completions[0u]);
     EXPECT_EQ(packetDependencies[2u], completions[2u]);
-    EXPECT_EQ(compiledGraph.compileStatistics().declaredExternalDependencyCount, analysisDependencies.size());
-    EXPECT_EQ(compiledGraph.compileStatistics().packetExternalDependencyCount, 3u);
+    EXPECT_EQ(compiledPlan.compileStatistics().declaredExternalDependencyCount, analysisDependencies.size());
+    EXPECT_EQ(compiledPlan.compileStatistics().packetExternalDependencyCount, 3u);
 }
 
 
@@ -16845,179 +16866,188 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_TRUE(compiledGraph.validFor(graph));
-    ASSERT_EQ(compiledGraph.taskCount(), 4u);
-    ASSERT_EQ(compiledGraph.packetCount(), 4u);
-    const Graphics::GpuPhysicalQueueTopology compiledQueueTopology = compiledGraph.queueTopology();
-    ASSERT_NE(compiledQueueTopology.queues, nullptr);
-    ASSERT_EQ(compiledQueueTopology.queueCount, LengthOf(queues));
-    EXPECT_EQ(compiledQueueTopology.queues[0u].id, queues[0u].id);
-    EXPECT_EQ(compiledQueueTopology.queues[1u].id, queues[1u].id);
-    EXPECT_EQ(compiledQueueTopology.queues[2u].id, queues[2u].id);
+    {
+        const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+        const Graphics::GpuTaskGraph::DeclarationReadView& declarations = reads.declarations;
+        const Graphics::GpuCompiledGraph::ReadView& compiledPlan = reads.compiled;
 
-    const Graphics::GpuTaskGraphCompileStatistics& compileStatistics = compiledGraph.compileStatistics();
-    ASSERT_TRUE(compileStatistics.valid());
-    EXPECT_EQ(compileStatistics.graphGeneration, compiledGraph.generation());
-    EXPECT_EQ(compileStatistics.planGeneration, compiledGraph.planGeneration());
-    EXPECT_EQ(compileStatistics.deviceGeneration, compiledGraph.deviceGeneration());
-    EXPECT_EQ(compileStatistics.taskCount, compiledGraph.taskCount());
-    EXPECT_EQ(compileStatistics.resourceCount, graph.resourceCount());
-    EXPECT_EQ(compileStatistics.resourceUseCount, 1u);
-    EXPECT_EQ(compileStatistics.explicitDependencyCount, 1u);
-    EXPECT_EQ(compileStatistics.inferredDependencyCount, 0u);
-    EXPECT_EQ(compileStatistics.declaredExternalDependencyCount, 1u);
-    EXPECT_EQ(compileStatistics.initialOwnershipExternalDependencyCount, 0u);
-    EXPECT_EQ(compileStatistics.externalDependencyCount, 1u);
-    EXPECT_EQ(compileStatistics.packetCount, compiledGraph.packetCount());
-    EXPECT_EQ(compileStatistics.packetDependencyCount, 1u);
-    EXPECT_EQ(compileStatistics.packetExternalDependencyCount, 1u);
-    EXPECT_EQ(compileStatistics.crossQueuePacketDependencyCount, 1u);
-    EXPECT_EQ(compileStatistics.crossFamilyPacketDependencyCount, 1u);
-    EXPECT_EQ(compileStatistics.mergedTaskCount, 0u);
-    EXPECT_EQ(compileStatistics.recordingFrontierCount, 1u);
-    EXPECT_EQ(
-        compileStatistics.taskCountByQueueClass[Graphics::CommandQueue::Graphics],
-        2u
-    );
-    EXPECT_EQ(
-        compileStatistics.taskCountByQueueClass[Graphics::CommandQueue::Compute],
-        1u
-    );
-    EXPECT_EQ(
-        compileStatistics.taskCountByQueueClass[Graphics::CommandQueue::Transfer],
-        1u
-    );
-    EXPECT_EQ(
-        compileStatistics.packetCountByQueueClass[Graphics::CommandQueue::Graphics],
-        2u
-    );
-    EXPECT_EQ(
-        compileStatistics.packetCountByQueueClass[Graphics::CommandQueue::Compute],
-        1u
-    );
-    EXPECT_EQ(
-        compileStatistics.packetCountByQueueClass[Graphics::CommandQueue::Transfer],
-        1u
-    );
-    usize packetizationDecisionCount = 0u;
-    for(const usize count : compileStatistics.packetizationDecisionCounts)
-        packetizationDecisionCount += count;
-    EXPECT_EQ(packetizationDecisionCount, compiledGraph.taskCount());
-    EXPECT_GE(compileStatistics.analysisSeconds, 0.0);
-    EXPECT_GE(compileStatistics.validationSeconds, 0.0);
-    EXPECT_GE(compileStatistics.dependencyAnalysisSeconds, 0.0);
-    EXPECT_GE(compileStatistics.hazardAnalysisSeconds, 0.0);
-    EXPECT_GE(compileStatistics.topologicalOrderSeconds, 0.0);
-    EXPECT_LE(
-        compileStatistics.validationSeconds
-            + compileStatistics.dependencyAnalysisSeconds
-            + compileStatistics.hazardAnalysisSeconds
-            + compileStatistics.topologicalOrderSeconds,
-        compileStatistics.analysisSeconds + 1.0e-9
-    );
-    EXPECT_GE(compileStatistics.queueAssignmentSeconds, 0.0);
-    EXPECT_GE(compileStatistics.planningSeconds, 0.0);
-    EXPECT_GE(compileStatistics.packetizationSeconds, 0.0);
-    EXPECT_GE(compileStatistics.resourceStatePlanningSeconds, 0.0);
-    EXPECT_GE(compileStatistics.packetDependencyPlanningSeconds, 0.0);
-    EXPECT_GE(compileStatistics.totalSeconds, 0.0);
+        ASSERT_TRUE(reads.valid());
+        ASSERT_EQ(compiledPlan.taskCount(), 4u);
+        ASSERT_EQ(compiledPlan.packetCount(), 4u);
+        const Graphics::GpuPhysicalQueueTopology compiledQueueTopology = compiledPlan.queueTopology();
+        ASSERT_NE(compiledQueueTopology.queues, nullptr);
+        ASSERT_EQ(compiledQueueTopology.queueCount, LengthOf(queues));
+        EXPECT_EQ(compiledQueueTopology.queues[0u].id, queues[0u].id);
+        EXPECT_EQ(compiledQueueTopology.queues[1u].id, queues[1u].id);
+        EXPECT_EQ(compiledQueueTopology.queues[2u].id, queues[2u].id);
 
-    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
-    const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(second);
-    const Graphics::GpuSubmissionPacketId transferPacket = compiledGraph.packetForTask(transfer);
-    const Graphics::GpuSubmissionPacketId recoveryPacket = compiledGraph.packetForTask(recovery);
-    ASSERT_TRUE(firstPacket.valid());
-    ASSERT_TRUE(secondPacket.valid());
-    ASSERT_TRUE(transferPacket.valid());
-    ASSERT_TRUE(recoveryPacket.valid());
-    EXPECT_NE(firstPacket, secondPacket);
-    EXPECT_NE(recoveryPacket, secondPacket);
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(first, first));
-    EXPECT_FALSE(compiledGraph.tasksSharePacket(first, second));
-    EXPECT_FALSE(compiledGraph.tasksSharePacket(first, {}));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(first, second));
-    EXPECT_FALSE(compiledGraph.taskPrecedesOrSharesPacket(second, first));
-    EXPECT_FALSE(compiledGraph.taskPrecedesOrSharesPacket(first, {}));
-    EXPECT_FALSE(compiledGraph.taskPrecedesInSamePacket(first, second));
-    EXPECT_FALSE(compiledGraph.taskPrecedesInSamePacket(first, first));
-    EXPECT_FALSE(compiledGraph.tasksFormContiguousPacketSequence(nullptr, 0u));
-    EXPECT_FALSE(compiledGraph.taskJoinsAcceptedQueueFrontier(first));
-    EXPECT_TRUE(compiledGraph.taskJoinsAcceptedQueueFrontier(recovery));
-    EXPECT_FALSE(compiledGraph.taskJoinsAcceptedQueueFrontier({}));
-    const Graphics::GpuPhysicalQueueInfo* const firstTaskQueue = compiledGraph.queueInfoForTask(first);
-    const Graphics::GpuPhysicalQueueInfo* const recoveryTaskQueue = compiledGraph.queueInfoForTask(recovery);
-    ASSERT_NE(firstTaskQueue, nullptr);
-    ASSERT_NE(recoveryTaskQueue, nullptr);
-    EXPECT_EQ(firstTaskQueue->id, compiledGraph.packet(firstPacket).queue);
-    EXPECT_EQ(recoveryTaskQueue->id, compiledGraph.packet(recoveryPacket).queue);
-    EXPECT_EQ(compiledGraph.queueInfoForTask({}), nullptr);
-    const Graphics::GpuSubmissionPacketRange firstTwoPacketRange = compiledGraph.packetRange(
-        firstPacket,
-        secondPacket
-    );
-    ASSERT_TRUE(firstTwoPacketRange.valid());
-    EXPECT_TRUE(compiledGraph.validPacketRange(firstTwoPacketRange));
-    EXPECT_EQ(firstTwoPacketRange.first, firstPacket);
-    EXPECT_EQ(firstTwoPacketRange.packetCount, 2u);
-    const Graphics::GpuSubmissionPacketRange firstTwoTaskRange = compiledGraph.packetRangeForTasks(first, second);
-    ASSERT_TRUE(firstTwoTaskRange.valid());
-    EXPECT_EQ(firstTwoTaskRange.first, firstPacket);
-    EXPECT_EQ(firstTwoTaskRange.packetCount, firstTwoPacketRange.packetCount);
-    const Graphics::GpuSubmissionPacketRange fullPacketRange = compiledGraph.allPacketRange();
-    ASSERT_TRUE(fullPacketRange.valid());
-    EXPECT_TRUE(compiledGraph.validPacketRange(fullPacketRange));
-    EXPECT_EQ(fullPacketRange.first, firstPacket);
-    EXPECT_EQ(fullPacketRange.packetCount, compiledGraph.packetCount());
-    EXPECT_FALSE(compiledGraph.packetRange(secondPacket, firstPacket).valid());
-    EXPECT_FALSE(compiledGraph.packetRangeForTasks(second, first).valid());
-    EXPECT_FALSE(compiledGraph.packetRangeForTasks(first, {}).valid());
-    EXPECT_FALSE(compiledGraph.validPacketRange(Graphics::GpuSubmissionPacketRange{
-        .first = firstPacket,
-        .packetCount = compiledGraph.packetCount() + 1u,
-    }));
-    const auto& secondPacketPlan = compiledGraph.packet(secondPacket);
-    ASSERT_EQ(secondPacketPlan.taskCount, 1u);
-    ASSERT_EQ(secondPacketPlan.dependencyCount, 1u);
-    ASSERT_EQ(secondPacketPlan.externalDependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(secondPacket)[0].producer, firstPacket);
-    EXPECT_EQ(compiledGraph.packetExternalDependencies(secondPacket)[0], completion);
-    const auto& recoveryPacketPlan = compiledGraph.packet(recoveryPacket);
-    EXPECT_EQ(recoveryPacketPlan.dependencyCount, 0u);
-    EXPECT_EQ(recoveryPacketPlan.externalDependencyCount, 0u);
-    EXPECT_TRUE(recoveryPacketPlan.joinsAcceptedQueueFrontier);
-    EXPECT_TRUE(recoveryPacketPlan.isRecoverySubmission);
+        const Graphics::GpuTaskGraphCompileStatistics compileStatistics = compiledPlan.compileStatistics();
+        ASSERT_TRUE(compileStatistics.valid());
+        EXPECT_EQ(compileStatistics.graphGeneration, compiledPlan.generation());
+        EXPECT_EQ(compileStatistics.planGeneration, compiledPlan.planGeneration());
+        EXPECT_EQ(compileStatistics.deviceGeneration, compiledPlan.deviceGeneration());
+        EXPECT_EQ(compileStatistics.taskCount, compiledPlan.taskCount());
+        EXPECT_EQ(compileStatistics.resourceCount, declarations.resourceCount());
+        EXPECT_EQ(compileStatistics.resourceUseCount, 1u);
+        EXPECT_EQ(compileStatistics.explicitDependencyCount, 1u);
+        EXPECT_EQ(compileStatistics.inferredDependencyCount, 0u);
+        EXPECT_EQ(compileStatistics.declaredExternalDependencyCount, 1u);
+        EXPECT_EQ(compileStatistics.initialOwnershipExternalDependencyCount, 0u);
+        EXPECT_EQ(compileStatistics.externalDependencyCount, 1u);
+        EXPECT_EQ(compileStatistics.packetCount, compiledPlan.packetCount());
+        EXPECT_EQ(compileStatistics.packetDependencyCount, 1u);
+        EXPECT_EQ(compileStatistics.packetExternalDependencyCount, 1u);
+        EXPECT_EQ(compileStatistics.crossQueuePacketDependencyCount, 1u);
+        EXPECT_EQ(compileStatistics.crossFamilyPacketDependencyCount, 1u);
+        EXPECT_EQ(compileStatistics.mergedTaskCount, 0u);
+        EXPECT_EQ(compileStatistics.recordingFrontierCount, 1u);
+        EXPECT_EQ(
+            compileStatistics.taskCountByQueueClass[Graphics::CommandQueue::Graphics],
+            2u
+        );
+        EXPECT_EQ(
+            compileStatistics.taskCountByQueueClass[Graphics::CommandQueue::Compute],
+            1u
+        );
+        EXPECT_EQ(
+            compileStatistics.taskCountByQueueClass[Graphics::CommandQueue::Transfer],
+            1u
+        );
+        EXPECT_EQ(
+            compileStatistics.packetCountByQueueClass[Graphics::CommandQueue::Graphics],
+            2u
+        );
+        EXPECT_EQ(
+            compileStatistics.packetCountByQueueClass[Graphics::CommandQueue::Compute],
+            1u
+        );
+        EXPECT_EQ(
+            compileStatistics.packetCountByQueueClass[Graphics::CommandQueue::Transfer],
+            1u
+        );
+        usize packetizationDecisionCount = 0u;
+        for(const usize count : compileStatistics.packetizationDecisionCounts)
+            packetizationDecisionCount += count;
+        EXPECT_EQ(packetizationDecisionCount, compiledPlan.taskCount());
+        EXPECT_GE(compileStatistics.analysisSeconds, 0.0);
+        EXPECT_GE(compileStatistics.validationSeconds, 0.0);
+        EXPECT_GE(compileStatistics.dependencyAnalysisSeconds, 0.0);
+        EXPECT_GE(compileStatistics.hazardAnalysisSeconds, 0.0);
+        EXPECT_GE(compileStatistics.topologicalOrderSeconds, 0.0);
+        EXPECT_LE(
+            compileStatistics.validationSeconds
+                + compileStatistics.dependencyAnalysisSeconds
+                + compileStatistics.hazardAnalysisSeconds
+                + compileStatistics.topologicalOrderSeconds,
+            compileStatistics.analysisSeconds + 1.0e-9
+        );
+        EXPECT_GE(compileStatistics.queueAssignmentSeconds, 0.0);
+        EXPECT_GE(compileStatistics.planningSeconds, 0.0);
+        EXPECT_GE(compileStatistics.packetizationSeconds, 0.0);
+        EXPECT_GE(compileStatistics.resourceStatePlanningSeconds, 0.0);
+        EXPECT_GE(compileStatistics.packetDependencyPlanningSeconds, 0.0);
+        EXPECT_GE(compileStatistics.totalSeconds, 0.0);
 
-    const Graphics::GpuPhysicalQueueId firstQueue = compiledGraph.packet(firstPacket).queue;
-    const Graphics::QueueSubmissionToken firstToken{
-        .queue = Graphics::CommandQueue::Compute,
-        .value = 41u,
-        .physicalQueueIndex = firstQueue.index,
-        .deviceGeneration = firstQueue.deviceGeneration,
-    };
-    const Graphics::GpuTaskGraphExternalCompletionToken externalCompletionToken{
-        .completion = completion,
-        .token = firstToken,
-    };
-    EXPECT_TRUE(externalCompletionToken.validFor(compiledGraph));
-    const Graphics::GpuTaskGraphExternalCompletionToken otherQueueCompletionToken{
-        .completion = completion,
-        .token = Graphics::QueueSubmissionToken{
-            .queue = Graphics::CommandQueue::Transfer,
-            .value = 40u,
-            .physicalQueueIndex = 3u,
-            .deviceGeneration = compiledGraph.deviceGeneration(),
-        },
-    };
-    EXPECT_TRUE(otherQueueCompletionToken.validFor(compiledGraph));
-    Graphics::GpuTaskGraphExternalCompletionToken staleExternalCompletionToken = externalCompletionToken;
-    staleExternalCompletionToken.token.deviceGeneration = firstQueue.deviceGeneration == Limit<u16>::s_Max
-        ? 1u
-        : static_cast<u16>(firstQueue.deviceGeneration + 1u)
-    ;
-    EXPECT_FALSE(staleExternalCompletionToken.validFor(compiledGraph));
+        const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
+        const Graphics::GpuSubmissionPacketId secondPacket = compiledPlan.packetForTask(second);
+        const Graphics::GpuSubmissionPacketId transferPacket = compiledPlan.packetForTask(transfer);
+        const Graphics::GpuSubmissionPacketId recoveryPacket = compiledPlan.packetForTask(recovery);
+        ASSERT_TRUE(firstPacket.valid());
+        ASSERT_TRUE(secondPacket.valid());
+        ASSERT_TRUE(transferPacket.valid());
+        ASSERT_TRUE(recoveryPacket.valid());
+        EXPECT_NE(firstPacket, secondPacket);
+        EXPECT_NE(recoveryPacket, secondPacket);
+        EXPECT_TRUE(compiledPlan.tasksSharePacket(first, first));
+        EXPECT_FALSE(compiledPlan.tasksSharePacket(first, second));
+        EXPECT_FALSE(compiledPlan.tasksSharePacket(first, {}));
+        EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(first, second));
+        EXPECT_FALSE(compiledPlan.taskPrecedesOrSharesPacket(second, first));
+        EXPECT_FALSE(compiledPlan.taskPrecedesOrSharesPacket(first, {}));
+        EXPECT_FALSE(compiledPlan.taskPrecedesInSamePacket(first, second));
+        EXPECT_FALSE(compiledPlan.taskPrecedesInSamePacket(first, first));
+        EXPECT_FALSE(compiledPlan.tasksFormContiguousPacketSequence(nullptr, 0u));
+        EXPECT_FALSE(compiledPlan.taskJoinsAcceptedQueueFrontier(first));
+        EXPECT_TRUE(compiledPlan.taskJoinsAcceptedQueueFrontier(recovery));
+        EXPECT_FALSE(compiledPlan.taskJoinsAcceptedQueueFrontier({}));
+        const Graphics::GpuPhysicalQueueInfo* const firstTaskQueue = compiledPlan.queueInfoForTask(first);
+        const Graphics::GpuPhysicalQueueInfo* const recoveryTaskQueue = compiledPlan.queueInfoForTask(recovery);
+        ASSERT_NE(firstTaskQueue, nullptr);
+        ASSERT_NE(recoveryTaskQueue, nullptr);
+        EXPECT_EQ(firstTaskQueue->id, compiledPlan.packet(firstPacket).plan->queue);
+        EXPECT_EQ(recoveryTaskQueue->id, compiledPlan.packet(recoveryPacket).plan->queue);
+        EXPECT_EQ(compiledPlan.queueInfoForTask({}), nullptr);
+        const Graphics::GpuSubmissionPacketRange firstTwoPacketRange = compiledPlan.packetRange(
+            firstPacket,
+            secondPacket
+        );
+        ASSERT_TRUE(firstTwoPacketRange.valid());
+        EXPECT_TRUE(compiledPlan.validPacketRange(firstTwoPacketRange));
+        EXPECT_EQ(firstTwoPacketRange.first, firstPacket);
+        EXPECT_EQ(firstTwoPacketRange.packetCount, 2u);
+        const Graphics::GpuSubmissionPacketRange firstTwoTaskRange = compiledPlan.packetRangeForTasks(first, second);
+        ASSERT_TRUE(firstTwoTaskRange.valid());
+        EXPECT_EQ(firstTwoTaskRange.first, firstPacket);
+        EXPECT_EQ(firstTwoTaskRange.packetCount, firstTwoPacketRange.packetCount);
+        const Graphics::GpuSubmissionPacketRange fullPacketRange = compiledPlan.allPacketRange();
+        ASSERT_TRUE(fullPacketRange.valid());
+        EXPECT_TRUE(compiledPlan.validPacketRange(fullPacketRange));
+        EXPECT_EQ(fullPacketRange.first, firstPacket);
+        EXPECT_EQ(fullPacketRange.packetCount, compiledPlan.packetCount());
+        EXPECT_FALSE(compiledPlan.packetRange(secondPacket, firstPacket).valid());
+        EXPECT_FALSE(compiledPlan.packetRangeForTasks(second, first).valid());
+        EXPECT_FALSE(compiledPlan.packetRangeForTasks(first, {}).valid());
+        EXPECT_FALSE(compiledPlan.validPacketRange(Graphics::GpuSubmissionPacketRange{
+            .first = firstPacket,
+            .packetCount = compiledPlan.packetCount() + 1u,
+        }));
+        const Graphics::GpuCompiledPacketView secondPacketView = compiledPlan.packet(secondPacket);
+        ASSERT_TRUE(secondPacketView.valid());
+        ASSERT_EQ(secondPacketView.plan->taskCount, 1u);
+        ASSERT_EQ(secondPacketView.plan->dependencyCount, 1u);
+        ASSERT_EQ(secondPacketView.plan->externalDependencyCount, 1u);
+        EXPECT_EQ(secondPacketView.dependencies[0u].producer, firstPacket);
+        EXPECT_EQ(secondPacketView.externalDependencies[0u], completion);
+        const Graphics::GpuCompiledPacketView recoveryPacketView = compiledPlan.packet(recoveryPacket);
+        ASSERT_TRUE(recoveryPacketView.valid());
+        EXPECT_EQ(recoveryPacketView.plan->dependencyCount, 0u);
+        EXPECT_EQ(recoveryPacketView.plan->externalDependencyCount, 0u);
+        EXPECT_TRUE(recoveryPacketView.plan->joinsAcceptedQueueFrontier);
+        EXPECT_TRUE(recoveryPacketView.plan->isRecoverySubmission);
+
+        const Graphics::GpuPhysicalQueueId firstQueue = compiledPlan.packet(firstPacket).plan->queue;
+        const Graphics::QueueSubmissionToken firstToken{
+            .queue = Graphics::CommandQueue::Compute,
+            .value = 41u,
+            .physicalQueueIndex = firstQueue.index,
+            .deviceGeneration = firstQueue.deviceGeneration,
+        };
+        const Graphics::GpuTaskGraphExternalCompletionToken externalCompletionToken{
+            .completion = completion,
+            .token = firstToken,
+        };
+        EXPECT_TRUE(externalCompletionToken.validFor(compiledGraph, compiledPlan));
+        const Graphics::GpuTaskGraphExternalCompletionToken otherQueueCompletionToken{
+            .completion = completion,
+            .token = Graphics::QueueSubmissionToken{
+                .queue = Graphics::CommandQueue::Transfer,
+                .value = 40u,
+                .physicalQueueIndex = 3u,
+                .deviceGeneration = compiledPlan.deviceGeneration(),
+            },
+        };
+        EXPECT_TRUE(otherQueueCompletionToken.validFor(compiledGraph, compiledPlan));
+        Graphics::GpuTaskGraphExternalCompletionToken staleExternalCompletionToken = externalCompletionToken;
+        staleExternalCompletionToken.token.deviceGeneration = firstQueue.deviceGeneration == Limit<u16>::s_Max
+            ? 1u
+            : static_cast<u16>(firstQueue.deviceGeneration + 1u)
+        ;
+        EXPECT_FALSE(staleExternalCompletionToken.validFor(compiledGraph, compiledPlan));
+    }
 
     compiledGraph.reset();
-    const Graphics::GpuPhysicalQueueTopology resetQueueTopology = compiledGraph.queueTopology();
+    const Graphics::GpuCompiledGraph::ReadView resetPlan(compiledGraph);
+    const Graphics::GpuPhysicalQueueTopology resetQueueTopology = resetPlan.queueTopology();
     EXPECT_EQ(resetQueueTopology.queues, nullptr);
     EXPECT_EQ(resetQueueTopology.queueCount, 0u);
 }
@@ -17107,66 +17137,78 @@ TEST(GpuTaskGraph, PublishesDeclarationStructureStatisticsOnlyForAcceptedPlans){
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
 
-    const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledGraph.compileStatistics();
-    ASSERT_TRUE(statistics.valid());
-    EXPECT_EQ(statistics.resourceSetCount, 1u);
-    EXPECT_EQ(statistics.resourceSetMemberCount, LengthOf(resourceSetMembers));
-    EXPECT_EQ(statistics.directResourceUseCount, LengthOf(directUses));
-    EXPECT_EQ(statistics.declaredResourceSetUseCount, LengthOf(resourceSetUses));
-    EXPECT_EQ(statistics.expandedResourceSetMemberUseCount, LengthOf(resourceSetMembers));
-    EXPECT_EQ(statistics.resourceUseCount, LengthOf(directUses) + LengthOf(resourceSetMembers));
-    EXPECT_EQ(statistics.payloadObjectCount, 2u);
-    EXPECT_EQ(
-        statistics.payloadObjectBytes,
-        sizeof(PacketLifecycleTask::Payload) + sizeof(NativeRecordProbeTask::Payload)
-    );
-    EXPECT_EQ(statistics.uploadBlobCount, 2u);
-    EXPECT_EQ(statistics.uploadBlobBytes, sizeof(firstUploadBytes) + sizeof(secondUploadBytes));
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        const Graphics::GpuTaskGraphCompileStatistics statistics = compiledPlan.compileStatistics();
+
+        ASSERT_TRUE(statistics.valid());
+        EXPECT_EQ(statistics.resourceSetCount, 1u);
+        EXPECT_EQ(statistics.resourceSetMemberCount, LengthOf(resourceSetMembers));
+        EXPECT_EQ(statistics.directResourceUseCount, LengthOf(directUses));
+        EXPECT_EQ(statistics.declaredResourceSetUseCount, LengthOf(resourceSetUses));
+        EXPECT_EQ(statistics.expandedResourceSetMemberUseCount, LengthOf(resourceSetMembers));
+        EXPECT_EQ(statistics.resourceUseCount, LengthOf(directUses) + LengthOf(resourceSetMembers));
+        EXPECT_EQ(statistics.payloadObjectCount, 2u);
+        EXPECT_EQ(
+            statistics.payloadObjectBytes,
+            sizeof(PacketLifecycleTask::Payload) + sizeof(NativeRecordProbeTask::Payload)
+        );
+        EXPECT_EQ(statistics.uploadBlobCount, 2u);
+        EXPECT_EQ(statistics.uploadBlobBytes, sizeof(firstUploadBytes) + sizeof(secondUploadBytes));
+    }
 
     compiledGraph.reset();
-    const Graphics::GpuTaskGraphCompileStatistics& resetStatistics = compiledGraph.compileStatistics();
-    EXPECT_FALSE(resetStatistics.valid());
-    EXPECT_EQ(resetStatistics.resourceSetCount, 0u);
-    EXPECT_EQ(resetStatistics.resourceSetMemberCount, 0u);
-    EXPECT_EQ(resetStatistics.directResourceUseCount, 0u);
-    EXPECT_EQ(resetStatistics.declaredResourceSetUseCount, 0u);
-    EXPECT_EQ(resetStatistics.expandedResourceSetMemberUseCount, 0u);
-    EXPECT_EQ(resetStatistics.resourceUseCount, 0u);
-    EXPECT_EQ(resetStatistics.payloadObjectCount, 0u);
-    EXPECT_EQ(resetStatistics.payloadObjectBytes, 0u);
-    EXPECT_EQ(resetStatistics.uploadBlobCount, 0u);
-    EXPECT_EQ(resetStatistics.uploadBlobBytes, 0u);
-    EXPECT_EQ(resetStatistics.validationSeconds, 0.0);
-    EXPECT_EQ(resetStatistics.dependencyAnalysisSeconds, 0.0);
-    EXPECT_EQ(resetStatistics.hazardAnalysisSeconds, 0.0);
-    EXPECT_EQ(resetStatistics.topologicalOrderSeconds, 0.0);
-    EXPECT_EQ(resetStatistics.packetizationSeconds, 0.0);
-    EXPECT_EQ(resetStatistics.resourceStatePlanningSeconds, 0.0);
-    EXPECT_EQ(resetStatistics.packetDependencyPlanningSeconds, 0.0);
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        const Graphics::GpuTaskGraphCompileStatistics resetStatistics = compiledPlan.compileStatistics();
+
+        EXPECT_FALSE(resetStatistics.valid());
+        EXPECT_EQ(resetStatistics.resourceSetCount, 0u);
+        EXPECT_EQ(resetStatistics.resourceSetMemberCount, 0u);
+        EXPECT_EQ(resetStatistics.directResourceUseCount, 0u);
+        EXPECT_EQ(resetStatistics.declaredResourceSetUseCount, 0u);
+        EXPECT_EQ(resetStatistics.expandedResourceSetMemberUseCount, 0u);
+        EXPECT_EQ(resetStatistics.resourceUseCount, 0u);
+        EXPECT_EQ(resetStatistics.payloadObjectCount, 0u);
+        EXPECT_EQ(resetStatistics.payloadObjectBytes, 0u);
+        EXPECT_EQ(resetStatistics.uploadBlobCount, 0u);
+        EXPECT_EQ(resetStatistics.uploadBlobBytes, 0u);
+        EXPECT_EQ(resetStatistics.validationSeconds, 0.0);
+        EXPECT_EQ(resetStatistics.dependencyAnalysisSeconds, 0.0);
+        EXPECT_EQ(resetStatistics.hazardAnalysisSeconds, 0.0);
+        EXPECT_EQ(resetStatistics.topologicalOrderSeconds, 0.0);
+        EXPECT_EQ(resetStatistics.packetizationSeconds, 0.0);
+        EXPECT_EQ(resetStatistics.resourceStatePlanningSeconds, 0.0);
+        EXPECT_EQ(resetStatistics.packetDependencyPlanningSeconds, 0.0);
+    }
 
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuTaskGraphQueueTopology invalidTopology{};
     EXPECT_FALSE(Compile(graph, analysis, invalidTopology, assignments, compiledGraph));
-    EXPECT_FALSE(compiledGraph.valid());
-    const Graphics::GpuTaskGraphCompileStatistics& failedStatistics = compiledGraph.compileStatistics();
-    EXPECT_FALSE(failedStatistics.valid());
-    EXPECT_EQ(failedStatistics.resourceSetCount, 0u);
-    EXPECT_EQ(failedStatistics.resourceSetMemberCount, 0u);
-    EXPECT_EQ(failedStatistics.directResourceUseCount, 0u);
-    EXPECT_EQ(failedStatistics.declaredResourceSetUseCount, 0u);
-    EXPECT_EQ(failedStatistics.expandedResourceSetMemberUseCount, 0u);
-    EXPECT_EQ(failedStatistics.resourceUseCount, 0u);
-    EXPECT_EQ(failedStatistics.payloadObjectCount, 0u);
-    EXPECT_EQ(failedStatistics.payloadObjectBytes, 0u);
-    EXPECT_EQ(failedStatistics.uploadBlobCount, 0u);
-    EXPECT_EQ(failedStatistics.uploadBlobBytes, 0u);
-    EXPECT_EQ(failedStatistics.validationSeconds, 0.0);
-    EXPECT_EQ(failedStatistics.dependencyAnalysisSeconds, 0.0);
-    EXPECT_EQ(failedStatistics.hazardAnalysisSeconds, 0.0);
-    EXPECT_EQ(failedStatistics.topologicalOrderSeconds, 0.0);
-    EXPECT_EQ(failedStatistics.packetizationSeconds, 0.0);
-    EXPECT_EQ(failedStatistics.resourceStatePlanningSeconds, 0.0);
-    EXPECT_EQ(failedStatistics.packetDependencyPlanningSeconds, 0.0);
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        const Graphics::GpuTaskGraphCompileStatistics failedStatistics = compiledPlan.compileStatistics();
+
+        EXPECT_FALSE(compiledPlan.valid());
+        EXPECT_FALSE(failedStatistics.valid());
+        EXPECT_EQ(failedStatistics.resourceSetCount, 0u);
+        EXPECT_EQ(failedStatistics.resourceSetMemberCount, 0u);
+        EXPECT_EQ(failedStatistics.directResourceUseCount, 0u);
+        EXPECT_EQ(failedStatistics.declaredResourceSetUseCount, 0u);
+        EXPECT_EQ(failedStatistics.expandedResourceSetMemberUseCount, 0u);
+        EXPECT_EQ(failedStatistics.resourceUseCount, 0u);
+        EXPECT_EQ(failedStatistics.payloadObjectCount, 0u);
+        EXPECT_EQ(failedStatistics.payloadObjectBytes, 0u);
+        EXPECT_EQ(failedStatistics.uploadBlobCount, 0u);
+        EXPECT_EQ(failedStatistics.uploadBlobBytes, 0u);
+        EXPECT_EQ(failedStatistics.validationSeconds, 0.0);
+        EXPECT_EQ(failedStatistics.dependencyAnalysisSeconds, 0.0);
+        EXPECT_EQ(failedStatistics.hazardAnalysisSeconds, 0.0);
+        EXPECT_EQ(failedStatistics.topologicalOrderSeconds, 0.0);
+        EXPECT_EQ(failedStatistics.packetizationSeconds, 0.0);
+        EXPECT_EQ(failedStatistics.resourceStatePlanningSeconds, 0.0);
+        EXPECT_EQ(failedStatistics.packetDependencyPlanningSeconds, 0.0);
+    }
 }
 
 
@@ -17196,66 +17238,88 @@ TEST(GpuTaskGraph, PublishesFiniteDeclarationTimingOnlyForAcceptedPlans){
     Graphics::GpuTaskGraphCompileOptions options;
 
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    ASSERT_TRUE(compiledGraph.compileStatistics().valid());
-    EXPECT_EQ(compiledGraph.compileStatistics().declarationSeconds, 0.0);
-    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics firstQueueCompileStatistics =
-        compiledGraph.physicalQueueCompileStatistics(queue.id)
-    ;
-    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics idleQueueCompileStatistics =
-        compiledGraph.physicalQueueCompileStatistics(idleQueue.id)
-    ;
-    ASSERT_TRUE(firstQueueCompileStatistics.valid());
-    ASSERT_TRUE(idleQueueCompileStatistics.valid());
-    EXPECT_EQ(firstQueueCompileStatistics.graphGeneration, compiledGraph.generation());
-    EXPECT_EQ(firstQueueCompileStatistics.planGeneration, compiledGraph.planGeneration());
-    EXPECT_EQ(firstQueueCompileStatistics.deviceGeneration, compiledGraph.deviceGeneration());
-    EXPECT_EQ(firstQueueCompileStatistics.queue, queue.id);
-    EXPECT_EQ(firstQueueCompileStatistics.queueClass, Graphics::CommandQueue::Graphics);
-    EXPECT_EQ(firstQueueCompileStatistics.taskCount, 1u);
-    EXPECT_EQ(firstQueueCompileStatistics.packetCount, 1u);
-    EXPECT_EQ(idleQueueCompileStatistics.queue, idleQueue.id);
-    EXPECT_EQ(idleQueueCompileStatistics.taskCount, 0u);
-    EXPECT_EQ(idleQueueCompileStatistics.packetCount, 0u);
-    EXPECT_EQ(idleQueueCompileStatistics.mergedTaskCount, 0u);
-    EXPECT_EQ(idleQueueCompileStatistics.prologueBarrierCount, 0u);
-    EXPECT_EQ(idleQueueCompileStatistics.epilogueBarrierCount, 0u);
-    EXPECT_EQ(idleQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
-    EXPECT_EQ(idleQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
-    const Graphics::GpuPhysicalQueueId staleQueue{
-        queue.id.index,
-        static_cast<u16>(queue.id.deviceGeneration + 1u),
-    };
-    EXPECT_FALSE(compiledGraph.physicalQueueCompileStatistics(staleQueue).valid());
-    const Graphics::GpuPhysicalQueueId nonPlanQueue{ 2u, compiledGraph.deviceGeneration() };
-    ASSERT_TRUE(nonPlanQueue.valid());
-    EXPECT_FALSE(compiledGraph.physicalQueueCompileStatistics(nonPlanQueue).valid());
-    const u64 firstPlanGeneration = firstQueueCompileStatistics.planGeneration;
+    u64 firstPlanGeneration = 0u;
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        const Graphics::GpuTaskGraphCompileStatistics statistics = compiledPlan.compileStatistics();
+        const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics firstQueueCompileStatistics =
+            compiledPlan.physicalQueueCompileStatistics(queue.id)
+        ;
+        const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics idleQueueCompileStatistics =
+            compiledPlan.physicalQueueCompileStatistics(idleQueue.id)
+        ;
+
+        ASSERT_TRUE(statistics.valid());
+        EXPECT_EQ(statistics.declarationSeconds, 0.0);
+        ASSERT_TRUE(firstQueueCompileStatistics.valid());
+        ASSERT_TRUE(idleQueueCompileStatistics.valid());
+        EXPECT_EQ(firstQueueCompileStatistics.graphGeneration, compiledPlan.generation());
+        EXPECT_EQ(firstQueueCompileStatistics.planGeneration, compiledPlan.planGeneration());
+        EXPECT_EQ(firstQueueCompileStatistics.deviceGeneration, compiledPlan.deviceGeneration());
+        EXPECT_EQ(firstQueueCompileStatistics.queue, queue.id);
+        EXPECT_EQ(firstQueueCompileStatistics.queueClass, Graphics::CommandQueue::Graphics);
+        EXPECT_EQ(firstQueueCompileStatistics.taskCount, 1u);
+        EXPECT_EQ(firstQueueCompileStatistics.packetCount, 1u);
+        EXPECT_EQ(idleQueueCompileStatistics.queue, idleQueue.id);
+        EXPECT_EQ(idleQueueCompileStatistics.taskCount, 0u);
+        EXPECT_EQ(idleQueueCompileStatistics.packetCount, 0u);
+        EXPECT_EQ(idleQueueCompileStatistics.mergedTaskCount, 0u);
+        EXPECT_EQ(idleQueueCompileStatistics.prologueBarrierCount, 0u);
+        EXPECT_EQ(idleQueueCompileStatistics.epilogueBarrierCount, 0u);
+        EXPECT_EQ(idleQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
+        EXPECT_EQ(idleQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
+        const Graphics::GpuPhysicalQueueId staleQueue{
+            queue.id.index,
+            static_cast<u16>(queue.id.deviceGeneration + 1u),
+        };
+        EXPECT_FALSE(compiledPlan.physicalQueueCompileStatistics(staleQueue).valid());
+        const Graphics::GpuPhysicalQueueId nonPlanQueue{ 2u, compiledPlan.deviceGeneration() };
+        ASSERT_TRUE(nonPlanQueue.valid());
+        EXPECT_FALSE(compiledPlan.physicalQueueCompileStatistics(nonPlanQueue).valid());
+        firstPlanGeneration = firstQueueCompileStatistics.planGeneration;
+    }
 
     constexpr f64 s_DeclarationSeconds = 0.125;
     options.declarationSeconds = s_DeclarationSeconds;
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    const Graphics::GpuTaskGraphCompileStatistics& acceptedStatistics = compiledGraph.compileStatistics();
-    ASSERT_TRUE(acceptedStatistics.valid());
-    EXPECT_EQ(acceptedStatistics.declarationSeconds, s_DeclarationSeconds);
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        const Graphics::GpuTaskGraphCompileStatistics acceptedStatistics = compiledPlan.compileStatistics();
+
+        ASSERT_TRUE(acceptedStatistics.valid());
+        EXPECT_EQ(acceptedStatistics.declarationSeconds, s_DeclarationSeconds);
+    }
 
     compiledGraph.reset();
-    const Graphics::GpuTaskGraphCompileStatistics& resetStatistics = compiledGraph.compileStatistics();
-    EXPECT_FALSE(resetStatistics.valid());
-    EXPECT_EQ(resetStatistics.declarationSeconds, 0.0);
-    EXPECT_FALSE(compiledGraph.physicalQueueCompileStatistics(queue.id).valid());
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        const Graphics::GpuTaskGraphCompileStatistics resetStatistics = compiledPlan.compileStatistics();
+
+        EXPECT_FALSE(resetStatistics.valid());
+        EXPECT_EQ(resetStatistics.declarationSeconds, 0.0);
+        EXPECT_FALSE(compiledPlan.physicalQueueCompileStatistics(queue.id).valid());
+    }
 
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics recompiledQueueCompileStatistics =
-        compiledGraph.physicalQueueCompileStatistics(queue.id)
-    ;
-    ASSERT_TRUE(recompiledQueueCompileStatistics.valid());
-    EXPECT_NE(recompiledQueueCompileStatistics.planGeneration, firstPlanGeneration);
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics recompiledQueueCompileStatistics =
+            compiledPlan.physicalQueueCompileStatistics(queue.id)
+        ;
+
+        ASSERT_TRUE(recompiledQueueCompileStatistics.valid());
+        EXPECT_NE(recompiledQueueCompileStatistics.planGeneration, firstPlanGeneration);
+    }
     const Graphics::GpuTaskGraphQueueTopology invalidTopology{};
     EXPECT_FALSE(Compile(graph, analysis, invalidTopology, assignments, compiledGraph, options));
-    const Graphics::GpuTaskGraphCompileStatistics& failedStatistics = compiledGraph.compileStatistics();
-    EXPECT_FALSE(failedStatistics.valid());
-    EXPECT_EQ(failedStatistics.declarationSeconds, 0.0);
-    EXPECT_FALSE(compiledGraph.physicalQueueCompileStatistics(queue.id).valid());
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        const Graphics::GpuTaskGraphCompileStatistics failedStatistics = compiledPlan.compileStatistics();
+
+        EXPECT_FALSE(failedStatistics.valid());
+        EXPECT_EQ(failedStatistics.declarationSeconds, 0.0);
+        EXPECT_FALSE(compiledPlan.physicalQueueCompileStatistics(queue.id).valid());
+    }
 
     const f64 invalidDeclarationSeconds[] = {
         -0.125,
@@ -17265,7 +17329,9 @@ TEST(GpuTaskGraph, PublishesFiniteDeclarationTimingOnlyForAcceptedPlans){
     for(const f64 declarationSeconds : invalidDeclarationSeconds){
         options.declarationSeconds = declarationSeconds;
         ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-        const Graphics::GpuTaskGraphCompileStatistics& invalidStatistics = compiledGraph.compileStatistics();
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        const Graphics::GpuTaskGraphCompileStatistics invalidStatistics = compiledPlan.compileStatistics();
+
         EXPECT_TRUE(invalidStatistics.valid());
         EXPECT_EQ(invalidStatistics.declarationSeconds, 0.0);
     }
@@ -17315,28 +17381,30 @@ TEST(GpuTaskGraph, KeepsExplicitPacketDependenciesOutOfRecordingReadyFrontiers){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
-    const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(second);
-    const Graphics::GpuSubmissionPacketId thirdPacket = compiledGraph.packetForTask(third);
-    const Graphics::GpuSubmissionPacketId fourthPacket = compiledGraph.packetForTask(fourth);
+
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId secondPacket = compiledPlan.packetForTask(second);
+    const Graphics::GpuSubmissionPacketId thirdPacket = compiledPlan.packetForTask(third);
+    const Graphics::GpuSubmissionPacketId fourthPacket = compiledPlan.packetForTask(fourth);
     ASSERT_TRUE(firstPacket.valid());
     ASSERT_TRUE(secondPacket.valid());
     ASSERT_TRUE(thirdPacket.valid());
     ASSERT_TRUE(fourthPacket.valid());
-    EXPECT_EQ(compiledGraph.packet(firstPacket).recordingFrontier, 0u);
-    EXPECT_EQ(compiledGraph.packet(secondPacket).recordingFrontier, 0u);
-    EXPECT_EQ(compiledGraph.packet(thirdPacket).recordingFrontier, 0u);
-    EXPECT_EQ(compiledGraph.packet(fourthPacket).recordingFrontier, 0u);
-    EXPECT_EQ(compiledGraph.compileStatistics().recordingFrontierCount, 1u);
-    ASSERT_EQ(compiledGraph.packet(thirdPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(thirdPacket)[0u].producer, firstPacket);
-    ASSERT_EQ(compiledGraph.packet(fourthPacket).dependencyCount, 2u);
+    EXPECT_EQ(compiledPlan.packet(firstPacket).plan->recordingFrontier, 0u);
+    EXPECT_EQ(compiledPlan.packet(secondPacket).plan->recordingFrontier, 0u);
+    EXPECT_EQ(compiledPlan.packet(thirdPacket).plan->recordingFrontier, 0u);
+    EXPECT_EQ(compiledPlan.packet(fourthPacket).plan->recordingFrontier, 0u);
+    EXPECT_EQ(compiledPlan.compileStatistics().recordingFrontierCount, 1u);
+    ASSERT_EQ(compiledPlan.packet(thirdPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(thirdPacket).dependencies[0u].producer, firstPacket);
+    ASSERT_EQ(compiledPlan.packet(fourthPacket).plan->dependencyCount, 2u);
     bool hasSecondProducer = false;
     bool hasThirdProducer = false;
     for(const Graphics::GpuPacketDependency& dependency : {
-        compiledGraph.packetDependencies(fourthPacket)[0u],
-        compiledGraph.packetDependencies(fourthPacket)[1u],
+        compiledPlan.packet(fourthPacket).dependencies[0u],
+        compiledPlan.packet(fourthPacket).dependencies[1u],
     }){
         hasSecondProducer = hasSecondProducer || dependency.producer == secondPacket;
         hasThirdProducer = hasThirdProducer || dependency.producer == thirdPacket;
@@ -17386,6 +17454,8 @@ TEST(GpuTaskGraph, PlansSchedulingPacketDependenciesInStableIncomingOrder){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const Graphics::GpuTaskGraphSchedulingTaskIndexView producers = analysis.schedulingProducers(consumer);
     ASSERT_EQ(producers.taskCount, LengthOf(consumerDependencies));
@@ -17393,16 +17463,16 @@ TEST(GpuTaskGraph, PlansSchedulingPacketDependenciesInStableIncomingOrder){
     EXPECT_EQ(producers[1u], first.index);
     EXPECT_EQ(producers[2u], second.index);
 
-    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
-    const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(second);
-    const Graphics::GpuSubmissionPacketId thirdPacket = compiledGraph.packetForTask(third);
-    const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumer);
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId secondPacket = compiledPlan.packetForTask(second);
+    const Graphics::GpuSubmissionPacketId thirdPacket = compiledPlan.packetForTask(third);
+    const Graphics::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
     ASSERT_TRUE(firstPacket.valid());
     ASSERT_TRUE(secondPacket.valid());
     ASSERT_TRUE(thirdPacket.valid());
     ASSERT_TRUE(consumerPacket.valid());
-    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, LengthOf(consumerDependencies));
-    const Graphics::GpuPacketDependency* const dependencies = compiledGraph.packetDependencies(consumerPacket);
+    ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, LengthOf(consumerDependencies));
+    const Graphics::GpuPacketDependency* const dependencies = compiledPlan.packet(consumerPacket).dependencies;
     ASSERT_NE(dependencies, nullptr);
     EXPECT_EQ(dependencies[0u].producer, thirdPacket);
     EXPECT_EQ(dependencies[1u].producer, firstPacket);
@@ -17484,21 +17554,23 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId orderingProducerPacket = compiledGraph.packetForTask(orderingProducer);
-    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
-    const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumer);
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+
+    const Graphics::GpuSubmissionPacketId orderingProducerPacket = compiledPlan.packetForTask(orderingProducer);
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
     ASSERT_TRUE(orderingProducerPacket.valid());
     ASSERT_TRUE(producerPacket.valid());
     ASSERT_TRUE(consumerPacket.valid());
     ASSERT_NE(producerPacket, consumerPacket);
     ASSERT_NE(compiledConsumer, nullptr);
-    EXPECT_EQ(compiledGraph.packet(producerPacket).recordingFrontier, 0u);
-    EXPECT_EQ(compiledGraph.packet(consumerPacket).recordingFrontier, 1u);
-    EXPECT_EQ(compiledGraph.compileStatistics().recordingFrontierCount, 2u);
-    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 2u);
-    const Graphics::GpuPacketDependency* const dependencies = compiledGraph.packetDependencies(consumerPacket);
+    EXPECT_EQ(compiledPlan.packet(producerPacket).plan->recordingFrontier, 0u);
+    EXPECT_EQ(compiledPlan.packet(consumerPacket).plan->recordingFrontier, 1u);
+    EXPECT_EQ(compiledPlan.compileStatistics().recordingFrontierCount, 2u);
+    ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 2u);
+    const Graphics::GpuPacketDependency* const dependencies = compiledPlan.packet(consumerPacket).dependencies;
     ASSERT_NE(dependencies, nullptr);
     // The state seed projects producerPacket a second time after both scheduling dependencies. Deduplication retains
     // the original scheduling order rather than moving that producer to the end.
@@ -17506,7 +17578,7 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
     EXPECT_EQ(dependencies[1u].producer, orderingProducerPacket);
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
 
-    const Graphics::GpuPacketStateSeed* const stateSeeds = compiledGraph.taskPrologueStateSeeds(consumer);
+    const Graphics::GpuPacketStateSeed* const stateSeeds = compiledPlan.findTask(consumer).prologueStateSeeds;
     ASSERT_NE(stateSeeds, nullptr);
     EXPECT_EQ(stateSeeds[0u].resource, buffer);
     EXPECT_EQ(stateSeeds[0u].sourcePacket, producerPacket);
@@ -17530,9 +17602,13 @@ TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
         Graphics::ResourceStates::Unknown
     );
     ASSERT_TRUE(backbuffer.valid());
-    EXPECT_NE(graph.textureForResource(backbuffer), nullptr);
-    EXPECT_EQ(graph.resourceAt(backbuffer.index).initialState, Graphics::ResourceStates::Unknown);
-    EXPECT_EQ(graph.resourceAt(backbuffer.index).externalFinalState, Graphics::ResourceStates::Present);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        EXPECT_NE(declarations.textureForResource(backbuffer), nullptr);
+        EXPECT_EQ(declarations.resourceAt(backbuffer.index).initialState, Graphics::ResourceStates::Unknown);
+        EXPECT_EQ(declarations.resourceAt(backbuffer.index).externalFinalState, Graphics::ResourceStates::Present);
+    }
 
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
@@ -17590,7 +17666,11 @@ TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
     ;
     const Graphics::GpuTaskId terminal = graph.addTask(terminalDesc);
     ASSERT_TRUE(terminal.valid());
-    EXPECT_EQ(graph.taskAt(terminal.index).resourceUseCount, 0u);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        EXPECT_EQ(declarations.taskAt(terminal.index).resourceUseCount, 0u);
+    }
 
     // A diagnostic/history tail need not depend on the backbuffer, but declaration order keeps it outside the
     // terminal presentation span. This lets the renderer signal from the terminal packet while later graph-owned
@@ -17614,24 +17694,36 @@ TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_TRUE(analysis.validFor(graph));
-    ASSERT_TRUE(assignments.validFor(graph));
-    ASSERT_TRUE(compiledGraph.validFor(graph));
+    {
+        const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+
+        ASSERT_TRUE(reads.valid());
+        ASSERT_TRUE(analysis.validFor(reads.declarations));
+        ASSERT_TRUE(assignments.validFor(reads.declarations));
+    }
     ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
         .producer = terminal,
         .backBuffer = backbuffer,
     }));
     // Endpoint metadata is part of an immutable compiled plan. Adding it invalidates the prior no-endpoint plan
     // even though task/resource generations and counts did not change.
-    EXPECT_FALSE(analysis.validFor(graph));
-    EXPECT_FALSE(assignments.validFor(graph));
-    EXPECT_FALSE(compiledGraph.validFor(graph));
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId sceneOutputPacket = compiledGraph.packetForTask(sceneOutput);
-    const Graphics::GpuSubmissionPacketId overlayPacket = compiledGraph.packetForTask(overlay);
-    const Graphics::GpuSubmissionPacketId terminalPacket = compiledGraph.packetForTask(terminal);
-    const Graphics::GpuSubmissionPacketId lateTailPacket = compiledGraph.packetForTask(lateTail);
+        EXPECT_FALSE(analysis.validFor(declarations));
+        EXPECT_FALSE(assignments.validFor(declarations));
+        EXPECT_FALSE(compiledPlan.validFor(declarations));
+    }
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+    const Graphics::GpuCompiledGraph::ReadView& compiledPlan = reads.compiled;
+
+    ASSERT_TRUE(reads.valid());
+    const Graphics::GpuSubmissionPacketId sceneOutputPacket = compiledPlan.packetForTask(sceneOutput);
+    const Graphics::GpuSubmissionPacketId overlayPacket = compiledPlan.packetForTask(overlay);
+    const Graphics::GpuSubmissionPacketId terminalPacket = compiledPlan.packetForTask(terminal);
+    const Graphics::GpuSubmissionPacketId lateTailPacket = compiledPlan.packetForTask(lateTail);
     ASSERT_TRUE(sceneOutputPacket.valid());
     ASSERT_TRUE(overlayPacket.valid());
     ASSERT_TRUE(terminalPacket.valid());
@@ -17639,18 +17731,19 @@ TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
     EXPECT_NE(sceneOutputPacket, overlayPacket);
     EXPECT_NE(overlayPacket, terminalPacket);
     EXPECT_GT(lateTailPacket.index, terminalPacket.index);
-    EXPECT_EQ(compiledGraph.packet(terminalPacket).queue, queues[0].id);
-    const Graphics::GpuSubmissionPacketRange presentationRange = compiledGraph.packetRange(
+    EXPECT_EQ(compiledPlan.packet(terminalPacket).plan->queue, queues[0].id);
+    const Graphics::GpuSubmissionPacketRange presentationRange = compiledPlan.packetRange(
         sceneOutputPacket,
         terminalPacket
     );
     ASSERT_TRUE(presentationRange.valid());
     EXPECT_EQ(presentationRange.packetCount, 3u);
-    const auto& overlayPlan = compiledGraph.packet(overlayPacket);
-    ASSERT_EQ(overlayPlan.taskCount, 1u);
-    ASSERT_EQ(overlayPlan.dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(overlayPacket)[0].producer, sceneOutputPacket);
-    const Graphics::GpuCompiledPresentEndpoint* const endpoint = compiledGraph.presentEndpoint();
+    const Graphics::GpuCompiledPacketView overlayPlan = compiledPlan.packet(overlayPacket);
+    ASSERT_TRUE(overlayPlan.valid());
+    ASSERT_EQ(overlayPlan.plan->taskCount, 1u);
+    ASSERT_EQ(overlayPlan.plan->dependencyCount, 1u);
+    EXPECT_EQ(overlayPlan.dependencies[0u].producer, sceneOutputPacket);
+    const Graphics::GpuCompiledPresentEndpoint* const endpoint = compiledPlan.presentEndpoint();
     ASSERT_NE(endpoint, nullptr);
     EXPECT_TRUE(endpoint->valid());
     EXPECT_EQ(endpoint->producer, terminal);
@@ -17658,9 +17751,10 @@ TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
     EXPECT_EQ(endpoint->packet, terminalPacket);
     EXPECT_EQ(endpoint->queue, queues[0].id);
 
-    const Graphics::GpuCompiledTask* const compiledOverlay = compiledGraph.findTask(overlay);
+    const Graphics::GpuCompiledTaskView compiledOverlayView = compiledPlan.findTask(overlay);
+    const Graphics::GpuCompiledTask* const compiledOverlay = compiledOverlayView.plan;
     ASSERT_NE(compiledOverlay, nullptr);
-    const Graphics::GpuCompiledBarrier* const overlayEpilogue = compiledGraph.taskEpilogueBarriers(overlay);
+    const Graphics::GpuCompiledBarrier* const overlayEpilogue = compiledOverlayView.epilogueBarriers;
     ASSERT_NE(overlayEpilogue, nullptr);
     bool foundPresentExport = false;
     for(u32 barrierIndex = 0u; barrierIndex < compiledOverlay->epilogueBarrierCount; ++barrierIndex){
@@ -17730,11 +17824,14 @@ TEST(GpuTaskGraph, AcceptsPresentationEndpointFromPresentAcquisitionState){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_NE(compiledGraph.presentEndpoint(), nullptr);
-    EXPECT_EQ(compiledGraph.presentEndpoint()->producer, writer);
-    EXPECT_EQ(compiledGraph.presentEndpoint()->backBuffer, backbuffer);
-    EXPECT_EQ(graph.resourceAt(backbuffer.index).initialState, Graphics::ResourceStates::Present);
-    EXPECT_EQ(graph.resourceAt(backbuffer.index).externalFinalState, Graphics::ResourceStates::Present);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    ASSERT_NE(compiledPlan.presentEndpoint(), nullptr);
+    EXPECT_EQ(compiledPlan.presentEndpoint()->producer, writer);
+    EXPECT_EQ(compiledPlan.presentEndpoint()->backBuffer, backbuffer);
+    EXPECT_EQ(declarations.resourceAt(backbuffer.index).initialState, Graphics::ResourceStates::Present);
+    EXPECT_EQ(declarations.resourceAt(backbuffer.index).externalFinalState, Graphics::ResourceStates::Present);
 }
 
 
@@ -17765,13 +17862,15 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
         EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint);
         EXPECT_EQ(analysis.diagnostic().task, producer);
         EXPECT_EQ(analysis.diagnostic().relatedTask, relatedTask);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
         EXPECT_FALSE(analysis.valid());
         EXPECT_FALSE(assignments.valid());
-        EXPECT_FALSE(compiledGraph.valid());
+        EXPECT_FALSE(compiledPlan.valid());
     };
 
     {
@@ -17827,7 +17926,9 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
             .producer = producer,
             .backBuffer = backbuffer,
         }));
-        const Graphics::GpuPresentEndpoint* const endpoint = graph.presentEndpoint();
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Graphics::GpuPresentEndpoint* const endpoint = declarations.presentEndpoint();
+
         ASSERT_NE(endpoint, nullptr);
         EXPECT_EQ(endpoint->producer, producer);
         EXPECT_EQ(endpoint->backBuffer, backbuffer);
@@ -18114,13 +18215,15 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
         EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint);
         EXPECT_EQ(analysis.diagnostic().task, producer);
         EXPECT_EQ(analysis.diagnostic().relatedTask, relatedTask);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
         EXPECT_FALSE(analysis.valid());
         EXPECT_FALSE(assignments.valid());
-        EXPECT_FALSE(compiledGraph.valid());
+        EXPECT_FALSE(compiledPlan.valid());
     };
     const auto addTerminal = [&](Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskId dependency){
         return AddTaskWithQueue(
@@ -18146,7 +18249,11 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
                 .setExternalFinalState(Graphics::ResourceStates::Present)
         );
         ASSERT_TRUE(backbuffer.valid());
-        EXPECT_FALSE(graph.resourceAt(backbuffer.index).hasBackendResource);
+        {
+            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+            EXPECT_FALSE(declarations.resourceAt(backbuffer.index).hasBackendResource);
+        }
         const Graphics::GpuTaskResourceUse writerUse{
             .resource = backbuffer,
             .range = {},
@@ -18458,7 +18565,11 @@ TEST(GpuTaskGraph, RejectsPresentationEndpointUsersOnDifferentGraphicsQueuesDuri
     };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
-    EXPECT_TRUE(analysis.validFor(graph));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        EXPECT_TRUE(analysis.validFor(declarations));
+    }
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
     const Graphics::GpuTaskQueueAssignment* const writerAssignment = assignments.find(writer);
@@ -18471,9 +18582,12 @@ TEST(GpuTaskGraph, RejectsPresentationEndpointUsersOnDifferentGraphicsQueuesDuri
 
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    EXPECT_TRUE(analysis.validFor(graph));
-    EXPECT_TRUE(assignments.validFor(graph));
-    EXPECT_FALSE(compiledGraph.valid());
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    EXPECT_TRUE(analysis.validFor(declarations));
+    EXPECT_FALSE(assignments.validFor(declarations));
+    EXPECT_FALSE(compiledPlan.valid());
 }
 
 TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
@@ -18679,30 +18793,32 @@ TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId scenePacket = compiledGraph.packetForTask(scene);
-    const Graphics::GpuSubmissionPacketId vertexPacket = compiledGraph.packetForTask(vertexUpload);
-    const Graphics::GpuSubmissionPacketId indexPacket = compiledGraph.packetForTask(indexUpload);
-    const Graphics::GpuSubmissionPacketId fontPacket = compiledGraph.packetForTask(fontUpload);
-    const Graphics::GpuSubmissionPacketId overlayPacket = compiledGraph.packetForTask(overlay);
+
+    const Graphics::GpuSubmissionPacketId scenePacket = compiledPlan.packetForTask(scene);
+    const Graphics::GpuSubmissionPacketId vertexPacket = compiledPlan.packetForTask(vertexUpload);
+    const Graphics::GpuSubmissionPacketId indexPacket = compiledPlan.packetForTask(indexUpload);
+    const Graphics::GpuSubmissionPacketId fontPacket = compiledPlan.packetForTask(fontUpload);
+    const Graphics::GpuSubmissionPacketId overlayPacket = compiledPlan.packetForTask(overlay);
     ASSERT_TRUE(scenePacket.valid());
     ASSERT_TRUE(vertexPacket.valid());
     ASSERT_TRUE(indexPacket.valid());
     ASSERT_TRUE(fontPacket.valid());
     ASSERT_TRUE(overlayPacket.valid());
-    EXPECT_EQ(compiledGraph.packet(scenePacket).queue, queues[0].id);
+    EXPECT_EQ(compiledPlan.packet(scenePacket).plan->queue, queues[0].id);
     // Tiny vertex/index deltas avoid a queue crossing, but an amortizable texture upload follows Transfer first.
-    EXPECT_EQ(compiledGraph.packet(vertexPacket).queue, queues[0].id);
-    EXPECT_EQ(compiledGraph.packet(indexPacket).queue, queues[0].id);
-    EXPECT_EQ(compiledGraph.packet(fontPacket).queue, queues[1].id);
-    EXPECT_EQ(compiledGraph.packet(overlayPacket).queue, queues[0].id);
+    EXPECT_EQ(compiledPlan.packet(vertexPacket).plan->queue, queues[0].id);
+    EXPECT_EQ(compiledPlan.packet(indexPacket).plan->queue, queues[0].id);
+    EXPECT_EQ(compiledPlan.packet(fontPacket).plan->queue, queues[1].id);
+    EXPECT_EQ(compiledPlan.packet(overlayPacket).plan->queue, queues[0].id);
     EXPECT_GT(vertexPacket.index, scenePacket.index);
     EXPECT_GT(indexPacket.index, scenePacket.index);
     EXPECT_GT(fontPacket.index, scenePacket.index);
     EXPECT_GT(overlayPacket.index, vertexPacket.index);
     EXPECT_GT(overlayPacket.index, indexPacket.index);
     EXPECT_GT(overlayPacket.index, fontPacket.index);
-    const Graphics::GpuSubmissionPacketRange presentationRange = compiledGraph.packetRange(scenePacket, overlayPacket);
+    const Graphics::GpuSubmissionPacketRange presentationRange = compiledPlan.packetRange(scenePacket, overlayPacket);
     ASSERT_TRUE(presentationRange.valid());
     EXPECT_EQ(presentationRange.packetCount, 5u);
 }
@@ -18782,26 +18898,28 @@ TEST(GpuTaskGraph, CompilesHierarchicalGraphOwnedTimingPolicies){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId untimedPacket = compiledGraph.packetForTask(untimed);
-    const Graphics::GpuSubmissionPacketId timedPacket = compiledGraph.packetForTask(packetOnly);
-    const Graphics::GpuSubmissionPacketId taskPacket = compiledGraph.packetForTask(task);
-    const Graphics::GpuSubmissionPacketId finalUntimedPacket = compiledGraph.packetForTask(finalUntimed);
+    ASSERT_EQ(compiledPlan.packetCount(), 3u);
+
+    const Graphics::GpuSubmissionPacketId untimedPacket = compiledPlan.packetForTask(untimed);
+    const Graphics::GpuSubmissionPacketId timedPacket = compiledPlan.packetForTask(packetOnly);
+    const Graphics::GpuSubmissionPacketId taskPacket = compiledPlan.packetForTask(task);
+    const Graphics::GpuSubmissionPacketId finalUntimedPacket = compiledPlan.packetForTask(finalUntimed);
     ASSERT_TRUE(untimedPacket.valid());
     ASSERT_TRUE(timedPacket.valid());
     ASSERT_TRUE(finalUntimedPacket.valid());
     EXPECT_NE(untimedPacket, timedPacket);
     EXPECT_EQ(timedPacket, taskPacket);
     EXPECT_NE(timedPacket, finalUntimedPacket);
-    EXPECT_FALSE(compiledGraph.packet(untimedPacket).recordsTiming);
-    EXPECT_TRUE(compiledGraph.packet(timedPacket).recordsTiming);
-    EXPECT_FALSE(compiledGraph.packet(finalUntimedPacket).recordsTiming);
+    EXPECT_FALSE(compiledPlan.packet(untimedPacket).plan->recordsTiming);
+    EXPECT_TRUE(compiledPlan.packet(timedPacket).plan->recordsTiming);
+    EXPECT_FALSE(compiledPlan.packet(finalUntimedPacket).plan->recordsTiming);
 
-    const Graphics::GpuCompiledTask* const compiledUntimed = compiledGraph.findTask(untimed);
-    const Graphics::GpuCompiledTask* const compiledPacketOnly = compiledGraph.findTask(packetOnly);
-    const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-    const Graphics::GpuCompiledTask* const compiledFinalUntimed = compiledGraph.findTask(finalUntimed);
+    const Graphics::GpuCompiledTask* const compiledUntimed = compiledPlan.findTask(untimed).plan;
+    const Graphics::GpuCompiledTask* const compiledPacketOnly = compiledPlan.findTask(packetOnly).plan;
+    const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+    const Graphics::GpuCompiledTask* const compiledFinalUntimed = compiledPlan.findTask(finalUntimed).plan;
     ASSERT_NE(compiledUntimed, nullptr);
     ASSERT_NE(compiledPacketOnly, nullptr);
     ASSERT_NE(compiledTask, nullptr);
@@ -18890,37 +19008,40 @@ TEST(GpuTaskGraph, MergesExplicitCompatibleSuccessorIntoOnePacket){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_TRUE(compiledGraph.validFor(graph));
-    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
-    const Graphics::GpuSubmissionPacketId suffixPacket = compiledGraph.packetForTask(suffix);
-    const Graphics::GpuSubmissionPacketId finalSuffixPacket = compiledGraph.packetForTask(finalSuffix);
+    ASSERT_TRUE(compiledPlan.validFor(declarations));
+    ASSERT_EQ(compiledPlan.packetCount(), 1u);
+
+    const Graphics::GpuSubmissionPacketId prefixPacket = compiledPlan.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId suffixPacket = compiledPlan.packetForTask(suffix);
+    const Graphics::GpuSubmissionPacketId finalSuffixPacket = compiledPlan.packetForTask(finalSuffix);
     ASSERT_TRUE(prefixPacket.valid());
     EXPECT_EQ(prefixPacket, suffixPacket);
     EXPECT_EQ(prefixPacket, finalSuffixPacket);
-    const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(prefixPacket);
+    const Graphics::GpuSubmissionPacket& packet = *compiledPlan.packet(prefixPacket).plan;
     ASSERT_EQ(packet.taskCount, 3u);
-    ASSERT_NE(compiledGraph.packetTasks(prefixPacket), nullptr);
-    EXPECT_EQ(compiledGraph.packetTasks(prefixPacket)[0u], prefix);
-    EXPECT_EQ(compiledGraph.packetTasks(prefixPacket)[1u], suffix);
-    EXPECT_EQ(compiledGraph.packetTasks(prefixPacket)[2u], finalSuffix);
+    ASSERT_NE(compiledPlan.packet(prefixPacket).tasks, nullptr);
+    EXPECT_EQ(compiledPlan.packet(prefixPacket).tasks[0u], prefix);
+    EXPECT_EQ(compiledPlan.packet(prefixPacket).tasks[1u], suffix);
+    EXPECT_EQ(compiledPlan.packet(prefixPacket).tasks[2u], finalSuffix);
     EXPECT_EQ(packet.dependencyCount, 0u);
     EXPECT_EQ(
-        compiledGraph.packetizationDecisionForTask(prefix),
+        compiledPlan.packetizationDecisionForTask(prefix),
         Graphics::GpuTaskPacketizationDecision::FirstTask
     );
     EXPECT_EQ(
-        compiledGraph.packetizationDecisionForTask(suffix),
+        compiledPlan.packetizationDecisionForTask(suffix),
         Graphics::GpuTaskPacketizationDecision::MergedExplicit
     );
     EXPECT_EQ(
-        compiledGraph.packetizationDecisionForTask(finalSuffix),
+        compiledPlan.packetizationDecisionForTask(finalSuffix),
         Graphics::GpuTaskPacketizationDecision::MergedExplicit
     );
 
     const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics queueCompileStatistics =
-        compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
+        compiledPlan.physicalQueueCompileStatistics(queues[0u].id)
     ;
     ASSERT_TRUE(queueCompileStatistics.valid());
     EXPECT_EQ(queueCompileStatistics.queue, queues[0u].id);
@@ -19036,6 +19157,8 @@ TEST(GpuTaskGraph, MergesGraphicsComputeUavProducerIntoGraphicsVertexBufferConsu
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
     const Graphics::GpuTaskQueueAssignment* const rasterAssignment = assignments.find(raster);
@@ -19043,28 +19166,28 @@ TEST(GpuTaskGraph, MergesGraphicsComputeUavProducerIntoGraphicsVertexBufferConsu
     ASSERT_NE(rasterAssignment, nullptr);
     EXPECT_EQ(producerAssignment->queue, queue.id);
     EXPECT_EQ(rasterAssignment->queue, queue.id);
-    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
-    const Graphics::GpuSubmissionPacketId rasterPacket = compiledGraph.packetForTask(raster);
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId rasterPacket = compiledPlan.packetForTask(raster);
     ASSERT_TRUE(producerPacket.valid());
     ASSERT_TRUE(rasterPacket.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
     EXPECT_EQ(producerPacket, rasterPacket);
-    const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(producerPacket);
+    const Graphics::GpuSubmissionPacket& packet = *compiledPlan.packet(producerPacket).plan;
     EXPECT_EQ(packet.queue, queue.id);
     EXPECT_EQ(packet.dependencyCount, 0u);
     ASSERT_EQ(packet.taskCount, 2u);
-    ASSERT_NE(compiledGraph.packetTasks(producerPacket), nullptr);
-    EXPECT_EQ(compiledGraph.packetTasks(producerPacket)[0u], producer);
-    EXPECT_EQ(compiledGraph.packetTasks(producerPacket)[1u], raster);
+    ASSERT_NE(compiledPlan.packet(producerPacket).tasks, nullptr);
+    EXPECT_EQ(compiledPlan.packet(producerPacket).tasks[0u], producer);
+    EXPECT_EQ(compiledPlan.packet(producerPacket).tasks[1u], raster);
 
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
-    const Graphics::GpuCompiledTask* const compiledRaster = compiledGraph.findTask(raster);
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
+    const Graphics::GpuCompiledTask* const compiledRaster = compiledPlan.findTask(raster).plan;
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledRaster, nullptr);
     ASSERT_EQ(compiledProducer->prologueBarrierCount, 1u);
     ASSERT_EQ(compiledRaster->prologueBarrierCount, 1u);
-    const Graphics::GpuCompiledBarrier* const producerBarrier = compiledGraph.taskPrologueBarriers(producer);
-    const Graphics::GpuCompiledBarrier* const rasterBarrier = compiledGraph.taskPrologueBarriers(raster);
+    const Graphics::GpuCompiledBarrier* const producerBarrier = compiledPlan.findTask(producer).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const rasterBarrier = compiledPlan.findTask(raster).prologueBarriers;
     ASSERT_NE(producerBarrier, nullptr);
     ASSERT_NE(rasterBarrier, nullptr);
     EXPECT_EQ(producerBarrier[0u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
@@ -19233,6 +19356,8 @@ TEST(GpuTaskGraph, MergesSharedOpaqueComputeEmulationDispatchRasterPairsIntoOneP
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const Graphics::GpuTaskQueueAssignment* const dispatchAAssignment = assignments.find(dispatchA);
     const Graphics::GpuTaskQueueAssignment* const rasterAAssignment = assignments.find(rasterA);
@@ -19247,18 +19372,18 @@ TEST(GpuTaskGraph, MergesSharedOpaqueComputeEmulationDispatchRasterPairsIntoOneP
     EXPECT_EQ(dispatchBAssignment->queue, queue.id);
     EXPECT_EQ(rasterBAssignment->queue, queue.id);
 
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(dispatchA);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(dispatchA);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterA));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchB));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterB));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(dispatchA, rasterB));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterA));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(dispatchB));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterB));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(dispatchA, rasterB));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, 4u);
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], dispatchA);
     EXPECT_EQ(packetTasks[1u], rasterA);
@@ -19268,21 +19393,21 @@ TEST(GpuTaskGraph, MergesSharedOpaqueComputeEmulationDispatchRasterPairsIntoOneP
     const Graphics::GpuTaskId fullSequence[] = { dispatchA, rasterA, dispatchB, rasterB };
     const Graphics::GpuTaskId nonContiguousSequence[] = { dispatchA, dispatchB };
     const Graphics::GpuTaskId reversedPair[] = { rasterA, dispatchA };
-    EXPECT_TRUE(compiledGraph.taskPrecedesInSamePacket(dispatchA, rasterB));
-    EXPECT_FALSE(compiledGraph.taskPrecedesInSamePacket(rasterB, dispatchA));
-    EXPECT_TRUE(compiledGraph.tasksFormContiguousPacketSequence(firstPair, LengthOf(firstPair)));
-    EXPECT_TRUE(compiledGraph.tasksFormContiguousPacketSequence(fullSequence, LengthOf(fullSequence)));
-    EXPECT_FALSE(compiledGraph.tasksFormContiguousPacketSequence(
+    EXPECT_TRUE(compiledPlan.taskPrecedesInSamePacket(dispatchA, rasterB));
+    EXPECT_FALSE(compiledPlan.taskPrecedesInSamePacket(rasterB, dispatchA));
+    EXPECT_TRUE(compiledPlan.tasksFormContiguousPacketSequence(firstPair, LengthOf(firstPair)));
+    EXPECT_TRUE(compiledPlan.tasksFormContiguousPacketSequence(fullSequence, LengthOf(fullSequence)));
+    EXPECT_FALSE(compiledPlan.tasksFormContiguousPacketSequence(
         nonContiguousSequence,
         LengthOf(nonContiguousSequence)
     ));
-    EXPECT_FALSE(compiledGraph.tasksFormContiguousPacketSequence(reversedPair, LengthOf(reversedPair)));
+    EXPECT_FALSE(compiledPlan.tasksFormContiguousPacketSequence(reversedPair, LengthOf(reversedPair)));
 
     const auto expectTransition = [&](const Graphics::GpuTaskId task, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
         ASSERT_NE(compiledTask, nullptr);
         ASSERT_EQ(compiledTask->prologueBarrierCount, 1u);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         ASSERT_NE(barriers, nullptr);
         const Graphics::GpuCompiledBarrier& barrier = barriers[0u];
         EXPECT_EQ(barrier.type, Graphics::GpuCompiledBarrierType::BufferTransition);
@@ -19460,32 +19585,34 @@ TEST(GpuTaskGraph, MergesSharedOpaqueComputeEmulationDispatchRasterTriplesIntoOn
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(tasks[0u]);
+
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(tasks[0u]);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
     for(const Graphics::GpuTaskId task : tasks){
         const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
         ASSERT_NE(assignment, nullptr);
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
-        EXPECT_EQ(compiledGraph.packetForTask(task), packet);
+        EXPECT_EQ(compiledPlan.packetForTask(task), packet);
     }
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(tasks[0u], tasks[5u]));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(tasks[0u], tasks[5u]));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, LengthOf(tasks));
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex)
         EXPECT_EQ(packetTasks[taskIndex], tasks[taskIndex]);
 
     const auto expectTransition = [&](const usize taskIndex, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(tasks[taskIndex]);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(tasks[taskIndex]).plan;
         ASSERT_NE(compiledTask, nullptr);
         ASSERT_EQ(compiledTask->prologueBarrierCount, 1u);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(tasks[taskIndex]);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(tasks[taskIndex]).prologueBarriers;
         ASSERT_NE(barriers, nullptr);
         const Graphics::GpuCompiledBarrier& barrier = barriers[0u];
         EXPECT_EQ(barrier.type, Graphics::GpuCompiledBarrierType::BufferTransition);
@@ -19712,32 +19839,34 @@ TEST(GpuTaskGraph, MergesSharedOpaqueComputeEmulationDispatchRasterQuintuplesInt
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(tasks[0u]);
+
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(tasks[0u]);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
     for(const Graphics::GpuTaskId task : tasks){
         const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
         ASSERT_NE(assignment, nullptr);
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
-        EXPECT_EQ(compiledGraph.packetForTask(task), packet);
+        EXPECT_EQ(compiledPlan.packetForTask(task), packet);
     }
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(tasks[0u], tasks[9u]));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(tasks[0u], tasks[9u]));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, LengthOf(tasks));
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex)
         EXPECT_EQ(packetTasks[taskIndex], tasks[taskIndex]);
 
     const auto expectTransition = [&](const usize taskIndex, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(tasks[taskIndex]);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(tasks[taskIndex]).plan;
         ASSERT_NE(compiledTask, nullptr);
         ASSERT_EQ(compiledTask->prologueBarrierCount, 1u);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(tasks[taskIndex]);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(tasks[taskIndex]).prologueBarriers;
         ASSERT_NE(barriers, nullptr);
         const Graphics::GpuCompiledBarrier& barrier = barriers[0u];
         EXPECT_EQ(barrier.type, Graphics::GpuCompiledBarrierType::BufferTransition);
@@ -19915,26 +20044,28 @@ TEST(GpuTaskGraph, MergesOpaqueCsgReceiverComputeProducerIntoGbufferPacket){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
-    ASSERT_EQ(compiledGraph.packetCount(), 1u);
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(csgClear);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    ASSERT_EQ(compiledPlan.packetCount(), 1u);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(csgClear);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(packet, compiledGraph.packetForTask(producer));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(gbuffer));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(csgClear, gbuffer));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(packet, compiledPlan.packetForTask(producer));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(gbuffer));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(csgClear, gbuffer));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     ASSERT_EQ(compiledPacket.taskCount, 3u);
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], csgClear);
     EXPECT_EQ(packetTasks[1u], producer);
     EXPECT_EQ(packetTasks[2u], gbuffer);
 
     const auto hasTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
         if(!compiledTask)
             return false;
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(usize barrierIndex = 0u; barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -20156,6 +20287,8 @@ TEST(GpuTaskGraph, MergesAliasFreeOpaqueCsgIntervalSampleComputeEmulationWithRas
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     for(const Graphics::GpuTaskId task : { combine, computeEmulation, sample }){
         const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
@@ -20163,28 +20296,28 @@ TEST(GpuTaskGraph, MergesAliasFreeOpaqueCsgIntervalSampleComputeEmulationWithRas
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(combine);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(combine);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
-    EXPECT_EQ(packet, compiledGraph.packetForTask(computeEmulation));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(sample));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(combine, computeEmulation));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(computeEmulation, sample));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledPlan.packetForTask(computeEmulation));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(sample));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(combine, computeEmulation));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(computeEmulation, sample));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, 3u);
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], combine);
     EXPECT_EQ(packetTasks[1u], computeEmulation);
     EXPECT_EQ(packetTasks[2u], sample);
 
     const auto hasTextureBarrier = [&](const Graphics::GpuTaskId task, const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
         if(!compiledTask)
             return false;
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -20199,10 +20332,10 @@ TEST(GpuTaskGraph, MergesAliasFreeOpaqueCsgIntervalSampleComputeEmulationWithRas
         return false;
     };
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
         if(!compiledTask)
             return false;
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -20362,6 +20495,8 @@ TEST(GpuTaskGraph, MergesAliasFreeAvboitExtinctionGeneratedVertexHandoffWithRast
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     for(const Graphics::GpuTaskId task : { producer, raster }){
         const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
@@ -20369,26 +20504,26 @@ TEST(GpuTaskGraph, MergesAliasFreeAvboitExtinctionGeneratedVertexHandoffWithRast
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(producer);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
-    EXPECT_EQ(packet, compiledGraph.packetForTask(raster));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(producer, raster));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(producer, raster));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledPlan.packetForTask(raster));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(producer, raster));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(producer, raster));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, 2u);
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], producer);
     EXPECT_EQ(packetTasks[1u], raster);
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
         if(!compiledTask)
             return false;
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -20536,6 +20671,8 @@ TEST(GpuTaskGraph, MergesAliasFreeAvboitAccumulationGeneratedVertexHandoffWithRa
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     for(const Graphics::GpuTaskId task : { producer, raster }){
         const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
@@ -20543,26 +20680,26 @@ TEST(GpuTaskGraph, MergesAliasFreeAvboitAccumulationGeneratedVertexHandoffWithRa
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(producer);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
-    EXPECT_EQ(packet, compiledGraph.packetForTask(raster));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(producer, raster));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(producer, raster));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledPlan.packetForTask(raster));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(producer, raster));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(producer, raster));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, 2u);
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], producer);
     EXPECT_EQ(packetTasks[1u], raster);
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
         if(!compiledTask)
             return false;
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -20870,6 +21007,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationAliasFreeRegularComputeEmulatio
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(pre, streamUpload));
     EXPECT_TRUE(analysis.hasExplicitEdge(streamUpload, producer));
@@ -20918,23 +21057,23 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationAliasFreeRegularComputeEmulatio
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(pre);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
-    EXPECT_EQ(packet, compiledGraph.packetForTask(streamUpload));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(producer));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(raster));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(finalizer));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(pre, finalizer));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(pre, streamUpload));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(streamUpload, producer));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(producer, raster));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(raster, finalizer));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledPlan.packetForTask(streamUpload));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(producer));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(raster));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(finalizer));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(pre, finalizer));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(pre, streamUpload));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(streamUpload, producer));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(producer, raster));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(raster, finalizer));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, 5u);
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], pre);
     EXPECT_EQ(packetTasks[1u], streamUpload);
@@ -20943,8 +21082,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationAliasFreeRegularComputeEmulatio
     EXPECT_EQ(packetTasks[4u], finalizer);
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -20960,8 +21099,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationAliasFreeRegularComputeEmulatio
         return false;
     };
     const auto hasTextureTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -21315,6 +21454,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationSharedOutputComputeEmulationPai
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(pre, stream));
     EXPECT_TRUE(analysis.hasExplicitEdge(stream, dispatchA));
@@ -21379,21 +21520,21 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationSharedOutputComputeEmulationPai
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(pre);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
-    EXPECT_EQ(packet, compiledGraph.packetForTask(stream));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchA));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterA));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchB));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterB));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(finalizer));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(pre, finalizer));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledPlan.packetForTask(stream));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(dispatchA));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterA));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(dispatchB));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterB));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(finalizer));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(pre, finalizer));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, 7u);
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], pre);
     EXPECT_EQ(packetTasks[1u], stream);
@@ -21404,8 +21545,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationSharedOutputComputeEmulationPai
     EXPECT_EQ(packetTasks[6u], finalizer);
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -21421,8 +21562,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationSharedOutputComputeEmulationPai
         return false;
     };
     const auto hasTextureTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -21808,6 +21949,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationSharedOutputComputeEmulationTri
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(pre, stream));
     EXPECT_TRUE(analysis.hasExplicitEdge(stream, dispatchA));
@@ -21890,23 +22033,23 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationSharedOutputComputeEmulationTri
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(pre);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
-    EXPECT_EQ(packet, compiledGraph.packetForTask(stream));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchA));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterA));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchB));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterB));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchC));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterC));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(finalizer));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(pre, finalizer));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledPlan.packetForTask(stream));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(dispatchA));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterA));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(dispatchB));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterB));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(dispatchC));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterC));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(finalizer));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(pre, finalizer));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, 9u);
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], pre);
     EXPECT_EQ(packetTasks[1u], stream);
@@ -21919,8 +22062,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationSharedOutputComputeEmulationTri
     EXPECT_EQ(packetTasks[8u], finalizer);
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -21936,8 +22079,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationSharedOutputComputeEmulationTri
         return false;
     };
     const auto hasTextureTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -22376,6 +22519,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationSharedOutputComputeEmulationQui
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(pre, stream));
     EXPECT_TRUE(analysis.hasExplicitEdge(stream, dispatchA));
@@ -22497,27 +22642,27 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationSharedOutputComputeEmulationQui
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(pre);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
-    EXPECT_EQ(packet, compiledGraph.packetForTask(stream));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchA));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterA));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchB));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterB));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchC));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterC));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchD));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterD));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchE));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterE));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(finalizer));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(pre, finalizer));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledPlan.packetForTask(stream));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(dispatchA));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterA));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(dispatchB));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterB));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(dispatchC));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterC));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(dispatchD));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterD));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(dispatchE));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterE));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(finalizer));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(pre, finalizer));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, 13u);
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], pre);
     EXPECT_EQ(packetTasks[1u], stream);
@@ -22534,8 +22679,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationSharedOutputComputeEmulationQui
     EXPECT_EQ(packetTasks[12u], finalizer);
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -22551,8 +22696,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationSharedOutputComputeEmulationQui
         return false;
     };
     const auto hasTextureTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -22799,6 +22944,8 @@ TEST(GpuTaskGraph, MergesAliasFreeAvboitOccupancyGeneratedVertexHandoffWithRaste
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     for(const Graphics::GpuTaskId task : { producer, raster }){
         const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
@@ -22806,26 +22953,26 @@ TEST(GpuTaskGraph, MergesAliasFreeAvboitOccupancyGeneratedVertexHandoffWithRaste
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(producer);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
-    EXPECT_EQ(packet, compiledGraph.packetForTask(raster));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(producer, raster));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(producer, raster));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledPlan.packetForTask(raster));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(producer, raster));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(producer, raster));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, 2u);
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], producer);
     EXPECT_EQ(packetTasks[1u], raster);
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
         if(!compiledTask)
             return false;
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -23094,6 +23241,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancyAliasFreeRegularComputeEmulationIn
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(pre, streamUpload));
     EXPECT_TRUE(analysis.hasExplicitEdge(streamUpload, clear));
@@ -23135,23 +23284,23 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancyAliasFreeRegularComputeEmulationIn
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(pre);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
-    EXPECT_EQ(packet, compiledGraph.packetForTask(streamUpload));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(clear));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(producer));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(occupancy));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(pre, occupancy));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(pre, streamUpload));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(streamUpload, clear));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(clear, producer));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(producer, occupancy));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledPlan.packetForTask(streamUpload));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(clear));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(producer));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(occupancy));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(pre, occupancy));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(pre, streamUpload));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(streamUpload, clear));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(clear, producer));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(producer, occupancy));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, 5u);
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], pre);
     EXPECT_EQ(packetTasks[1u], streamUpload);
@@ -23160,8 +23309,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancyAliasFreeRegularComputeEmulationIn
     EXPECT_EQ(packetTasks[4u], occupancy);
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -23475,6 +23624,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancySharedOutputComputeEmulationPairsI
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(pre, stream));
     EXPECT_TRUE(analysis.hasExplicitEdge(stream, clear));
@@ -23541,22 +23692,22 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancySharedOutputComputeEmulationPairsI
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(pre);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
-    EXPECT_EQ(packet, compiledGraph.packetForTask(stream));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(clear));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchA));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterA));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchB));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterB));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(depthWarp));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(pre, depthWarp));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledPlan.packetForTask(stream));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(clear));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(dispatchA));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterA));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(dispatchB));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterB));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(depthWarp));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(pre, depthWarp));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, 8u);
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], pre);
     EXPECT_EQ(packetTasks[1u], stream);
@@ -23568,8 +23719,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancySharedOutputComputeEmulationPairsI
     EXPECT_EQ(packetTasks[7u], depthWarp);
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -23915,6 +24066,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancySharedOutputComputeEmulationTriple
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(pre, stream));
     EXPECT_TRUE(analysis.hasExplicitEdge(stream, clear));
@@ -23999,24 +24152,24 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancySharedOutputComputeEmulationTriple
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(pre);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
-    EXPECT_EQ(packet, compiledGraph.packetForTask(stream));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(clear));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchA));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterA));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchB));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterB));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchC));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterC));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(depthWarp));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(pre, depthWarp));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledPlan.packetForTask(stream));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(clear));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(dispatchA));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterA));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(dispatchB));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterB));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(dispatchC));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(rasterC));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(depthWarp));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(pre, depthWarp));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, 10u);
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], pre);
     EXPECT_EQ(packetTasks[1u], stream);
@@ -24030,8 +24183,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancySharedOutputComputeEmulationTriple
     EXPECT_EQ(packetTasks[9u], depthWarp);
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -24378,6 +24531,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancySharedOutputComputeEmulationQuintu
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(pre, stream));
     EXPECT_TRUE(analysis.hasExplicitEdge(stream, clear));
@@ -24502,26 +24657,26 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancySharedOutputComputeEmulationQuintu
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(pre);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
     for(const Graphics::GpuTaskId task : tasks)
-        EXPECT_EQ(packet, compiledGraph.packetForTask(task));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(pre, depthWarp));
+        EXPECT_EQ(packet, compiledPlan.packetForTask(task));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(pre, depthWarp));
     for(usize taskIndex = 0u; taskIndex + 1u < LengthOf(tasks); ++taskIndex)
-        EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(tasks[taskIndex], tasks[taskIndex + 1u]));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+        EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(tasks[taskIndex], tasks[taskIndex + 1u]));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, LengthOf(tasks));
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex)
         EXPECT_EQ(packetTasks[taskIndex], tasks[taskIndex]);
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -24537,8 +24692,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancySharedOutputComputeEmulationQuintu
         return false;
     };
     const auto hasBufferUav = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -24943,6 +25098,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancyAliasFreeCsgComputeEmulationInPreP
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(combine, streamUpload));
     EXPECT_TRUE(analysis.hasExplicitEdge(streamUpload, clear));
@@ -25000,23 +25157,23 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancyAliasFreeCsgComputeEmulationInPreP
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(combine);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(combine);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
-    EXPECT_EQ(packet, compiledGraph.packetForTask(streamUpload));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(clear));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(producer));
-    EXPECT_EQ(packet, compiledGraph.packetForTask(occupancy));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(combine, occupancy));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(combine, streamUpload));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(streamUpload, clear));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(clear, producer));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(producer, occupancy));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledPlan.packetForTask(streamUpload));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(clear));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(producer));
+    EXPECT_EQ(packet, compiledPlan.packetForTask(occupancy));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(combine, occupancy));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(combine, streamUpload));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(streamUpload, clear));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(clear, producer));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(producer, occupancy));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, 5u);
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], combine);
     EXPECT_EQ(packetTasks[1u], streamUpload);
@@ -25029,8 +25186,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancyAliasFreeCsgComputeEmulationInPreP
                                        const Graphics::GpuGraphResourceId resource,
                                        const Graphics::ResourceStates::Mask before,
                                        const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount;
             ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
@@ -25051,8 +25208,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancyAliasFreeCsgComputeEmulationInPreP
                                          const Graphics::GpuGraphResourceId resource,
                                          const Graphics::ResourceStates::Mask before,
                                          const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount;
             ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
@@ -25569,6 +25726,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionAliasFreeCsgComputeEmulationInPre
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(pre, combine));
     EXPECT_TRUE(analysis.hasExplicitEdge(combine, receiverRangesUpload));
@@ -25657,18 +25816,18 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionAliasFreeCsgComputeEmulationInPre
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(pre);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
     for(const Graphics::GpuTaskId task : tasks)
-        EXPECT_EQ(compiledGraph.packetForTask(task), packet);
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(producer, extinction));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(producer, extinction));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+        EXPECT_EQ(compiledPlan.packetForTask(task), packet);
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(producer, extinction));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(producer, extinction));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, LengthOf(tasks));
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex)
         EXPECT_EQ(packetTasks[taskIndex], tasks[taskIndex]);
@@ -25679,8 +25838,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionAliasFreeCsgComputeEmulationInPre
                                          const Graphics::GpuGraphResourceId resource,
                                          const Graphics::ResourceStates::Mask before,
                                          const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount;
             ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
@@ -25699,8 +25858,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionAliasFreeCsgComputeEmulationInPre
     const auto hasTextureUav = [&](const Graphics::GpuTaskId task,
                                    const Graphics::GpuGraphResourceId resource,
                                    const Graphics::TextureSubresourceSet& range){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount;
             ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
@@ -26272,6 +26431,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationAliasFreeCsgComputeEmulationInP
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(pre, combine));
     EXPECT_TRUE(analysis.hasExplicitEdge(combine, receiverRangesUpload));
@@ -26360,19 +26521,19 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationAliasFreeCsgComputeEmulationInP
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(pre);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
     for(const Graphics::GpuTaskId task : tasks)
-        EXPECT_EQ(compiledGraph.packetForTask(task), packet);
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(producer, accumulation));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(producer, accumulation));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(accumulation, finalizer));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+        EXPECT_EQ(compiledPlan.packetForTask(task), packet);
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(producer, accumulation));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(producer, accumulation));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(accumulation, finalizer));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, LengthOf(tasks));
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex)
         EXPECT_EQ(packetTasks[taskIndex], tasks[taskIndex]);
@@ -26384,8 +26545,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationAliasFreeCsgComputeEmulationInP
                                          const Graphics::GpuGraphResourceId resource,
                                          const Graphics::ResourceStates::Mask before,
                                          const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount;
             ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
@@ -26405,8 +26566,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationAliasFreeCsgComputeEmulationInP
                                           const Graphics::GpuGraphResourceId resource,
                                           const Graphics::ResourceStates::Mask before,
                                           const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount;
             ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
@@ -26425,8 +26586,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationAliasFreeCsgComputeEmulationInP
     const auto hasTextureUav = [&](const Graphics::GpuTaskId task,
                                    const Graphics::GpuGraphResourceId resource,
                                    const Graphics::TextureSubresourceSet& range){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount;
             ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
@@ -26917,6 +27078,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionAliasFreeRegularComputeEmulationI
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(pre, occupancy));
     EXPECT_TRUE(analysis.hasExplicitEdge(occupancy, depthWarpTask));
@@ -26994,26 +27157,26 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionAliasFreeRegularComputeEmulationI
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(pre);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
     for(const Graphics::GpuTaskId task : tasks)
-        EXPECT_EQ(compiledGraph.packetForTask(task), packet);
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(pre, integrationTail));
+        EXPECT_EQ(compiledPlan.packetForTask(task), packet);
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(pre, integrationTail));
     for(usize taskIndex = 0u; taskIndex + 1u < LengthOf(tasks); ++taskIndex)
-        EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(tasks[taskIndex], tasks[taskIndex + 1u]));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+        EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(tasks[taskIndex], tasks[taskIndex + 1u]));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, LengthOf(tasks));
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex)
         EXPECT_EQ(packetTasks[taskIndex], tasks[taskIndex]);
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -27029,8 +27192,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionAliasFreeRegularComputeEmulationI
         return false;
     };
     const auto hasBufferUav = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -27331,6 +27494,8 @@ TEST(GpuTaskGraph, KeepsUnsplitTypedAvboitIntegrationTailWithExtinctionInGraphic
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(extinctionTask, integrationTask));
     EXPECT_TRUE(analysis.hasExplicitEdge(integrationTask, accumulationTask));
@@ -27369,27 +27534,27 @@ TEST(GpuTaskGraph, KeepsUnsplitTypedAvboitIntegrationTailWithExtinctionInGraphic
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(extinctionTask);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(extinctionTask);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
-    EXPECT_EQ(compiledGraph.packetForTask(integrationTask), packet);
-    EXPECT_EQ(compiledGraph.packetForTask(accumulationTask), packet);
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(extinctionTask, accumulationTask));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(extinctionTask, integrationTask));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(integrationTask, accumulationTask));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
+    EXPECT_EQ(compiledPlan.packetForTask(integrationTask), packet);
+    EXPECT_EQ(compiledPlan.packetForTask(accumulationTask), packet);
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(extinctionTask, accumulationTask));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(extinctionTask, integrationTask));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(integrationTask, accumulationTask));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, LengthOf(tasks));
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], extinctionTask);
     EXPECT_EQ(packetTasks[1u], integrationTask);
     EXPECT_EQ(packetTasks[2u], accumulationTask);
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -27854,6 +28019,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionSharedOutputRegularPairsWithTyped
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(pre, occupancy));
     EXPECT_TRUE(analysis.hasExplicitEdge(occupancy, depthWarpTask));
@@ -27955,26 +28122,26 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionSharedOutputRegularPairsWithTyped
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(pre);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
     for(const Graphics::GpuTaskId task : tasks)
-        EXPECT_EQ(compiledGraph.packetForTask(task), packet);
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(pre, accumulationTask));
+        EXPECT_EQ(compiledPlan.packetForTask(task), packet);
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(pre, accumulationTask));
     for(usize taskIndex = 0u; taskIndex + 1u < LengthOf(tasks); ++taskIndex)
-        EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(tasks[taskIndex], tasks[taskIndex + 1u]));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+        EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(tasks[taskIndex], tasks[taskIndex + 1u]));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, LengthOf(tasks));
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex)
         EXPECT_EQ(packetTasks[taskIndex], tasks[taskIndex]);
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -27990,8 +28157,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionSharedOutputRegularPairsWithTyped
         return false;
     };
     const auto hasBufferUav = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -28007,8 +28174,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionSharedOutputRegularPairsWithTyped
         return false;
     };
     const auto hasTextureTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -28542,6 +28709,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionSharedOutputRegularTriplesWithTyp
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(pre, occupancy));
     EXPECT_TRUE(analysis.hasExplicitEdge(occupancy, depthWarpTask));
@@ -28661,26 +28830,26 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionSharedOutputRegularTriplesWithTyp
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(pre);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
     for(const Graphics::GpuTaskId task : tasks)
-        EXPECT_EQ(compiledGraph.packetForTask(task), packet);
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(pre, accumulationTask));
+        EXPECT_EQ(compiledPlan.packetForTask(task), packet);
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(pre, accumulationTask));
     for(usize taskIndex = 0u; taskIndex + 1u < LengthOf(tasks); ++taskIndex)
-        EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(tasks[taskIndex], tasks[taskIndex + 1u]));
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+        EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(tasks[taskIndex], tasks[taskIndex + 1u]));
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     EXPECT_EQ(compiledPacket.queue, queue.id);
     EXPECT_EQ(compiledPacket.dependencyCount, 0u);
     ASSERT_EQ(compiledPacket.taskCount, LengthOf(tasks));
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex)
         EXPECT_EQ(packetTasks[taskIndex], tasks[taskIndex]);
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -28696,8 +28865,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionSharedOutputRegularTriplesWithTyp
         return false;
     };
     const auto hasBufferUav = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -28713,8 +28882,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionSharedOutputRegularTriplesWithTyp
         return false;
     };
     const auto hasTextureTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -29124,6 +29293,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionSharedOutputRegularQuintuplesWith
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(stream, phases[0u]));
     for(usize phaseIndex = 1u; phaseIndex < LengthOf(phases); ++phaseIndex)
@@ -29158,21 +29329,21 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionSharedOutputRegularQuintuplesWith
         EXPECT_EQ(assignment->queue, queue.id);
         EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     }
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(pre);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     ASSERT_EQ(compiledPacket.taskCount, LengthOf(tasks));
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
-        EXPECT_EQ(compiledGraph.packetForTask(tasks[taskIndex]), packet);
+        EXPECT_EQ(compiledPlan.packetForTask(tasks[taskIndex]), packet);
         EXPECT_EQ(packetTasks[taskIndex], tasks[taskIndex]);
     }
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -29188,8 +29359,8 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionSharedOutputRegularQuintuplesWith
         return false;
     };
     const auto hasBufferUav = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -29445,6 +29616,8 @@ TEST(GpuTaskGraph, OrdersAsyncAvboitExtinctionComputeEmulationPacketBetweenDepth
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(depthWarpTask, producerTask));
     EXPECT_TRUE(analysis.hasExplicitEdge(producerTask, extinctionTask));
@@ -29501,50 +29674,50 @@ TEST(GpuTaskGraph, OrdersAsyncAvboitExtinctionComputeEmulationPacketBetweenDepth
     expectAssignment(extinctionTask, queues[0u].id, Graphics::CommandQueue::Graphics);
     expectAssignment(integrationTask, queues[1u].id, Graphics::CommandQueue::Compute);
 
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
-    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledGraph.packetForTask(depthWarpTask);
-    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledGraph.packetForTask(producerTask);
-    const Graphics::GpuSubmissionPacketId integrationPacket = compiledGraph.packetForTask(integrationTask);
+    ASSERT_EQ(compiledPlan.packetCount(), 3u);
+    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledPlan.packetForTask(depthWarpTask);
+    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledPlan.packetForTask(producerTask);
+    const Graphics::GpuSubmissionPacketId integrationPacket = compiledPlan.packetForTask(integrationTask);
     ASSERT_TRUE(depthWarpPacket.valid());
     ASSERT_TRUE(extinctionPacket.valid());
     ASSERT_TRUE(integrationPacket.valid());
-    EXPECT_EQ(extinctionPacket, compiledGraph.packetForTask(extinctionTask));
+    EXPECT_EQ(extinctionPacket, compiledPlan.packetForTask(extinctionTask));
     EXPECT_NE(depthWarpPacket, extinctionPacket);
     EXPECT_NE(extinctionPacket, integrationPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(0u), depthWarpPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(1u), extinctionPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(2u), integrationPacket);
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(depthWarpTask, producerTask));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(producerTask, extinctionTask));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(extinctionTask, integrationTask));
-    const Graphics::GpuSubmissionPacketRange packetRange = compiledGraph.packetRange(depthWarpPacket, integrationPacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(0u), depthWarpPacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(1u), extinctionPacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(2u), integrationPacket);
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(depthWarpTask, producerTask));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(producerTask, extinctionTask));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(extinctionTask, integrationTask));
+    const Graphics::GpuSubmissionPacketRange packetRange = compiledPlan.packetRange(depthWarpPacket, integrationPacket);
     ASSERT_TRUE(packetRange.valid());
     EXPECT_EQ(packetRange.packetCount, 3u);
-    const Graphics::GpuSubmissionPacket& depthWarpPacketPlan = compiledGraph.packet(depthWarpPacket);
-    const Graphics::GpuSubmissionPacket& extinctionPacketPlan = compiledGraph.packet(extinctionPacket);
-    const Graphics::GpuSubmissionPacket& integrationPacketPlan = compiledGraph.packet(integrationPacket);
+    const Graphics::GpuSubmissionPacket& depthWarpPacketPlan = *compiledPlan.packet(depthWarpPacket).plan;
+    const Graphics::GpuSubmissionPacket& extinctionPacketPlan = *compiledPlan.packet(extinctionPacket).plan;
+    const Graphics::GpuSubmissionPacket& integrationPacketPlan = *compiledPlan.packet(integrationPacket).plan;
     EXPECT_EQ(depthWarpPacketPlan.queue, queues[1u].id);
     EXPECT_EQ(extinctionPacketPlan.queue, queues[0u].id);
     EXPECT_EQ(integrationPacketPlan.queue, queues[1u].id);
     ASSERT_EQ(extinctionPacketPlan.taskCount, 2u);
-    const Graphics::GpuTaskId* const extinctionPacketTasks = compiledGraph.packetTasks(extinctionPacket);
+    const Graphics::GpuTaskId* const extinctionPacketTasks = compiledPlan.packet(extinctionPacket).tasks;
     ASSERT_NE(extinctionPacketTasks, nullptr);
     EXPECT_EQ(extinctionPacketTasks[0u], producerTask);
     EXPECT_EQ(extinctionPacketTasks[1u], extinctionTask);
     ASSERT_EQ(extinctionPacketPlan.dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(extinctionPacket)[0u].producer, depthWarpPacket);
+    EXPECT_EQ(compiledPlan.packet(extinctionPacket).dependencies[0u].producer, depthWarpPacket);
     // The raw Depth-Warp -> Integration resource edge remains diagnostic, while the scheduling reduction relies on
     // the already-required Depth-Warp -> Extinction -> Integration packet chain.
     EXPECT_NE(FindEdge(analysis, depthWarpTask, integrationTask), nullptr);
     ASSERT_EQ(integrationPacketPlan.dependencyCount, 1u);
-    const Graphics::GpuPacketDependency* const integrationDependencies = compiledGraph.packetDependencies(integrationPacket);
+    const Graphics::GpuPacketDependency* const integrationDependencies = compiledPlan.packet(integrationPacket).dependencies;
     ASSERT_NE(integrationDependencies, nullptr);
     EXPECT_EQ(integrationDependencies[0u].producer, extinctionPacket);
 
-    const Graphics::GpuCompiledTask* const compiledDepthWarp = compiledGraph.findTask(depthWarpTask);
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producerTask);
-    const Graphics::GpuCompiledTask* const compiledExtinction = compiledGraph.findTask(extinctionTask);
-    const Graphics::GpuCompiledTask* const compiledIntegration = compiledGraph.findTask(integrationTask);
+    const Graphics::GpuCompiledTask* const compiledDepthWarp = compiledPlan.findTask(depthWarpTask).plan;
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producerTask).plan;
+    const Graphics::GpuCompiledTask* const compiledExtinction = compiledPlan.findTask(extinctionTask).plan;
+    const Graphics::GpuCompiledTask* const compiledIntegration = compiledPlan.findTask(integrationTask).plan;
     ASSERT_NE(compiledDepthWarp, nullptr);
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledExtinction, nullptr);
@@ -29559,8 +29732,8 @@ TEST(GpuTaskGraph, OrdersAsyncAvboitExtinctionComputeEmulationPacketBetweenDepth
     ASSERT_EQ(compiledIntegration->prologueBarrierCount, 2u);
 
     const auto hasStateSeed = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::GpuSubmissionPacketId sourcePacket){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuPacketStateSeed* const seeds = compiledGraph.taskPrologueStateSeeds(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuPacketStateSeed* const seeds = compiledPlan.findTask(task).prologueStateSeeds;
         for(u32 seedIndex = 0u; compiledTask && seeds && seedIndex < compiledTask->prologueStateSeedCount; ++seedIndex){
             if(seeds[seedIndex].resource == resource && seeds[seedIndex].sourcePacket == sourcePacket)
                 return true;
@@ -29568,8 +29741,8 @@ TEST(GpuTaskGraph, OrdersAsyncAvboitExtinctionComputeEmulationPacketBetweenDepth
         return false;
     };
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after, const Graphics::GpuPhysicalQueueId sourceQueue, const Graphics::GpuPhysicalQueueId destinationQueue){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -29973,6 +30146,8 @@ TEST(GpuTaskGraph, OrdersAsyncAvboitAccumulationComputeEmulationPacketBetweenInt
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(integration, streamUpload));
     EXPECT_TRUE(analysis.hasExplicitEdge(streamUpload, producer));
@@ -30037,46 +30212,46 @@ TEST(GpuTaskGraph, OrdersAsyncAvboitAccumulationComputeEmulationPacketBetweenInt
     expectAssignment(finalizer, queues[0u].id, Graphics::CommandQueue::Graphics);
     expectAssignment(composite, queues[1u].id, Graphics::CommandQueue::Compute);
 
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
-    const Graphics::GpuSubmissionPacketId integrationPacket = compiledGraph.packetForTask(integration);
-    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledGraph.packetForTask(producer);
-    const Graphics::GpuSubmissionPacketId compositePacket = compiledGraph.packetForTask(composite);
+    ASSERT_EQ(compiledPlan.packetCount(), 3u);
+    const Graphics::GpuSubmissionPacketId integrationPacket = compiledPlan.packetForTask(integration);
+    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledPlan.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId compositePacket = compiledPlan.packetForTask(composite);
     ASSERT_TRUE(integrationPacket.valid());
     ASSERT_TRUE(accumulationPacket.valid());
     ASSERT_TRUE(compositePacket.valid());
-    EXPECT_EQ(accumulationPacket, compiledGraph.packetForTask(streamUpload));
-    EXPECT_EQ(accumulationPacket, compiledGraph.packetForTask(raster));
-    EXPECT_EQ(accumulationPacket, compiledGraph.packetForTask(finalizer));
+    EXPECT_EQ(accumulationPacket, compiledPlan.packetForTask(streamUpload));
+    EXPECT_EQ(accumulationPacket, compiledPlan.packetForTask(raster));
+    EXPECT_EQ(accumulationPacket, compiledPlan.packetForTask(finalizer));
     EXPECT_NE(integrationPacket, accumulationPacket);
     EXPECT_NE(accumulationPacket, compositePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(0u), integrationPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(1u), accumulationPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(2u), compositePacket);
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(integration, streamUpload));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(streamUpload, producer));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(producer, raster));
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(raster, finalizer));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(finalizer, composite));
+    EXPECT_EQ(compiledPlan.packetIdAt(0u), integrationPacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(1u), accumulationPacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(2u), compositePacket);
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(integration, streamUpload));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(streamUpload, producer));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(producer, raster));
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(raster, finalizer));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(finalizer, composite));
 
-    const Graphics::GpuSubmissionPacket& accumulationPacketPlan = compiledGraph.packet(accumulationPacket);
-    const Graphics::GpuSubmissionPacket& compositePacketPlan = compiledGraph.packet(compositePacket);
+    const Graphics::GpuSubmissionPacket& accumulationPacketPlan = *compiledPlan.packet(accumulationPacket).plan;
+    const Graphics::GpuSubmissionPacket& compositePacketPlan = *compiledPlan.packet(compositePacket).plan;
     EXPECT_EQ(accumulationPacketPlan.queue, queues[0u].id);
     EXPECT_EQ(compositePacketPlan.queue, queues[1u].id);
     ASSERT_EQ(accumulationPacketPlan.taskCount, 4u);
-    const Graphics::GpuTaskId* const accumulationPacketTasks = compiledGraph.packetTasks(accumulationPacket);
+    const Graphics::GpuTaskId* const accumulationPacketTasks = compiledPlan.packet(accumulationPacket).tasks;
     ASSERT_NE(accumulationPacketTasks, nullptr);
     EXPECT_EQ(accumulationPacketTasks[0u], streamUpload);
     EXPECT_EQ(accumulationPacketTasks[1u], producer);
     EXPECT_EQ(accumulationPacketTasks[2u], raster);
     EXPECT_EQ(accumulationPacketTasks[3u], finalizer);
     ASSERT_EQ(accumulationPacketPlan.dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(accumulationPacket)[0u].producer, integrationPacket);
+    EXPECT_EQ(compiledPlan.packet(accumulationPacket).dependencies[0u].producer, integrationPacket);
     ASSERT_EQ(compositePacketPlan.dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(compositePacket)[0u].producer, accumulationPacket);
+    EXPECT_EQ(compiledPlan.packet(compositePacket).dependencies[0u].producer, accumulationPacket);
 
     const auto hasStateSeed = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::GpuSubmissionPacketId sourcePacket){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuPacketStateSeed* const seeds = compiledGraph.taskPrologueStateSeeds(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuPacketStateSeed* const seeds = compiledPlan.findTask(task).prologueStateSeeds;
         for(u32 seedIndex = 0u; compiledTask && seeds && seedIndex < compiledTask->prologueStateSeedCount; ++seedIndex){
             if(seeds[seedIndex].resource == resource && seeds[seedIndex].sourcePacket == sourcePacket)
                 return true;
@@ -30084,8 +30259,8 @@ TEST(GpuTaskGraph, OrdersAsyncAvboitAccumulationComputeEmulationPacketBetweenInt
         return false;
     };
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after, const Graphics::GpuPhysicalQueueId sourceQueue, const Graphics::GpuPhysicalQueueId destinationQueue){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -30101,8 +30276,8 @@ TEST(GpuTaskGraph, OrdersAsyncAvboitAccumulationComputeEmulationPacketBetweenInt
         return false;
     };
     const auto hasTextureTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after, const Graphics::GpuPhysicalQueueId sourceQueue, const Graphics::GpuPhysicalQueueId destinationQueue){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -30396,6 +30571,8 @@ TEST(GpuTaskGraph, OrdersAsyncAvboitOccupancyComputeEmulationPacketBeforeDepthWa
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     EXPECT_TRUE(analysis.hasExplicitEdge(clearTask, producerTask));
     EXPECT_TRUE(analysis.hasExplicitEdge(producerTask, occupancyTask));
@@ -30438,44 +30615,44 @@ TEST(GpuTaskGraph, OrdersAsyncAvboitOccupancyComputeEmulationPacketBeforeDepthWa
     expectAssignment(occupancyTask, queues[0u].id, Graphics::CommandQueue::Graphics);
     expectAssignment(depthWarpTask, queues[1u].id, Graphics::CommandQueue::Compute);
 
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
-    const Graphics::GpuSubmissionPacketId prePacket = compiledGraph.packetForTask(clearTask);
-    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledGraph.packetForTask(depthWarpTask);
+    ASSERT_EQ(compiledPlan.packetCount(), 2u);
+    const Graphics::GpuSubmissionPacketId prePacket = compiledPlan.packetForTask(clearTask);
+    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledPlan.packetForTask(depthWarpTask);
     ASSERT_TRUE(prePacket.valid());
     ASSERT_TRUE(depthWarpPacket.valid());
-    EXPECT_EQ(prePacket, compiledGraph.packetForTask(producerTask));
-    EXPECT_EQ(prePacket, compiledGraph.packetForTask(occupancyTask));
+    EXPECT_EQ(prePacket, compiledPlan.packetForTask(producerTask));
+    EXPECT_EQ(prePacket, compiledPlan.packetForTask(occupancyTask));
     EXPECT_NE(prePacket, depthWarpPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(0u), prePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(1u), depthWarpPacket);
-    EXPECT_TRUE(compiledGraph.tasksSharePacket(producerTask, occupancyTask));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(clearTask, producerTask));
-    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(occupancyTask, depthWarpTask));
-    const Graphics::GpuSubmissionPacket& prePacketPlan = compiledGraph.packet(prePacket);
-    const Graphics::GpuSubmissionPacket& depthWarpPacketPlan = compiledGraph.packet(depthWarpPacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(0u), prePacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(1u), depthWarpPacket);
+    EXPECT_TRUE(compiledPlan.tasksSharePacket(producerTask, occupancyTask));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(clearTask, producerTask));
+    EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(occupancyTask, depthWarpTask));
+    const Graphics::GpuSubmissionPacket& prePacketPlan = *compiledPlan.packet(prePacket).plan;
+    const Graphics::GpuSubmissionPacket& depthWarpPacketPlan = *compiledPlan.packet(depthWarpPacket).plan;
     EXPECT_EQ(prePacketPlan.queue, queues[0u].id);
     EXPECT_EQ(depthWarpPacketPlan.queue, queues[1u].id);
     ASSERT_EQ(prePacketPlan.taskCount, 3u);
-    const Graphics::GpuTaskId* const prePacketTasks = compiledGraph.packetTasks(prePacket);
+    const Graphics::GpuTaskId* const prePacketTasks = compiledPlan.packet(prePacket).tasks;
     ASSERT_NE(prePacketTasks, nullptr);
     EXPECT_EQ(prePacketTasks[0u], clearTask);
     EXPECT_EQ(prePacketTasks[1u], producerTask);
     EXPECT_EQ(prePacketTasks[2u], occupancyTask);
     ASSERT_EQ(depthWarpPacketPlan.dependencyCount, 1u);
-    ASSERT_NE(compiledGraph.packetDependencies(depthWarpPacket), nullptr);
-    EXPECT_EQ(compiledGraph.packetDependencies(depthWarpPacket)[0u].producer, prePacket);
+    ASSERT_NE(compiledPlan.packet(depthWarpPacket).dependencies, nullptr);
+    EXPECT_EQ(compiledPlan.packet(depthWarpPacket).dependencies[0u].producer, prePacket);
 
-    const Graphics::GpuCompiledTask* const compiledDepthWarp = compiledGraph.findTask(depthWarpTask);
+    const Graphics::GpuCompiledTask* const compiledDepthWarp = compiledPlan.findTask(depthWarpTask).plan;
     ASSERT_NE(compiledDepthWarp, nullptr);
     ASSERT_EQ(compiledDepthWarp->prologueStateSeedCount, 1u);
-    const Graphics::GpuPacketStateSeed* const depthWarpSeeds = compiledGraph.taskPrologueStateSeeds(depthWarpTask);
+    const Graphics::GpuPacketStateSeed* const depthWarpSeeds = compiledPlan.findTask(depthWarpTask).prologueStateSeeds;
     ASSERT_NE(depthWarpSeeds, nullptr);
     EXPECT_EQ(depthWarpSeeds[0u].resource, coverage);
     EXPECT_EQ(depthWarpSeeds[0u].sourcePacket, prePacket);
 
     const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after, const Graphics::GpuPhysicalQueueId sourceQueue, const Graphics::GpuPhysicalQueueId destinationQueue){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
@@ -30603,27 +30780,30 @@ TEST(GpuTaskGraph, KeepsAvboitUploadSequenceOutOfHardwareCausticsPacket){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_TRUE(compiledGraph.validFor(graph));
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId hardwareCausticsPacket = compiledGraph.packetForTask(hardwareCaustics);
-    const Graphics::GpuSubmissionPacketId firstAvboitUploadPacket = compiledGraph.packetForTask(firstAvboitUpload);
-    const Graphics::GpuSubmissionPacketId secondAvboitUploadPacket = compiledGraph.packetForTask(secondAvboitUpload);
-    const Graphics::GpuSubmissionPacketId avboitPrePacket = compiledGraph.packetForTask(avboitPre);
+    ASSERT_TRUE(compiledPlan.validFor(declarations));
+    ASSERT_EQ(compiledPlan.packetCount(), 2u);
+
+    const Graphics::GpuSubmissionPacketId hardwareCausticsPacket = compiledPlan.packetForTask(hardwareCaustics);
+    const Graphics::GpuSubmissionPacketId firstAvboitUploadPacket = compiledPlan.packetForTask(firstAvboitUpload);
+    const Graphics::GpuSubmissionPacketId secondAvboitUploadPacket = compiledPlan.packetForTask(secondAvboitUpload);
+    const Graphics::GpuSubmissionPacketId avboitPrePacket = compiledPlan.packetForTask(avboitPre);
     ASSERT_TRUE(hardwareCausticsPacket.valid());
     ASSERT_TRUE(firstAvboitUploadPacket.valid());
     EXPECT_NE(hardwareCausticsPacket, firstAvboitUploadPacket);
     EXPECT_EQ(firstAvboitUploadPacket, secondAvboitUploadPacket);
     EXPECT_EQ(firstAvboitUploadPacket, avboitPrePacket);
 
-    ASSERT_EQ(compiledGraph.packet(hardwareCausticsPacket).taskCount, 1u);
-    ASSERT_EQ(compiledGraph.packet(firstAvboitUploadPacket).taskCount, 3u);
-    ASSERT_NE(compiledGraph.packetTasks(hardwareCausticsPacket), nullptr);
-    ASSERT_NE(compiledGraph.packetTasks(firstAvboitUploadPacket), nullptr);
-    EXPECT_EQ(compiledGraph.packetTasks(hardwareCausticsPacket)[0u], hardwareCaustics);
-    EXPECT_EQ(compiledGraph.packetTasks(firstAvboitUploadPacket)[0u], firstAvboitUpload);
-    EXPECT_EQ(compiledGraph.packetTasks(firstAvboitUploadPacket)[1u], secondAvboitUpload);
-    EXPECT_EQ(compiledGraph.packetTasks(firstAvboitUploadPacket)[2u], avboitPre);
+    ASSERT_EQ(compiledPlan.packet(hardwareCausticsPacket).plan->taskCount, 1u);
+    ASSERT_EQ(compiledPlan.packet(firstAvboitUploadPacket).plan->taskCount, 3u);
+    ASSERT_NE(compiledPlan.packet(hardwareCausticsPacket).tasks, nullptr);
+    ASSERT_NE(compiledPlan.packet(firstAvboitUploadPacket).tasks, nullptr);
+    EXPECT_EQ(compiledPlan.packet(hardwareCausticsPacket).tasks[0u], hardwareCaustics);
+    EXPECT_EQ(compiledPlan.packet(firstAvboitUploadPacket).tasks[0u], firstAvboitUpload);
+    EXPECT_EQ(compiledPlan.packet(firstAvboitUploadPacket).tasks[1u], secondAvboitUpload);
+    EXPECT_EQ(compiledPlan.packet(firstAvboitUploadPacket).tasks[2u], avboitPre);
 }
 
 
@@ -30698,18 +30878,21 @@ TEST(GpuTaskGraph, FrontierSafePacketizationSplitsBeforeCrossQueueConsumer){
         explicitMergeAssignments,
         explicitMergeGraph
     ));
-    ASSERT_EQ(explicitMergeGraph.packetCount(), 2u);
-    const Graphics::GpuSubmissionPacketId explicitFirstPacket = explicitMergeGraph.packetForTask(first);
-    const Graphics::GpuSubmissionPacketId explicitUnrelatedPacket = explicitMergeGraph.packetForTask(unrelatedGraphics);
-    const Graphics::GpuSubmissionPacketId explicitConsumerPacket = explicitMergeGraph.packetForTask(computeConsumer);
-    ASSERT_TRUE(explicitFirstPacket.valid());
-    EXPECT_EQ(explicitFirstPacket, explicitUnrelatedPacket);
-    EXPECT_NE(explicitFirstPacket, explicitConsumerPacket);
-    ASSERT_EQ(explicitMergeGraph.packet(explicitConsumerPacket).dependencyCount, 1u);
-    EXPECT_EQ(
-        explicitMergeGraph.packetDependencies(explicitConsumerPacket)[0u].producer,
-        explicitFirstPacket
-    );
+    {
+        const Graphics::GpuCompiledGraph::ReadView explicitMergePlan(explicitMergeGraph);
+
+        ASSERT_EQ(explicitMergePlan.packetCount(), 2u);
+        const Graphics::GpuSubmissionPacketId explicitFirstPacket = explicitMergePlan.packetForTask(first);
+        const Graphics::GpuSubmissionPacketId explicitUnrelatedPacket = explicitMergePlan.packetForTask(unrelatedGraphics);
+        const Graphics::GpuSubmissionPacketId explicitConsumerPacket = explicitMergePlan.packetForTask(computeConsumer);
+        ASSERT_TRUE(explicitFirstPacket.valid());
+        EXPECT_EQ(explicitFirstPacket, explicitUnrelatedPacket);
+        EXPECT_NE(explicitFirstPacket, explicitConsumerPacket);
+        const Graphics::GpuCompiledPacketView explicitConsumerView = explicitMergePlan.packet(explicitConsumerPacket);
+        ASSERT_TRUE(explicitConsumerView.valid());
+        ASSERT_EQ(explicitConsumerView.plan->dependencyCount, 1u);
+        EXPECT_EQ(explicitConsumerView.dependencies[0u].producer, explicitFirstPacket);
+    }
 
     Graphics::GpuTaskGraphCompileOptions frontierOptions;
     frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
@@ -30724,28 +30907,29 @@ TEST(GpuTaskGraph, FrontierSafePacketizationSplitsBeforeCrossQueueConsumer){
         frontierGraph,
         frontierOptions
     ));
-    ASSERT_EQ(frontierGraph.packetCount(), 3u);
-    const Graphics::GpuSubmissionPacketId frontierFirstPacket = frontierGraph.packetForTask(first);
-    const Graphics::GpuSubmissionPacketId frontierUnrelatedPacket = frontierGraph.packetForTask(unrelatedGraphics);
-    const Graphics::GpuSubmissionPacketId frontierConsumerPacket = frontierGraph.packetForTask(computeConsumer);
+    const Graphics::GpuCompiledGraph::ReadView frontierPlan(frontierGraph);
+
+    ASSERT_EQ(frontierPlan.packetCount(), 3u);
+    const Graphics::GpuSubmissionPacketId frontierFirstPacket = frontierPlan.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId frontierUnrelatedPacket = frontierPlan.packetForTask(unrelatedGraphics);
+    const Graphics::GpuSubmissionPacketId frontierConsumerPacket = frontierPlan.packetForTask(computeConsumer);
     ASSERT_TRUE(frontierFirstPacket.valid());
     EXPECT_NE(frontierFirstPacket, frontierUnrelatedPacket);
     EXPECT_NE(frontierUnrelatedPacket, frontierConsumerPacket);
     EXPECT_NE(
-        frontierGraph.packet(frontierFirstPacket).queue,
-        frontierGraph.packet(frontierConsumerPacket).queue
+        frontierPlan.packet(frontierFirstPacket).plan->queue,
+        frontierPlan.packet(frontierConsumerPacket).plan->queue
     );
-    EXPECT_EQ(frontierGraph.packet(frontierFirstPacket).taskCount, 1u);
-    EXPECT_EQ(frontierGraph.packet(frontierUnrelatedPacket).taskCount, 1u);
+    EXPECT_EQ(frontierPlan.packet(frontierFirstPacket).plan->taskCount, 1u);
+    EXPECT_EQ(frontierPlan.packet(frontierUnrelatedPacket).plan->taskCount, 1u);
     EXPECT_EQ(
-        frontierGraph.packetizationDecisionForTask(unrelatedGraphics),
+        frontierPlan.packetizationDecisionForTask(unrelatedGraphics),
         Graphics::GpuTaskPacketizationDecision::CrossQueueConsumerFrontier
     );
-    ASSERT_EQ(frontierGraph.packet(frontierConsumerPacket).dependencyCount, 1u);
-    EXPECT_EQ(
-        frontierGraph.packetDependencies(frontierConsumerPacket)[0u].producer,
-        frontierFirstPacket
-    );
+    const Graphics::GpuCompiledPacketView frontierConsumerView = frontierPlan.packet(frontierConsumerPacket);
+    ASSERT_TRUE(frontierConsumerView.valid());
+    ASSERT_EQ(frontierConsumerView.plan->dependencyCount, 1u);
+    EXPECT_EQ(frontierConsumerView.dependencies[0u].producer, frontierFirstPacket);
 }
 
 
@@ -30797,19 +30981,21 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationMergesCheapImmediateSuccessor){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
-    const Graphics::GpuSubmissionPacketId successorPacket = compiledGraph.packetForTask(successor);
+    ASSERT_EQ(compiledPlan.packetCount(), 1u);
+
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId successorPacket = compiledPlan.packetForTask(successor);
     ASSERT_TRUE(producerPacket.valid());
     EXPECT_EQ(producerPacket, successorPacket);
-    EXPECT_EQ(compiledGraph.packet(producerPacket).taskCount, 2u);
+    EXPECT_EQ(compiledPlan.packet(producerPacket).plan->taskCount, 2u);
     EXPECT_EQ(
-        compiledGraph.packetizationDecisionForTask(producer),
+        compiledPlan.packetizationDecisionForTask(producer),
         Graphics::GpuTaskPacketizationDecision::FirstTask
     );
     EXPECT_EQ(
-        compiledGraph.packetizationDecisionForTask(successor),
+        compiledPlan.packetizationDecisionForTask(successor),
         Graphics::GpuTaskPacketizationDecision::MergedFrontierScored
     );
 }
@@ -30860,22 +31046,24 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationMergesLongSerialPacket){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(tasks[0u]);
+    ASSERT_EQ(compiledPlan.packetCount(), 1u);
+
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(tasks[0u]);
     ASSERT_TRUE(packet.valid());
-    ASSERT_EQ(compiledGraph.packet(packet).taskCount, s_TaskCount);
-    ASSERT_NE(compiledGraph.packetTasks(packet), nullptr);
+    ASSERT_EQ(compiledPlan.packet(packet).plan->taskCount, s_TaskCount);
+    ASSERT_NE(compiledPlan.packet(packet).tasks, nullptr);
     EXPECT_EQ(
-        compiledGraph.packetizationDecisionForTask(tasks[0u]),
+        compiledPlan.packetizationDecisionForTask(tasks[0u]),
         Graphics::GpuTaskPacketizationDecision::FirstTask
     );
     for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
-        EXPECT_EQ(compiledGraph.packetTasks(packet)[taskIndex], tasks[taskIndex]);
-        EXPECT_EQ(compiledGraph.packetForTask(tasks[taskIndex]), packet);
+        EXPECT_EQ(compiledPlan.packet(packet).tasks[taskIndex], tasks[taskIndex]);
+        EXPECT_EQ(compiledPlan.packetForTask(tasks[taskIndex]), packet);
         if(taskIndex != 0u){
             EXPECT_EQ(
-                compiledGraph.packetizationDecisionForTask(tasks[taskIndex]),
+                compiledPlan.packetizationDecisionForTask(tasks[taskIndex]),
                 Graphics::GpuTaskPacketizationDecision::MergedFrontierScored
             );
         }
@@ -30933,10 +31121,12 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRejectsPrecedingBoundaryTask){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
-    EXPECT_NE(compiledGraph.packetForTask(first), compiledGraph.packetForTask(successor));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    ASSERT_EQ(compiledPlan.packetCount(), 2u);
+    EXPECT_NE(compiledPlan.packetForTask(first), compiledPlan.packetForTask(successor));
     EXPECT_EQ(
-        compiledGraph.packetizationDecisionForTask(successor),
+        compiledPlan.packetizationDecisionForTask(successor),
         Graphics::GpuTaskPacketizationDecision::PrecedingTaskForcesBoundary
     );
 }
@@ -31002,20 +31192,22 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRequiresNonemptyMergeDomain){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
-    const Graphics::GpuSubmissionPacketId namedDomainSuccessorPacket = compiledGraph.packetForTask(namedDomainSuccessor);
-    const Graphics::GpuSubmissionPacketId emptyDomainSuccessorPacket = compiledGraph.packetForTask(emptyDomainSuccessor);
+    ASSERT_EQ(compiledPlan.packetCount(), 3u);
+
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId namedDomainSuccessorPacket = compiledPlan.packetForTask(namedDomainSuccessor);
+    const Graphics::GpuSubmissionPacketId emptyDomainSuccessorPacket = compiledPlan.packetForTask(emptyDomainSuccessor);
     ASSERT_TRUE(firstPacket.valid());
     EXPECT_NE(firstPacket, namedDomainSuccessorPacket);
     EXPECT_NE(namedDomainSuccessorPacket, emptyDomainSuccessorPacket);
     EXPECT_EQ(
-        compiledGraph.packetizationDecisionForTask(namedDomainSuccessor),
+        compiledPlan.packetizationDecisionForTask(namedDomainSuccessor),
         Graphics::GpuTaskPacketizationDecision::ScoredMergeDomainMismatch
     );
     EXPECT_EQ(
-        compiledGraph.packetizationDecisionForTask(emptyDomainSuccessor),
+        compiledPlan.packetizationDecisionForTask(emptyDomainSuccessor),
         Graphics::GpuTaskPacketizationDecision::ScoredMergeDomainMismatch
     );
 }
@@ -31084,20 +31276,22 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRequiresOneDomainAcrossPrecedingPa
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
-    const Graphics::GpuSubmissionPacketId explicitPacket = compiledGraph.packetForTask(explicitTask);
-    const Graphics::GpuSubmissionPacketId successorPacket = compiledGraph.packetForTask(successor);
+    ASSERT_EQ(compiledPlan.packetCount(), 2u);
+
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId explicitPacket = compiledPlan.packetForTask(explicitTask);
+    const Graphics::GpuSubmissionPacketId successorPacket = compiledPlan.packetForTask(successor);
     ASSERT_TRUE(firstPacket.valid());
     EXPECT_EQ(firstPacket, explicitPacket);
     EXPECT_NE(explicitPacket, successorPacket);
     EXPECT_EQ(
-        compiledGraph.packetizationDecisionForTask(explicitTask),
+        compiledPlan.packetizationDecisionForTask(explicitTask),
         Graphics::GpuTaskPacketizationDecision::MergedExplicit
     );
     EXPECT_EQ(
-        compiledGraph.packetizationDecisionForTask(successor),
+        compiledPlan.packetizationDecisionForTask(successor),
         Graphics::GpuTaskPacketizationDecision::ScoredMergeDomainMismatch
     );
 }
@@ -31170,20 +31364,22 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationPreservesCrossQueueConsumerFrontie
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
-    const Graphics::GpuSubmissionPacketId successorPacket = compiledGraph.packetForTask(successor);
-    const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumer);
+    ASSERT_EQ(compiledPlan.packetCount(), 3u);
+
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId successorPacket = compiledPlan.packetForTask(successor);
+    const Graphics::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
     ASSERT_TRUE(producerPacket.valid());
     EXPECT_NE(producerPacket, successorPacket);
     EXPECT_NE(producerPacket, consumerPacket);
     EXPECT_EQ(
-        compiledGraph.packetizationDecisionForTask(successor),
+        compiledPlan.packetizationDecisionForTask(successor),
         Graphics::GpuTaskPacketizationDecision::CrossQueueConsumerFrontier
     );
-    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(consumerPacket)[0u].producer, producerPacket);
+    ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(consumerPacket).dependencies[0u].producer, producerPacket);
 }
 
 
@@ -31279,7 +31475,9 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationCarriesTailPhysicalQueueFrontierFo
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    ASSERT_EQ(compiledPlan.packetCount(), 3u);
 
     const Graphics::GpuTaskQueueAssignment* const firstAssignment = assignments.find(first);
     const Graphics::GpuTaskQueueAssignment* const mergedAssignment = assignments.find(merged);
@@ -31294,20 +31492,20 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationCarriesTailPhysicalQueueFrontierFo
     EXPECT_EQ(blockedAssignment->queue, queues[0u].id);
     EXPECT_EQ(consumerAssignment->queue, queues[1u].id);
 
-    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
-    const Graphics::GpuSubmissionPacketId mergedPacket = compiledGraph.packetForTask(merged);
-    const Graphics::GpuSubmissionPacketId blockedPacket = compiledGraph.packetForTask(blocked);
-    const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumer);
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId mergedPacket = compiledPlan.packetForTask(merged);
+    const Graphics::GpuSubmissionPacketId blockedPacket = compiledPlan.packetForTask(blocked);
+    const Graphics::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
     ASSERT_TRUE(firstPacket.valid());
     EXPECT_EQ(firstPacket, mergedPacket);
     EXPECT_NE(firstPacket, blockedPacket);
     EXPECT_NE(blockedPacket, consumerPacket);
     EXPECT_EQ(
-        compiledGraph.packetizationDecisionForTask(merged),
+        compiledPlan.packetizationDecisionForTask(merged),
         Graphics::GpuTaskPacketizationDecision::MergedFrontierScored
     );
     EXPECT_EQ(
-        compiledGraph.packetizationDecisionForTask(blocked),
+        compiledPlan.packetizationDecisionForTask(blocked),
         Graphics::GpuTaskPacketizationDecision::CrossQueueConsumerFrontier
     );
 }
@@ -31394,22 +31592,24 @@ TEST(GpuTaskGraph, FrontierSafePacketizationKeepsFrontierAfterExplicitOverride){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
-    const Graphics::GpuSubmissionPacketId overridePacket = compiledGraph.packetForTask(overrideTask);
-    const Graphics::GpuSubmissionPacketId blockedPacket = compiledGraph.packetForTask(blocked);
-    const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumer);
+    ASSERT_EQ(compiledPlan.packetCount(), 3u);
+
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId overridePacket = compiledPlan.packetForTask(overrideTask);
+    const Graphics::GpuSubmissionPacketId blockedPacket = compiledPlan.packetForTask(blocked);
+    const Graphics::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
     ASSERT_TRUE(firstPacket.valid());
     EXPECT_EQ(firstPacket, overridePacket);
     EXPECT_NE(firstPacket, blockedPacket);
     EXPECT_NE(blockedPacket, consumerPacket);
     EXPECT_EQ(
-        compiledGraph.packetizationDecisionForTask(overrideTask),
+        compiledPlan.packetizationDecisionForTask(overrideTask),
         Graphics::GpuTaskPacketizationDecision::MergedExplicit
     );
     EXPECT_EQ(
-        compiledGraph.packetizationDecisionForTask(blocked),
+        compiledPlan.packetizationDecisionForTask(blocked),
         Graphics::GpuTaskPacketizationDecision::CrossQueueConsumerFrontier
     );
 }
@@ -31526,22 +31726,24 @@ TEST(GpuTaskGraph, FrontierSafeConsumerFrontierOverrideRequiresExplicitImmediate
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
-    const Graphics::GpuSubmissionPacketId immediateFinalizePacket = compiledGraph.packetForTask(immediateFinalize);
-    const Graphics::GpuSubmissionPacketId unrelatedPacket = compiledGraph.packetForTask(unrelatedSuccessor);
-    const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(computeConsumer);
+    ASSERT_EQ(compiledPlan.packetCount(), 3u);
+
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId immediateFinalizePacket = compiledPlan.packetForTask(immediateFinalize);
+    const Graphics::GpuSubmissionPacketId unrelatedPacket = compiledPlan.packetForTask(unrelatedSuccessor);
+    const Graphics::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(computeConsumer);
     ASSERT_TRUE(firstPacket.valid());
     EXPECT_EQ(firstPacket, immediateFinalizePacket);
     EXPECT_NE(firstPacket, unrelatedPacket);
     EXPECT_NE(unrelatedPacket, consumerPacket);
-    EXPECT_EQ(compiledGraph.packet(firstPacket).taskCount, 2u);
-    EXPECT_EQ(compiledGraph.packet(unrelatedPacket).taskCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(firstPacket).plan->taskCount, 2u);
+    EXPECT_EQ(compiledPlan.packet(unrelatedPacket).plan->taskCount, 1u);
     EXPECT_TRUE(analysis.hasExplicitEdge(first, computeConsumer));
-    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 1u);
-    ASSERT_NE(compiledGraph.packetDependencies(consumerPacket), nullptr);
-    EXPECT_EQ(compiledGraph.packetDependencies(consumerPacket)[0u].producer, unrelatedPacket);
+    ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 1u);
+    ASSERT_NE(compiledPlan.packet(consumerPacket).dependencies, nullptr);
+    EXPECT_EQ(compiledPlan.packet(consumerPacket).dependencies[0u].producer, unrelatedPacket);
     EXPECT_TRUE(HasInferredHazard(
         analysis,
         immediateFinalize,
@@ -31618,18 +31820,20 @@ TEST(GpuTaskGraph, FrontierSafePacketizationKeepsMergeWhenLaterTaskOwnsCrossQueu
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
-    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
-    const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(computeConsumer);
+    ASSERT_EQ(compiledPlan.packetCount(), 2u);
+
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(computeConsumer);
     ASSERT_TRUE(firstPacket.valid());
     EXPECT_EQ(firstPacket, producerPacket);
     EXPECT_NE(producerPacket, consumerPacket);
-    EXPECT_EQ(compiledGraph.packet(firstPacket).taskCount, 2u);
-    EXPECT_NE(compiledGraph.packet(firstPacket).queue, compiledGraph.packet(consumerPacket).queue);
-    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(consumerPacket)[0u].producer, producerPacket);
+    EXPECT_EQ(compiledPlan.packet(firstPacket).plan->taskCount, 2u);
+    EXPECT_NE(compiledPlan.packet(firstPacket).plan->queue, compiledPlan.packet(consumerPacket).plan->queue);
+    ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(consumerPacket).dependencies[0u].producer, producerPacket);
 }
 
 
@@ -32355,7 +32559,9 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    ASSERT_EQ(compiledPlan.packetCount(), 2u);
 
     // Shadow Preparation retains direct cross-queue descriptor hazards even though Visibility explicitly depends on
     // the finalizer. The hybrid tail and finalizer's opt-ins must keep the complete callback chain in the first
@@ -32382,35 +32588,35 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
 
-    const Graphics::GpuSubmissionPacketId uploadPacket = compiledGraph.packetForTask(upload);
-    const Graphics::GpuSubmissionPacketId materialContextUploadPacket = compiledGraph.packetForTask(materialContextUpload);
-    const Graphics::GpuSubmissionPacketId causticEmissionTargetsUploadPacket = compiledGraph.packetForTask(
+    const Graphics::GpuSubmissionPacketId uploadPacket = compiledPlan.packetForTask(upload);
+    const Graphics::GpuSubmissionPacketId materialContextUploadPacket = compiledPlan.packetForTask(materialContextUpload);
+    const Graphics::GpuSubmissionPacketId causticEmissionTargetsUploadPacket = compiledPlan.packetForTask(
         causticEmissionTargetsUpload
     );
-    const Graphics::GpuSubmissionPacketId surfelFrameConstantsUploadPacket = compiledGraph.packetForTask(
+    const Graphics::GpuSubmissionPacketId surfelFrameConstantsUploadPacket = compiledPlan.packetForTask(
         surfelFrameConstantsUpload
     );
-    const Graphics::GpuSubmissionPacketId shadowInstanceMaterialsUploadPacket = compiledGraph.packetForTask(
+    const Graphics::GpuSubmissionPacketId shadowInstanceMaterialsUploadPacket = compiledPlan.packetForTask(
         shadowInstanceMaterialsUpload
     );
-    const Graphics::GpuSubmissionPacketId shadowInstancesUploadPacket = compiledGraph.packetForTask(
+    const Graphics::GpuSubmissionPacketId shadowInstancesUploadPacket = compiledPlan.packetForTask(
         shadowInstancesUpload
     );
-    const Graphics::GpuSubmissionPacketId shadowMaterialTypedUploadPacket = compiledGraph.packetForTask(
+    const Graphics::GpuSubmissionPacketId shadowMaterialTypedUploadPacket = compiledPlan.packetForTask(
         shadowMaterialTypedUpload
     );
-    const Graphics::GpuSubmissionPacketId sceneBvhNodesUploadPacket = compiledGraph.packetForTask(sceneBvhNodesUpload);
-    const Graphics::GpuSubmissionPacketId sceneBvhInstancesUploadPacket = compiledGraph.packetForTask(
+    const Graphics::GpuSubmissionPacketId sceneBvhNodesUploadPacket = compiledPlan.packetForTask(sceneBvhNodesUpload);
+    const Graphics::GpuSubmissionPacketId sceneBvhInstancesUploadPacket = compiledPlan.packetForTask(
         sceneBvhInstancesUpload
     );
-    const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
-    const Graphics::GpuSubmissionPacketId shadowPrepareHybridTailPacket = compiledGraph.packetForTask(
+    const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledPlan.packetForTask(shadowPrepare);
+    const Graphics::GpuSubmissionPacketId shadowPrepareHybridTailPacket = compiledPlan.packetForTask(
         shadowPrepareHybridTail
     );
-    const Graphics::GpuSubmissionPacketId shadowPrepareTlasFinalizePacket = compiledGraph.packetForTask(
+    const Graphics::GpuSubmissionPacketId shadowPrepareTlasFinalizePacket = compiledPlan.packetForTask(
         shadowPrepareTlasFinalize
     );
-    const Graphics::GpuSubmissionPacketId shadowVisibilityPacket = compiledGraph.packetForTask(shadowVisibility);
+    const Graphics::GpuSubmissionPacketId shadowVisibilityPacket = compiledPlan.packetForTask(shadowVisibility);
     ASSERT_TRUE(uploadPacket.valid());
     ASSERT_TRUE(materialContextUploadPacket.valid());
     ASSERT_TRUE(causticEmissionTargetsUploadPacket.valid());
@@ -32436,29 +32642,29 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     EXPECT_EQ(shadowPrepareHybridTailPacket, shadowPreparePacket);
     EXPECT_EQ(shadowPrepareTlasFinalizePacket, shadowPreparePacket);
     EXPECT_NE(shadowPreparePacket, shadowVisibilityPacket);
-    EXPECT_EQ(compiledGraph.packet(shadowPreparePacket).taskCount, 12u);
-    const Graphics::GpuTaskId* const shadowPrepareTasks = compiledGraph.packetTasks(shadowPreparePacket);
+    EXPECT_EQ(compiledPlan.packet(shadowPreparePacket).plan->taskCount, 12u);
+    const Graphics::GpuTaskId* const shadowPrepareTasks = compiledPlan.packet(shadowPreparePacket).tasks;
     ASSERT_NE(shadowPrepareTasks, nullptr);
     EXPECT_EQ(shadowPrepareTasks[9u], shadowPrepare);
     EXPECT_EQ(shadowPrepareTasks[10u], shadowPrepareHybridTail);
     EXPECT_EQ(shadowPrepareTasks[11u], shadowPrepareTlasFinalize);
-    const Graphics::GpuSubmissionPacketRange shadowPrepareRange = compiledGraph.packetRange(
+    const Graphics::GpuSubmissionPacketRange shadowPrepareRange = compiledPlan.packetRange(
         shadowPreparePacket,
         shadowPreparePacket
     );
     ASSERT_TRUE(shadowPrepareRange.valid());
     EXPECT_EQ(shadowPrepareRange.packetCount, 1u);
-    const Graphics::GpuCompiledTask* const compiledShadowPrepare = compiledGraph.findTask(shadowPrepare);
-    const Graphics::GpuCompiledTask* const compiledShadowPrepareHybridTail = compiledGraph.findTask(
+    const Graphics::GpuCompiledTask* const compiledShadowPrepare = compiledPlan.findTask(shadowPrepare).plan;
+    const Graphics::GpuCompiledTask* const compiledShadowPrepareHybridTail = compiledPlan.findTask(
         shadowPrepareHybridTail
-    );
-    const Graphics::GpuCompiledTask* const compiledShadowPrepareTlasFinalize = compiledGraph.findTask(
+    ).plan;
+    const Graphics::GpuCompiledTask* const compiledShadowPrepareTlasFinalize = compiledPlan.findTask(
         shadowPrepareTlasFinalize
-    );
+    ).plan;
     ASSERT_NE(compiledShadowPrepare, nullptr);
     ASSERT_NE(compiledShadowPrepareHybridTail, nullptr);
     ASSERT_NE(compiledShadowPrepareTlasFinalize, nullptr);
-    const Graphics::GpuCompiledBarrier* const shadowPrepareBarriers = compiledGraph.taskPrologueBarriers(shadowPrepare);
+    const Graphics::GpuCompiledBarrier* const shadowPrepareBarriers = compiledPlan.findTask(shadowPrepare).prologueBarriers;
     ASSERT_NE(shadowPrepareBarriers, nullptr);
     bool transitionsCurrentBindlessSlots = false;
     bool transitionsMaterialContextSlots = false;
@@ -32579,7 +32785,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     EXPECT_TRUE(transitionsMeshBlasAPosition);
     EXPECT_TRUE(transitionsMeshBlasAIndex);
     const Graphics::GpuCompiledBarrier* const shadowPrepareHybridTailBarriers =
-        compiledGraph.taskPrologueBarriers(shadowPrepareHybridTail)
+        compiledPlan.findTask(shadowPrepareHybridTail).prologueBarriers
     ;
     ASSERT_NE(shadowPrepareHybridTailBarriers, nullptr);
     const auto hasShadowPrepareHybridTailInputBarrier = [&](const Graphics::GpuGraphResourceId resource){
@@ -32601,7 +32807,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     EXPECT_TRUE(hasShadowPrepareHybridTailInputBarrier(meshBlasAPosition));
     EXPECT_TRUE(hasShadowPrepareHybridTailInputBarrier(meshBlasAIndex));
     const Graphics::GpuCompiledBarrier* const shadowPrepareTlasFinalizeBarriers =
-        compiledGraph.taskPrologueBarriers(shadowPrepareTlasFinalize)
+        compiledPlan.findTask(shadowPrepareTlasFinalize).prologueBarriers
     ;
     ASSERT_NE(shadowPrepareTlasFinalizeBarriers, nullptr);
     const auto hasShadowPrepareTlasFinalizeBarrier = [&](
@@ -32639,8 +32845,8 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         Graphics::GpuCompiledBarrierType::BufferTransition,
         meshBlasABacking
     ));
-    ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(shadowVisibilityPacket)[0u].producer, shadowPreparePacket);
+    ASSERT_EQ(compiledPlan.packet(shadowVisibilityPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(shadowVisibilityPacket).dependencies[0u].producer, shadowPreparePacket);
 }
 
 
@@ -33089,6 +33295,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     ASSERT_TRUE(HasInferredHazard(
         analysis,
         shadowVisibilityTask,
@@ -33097,14 +33305,14 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
 
-    const Graphics::GpuCompiledTask* const compiledShadowVisibility = compiledGraph.findTask(shadowVisibilityTask);
-    const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting);
+    const Graphics::GpuCompiledTask* const compiledShadowVisibility = compiledPlan.findTask(shadowVisibilityTask).plan;
+    const Graphics::GpuCompiledTask* const compiledLighting = compiledPlan.findTask(lighting).plan;
     ASSERT_NE(compiledShadowVisibility, nullptr);
     ASSERT_NE(compiledLighting, nullptr);
-    const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
-    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
-    const Graphics::GpuSubmissionPacketId shadowPacket = compiledGraph.packetForTask(shadowVisibilityTask);
-    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
+    const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledPlan.packetForTask(shadowPrepare);
+    const Graphics::GpuSubmissionPacketId prefixPacket = compiledPlan.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId shadowPacket = compiledPlan.packetForTask(shadowVisibilityTask);
+    const Graphics::GpuSubmissionPacketId lightingPacket = compiledPlan.packetForTask(lighting);
     ASSERT_TRUE(shadowPreparePacket.valid());
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(shadowPacket.valid());
@@ -33112,9 +33320,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
     EXPECT_NE(shadowPreparePacket, prefixPacket);
     EXPECT_NE(prefixPacket, shadowPacket);
     EXPECT_NE(shadowPacket, lightingPacket);
-    const Graphics::GpuCompiledTask* const compiledShadowPrepare = compiledGraph.findTask(shadowPrepare);
+    const Graphics::GpuCompiledTask* const compiledShadowPrepare = compiledPlan.findTask(shadowPrepare).plan;
     ASSERT_NE(compiledShadowPrepare, nullptr);
-    const Graphics::GpuCompiledBarrier* const shadowPrepareBarriers = compiledGraph.taskPrologueBarriers(shadowPrepare);
+    const Graphics::GpuCompiledBarrier* const shadowPrepareBarriers = compiledPlan.findTask(shadowPrepare).prologueBarriers;
     ASSERT_NE(shadowPrepareBarriers, nullptr);
     const auto hasShadowPrepareBarrier = [&](
         const Graphics::GpuCompiledBarrierType::Enum type,
@@ -33158,7 +33366,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
         Graphics::ResourceStates::Common,
         Graphics::ResourceStates::AccelStructRead
     ));
-    const Graphics::GpuPacketStateSeed* const shadowSeeds = compiledGraph.taskPrologueStateSeeds(shadowVisibilityTask);
+    const Graphics::GpuPacketStateSeed* const shadowSeeds = compiledPlan.findTask(shadowVisibilityTask).prologueStateSeeds;
     ASSERT_NE(shadowSeeds, nullptr);
     const auto hasShadowSeed = [&](const Graphics::GpuGraphResourceId resource, const Graphics::GpuSubmissionPacketId sourcePacket){
         for(usize seedIndex = 0u; seedIndex < compiledShadowVisibility->prologueStateSeedCount; ++seedIndex){
@@ -33177,8 +33385,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
     EXPECT_TRUE(hasShadowSeed(materialContextSlots, shadowPreparePacket));
     EXPECT_TRUE(hasShadowSeed(sceneTlasBacking, shadowPreparePacket));
     const auto shadowPacketWaitsFor = [&](const Graphics::GpuSubmissionPacketId producer){
-        const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(shadowPacket);
-        const Graphics::GpuPacketDependency* const dependencies = compiledGraph.packetDependencies(shadowPacket);
+        const Graphics::GpuSubmissionPacket& packet = *compiledPlan.packet(shadowPacket).plan;
+        const Graphics::GpuPacketDependency* const dependencies = compiledPlan.packet(shadowPacket).dependencies;
         if(packet.dependencyCount != 0u && !dependencies)
             return false;
         for(usize dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){
@@ -33189,7 +33397,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
     };
     EXPECT_TRUE(shadowPacketWaitsFor(shadowPreparePacket));
     EXPECT_TRUE(shadowPacketWaitsFor(prefixPacket));
-    const Graphics::GpuCompiledBarrier* const shadowBarriers = compiledGraph.taskPrologueBarriers(shadowVisibilityTask);
+    const Graphics::GpuCompiledBarrier* const shadowBarriers = compiledPlan.findTask(shadowVisibilityTask).prologueBarriers;
     ASSERT_NE(shadowBarriers, nullptr);
     const auto hasShadowBarrier = [&](
         const Graphics::GpuCompiledBarrierType::Enum type,
@@ -33331,19 +33539,19 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
         true
     ));
     ASSERT_EQ(compiledLighting->prologueStateSeedCount, 1u);
-    const Graphics::GpuPacketStateSeed* const lightingSeed = compiledGraph.taskPrologueStateSeeds(lighting);
+    const Graphics::GpuPacketStateSeed* const lightingSeed = compiledPlan.findTask(lighting).prologueStateSeeds;
     ASSERT_NE(lightingSeed, nullptr);
     EXPECT_EQ(lightingSeed[0u].resource, shadowVisibility);
     EXPECT_EQ(lightingSeed[0u].sourcePacket, shadowPacket);
     ASSERT_EQ(compiledLighting->prologueBarrierCount, 1u);
-    const Graphics::GpuCompiledBarrier* const lightingBarrier = compiledGraph.taskPrologueBarriers(lighting);
+    const Graphics::GpuCompiledBarrier* const lightingBarrier = compiledPlan.findTask(lighting).prologueBarriers;
     ASSERT_NE(lightingBarrier, nullptr);
     EXPECT_EQ(lightingBarrier[0u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
     EXPECT_EQ(lightingBarrier[0u].resource, shadowVisibility);
     EXPECT_EQ(lightingBarrier[0u].before, Graphics::ResourceStates::UnorderedAccess);
     EXPECT_EQ(lightingBarrier[0u].after, Graphics::ResourceStates::ShaderResource);
-    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(lightingPacket)[0u].producer, shadowPacket);
+    ASSERT_EQ(compiledPlan.packet(lightingPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(lightingPacket).dependencies[0u].producer, shadowPacket);
 }
 
 
@@ -33490,16 +33698,18 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftTransparentTraceEntryStates){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
-    const Graphics::GpuSubmissionPacketId tracePacket = compiledGraph.packetForTask(trace);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    const Graphics::GpuSubmissionPacketId prefixPacket = compiledPlan.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId tracePacket = compiledPlan.packetForTask(trace);
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(tracePacket.valid());
     EXPECT_NE(prefixPacket, tracePacket);
 
-    const Graphics::GpuCompiledTask* const compiledTrace = compiledGraph.findTask(trace);
+    const Graphics::GpuCompiledTask* const compiledTrace = compiledPlan.findTask(trace).plan;
     ASSERT_NE(compiledTrace, nullptr);
     EXPECT_EQ(compiledTrace->prologueStateSeedCount, LengthOf(traceUses));
-    const Graphics::GpuPacketStateSeed* const traceSeeds = compiledGraph.taskPrologueStateSeeds(trace);
+    const Graphics::GpuPacketStateSeed* const traceSeeds = compiledPlan.findTask(trace).prologueStateSeeds;
     ASSERT_NE(traceSeeds, nullptr);
     const auto hasTraceSeed = [&](const Graphics::GpuGraphResourceId resource){
         for(usize seedIndex = 0u; seedIndex < compiledTrace->prologueStateSeedCount; ++seedIndex){
@@ -33513,7 +33723,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftTransparentTraceEntryStates){
     for(const Graphics::GpuGraphResourceId resource : constantResources)
         EXPECT_TRUE(hasTraceSeed(resource));
 
-    const Graphics::GpuCompiledBarrier* const traceBarriers = compiledGraph.taskPrologueBarriers(trace);
+    const Graphics::GpuCompiledBarrier* const traceBarriers = compiledPlan.findTask(trace).prologueBarriers;
     ASSERT_NE(traceBarriers, nullptr);
     const auto hasTraceBarrier = [&](const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask after){
         for(usize barrierIndex = 0u; barrierIndex < compiledTrace->prologueBarrierCount; ++barrierIndex){
@@ -33532,8 +33742,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftTransparentTraceEntryStates){
         EXPECT_TRUE(hasTraceBarrier(resource, Graphics::ResourceStates::ShaderResource));
     for(const Graphics::GpuGraphResourceId resource : constantResources)
         EXPECT_TRUE(hasTraceBarrier(resource, Graphics::ResourceStates::ConstantBuffer));
-    ASSERT_EQ(compiledGraph.packet(tracePacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(tracePacket)[0u].producer, prefixPacket);
+    ASSERT_EQ(compiledPlan.packet(tracePacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(tracePacket).dependencies[0u].producer, prefixPacket);
 }
 
 
@@ -33756,25 +33966,27 @@ TEST(GpuTaskGraph, MergesGraphOwnedAdaptiveShadowPrimitivesIntoShadowVisibilityP
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId statsClearPacket = compiledGraph.packetForTask(statsClear);
-    const Graphics::GpuSubmissionPacketId counterClearPacket = compiledGraph.packetForTask(counterClear);
-    const Graphics::GpuSubmissionPacketId shadowPacket = compiledGraph.packetForTask(shadow);
-    const Graphics::GpuSubmissionPacketId statsCopyPacket = compiledGraph.packetForTask(statsCopy);
-    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
+
+    const Graphics::GpuSubmissionPacketId statsClearPacket = compiledPlan.packetForTask(statsClear);
+    const Graphics::GpuSubmissionPacketId counterClearPacket = compiledPlan.packetForTask(counterClear);
+    const Graphics::GpuSubmissionPacketId shadowPacket = compiledPlan.packetForTask(shadow);
+    const Graphics::GpuSubmissionPacketId statsCopyPacket = compiledPlan.packetForTask(statsCopy);
+    const Graphics::GpuSubmissionPacketId lightingPacket = compiledPlan.packetForTask(lighting);
     ASSERT_TRUE(shadowPacket.valid());
     EXPECT_EQ(statsClearPacket, shadowPacket);
     EXPECT_EQ(counterClearPacket, shadowPacket);
     EXPECT_EQ(statsCopyPacket, shadowPacket);
     EXPECT_NE(lightingPacket, shadowPacket);
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
-    const Graphics::GpuSubmissionPacketRange shadowRange = compiledGraph.packetRangeForTasks(shadow, shadow);
+    ASSERT_EQ(compiledPlan.packetCount(), 3u);
+    const Graphics::GpuSubmissionPacketRange shadowRange = compiledPlan.packetRangeForTasks(shadow, shadow);
     ASSERT_TRUE(shadowRange.valid());
     EXPECT_EQ(shadowRange.packetCount, 1u);
     EXPECT_EQ(shadowRange.first, shadowPacket);
-    const Graphics::GpuSubmissionPacket& shadowPacketDesc = compiledGraph.packet(shadowPacket);
+    const Graphics::GpuSubmissionPacket& shadowPacketDesc = *compiledPlan.packet(shadowPacket).plan;
     ASSERT_EQ(shadowPacketDesc.taskCount, 4u);
-    const Graphics::GpuTaskId* const shadowPacketTasks = compiledGraph.packetTasks(shadowPacket);
+    const Graphics::GpuTaskId* const shadowPacketTasks = compiledPlan.packet(shadowPacket).tasks;
     ASSERT_NE(shadowPacketTasks, nullptr);
     EXPECT_EQ(shadowPacketTasks[0u], statsClear);
     EXPECT_EQ(shadowPacketTasks[1u], counterClear);
@@ -33787,10 +33999,10 @@ TEST(GpuTaskGraph, MergesGraphOwnedAdaptiveShadowPrimitivesIntoShadowVisibilityP
         const Graphics::ResourceStates::Mask before,
         const Graphics::ResourceStates::Mask after
     ){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
         if(!compiledTask)
             return false;
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         if(!barriers)
             return false;
         for(usize barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
@@ -34031,17 +34243,19 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
-    const Graphics::GpuSubmissionPacketId clearPacket = compiledGraph.packetForTask(allLitClear);
-    const Graphics::GpuSubmissionPacketId shadowPacket = compiledGraph.packetForTask(shadow);
-    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
+
+    const Graphics::GpuSubmissionPacketId prefixPacket = compiledPlan.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId clearPacket = compiledPlan.packetForTask(allLitClear);
+    const Graphics::GpuSubmissionPacketId shadowPacket = compiledPlan.packetForTask(shadow);
+    const Graphics::GpuSubmissionPacketId lightingPacket = compiledPlan.packetForTask(lighting);
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(clearPacket.valid());
     ASSERT_TRUE(shadowPacket.valid());
     ASSERT_TRUE(lightingPacket.valid());
-    const Graphics::GpuPhysicalQueueInfo* const clearQueue = compiledGraph.queueInfoForTask(allLitClear);
-    const Graphics::GpuPhysicalQueueInfo* const shadowQueue = compiledGraph.queueInfoForTask(shadow);
+    const Graphics::GpuPhysicalQueueInfo* const clearQueue = compiledPlan.queueInfoForTask(allLitClear);
+    const Graphics::GpuPhysicalQueueInfo* const shadowQueue = compiledPlan.queueInfoForTask(shadow);
     ASSERT_NE(clearQueue, nullptr);
     ASSERT_NE(shadowQueue, nullptr);
     EXPECT_EQ(clearQueue->id, queues[1u].id);
@@ -34053,21 +34267,21 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
     EXPECT_NE(prefixPacket, shadowPacket);
     EXPECT_EQ(clearPacket, shadowPacket);
     EXPECT_NE(lightingPacket, shadowPacket);
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
-    const Graphics::GpuSubmissionPacketRange shadowRange = compiledGraph.packetRangeForTasks(shadow, shadow);
+    ASSERT_EQ(compiledPlan.packetCount(), 3u);
+    const Graphics::GpuSubmissionPacketRange shadowRange = compiledPlan.packetRangeForTasks(shadow, shadow);
     ASSERT_TRUE(shadowRange.valid());
     EXPECT_EQ(shadowRange.packetCount, 1u);
     EXPECT_EQ(shadowRange.first, shadowPacket);
-    const Graphics::GpuSubmissionPacket& shadowPacketDesc = compiledGraph.packet(shadowPacket);
+    const Graphics::GpuSubmissionPacket& shadowPacketDesc = *compiledPlan.packet(shadowPacket).plan;
     ASSERT_EQ(shadowPacketDesc.taskCount, 2u);
-    const Graphics::GpuTaskId* const shadowPacketTasks = compiledGraph.packetTasks(shadowPacket);
+    const Graphics::GpuTaskId* const shadowPacketTasks = compiledPlan.packet(shadowPacket).tasks;
     ASSERT_NE(shadowPacketTasks, nullptr);
     EXPECT_EQ(shadowPacketTasks[0u], allLitClear);
     EXPECT_EQ(shadowPacketTasks[1u], shadow);
     ASSERT_EQ(shadowPacketDesc.externalDependencyCount, 1u);
-    const Graphics::GpuExternalCompletionId* const shadowExternalDependencies = compiledGraph.packetExternalDependencies(
+    const Graphics::GpuExternalCompletionId* const shadowExternalDependencies = compiledPlan.packet(
         shadowPacket
-    );
+    ).externalDependencies;
     ASSERT_NE(shadowExternalDependencies, nullptr);
     EXPECT_EQ(shadowExternalDependencies[0u], priorHistoryTail);
 
@@ -34077,10 +34291,10 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
         const Graphics::ResourceStates::Mask before,
         const Graphics::ResourceStates::Mask after
     ){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
         if(!compiledTask)
             return false;
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         if(!barriers)
             return false;
         for(usize barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
@@ -34114,8 +34328,8 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
         Graphics::ResourceStates::ShaderResource
     ));
     const auto hasUnknownFirstWrite = [&](const Graphics::GpuGraphResourceId resource){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(shadow);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(shadow);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(shadow).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(shadow).prologueBarriers;
         if(!compiledTask || !barriers)
             return false;
         for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
@@ -34134,10 +34348,10 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
     EXPECT_TRUE(hasUnknownFirstWrite(shadowSoftHalfA));
     EXPECT_TRUE(hasUnknownFirstWrite(shadowSoftHalfB));
     EXPECT_TRUE(hasUnknownFirstWrite(shadowSoftGeometry));
-    ASSERT_EQ(compiledGraph.packet(shadowPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(shadowPacket)[0u].producer, prefixPacket);
-    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(lightingPacket)[0u].producer, shadowPacket);
+    ASSERT_EQ(compiledPlan.packet(shadowPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(shadowPacket).dependencies[0u].producer, prefixPacket);
+    ASSERT_EQ(compiledPlan.packet(lightingPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(lightingPacket).dependencies[0u].producer, shadowPacket);
 }
 
 
@@ -34601,6 +34815,8 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     EXPECT_TRUE(analysis.hasExplicitEdge(opaque, opaqueFirstWavelet));
     EXPECT_TRUE(analysis.hasExplicitEdge(opaqueFirstWavelet, opaqueResolve));
     EXPECT_TRUE(analysis.hasExplicitEdge(opaqueResolve, trace));
@@ -34658,14 +34874,14 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
 
-    const Graphics::GpuSubmissionPacketId opaquePacket = compiledGraph.packetForTask(opaque);
-    const Graphics::GpuSubmissionPacketId opaqueFirstWaveletPacket = compiledGraph.packetForTask(opaqueFirstWavelet);
-    const Graphics::GpuSubmissionPacketId opaqueResolvePacket = compiledGraph.packetForTask(opaqueResolve);
-    const Graphics::GpuSubmissionPacketId tracePacket = compiledGraph.packetForTask(trace);
-    const Graphics::GpuSubmissionPacketId transparentTemporalMergePacket = compiledGraph.packetForTask(transparentTemporalMerge);
-    const Graphics::GpuSubmissionPacketId transparentFirstWaveletPacket = compiledGraph.packetForTask(transparentFirstWavelet);
-    const Graphics::GpuSubmissionPacketId foldPacket = compiledGraph.packetForTask(fold);
-    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
+    const Graphics::GpuSubmissionPacketId opaquePacket = compiledPlan.packetForTask(opaque);
+    const Graphics::GpuSubmissionPacketId opaqueFirstWaveletPacket = compiledPlan.packetForTask(opaqueFirstWavelet);
+    const Graphics::GpuSubmissionPacketId opaqueResolvePacket = compiledPlan.packetForTask(opaqueResolve);
+    const Graphics::GpuSubmissionPacketId tracePacket = compiledPlan.packetForTask(trace);
+    const Graphics::GpuSubmissionPacketId transparentTemporalMergePacket = compiledPlan.packetForTask(transparentTemporalMerge);
+    const Graphics::GpuSubmissionPacketId transparentFirstWaveletPacket = compiledPlan.packetForTask(transparentFirstWavelet);
+    const Graphics::GpuSubmissionPacketId foldPacket = compiledPlan.packetForTask(fold);
+    const Graphics::GpuSubmissionPacketId lightingPacket = compiledPlan.packetForTask(lighting);
     ASSERT_TRUE(opaquePacket.valid());
     ASSERT_TRUE(opaqueFirstWaveletPacket.valid());
     ASSERT_TRUE(opaqueResolvePacket.valid());
@@ -34681,10 +34897,10 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     EXPECT_EQ(transparentTemporalMergePacket, foldPacket);
     EXPECT_EQ(transparentFirstWaveletPacket, foldPacket);
     EXPECT_NE(foldPacket, lightingPacket);
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
-    const Graphics::GpuSubmissionPacket& shadowPacket = compiledGraph.packet(foldPacket);
+    ASSERT_EQ(compiledPlan.packetCount(), 2u);
+    const Graphics::GpuSubmissionPacket& shadowPacket = *compiledPlan.packet(foldPacket).plan;
     ASSERT_EQ(shadowPacket.taskCount, 7u);
-    const Graphics::GpuTaskId* const shadowTasks = compiledGraph.packetTasks(foldPacket);
+    const Graphics::GpuTaskId* const shadowTasks = compiledPlan.packet(foldPacket).tasks;
     ASSERT_NE(shadowTasks, nullptr);
     EXPECT_EQ(shadowTasks[0u], opaque);
     EXPECT_EQ(shadowTasks[1u], opaqueFirstWavelet);
@@ -34694,15 +34910,15 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     EXPECT_EQ(shadowTasks[5u], transparentFirstWavelet);
     EXPECT_EQ(shadowTasks[6u], fold);
     ASSERT_EQ(shadowPacket.externalDependencyCount, 1u);
-    const Graphics::GpuExternalCompletionId* const shadowExternalDependencies = compiledGraph.packetExternalDependencies(
+    const Graphics::GpuExternalCompletionId* const shadowExternalDependencies = compiledPlan.packet(
         foldPacket
-    );
+    ).externalDependencies;
     ASSERT_NE(shadowExternalDependencies, nullptr);
     EXPECT_EQ(shadowExternalDependencies[0u], priorHistoryTail);
 
-    const Graphics::GpuCompiledTask* const compiledOpaqueFirstWavelet = compiledGraph.findTask(opaqueFirstWavelet);
+    const Graphics::GpuCompiledTask* const compiledOpaqueFirstWavelet = compiledPlan.findTask(opaqueFirstWavelet).plan;
     ASSERT_NE(compiledOpaqueFirstWavelet, nullptr);
-    const Graphics::GpuCompiledBarrier* const opaqueFirstWaveletBarriers = compiledGraph.taskPrologueBarriers(opaqueFirstWavelet);
+    const Graphics::GpuCompiledBarrier* const opaqueFirstWaveletBarriers = compiledPlan.findTask(opaqueFirstWavelet).prologueBarriers;
     ASSERT_NE(opaqueFirstWaveletBarriers, nullptr);
     const auto hasOpaqueFirstWaveletTransition = [&](const Graphics::GpuGraphResourceId resource){
         for(u32 barrierIndex = 0u; barrierIndex < compiledOpaqueFirstWavelet->prologueBarrierCount; ++barrierIndex){
@@ -34720,9 +34936,9 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     EXPECT_TRUE(hasOpaqueFirstWaveletTransition(opaqueSoftHalf));
     EXPECT_TRUE(hasOpaqueFirstWaveletTransition(shadowSoftGeometry));
 
-    const Graphics::GpuCompiledTask* const compiledOpaqueResolve = compiledGraph.findTask(opaqueResolve);
+    const Graphics::GpuCompiledTask* const compiledOpaqueResolve = compiledPlan.findTask(opaqueResolve).plan;
     ASSERT_NE(compiledOpaqueResolve, nullptr);
-    const Graphics::GpuCompiledBarrier* const opaqueResolveBarriers = compiledGraph.taskPrologueBarriers(opaqueResolve);
+    const Graphics::GpuCompiledBarrier* const opaqueResolveBarriers = compiledPlan.findTask(opaqueResolve).prologueBarriers;
     ASSERT_NE(opaqueResolveBarriers, nullptr);
     bool hasOpaqueWaveletResolveTransition = false;
     for(u32 barrierIndex = 0u; barrierIndex < compiledOpaqueResolve->prologueBarrierCount; ++barrierIndex){
@@ -34740,8 +34956,8 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     EXPECT_TRUE(hasOpaqueWaveletResolveTransition);
 
     const auto hasUnknownFirstWrite = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         if(!compiledTask || !barriers)
             return false;
         for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
@@ -34765,10 +34981,10 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     EXPECT_TRUE(hasUnknownFirstWrite(transparentTemporalMerge, transparentHistoryB));
     EXPECT_TRUE(hasUnknownFirstWrite(transparentTemporalMerge, transparentMomentsB));
 
-    const Graphics::GpuCompiledTask* const compiledTransparentTemporalMerge = compiledGraph.findTask(transparentTemporalMerge);
+    const Graphics::GpuCompiledTask* const compiledTransparentTemporalMerge = compiledPlan.findTask(transparentTemporalMerge).plan;
     ASSERT_NE(compiledTransparentTemporalMerge, nullptr);
     const Graphics::GpuCompiledBarrier* const transparentTemporalMergeBarriers =
-        compiledGraph.taskPrologueBarriers(transparentTemporalMerge)
+        compiledPlan.findTask(transparentTemporalMerge).prologueBarriers
     ;
     ASSERT_NE(transparentTemporalMergeBarriers, nullptr);
     const auto hasTransparentTemporalMergeShaderResourceTransition = [&](const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before){
@@ -34790,10 +35006,10 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(previousGeometry, Graphics::ResourceStates::Common));
     EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(worldPosition, Graphics::ResourceStates::Common));
 
-    const Graphics::GpuCompiledTask* const compiledTransparentFirstWavelet = compiledGraph.findTask(transparentFirstWavelet);
+    const Graphics::GpuCompiledTask* const compiledTransparentFirstWavelet = compiledPlan.findTask(transparentFirstWavelet).plan;
     ASSERT_NE(compiledTransparentFirstWavelet, nullptr);
     const Graphics::GpuCompiledBarrier* const transparentFirstWaveletBarriers =
-        compiledGraph.taskPrologueBarriers(transparentFirstWavelet)
+        compiledPlan.findTask(transparentFirstWavelet).prologueBarriers
     ;
     ASSERT_NE(transparentFirstWaveletBarriers, nullptr);
     const auto hasTransparentFirstWaveletShaderResourceTransition = [&](const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before){
@@ -34812,9 +35028,9 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(transparentHistoryB, Graphics::ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(transparentMomentsB, Graphics::ResourceStates::UnorderedAccess));
 
-    const Graphics::GpuCompiledTask* const compiledFold = compiledGraph.findTask(fold);
+    const Graphics::GpuCompiledTask* const compiledFold = compiledPlan.findTask(fold).plan;
     ASSERT_NE(compiledFold, nullptr);
-    const Graphics::GpuCompiledBarrier* const foldBarriers = compiledGraph.taskPrologueBarriers(fold);
+    const Graphics::GpuCompiledBarrier* const foldBarriers = compiledPlan.findTask(fold).prologueBarriers;
     ASSERT_NE(foldBarriers, nullptr);
     const auto hasFoldShaderResourceTransition = [&](const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before){
         for(u32 barrierIndex = 0u; barrierIndex < compiledFold->prologueBarrierCount; ++barrierIndex){
@@ -34847,9 +35063,9 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     }
     EXPECT_TRUE(hasSceneShadingTransition);
 
-    const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting);
+    const Graphics::GpuCompiledTask* const compiledLighting = compiledPlan.findTask(lighting).plan;
     ASSERT_NE(compiledLighting, nullptr);
-    const Graphics::GpuCompiledBarrier* const lightingBarriers = compiledGraph.taskPrologueBarriers(lighting);
+    const Graphics::GpuCompiledBarrier* const lightingBarriers = compiledPlan.findTask(lighting).prologueBarriers;
     ASSERT_NE(lightingBarriers, nullptr);
     bool hasLightingTransition = false;
     for(u32 barrierIndex = 0u; barrierIndex < compiledLighting->prologueBarrierCount; ++barrierIndex){
@@ -34983,11 +35199,13 @@ TEST(GpuTaskGraph, GraphOwnsOpaqueSoftTemporalMergeHistoryStates){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledMerge = compiledGraph.findTask(opaqueMerge);
+    ASSERT_EQ(compiledPlan.packetCount(), 1u);
+
+    const Graphics::GpuCompiledTask* const compiledMerge = compiledPlan.findTask(opaqueMerge).plan;
     ASSERT_NE(compiledMerge, nullptr);
-    const Graphics::GpuCompiledBarrier* const mergeBarriers = compiledGraph.taskPrologueBarriers(opaqueMerge);
+    const Graphics::GpuCompiledBarrier* const mergeBarriers = compiledPlan.findTask(opaqueMerge).prologueBarriers;
     ASSERT_NE(mergeBarriers, nullptr);
     const auto hasMergeInputTransition = [&](const Graphics::GpuGraphResourceId resource){
         for(u32 barrierIndex = 0u; barrierIndex < compiledMerge->prologueBarrierCount; ++barrierIndex){
@@ -35079,11 +35297,13 @@ TEST(GpuTaskGraph, PlansGraphOwnedPreparedSoftwareBvhInputStates){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledPrepare = compiledGraph.findTask(prepare);
+    ASSERT_EQ(compiledPlan.packetCount(), 1u);
+
+    const Graphics::GpuCompiledTask* const compiledPrepare = compiledPlan.findTask(prepare).plan;
     ASSERT_NE(compiledPrepare, nullptr);
-    const Graphics::GpuCompiledBarrier* const prepareBarriers = compiledGraph.taskPrologueBarriers(prepare);
+    const Graphics::GpuCompiledBarrier* const prepareBarriers = compiledPlan.findTask(prepare).prologueBarriers;
     ASSERT_NE(prepareBarriers, nullptr);
     const auto hasInputTransition = [&](const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before){
         for(usize barrierIndex = 0u; barrierIndex < compiledPrepare->prologueBarrierCount; ++barrierIndex){
@@ -35378,17 +35598,19 @@ TEST(GpuTaskGraph, MergesPreparedPureSoftwareBvhAndSceneTraversalIntoShadowPrepa
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
+    ASSERT_EQ(compiledPlan.packetCount(), 2u);
+
+    const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledPlan.packetForTask(shadowPrepare);
     ASSERT_TRUE(shadowPreparePacket.valid());
-    EXPECT_EQ(compiledGraph.packetForTask(rebuildKeysClear), shadowPreparePacket);
-    EXPECT_EQ(compiledGraph.packetForTask(rebuildParentClear), shadowPreparePacket);
-    EXPECT_EQ(compiledGraph.packetForTask(rebuildCounterClear), shadowPreparePacket);
-    EXPECT_EQ(compiledGraph.packetForTask(rebuild), shadowPreparePacket);
-    EXPECT_EQ(compiledGraph.packetForTask(refitCounterClear), shadowPreparePacket);
-    EXPECT_EQ(compiledGraph.packetForTask(refit), shadowPreparePacket);
-    EXPECT_NE(compiledGraph.packetForTask(traversal), shadowPreparePacket);
+    EXPECT_EQ(compiledPlan.packetForTask(rebuildKeysClear), shadowPreparePacket);
+    EXPECT_EQ(compiledPlan.packetForTask(rebuildParentClear), shadowPreparePacket);
+    EXPECT_EQ(compiledPlan.packetForTask(rebuildCounterClear), shadowPreparePacket);
+    EXPECT_EQ(compiledPlan.packetForTask(rebuild), shadowPreparePacket);
+    EXPECT_EQ(compiledPlan.packetForTask(refitCounterClear), shadowPreparePacket);
+    EXPECT_EQ(compiledPlan.packetForTask(refit), shadowPreparePacket);
+    EXPECT_NE(compiledPlan.packetForTask(traversal), shadowPreparePacket);
     const Graphics::GpuTaskId expectedPacketTasks[] = {
         preflight,
         rebuildKeysClear,
@@ -35399,9 +35621,9 @@ TEST(GpuTaskGraph, MergesPreparedPureSoftwareBvhAndSceneTraversalIntoShadowPrepa
         refit,
         shadowPrepare,
     };
-    const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(shadowPreparePacket);
+    const Graphics::GpuSubmissionPacket& packet = *compiledPlan.packet(shadowPreparePacket).plan;
     ASSERT_EQ(packet.taskCount, LengthOf(expectedPacketTasks));
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(shadowPreparePacket);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(shadowPreparePacket).tasks;
     ASSERT_NE(packetTasks, nullptr);
     for(usize taskIndex = 0u; taskIndex < LengthOf(expectedPacketTasks); ++taskIndex)
         EXPECT_EQ(packetTasks[taskIndex], expectedPacketTasks[taskIndex]);
@@ -35412,8 +35634,8 @@ TEST(GpuTaskGraph, MergesPreparedPureSoftwareBvhAndSceneTraversalIntoShadowPrepa
         const Graphics::ResourceStates::Mask before,
         const Graphics::ResourceStates::Mask after
     ){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         if(!compiledTask || (compiledTask->prologueBarrierCount != 0u && !barriers))
             return false;
         for(usize barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
@@ -35442,8 +35664,8 @@ TEST(GpuTaskGraph, MergesPreparedPureSoftwareBvhAndSceneTraversalIntoShadowPrepa
     EXPECT_TRUE(hasTransition(shadowPrepare, shadowInstances, Graphics::ResourceStates::Common, Graphics::ResourceStates::ShaderResource));
     EXPECT_TRUE(hasTransition(shadowPrepare, materialTyped, Graphics::ResourceStates::Common, Graphics::ResourceStates::ShaderResource));
     const auto hasUavBarrier = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         if(!compiledTask || (compiledTask->prologueBarrierCount != 0u && !barriers))
             return false;
         for(usize barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
@@ -35565,14 +35787,16 @@ TEST(GpuTaskGraph, PlansGraphOwnedPreparedTailFreeBlasInputStates){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_EQ(compiledGraph.packetCount(), 1u);
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(prepare);
-    ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packetForTask(normalize), packet);
-    EXPECT_EQ(compiledGraph.packet(packet).taskCount, 2u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledPrepare = compiledGraph.findTask(prepare);
-    const Graphics::GpuCompiledTask* const compiledNormalize = compiledGraph.findTask(normalize);
+    ASSERT_EQ(compiledPlan.packetCount(), 1u);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(prepare);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledPlan.packetForTask(normalize), packet);
+    EXPECT_EQ(compiledPlan.packet(packet).plan->taskCount, 2u);
+
+    const Graphics::GpuCompiledTask* const compiledPrepare = compiledPlan.findTask(prepare).plan;
+    const Graphics::GpuCompiledTask* const compiledNormalize = compiledPlan.findTask(normalize).plan;
     ASSERT_NE(compiledPrepare, nullptr);
     ASSERT_NE(compiledNormalize, nullptr);
     const auto hasTransition = [&](
@@ -35582,7 +35806,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedPreparedTailFreeBlasInputStates){
         const Graphics::ResourceStates::Mask before,
         const Graphics::ResourceStates::Mask after
     ){
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         if(compiledTask.prologueBarrierCount != 0u && !barriers)
             return false;
         for(usize barrierIndex = 0u; barrierIndex < compiledTask.prologueBarrierCount; ++barrierIndex){
@@ -35753,9 +35977,11 @@ TEST(GpuTaskGraph, PlansGraphOwnedPostGbufferTraceGeometryStates){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledTask* const compiledNormalize = compiledGraph.findTask(normalize);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    const Graphics::GpuCompiledTask* const compiledNormalize = compiledPlan.findTask(normalize).plan;
     ASSERT_NE(compiledNormalize, nullptr);
-    const Graphics::GpuCompiledBarrier* const normalizeBarriers = compiledGraph.taskPrologueBarriers(normalize);
+    const Graphics::GpuCompiledBarrier* const normalizeBarriers = compiledPlan.findTask(normalize).prologueBarriers;
     ASSERT_NE(normalizeBarriers, nullptr);
     const auto hasNormalizeBarrier = [&](const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before){
         for(usize barrierIndex = 0u; barrierIndex < compiledNormalize->prologueBarrierCount; ++barrierIndex){
@@ -36193,6 +36419,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     ASSERT_TRUE(HasInferredHazard(
         analysis,
         softwareCausticsTask,
@@ -36218,14 +36446,14 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
     const Graphics::GpuTaskQueueAssignment* const clearAssignment = assignments.find(irradianceClearTask);
     ASSERT_NE(clearAssignment, nullptr);
     EXPECT_EQ(clearAssignment->queueClass, Graphics::CommandQueue::Compute);
-    const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
-    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
-    const Graphics::GpuSubmissionPacketId shadowPacket = compiledGraph.packetForTask(shadowVisibilityTask);
-    const Graphics::GpuSubmissionPacketId irradianceClearPacket = compiledGraph.packetForTask(irradianceClearTask);
+    const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledPlan.packetForTask(shadowPrepare);
+    const Graphics::GpuSubmissionPacketId prefixPacket = compiledPlan.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId shadowPacket = compiledPlan.packetForTask(shadowVisibilityTask);
+    const Graphics::GpuSubmissionPacketId irradianceClearPacket = compiledPlan.packetForTask(irradianceClearTask);
     const Graphics::GpuSubmissionPacketId accumulatorBootstrapClearPacket =
-        compiledGraph.packetForTask(accumulatorBootstrapClearTask);
-    const Graphics::GpuSubmissionPacketId causticsPacket = compiledGraph.packetForTask(softwareCausticsTask);
-    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
+        compiledPlan.packetForTask(accumulatorBootstrapClearTask);
+    const Graphics::GpuSubmissionPacketId causticsPacket = compiledPlan.packetForTask(softwareCausticsTask);
+    const Graphics::GpuSubmissionPacketId lightingPacket = compiledPlan.packetForTask(lighting);
     ASSERT_TRUE(shadowPreparePacket.valid());
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(shadowPacket.valid());
@@ -36239,15 +36467,15 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
     EXPECT_EQ(irradianceClearPacket, causticsPacket);
     EXPECT_EQ(accumulatorBootstrapClearPacket, causticsPacket);
     EXPECT_NE(causticsPacket, lightingPacket);
-    EXPECT_EQ(compiledGraph.packetCount(), 5u);
+    EXPECT_EQ(compiledPlan.packetCount(), 5u);
 
-    const Graphics::GpuCompiledTask* const compiledShadow = compiledGraph.findTask(shadowVisibilityTask);
-    const Graphics::GpuCompiledTask* const compiledCaustics = compiledGraph.findTask(softwareCausticsTask);
-    const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting);
+    const Graphics::GpuCompiledTask* const compiledShadow = compiledPlan.findTask(shadowVisibilityTask).plan;
+    const Graphics::GpuCompiledTask* const compiledCaustics = compiledPlan.findTask(softwareCausticsTask).plan;
+    const Graphics::GpuCompiledTask* const compiledLighting = compiledPlan.findTask(lighting).plan;
     ASSERT_NE(compiledShadow, nullptr);
     ASSERT_NE(compiledCaustics, nullptr);
     ASSERT_NE(compiledLighting, nullptr);
-    const Graphics::GpuCompiledBarrier* const shadowBarriers = compiledGraph.taskPrologueBarriers(shadowVisibilityTask);
+    const Graphics::GpuCompiledBarrier* const shadowBarriers = compiledPlan.findTask(shadowVisibilityTask).prologueBarriers;
     ASSERT_NE(shadowBarriers, nullptr);
     bool shadowTransitionsDepthToShaderResource = false;
     for(usize barrierIndex = 0u; barrierIndex < compiledShadow->prologueBarrierCount; ++barrierIndex){
@@ -36261,7 +36489,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
     }
     EXPECT_TRUE(shadowTransitionsDepthToShaderResource);
 
-    const Graphics::GpuPacketStateSeed* const causticsSeeds = compiledGraph.taskPrologueStateSeeds(softwareCausticsTask);
+    const Graphics::GpuPacketStateSeed* const causticsSeeds = compiledPlan.findTask(softwareCausticsTask).prologueStateSeeds;
     ASSERT_NE(causticsSeeds, nullptr);
     const auto hasCausticsSeed = [&](const Graphics::GpuGraphResourceId resource, const Graphics::GpuSubmissionPacketId sourcePacket){
         for(usize seedIndex = 0u; seedIndex < compiledCaustics->prologueStateSeedCount; ++seedIndex){
@@ -36289,8 +36517,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
     EXPECT_TRUE(hasCausticsSeed(lights, shadowPacket));
 
     const auto causticsPacketWaitsFor = [&](const Graphics::GpuSubmissionPacketId producer){
-        const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(causticsPacket);
-        const Graphics::GpuPacketDependency* const dependencies = compiledGraph.packetDependencies(causticsPacket);
+        const Graphics::GpuSubmissionPacket& packet = *compiledPlan.packet(causticsPacket).plan;
+        const Graphics::GpuPacketDependency* const dependencies = compiledPlan.packet(causticsPacket).dependencies;
         if(packet.dependencyCount != 0u && !dependencies)
             return false;
         for(usize dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){
@@ -36303,7 +36531,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
     EXPECT_TRUE(causticsPacketWaitsFor(prefixPacket));
     EXPECT_TRUE(causticsPacketWaitsFor(shadowPacket));
 
-    const Graphics::GpuCompiledBarrier* const causticsBarriers = compiledGraph.taskPrologueBarriers(softwareCausticsTask);
+    const Graphics::GpuCompiledBarrier* const causticsBarriers = compiledPlan.findTask(softwareCausticsTask).prologueBarriers;
     ASSERT_NE(causticsBarriers, nullptr);
     const auto hasCausticsBarrier = [&](const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
         for(usize barrierIndex = 0u; barrierIndex < compiledCaustics->prologueBarrierCount; ++barrierIndex){
@@ -36356,19 +36584,19 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
     ));
 
     ASSERT_EQ(compiledLighting->prologueStateSeedCount, 1u);
-    const Graphics::GpuPacketStateSeed* const lightingSeed = compiledGraph.taskPrologueStateSeeds(lighting);
+    const Graphics::GpuPacketStateSeed* const lightingSeed = compiledPlan.findTask(lighting).prologueStateSeeds;
     ASSERT_NE(lightingSeed, nullptr);
     EXPECT_EQ(lightingSeed[0u].resource, causticIrradiance);
     EXPECT_EQ(lightingSeed[0u].sourcePacket, causticsPacket);
     ASSERT_EQ(compiledLighting->prologueBarrierCount, 1u);
-    const Graphics::GpuCompiledBarrier* const lightingBarrier = compiledGraph.taskPrologueBarriers(lighting);
+    const Graphics::GpuCompiledBarrier* const lightingBarrier = compiledPlan.findTask(lighting).prologueBarriers;
     ASSERT_NE(lightingBarrier, nullptr);
     EXPECT_EQ(lightingBarrier[0u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
     EXPECT_EQ(lightingBarrier[0u].resource, causticIrradiance);
     EXPECT_EQ(lightingBarrier[0u].before, Graphics::ResourceStates::UnorderedAccess);
     EXPECT_EQ(lightingBarrier[0u].after, Graphics::ResourceStates::ShaderResource);
-    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(lightingPacket)[0u].producer, causticsPacket);
+    ASSERT_EQ(compiledPlan.packet(lightingPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(lightingPacket).dependencies[0u].producer, causticsPacket);
 }
 
 
@@ -36708,6 +36936,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     ASSERT_TRUE(HasInferredHazard(
         analysis,
         photonTask,
@@ -36765,16 +36995,16 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
 
-    const Graphics::GpuSubmissionPacketId photonPacket = compiledGraph.packetForTask(photonTask);
-    const Graphics::GpuSubmissionPacketId geometryPacket = compiledGraph.packetForTask(geometryTask);
-    const Graphics::GpuSubmissionPacketId preparePacket = compiledGraph.packetForTask(prepareTask);
-    const Graphics::GpuSubmissionPacketId waveletPacket = compiledGraph.packetForTask(waveletTask);
-    const Graphics::GpuSubmissionPacketId secondWaveletPacket = compiledGraph.packetForTask(secondWaveletTask);
-    const Graphics::GpuSubmissionPacketId thirdWaveletPacket = compiledGraph.packetForTask(thirdWaveletTask);
-    const Graphics::GpuSubmissionPacketId fourthWaveletPacket = compiledGraph.packetForTask(fourthWaveletTask);
-    const Graphics::GpuSubmissionPacketId fifthWaveletPacket = compiledGraph.packetForTask(fifthWaveletTask);
-    const Graphics::GpuSubmissionPacketId tailPacket = compiledGraph.packetForTask(tailTask);
-    const Graphics::GpuSubmissionPacketId timingClosePacket = compiledGraph.packetForTask(timingCloseTask);
+    const Graphics::GpuSubmissionPacketId photonPacket = compiledPlan.packetForTask(photonTask);
+    const Graphics::GpuSubmissionPacketId geometryPacket = compiledPlan.packetForTask(geometryTask);
+    const Graphics::GpuSubmissionPacketId preparePacket = compiledPlan.packetForTask(prepareTask);
+    const Graphics::GpuSubmissionPacketId waveletPacket = compiledPlan.packetForTask(waveletTask);
+    const Graphics::GpuSubmissionPacketId secondWaveletPacket = compiledPlan.packetForTask(secondWaveletTask);
+    const Graphics::GpuSubmissionPacketId thirdWaveletPacket = compiledPlan.packetForTask(thirdWaveletTask);
+    const Graphics::GpuSubmissionPacketId fourthWaveletPacket = compiledPlan.packetForTask(fourthWaveletTask);
+    const Graphics::GpuSubmissionPacketId fifthWaveletPacket = compiledPlan.packetForTask(fifthWaveletTask);
+    const Graphics::GpuSubmissionPacketId tailPacket = compiledPlan.packetForTask(tailTask);
+    const Graphics::GpuSubmissionPacketId timingClosePacket = compiledPlan.packetForTask(timingCloseTask);
     ASSERT_TRUE(photonPacket.valid());
     ASSERT_TRUE(geometryPacket.valid());
     ASSERT_TRUE(preparePacket.valid());
@@ -36785,7 +37015,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
     ASSERT_TRUE(fifthWaveletPacket.valid());
     ASSERT_TRUE(tailPacket.valid());
     ASSERT_TRUE(timingClosePacket.valid());
-    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(compiledPlan.packetCount(), 1u);
     EXPECT_EQ(geometryPacket, photonPacket);
     EXPECT_EQ(preparePacket, photonPacket);
     EXPECT_EQ(waveletPacket, photonPacket);
@@ -36796,14 +37026,14 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
     EXPECT_EQ(tailPacket, photonPacket);
     EXPECT_EQ(timingClosePacket, photonPacket);
 
-    const Graphics::GpuCompiledTask* const compiledGeometry = compiledGraph.findTask(geometryTask);
-    const Graphics::GpuCompiledTask* const compiledPrepare = compiledGraph.findTask(prepareTask);
-    const Graphics::GpuCompiledTask* const compiledWavelet = compiledGraph.findTask(waveletTask);
-    const Graphics::GpuCompiledTask* const compiledSecondWavelet = compiledGraph.findTask(secondWaveletTask);
-    const Graphics::GpuCompiledTask* const compiledThirdWavelet = compiledGraph.findTask(thirdWaveletTask);
-    const Graphics::GpuCompiledTask* const compiledFourthWavelet = compiledGraph.findTask(fourthWaveletTask);
-    const Graphics::GpuCompiledTask* const compiledFifthWavelet = compiledGraph.findTask(fifthWaveletTask);
-    const Graphics::GpuCompiledTask* const compiledTail = compiledGraph.findTask(tailTask);
+    const Graphics::GpuCompiledTask* const compiledGeometry = compiledPlan.findTask(geometryTask).plan;
+    const Graphics::GpuCompiledTask* const compiledPrepare = compiledPlan.findTask(prepareTask).plan;
+    const Graphics::GpuCompiledTask* const compiledWavelet = compiledPlan.findTask(waveletTask).plan;
+    const Graphics::GpuCompiledTask* const compiledSecondWavelet = compiledPlan.findTask(secondWaveletTask).plan;
+    const Graphics::GpuCompiledTask* const compiledThirdWavelet = compiledPlan.findTask(thirdWaveletTask).plan;
+    const Graphics::GpuCompiledTask* const compiledFourthWavelet = compiledPlan.findTask(fourthWaveletTask).plan;
+    const Graphics::GpuCompiledTask* const compiledFifthWavelet = compiledPlan.findTask(fifthWaveletTask).plan;
+    const Graphics::GpuCompiledTask* const compiledTail = compiledPlan.findTask(tailTask).plan;
     ASSERT_NE(compiledGeometry, nullptr);
     ASSERT_NE(compiledPrepare, nullptr);
     ASSERT_NE(compiledWavelet, nullptr);
@@ -36812,14 +37042,14 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
     ASSERT_NE(compiledFourthWavelet, nullptr);
     ASSERT_NE(compiledFifthWavelet, nullptr);
     ASSERT_NE(compiledTail, nullptr);
-    const Graphics::GpuCompiledBarrier* const geometryBarriers = compiledGraph.taskPrologueBarriers(geometryTask);
-    const Graphics::GpuCompiledBarrier* const prepareBarriers = compiledGraph.taskPrologueBarriers(prepareTask);
-    const Graphics::GpuCompiledBarrier* const waveletBarriers = compiledGraph.taskPrologueBarriers(waveletTask);
-    const Graphics::GpuCompiledBarrier* const secondWaveletBarriers = compiledGraph.taskPrologueBarriers(secondWaveletTask);
-    const Graphics::GpuCompiledBarrier* const thirdWaveletBarriers = compiledGraph.taskPrologueBarriers(thirdWaveletTask);
-    const Graphics::GpuCompiledBarrier* const fourthWaveletBarriers = compiledGraph.taskPrologueBarriers(fourthWaveletTask);
-    const Graphics::GpuCompiledBarrier* const fifthWaveletBarriers = compiledGraph.taskPrologueBarriers(fifthWaveletTask);
-    const Graphics::GpuCompiledBarrier* const tailBarriers = compiledGraph.taskPrologueBarriers(tailTask);
+    const Graphics::GpuCompiledBarrier* const geometryBarriers = compiledPlan.findTask(geometryTask).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const prepareBarriers = compiledPlan.findTask(prepareTask).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const waveletBarriers = compiledPlan.findTask(waveletTask).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const secondWaveletBarriers = compiledPlan.findTask(secondWaveletTask).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const thirdWaveletBarriers = compiledPlan.findTask(thirdWaveletTask).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const fourthWaveletBarriers = compiledPlan.findTask(fourthWaveletTask).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const fifthWaveletBarriers = compiledPlan.findTask(fifthWaveletTask).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const tailBarriers = compiledPlan.findTask(tailTask).prologueBarriers;
     ASSERT_NE(geometryBarriers, nullptr);
     ASSERT_NE(prepareBarriers, nullptr);
     ASSERT_NE(waveletBarriers, nullptr);
@@ -37379,6 +37609,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     Graphics::GpuTaskGraphCompileOptions compileOptions;
     compileOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, compileOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     EXPECT_TRUE(analysis.hasExplicitEdge(ageFree, cellHeadClear));
     EXPECT_TRUE(analysis.hasExplicitEdge(cellHeadClear, hashBuild));
     EXPECT_TRUE(analysis.hasExplicitEdge(hashBuild, spawn));
@@ -37475,17 +37707,17 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     const Graphics::GpuTaskQueueAssignment* const lightingAssignment = assignments.find(lighting);
     ASSERT_NE(lightingAssignment, nullptr);
     EXPECT_EQ(lightingAssignment->queueClass, Graphics::CommandQueue::Compute);
-    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
-    const Graphics::GpuSubmissionPacketId clearPacket = compiledGraph.packetForTask(outputClear);
-    const Graphics::GpuSubmissionPacketId ageFreePacket = compiledGraph.packetForTask(ageFree);
-    const Graphics::GpuSubmissionPacketId cellHeadClearPacket = compiledGraph.packetForTask(cellHeadClear);
-    const Graphics::GpuSubmissionPacketId hashBuildPacket = compiledGraph.packetForTask(hashBuild);
-    const Graphics::GpuSubmissionPacketId spawnPacket = compiledGraph.packetForTask(spawn);
-    const Graphics::GpuSubmissionPacketId traceBuildArgsPacket = compiledGraph.packetForTask(traceBuildArgs);
-    const Graphics::GpuSubmissionPacketId tracePacket = compiledGraph.packetForTask(trace);
-    const Graphics::GpuSubmissionPacketId resolvePacket = compiledGraph.packetForTask(resolve);
-    const Graphics::GpuSubmissionPacketId surfelPacket = compiledGraph.packetForTask(surfelGi);
-    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
+    const Graphics::GpuSubmissionPacketId prefixPacket = compiledPlan.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId clearPacket = compiledPlan.packetForTask(outputClear);
+    const Graphics::GpuSubmissionPacketId ageFreePacket = compiledPlan.packetForTask(ageFree);
+    const Graphics::GpuSubmissionPacketId cellHeadClearPacket = compiledPlan.packetForTask(cellHeadClear);
+    const Graphics::GpuSubmissionPacketId hashBuildPacket = compiledPlan.packetForTask(hashBuild);
+    const Graphics::GpuSubmissionPacketId spawnPacket = compiledPlan.packetForTask(spawn);
+    const Graphics::GpuSubmissionPacketId traceBuildArgsPacket = compiledPlan.packetForTask(traceBuildArgs);
+    const Graphics::GpuSubmissionPacketId tracePacket = compiledPlan.packetForTask(trace);
+    const Graphics::GpuSubmissionPacketId resolvePacket = compiledPlan.packetForTask(resolve);
+    const Graphics::GpuSubmissionPacketId surfelPacket = compiledPlan.packetForTask(surfelGi);
+    const Graphics::GpuSubmissionPacketId lightingPacket = compiledPlan.packetForTask(lighting);
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(clearPacket.valid());
     ASSERT_TRUE(ageFreePacket.valid());
@@ -37507,21 +37739,21 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     EXPECT_EQ(tracePacket, surfelPacket);
     EXPECT_EQ(resolvePacket, surfelPacket);
     EXPECT_NE(lightingPacket, surfelPacket);
-    EXPECT_EQ(compiledGraph.packetCount(), 3u);
-    ASSERT_NE(compiledGraph.packetTasks(surfelPacket), nullptr);
-    ASSERT_EQ(compiledGraph.packet(surfelPacket).taskCount, 9u);
-    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[0u], outputClear);
-    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[1u], ageFree);
-    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[2u], cellHeadClear);
-    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[3u], hashBuild);
-    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[4u], spawn);
-    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[5u], traceBuildArgs);
-    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[6u], trace);
-    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[7u], resolve);
-    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[8u], surfelGi);
-    const Graphics::GpuCompiledTask* const compiledAgeFree = compiledGraph.findTask(ageFree);
+    EXPECT_EQ(compiledPlan.packetCount(), 3u);
+    ASSERT_NE(compiledPlan.packet(surfelPacket).tasks, nullptr);
+    ASSERT_EQ(compiledPlan.packet(surfelPacket).plan->taskCount, 9u);
+    EXPECT_EQ(compiledPlan.packet(surfelPacket).tasks[0u], outputClear);
+    EXPECT_EQ(compiledPlan.packet(surfelPacket).tasks[1u], ageFree);
+    EXPECT_EQ(compiledPlan.packet(surfelPacket).tasks[2u], cellHeadClear);
+    EXPECT_EQ(compiledPlan.packet(surfelPacket).tasks[3u], hashBuild);
+    EXPECT_EQ(compiledPlan.packet(surfelPacket).tasks[4u], spawn);
+    EXPECT_EQ(compiledPlan.packet(surfelPacket).tasks[5u], traceBuildArgs);
+    EXPECT_EQ(compiledPlan.packet(surfelPacket).tasks[6u], trace);
+    EXPECT_EQ(compiledPlan.packet(surfelPacket).tasks[7u], resolve);
+    EXPECT_EQ(compiledPlan.packet(surfelPacket).tasks[8u], surfelGi);
+    const Graphics::GpuCompiledTask* const compiledAgeFree = compiledPlan.findTask(ageFree).plan;
     ASSERT_NE(compiledAgeFree, nullptr);
-    const Graphics::GpuPacketStateSeed* const ageFreeSeeds = compiledGraph.taskPrologueStateSeeds(ageFree);
+    const Graphics::GpuPacketStateSeed* const ageFreeSeeds = compiledPlan.findTask(ageFree).prologueStateSeeds;
     ASSERT_NE(ageFreeSeeds, nullptr);
     const auto hasAgeFreeSeed = [&](const Graphics::GpuGraphResourceId resource){
         for(usize seedIndex = 0u; seedIndex < compiledAgeFree->prologueStateSeedCount; ++seedIndex){
@@ -37537,9 +37769,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     EXPECT_TRUE(hasAgeFreeSeed(pool));
     EXPECT_TRUE(hasAgeFreeSeed(counter));
     EXPECT_TRUE(hasAgeFreeSeed(freeList));
-    const Graphics::GpuCompiledTask* const compiledSpawn = compiledGraph.findTask(spawn);
+    const Graphics::GpuCompiledTask* const compiledSpawn = compiledPlan.findTask(spawn).plan;
     ASSERT_NE(compiledSpawn, nullptr);
-    const Graphics::GpuPacketStateSeed* const spawnSeeds = compiledGraph.taskPrologueStateSeeds(spawn);
+    const Graphics::GpuPacketStateSeed* const spawnSeeds = compiledPlan.findTask(spawn).prologueStateSeeds;
     ASSERT_NE(spawnSeeds, nullptr);
     const auto hasSpawnSeed = [&](const Graphics::GpuGraphResourceId resource){
         for(usize seedIndex = 0u; seedIndex < compiledSpawn->prologueStateSeedCount; ++seedIndex){
@@ -37553,9 +37785,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     };
     EXPECT_TRUE(hasSpawnSeed(worldPosition));
     EXPECT_TRUE(hasSpawnSeed(normal));
-    const Graphics::GpuCompiledTask* const compiledTraceBuildArgs = compiledGraph.findTask(traceBuildArgs);
+    const Graphics::GpuCompiledTask* const compiledTraceBuildArgs = compiledPlan.findTask(traceBuildArgs).plan;
     ASSERT_NE(compiledTraceBuildArgs, nullptr);
-    const Graphics::GpuPacketStateSeed* const traceBuildArgsSeeds = compiledGraph.taskPrologueStateSeeds(traceBuildArgs);
+    const Graphics::GpuPacketStateSeed* const traceBuildArgsSeeds = compiledPlan.findTask(traceBuildArgs).prologueStateSeeds;
     ASSERT_NE(traceBuildArgsSeeds, nullptr);
     const auto hasTraceBuildArgsSeed = [&](const Graphics::GpuGraphResourceId resource){
         for(usize seedIndex = 0u; seedIndex < compiledTraceBuildArgs->prologueStateSeedCount; ++seedIndex){
@@ -37568,9 +37800,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
         return false;
     };
     EXPECT_TRUE(hasTraceBuildArgsSeed(traceArgs));
-    const Graphics::GpuCompiledTask* const compiledTrace = compiledGraph.findTask(trace);
+    const Graphics::GpuCompiledTask* const compiledTrace = compiledPlan.findTask(trace).plan;
     ASSERT_NE(compiledTrace, nullptr);
-    const Graphics::GpuPacketStateSeed* const traceSeeds = compiledGraph.taskPrologueStateSeeds(trace);
+    const Graphics::GpuPacketStateSeed* const traceSeeds = compiledPlan.findTask(trace).prologueStateSeeds;
     ASSERT_NE(traceSeeds, nullptr);
     const auto hasTraceSeed = [&](const Graphics::GpuGraphResourceId resource){
         for(usize seedIndex = 0u; seedIndex < compiledTrace->prologueStateSeedCount; ++seedIndex){
@@ -37585,9 +37817,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     EXPECT_TRUE(hasTraceSeed(currentBindlessSlots));
     EXPECT_TRUE(hasTraceSeed(traceGeometry));
     EXPECT_TRUE(hasTraceSeed(poolSnapshot));
-    const Graphics::GpuCompiledTask* const compiledResolve = compiledGraph.findTask(resolve);
+    const Graphics::GpuCompiledTask* const compiledResolve = compiledPlan.findTask(resolve).plan;
     ASSERT_NE(compiledResolve, nullptr);
-    const Graphics::GpuPacketStateSeed* const resolveSeeds = compiledGraph.taskPrologueStateSeeds(resolve);
+    const Graphics::GpuPacketStateSeed* const resolveSeeds = compiledPlan.findTask(resolve).prologueStateSeeds;
     ASSERT_NE(resolveSeeds, nullptr);
     const auto hasResolveSeed = [&](const Graphics::GpuGraphResourceId resource){
         for(usize seedIndex = 0u; seedIndex < compiledResolve->prologueStateSeedCount; ++seedIndex){
@@ -37601,7 +37833,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     };
     EXPECT_TRUE(hasResolveSeed(irradianceHalf));
 
-    const Graphics::GpuCompiledBarrier* const ageFreeBarriers = compiledGraph.taskPrologueBarriers(ageFree);
+    const Graphics::GpuCompiledBarrier* const ageFreeBarriers = compiledPlan.findTask(ageFree).prologueBarriers;
     ASSERT_NE(ageFreeBarriers, nullptr);
     const auto hasAgeFreeBarrier = [&](const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
         for(usize barrierIndex = 0u; barrierIndex < compiledAgeFree->prologueBarrierCount; ++barrierIndex){
@@ -37637,9 +37869,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
         Graphics::ResourceStates::UnorderedAccess
     ));
 
-    const Graphics::GpuCompiledTask* const compiledHashBuild = compiledGraph.findTask(hashBuild);
+    const Graphics::GpuCompiledTask* const compiledHashBuild = compiledPlan.findTask(hashBuild).plan;
     ASSERT_NE(compiledHashBuild, nullptr);
-    const Graphics::GpuCompiledBarrier* const hashBuildBarriers = compiledGraph.taskPrologueBarriers(hashBuild);
+    const Graphics::GpuCompiledBarrier* const hashBuildBarriers = compiledPlan.findTask(hashBuild).prologueBarriers;
     ASSERT_NE(hashBuildBarriers, nullptr);
     const auto hasHashBuildBarrier = [&](const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
         for(usize barrierIndex = 0u; barrierIndex < compiledHashBuild->prologueBarrierCount; ++barrierIndex){
@@ -37661,7 +37893,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
         Graphics::ResourceStates::UnorderedAccess
     ));
 
-    const Graphics::GpuCompiledBarrier* const spawnBarriers = compiledGraph.taskPrologueBarriers(spawn);
+    const Graphics::GpuCompiledBarrier* const spawnBarriers = compiledPlan.findTask(spawn).prologueBarriers;
     ASSERT_NE(spawnBarriers, nullptr);
     const auto hasSpawnBarrier = [&](const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
         for(usize barrierIndex = 0u; barrierIndex < compiledSpawn->prologueBarrierCount; ++barrierIndex){
@@ -37689,7 +37921,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
         Graphics::ResourceStates::UnorderedAccess
     ));
 
-    const Graphics::GpuCompiledBarrier* const traceBuildArgsBarriers = compiledGraph.taskPrologueBarriers(traceBuildArgs);
+    const Graphics::GpuCompiledBarrier* const traceBuildArgsBarriers = compiledPlan.findTask(traceBuildArgs).prologueBarriers;
     ASSERT_NE(traceBuildArgsBarriers, nullptr);
     const auto hasTraceBuildArgsBarrier = [&](const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
         for(usize barrierIndex = 0u; barrierIndex < compiledTraceBuildArgs->prologueBarrierCount; ++barrierIndex){
@@ -37717,7 +37949,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
         Graphics::ResourceStates::UnorderedAccess
     ));
 
-    const Graphics::GpuCompiledBarrier* const traceBarriers = compiledGraph.taskPrologueBarriers(trace);
+    const Graphics::GpuCompiledBarrier* const traceBarriers = compiledPlan.findTask(trace).prologueBarriers;
     ASSERT_NE(traceBarriers, nullptr);
     const auto hasTraceBarrier = [&](const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
         for(usize barrierIndex = 0u; barrierIndex < compiledTrace->prologueBarrierCount; ++barrierIndex){
@@ -37745,7 +37977,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
         Graphics::ResourceStates::IndirectArgument
     ));
 
-    const Graphics::GpuCompiledBarrier* const resolveBarriers = compiledGraph.taskPrologueBarriers(resolve);
+    const Graphics::GpuCompiledBarrier* const resolveBarriers = compiledPlan.findTask(resolve).prologueBarriers;
     ASSERT_NE(resolveBarriers, nullptr);
     const auto hasResolveBarrier = [&](const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
         for(usize barrierIndex = 0u; barrierIndex < compiledResolve->prologueBarrierCount; ++barrierIndex){
@@ -37778,9 +38010,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
         Graphics::ResourceStates::CopyDest,
         Graphics::ResourceStates::UnorderedAccess
     ));
-    const Graphics::GpuCompiledTask* const compiledSurfel = compiledGraph.findTask(surfelGi);
+    const Graphics::GpuCompiledTask* const compiledSurfel = compiledPlan.findTask(surfelGi).plan;
     ASSERT_NE(compiledSurfel, nullptr);
-    const Graphics::GpuCompiledBarrier* const surfelBarriers = compiledGraph.taskPrologueBarriers(surfelGi);
+    const Graphics::GpuCompiledBarrier* const surfelBarriers = compiledPlan.findTask(surfelGi).prologueBarriers;
     ASSERT_NE(surfelBarriers, nullptr);
     const auto hasSurfelBarrier = [&](const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
         for(usize barrierIndex = 0u; barrierIndex < compiledSurfel->prologueBarrierCount; ++barrierIndex){
@@ -37807,11 +38039,11 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
         Graphics::ResourceStates::CopyDest,
         Graphics::ResourceStates::UnorderedAccess
     ));
-    ASSERT_EQ(compiledGraph.packet(surfelPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(surfelPacket)[0u].producer, prefixPacket);
-    const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting);
+    ASSERT_EQ(compiledPlan.packet(surfelPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(surfelPacket).dependencies[0u].producer, prefixPacket);
+    const Graphics::GpuCompiledTask* const compiledLighting = compiledPlan.findTask(lighting).plan;
     ASSERT_NE(compiledLighting, nullptr);
-    const Graphics::GpuCompiledBarrier* const lightingBarriers = compiledGraph.taskPrologueBarriers(lighting);
+    const Graphics::GpuCompiledBarrier* const lightingBarriers = compiledPlan.findTask(lighting).prologueBarriers;
     ASSERT_NE(lightingBarriers, nullptr);
     bool lightingTransitionsIrradiance = false;
     for(usize barrierIndex = 0u; barrierIndex < compiledLighting->prologueBarrierCount; ++barrierIndex){
@@ -37826,8 +38058,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
         ;
     }
     EXPECT_TRUE(lightingTransitionsIrradiance);
-    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(lightingPacket)[0u].producer, surfelPacket);
+    ASSERT_EQ(compiledPlan.packet(lightingPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(lightingPacket).dependencies[0u].producer, surfelPacket);
 }
 
 
@@ -38038,6 +38270,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelInitializationEntryStates){
     Graphics::GpuTaskGraphCompileOptions frontierOptions;
     frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     ASSERT_TRUE(HasInferredHazard(
         analysis,
         prefix,
@@ -38066,33 +38300,33 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelInitializationEntryStates){
     const Graphics::GpuTaskQueueAssignment* const snapshotAssignment = assignments.find(snapshot);
     ASSERT_NE(snapshotAssignment, nullptr);
     EXPECT_EQ(snapshotAssignment->queueClass, Graphics::CommandQueue::Transfer);
-    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
-    const Graphics::GpuSubmissionPacketId initializePacket = compiledGraph.packetForTask(poolClear);
-    const Graphics::GpuSubmissionPacketId snapshotPacket = compiledGraph.packetForTask(snapshot);
+    const Graphics::GpuSubmissionPacketId prefixPacket = compiledPlan.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId initializePacket = compiledPlan.packetForTask(poolClear);
+    const Graphics::GpuSubmissionPacketId snapshotPacket = compiledPlan.packetForTask(snapshot);
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(initializePacket.valid());
     ASSERT_TRUE(snapshotPacket.valid());
     EXPECT_NE(prefixPacket, initializePacket);
     EXPECT_NE(initializePacket, snapshotPacket);
-    EXPECT_EQ(compiledGraph.packetForTask(cellHeadClear), initializePacket);
-    EXPECT_EQ(compiledGraph.packetForTask(counterClear), initializePacket);
-    EXPECT_EQ(compiledGraph.packetForTask(freeListClear), initializePacket);
-    EXPECT_EQ(compiledGraph.packetForTask(lifecycle), initializePacket);
-    ASSERT_EQ(compiledGraph.packet(initializePacket).taskCount, 5u);
-    const Graphics::GpuTaskId* const initializeTasks = compiledGraph.packetTasks(initializePacket);
+    EXPECT_EQ(compiledPlan.packetForTask(cellHeadClear), initializePacket);
+    EXPECT_EQ(compiledPlan.packetForTask(counterClear), initializePacket);
+    EXPECT_EQ(compiledPlan.packetForTask(freeListClear), initializePacket);
+    EXPECT_EQ(compiledPlan.packetForTask(lifecycle), initializePacket);
+    ASSERT_EQ(compiledPlan.packet(initializePacket).plan->taskCount, 5u);
+    const Graphics::GpuTaskId* const initializeTasks = compiledPlan.packet(initializePacket).tasks;
     ASSERT_NE(initializeTasks, nullptr);
     EXPECT_EQ(initializeTasks[0u], poolClear);
     EXPECT_EQ(initializeTasks[1u], cellHeadClear);
     EXPECT_EQ(initializeTasks[2u], counterClear);
     EXPECT_EQ(initializeTasks[3u], freeListClear);
     EXPECT_EQ(initializeTasks[4u], lifecycle);
-    ASSERT_EQ(compiledGraph.packet(snapshotPacket).taskCount, 1u);
-    EXPECT_EQ(compiledGraph.packetTasks(snapshotPacket)[0u], snapshot);
+    ASSERT_EQ(compiledPlan.packet(snapshotPacket).plan->taskCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(snapshotPacket).tasks[0u], snapshot);
 
     const auto expectsInitializeTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource){
-        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
         ASSERT_NE(compiledTask, nullptr);
-        const Graphics::GpuPacketStateSeed* const seeds = compiledGraph.taskPrologueStateSeeds(task);
+        const Graphics::GpuPacketStateSeed* const seeds = compiledPlan.findTask(task).prologueStateSeeds;
         ASSERT_NE(seeds, nullptr);
         bool seededFromPrefix = false;
         for(usize seedIndex = 0u; seedIndex < compiledTask->prologueStateSeedCount; ++seedIndex){
@@ -38104,7 +38338,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelInitializationEntryStates){
             ;
         }
         EXPECT_TRUE(seededFromPrefix);
-        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
         ASSERT_NE(barriers, nullptr);
         bool transitioned = false;
         for(usize barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
@@ -38124,8 +38358,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelInitializationEntryStates){
     expectsInitializeTransition(cellHeadClear, cellHeads);
     expectsInitializeTransition(counterClear, counter);
     expectsInitializeTransition(freeListClear, freeList);
-    ASSERT_EQ(compiledGraph.packet(initializePacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(initializePacket)[0u].producer, prefixPacket);
+    ASSERT_EQ(compiledPlan.packet(initializePacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(initializePacket).dependencies[0u].producer, prefixPacket);
 }
 
 
@@ -38386,6 +38620,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     ASSERT_TRUE(HasInferredHazard(
         analysis,
         prefix,
@@ -38411,11 +38647,11 @@ TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
     const Graphics::GpuTaskQueueAssignment* const causticsAssignment = assignments.find(caustics);
     ASSERT_NE(causticsAssignment, nullptr);
     EXPECT_EQ(causticsAssignment->queueClass, Graphics::CommandQueue::Graphics);
-    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
-    const Graphics::GpuSubmissionPacketId irradianceClearPacket = compiledGraph.packetForTask(irradianceClearTask);
+    const Graphics::GpuSubmissionPacketId prefixPacket = compiledPlan.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId irradianceClearPacket = compiledPlan.packetForTask(irradianceClearTask);
     const Graphics::GpuSubmissionPacketId accumulatorBootstrapClearPacket =
-        compiledGraph.packetForTask(accumulatorBootstrapClearTask);
-    const Graphics::GpuSubmissionPacketId causticsPacket = compiledGraph.packetForTask(caustics);
+        compiledPlan.packetForTask(accumulatorBootstrapClearTask);
+    const Graphics::GpuSubmissionPacketId causticsPacket = compiledPlan.packetForTask(caustics);
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(irradianceClearPacket.valid());
     ASSERT_TRUE(accumulatorBootstrapClearPacket.valid());
@@ -38423,10 +38659,10 @@ TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
     EXPECT_NE(prefixPacket, causticsPacket);
     EXPECT_EQ(irradianceClearPacket, causticsPacket);
     EXPECT_EQ(accumulatorBootstrapClearPacket, causticsPacket);
-    EXPECT_EQ(compiledGraph.packetCount(), 2u);
-    const Graphics::GpuCompiledTask* const compiledCaustics = compiledGraph.findTask(caustics);
+    EXPECT_EQ(compiledPlan.packetCount(), 2u);
+    const Graphics::GpuCompiledTask* const compiledCaustics = compiledPlan.findTask(caustics).plan;
     ASSERT_NE(compiledCaustics, nullptr);
-    const Graphics::GpuCompiledBarrier* const causticsBarriers = compiledGraph.taskPrologueBarriers(caustics);
+    const Graphics::GpuCompiledBarrier* const causticsBarriers = compiledPlan.findTask(caustics).prologueBarriers;
     ASSERT_NE(causticsBarriers, nullptr);
     const auto hasCausticsBarrier = [&](const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
         for(usize barrierIndex = 0u; barrierIndex < compiledCaustics->prologueBarrierCount; ++barrierIndex){
@@ -38483,8 +38719,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
         Graphics::ResourceStates::CopyDest,
         Graphics::ResourceStates::UnorderedAccess
     ));
-    ASSERT_EQ(compiledGraph.packet(causticsPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(causticsPacket)[0u].producer, prefixPacket);
+    ASSERT_EQ(compiledPlan.packet(causticsPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(causticsPacket).dependencies[0u].producer, prefixPacket);
 }
 
 
@@ -38588,6 +38824,8 @@ TEST(GpuTaskGraph, PlansNonTemporalCausticAccumulatorClearBeforePhotonProducer){
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, compileOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
         EXPECT_TRUE(HasInferredHazard(
             analysis,
             clear,
@@ -38607,25 +38845,25 @@ TEST(GpuTaskGraph, PlansNonTemporalCausticAccumulatorClearBeforePhotonProducer){
         EXPECT_EQ(clearAssignment->queueClass, expectedQueue);
         EXPECT_EQ(producerAssignment->queueClass, expectedQueue);
 
-        const Graphics::GpuSubmissionPacketId clearPacket = compiledGraph.packetForTask(clear);
-        const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
+        const Graphics::GpuSubmissionPacketId clearPacket = compiledPlan.packetForTask(clear);
+        const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
         ASSERT_TRUE(clearPacket.valid());
         EXPECT_EQ(producerPacket, clearPacket);
-        ASSERT_EQ(compiledGraph.packetCount(), 1u);
-        const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(clearPacket);
+        ASSERT_EQ(compiledPlan.packetCount(), 1u);
+        const Graphics::GpuSubmissionPacket& packet = *compiledPlan.packet(clearPacket).plan;
         ASSERT_EQ(packet.taskCount, 2u);
-        ASSERT_NE(compiledGraph.packetTasks(clearPacket), nullptr);
-        EXPECT_EQ(compiledGraph.packetTasks(clearPacket)[0u], clear);
-        EXPECT_EQ(compiledGraph.packetTasks(clearPacket)[1u], producer);
+        ASSERT_NE(compiledPlan.packet(clearPacket).tasks, nullptr);
+        EXPECT_EQ(compiledPlan.packet(clearPacket).tasks[0u], clear);
+        EXPECT_EQ(compiledPlan.packet(clearPacket).tasks[1u], producer);
 
-        const Graphics::GpuCompiledTask* const compiledClear = compiledGraph.findTask(clear);
-        const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+        const Graphics::GpuCompiledTask* const compiledClear = compiledPlan.findTask(clear).plan;
+        const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
         ASSERT_NE(compiledClear, nullptr);
         ASSERT_NE(compiledProducer, nullptr);
         ASSERT_EQ(compiledClear->prologueBarrierCount, 1u);
         ASSERT_EQ(compiledProducer->prologueBarrierCount, 1u);
-        const Graphics::GpuCompiledBarrier* const clearBarrier = compiledGraph.taskPrologueBarriers(clear);
-        const Graphics::GpuCompiledBarrier* const producerBarrier = compiledGraph.taskPrologueBarriers(producer);
+        const Graphics::GpuCompiledBarrier* const clearBarrier = compiledPlan.findTask(clear).prologueBarriers;
+        const Graphics::GpuCompiledBarrier* const producerBarrier = compiledPlan.findTask(producer).prologueBarriers;
         ASSERT_NE(clearBarrier, nullptr);
         ASSERT_NE(producerBarrier, nullptr);
         EXPECT_EQ(clearBarrier[0u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
@@ -38729,6 +38967,8 @@ TEST(GpuTaskGraph, PlansWarmCausticAccumulatorDecayBeforePhotonProducer){
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, compileOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
         EXPECT_TRUE(HasInferredHazard(
             analysis,
             decay,
@@ -38748,25 +38988,25 @@ TEST(GpuTaskGraph, PlansWarmCausticAccumulatorDecayBeforePhotonProducer){
         EXPECT_EQ(decayAssignment->queueClass, expectedQueue);
         EXPECT_EQ(producerAssignment->queueClass, expectedQueue);
 
-        const Graphics::GpuSubmissionPacketId decayPacket = compiledGraph.packetForTask(decay);
-        const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
+        const Graphics::GpuSubmissionPacketId decayPacket = compiledPlan.packetForTask(decay);
+        const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
         ASSERT_TRUE(decayPacket.valid());
         EXPECT_EQ(producerPacket, decayPacket);
-        ASSERT_EQ(compiledGraph.packetCount(), 1u);
-        const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(decayPacket);
+        ASSERT_EQ(compiledPlan.packetCount(), 1u);
+        const Graphics::GpuSubmissionPacket& packet = *compiledPlan.packet(decayPacket).plan;
         ASSERT_EQ(packet.taskCount, 2u);
-        ASSERT_NE(compiledGraph.packetTasks(decayPacket), nullptr);
-        EXPECT_EQ(compiledGraph.packetTasks(decayPacket)[0u], decay);
-        EXPECT_EQ(compiledGraph.packetTasks(decayPacket)[1u], producer);
+        ASSERT_NE(compiledPlan.packet(decayPacket).tasks, nullptr);
+        EXPECT_EQ(compiledPlan.packet(decayPacket).tasks[0u], decay);
+        EXPECT_EQ(compiledPlan.packet(decayPacket).tasks[1u], producer);
 
-        const Graphics::GpuCompiledTask* const compiledDecay = compiledGraph.findTask(decay);
-        const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+        const Graphics::GpuCompiledTask* const compiledDecay = compiledPlan.findTask(decay).plan;
+        const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
         ASSERT_NE(compiledDecay, nullptr);
         ASSERT_NE(compiledProducer, nullptr);
         ASSERT_EQ(compiledDecay->prologueBarrierCount, 1u);
         ASSERT_EQ(compiledProducer->prologueBarrierCount, 1u);
-        const Graphics::GpuCompiledBarrier* const decayBarrier = compiledGraph.taskPrologueBarriers(decay);
-        const Graphics::GpuCompiledBarrier* const producerBarrier = compiledGraph.taskPrologueBarriers(producer);
+        const Graphics::GpuCompiledBarrier* const decayBarrier = compiledPlan.findTask(decay).prologueBarriers;
+        const Graphics::GpuCompiledBarrier* const producerBarrier = compiledPlan.findTask(producer).prologueBarriers;
         ASSERT_NE(decayBarrier, nullptr);
         ASSERT_NE(producerBarrier, nullptr);
         EXPECT_EQ(decayBarrier[0u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
@@ -38900,25 +39140,27 @@ TEST(GpuTaskGraph, MergesRayTraceMaterialContextUploadIntoShadowPreparePacket){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId uploadPacket = compiledGraph.packetForTask(upload);
-    const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
-    const Graphics::GpuSubmissionPacketId shadowVisibilityPacket = compiledGraph.packetForTask(shadowVisibility);
+    ASSERT_EQ(compiledPlan.packetCount(), 2u);
+
+    const Graphics::GpuSubmissionPacketId uploadPacket = compiledPlan.packetForTask(upload);
+    const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledPlan.packetForTask(shadowPrepare);
+    const Graphics::GpuSubmissionPacketId shadowVisibilityPacket = compiledPlan.packetForTask(shadowVisibility);
     ASSERT_TRUE(uploadPacket.valid());
     ASSERT_TRUE(shadowPreparePacket.valid());
     ASSERT_TRUE(shadowVisibilityPacket.valid());
     EXPECT_EQ(uploadPacket, shadowPreparePacket);
     EXPECT_NE(shadowPreparePacket, shadowVisibilityPacket);
-    EXPECT_EQ(compiledGraph.packet(shadowPreparePacket).taskCount, 2u);
-    const Graphics::GpuSubmissionPacketRange shadowPrepareRange = compiledGraph.packetRange(
+    EXPECT_EQ(compiledPlan.packet(shadowPreparePacket).plan->taskCount, 2u);
+    const Graphics::GpuSubmissionPacketRange shadowPrepareRange = compiledPlan.packetRange(
         shadowPreparePacket,
         shadowPreparePacket
     );
     ASSERT_TRUE(shadowPrepareRange.valid());
     EXPECT_EQ(shadowPrepareRange.packetCount, 1u);
-    ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(shadowVisibilityPacket)[0u].producer, shadowPreparePacket);
+    ASSERT_EQ(compiledPlan.packet(shadowVisibilityPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(shadowVisibilityPacket).dependencies[0u].producer, shadowPreparePacket);
 }
 
 
@@ -39090,9 +39332,11 @@ TEST(GpuTaskGraph, PlacesNaturalAvboitStagesAcrossCollapsedHybridAndSplitPackets
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, compileOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
         ASSERT_EQ(analysis.topologicalOrder().size(), LengthOf(tasks));
-        ASSERT_EQ(compiledGraph.packetCount(), testCase.expectedPacketCount);
+        ASSERT_EQ(compiledPlan.packetCount(), testCase.expectedPacketCount);
         const Graphics::CommandQueue::Enum expectedQueueClasses[] = {
             Graphics::CommandQueue::Graphics,
             testCase.depthWarpOnCompute ? Graphics::CommandQueue::Compute : Graphics::CommandQueue::Graphics,
@@ -39133,7 +39377,7 @@ TEST(GpuTaskGraph, PlacesNaturalAvboitStagesAcrossCollapsedHybridAndSplitPackets
             if(taskIndex == 1u || taskIndex == 3u)
                 EXPECT_EQ(assignment->initialQueue, queues[0u].id);
 
-            const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(tasks[taskIndex]);
+            const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(tasks[taskIndex]);
             ASSERT_TRUE(packet.valid());
             EXPECT_EQ(packet.index, testCase.expectedPacketIndices[taskIndex]);
         }
@@ -39143,28 +39387,28 @@ TEST(GpuTaskGraph, PlacesNaturalAvboitStagesAcrossCollapsedHybridAndSplitPackets
                 const bool sharesPacket = testCase.expectedPacketIndices[firstTaskIndex]
                     == testCase.expectedPacketIndices[secondTaskIndex]
                 ;
-                EXPECT_EQ(compiledGraph.tasksSharePacket(tasks[firstTaskIndex], tasks[secondTaskIndex]), sharesPacket);
-                EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(tasks[firstTaskIndex], tasks[secondTaskIndex]));
+                EXPECT_EQ(compiledPlan.tasksSharePacket(tasks[firstTaskIndex], tasks[secondTaskIndex]), sharesPacket);
+                EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(tasks[firstTaskIndex], tasks[secondTaskIndex]));
                 EXPECT_EQ(
-                    compiledGraph.taskPrecedesOrSharesPacket(tasks[secondTaskIndex], tasks[firstTaskIndex]),
+                    compiledPlan.taskPrecedesOrSharesPacket(tasks[secondTaskIndex], tasks[firstTaskIndex]),
                     sharesPacket
                 );
                 EXPECT_EQ(
-                    compiledGraph.taskPrecedesInSamePacket(tasks[firstTaskIndex], tasks[secondTaskIndex]),
+                    compiledPlan.taskPrecedesInSamePacket(tasks[firstTaskIndex], tasks[secondTaskIndex]),
                     sharesPacket
                 );
-                EXPECT_FALSE(compiledGraph.taskPrecedesInSamePacket(tasks[secondTaskIndex], tasks[firstTaskIndex]));
+                EXPECT_FALSE(compiledPlan.taskPrecedesInSamePacket(tasks[secondTaskIndex], tasks[firstTaskIndex]));
             }
         }
         EXPECT_EQ(
-            compiledGraph.tasksFormContiguousPacketSequence(tasks, LengthOf(tasks)),
+            compiledPlan.tasksFormContiguousPacketSequence(tasks, LengthOf(tasks)),
             testCase.expectedPacketCount == 1u
         );
 
-        const Graphics::GpuSubmissionPacketRange avboitRange = compiledGraph.packetRangeForTasks(pre, accumulation);
+        const Graphics::GpuSubmissionPacketRange avboitRange = compiledPlan.packetRangeForTasks(pre, accumulation);
         ASSERT_TRUE(avboitRange.valid());
-        EXPECT_TRUE(compiledGraph.validPacketRange(avboitRange));
-        EXPECT_EQ(avboitRange.first, compiledGraph.packetForTask(pre));
+        EXPECT_TRUE(compiledPlan.validPacketRange(avboitRange));
+        EXPECT_EQ(avboitRange.first, compiledPlan.packetForTask(pre));
         EXPECT_EQ(avboitRange.packetCount, testCase.expectedPacketCount);
     }
 }
@@ -39364,15 +39608,17 @@ TEST(GpuTaskGraph, MergesExtinctionUploadChainIntoAsyncAvboitPacket){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
-    ASSERT_EQ(compiledGraph.packetCount(), 5u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId prePacket = compiledGraph.packetForTask(pre);
-    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledGraph.packetForTask(depthWarp);
-    const Graphics::GpuSubmissionPacketId instanceUploadPacket = compiledGraph.packetForTask(instanceUpload);
-    const Graphics::GpuSubmissionPacketId typedUploadPacket = compiledGraph.packetForTask(typedUpload);
-    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledGraph.packetForTask(extinction);
-    const Graphics::GpuSubmissionPacketId integrationPacket = compiledGraph.packetForTask(integration);
-    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledGraph.packetForTask(accumulation);
+    ASSERT_EQ(compiledPlan.packetCount(), 5u);
+
+    const Graphics::GpuSubmissionPacketId prePacket = compiledPlan.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledPlan.packetForTask(depthWarp);
+    const Graphics::GpuSubmissionPacketId instanceUploadPacket = compiledPlan.packetForTask(instanceUpload);
+    const Graphics::GpuSubmissionPacketId typedUploadPacket = compiledPlan.packetForTask(typedUpload);
+    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledPlan.packetForTask(extinction);
+    const Graphics::GpuSubmissionPacketId integrationPacket = compiledPlan.packetForTask(integration);
+    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledPlan.packetForTask(accumulation);
     ASSERT_TRUE(prePacket.valid());
     ASSERT_TRUE(depthWarpPacket.valid());
     ASSERT_TRUE(instanceUploadPacket.valid());
@@ -39386,13 +39632,13 @@ TEST(GpuTaskGraph, MergesExtinctionUploadChainIntoAsyncAvboitPacket){
     EXPECT_EQ(typedUploadPacket, extinctionPacket);
     EXPECT_NE(extinctionPacket, integrationPacket);
     EXPECT_NE(integrationPacket, accumulationPacket);
-    EXPECT_EQ(compiledGraph.packet(extinctionPacket).taskCount, 3u);
+    EXPECT_EQ(compiledPlan.packet(extinctionPacket).plan->taskCount, 3u);
 
-    const Graphics::GpuSubmissionPacketRange avboitRange = compiledGraph.packetRange(prePacket, accumulationPacket);
+    const Graphics::GpuSubmissionPacketRange avboitRange = compiledPlan.packetRange(prePacket, accumulationPacket);
     ASSERT_TRUE(avboitRange.valid());
     EXPECT_EQ(avboitRange.packetCount, 5u);
-    ASSERT_EQ(compiledGraph.packet(integrationPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(integrationPacket)[0u].producer, extinctionPacket);
+    ASSERT_EQ(compiledPlan.packet(integrationPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(integrationPacket).dependencies[0u].producer, extinctionPacket);
 }
 
 
@@ -39681,19 +39927,21 @@ TEST(GpuTaskGraph, MergesAccumulationUploadChainIntoAsyncAvboitPacket){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
-    ASSERT_EQ(compiledGraph.packetCount(), 6u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId prePacket = compiledGraph.packetForTask(pre);
-    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledGraph.packetForTask(depthWarp);
-    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledGraph.packetForTask(extinction);
-    const Graphics::GpuSubmissionPacketId integrationPacket = compiledGraph.packetForTask(integration);
-    const Graphics::GpuSubmissionPacketId instanceUploadPacket = compiledGraph.packetForTask(instanceUpload);
-    const Graphics::GpuSubmissionPacketId typedUploadPacket = compiledGraph.packetForTask(typedUpload);
-    const Graphics::GpuSubmissionPacketId receiverRangesUploadPacket = compiledGraph.packetForTask(receiverRangesUpload);
-    const Graphics::GpuSubmissionPacketId cuttersUploadPacket = compiledGraph.packetForTask(cuttersUpload);
-    const Graphics::GpuSubmissionPacketId clipContextUploadPacket = compiledGraph.packetForTask(clipContextUpload);
-    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledGraph.packetForTask(accumulation);
-    const Graphics::GpuSubmissionPacketId compositePacket = compiledGraph.packetForTask(composite);
+    ASSERT_EQ(compiledPlan.packetCount(), 6u);
+
+    const Graphics::GpuSubmissionPacketId prePacket = compiledPlan.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledPlan.packetForTask(depthWarp);
+    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledPlan.packetForTask(extinction);
+    const Graphics::GpuSubmissionPacketId integrationPacket = compiledPlan.packetForTask(integration);
+    const Graphics::GpuSubmissionPacketId instanceUploadPacket = compiledPlan.packetForTask(instanceUpload);
+    const Graphics::GpuSubmissionPacketId typedUploadPacket = compiledPlan.packetForTask(typedUpload);
+    const Graphics::GpuSubmissionPacketId receiverRangesUploadPacket = compiledPlan.packetForTask(receiverRangesUpload);
+    const Graphics::GpuSubmissionPacketId cuttersUploadPacket = compiledPlan.packetForTask(cuttersUpload);
+    const Graphics::GpuSubmissionPacketId clipContextUploadPacket = compiledPlan.packetForTask(clipContextUpload);
+    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledPlan.packetForTask(accumulation);
+    const Graphics::GpuSubmissionPacketId compositePacket = compiledPlan.packetForTask(composite);
     ASSERT_TRUE(prePacket.valid());
     ASSERT_TRUE(depthWarpPacket.valid());
     ASSERT_TRUE(extinctionPacket.valid());
@@ -39714,11 +39962,11 @@ TEST(GpuTaskGraph, MergesAccumulationUploadChainIntoAsyncAvboitPacket){
     EXPECT_EQ(receiverRangesUploadPacket, accumulationPacket);
     EXPECT_EQ(cuttersUploadPacket, accumulationPacket);
     EXPECT_EQ(clipContextUploadPacket, accumulationPacket);
-    EXPECT_EQ(compiledGraph.packet(accumulationPacket).taskCount, 6u);
-    ASSERT_EQ(compiledGraph.packet(compositePacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(compositePacket)[0u].producer, accumulationPacket);
+    EXPECT_EQ(compiledPlan.packet(accumulationPacket).plan->taskCount, 6u);
+    ASSERT_EQ(compiledPlan.packet(compositePacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(compositePacket).dependencies[0u].producer, accumulationPacket);
 
-    const Graphics::GpuSubmissionPacketRange avboitRange = compiledGraph.packetRange(prePacket, accumulationPacket);
+    const Graphics::GpuSubmissionPacketRange avboitRange = compiledPlan.packetRange(prePacket, accumulationPacket);
     ASSERT_TRUE(avboitRange.valid());
     EXPECT_EQ(avboitRange.packetCount, 5u);
 }
@@ -39856,14 +40104,16 @@ TEST(GpuTaskGraph, MergesAccumulationTailIntoGraphicsAvboitPacket){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId prePacket = compiledGraph.packetForTask(pre);
-    const Graphics::GpuSubmissionPacketId occupancyPacket = compiledGraph.packetForTask(occupancy);
-    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledGraph.packetForTask(extinction);
-    const Graphics::GpuSubmissionPacketId uploadPacket = compiledGraph.packetForTask(instanceUpload);
-    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledGraph.packetForTask(accumulation);
-    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
+    ASSERT_EQ(compiledPlan.packetCount(), 2u);
+
+    const Graphics::GpuSubmissionPacketId prePacket = compiledPlan.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId occupancyPacket = compiledPlan.packetForTask(occupancy);
+    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledPlan.packetForTask(extinction);
+    const Graphics::GpuSubmissionPacketId uploadPacket = compiledPlan.packetForTask(instanceUpload);
+    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledPlan.packetForTask(accumulation);
+    const Graphics::GpuSubmissionPacketId lightingPacket = compiledPlan.packetForTask(lighting);
     ASSERT_TRUE(prePacket.valid());
     ASSERT_TRUE(occupancyPacket.valid());
     ASSERT_TRUE(extinctionPacket.valid());
@@ -39875,8 +40125,8 @@ TEST(GpuTaskGraph, MergesAccumulationTailIntoGraphicsAvboitPacket){
     EXPECT_EQ(uploadPacket, prePacket);
     EXPECT_EQ(accumulationPacket, prePacket);
     EXPECT_NE(lightingPacket, prePacket);
-    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(lightingPacket)[0u].producer, accumulationPacket);
+    ASSERT_EQ(compiledPlan.packet(lightingPacket).plan->dependencyCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(lightingPacket).dependencies[0u].producer, accumulationPacket);
 }
 
 
@@ -39989,9 +40239,11 @@ TEST(GpuTaskGraph, ForcesMergedSameStateWriteDependenciesAcrossResourceKinds){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledConsumer, nullptr);
     EXPECT_EQ(compiledProducer->packet, compiledConsumer->packet);
@@ -39999,8 +40251,8 @@ TEST(GpuTaskGraph, ForcesMergedSameStateWriteDependenciesAcrossResourceKinds){
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledConsumer->prologueBarrierCount, 5u);
 
-    const Graphics::GpuCompiledBarrier* const producerBarriers = compiledGraph.taskPrologueBarriers(producer);
-    const Graphics::GpuCompiledBarrier* const consumerBarriers = compiledGraph.taskPrologueBarriers(consumer);
+    const Graphics::GpuCompiledBarrier* const producerBarriers = compiledPlan.findTask(producer).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const consumerBarriers = compiledPlan.findTask(consumer).prologueBarriers;
     ASSERT_NE(producerBarriers, nullptr);
     ASSERT_NE(consumerBarriers, nullptr);
     for(u32 barrierIndex = 0u; barrierIndex < compiledProducer->prologueBarrierCount; ++barrierIndex)
@@ -40122,10 +40374,12 @@ TEST(GpuTaskGraph, PlansPacketBoundaryTransitionsAndUavDependencies){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledWriter = compiledGraph.findTask(writer);
-    const Graphics::GpuCompiledTask* const compiledUavReader = compiledGraph.findTask(uavReader);
-    const Graphics::GpuCompiledTask* const compiledShaderReader = compiledGraph.findTask(shaderReader);
+
+    const Graphics::GpuCompiledTask* const compiledWriter = compiledPlan.findTask(writer).plan;
+    const Graphics::GpuCompiledTask* const compiledUavReader = compiledPlan.findTask(uavReader).plan;
+    const Graphics::GpuCompiledTask* const compiledShaderReader = compiledPlan.findTask(shaderReader).plan;
     ASSERT_NE(compiledWriter, nullptr);
     ASSERT_NE(compiledUavReader, nullptr);
     ASSERT_NE(compiledShaderReader, nullptr);
@@ -40136,11 +40390,11 @@ TEST(GpuTaskGraph, PlansPacketBoundaryTransitionsAndUavDependencies){
     ASSERT_EQ(compiledUavReader->prologueBarrierCount, 1u);
     ASSERT_EQ(compiledShaderReader->prologueBarrierCount, 1u);
 
-    const Graphics::GpuCompiledBarrier* const writerBarrier = compiledGraph.taskPrologueBarriers(writer);
-    const Graphics::GpuCompiledBarrier* const uavBarrier = compiledGraph.taskPrologueBarriers(uavReader);
-    const Graphics::GpuCompiledBarrier* const shaderBarrier = compiledGraph.taskPrologueBarriers(shaderReader);
-    const Graphics::GpuPacketStateSeed* const uavSeed = compiledGraph.taskPrologueStateSeeds(uavReader);
-    const Graphics::GpuPacketStateSeed* const shaderSeed = compiledGraph.taskPrologueStateSeeds(shaderReader);
+    const Graphics::GpuCompiledBarrier* const writerBarrier = compiledPlan.findTask(writer).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const uavBarrier = compiledPlan.findTask(uavReader).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const shaderBarrier = compiledPlan.findTask(shaderReader).prologueBarriers;
+    const Graphics::GpuPacketStateSeed* const uavSeed = compiledPlan.findTask(uavReader).prologueStateSeeds;
+    const Graphics::GpuPacketStateSeed* const shaderSeed = compiledPlan.findTask(shaderReader).prologueStateSeeds;
     ASSERT_NE(writerBarrier, nullptr);
     ASSERT_NE(uavBarrier, nullptr);
     ASSERT_NE(shaderBarrier, nullptr);
@@ -40242,15 +40496,17 @@ TEST(GpuTaskGraph, PlansCompositeUavDependencies){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledConsumer, nullptr);
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 2u);
     ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
 
-    const Graphics::GpuCompiledBarrier* const consumerBarriers = compiledGraph.taskPrologueBarriers(consumer);
+    const Graphics::GpuCompiledBarrier* const consumerBarriers = compiledPlan.findTask(consumer).prologueBarriers;
     ASSERT_NE(consumerBarriers, nullptr);
     bool hasTextureUavBarrier = false;
     bool hasBufferUavBarrier = false;
@@ -40336,9 +40592,12 @@ TEST(GpuTaskGraph, TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExp
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-        const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
-        const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+        const Graphics::GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(producer);
+        const Graphics::GpuCompiledTaskView compiledConsumerView = compiledPlan.findTask(consumer);
+        const Graphics::GpuCompiledTask* const compiledProducer = compiledProducerView.plan;
+        const Graphics::GpuCompiledTask* const compiledConsumer = compiledConsumerView.plan;
         ASSERT_NE(compiledProducer, nullptr);
         ASSERT_NE(compiledConsumer, nullptr);
         EXPECT_NE(compiledProducer->packet, compiledConsumer->packet);
@@ -40346,9 +40605,9 @@ TEST(GpuTaskGraph, TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExp
         ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
         ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
 
-        const Graphics::GpuCompiledBarrier* const producerBarrier = compiledGraph.taskPrologueBarriers(producer);
-        const Graphics::GpuPacketStateSeed* const consumerSeed = compiledGraph.taskPrologueStateSeeds(consumer);
-        const Graphics::GpuCompiledBarrier* const consumerBarrier = compiledGraph.taskPrologueBarriers(consumer);
+        const Graphics::GpuCompiledBarrier* const producerBarrier = compiledProducerView.prologueBarriers;
+        const Graphics::GpuPacketStateSeed* const consumerSeed = compiledConsumerView.prologueStateSeeds;
+        const Graphics::GpuCompiledBarrier* const consumerBarrier = compiledConsumerView.prologueBarriers;
         ASSERT_NE(producerBarrier, nullptr);
         ASSERT_NE(consumerSeed, nullptr);
         ASSERT_NE(consumerBarrier, nullptr);
@@ -40400,11 +40659,13 @@ TEST(GpuTaskGraph, TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExp
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-        const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+        const Graphics::GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(producer);
+        const Graphics::GpuCompiledTask* const compiledProducer = compiledProducerView.plan;
         ASSERT_NE(compiledProducer, nullptr);
         ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
-        const Graphics::GpuCompiledBarrier* const exportBarrier = compiledGraph.taskEpilogueBarriers(producer);
+        const Graphics::GpuCompiledBarrier* const exportBarrier = compiledProducerView.epilogueBarriers;
         ASSERT_NE(exportBarrier, nullptr);
         EXPECT_EQ(exportBarrier[0u].type, Graphics::GpuCompiledBarrierType::TextureStateExport);
         EXPECT_EQ(exportBarrier[0u].before, Graphics::ResourceStates::RenderTarget);
@@ -40480,11 +40741,13 @@ TEST(GpuTaskGraph, PlansGraphInitialStateForUncoveredLaterTextureSubresourcesWit
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+
+    const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
     ASSERT_NE(compiledTask, nullptr);
     ASSERT_EQ(compiledTask->prologueBarrierCount, 2u);
-    const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+    const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
     ASSERT_NE(barriers, nullptr);
 
     bool hasMipZeroInitialBarrier = false;
@@ -40594,16 +40857,18 @@ TEST(GpuTaskGraph, PlansAvboitCoverageClearAndTailUavDependencies){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledOccupancy = compiledGraph.findTask(occupancy);
-    const Graphics::GpuCompiledTask* const compiledTail = compiledGraph.findTask(tail);
+
+    const Graphics::GpuCompiledTask* const compiledOccupancy = compiledPlan.findTask(occupancy).plan;
+    const Graphics::GpuCompiledTask* const compiledTail = compiledPlan.findTask(tail).plan;
     ASSERT_NE(compiledOccupancy, nullptr);
     ASSERT_NE(compiledTail, nullptr);
     ASSERT_EQ(compiledOccupancy->prologueBarrierCount, 1u);
     ASSERT_EQ(compiledTail->prologueBarrierCount, 1u);
 
-    const Graphics::GpuCompiledBarrier* const occupancyBarrier = compiledGraph.taskPrologueBarriers(occupancy);
-    const Graphics::GpuCompiledBarrier* const tailBarrier = compiledGraph.taskPrologueBarriers(tail);
+    const Graphics::GpuCompiledBarrier* const occupancyBarrier = compiledPlan.findTask(occupancy).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const tailBarrier = compiledPlan.findTask(tail).prologueBarriers;
     ASSERT_NE(occupancyBarrier, nullptr);
     ASSERT_NE(tailBarrier, nullptr);
     EXPECT_EQ(occupancyBarrier[0].type, Graphics::GpuCompiledBarrierType::BufferTransition);
@@ -40765,24 +41030,26 @@ TEST(GpuTaskGraph, KeepsAvboitTypedClearChainWithOccupancy){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(occupancy);
+    ASSERT_EQ(compiledPlan.packetCount(), 1u);
+
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(occupancy);
     ASSERT_TRUE(packet.valid());
-    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    const Graphics::GpuSubmissionPacket& compiledPacket = *compiledPlan.packet(packet).plan;
     ASSERT_EQ(compiledPacket.taskCount, LengthOf(clearTasks) + 1u);
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    const Graphics::GpuTaskId* const packetTasks = compiledPlan.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     for(usize taskIndex = 0u; taskIndex < LengthOf(clearTasks); ++taskIndex){
         EXPECT_EQ(packetTasks[taskIndex], clearTasks[taskIndex]);
-        EXPECT_TRUE(compiledGraph.tasksSharePacket(clearTasks[taskIndex], occupancy));
+        EXPECT_TRUE(compiledPlan.tasksSharePacket(clearTasks[taskIndex], occupancy));
     }
     EXPECT_EQ(packetTasks[LengthOf(clearTasks)], occupancy);
 
-    const Graphics::GpuCompiledTask* const compiledOccupancy = compiledGraph.findTask(occupancy);
+    const Graphics::GpuCompiledTask* const compiledOccupancy = compiledPlan.findTask(occupancy).plan;
     ASSERT_NE(compiledOccupancy, nullptr);
     ASSERT_EQ(compiledOccupancy->prologueBarrierCount, LengthOf(clearResources));
-    const Graphics::GpuCompiledBarrier* const occupancyBarriers = compiledGraph.taskPrologueBarriers(occupancy);
+    const Graphics::GpuCompiledBarrier* const occupancyBarriers = compiledPlan.findTask(occupancy).prologueBarriers;
     ASSERT_NE(occupancyBarriers, nullptr);
     for(const Graphics::GpuGraphResourceId& resource : clearResources){
         bool foundTransition = false;
@@ -40955,6 +41222,8 @@ TEST(GpuTaskGraph, PlansAvboitAccumulationFinalizationOnGraphics){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const Graphics::GpuTaskQueueAssignment* const finalizerAssignment = assignments.find(finalizer);
     const Graphics::GpuTaskQueueAssignment* const compositeAssignment = assignments.find(composite);
@@ -40963,21 +41232,21 @@ TEST(GpuTaskGraph, PlansAvboitAccumulationFinalizationOnGraphics){
     EXPECT_EQ(finalizerAssignment->queueClass, Graphics::CommandQueue::Graphics);
     EXPECT_EQ(compositeAssignment->queueClass, Graphics::CommandQueue::Compute);
 
-    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledGraph.packetForTask(accumulation);
-    const Graphics::GpuSubmissionPacketId finalizerPacket = compiledGraph.packetForTask(finalizer);
-    const Graphics::GpuSubmissionPacketId compositePacket = compiledGraph.packetForTask(composite);
+    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledPlan.packetForTask(accumulation);
+    const Graphics::GpuSubmissionPacketId finalizerPacket = compiledPlan.packetForTask(finalizer);
+    const Graphics::GpuSubmissionPacketId compositePacket = compiledPlan.packetForTask(composite);
     ASSERT_TRUE(accumulationPacket.valid());
     ASSERT_TRUE(finalizerPacket.valid());
     ASSERT_TRUE(compositePacket.valid());
     EXPECT_EQ(finalizerPacket, accumulationPacket);
     EXPECT_NE(compositePacket, finalizerPacket);
 
-    const Graphics::GpuCompiledTask* const compiledFinalizer = compiledGraph.findTask(finalizer);
-    const Graphics::GpuCompiledTask* const compiledComposite = compiledGraph.findTask(composite);
+    const Graphics::GpuCompiledTask* const compiledFinalizer = compiledPlan.findTask(finalizer).plan;
+    const Graphics::GpuCompiledTask* const compiledComposite = compiledPlan.findTask(composite).plan;
     ASSERT_NE(compiledFinalizer, nullptr);
     ASSERT_NE(compiledComposite, nullptr);
     ASSERT_EQ(compiledFinalizer->prologueBarrierCount, 3u);
-    const Graphics::GpuCompiledBarrier* const finalizerBarriers = compiledGraph.taskPrologueBarriers(finalizer);
+    const Graphics::GpuCompiledBarrier* const finalizerBarriers = compiledPlan.findTask(finalizer).prologueBarriers;
     ASSERT_NE(finalizerBarriers, nullptr);
     bool finalizesAccumColor = false;
     bool finalizesAccumExtinction = false;
@@ -41002,7 +41271,7 @@ TEST(GpuTaskGraph, PlansAvboitAccumulationFinalizationOnGraphics){
     EXPECT_TRUE(finalizesAccumExtinction);
     EXPECT_TRUE(finalizesDeferredDepth);
 
-    const Graphics::GpuCompiledBarrier* const compositeBarriers = compiledGraph.taskPrologueBarriers(composite);
+    const Graphics::GpuCompiledBarrier* const compositeBarriers = compiledPlan.findTask(composite).prologueBarriers;
     for(u32 barrierIndex = 0u; barrierIndex < compiledComposite->prologueBarrierCount; ++barrierIndex){
         const Graphics::GpuCompiledBarrier& barrier = compositeBarriers[barrierIndex];
         EXPECT_FALSE(
@@ -41179,6 +41448,8 @@ TEST(GpuTaskGraph, OrdersLaggedLightingAfterAvboitDepthFinalizer){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const Graphics::GpuTaskQueueAssignment* const finalizerAssignment = assignments.find(finalizer);
     const Graphics::GpuTaskQueueAssignment* const lightingAssignment = assignments.find(lighting);
@@ -41189,18 +41460,18 @@ TEST(GpuTaskGraph, OrdersLaggedLightingAfterAvboitDepthFinalizer){
     EXPECT_EQ(lightingAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute);
     EXPECT_NE(FindEdge(analysis, finalizer, lighting), nullptr);
 
-    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledGraph.packetForTask(accumulation);
-    const Graphics::GpuSubmissionPacketId finalizerPacket = compiledGraph.packetForTask(finalizer);
-    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
+    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledPlan.packetForTask(accumulation);
+    const Graphics::GpuSubmissionPacketId finalizerPacket = compiledPlan.packetForTask(finalizer);
+    const Graphics::GpuSubmissionPacketId lightingPacket = compiledPlan.packetForTask(lighting);
     ASSERT_TRUE(accumulationPacket.valid());
     ASSERT_TRUE(finalizerPacket.valid());
     ASSERT_TRUE(lightingPacket.valid());
     EXPECT_EQ(finalizerPacket, accumulationPacket);
     EXPECT_NE(lightingPacket, finalizerPacket);
 
-    const Graphics::GpuCompiledTask* const compiledFinalizer = compiledGraph.findTask(finalizer);
+    const Graphics::GpuCompiledTask* const compiledFinalizer = compiledPlan.findTask(finalizer).plan;
     ASSERT_NE(compiledFinalizer, nullptr);
-    const Graphics::GpuCompiledBarrier* const finalizerBarriers = compiledGraph.taskPrologueBarriers(finalizer);
+    const Graphics::GpuCompiledBarrier* const finalizerBarriers = compiledPlan.findTask(finalizer).prologueBarriers;
     ASSERT_NE(finalizerBarriers, nullptr);
     bool finalizesDeferredDepth = false;
     for(u32 barrierIndex = 0u; barrierIndex < compiledFinalizer->prologueBarrierCount; ++barrierIndex){
@@ -41214,9 +41485,9 @@ TEST(GpuTaskGraph, OrdersLaggedLightingAfterAvboitDepthFinalizer){
     }
     EXPECT_TRUE(finalizesDeferredDepth);
 
-    const Graphics::GpuSubmissionPacket& lightingPacketInfo = compiledGraph.packet(lightingPacket);
+    const Graphics::GpuSubmissionPacket& lightingPacketInfo = *compiledPlan.packet(lightingPacket).plan;
     ASSERT_GT(lightingPacketInfo.dependencyCount, 0u);
-    const Graphics::GpuPacketDependency* const lightingPacketDependencies = compiledGraph.packetDependencies(lightingPacket);
+    const Graphics::GpuPacketDependency* const lightingPacketDependencies = compiledPlan.packet(lightingPacket).dependencies;
     ASSERT_NE(lightingPacketDependencies, nullptr);
     bool lightingWaitsForFinalizer = false;
     for(u32 dependencyIndex = 0u; dependencyIndex < lightingPacketInfo.dependencyCount; ++dependencyIndex)
@@ -41372,75 +41643,86 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
     EXPECT_EQ(FindEdge(analysis, defaultConcurrentGraphics, defaultConcurrentCompute), nullptr);
     EXPECT_EQ(FindEdge(analysis, exclusiveGraphics, exclusiveCompute), nullptr);
 
-    ASSERT_EQ(compiledGraph.packetCount(), 6u);
-    const Graphics::GpuSubmissionPacketId concurrentGraphicsPacket = compiledGraph.packetForTask(concurrentGraphics);
-    const Graphics::GpuSubmissionPacketId concurrentComputePacket = compiledGraph.packetForTask(concurrentCompute);
-    const Graphics::GpuSubmissionPacketId defaultConcurrentGraphicsPacket = compiledGraph.packetForTask(
-        defaultConcurrentGraphics
-    );
-    const Graphics::GpuSubmissionPacketId defaultConcurrentComputePacket = compiledGraph.packetForTask(
-        defaultConcurrentCompute
-    );
-    const Graphics::GpuSubmissionPacketId exclusiveGraphicsPacket = compiledGraph.packetForTask(exclusiveGraphics);
-    const Graphics::GpuSubmissionPacketId exclusiveComputePacket = compiledGraph.packetForTask(exclusiveCompute);
-    ASSERT_TRUE(concurrentGraphicsPacket.valid());
-    ASSERT_TRUE(concurrentComputePacket.valid());
-    ASSERT_TRUE(defaultConcurrentGraphicsPacket.valid());
-    ASSERT_TRUE(defaultConcurrentComputePacket.valid());
-    ASSERT_TRUE(exclusiveGraphicsPacket.valid());
-    ASSERT_TRUE(exclusiveComputePacket.valid());
-    EXPECT_EQ(compiledGraph.packetIdAt(0u), concurrentGraphicsPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(1u), concurrentComputePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(2u), defaultConcurrentGraphicsPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(3u), defaultConcurrentComputePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(4u), exclusiveGraphicsPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(5u), exclusiveComputePacket);
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledConcurrentCompute = compiledGraph.findTask(concurrentCompute);
-    const Graphics::GpuCompiledTask* const compiledDefaultConcurrentCompute = compiledGraph.findTask(
-        defaultConcurrentCompute
-    );
-    const Graphics::GpuCompiledTask* const compiledExclusiveGraphics = compiledGraph.findTask(exclusiveGraphics);
-    const Graphics::GpuCompiledTask* const compiledExclusiveCompute = compiledGraph.findTask(exclusiveCompute);
-    ASSERT_NE(compiledConcurrentCompute, nullptr);
-    ASSERT_NE(compiledDefaultConcurrentCompute, nullptr);
-    ASSERT_NE(compiledExclusiveGraphics, nullptr);
-    ASSERT_NE(compiledExclusiveCompute, nullptr);
-    EXPECT_EQ(compiledConcurrentCompute->prologueStateSeedCount, 0u);
-    ASSERT_EQ(compiledDefaultConcurrentCompute->prologueStateSeedCount, 1u);
-    ASSERT_EQ(compiledExclusiveCompute->prologueStateSeedCount, 1u);
-    EXPECT_EQ(compiledConcurrentCompute->prologueBarrierCount, 0u);
-    EXPECT_EQ(compiledDefaultConcurrentCompute->prologueBarrierCount, 0u);
-    ASSERT_EQ(compiledExclusiveCompute->prologueBarrierCount, 1u);
-    ASSERT_EQ(compiledExclusiveGraphics->epilogueBarrierCount, 1u);
-    const Graphics::GpuPacketStateSeed* const defaultConcurrentSeed = compiledGraph.taskPrologueStateSeeds(
-        defaultConcurrentCompute
-    );
-    const Graphics::GpuPacketStateSeed* const exclusiveSeed = compiledGraph.taskPrologueStateSeeds(exclusiveCompute);
-    const Graphics::GpuCompiledBarrier* const exclusiveAcquire = compiledGraph.taskPrologueBarriers(exclusiveCompute);
-    const Graphics::GpuCompiledBarrier* const exclusiveRelease = compiledGraph.taskEpilogueBarriers(exclusiveGraphics);
-    EXPECT_EQ(compiledGraph.taskPrologueStateSeeds(concurrentCompute), nullptr);
-    ASSERT_NE(defaultConcurrentSeed, nullptr);
-    ASSERT_NE(exclusiveSeed, nullptr);
-    ASSERT_NE(exclusiveAcquire, nullptr);
-    ASSERT_NE(exclusiveRelease, nullptr);
-    EXPECT_EQ(defaultConcurrentSeed[0u].sourcePacket, defaultConcurrentGraphicsPacket);
-    EXPECT_EQ(exclusiveSeed[0u].sourcePacket, exclusiveGraphicsPacket);
-    EXPECT_EQ(exclusiveAcquire[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire);
-    EXPECT_EQ(exclusiveAcquire[0u].sourceQueue, compiledExclusiveGraphics->queue);
-    EXPECT_EQ(exclusiveAcquire[0u].destinationQueue, compiledExclusiveCompute->queue);
-    EXPECT_FALSE(exclusiveAcquire[0u].isInitialOwnerHandoff);
-    EXPECT_EQ(exclusiveRelease[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipRelease);
-    EXPECT_EQ(exclusiveRelease[0u].sourceQueue, compiledExclusiveGraphics->queue);
-    EXPECT_EQ(exclusiveRelease[0u].destinationQueue, compiledExclusiveCompute->queue);
-    EXPECT_EQ(compiledGraph.packet(concurrentComputePacket).dependencyCount, 0u);
-    ASSERT_EQ(compiledGraph.packet(defaultConcurrentComputePacket).dependencyCount, 1u);
-    EXPECT_EQ(
-        compiledGraph.packetDependencies(defaultConcurrentComputePacket)[0u].producer,
-        defaultConcurrentGraphicsPacket
-    );
-    ASSERT_EQ(compiledGraph.packet(exclusiveComputePacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(exclusiveComputePacket)[0u].producer, exclusiveGraphicsPacket);
+        ASSERT_EQ(compiledPlan.packetCount(), 6u);
+        const Graphics::GpuSubmissionPacketId concurrentGraphicsPacket = compiledPlan.packetForTask(concurrentGraphics);
+        const Graphics::GpuSubmissionPacketId concurrentComputePacket = compiledPlan.packetForTask(concurrentCompute);
+        const Graphics::GpuSubmissionPacketId defaultConcurrentGraphicsPacket = compiledPlan.packetForTask(
+            defaultConcurrentGraphics
+        );
+        const Graphics::GpuSubmissionPacketId defaultConcurrentComputePacket = compiledPlan.packetForTask(
+            defaultConcurrentCompute
+        );
+        const Graphics::GpuSubmissionPacketId exclusiveGraphicsPacket = compiledPlan.packetForTask(exclusiveGraphics);
+        const Graphics::GpuSubmissionPacketId exclusiveComputePacket = compiledPlan.packetForTask(exclusiveCompute);
+        ASSERT_TRUE(concurrentGraphicsPacket.valid());
+        ASSERT_TRUE(concurrentComputePacket.valid());
+        ASSERT_TRUE(defaultConcurrentGraphicsPacket.valid());
+        ASSERT_TRUE(defaultConcurrentComputePacket.valid());
+        ASSERT_TRUE(exclusiveGraphicsPacket.valid());
+        ASSERT_TRUE(exclusiveComputePacket.valid());
+        EXPECT_EQ(compiledPlan.packetIdAt(0u), concurrentGraphicsPacket);
+        EXPECT_EQ(compiledPlan.packetIdAt(1u), concurrentComputePacket);
+        EXPECT_EQ(compiledPlan.packetIdAt(2u), defaultConcurrentGraphicsPacket);
+        EXPECT_EQ(compiledPlan.packetIdAt(3u), defaultConcurrentComputePacket);
+        EXPECT_EQ(compiledPlan.packetIdAt(4u), exclusiveGraphicsPacket);
+        EXPECT_EQ(compiledPlan.packetIdAt(5u), exclusiveComputePacket);
+
+        const Graphics::GpuCompiledTaskView concurrentComputeView = compiledPlan.findTask(concurrentCompute);
+        const Graphics::GpuCompiledTaskView defaultConcurrentComputeView = compiledPlan.findTask(
+            defaultConcurrentCompute
+        );
+        const Graphics::GpuCompiledTaskView exclusiveGraphicsView = compiledPlan.findTask(exclusiveGraphics);
+        const Graphics::GpuCompiledTaskView exclusiveComputeView = compiledPlan.findTask(exclusiveCompute);
+        const Graphics::GpuCompiledTask* const compiledConcurrentCompute = concurrentComputeView.plan;
+        const Graphics::GpuCompiledTask* const compiledDefaultConcurrentCompute = defaultConcurrentComputeView.plan;
+        const Graphics::GpuCompiledTask* const compiledExclusiveGraphics = exclusiveGraphicsView.plan;
+        const Graphics::GpuCompiledTask* const compiledExclusiveCompute = exclusiveComputeView.plan;
+        ASSERT_NE(compiledConcurrentCompute, nullptr);
+        ASSERT_NE(compiledDefaultConcurrentCompute, nullptr);
+        ASSERT_NE(compiledExclusiveGraphics, nullptr);
+        ASSERT_NE(compiledExclusiveCompute, nullptr);
+        EXPECT_EQ(compiledConcurrentCompute->prologueStateSeedCount, 0u);
+        ASSERT_EQ(compiledDefaultConcurrentCompute->prologueStateSeedCount, 1u);
+        ASSERT_EQ(compiledExclusiveCompute->prologueStateSeedCount, 1u);
+        EXPECT_EQ(compiledConcurrentCompute->prologueBarrierCount, 0u);
+        EXPECT_EQ(compiledDefaultConcurrentCompute->prologueBarrierCount, 0u);
+        ASSERT_EQ(compiledExclusiveCompute->prologueBarrierCount, 1u);
+        ASSERT_EQ(compiledExclusiveGraphics->epilogueBarrierCount, 1u);
+        const Graphics::GpuPacketStateSeed* const defaultConcurrentSeed =
+            defaultConcurrentComputeView.prologueStateSeeds
+        ;
+        const Graphics::GpuPacketStateSeed* const exclusiveSeed = exclusiveComputeView.prologueStateSeeds;
+        const Graphics::GpuCompiledBarrier* const exclusiveAcquire = exclusiveComputeView.prologueBarriers;
+        const Graphics::GpuCompiledBarrier* const exclusiveRelease = exclusiveGraphicsView.epilogueBarriers;
+        EXPECT_EQ(concurrentComputeView.prologueStateSeeds, nullptr);
+        ASSERT_NE(defaultConcurrentSeed, nullptr);
+        ASSERT_NE(exclusiveSeed, nullptr);
+        ASSERT_NE(exclusiveAcquire, nullptr);
+        ASSERT_NE(exclusiveRelease, nullptr);
+        EXPECT_EQ(defaultConcurrentSeed[0u].sourcePacket, defaultConcurrentGraphicsPacket);
+        EXPECT_EQ(exclusiveSeed[0u].sourcePacket, exclusiveGraphicsPacket);
+        EXPECT_EQ(exclusiveAcquire[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire);
+        EXPECT_EQ(exclusiveAcquire[0u].sourceQueue, compiledExclusiveGraphics->queue);
+        EXPECT_EQ(exclusiveAcquire[0u].destinationQueue, compiledExclusiveCompute->queue);
+        EXPECT_FALSE(exclusiveAcquire[0u].isInitialOwnerHandoff);
+        EXPECT_EQ(exclusiveRelease[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipRelease);
+        EXPECT_EQ(exclusiveRelease[0u].sourceQueue, compiledExclusiveGraphics->queue);
+        EXPECT_EQ(exclusiveRelease[0u].destinationQueue, compiledExclusiveCompute->queue);
+        EXPECT_EQ(compiledPlan.packet(concurrentComputePacket).plan->dependencyCount, 0u);
+        const Graphics::GpuCompiledPacketView defaultConcurrentComputePacketView = compiledPlan.packet(
+            defaultConcurrentComputePacket
+        );
+        ASSERT_TRUE(defaultConcurrentComputePacketView.valid());
+        ASSERT_EQ(defaultConcurrentComputePacketView.plan->dependencyCount, 1u);
+        EXPECT_EQ(defaultConcurrentComputePacketView.dependencies[0u].producer, defaultConcurrentGraphicsPacket);
+        const Graphics::GpuCompiledPacketView exclusiveComputePacketView = compiledPlan.packet(exclusiveComputePacket);
+        ASSERT_TRUE(exclusiveComputePacketView.valid());
+        ASSERT_EQ(exclusiveComputePacketView.plan->dependencyCount, 1u);
+        EXPECT_EQ(exclusiveComputePacketView.dependencies[0u].producer, exclusiveGraphicsPacket);
+    }
 
     // The combined sharing mask becomes Vulkan-concurrent only when the queues have distinct families. Two real
     // VkQueues in one family still use exclusive ownership in the backend, so they must retain the handoff.
@@ -41465,29 +41747,26 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
         sameFamilyAssignments,
         sameFamilyCompiledGraph
     ));
-    const Graphics::GpuSubmissionPacketId sameFamilyGraphicsPacket = sameFamilyCompiledGraph.packetForTask(
+    const Graphics::GpuCompiledGraph::ReadView sameFamilyPlan(sameFamilyCompiledGraph);
+    const Graphics::GpuSubmissionPacketId sameFamilyGraphicsPacket = sameFamilyPlan.packetForTask(
         concurrentGraphics
     );
-    const Graphics::GpuSubmissionPacketId sameFamilyComputePacket = sameFamilyCompiledGraph.packetForTask(
+    const Graphics::GpuSubmissionPacketId sameFamilyComputePacket = sameFamilyPlan.packetForTask(
         concurrentCompute
     );
-    const Graphics::GpuCompiledTask* const sameFamilyCompiledCompute = sameFamilyCompiledGraph.findTask(
-        concurrentCompute
-    );
+    const Graphics::GpuCompiledTaskView sameFamilyCompiledComputeView = sameFamilyPlan.findTask(concurrentCompute);
+    const Graphics::GpuCompiledTask* const sameFamilyCompiledCompute = sameFamilyCompiledComputeView.plan;
     ASSERT_TRUE(sameFamilyGraphicsPacket.valid());
     ASSERT_TRUE(sameFamilyComputePacket.valid());
     ASSERT_NE(sameFamilyCompiledCompute, nullptr);
     ASSERT_EQ(sameFamilyCompiledCompute->prologueStateSeedCount, 1u);
-    const Graphics::GpuPacketStateSeed* const sameFamilySeed = sameFamilyCompiledGraph.taskPrologueStateSeeds(
-        concurrentCompute
-    );
+    const Graphics::GpuPacketStateSeed* const sameFamilySeed = sameFamilyCompiledComputeView.prologueStateSeeds;
     ASSERT_NE(sameFamilySeed, nullptr);
     EXPECT_EQ(sameFamilySeed[0u].sourcePacket, sameFamilyGraphicsPacket);
-    ASSERT_EQ(sameFamilyCompiledGraph.packet(sameFamilyComputePacket).dependencyCount, 1u);
-    EXPECT_EQ(
-        sameFamilyCompiledGraph.packetDependencies(sameFamilyComputePacket)[0u].producer,
-        sameFamilyGraphicsPacket
-    );
+    const Graphics::GpuCompiledPacketView sameFamilyComputePacketView = sameFamilyPlan.packet(sameFamilyComputePacket);
+    ASSERT_TRUE(sameFamilyComputePacketView.valid());
+    ASSERT_EQ(sameFamilyComputePacketView.plan->dependencyCount, 1u);
+    EXPECT_EQ(sameFamilyComputePacketView.dependencies[0u].producer, sameFamilyGraphicsPacket);
 }
 
 
@@ -41511,133 +41790,146 @@ TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        const Graphics::GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(pair.producer);
+        const Graphics::GpuCompiledTaskView compiledConsumerView = compiledPlan.findTask(pair.consumer);
+        const Graphics::GpuCompiledTask* const compiledProducer = compiledProducerView.plan;
+        const Graphics::GpuCompiledTask* const compiledConsumer = compiledConsumerView.plan;
+        ASSERT_NE(compiledProducer, nullptr);
+        ASSERT_NE(compiledConsumer, nullptr);
+        const Graphics::GpuPhysicalQueueInfo* const consumerQueue = compiledPlan.queueInfo(compiledConsumer->queue);
+        ASSERT_NE(consumerQueue, nullptr);
+        EXPECT_EQ(consumerQueue->queueClass, Graphics::CommandQueue::Transfer);
+        ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
+        ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
+        ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
 
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(pair.producer);
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(pair.consumer);
-    ASSERT_NE(compiledProducer, nullptr);
-    ASSERT_NE(compiledConsumer, nullptr);
-    const Graphics::GpuPhysicalQueueInfo* const consumerQueue = compiledGraph.queueInfo(compiledConsumer->queue);
-    ASSERT_NE(consumerQueue, nullptr);
-    EXPECT_EQ(consumerQueue->queueClass, Graphics::CommandQueue::Transfer);
-    ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
-    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
-    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
+        const Graphics::GpuCompiledBarrier* const release = compiledProducerView.epilogueBarriers;
+        const Graphics::GpuCompiledBarrier* const acquire = compiledConsumerView.prologueBarriers;
+        const Graphics::GpuPacketStateSeed* const stateSeed = compiledConsumerView.prologueStateSeeds;
+        ASSERT_NE(release, nullptr);
+        ASSERT_NE(acquire, nullptr);
+        ASSERT_NE(stateSeed, nullptr);
+        EXPECT_EQ(release[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipRelease);
+        EXPECT_EQ(release[0u].resource, pair.texture);
+        EXPECT_EQ(release[0u].before, Graphics::ResourceStates::CopySource);
+        EXPECT_EQ(release[0u].after, Graphics::ResourceStates::CopySource);
+        EXPECT_EQ(release[0u].sourceQueue, compiledProducer->queue);
+        EXPECT_EQ(release[0u].destinationQueue, compiledConsumer->queue);
+        EXPECT_FALSE(release[0u].forceMemoryDependency);
+        EXPECT_EQ(acquire[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire);
+        EXPECT_EQ(acquire[0u].resource, pair.texture);
+        EXPECT_EQ(acquire[0u].sourceQueue, compiledProducer->queue);
+        EXPECT_EQ(acquire[0u].destinationQueue, compiledConsumer->queue);
+        EXPECT_FALSE(acquire[0u].isInitialOwnerHandoff);
+        EXPECT_FALSE(acquire[0u].forceMemoryDependency);
+        EXPECT_EQ(acquire[1u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
+        EXPECT_EQ(acquire[1u].resource, pair.texture);
+        EXPECT_EQ(acquire[1u].before, Graphics::ResourceStates::CopySource);
+        EXPECT_EQ(acquire[1u].after, Graphics::ResourceStates::CopySource);
+        EXPECT_EQ(acquire[1u].sourceQueue, compiledProducer->queue);
+        EXPECT_EQ(acquire[1u].destinationQueue, compiledConsumer->queue);
+        EXPECT_FALSE(acquire[1u].isGraphInitialState);
+        EXPECT_FALSE(acquire[1u].isInitialOwnerHandoff);
+        EXPECT_TRUE(acquire[1u].forceMemoryDependency);
+        EXPECT_EQ(stateSeed[0u].resource, pair.texture);
+        EXPECT_EQ(stateSeed[0u].sourcePacket, compiledProducer->packet);
 
-    const Graphics::GpuCompiledBarrier* const release = compiledGraph.taskEpilogueBarriers(pair.producer);
-    const Graphics::GpuCompiledBarrier* const acquire = compiledGraph.taskPrologueBarriers(pair.consumer);
-    const Graphics::GpuPacketStateSeed* const stateSeed = compiledGraph.taskPrologueStateSeeds(pair.consumer);
-    ASSERT_NE(release, nullptr);
-    ASSERT_NE(acquire, nullptr);
-    ASSERT_NE(stateSeed, nullptr);
-    EXPECT_EQ(release[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipRelease);
-    EXPECT_EQ(release[0u].resource, pair.texture);
-    EXPECT_EQ(release[0u].before, Graphics::ResourceStates::CopySource);
-    EXPECT_EQ(release[0u].after, Graphics::ResourceStates::CopySource);
-    EXPECT_EQ(release[0u].sourceQueue, compiledProducer->queue);
-    EXPECT_EQ(release[0u].destinationQueue, compiledConsumer->queue);
-    EXPECT_FALSE(release[0u].forceMemoryDependency);
-    EXPECT_EQ(acquire[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire);
-    EXPECT_EQ(acquire[0u].resource, pair.texture);
-    EXPECT_EQ(acquire[0u].sourceQueue, compiledProducer->queue);
-    EXPECT_EQ(acquire[0u].destinationQueue, compiledConsumer->queue);
-    EXPECT_FALSE(acquire[0u].isInitialOwnerHandoff);
-    EXPECT_FALSE(acquire[0u].forceMemoryDependency);
-    EXPECT_EQ(acquire[1u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
-    EXPECT_EQ(acquire[1u].resource, pair.texture);
-    EXPECT_EQ(acquire[1u].before, Graphics::ResourceStates::CopySource);
-    EXPECT_EQ(acquire[1u].after, Graphics::ResourceStates::CopySource);
-    EXPECT_EQ(acquire[1u].sourceQueue, compiledProducer->queue);
-    EXPECT_EQ(acquire[1u].destinationQueue, compiledConsumer->queue);
-    EXPECT_FALSE(acquire[1u].isGraphInitialState);
-    EXPECT_FALSE(acquire[1u].isInitialOwnerHandoff);
-    EXPECT_TRUE(acquire[1u].forceMemoryDependency);
-    EXPECT_EQ(stateSeed[0u].resource, pair.texture);
-    EXPECT_EQ(stateSeed[0u].sourcePacket, compiledProducer->packet);
+        const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics producerQueueCompileStatistics =
+            compiledPlan.physicalQueueCompileStatistics(compiledProducer->queue)
+        ;
+        const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics consumerQueueCompileStatistics =
+            compiledPlan.physicalQueueCompileStatistics(compiledConsumer->queue)
+        ;
+        ASSERT_TRUE(producerQueueCompileStatistics.valid());
+        ASSERT_TRUE(consumerQueueCompileStatistics.valid());
+        EXPECT_EQ(producerQueueCompileStatistics.ownershipReleaseBarrierCount, 1u);
+        EXPECT_EQ(producerQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
+        EXPECT_EQ(consumerQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
+        EXPECT_EQ(consumerQueueCompileStatistics.ownershipAcquireBarrierCount, 1u);
 
-    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics producerQueueCompileStatistics =
-        compiledGraph.physicalQueueCompileStatistics(compiledProducer->queue)
-    ;
-    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics consumerQueueCompileStatistics =
-        compiledGraph.physicalQueueCompileStatistics(compiledConsumer->queue)
-    ;
-    ASSERT_TRUE(producerQueueCompileStatistics.valid());
-    ASSERT_TRUE(consumerQueueCompileStatistics.valid());
-    EXPECT_EQ(producerQueueCompileStatistics.ownershipReleaseBarrierCount, 1u);
-    EXPECT_EQ(producerQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
-    EXPECT_EQ(consumerQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
-    EXPECT_EQ(consumerQueueCompileStatistics.ownershipAcquireBarrierCount, 1u);
+        ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 1u);
+        const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
+            compiledPlan.logicalOwnershipTransfers()
+        ;
+        ASSERT_NE(ownershipTransfers, nullptr);
+        EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), ownershipTransfers);
+        EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(1u), nullptr);
+        const Graphics::GpuCompiledOwnershipTransfer& ownershipTransfer = ownershipTransfers[0u];
+        EXPECT_TRUE(ownershipTransfer.valid());
+        EXPECT_EQ(ownershipTransfer.resource, pair.texture);
+        EXPECT_EQ(ownershipTransfer.resourceIdentity, Name("tests/task_graph/transfer_ownership_texture"));
+        EXPECT_EQ(ownershipTransfer.range.textureSubresources, Graphics::s_AllSubresources);
+        EXPECT_EQ(ownershipTransfer.sourceTask, pair.producer);
+        EXPECT_EQ(ownershipTransfer.destinationTask, pair.consumer);
+        EXPECT_EQ(ownershipTransfer.sourcePacket, compiledProducer->packet);
+        EXPECT_EQ(ownershipTransfer.destinationPacket, compiledConsumer->packet);
+        EXPECT_EQ(ownershipTransfer.sourceQueue, compiledProducer->queue);
+        EXPECT_EQ(ownershipTransfer.destinationQueue, compiledConsumer->queue);
+        EXPECT_EQ(ownershipTransfer.sourceQueueFamilyIndex, queues[0u].familyIndex);
+        EXPECT_EQ(ownershipTransfer.destinationQueueFamilyIndex, queues[1u].familyIndex);
+        EXPECT_EQ(ownershipTransfer.declaredQueueSharing, Graphics::ResourceQueueSharing::Exclusive);
+        EXPECT_EQ(ownershipTransfer.resourceType, Graphics::GpuGraphResourceType::Texture);
+        EXPECT_EQ(ownershipTransfer.route, Graphics::GpuOwnershipTransferRoute::Internal);
+        EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
+        Graphics::GpuCompiledOwnershipTransfer nonAdvisoryOwnershipTransfer = ownershipTransfer;
+        nonAdvisoryOwnershipTransfer.concurrentSharingCouldAvoid = false;
+        EXPECT_TRUE(nonAdvisoryOwnershipTransfer.valid());
 
-    ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 1u);
-    const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
-        compiledGraph.logicalOwnershipTransfers()
-    ;
-    ASSERT_NE(ownershipTransfers, nullptr);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), ownershipTransfers);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(1u), nullptr);
-    const Graphics::GpuCompiledOwnershipTransfer& ownershipTransfer = ownershipTransfers[0u];
-    EXPECT_TRUE(ownershipTransfer.valid());
-    EXPECT_EQ(ownershipTransfer.resource, pair.texture);
-    EXPECT_EQ(ownershipTransfer.resourceIdentity, Name("tests/task_graph/transfer_ownership_texture"));
-    EXPECT_EQ(ownershipTransfer.range.textureSubresources, Graphics::s_AllSubresources);
-    EXPECT_EQ(ownershipTransfer.sourceTask, pair.producer);
-    EXPECT_EQ(ownershipTransfer.destinationTask, pair.consumer);
-    EXPECT_EQ(ownershipTransfer.sourcePacket, compiledProducer->packet);
-    EXPECT_EQ(ownershipTransfer.destinationPacket, compiledConsumer->packet);
-    EXPECT_EQ(ownershipTransfer.sourceQueue, compiledProducer->queue);
-    EXPECT_EQ(ownershipTransfer.destinationQueue, compiledConsumer->queue);
-    EXPECT_EQ(ownershipTransfer.sourceQueueFamilyIndex, queues[0u].familyIndex);
-    EXPECT_EQ(ownershipTransfer.destinationQueueFamilyIndex, queues[1u].familyIndex);
-    EXPECT_EQ(ownershipTransfer.declaredQueueSharing, Graphics::ResourceQueueSharing::Exclusive);
-    EXPECT_EQ(ownershipTransfer.resourceType, Graphics::GpuGraphResourceType::Texture);
-    EXPECT_EQ(ownershipTransfer.route, Graphics::GpuOwnershipTransferRoute::Internal);
-    EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
-    Graphics::GpuCompiledOwnershipTransfer nonAdvisoryOwnershipTransfer = ownershipTransfer;
-    nonAdvisoryOwnershipTransfer.concurrentSharingCouldAvoid = false;
-    EXPECT_TRUE(nonAdvisoryOwnershipTransfer.valid());
+        const Graphics::GpuTaskGraphCompileStatistics ownershipStatistics = compiledPlan.compileStatistics();
+        ASSERT_TRUE(ownershipStatistics.valid());
+        EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferCount, 1u);
+        EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferSignatureCount, 1u);
+        EXPECT_EQ(ownershipStatistics.repeatedOwnershipTransferSignatureCount, 0u);
+        EXPECT_EQ(ownershipStatistics.concurrentSharingCouldAvoidTransferCount, 1u);
+        EXPECT_EQ(ownershipStatistics.concurrentSharingAdviceResourceCount, 0u);
+        EXPECT_EQ(
+            ownershipStatistics.logicalOwnershipTransferCountByRoute[Graphics::GpuOwnershipTransferRoute::Internal],
+            1u
+        );
+        EXPECT_EQ(
+            ownershipStatistics.logicalOwnershipTransferCountByRoute[
+                Graphics::GpuOwnershipTransferRoute::ExternalImport
+            ],
+            0u
+        );
+        EXPECT_EQ(
+            ownershipStatistics.logicalOwnershipTransferCountByRoute[
+                Graphics::GpuOwnershipTransferRoute::ExternalExport
+            ],
+            0u
+        );
 
-    const Graphics::GpuTaskGraphCompileStatistics& ownershipStatistics = compiledGraph.compileStatistics();
-    ASSERT_TRUE(ownershipStatistics.valid());
-    EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferCount, 1u);
-    EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferSignatureCount, 1u);
-    EXPECT_EQ(ownershipStatistics.repeatedOwnershipTransferSignatureCount, 0u);
-    EXPECT_EQ(ownershipStatistics.concurrentSharingCouldAvoidTransferCount, 1u);
-    EXPECT_EQ(ownershipStatistics.concurrentSharingAdviceResourceCount, 0u);
-    EXPECT_EQ(
-        ownershipStatistics.logicalOwnershipTransferCountByRoute[Graphics::GpuOwnershipTransferRoute::Internal],
-        1u
-    );
-    EXPECT_EQ(
-        ownershipStatistics.logicalOwnershipTransferCountByRoute[
-            Graphics::GpuOwnershipTransferRoute::ExternalImport
-        ],
-        0u
-    );
-    EXPECT_EQ(
-        ownershipStatistics.logicalOwnershipTransferCountByRoute[
-            Graphics::GpuOwnershipTransferRoute::ExternalExport
-        ],
-        0u
-    );
-
-    ASSERT_EQ(compiledGraph.packet(compiledConsumer->packet).dependencyCount, 1u);
-    EXPECT_EQ(
-        compiledGraph.packetDependencies(compiledConsumer->packet)[0u].producer,
-        compiledProducer->packet
-    );
+        const Graphics::GpuCompiledPacketView consumerPacketView = compiledPlan.packet(compiledConsumer->packet);
+        ASSERT_TRUE(consumerPacketView.valid());
+        ASSERT_EQ(consumerPacketView.plan->dependencyCount, 1u);
+        EXPECT_EQ(consumerPacketView.dependencies[0u].producer, compiledProducer->packet);
+    }
 
     compiledGraph.reset();
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransfers(), nullptr);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), nullptr);
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+        EXPECT_EQ(compiledPlan.logicalOwnershipTransferCount(), 0u);
+        EXPECT_EQ(compiledPlan.logicalOwnershipTransfers(), nullptr);
+        EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), nullptr);
+    }
 
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 1u);
+    {
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+        ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 1u);
+    }
     const Graphics::GpuTaskGraphQueueTopology invalidTopology{};
     EXPECT_FALSE(Compile(graph, analysis, invalidTopology, assignments, compiledGraph));
-    EXPECT_FALSE(compiledGraph.valid());
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransfers(), nullptr);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), nullptr);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    EXPECT_FALSE(compiledPlan.valid());
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransferCount(), 0u);
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransfers(), nullptr);
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), nullptr);
 }
 
 
@@ -41733,14 +42025,16 @@ TEST(GpuTaskGraph, ReportsOwnershipRangesWithoutReleaseAcquireDuplicates){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledConsumer, nullptr);
     EXPECT_EQ(compiledProducer->queue, queues[0u].id);
     EXPECT_EQ(compiledConsumer->queue, queues[1u].id);
-    const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledGraph.compileStatistics();
+    const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledPlan.compileStatistics();
     ASSERT_TRUE(statistics.valid());
     EXPECT_EQ(statistics.ownershipReleaseBarrierCount, 2u);
     EXPECT_EQ(statistics.ownershipAcquireBarrierCount, 2u);
@@ -41751,10 +42045,10 @@ TEST(GpuTaskGraph, ReportsOwnershipRangesWithoutReleaseAcquireDuplicates){
     EXPECT_EQ(statistics.concurrentSharingAdviceResourceCount, 0u);
 
     const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics producerStatistics =
-        compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
+        compiledPlan.physicalQueueCompileStatistics(queues[0u].id)
     ;
     const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics consumerStatistics =
-        compiledGraph.physicalQueueCompileStatistics(queues[1u].id)
+        compiledPlan.physicalQueueCompileStatistics(queues[1u].id)
     ;
     ASSERT_TRUE(producerStatistics.valid());
     ASSERT_TRUE(consumerStatistics.valid());
@@ -41773,17 +42067,17 @@ TEST(GpuTaskGraph, ReportsOwnershipRangesWithoutReleaseAcquireDuplicates){
     EXPECT_EQ(consumerStatistics.incomingRepeatedOwnershipTransferSignatureCount, 0u);
     EXPECT_EQ(consumerStatistics.concurrentSharingAdviceResourceCount, 0u);
 
-    ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 2u);
+    ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 2u);
     const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
-        compiledGraph.logicalOwnershipTransfers()
+        compiledPlan.logicalOwnershipTransfers()
     ;
     ASSERT_NE(ownershipTransfers, nullptr);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), ownershipTransfers);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(1u), ownershipTransfers + 1u);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(2u), nullptr);
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), ownershipTransfers);
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(1u), ownershipTransfers + 1u);
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(2u), nullptr);
     usize firstRangeCount = 0u;
     usize secondRangeCount = 0u;
-    for(usize transferIndex = 0u; transferIndex < compiledGraph.logicalOwnershipTransferCount(); ++transferIndex){
+    for(usize transferIndex = 0u; transferIndex < compiledPlan.logicalOwnershipTransferCount(); ++transferIndex){
         const Graphics::GpuCompiledOwnershipTransfer& transfer = ownershipTransfers[transferIndex];
         EXPECT_TRUE(transfer.valid());
         EXPECT_EQ(transfer.resource, texture);
@@ -41893,10 +42187,12 @@ TEST(GpuTaskGraph, AdvisesConcurrentSharingForRepeatedExclusiveOwnershipMoves){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledFirstGraphics = compiledGraph.findTask(firstGraphics);
-    const Graphics::GpuCompiledTask* const compiledCompute = compiledGraph.findTask(compute);
-    const Graphics::GpuCompiledTask* const compiledSecondGraphics = compiledGraph.findTask(secondGraphics);
+
+    const Graphics::GpuCompiledTask* const compiledFirstGraphics = compiledPlan.findTask(firstGraphics).plan;
+    const Graphics::GpuCompiledTask* const compiledCompute = compiledPlan.findTask(compute).plan;
+    const Graphics::GpuCompiledTask* const compiledSecondGraphics = compiledPlan.findTask(secondGraphics).plan;
     ASSERT_NE(compiledFirstGraphics, nullptr);
     ASSERT_NE(compiledCompute, nullptr);
     ASSERT_NE(compiledSecondGraphics, nullptr);
@@ -41904,14 +42200,14 @@ TEST(GpuTaskGraph, AdvisesConcurrentSharingForRepeatedExclusiveOwnershipMoves){
     EXPECT_EQ(compiledCompute->queue, queues[1u].id);
     EXPECT_EQ(compiledSecondGraphics->queue, queues[0u].id);
 
-    ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 2u);
+    ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 2u);
     const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
-        compiledGraph.logicalOwnershipTransfers()
+        compiledPlan.logicalOwnershipTransfers()
     ;
     ASSERT_NE(ownershipTransfers, nullptr);
     const Graphics::GpuCompiledOwnershipTransfer* firstMove = nullptr;
     const Graphics::GpuCompiledOwnershipTransfer* secondMove = nullptr;
-    for(usize transferIndex = 0u; transferIndex < compiledGraph.logicalOwnershipTransferCount(); ++transferIndex){
+    for(usize transferIndex = 0u; transferIndex < compiledPlan.logicalOwnershipTransferCount(); ++transferIndex){
         const Graphics::GpuCompiledOwnershipTransfer& transfer = ownershipTransfers[transferIndex];
         EXPECT_TRUE(transfer.valid());
         EXPECT_EQ(transfer.resource, texture);
@@ -41941,7 +42237,7 @@ TEST(GpuTaskGraph, AdvisesConcurrentSharingForRepeatedExclusiveOwnershipMoves){
     EXPECT_EQ(secondMove->sourceQueueFamilyIndex, queues[1u].familyIndex);
     EXPECT_EQ(secondMove->destinationQueueFamilyIndex, queues[0u].familyIndex);
 
-    const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledGraph.compileStatistics();
+    const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledPlan.compileStatistics();
     ASSERT_TRUE(statistics.valid());
     EXPECT_EQ(statistics.ownershipReleaseBarrierCount, 2u);
     EXPECT_EQ(statistics.ownershipAcquireBarrierCount, 2u);
@@ -41956,10 +42252,10 @@ TEST(GpuTaskGraph, AdvisesConcurrentSharingForRepeatedExclusiveOwnershipMoves){
     );
 
     const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics graphicsStatistics =
-        compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
+        compiledPlan.physicalQueueCompileStatistics(queues[0u].id)
     ;
     const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics computeStatistics =
-        compiledGraph.physicalQueueCompileStatistics(queues[1u].id)
+        compiledPlan.physicalQueueCompileStatistics(queues[1u].id)
     ;
     ASSERT_TRUE(graphicsStatistics.valid());
     ASSERT_TRUE(computeStatistics.valid());
@@ -42004,16 +42300,18 @@ TEST(GpuTaskGraph, UsesDeclaredTripleQueueSharingForDedicatedTransfer){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(pair.producer);
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(pair.consumer);
+
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(pair.producer).plan;
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(pair.consumer).plan;
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledConsumer, nullptr);
     EXPECT_EQ(compiledProducer->epilogueBarrierCount, 0u);
     ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
-    const Graphics::GpuCompiledBarrier* const dependency = compiledGraph.taskPrologueBarriers(pair.consumer);
-    const Graphics::GpuPacketStateSeed* const stateSeed = compiledGraph.taskPrologueStateSeeds(pair.consumer);
+    const Graphics::GpuCompiledBarrier* const dependency = compiledPlan.findTask(pair.consumer).prologueBarriers;
+    const Graphics::GpuPacketStateSeed* const stateSeed = compiledPlan.findTask(pair.consumer).prologueStateSeeds;
     ASSERT_NE(dependency, nullptr);
     ASSERT_NE(stateSeed, nullptr);
     EXPECT_EQ(dependency[0u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
@@ -42023,10 +42321,10 @@ TEST(GpuTaskGraph, UsesDeclaredTripleQueueSharingForDedicatedTransfer){
     EXPECT_TRUE(dependency[0u].forceMemoryDependency);
     EXPECT_EQ(stateSeed[0u].resource, pair.texture);
     EXPECT_EQ(stateSeed[0u].sourcePacket, compiledProducer->packet);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransfers(), nullptr);
-    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), nullptr);
-    const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledGraph.compileStatistics();
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransferCount(), 0u);
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransfers(), nullptr);
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), nullptr);
+    const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledPlan.compileStatistics();
     ASSERT_TRUE(statistics.valid());
     EXPECT_EQ(statistics.ownershipReleaseBarrierCount, 0u);
     EXPECT_EQ(statistics.ownershipAcquireBarrierCount, 0u);
@@ -42055,17 +42353,18 @@ TEST(GpuTaskGraph, OmitsOwnershipTelemetryForSameFamilyAndSamePhysicalRoutes){
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-        const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(pair.producer);
-        const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(pair.consumer);
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(pair.producer).plan;
+        const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(pair.consumer).plan;
         ASSERT_NE(compiledProducer, nullptr);
         ASSERT_NE(compiledConsumer, nullptr);
         EXPECT_EQ(compiledProducer->queue, queue.id);
         EXPECT_EQ(compiledConsumer->queue, queue.id);
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransfers(), nullptr);
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), nullptr);
-        EXPECT_EQ(compiledGraph.compileStatistics().ownershipReleaseBarrierCount, 0u);
-        EXPECT_EQ(compiledGraph.compileStatistics().ownershipAcquireBarrierCount, 0u);
+        EXPECT_EQ(compiledPlan.logicalOwnershipTransferCount(), 0u);
+        EXPECT_EQ(compiledPlan.logicalOwnershipTransfers(), nullptr);
+        EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), nullptr);
+        EXPECT_EQ(compiledPlan.compileStatistics().ownershipReleaseBarrierCount, 0u);
+        EXPECT_EQ(compiledPlan.compileStatistics().ownershipAcquireBarrierCount, 0u);
     }
 
     {
@@ -42084,19 +42383,20 @@ TEST(GpuTaskGraph, OmitsOwnershipTelemetryForSameFamilyAndSamePhysicalRoutes){
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-        const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(pair.producer);
-        const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(pair.consumer);
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(pair.producer).plan;
+        const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(pair.consumer).plan;
         ASSERT_NE(compiledProducer, nullptr);
         ASSERT_NE(compiledConsumer, nullptr);
         EXPECT_EQ(compiledProducer->queue, queues[0u].id);
         EXPECT_EQ(compiledConsumer->queue, queues[1u].id);
         EXPECT_NE(compiledProducer->queue, compiledConsumer->queue);
         EXPECT_EQ(queues[0u].familyIndex, queues[1u].familyIndex);
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransfers(), nullptr);
-        EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), nullptr);
-        EXPECT_EQ(compiledGraph.compileStatistics().ownershipReleaseBarrierCount, 0u);
-        EXPECT_EQ(compiledGraph.compileStatistics().ownershipAcquireBarrierCount, 0u);
+        EXPECT_EQ(compiledPlan.logicalOwnershipTransferCount(), 0u);
+        EXPECT_EQ(compiledPlan.logicalOwnershipTransfers(), nullptr);
+        EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), nullptr);
+        EXPECT_EQ(compiledPlan.compileStatistics().ownershipReleaseBarrierCount, 0u);
+        EXPECT_EQ(compiledPlan.compileStatistics().ownershipAcquireBarrierCount, 0u);
     }
 }
 
@@ -42129,10 +42429,12 @@ TEST(GpuTaskGraph, AcceptsDedicatedTransferClassOnAConcurrentlySharedComputeFami
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(pair.consumer);
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(pair.producer);
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(pair.consumer);
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(pair.producer).plan;
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(pair.consumer).plan;
     ASSERT_NE(consumerAssignment, nullptr);
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledConsumer, nullptr);
@@ -42140,7 +42442,7 @@ TEST(GpuTaskGraph, AcceptsDedicatedTransferClassOnAConcurrentlySharedComputeFami
     EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedTransfer);
     EXPECT_EQ(compiledProducer->epilogueBarrierCount, 0u);
     ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
-    const Graphics::GpuCompiledBarrier* const dependency = compiledGraph.taskPrologueBarriers(pair.consumer);
+    const Graphics::GpuCompiledBarrier* const dependency = compiledPlan.findTask(pair.consumer).prologueBarriers;
     ASSERT_NE(dependency, nullptr);
     EXPECT_EQ(dependency[0u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
     EXPECT_EQ(dependency[0u].resource, pair.texture);
@@ -42175,11 +42477,13 @@ TEST(GpuTaskGraph, RejectsDedicatedTransferUseOutsideConcurrentSharingContract){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     EXPECT_EQ(
         assignments.diagnostic().status,
         Graphics::GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue
     );
-    EXPECT_FALSE(compiledGraph.valid());
+    EXPECT_FALSE(compiledPlan.valid());
 }
 
 
@@ -42627,263 +42931,269 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraphStorage(testArena.arena);
     Graphics::GpuTaskGraphCompileOptions frontierOptions;
     frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraphStorage, frontierOptions));
 
-    const Graphics::GpuTaskQueueAssignment* const shadowPrepareAssignment = assignments.find(shadowPrepare);
-    const Graphics::GpuTaskQueueAssignment* const prefixAssignment = assignments.find(prefix);
-    const Graphics::GpuTaskQueueAssignment* const shadowVisibilityAssignment = assignments.find(shadowVisibility);
-    const Graphics::GpuTaskQueueAssignment* const surfelGiAssignment = assignments.find(surfelGi);
-    const Graphics::GpuTaskQueueAssignment* const hardwareAssignment = assignments.find(hardware);
-    const Graphics::GpuTaskQueueAssignment* const avboitPreAssignment = assignments.find(avboitPre);
-    const Graphics::GpuTaskQueueAssignment* const laggedHistorySlotsUploadAssignment = assignments.find(laggedHistorySlotsUpload);
-    const Graphics::GpuTaskQueueAssignment* const lightingAssignment = assignments.find(lighting);
-    const Graphics::GpuTaskQueueAssignment* const compositeAssignment = assignments.find(composite);
-    const Graphics::GpuTaskQueueAssignment* const presentAssignment = assignments.find(present);
-    const Graphics::GpuTaskQueueAssignment* const historyCopyAssignment = assignments.find(historyCopy);
-    ASSERT_NE(shadowPrepareAssignment, nullptr);
-    ASSERT_NE(prefixAssignment, nullptr);
-    ASSERT_NE(shadowVisibilityAssignment, nullptr);
-    ASSERT_NE(surfelGiAssignment, nullptr);
-    ASSERT_NE(hardwareAssignment, nullptr);
-    ASSERT_NE(avboitPreAssignment, nullptr);
-    ASSERT_NE(laggedHistorySlotsUploadAssignment, nullptr);
-    ASSERT_NE(lightingAssignment, nullptr);
-    ASSERT_NE(compositeAssignment, nullptr);
-    ASSERT_NE(presentAssignment, nullptr);
-    ASSERT_NE(historyCopyAssignment, nullptr);
-    EXPECT_EQ(shadowPrepareAssignment->queueClass, Graphics::CommandQueue::Graphics);
-    EXPECT_EQ(prefixAssignment->queueClass, Graphics::CommandQueue::Graphics);
-    EXPECT_EQ(shadowVisibilityAssignment->queueClass, Graphics::CommandQueue::Compute);
-    EXPECT_EQ(surfelGiAssignment->queueClass, Graphics::CommandQueue::Compute);
-    EXPECT_EQ(hardwareAssignment->queueClass, Graphics::CommandQueue::Graphics);
-    EXPECT_EQ(avboitPreAssignment->queueClass, Graphics::CommandQueue::Graphics);
-    EXPECT_EQ(laggedHistorySlotsUploadAssignment->queueClass, Graphics::CommandQueue::Compute);
-    EXPECT_EQ(lightingAssignment->queueClass, Graphics::CommandQueue::Compute);
-    EXPECT_EQ(lightingAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute);
-    EXPECT_EQ(compositeAssignment->queueClass, Graphics::CommandQueue::Graphics);
-    EXPECT_EQ(presentAssignment->queueClass, Graphics::CommandQueue::Graphics);
-    EXPECT_EQ(historyCopyAssignment->queueClass, Graphics::CommandQueue::Transfer);
-    EXPECT_EQ(historyCopyAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedTransfer);
-    EXPECT_EQ(historyCopyAssignment->queue, queues[2u].id);
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraphStorage);
+        ASSERT_TRUE(views.valid());
+        const Graphics::GpuCompiledGraph::ReadView& compiledGraph = views.compiled;
 
-    const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
-    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
-    const Graphics::GpuSubmissionPacketId shadowVisibilityPacket = compiledGraph.packetForTask(shadowVisibility);
-    const Graphics::GpuSubmissionPacketId surfelGiPacket = compiledGraph.packetForTask(surfelGi);
-    const Graphics::GpuSubmissionPacketId hardwarePacket = compiledGraph.packetForTask(hardware);
-    const Graphics::GpuSubmissionPacketId avboitPrePacket = compiledGraph.packetForTask(avboitPre);
-    const Graphics::GpuSubmissionPacketId laggedHistorySlotsUploadPacket = compiledGraph.packetForTask(laggedHistorySlotsUpload);
-    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
-    const Graphics::GpuSubmissionPacketId compositePacket = compiledGraph.packetForTask(composite);
-    const Graphics::GpuSubmissionPacketId presentPacket = compiledGraph.packetForTask(present);
-    const Graphics::GpuSubmissionPacketId historyCopyPacket = compiledGraph.packetForTask(historyCopy);
-    ASSERT_TRUE(shadowPreparePacket.valid());
-    ASSERT_TRUE(prefixPacket.valid());
-    ASSERT_TRUE(shadowVisibilityPacket.valid());
-    ASSERT_TRUE(surfelGiPacket.valid());
-    ASSERT_TRUE(hardwarePacket.valid());
-    ASSERT_TRUE(avboitPrePacket.valid());
-    ASSERT_TRUE(laggedHistorySlotsUploadPacket.valid());
-    ASSERT_TRUE(lightingPacket.valid());
-    ASSERT_TRUE(compositePacket.valid());
-    ASSERT_TRUE(presentPacket.valid());
-    ASSERT_TRUE(historyCopyPacket.valid());
-    ASSERT_EQ(compiledGraph.packetCount(), 10u);
-    EXPECT_EQ(compiledGraph.packetIdAt(0u), shadowPreparePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(1u), prefixPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(2u), shadowVisibilityPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(3u), surfelGiPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(4u), hardwarePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(5u), avboitPrePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(6u), lightingPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(7u), compositePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(8u), presentPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(9u), historyCopyPacket);
-    EXPECT_EQ(laggedHistorySlotsUploadPacket, lightingPacket);
-    EXPECT_EQ(compiledGraph.packet(lightingPacket).taskCount, 2u);
-    const Graphics::GpuCompiledTask* const compiledShadowPrepare = compiledGraph.findTask(shadowPrepare);
-    const Graphics::GpuCompiledTask* const compiledPrefix = compiledGraph.findTask(prefix);
-    ASSERT_NE(compiledShadowPrepare, nullptr);
-    ASSERT_NE(compiledPrefix, nullptr);
-    ASSERT_EQ(compiledShadowPrepare->prologueBarrierCount, 1u);
-    const Graphics::GpuCompiledBarrier* const shadowPrepareBarrier = compiledGraph.taskPrologueBarriers(shadowPrepare);
-    ASSERT_NE(shadowPrepareBarrier, nullptr);
-    EXPECT_EQ(shadowPrepareBarrier[0u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
-    EXPECT_EQ(shadowPrepareBarrier[0u].resource, currentBindlessSlots);
-    EXPECT_EQ(shadowPrepareBarrier[0u].before, Graphics::ResourceStates::Common);
-    EXPECT_EQ(shadowPrepareBarrier[0u].after, Graphics::ResourceStates::ConstantBuffer);
-    ASSERT_EQ(compiledPrefix->prologueStateSeedCount, 1u);
-    const Graphics::GpuPacketStateSeed* const prefixSeeds = compiledGraph.taskPrologueStateSeeds(prefix);
-    ASSERT_NE(prefixSeeds, nullptr);
-    EXPECT_EQ(prefixSeeds[0u].resource, currentBindlessSlots);
-    EXPECT_EQ(prefixSeeds[0u].sourcePacket, shadowPreparePacket);
-    ASSERT_EQ(compiledGraph.packet(prefixPacket).dependencyCount, 1u);
-    const Graphics::GpuPacketDependency* const prefixPacketDependencies = compiledGraph.packetDependencies(prefixPacket);
-    ASSERT_NE(prefixPacketDependencies, nullptr);
-    EXPECT_EQ(prefixPacketDependencies[0u].producer, shadowPreparePacket);
-    EXPECT_EQ(FindEdge(analysis, avboitPre, lighting), nullptr);
-    EXPECT_EQ(FindEdge(analysis, surfelGi, lighting), nullptr);
-    const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting);
-    ASSERT_NE(compiledLighting, nullptr);
-    bool lightingTransitionsLaggedHistorySlots = false;
-    const Graphics::GpuCompiledBarrier* const lightingBarriers = compiledGraph.taskPrologueBarriers(lighting);
-    for(usize index = 0u; index < compiledLighting->prologueBarrierCount; ++index){
-        lightingTransitionsLaggedHistorySlots = lightingTransitionsLaggedHistorySlots
-            || (
-                lightingBarriers[index].type == Graphics::GpuCompiledBarrierType::BufferTransition
-                && lightingBarriers[index].resource == historyBindlessSlots
-                && lightingBarriers[index].before == Graphics::ResourceStates::Common
-                && lightingBarriers[index].after == Graphics::ResourceStates::ConstantBuffer
-            )
-        ;
-    }
-    EXPECT_TRUE(lightingTransitionsLaggedHistorySlots);
-    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 1u);
-    const Graphics::GpuPacketDependency* const lightingPacketDependencies = compiledGraph.packetDependencies(lightingPacket);
-    ASSERT_NE(lightingPacketDependencies, nullptr);
-    EXPECT_EQ(lightingPacketDependencies[0u].producer, prefixPacket);
-    ASSERT_EQ(compiledGraph.packet(lightingPacket).externalDependencyCount, 1u);
-    const Graphics::GpuExternalCompletionId* const lightingExternalDependencies = compiledGraph.packetExternalDependencies(
-        lightingPacket
-    );
-    ASSERT_NE(lightingExternalDependencies, nullptr);
-    EXPECT_EQ(lightingExternalDependencies[0u], historyCompletion);
+        const Graphics::GpuTaskQueueAssignment* const shadowPrepareAssignment = assignments.find(shadowPrepare);
+        const Graphics::GpuTaskQueueAssignment* const prefixAssignment = assignments.find(prefix);
+        const Graphics::GpuTaskQueueAssignment* const shadowVisibilityAssignment = assignments.find(shadowVisibility);
+        const Graphics::GpuTaskQueueAssignment* const surfelGiAssignment = assignments.find(surfelGi);
+        const Graphics::GpuTaskQueueAssignment* const hardwareAssignment = assignments.find(hardware);
+        const Graphics::GpuTaskQueueAssignment* const avboitPreAssignment = assignments.find(avboitPre);
+        const Graphics::GpuTaskQueueAssignment* const laggedHistorySlotsUploadAssignment = assignments.find(laggedHistorySlotsUpload);
+        const Graphics::GpuTaskQueueAssignment* const lightingAssignment = assignments.find(lighting);
+        const Graphics::GpuTaskQueueAssignment* const compositeAssignment = assignments.find(composite);
+        const Graphics::GpuTaskQueueAssignment* const presentAssignment = assignments.find(present);
+        const Graphics::GpuTaskQueueAssignment* const historyCopyAssignment = assignments.find(historyCopy);
+        ASSERT_NE(shadowPrepareAssignment, nullptr);
+        ASSERT_NE(prefixAssignment, nullptr);
+        ASSERT_NE(shadowVisibilityAssignment, nullptr);
+        ASSERT_NE(surfelGiAssignment, nullptr);
+        ASSERT_NE(hardwareAssignment, nullptr);
+        ASSERT_NE(avboitPreAssignment, nullptr);
+        ASSERT_NE(laggedHistorySlotsUploadAssignment, nullptr);
+        ASSERT_NE(lightingAssignment, nullptr);
+        ASSERT_NE(compositeAssignment, nullptr);
+        ASSERT_NE(presentAssignment, nullptr);
+        ASSERT_NE(historyCopyAssignment, nullptr);
+        EXPECT_EQ(shadowPrepareAssignment->queueClass, Graphics::CommandQueue::Graphics);
+        EXPECT_EQ(prefixAssignment->queueClass, Graphics::CommandQueue::Graphics);
+        EXPECT_EQ(shadowVisibilityAssignment->queueClass, Graphics::CommandQueue::Compute);
+        EXPECT_EQ(surfelGiAssignment->queueClass, Graphics::CommandQueue::Compute);
+        EXPECT_EQ(hardwareAssignment->queueClass, Graphics::CommandQueue::Graphics);
+        EXPECT_EQ(avboitPreAssignment->queueClass, Graphics::CommandQueue::Graphics);
+        EXPECT_EQ(laggedHistorySlotsUploadAssignment->queueClass, Graphics::CommandQueue::Compute);
+        EXPECT_EQ(lightingAssignment->queueClass, Graphics::CommandQueue::Compute);
+        EXPECT_EQ(lightingAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute);
+        EXPECT_EQ(compositeAssignment->queueClass, Graphics::CommandQueue::Graphics);
+        EXPECT_EQ(presentAssignment->queueClass, Graphics::CommandQueue::Graphics);
+        EXPECT_EQ(historyCopyAssignment->queueClass, Graphics::CommandQueue::Transfer);
+        EXPECT_EQ(historyCopyAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedTransfer);
+        EXPECT_EQ(historyCopyAssignment->queue, queues[2u].id);
 
-    const Graphics::GpuCompiledTask* const compiledShadowVisibility = compiledGraph.findTask(shadowVisibility);
-    ASSERT_NE(compiledShadowVisibility, nullptr);
-    ASSERT_GT(compiledShadowVisibility->prologueStateSeedCount, 0u);
-    const Graphics::GpuPacketStateSeed* const shadowVisibilitySeeds = compiledGraph.taskPrologueStateSeeds(
-        shadowVisibility
-    );
-    ASSERT_NE(shadowVisibilitySeeds, nullptr);
-    bool shadowVisibilityImportsBindlessSlotsState = false;
-    for(usize index = 0u; index < compiledShadowVisibility->prologueStateSeedCount; ++index){
-        shadowVisibilityImportsBindlessSlotsState = shadowVisibilityImportsBindlessSlotsState
-            || (
-                shadowVisibilitySeeds[index].resource == currentBindlessSlots
-                && shadowVisibilitySeeds[index].sourcePacket == prefixPacket
-            )
-        ;
-    }
-    EXPECT_TRUE(shadowVisibilityImportsBindlessSlotsState);
-    ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).externalDependencyCount, 1u);
-    const Graphics::GpuExternalCompletionId* const shadowVisibilityExternalDependencies =
-        compiledGraph.packetExternalDependencies(shadowVisibilityPacket)
-    ;
-    ASSERT_NE(shadowVisibilityExternalDependencies, nullptr);
-    EXPECT_EQ(shadowVisibilityExternalDependencies[0u], historyCompletion);
-    EXPECT_NE(FindEdge(analysis, shadowPrepare, shadowVisibility), nullptr);
-    ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 1u);
-    const Graphics::GpuPacketDependency* const shadowVisibilityPacketDependencies = compiledGraph.packetDependencies(
-        shadowVisibilityPacket
-    );
-    ASSERT_NE(shadowVisibilityPacketDependencies, nullptr);
-    EXPECT_EQ(shadowVisibilityPacketDependencies[0u].producer, prefixPacket);
-    ASSERT_EQ(compiledGraph.packet(hardwarePacket).externalDependencyCount, 1u);
-    const Graphics::GpuExternalCompletionId* const hardwareExternalDependencies = compiledGraph.packetExternalDependencies(
-        hardwarePacket
-    );
-    ASSERT_NE(hardwareExternalDependencies, nullptr);
-    EXPECT_EQ(hardwareExternalDependencies[0u], historyCompletion);
-    ASSERT_EQ(compiledGraph.packet(surfelGiPacket).externalDependencyCount, 0u);
-    ASSERT_GE(compiledGraph.packet(surfelGiPacket).dependencyCount, 1u);
-    const Graphics::GpuPacketDependency* const surfelGiPacketDependencies = compiledGraph.packetDependencies(
-        surfelGiPacket
-    );
-    ASSERT_NE(surfelGiPacketDependencies, nullptr);
-    bool surfelGiWaitsForShadowVisibility = false;
-    for(usize index = 0u; index < compiledGraph.packet(surfelGiPacket).dependencyCount; ++index){
-        surfelGiWaitsForShadowVisibility = surfelGiWaitsForShadowVisibility
-            || surfelGiPacketDependencies[index].producer == shadowVisibilityPacket
-        ;
-    }
-    EXPECT_TRUE(surfelGiWaitsForShadowVisibility);
+        const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
+        const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
+        const Graphics::GpuSubmissionPacketId shadowVisibilityPacket = compiledGraph.packetForTask(shadowVisibility);
+        const Graphics::GpuSubmissionPacketId surfelGiPacket = compiledGraph.packetForTask(surfelGi);
+        const Graphics::GpuSubmissionPacketId hardwarePacket = compiledGraph.packetForTask(hardware);
+        const Graphics::GpuSubmissionPacketId avboitPrePacket = compiledGraph.packetForTask(avboitPre);
+        const Graphics::GpuSubmissionPacketId laggedHistorySlotsUploadPacket = compiledGraph.packetForTask(laggedHistorySlotsUpload);
+        const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
+        const Graphics::GpuSubmissionPacketId compositePacket = compiledGraph.packetForTask(composite);
+        const Graphics::GpuSubmissionPacketId presentPacket = compiledGraph.packetForTask(present);
+        const Graphics::GpuSubmissionPacketId historyCopyPacket = compiledGraph.packetForTask(historyCopy);
+        ASSERT_TRUE(shadowPreparePacket.valid());
+        ASSERT_TRUE(prefixPacket.valid());
+        ASSERT_TRUE(shadowVisibilityPacket.valid());
+        ASSERT_TRUE(surfelGiPacket.valid());
+        ASSERT_TRUE(hardwarePacket.valid());
+        ASSERT_TRUE(avboitPrePacket.valid());
+        ASSERT_TRUE(laggedHistorySlotsUploadPacket.valid());
+        ASSERT_TRUE(lightingPacket.valid());
+        ASSERT_TRUE(compositePacket.valid());
+        ASSERT_TRUE(presentPacket.valid());
+        ASSERT_TRUE(historyCopyPacket.valid());
+        ASSERT_EQ(compiledGraph.packetCount(), 10u);
+        EXPECT_EQ(compiledGraph.packetIdAt(0u), shadowPreparePacket);
+        EXPECT_EQ(compiledGraph.packetIdAt(1u), prefixPacket);
+        EXPECT_EQ(compiledGraph.packetIdAt(2u), shadowVisibilityPacket);
+        EXPECT_EQ(compiledGraph.packetIdAt(3u), surfelGiPacket);
+        EXPECT_EQ(compiledGraph.packetIdAt(4u), hardwarePacket);
+        EXPECT_EQ(compiledGraph.packetIdAt(5u), avboitPrePacket);
+        EXPECT_EQ(compiledGraph.packetIdAt(6u), lightingPacket);
+        EXPECT_EQ(compiledGraph.packetIdAt(7u), compositePacket);
+        EXPECT_EQ(compiledGraph.packetIdAt(8u), presentPacket);
+        EXPECT_EQ(compiledGraph.packetIdAt(9u), historyCopyPacket);
+        EXPECT_EQ(laggedHistorySlotsUploadPacket, lightingPacket);
+        EXPECT_EQ(compiledGraph.packet(lightingPacket).plan->taskCount, 2u);
+        const Graphics::GpuCompiledTask* const compiledShadowPrepare = compiledGraph.findTask(shadowPrepare).plan;
+        const Graphics::GpuCompiledTask* const compiledPrefix = compiledGraph.findTask(prefix).plan;
+        ASSERT_NE(compiledShadowPrepare, nullptr);
+        ASSERT_NE(compiledPrefix, nullptr);
+        ASSERT_EQ(compiledShadowPrepare->prologueBarrierCount, 1u);
+        const Graphics::GpuCompiledBarrier* const shadowPrepareBarrier = compiledGraph.findTask(shadowPrepare).prologueBarriers;
+        ASSERT_NE(shadowPrepareBarrier, nullptr);
+        EXPECT_EQ(shadowPrepareBarrier[0u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
+        EXPECT_EQ(shadowPrepareBarrier[0u].resource, currentBindlessSlots);
+        EXPECT_EQ(shadowPrepareBarrier[0u].before, Graphics::ResourceStates::Common);
+        EXPECT_EQ(shadowPrepareBarrier[0u].after, Graphics::ResourceStates::ConstantBuffer);
+        ASSERT_EQ(compiledPrefix->prologueStateSeedCount, 1u);
+        const Graphics::GpuPacketStateSeed* const prefixSeeds = compiledGraph.findTask(prefix).prologueStateSeeds;
+        ASSERT_NE(prefixSeeds, nullptr);
+        EXPECT_EQ(prefixSeeds[0u].resource, currentBindlessSlots);
+        EXPECT_EQ(prefixSeeds[0u].sourcePacket, shadowPreparePacket);
+        ASSERT_EQ(compiledGraph.packet(prefixPacket).plan->dependencyCount, 1u);
+        const Graphics::GpuPacketDependency* const prefixPacketDependencies = compiledGraph.packet(prefixPacket).dependencies;
+        ASSERT_NE(prefixPacketDependencies, nullptr);
+        EXPECT_EQ(prefixPacketDependencies[0u].producer, shadowPreparePacket);
+        EXPECT_EQ(FindEdge(analysis, avboitPre, lighting), nullptr);
+        EXPECT_EQ(FindEdge(analysis, surfelGi, lighting), nullptr);
+        const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting).plan;
+        ASSERT_NE(compiledLighting, nullptr);
+        bool lightingTransitionsLaggedHistorySlots = false;
+        const Graphics::GpuCompiledBarrier* const lightingBarriers = compiledGraph.findTask(lighting).prologueBarriers;
+        for(usize index = 0u; index < compiledLighting->prologueBarrierCount; ++index){
+            lightingTransitionsLaggedHistorySlots = lightingTransitionsLaggedHistorySlots
+                || (
+                    lightingBarriers[index].type == Graphics::GpuCompiledBarrierType::BufferTransition
+                    && lightingBarriers[index].resource == historyBindlessSlots
+                    && lightingBarriers[index].before == Graphics::ResourceStates::Common
+                    && lightingBarriers[index].after == Graphics::ResourceStates::ConstantBuffer
+                )
+            ;
+        }
+        EXPECT_TRUE(lightingTransitionsLaggedHistorySlots);
+        ASSERT_EQ(compiledGraph.packet(lightingPacket).plan->dependencyCount, 1u);
+        const Graphics::GpuPacketDependency* const lightingPacketDependencies = compiledGraph.packet(lightingPacket).dependencies;
+        ASSERT_NE(lightingPacketDependencies, nullptr);
+        EXPECT_EQ(lightingPacketDependencies[0u].producer, prefixPacket);
+        ASSERT_EQ(compiledGraph.packet(lightingPacket).plan->externalDependencyCount, 1u);
+        const Graphics::GpuExternalCompletionId* const lightingExternalDependencies = compiledGraph.packet(
+            lightingPacket
+        ).externalDependencies;
+        ASSERT_NE(lightingExternalDependencies, nullptr);
+        EXPECT_EQ(lightingExternalDependencies[0u], historyCompletion);
 
-    EXPECT_EQ(compiledGraph.packet(avboitPrePacket).externalDependencyCount, 0u);
+        const Graphics::GpuCompiledTask* const compiledShadowVisibility = compiledGraph.findTask(shadowVisibility).plan;
+        ASSERT_NE(compiledShadowVisibility, nullptr);
+        ASSERT_GT(compiledShadowVisibility->prologueStateSeedCount, 0u);
+        const Graphics::GpuPacketStateSeed* const shadowVisibilitySeeds = compiledGraph.findTask(
+            shadowVisibility
+        ).prologueStateSeeds;
+        ASSERT_NE(shadowVisibilitySeeds, nullptr);
+        bool shadowVisibilityImportsBindlessSlotsState = false;
+        for(usize index = 0u; index < compiledShadowVisibility->prologueStateSeedCount; ++index){
+            shadowVisibilityImportsBindlessSlotsState = shadowVisibilityImportsBindlessSlotsState
+                || (
+                    shadowVisibilitySeeds[index].resource == currentBindlessSlots
+                    && shadowVisibilitySeeds[index].sourcePacket == prefixPacket
+                )
+            ;
+        }
+        EXPECT_TRUE(shadowVisibilityImportsBindlessSlotsState);
+        ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).plan->externalDependencyCount, 1u);
+        const Graphics::GpuExternalCompletionId* const shadowVisibilityExternalDependencies = compiledGraph.packet(
+            shadowVisibilityPacket
+        ).externalDependencies;
+        ASSERT_NE(shadowVisibilityExternalDependencies, nullptr);
+        EXPECT_EQ(shadowVisibilityExternalDependencies[0u], historyCompletion);
+        EXPECT_NE(FindEdge(analysis, shadowPrepare, shadowVisibility), nullptr);
+        ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).plan->dependencyCount, 1u);
+        const Graphics::GpuPacketDependency* const shadowVisibilityPacketDependencies = compiledGraph.packet(
+            shadowVisibilityPacket
+        ).dependencies;
+        ASSERT_NE(shadowVisibilityPacketDependencies, nullptr);
+        EXPECT_EQ(shadowVisibilityPacketDependencies[0u].producer, prefixPacket);
+        ASSERT_EQ(compiledGraph.packet(hardwarePacket).plan->externalDependencyCount, 1u);
+        const Graphics::GpuExternalCompletionId* const hardwareExternalDependencies = compiledGraph.packet(
+            hardwarePacket
+        ).externalDependencies;
+        ASSERT_NE(hardwareExternalDependencies, nullptr);
+        EXPECT_EQ(hardwareExternalDependencies[0u], historyCompletion);
+        ASSERT_EQ(compiledGraph.packet(surfelGiPacket).plan->externalDependencyCount, 0u);
+        ASSERT_GE(compiledGraph.packet(surfelGiPacket).plan->dependencyCount, 1u);
+        const Graphics::GpuPacketDependency* const surfelGiPacketDependencies = compiledGraph.packet(
+            surfelGiPacket
+        ).dependencies;
+        ASSERT_NE(surfelGiPacketDependencies, nullptr);
+        bool surfelGiWaitsForShadowVisibility = false;
+        for(usize index = 0u; index < compiledGraph.packet(surfelGiPacket).plan->dependencyCount; ++index){
+            surfelGiWaitsForShadowVisibility = surfelGiWaitsForShadowVisibility
+                || surfelGiPacketDependencies[index].producer == shadowVisibilityPacket
+            ;
+        }
+        EXPECT_TRUE(surfelGiWaitsForShadowVisibility);
 
-    ASSERT_EQ(compiledGraph.packet(compositePacket).dependencyCount, 2u);
-    const Graphics::GpuPacketDependency* const compositePacketDependencies = compiledGraph.packetDependencies(compositePacket);
-    ASSERT_NE(compositePacketDependencies, nullptr);
-    bool compositeWaitsForLighting = false;
-    bool compositeWaitsForAvboit = false;
-    for(usize index = 0u; index < compiledGraph.packet(compositePacket).dependencyCount; ++index){
-        compositeWaitsForLighting = compositeWaitsForLighting
-            || compositePacketDependencies[index].producer == lightingPacket
-        ;
-        compositeWaitsForAvboit = compositeWaitsForAvboit
-            || compositePacketDependencies[index].producer == avboitPrePacket
-        ;
-    }
-    EXPECT_TRUE(compositeWaitsForLighting);
-    EXPECT_TRUE(compositeWaitsForAvboit);
-    EXPECT_EQ(compiledGraph.packet(compositePacket).externalDependencyCount, 0u);
+        EXPECT_EQ(compiledGraph.packet(avboitPrePacket).plan->externalDependencyCount, 0u);
 
-    const Graphics::GpuCompiledTask* const compiledPresent = compiledGraph.findTask(present);
-    ASSERT_NE(compiledPresent, nullptr);
-    ASSERT_EQ(compiledPresent->prologueStateSeedCount, 1u);
-    const Graphics::GpuPacketStateSeed* const presentSeed = compiledGraph.taskPrologueStateSeeds(present);
-    ASSERT_NE(presentSeed, nullptr);
-    EXPECT_EQ(presentSeed[0u].resource, compositeColor);
-    EXPECT_EQ(presentSeed[0u].sourcePacket, compositePacket);
-    ASSERT_EQ(compiledGraph.packet(presentPacket).dependencyCount, 2u);
-    const Graphics::GpuPacketDependency* const presentPacketDependencies = compiledGraph.packetDependencies(presentPacket);
-    ASSERT_NE(presentPacketDependencies, nullptr);
-    bool presentWaitsForComposite = false;
-    bool presentWaitsForSurfelGi = false;
-    for(usize index = 0u; index < compiledGraph.packet(presentPacket).dependencyCount; ++index){
-        presentWaitsForComposite = presentWaitsForComposite
-            || presentPacketDependencies[index].producer == compositePacket
-        ;
-        presentWaitsForSurfelGi = presentWaitsForSurfelGi
-            || presentPacketDependencies[index].producer == surfelGiPacket
-        ;
-    }
-    EXPECT_TRUE(presentWaitsForComposite);
-    EXPECT_TRUE(presentWaitsForSurfelGi);
-    EXPECT_EQ(compiledGraph.packet(presentPacket).externalDependencyCount, 0u);
+        ASSERT_EQ(compiledGraph.packet(compositePacket).plan->dependencyCount, 2u);
+        const Graphics::GpuPacketDependency* const compositePacketDependencies = compiledGraph.packet(compositePacket).dependencies;
+        ASSERT_NE(compositePacketDependencies, nullptr);
+        bool compositeWaitsForLighting = false;
+        bool compositeWaitsForAvboit = false;
+        for(usize index = 0u; index < compiledGraph.packet(compositePacket).plan->dependencyCount; ++index){
+            compositeWaitsForLighting = compositeWaitsForLighting
+                || compositePacketDependencies[index].producer == lightingPacket
+            ;
+            compositeWaitsForAvboit = compositeWaitsForAvboit
+                || compositePacketDependencies[index].producer == avboitPrePacket
+            ;
+        }
+        EXPECT_TRUE(compositeWaitsForLighting);
+        EXPECT_TRUE(compositeWaitsForAvboit);
+        EXPECT_EQ(compiledGraph.packet(compositePacket).plan->externalDependencyCount, 0u);
 
-    const Graphics::GpuPacketDependency* const historyCopyPacketDependencies = compiledGraph.packetDependencies(
-        historyCopyPacket
-    );
-    ASSERT_NE(historyCopyPacketDependencies, nullptr);
-    bool historyCopyWaitsForPresent = false;
-    for(usize index = 0u; index < compiledGraph.packet(historyCopyPacket).dependencyCount; ++index){
-        historyCopyWaitsForPresent = historyCopyWaitsForPresent
-            || historyCopyPacketDependencies[index].producer == presentPacket
-        ;
+        const Graphics::GpuCompiledTask* const compiledPresent = compiledGraph.findTask(present).plan;
+        ASSERT_NE(compiledPresent, nullptr);
+        ASSERT_EQ(compiledPresent->prologueStateSeedCount, 1u);
+        const Graphics::GpuPacketStateSeed* const presentSeed = compiledGraph.findTask(present).prologueStateSeeds;
+        ASSERT_NE(presentSeed, nullptr);
+        EXPECT_EQ(presentSeed[0u].resource, compositeColor);
+        EXPECT_EQ(presentSeed[0u].sourcePacket, compositePacket);
+        ASSERT_EQ(compiledGraph.packet(presentPacket).plan->dependencyCount, 2u);
+        const Graphics::GpuPacketDependency* const presentPacketDependencies = compiledGraph.packet(presentPacket).dependencies;
+        ASSERT_NE(presentPacketDependencies, nullptr);
+        bool presentWaitsForComposite = false;
+        bool presentWaitsForSurfelGi = false;
+        for(usize index = 0u; index < compiledGraph.packet(presentPacket).plan->dependencyCount; ++index){
+            presentWaitsForComposite = presentWaitsForComposite
+                || presentPacketDependencies[index].producer == compositePacket
+            ;
+            presentWaitsForSurfelGi = presentWaitsForSurfelGi
+                || presentPacketDependencies[index].producer == surfelGiPacket
+            ;
+        }
+        EXPECT_TRUE(presentWaitsForComposite);
+        EXPECT_TRUE(presentWaitsForSurfelGi);
+        EXPECT_EQ(compiledGraph.packet(presentPacket).plan->externalDependencyCount, 0u);
+
+        const Graphics::GpuPacketDependency* const historyCopyPacketDependencies = compiledGraph.packet(
+            historyCopyPacket
+        ).dependencies;
+        ASSERT_NE(historyCopyPacketDependencies, nullptr);
+        bool historyCopyWaitsForPresent = false;
+        for(usize index = 0u; index < compiledGraph.packet(historyCopyPacket).plan->dependencyCount; ++index){
+            historyCopyWaitsForPresent = historyCopyWaitsForPresent
+                || historyCopyPacketDependencies[index].producer == presentPacket
+            ;
+        }
+        EXPECT_TRUE(historyCopyWaitsForPresent);
+        EXPECT_EQ(compiledGraph.packet(historyCopyPacket).plan->externalDependencyCount, 0u);
+        const Graphics::GpuCompiledTask* const compiledHistoryCopy = compiledGraph.findTask(historyCopy).plan;
+        ASSERT_NE(compiledHistoryCopy, nullptr);
+        const Graphics::GpuCompiledBarrier* const historyCopyBarriers = compiledGraph.findTask(historyCopy).prologueBarriers;
+        ASSERT_NE(historyCopyBarriers, nullptr);
+        bool historyCopyTransitionsCurrentIrradiance = false;
+        bool historyCopyTransitionsHistoryIrradiance = false;
+        for(usize index = 0u; index < compiledHistoryCopy->prologueBarrierCount; ++index){
+            const Graphics::GpuCompiledBarrier& barrier = historyCopyBarriers[index];
+            historyCopyTransitionsCurrentIrradiance = historyCopyTransitionsCurrentIrradiance
+                || (
+                    barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+                    && barrier.resource == currentIrradiance
+                    && barrier.before == Graphics::ResourceStates::UnorderedAccess
+                    && barrier.after == Graphics::ResourceStates::CopySource
+                )
+            ;
+            historyCopyTransitionsHistoryIrradiance = historyCopyTransitionsHistoryIrradiance
+                || (
+                    barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+                    && barrier.resource == historyIrradiance
+                    && barrier.before == Graphics::ResourceStates::ShaderResource
+                    && barrier.after == Graphics::ResourceStates::CopyDest
+                )
+            ;
+        }
+        EXPECT_TRUE(historyCopyTransitionsCurrentIrradiance);
+        EXPECT_TRUE(historyCopyTransitionsHistoryIrradiance);
     }
-    EXPECT_TRUE(historyCopyWaitsForPresent);
-    EXPECT_EQ(compiledGraph.packet(historyCopyPacket).externalDependencyCount, 0u);
-    const Graphics::GpuCompiledTask* const compiledHistoryCopy = compiledGraph.findTask(historyCopy);
-    ASSERT_NE(compiledHistoryCopy, nullptr);
-    const Graphics::GpuCompiledBarrier* const historyCopyBarriers = compiledGraph.taskPrologueBarriers(historyCopy);
-    ASSERT_NE(historyCopyBarriers, nullptr);
-    bool historyCopyTransitionsCurrentIrradiance = false;
-    bool historyCopyTransitionsHistoryIrradiance = false;
-    for(usize index = 0u; index < compiledHistoryCopy->prologueBarrierCount; ++index){
-        const Graphics::GpuCompiledBarrier& barrier = historyCopyBarriers[index];
-        historyCopyTransitionsCurrentIrradiance = historyCopyTransitionsCurrentIrradiance
-            || (
-                barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
-                && barrier.resource == currentIrradiance
-                && barrier.before == Graphics::ResourceStates::UnorderedAccess
-                && barrier.after == Graphics::ResourceStates::CopySource
-            )
-        ;
-        historyCopyTransitionsHistoryIrradiance = historyCopyTransitionsHistoryIrradiance
-            || (
-                barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
-                && barrier.resource == historyIrradiance
-                && barrier.before == Graphics::ResourceStates::ShaderResource
-                && barrier.after == Graphics::ResourceStates::CopyDest
-            )
-        ;
-    }
-    EXPECT_TRUE(historyCopyTransitionsCurrentIrradiance);
-    EXPECT_TRUE(historyCopyTransitionsHistoryIrradiance);
 
     const Graphics::GpuPhysicalQueueInfo graphicsOnlyQueue = GraphicsQueue();
     const Graphics::GpuTaskGraphQueueTopology graphicsOnlyTopology{
@@ -42892,15 +43202,18 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     };
     Graphics::GpuTaskGraphAnalysis graphicsOnlyAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments graphicsOnlyAssignments(testArena.arena);
-    Graphics::GpuCompiledGraph graphicsOnlyCompiledGraph(testArena.arena);
+    Graphics::GpuCompiledGraph graphicsOnlyCompiledGraphStorage(testArena.arena);
     ASSERT_TRUE(Compile(
         graph,
         graphicsOnlyAnalysis,
         graphicsOnlyTopology,
         graphicsOnlyAssignments,
-        graphicsOnlyCompiledGraph,
+        graphicsOnlyCompiledGraphStorage,
         frontierOptions
     ));
+    const GpuTaskGraphReadViews graphicsOnlyViews(graph, graphicsOnlyCompiledGraphStorage);
+    ASSERT_TRUE(graphicsOnlyViews.valid());
+    const Graphics::GpuCompiledGraph::ReadView& graphicsOnlyCompiledGraph = graphicsOnlyViews.compiled;
     const Graphics::GpuTaskQueueAssignment* const graphicsUploadAssignment = graphicsOnlyAssignments.find(
         laggedHistorySlotsUpload
     );
@@ -42918,7 +43231,7 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     ASSERT_TRUE(graphicsUploadPacket.valid());
     ASSERT_TRUE(graphicsLightingPacket.valid());
     EXPECT_EQ(graphicsUploadPacket, graphicsLightingPacket);
-    EXPECT_EQ(graphicsOnlyCompiledGraph.packet(graphicsLightingPacket).taskCount, 2u);
+    EXPECT_EQ(graphicsOnlyCompiledGraph.packet(graphicsLightingPacket).plan->taskCount, 2u);
 }
 
 
@@ -43404,6 +43717,8 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const Graphics::GpuTaskQueueAssignment* const shadowPrepareAssignment = assignments.find(shadowPrepare);
     const Graphics::GpuTaskQueueAssignment* const prefixAssignment = assignments.find(prefix);
@@ -43445,19 +43760,19 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     EXPECT_EQ(compositeAssignment->queueClass, Graphics::CommandQueue::Compute);
     EXPECT_EQ(presentAssignment->queueClass, Graphics::CommandQueue::Graphics);
 
-    const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
-    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
-    const Graphics::GpuSubmissionPacketId shadowVisibilityPacket = compiledGraph.packetForTask(shadowVisibility);
-    const Graphics::GpuSubmissionPacketId softwareCausticsPacket = compiledGraph.packetForTask(softwareCaustics);
-    const Graphics::GpuSubmissionPacketId surfelGiPacket = compiledGraph.packetForTask(surfelGi);
-    const Graphics::GpuSubmissionPacketId prePacket = compiledGraph.packetForTask(pre);
-    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledGraph.packetForTask(depthWarp);
-    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledGraph.packetForTask(extinction);
-    const Graphics::GpuSubmissionPacketId integrationPacket = compiledGraph.packetForTask(integration);
-    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledGraph.packetForTask(accumulation);
-    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
-    const Graphics::GpuSubmissionPacketId compositePacket = compiledGraph.packetForTask(composite);
-    const Graphics::GpuSubmissionPacketId presentPacket = compiledGraph.packetForTask(present);
+    const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledPlan.packetForTask(shadowPrepare);
+    const Graphics::GpuSubmissionPacketId prefixPacket = compiledPlan.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId shadowVisibilityPacket = compiledPlan.packetForTask(shadowVisibility);
+    const Graphics::GpuSubmissionPacketId softwareCausticsPacket = compiledPlan.packetForTask(softwareCaustics);
+    const Graphics::GpuSubmissionPacketId surfelGiPacket = compiledPlan.packetForTask(surfelGi);
+    const Graphics::GpuSubmissionPacketId prePacket = compiledPlan.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledPlan.packetForTask(depthWarp);
+    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledPlan.packetForTask(extinction);
+    const Graphics::GpuSubmissionPacketId integrationPacket = compiledPlan.packetForTask(integration);
+    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledPlan.packetForTask(accumulation);
+    const Graphics::GpuSubmissionPacketId lightingPacket = compiledPlan.packetForTask(lighting);
+    const Graphics::GpuSubmissionPacketId compositePacket = compiledPlan.packetForTask(composite);
+    const Graphics::GpuSubmissionPacketId presentPacket = compiledPlan.packetForTask(present);
     ASSERT_TRUE(shadowPreparePacket.valid());
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(shadowVisibilityPacket.valid());
@@ -43471,38 +43786,38 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     ASSERT_TRUE(lightingPacket.valid());
     ASSERT_TRUE(compositePacket.valid());
     ASSERT_TRUE(presentPacket.valid());
-    ASSERT_EQ(compiledGraph.packetCount(), 13u);
-    EXPECT_EQ(compiledGraph.packetIdAt(0u), shadowPreparePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(1u), prefixPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(2u), shadowVisibilityPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(3u), softwareCausticsPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(4u), surfelGiPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(5u), prePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(6u), depthWarpPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(7u), extinctionPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(8u), integrationPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(9u), accumulationPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(10u), lightingPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(11u), compositePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(12u), presentPacket);
-    const Graphics::GpuCompiledTask* const compiledShadowPrepare = compiledGraph.findTask(shadowPrepare);
-    const Graphics::GpuCompiledTask* const compiledPrefix = compiledGraph.findTask(prefix);
+    ASSERT_EQ(compiledPlan.packetCount(), 13u);
+    EXPECT_EQ(compiledPlan.packetIdAt(0u), shadowPreparePacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(1u), prefixPacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(2u), shadowVisibilityPacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(3u), softwareCausticsPacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(4u), surfelGiPacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(5u), prePacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(6u), depthWarpPacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(7u), extinctionPacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(8u), integrationPacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(9u), accumulationPacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(10u), lightingPacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(11u), compositePacket);
+    EXPECT_EQ(compiledPlan.packetIdAt(12u), presentPacket);
+    const Graphics::GpuCompiledTask* const compiledShadowPrepare = compiledPlan.findTask(shadowPrepare).plan;
+    const Graphics::GpuCompiledTask* const compiledPrefix = compiledPlan.findTask(prefix).plan;
     ASSERT_NE(compiledShadowPrepare, nullptr);
     ASSERT_NE(compiledPrefix, nullptr);
     ASSERT_EQ(compiledShadowPrepare->prologueBarrierCount, 1u);
-    const Graphics::GpuCompiledBarrier* const shadowPrepareBarrier = compiledGraph.taskPrologueBarriers(shadowPrepare);
+    const Graphics::GpuCompiledBarrier* const shadowPrepareBarrier = compiledPlan.findTask(shadowPrepare).prologueBarriers;
     ASSERT_NE(shadowPrepareBarrier, nullptr);
     EXPECT_EQ(shadowPrepareBarrier[0u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
     EXPECT_EQ(shadowPrepareBarrier[0u].resource, currentBindlessSlots);
     EXPECT_EQ(shadowPrepareBarrier[0u].before, Graphics::ResourceStates::Common);
     EXPECT_EQ(shadowPrepareBarrier[0u].after, Graphics::ResourceStates::ConstantBuffer);
     ASSERT_EQ(compiledPrefix->prologueStateSeedCount, 1u);
-    const Graphics::GpuPacketStateSeed* const prefixSeeds = compiledGraph.taskPrologueStateSeeds(prefix);
+    const Graphics::GpuPacketStateSeed* const prefixSeeds = compiledPlan.findTask(prefix).prologueStateSeeds;
     ASSERT_NE(prefixSeeds, nullptr);
     EXPECT_EQ(prefixSeeds[0u].resource, currentBindlessSlots);
     EXPECT_EQ(prefixSeeds[0u].sourcePacket, shadowPreparePacket);
-    ASSERT_EQ(compiledGraph.packet(prefixPacket).dependencyCount, 1u);
-    const Graphics::GpuPacketDependency* const prefixPacketDependencies = compiledGraph.packetDependencies(prefixPacket);
+    ASSERT_EQ(compiledPlan.packet(prefixPacket).plan->dependencyCount, 1u);
+    const Graphics::GpuPacketDependency* const prefixPacketDependencies = compiledPlan.packet(prefixPacket).dependencies;
     ASSERT_NE(prefixPacketDependencies, nullptr);
     EXPECT_EQ(prefixPacketDependencies[0u].producer, shadowPreparePacket);
 
@@ -43511,10 +43826,10 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     EXPECT_NE(FindEdge(analysis, surfelGi, lighting), nullptr);
     EXPECT_NE(FindEdge(analysis, accumulation, lighting), nullptr);
     EXPECT_NE(FindEdge(analysis, prefix, lighting), nullptr);
-    const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting);
+    const Graphics::GpuCompiledTask* const compiledLighting = compiledPlan.findTask(lighting).plan;
     ASSERT_NE(compiledLighting, nullptr);
     ASSERT_GT(compiledLighting->prologueStateSeedCount, 0u);
-    const Graphics::GpuPacketStateSeed* const lightingSeeds = compiledGraph.taskPrologueStateSeeds(lighting);
+    const Graphics::GpuPacketStateSeed* const lightingSeeds = compiledPlan.findTask(lighting).prologueStateSeeds;
     ASSERT_NE(lightingSeeds, nullptr);
     bool lightingImportsShadowVisibilityState = false;
     bool lightingImportsSoftwareCausticsState = false;
@@ -43538,15 +43853,15 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     EXPECT_TRUE(lightingImportsSoftwareCausticsState);
     EXPECT_TRUE(lightingImportsSurfelGiState);
     EXPECT_TRUE(lightingImportsAccumulationState);
-    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 4u);
-    const Graphics::GpuPacketDependency* const lightingPacketDependencies = compiledGraph.packetDependencies(lightingPacket);
+    ASSERT_EQ(compiledPlan.packet(lightingPacket).plan->dependencyCount, 4u);
+    const Graphics::GpuPacketDependency* const lightingPacketDependencies = compiledPlan.packet(lightingPacket).dependencies;
     ASSERT_NE(lightingPacketDependencies, nullptr);
     bool lightingWaitsForPrefix = false;
     bool lightingWaitsForShadowVisibility = false;
     bool lightingWaitsForSoftwareCaustics = false;
     bool lightingWaitsForSurfelGi = false;
     bool lightingWaitsForAccumulation = false;
-    for(usize index = 0u; index < compiledGraph.packet(lightingPacket).dependencyCount; ++index){
+    for(usize index = 0u; index < compiledPlan.packet(lightingPacket).plan->dependencyCount; ++index){
         lightingWaitsForPrefix = lightingWaitsForPrefix || lightingPacketDependencies[index].producer == prefixPacket;
         lightingWaitsForShadowVisibility = lightingWaitsForShadowVisibility
             || lightingPacketDependencies[index].producer == shadowVisibilityPacket
@@ -43566,14 +43881,14 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     EXPECT_TRUE(lightingWaitsForSoftwareCaustics);
     EXPECT_TRUE(lightingWaitsForSurfelGi);
     EXPECT_TRUE(lightingWaitsForAccumulation);
-    EXPECT_EQ(compiledGraph.packet(lightingPacket).externalDependencyCount, 0u);
+    EXPECT_EQ(compiledPlan.packet(lightingPacket).plan->externalDependencyCount, 0u);
 
-    const Graphics::GpuCompiledTask* const compiledShadowVisibility = compiledGraph.findTask(shadowVisibility);
+    const Graphics::GpuCompiledTask* const compiledShadowVisibility = compiledPlan.findTask(shadowVisibility).plan;
     ASSERT_NE(compiledShadowVisibility, nullptr);
     ASSERT_GT(compiledShadowVisibility->prologueStateSeedCount, 0u);
-    const Graphics::GpuPacketStateSeed* const shadowVisibilitySeeds = compiledGraph.taskPrologueStateSeeds(
+    const Graphics::GpuPacketStateSeed* const shadowVisibilitySeeds = compiledPlan.findTask(
         shadowVisibility
-    );
+    ).prologueStateSeeds;
     ASSERT_NE(shadowVisibilitySeeds, nullptr);
     bool shadowVisibilityImportsBindlessSlotsState = false;
     for(usize index = 0u; index < compiledShadowVisibility->prologueStateSeedCount; ++index){
@@ -43585,46 +43900,46 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
         ;
     }
     EXPECT_TRUE(shadowVisibilityImportsBindlessSlotsState);
-    EXPECT_EQ(compiledGraph.packet(shadowVisibilityPacket).externalDependencyCount, 0u);
+    EXPECT_EQ(compiledPlan.packet(shadowVisibilityPacket).plan->externalDependencyCount, 0u);
     EXPECT_NE(FindEdge(analysis, shadowPrepare, shadowVisibility), nullptr);
-    ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 1u);
-    const Graphics::GpuPacketDependency* const shadowVisibilityPacketDependencies = compiledGraph.packetDependencies(
+    ASSERT_EQ(compiledPlan.packet(shadowVisibilityPacket).plan->dependencyCount, 1u);
+    const Graphics::GpuPacketDependency* const shadowVisibilityPacketDependencies = compiledPlan.packet(
         shadowVisibilityPacket
-    );
+    ).dependencies;
     ASSERT_NE(shadowVisibilityPacketDependencies, nullptr);
     EXPECT_EQ(shadowVisibilityPacketDependencies[0u].producer, prefixPacket);
-    ASSERT_EQ(compiledGraph.packet(softwareCausticsPacket).externalDependencyCount, 0u);
-    ASSERT_GE(compiledGraph.packet(softwareCausticsPacket).dependencyCount, 1u);
-    const Graphics::GpuPacketDependency* const softwareCausticsPacketDependencies = compiledGraph.packetDependencies(
+    ASSERT_EQ(compiledPlan.packet(softwareCausticsPacket).plan->externalDependencyCount, 0u);
+    ASSERT_GE(compiledPlan.packet(softwareCausticsPacket).plan->dependencyCount, 1u);
+    const Graphics::GpuPacketDependency* const softwareCausticsPacketDependencies = compiledPlan.packet(
         softwareCausticsPacket
-    );
+    ).dependencies;
     ASSERT_NE(softwareCausticsPacketDependencies, nullptr);
     bool softwareCausticsWaitsForShadowVisibility = false;
-    for(usize index = 0u; index < compiledGraph.packet(softwareCausticsPacket).dependencyCount; ++index){
+    for(usize index = 0u; index < compiledPlan.packet(softwareCausticsPacket).plan->dependencyCount; ++index){
         softwareCausticsWaitsForShadowVisibility = softwareCausticsWaitsForShadowVisibility
             || softwareCausticsPacketDependencies[index].producer == shadowVisibilityPacket
         ;
     }
     EXPECT_TRUE(softwareCausticsWaitsForShadowVisibility);
-    ASSERT_EQ(compiledGraph.packet(surfelGiPacket).externalDependencyCount, 0u);
-    ASSERT_GE(compiledGraph.packet(surfelGiPacket).dependencyCount, 1u);
-    const Graphics::GpuPacketDependency* const surfelGiPacketDependencies = compiledGraph.packetDependencies(
+    ASSERT_EQ(compiledPlan.packet(surfelGiPacket).plan->externalDependencyCount, 0u);
+    ASSERT_GE(compiledPlan.packet(surfelGiPacket).plan->dependencyCount, 1u);
+    const Graphics::GpuPacketDependency* const surfelGiPacketDependencies = compiledPlan.packet(
         surfelGiPacket
-    );
+    ).dependencies;
     ASSERT_NE(surfelGiPacketDependencies, nullptr);
     bool surfelGiWaitsForSoftwareCaustics = false;
-    for(usize index = 0u; index < compiledGraph.packet(surfelGiPacket).dependencyCount; ++index){
+    for(usize index = 0u; index < compiledPlan.packet(surfelGiPacket).plan->dependencyCount; ++index){
         surfelGiWaitsForSoftwareCaustics = surfelGiWaitsForSoftwareCaustics
             || surfelGiPacketDependencies[index].producer == softwareCausticsPacket
         ;
     }
     EXPECT_TRUE(surfelGiWaitsForSoftwareCaustics);
 
-    const Graphics::GpuPacketDependency* const compositePacketDependencies = compiledGraph.packetDependencies(compositePacket);
+    const Graphics::GpuPacketDependency* const compositePacketDependencies = compiledPlan.packet(compositePacket).dependencies;
     ASSERT_NE(compositePacketDependencies, nullptr);
     bool compositeWaitsForLighting = false;
     bool compositeWaitsForAccumulation = false;
-    for(usize index = 0u; index < compiledGraph.packet(compositePacket).dependencyCount; ++index){
+    for(usize index = 0u; index < compiledPlan.packet(compositePacket).plan->dependencyCount; ++index){
         compositeWaitsForLighting = compositeWaitsForLighting
             || compositePacketDependencies[index].producer == lightingPacket
         ;
@@ -43634,7 +43949,7 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     }
     EXPECT_TRUE(compositeWaitsForLighting);
     EXPECT_TRUE(compositeWaitsForAccumulation);
-    EXPECT_EQ(compiledGraph.packet(compositePacket).externalDependencyCount, 0u);
+    EXPECT_EQ(compiledPlan.packet(compositePacket).plan->externalDependencyCount, 0u);
 }
 
 
@@ -43698,8 +44013,10 @@ TEST(GpuTaskGraph, PlansTextureStatesPerDeclaredSubresourceRange){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledBarrier* const secondBarrier = compiledGraph.taskPrologueBarriers(second);
+
+    const Graphics::GpuCompiledBarrier* const secondBarrier = compiledPlan.findTask(second).prologueBarriers;
     ASSERT_NE(secondBarrier, nullptr);
     EXPECT_EQ(secondBarrier[0].type, Graphics::GpuCompiledBarrierType::TextureTransition);
     EXPECT_EQ(secondBarrier[0].before, Graphics::ResourceStates::Common);
@@ -43829,10 +44146,12 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledTransfer = compiledGraph.findTask(transferTask);
-    const Graphics::GpuCompiledTask* const compiledCompute = compiledGraph.findTask(computeTask);
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumerTask);
+
+    const Graphics::GpuCompiledTask* const compiledTransfer = compiledPlan.findTask(transferTask).plan;
+    const Graphics::GpuCompiledTask* const compiledCompute = compiledPlan.findTask(computeTask).plan;
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumerTask).plan;
     ASSERT_NE(compiledTransfer, nullptr);
     ASSERT_NE(compiledCompute, nullptr);
     ASSERT_NE(compiledConsumer, nullptr);
@@ -43847,7 +44166,7 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     ASSERT_TRUE(computePacket.valid());
     ASSERT_TRUE(consumerPacket.valid());
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 2u);
-    const Graphics::GpuPacketStateSeed* const seeds = compiledGraph.taskPrologueStateSeeds(consumerTask);
+    const Graphics::GpuPacketStateSeed* const seeds = compiledPlan.findTask(consumerTask).prologueStateSeeds;
     ASSERT_NE(seeds, nullptr);
     bool hasTransferSeed = false;
     bool hasComputeSeed = false;
@@ -43868,12 +44187,12 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     EXPECT_TRUE(hasTransferSeed);
     EXPECT_TRUE(hasComputeSeed);
 
-    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 2u);
-    const Graphics::GpuPacketDependency* const dependencies = compiledGraph.packetDependencies(consumerPacket);
+    ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 2u);
+    const Graphics::GpuPacketDependency* const dependencies = compiledPlan.packet(consumerPacket).dependencies;
     ASSERT_NE(dependencies, nullptr);
     bool waitsForTransfer = false;
     bool waitsForCompute = false;
-    for(u32 dependencyIndex = 0u; dependencyIndex < compiledGraph.packet(consumerPacket).dependencyCount; ++dependencyIndex){
+    for(u32 dependencyIndex = 0u; dependencyIndex < compiledPlan.packet(consumerPacket).plan->dependencyCount; ++dependencyIndex){
         waitsForTransfer = waitsForTransfer || dependencies[dependencyIndex].producer == transferPacket;
         waitsForCompute = waitsForCompute || dependencies[dependencyIndex].producer == computePacket;
     }
@@ -43882,8 +44201,8 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
 
     ASSERT_EQ(compiledTransfer->epilogueBarrierCount, 1u);
     ASSERT_EQ(compiledCompute->epilogueBarrierCount, 1u);
-    const Graphics::GpuCompiledBarrier* const transferRelease = compiledGraph.taskEpilogueBarriers(transferTask);
-    const Graphics::GpuCompiledBarrier* const computeRelease = compiledGraph.taskEpilogueBarriers(computeTask);
+    const Graphics::GpuCompiledBarrier* const transferRelease = compiledPlan.findTask(transferTask).epilogueBarriers;
+    const Graphics::GpuCompiledBarrier* const computeRelease = compiledPlan.findTask(computeTask).epilogueBarriers;
     ASSERT_NE(transferRelease, nullptr);
     ASSERT_NE(computeRelease, nullptr);
     EXPECT_EQ(transferRelease[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipRelease);
@@ -43896,7 +44215,7 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     EXPECT_EQ(computeRelease[0u].destinationQueue, queues[0u].id);
 
     ASSERT_EQ(compiledConsumer->prologueBarrierCount, 5u);
-    const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(consumerTask);
+    const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(consumerTask).prologueBarriers;
     ASSERT_NE(barriers, nullptr);
     bool hasTransferAcquire = false;
     bool hasComputeAcquire = false;
@@ -43969,8 +44288,7 @@ TEST(GpuTaskGraph, ClampsTypedTextureFragmentsToPhysicalSubresources){
     );
 
     // The safe CPU-only Texture fixture retains its default one-mip descriptor. A broad consumer after this
-    // complete mip-0 producer must not invent a symbolic [1, All) tail that asks an external owner for no native
-    // subresources.
+    // complete mip-0 producer must not invent a symbolic [1, All) tail with no physical subresources.
     const Graphics::GpuPhysicalQueueInfo queues[] = {
         GraphicsQueue(),
         DedicatedComputeQueue(),
@@ -43980,31 +44298,6 @@ TEST(GpuTaskGraph, ClampsTypedTextureFragmentsToPhysicalSubresources){
         .queueCount = LengthOf(queues),
     };
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuExternalCompletionId initialCompletion = graph.importExternalCompletion(
-        Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/typed_fragment_initial_completion"))
-            .setMarkerLabel("Typed Fragment Initial Completion")
-    );
-    ASSERT_TRUE(initialCompletion.valid());
-    Graphics::CommandListResourceStateHandoff initialStateSource(testArena.arena);
-    const Graphics::QueueSubmissionToken initialToken{
-        .queue = Graphics::CommandQueue::Compute,
-        .value = 7u,
-        .physicalQueueIndex = queues[1u].id.index,
-        .deviceGeneration = queues[1u].id.deviceGeneration,
-    };
-    const Graphics::GpuGraphInitialOwnerHandoffSourceDesc initialSources[] = {
-        Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
-            .range = Graphics::GpuTaskResourceRange{
-                .textureSubresources = Graphics::s_AllSubresources,
-            },
-            .sourceQueue = queues[1u].id,
-            .destinationQueue = queues[0u].id,
-            .completion = initialCompletion,
-            .minimumCompletionToken = initialToken,
-            .stateSource = &initialStateSource,
-        },
-    };
     const Graphics::GpuGraphResourceId texture = graph.importTexture(
         typedTexture,
         Graphics::GpuGraphResourceDesc{}
@@ -44012,7 +44305,6 @@ TEST(GpuTaskGraph, ClampsTypedTextureFragmentsToPhysicalSubresources){
             .setMarkerLabel("Typed Fragment Texture")
             .setType(Graphics::GpuGraphResourceType::Texture)
             .setInitialState(Graphics::ResourceStates::Common)
-            .setInitialOwnerHandoffSources(initialSources, LengthOf(initialSources))
     );
     ASSERT_TRUE(texture.valid());
 
@@ -44057,29 +44349,20 @@ TEST(GpuTaskGraph, ClampsTypedTextureFragmentsToPhysicalSubresources){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
-    ASSERT_NE(compiledProducer, nullptr);
+
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
     ASSERT_NE(compiledConsumer, nullptr);
-    const Graphics::GpuSubmissionPacketId producerPacket = compiledProducer->packet;
-    ASSERT_TRUE(producerPacket.valid());
-    ASSERT_EQ(compiledGraph.packet(producerPacket).externalDependencyCount, 1u);
-    const Graphics::GpuExternalCompletionId* const producerDependencies =
-        compiledGraph.packetExternalDependencies(producerPacket)
-    ;
-    ASSERT_NE(producerDependencies, nullptr);
-    EXPECT_EQ(producerDependencies[0u], initialCompletion);
-
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
-    const Graphics::GpuPacketStateSeed* const seeds = compiledGraph.taskPrologueStateSeeds(consumer);
+    const Graphics::GpuPacketStateSeed* const seeds = compiledPlan.findTask(consumer).prologueStateSeeds;
     ASSERT_NE(seeds, nullptr);
     EXPECT_EQ(
         seeds[0u].range.textureSubresources,
         Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u)
     );
     ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
-    const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(consumer);
+    const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(consumer).prologueBarriers;
     ASSERT_NE(barriers, nullptr);
     EXPECT_EQ(barriers[0u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
     EXPECT_EQ(barriers[0u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
@@ -44089,7 +44372,7 @@ TEST(GpuTaskGraph, ClampsTypedTextureFragmentsToPhysicalSubresources){
 
     const Graphics::GpuSubmissionPacketId consumerPacket = compiledConsumer->packet;
     ASSERT_TRUE(consumerPacket.valid());
-    EXPECT_EQ(compiledGraph.packet(consumerPacket).externalDependencyCount, 0u);
+    EXPECT_EQ(compiledPlan.packet(consumerPacket).plan->externalDependencyCount, 0u);
 }
 
 
@@ -44320,12 +44603,16 @@ TEST(GpuTaskGraph, PlansCsgIntervalWorkingSetStorageStates){
     ASSERT_TRUE(transparentIntervalIdClear.valid());
     ASSERT_TRUE(transparentReceiverEventCountClear.valid());
     ASSERT_TRUE(transparentProducer.valid());
-    EXPECT_EQ(graph.taskAt(opaqueIntervalIdClear.index).resourceUseCount, 1u);
-    EXPECT_EQ(graph.taskAt(opaqueReceiverEventCountClear.index).resourceUseCount, 1u);
-    EXPECT_EQ(graph.taskAt(opaqueProducer.index).resourceUseCount, 11u);
-    EXPECT_EQ(graph.taskAt(transparentIntervalIdClear.index).resourceUseCount, 1u);
-    EXPECT_EQ(graph.taskAt(transparentReceiverEventCountClear.index).resourceUseCount, 1u);
-    EXPECT_EQ(graph.taskAt(transparentProducer.index).resourceUseCount, 11u);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        EXPECT_EQ(declarations.taskAt(opaqueIntervalIdClear.index).resourceUseCount, 1u);
+        EXPECT_EQ(declarations.taskAt(opaqueReceiverEventCountClear.index).resourceUseCount, 1u);
+        EXPECT_EQ(declarations.taskAt(opaqueProducer.index).resourceUseCount, 11u);
+        EXPECT_EQ(declarations.taskAt(transparentIntervalIdClear.index).resourceUseCount, 1u);
+        EXPECT_EQ(declarations.taskAt(transparentReceiverEventCountClear.index).resourceUseCount, 1u);
+        EXPECT_EQ(declarations.taskAt(transparentProducer.index).resourceUseCount, 11u);
+    }
 
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
     const Graphics::GpuTaskGraphQueueTopology topology{
@@ -44336,6 +44623,8 @@ TEST(GpuTaskGraph, PlansCsgIntervalWorkingSetStorageStates){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     EXPECT_NE(FindEdge(analysis, opaqueIntervalIdClear, opaqueReceiverEventCountClear), nullptr);
     EXPECT_NE(FindEdge(analysis, opaqueReceiverEventCountClear, opaqueProducer), nullptr);
     EXPECT_NE(FindEdge(analysis, transparentIntervalIdClear, transparentReceiverEventCountClear), nullptr);
@@ -44369,12 +44658,12 @@ TEST(GpuTaskGraph, PlansCsgIntervalWorkingSetStorageStates){
         Graphics::GpuTaskHazardType::WriteAfterWrite
     ));
 
-    const Graphics::GpuCompiledBarrier* const opaqueProducerBarriers = compiledGraph.taskPrologueBarriers(opaqueProducer);
-    const Graphics::GpuCompiledBarrier* const transparentProducerBarriers = compiledGraph.taskPrologueBarriers(
+    const Graphics::GpuCompiledBarrier* const opaqueProducerBarriers = compiledPlan.findTask(opaqueProducer).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const transparentProducerBarriers = compiledPlan.findTask(
         transparentProducer
-    );
-    const Graphics::GpuCompiledTask* const compiledOpaqueProducer = compiledGraph.findTask(opaqueProducer);
-    const Graphics::GpuCompiledTask* const compiledTransparentProducer = compiledGraph.findTask(transparentProducer);
+    ).prologueBarriers;
+    const Graphics::GpuCompiledTask* const compiledOpaqueProducer = compiledPlan.findTask(opaqueProducer).plan;
+    const Graphics::GpuCompiledTask* const compiledTransparentProducer = compiledPlan.findTask(transparentProducer).plan;
     ASSERT_NE(compiledOpaqueProducer, nullptr);
     ASSERT_NE(compiledTransparentProducer, nullptr);
     ASSERT_NE(opaqueProducerBarriers, nullptr);
@@ -44696,7 +44985,11 @@ TEST(GpuTaskGraph, PlansCsgClipBufferEntryStates){
     ;
     const Graphics::GpuTaskId csgClipTask = graph.addTask(csgClipDesc);
     ASSERT_TRUE(csgClipTask.valid());
-    EXPECT_EQ(graph.taskAt(csgClipTask.index).resourceUseCount, 4u);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        EXPECT_EQ(declarations.taskAt(csgClipTask.index).resourceUseCount, 4u);
+    }
 
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
     const Graphics::GpuTaskGraphQueueTopology topology{
@@ -44707,15 +45000,17 @@ TEST(GpuTaskGraph, PlansCsgClipBufferEntryStates){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_EQ(compiledGraph.packetCount(), 1u);
-    const Graphics::GpuSubmissionPacketId csgClipPacket = compiledGraph.packetForTask(csgClipTask);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    ASSERT_EQ(compiledPlan.packetCount(), 1u);
+    const Graphics::GpuSubmissionPacketId csgClipPacket = compiledPlan.packetForTask(csgClipTask);
     ASSERT_TRUE(csgClipPacket.valid());
-    EXPECT_EQ(compiledGraph.packet(csgClipPacket).dependencyCount, 0u);
-    const Graphics::GpuCompiledTask* const compiledCsgClip = compiledGraph.findTask(csgClipTask);
+    EXPECT_EQ(compiledPlan.packet(csgClipPacket).plan->dependencyCount, 0u);
+    const Graphics::GpuCompiledTask* const compiledCsgClip = compiledPlan.findTask(csgClipTask).plan;
     ASSERT_NE(compiledCsgClip, nullptr);
     EXPECT_EQ(compiledCsgClip->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledCsgClip->prologueBarrierCount, 4u);
-    const Graphics::GpuCompiledBarrier* const csgClipBarriers = compiledGraph.taskPrologueBarriers(csgClipTask);
+    const Graphics::GpuCompiledBarrier* const csgClipBarriers = compiledPlan.findTask(csgClipTask).prologueBarriers;
     ASSERT_NE(csgClipBarriers, nullptr);
     const auto hasTransition = [&](
         const Graphics::GpuGraphResourceId resource,
@@ -44822,11 +45117,13 @@ TEST(GpuTaskGraph, PlansGraphOwnedMaterialFrameEntryStates){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledTask* const compiledMaterial = compiledGraph.findTask(materialTask);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    const Graphics::GpuCompiledTask* const compiledMaterial = compiledPlan.findTask(materialTask).plan;
     ASSERT_NE(compiledMaterial, nullptr);
     ASSERT_EQ(compiledMaterial->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledMaterial->prologueBarrierCount, 3u);
-    const Graphics::GpuCompiledBarrier* const materialBarriers = compiledGraph.taskPrologueBarriers(materialTask);
+    const Graphics::GpuCompiledBarrier* const materialBarriers = compiledPlan.findTask(materialTask).prologueBarriers;
     ASSERT_NE(materialBarriers, nullptr);
     const auto hasTransition = [&](const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask after){
         for(u32 barrierIndex = 0u; barrierIndex < compiledMaterial->prologueBarrierCount; ++barrierIndex){
@@ -44908,11 +45205,13 @@ TEST(GpuTaskGraph, PlansGraphOwnedMaterialGeometryEntryStates){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledTask* const compiledMaterial = compiledGraph.findTask(materialTask);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
+    const Graphics::GpuCompiledTask* const compiledMaterial = compiledPlan.findTask(materialTask).plan;
     ASSERT_NE(compiledMaterial, nullptr);
     ASSERT_EQ(compiledMaterial->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledMaterial->prologueBarrierCount, 1u);
-    const Graphics::GpuCompiledBarrier* const materialBarrier = compiledGraph.taskPrologueBarriers(materialTask);
+    const Graphics::GpuCompiledBarrier* const materialBarrier = compiledPlan.findTask(materialTask).prologueBarriers;
     ASSERT_NE(materialBarrier, nullptr);
     EXPECT_EQ(materialBarrier[0].type, Graphics::GpuCompiledBarrierType::BufferTransition);
     EXPECT_EQ(materialBarrier[0].resource, geometry);
@@ -45246,6 +45545,8 @@ TEST(GpuTaskGraph, PlansMergedCsgGbufferSpanBuildCombineAndOpaqueSampleUavDepend
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     ASSERT_NE(FindEdge(analysis, producer, spanBuild), nullptr);
     ASSERT_NE(FindEdge(analysis, producer, combine), nullptr);
     ASSERT_NE(FindEdge(analysis, spanBuild, combine), nullptr);
@@ -45328,30 +45629,30 @@ TEST(GpuTaskGraph, PlansMergedCsgGbufferSpanBuildCombineAndOpaqueSampleUavDepend
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
 
-    ASSERT_EQ(compiledGraph.packetCount(), 1u);
-    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
-    const Graphics::GpuSubmissionPacketId spanBuildPacket = compiledGraph.packetForTask(spanBuild);
-    const Graphics::GpuSubmissionPacketId combinePacket = compiledGraph.packetForTask(combine);
-    const Graphics::GpuSubmissionPacketId samplePacket = compiledGraph.packetForTask(sample);
+    ASSERT_EQ(compiledPlan.packetCount(), 1u);
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId spanBuildPacket = compiledPlan.packetForTask(spanBuild);
+    const Graphics::GpuSubmissionPacketId combinePacket = compiledPlan.packetForTask(combine);
+    const Graphics::GpuSubmissionPacketId samplePacket = compiledPlan.packetForTask(sample);
     ASSERT_TRUE(producerPacket.valid());
     ASSERT_TRUE(spanBuildPacket.valid());
     ASSERT_TRUE(combinePacket.valid());
     ASSERT_EQ(spanBuildPacket, producerPacket);
     ASSERT_EQ(combinePacket, producerPacket);
     ASSERT_EQ(samplePacket, combinePacket);
-    const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(combinePacket);
+    const Graphics::GpuSubmissionPacket& packet = *compiledPlan.packet(combinePacket).plan;
     ASSERT_EQ(packet.taskCount, 4u);
-    ASSERT_NE(compiledGraph.packetTasks(combinePacket), nullptr);
-    EXPECT_EQ(compiledGraph.packetTasks(combinePacket)[0u], producer);
-    EXPECT_EQ(compiledGraph.packetTasks(combinePacket)[1u], spanBuild);
-    EXPECT_EQ(compiledGraph.packetTasks(combinePacket)[2u], combine);
-    EXPECT_EQ(compiledGraph.packetTasks(combinePacket)[3u], sample);
+    ASSERT_NE(compiledPlan.packet(combinePacket).tasks, nullptr);
+    EXPECT_EQ(compiledPlan.packet(combinePacket).tasks[0u], producer);
+    EXPECT_EQ(compiledPlan.packet(combinePacket).tasks[1u], spanBuild);
+    EXPECT_EQ(compiledPlan.packet(combinePacket).tasks[2u], combine);
+    EXPECT_EQ(compiledPlan.packet(combinePacket).tasks[3u], sample);
     EXPECT_EQ(packet.dependencyCount, 0u);
 
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
-    const Graphics::GpuCompiledTask* const compiledSpanBuild = compiledGraph.findTask(spanBuild);
-    const Graphics::GpuCompiledTask* const compiledCombine = compiledGraph.findTask(combine);
-    const Graphics::GpuCompiledTask* const compiledSample = compiledGraph.findTask(sample);
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
+    const Graphics::GpuCompiledTask* const compiledSpanBuild = compiledPlan.findTask(spanBuild).plan;
+    const Graphics::GpuCompiledTask* const compiledCombine = compiledPlan.findTask(combine).plan;
+    const Graphics::GpuCompiledTask* const compiledSample = compiledPlan.findTask(sample).plan;
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledSpanBuild, nullptr);
     ASSERT_NE(compiledCombine, nullptr);
@@ -45364,10 +45665,10 @@ TEST(GpuTaskGraph, PlansMergedCsgGbufferSpanBuildCombineAndOpaqueSampleUavDepend
     ASSERT_EQ(compiledSpanBuild->prologueBarrierCount, 4u);
     ASSERT_EQ(compiledCombine->prologueBarrierCount, 9u);
     ASSERT_EQ(compiledSample->prologueBarrierCount, 5u);
-    const Graphics::GpuCompiledBarrier* const producerBarriers = compiledGraph.taskPrologueBarriers(producer);
-    const Graphics::GpuCompiledBarrier* const spanBuildBarriers = compiledGraph.taskPrologueBarriers(spanBuild);
-    const Graphics::GpuCompiledBarrier* const combineBarriers = compiledGraph.taskPrologueBarriers(combine);
-    const Graphics::GpuCompiledBarrier* const sampleBarriers = compiledGraph.taskPrologueBarriers(sample);
+    const Graphics::GpuCompiledBarrier* const producerBarriers = compiledPlan.findTask(producer).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const spanBuildBarriers = compiledPlan.findTask(spanBuild).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const combineBarriers = compiledPlan.findTask(combine).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const sampleBarriers = compiledPlan.findTask(sample).prologueBarriers;
     ASSERT_NE(producerBarriers, nullptr);
     ASSERT_NE(spanBuildBarriers, nullptr);
     ASSERT_NE(combineBarriers, nullptr);
@@ -45783,6 +46084,8 @@ TEST(GpuTaskGraph, PlansCsgGbufferSpanBuildCombineAndSampleUavDependenciesAcross
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     ASSERT_NE(FindEdge(analysis, producer, spanBuild), nullptr);
     ASSERT_NE(FindEdge(analysis, producer, combine), nullptr);
     ASSERT_NE(FindEdge(analysis, spanBuild, combine), nullptr);
@@ -45865,11 +46168,11 @@ TEST(GpuTaskGraph, PlansCsgGbufferSpanBuildCombineAndSampleUavDependenciesAcross
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
 
-    ASSERT_EQ(compiledGraph.packetCount(), 4u);
-    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
-    const Graphics::GpuSubmissionPacketId spanBuildPacket = compiledGraph.packetForTask(spanBuild);
-    const Graphics::GpuSubmissionPacketId combinePacket = compiledGraph.packetForTask(combine);
-    const Graphics::GpuSubmissionPacketId samplePacket = compiledGraph.packetForTask(sample);
+    ASSERT_EQ(compiledPlan.packetCount(), 4u);
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId spanBuildPacket = compiledPlan.packetForTask(spanBuild);
+    const Graphics::GpuSubmissionPacketId combinePacket = compiledPlan.packetForTask(combine);
+    const Graphics::GpuSubmissionPacketId samplePacket = compiledPlan.packetForTask(sample);
     ASSERT_TRUE(producerPacket.valid());
     ASSERT_TRUE(spanBuildPacket.valid());
     ASSERT_TRUE(combinePacket.valid());
@@ -45878,32 +46181,32 @@ TEST(GpuTaskGraph, PlansCsgGbufferSpanBuildCombineAndSampleUavDependenciesAcross
     EXPECT_NE(producerPacket, combinePacket);
     EXPECT_NE(spanBuildPacket, combinePacket);
     EXPECT_NE(combinePacket, samplePacket);
-    EXPECT_EQ(compiledGraph.packet(producerPacket).taskCount, 1u);
-    EXPECT_EQ(compiledGraph.packet(spanBuildPacket).taskCount, 1u);
-    EXPECT_EQ(compiledGraph.packet(combinePacket).taskCount, 1u);
-    EXPECT_EQ(compiledGraph.packet(samplePacket).taskCount, 1u);
-    ASSERT_EQ(compiledGraph.packet(spanBuildPacket).dependencyCount, 1u);
-    ASSERT_NE(compiledGraph.packetDependencies(spanBuildPacket), nullptr);
-    EXPECT_EQ(compiledGraph.packetDependencies(spanBuildPacket)[0u].producer, producerPacket);
-    ASSERT_EQ(compiledGraph.packet(combinePacket).dependencyCount, 2u);
-    const Graphics::GpuPacketDependency* const combineDependencies = compiledGraph.packetDependencies(combinePacket);
+    EXPECT_EQ(compiledPlan.packet(producerPacket).plan->taskCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(spanBuildPacket).plan->taskCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(combinePacket).plan->taskCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(samplePacket).plan->taskCount, 1u);
+    ASSERT_EQ(compiledPlan.packet(spanBuildPacket).plan->dependencyCount, 1u);
+    ASSERT_NE(compiledPlan.packet(spanBuildPacket).dependencies, nullptr);
+    EXPECT_EQ(compiledPlan.packet(spanBuildPacket).dependencies[0u].producer, producerPacket);
+    ASSERT_EQ(compiledPlan.packet(combinePacket).plan->dependencyCount, 2u);
+    const Graphics::GpuPacketDependency* const combineDependencies = compiledPlan.packet(combinePacket).dependencies;
     ASSERT_NE(combineDependencies, nullptr);
     bool combineWaitsForProducer = false;
     bool combineWaitsForSpanBuild = false;
-    for(u32 dependencyIndex = 0u; dependencyIndex < compiledGraph.packet(combinePacket).dependencyCount; ++dependencyIndex){
+    for(u32 dependencyIndex = 0u; dependencyIndex < compiledPlan.packet(combinePacket).plan->dependencyCount; ++dependencyIndex){
         combineWaitsForProducer = combineWaitsForProducer || combineDependencies[dependencyIndex].producer == producerPacket;
         combineWaitsForSpanBuild = combineWaitsForSpanBuild || combineDependencies[dependencyIndex].producer == spanBuildPacket;
     }
     EXPECT_TRUE(combineWaitsForProducer);
     EXPECT_TRUE(combineWaitsForSpanBuild);
-    ASSERT_EQ(compiledGraph.packet(samplePacket).dependencyCount, 1u);
-    ASSERT_NE(compiledGraph.packetDependencies(samplePacket), nullptr);
-    EXPECT_EQ(compiledGraph.packetDependencies(samplePacket)[0u].producer, combinePacket);
+    ASSERT_EQ(compiledPlan.packet(samplePacket).plan->dependencyCount, 1u);
+    ASSERT_NE(compiledPlan.packet(samplePacket).dependencies, nullptr);
+    EXPECT_EQ(compiledPlan.packet(samplePacket).dependencies[0u].producer, combinePacket);
 
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
-    const Graphics::GpuCompiledTask* const compiledSpanBuild = compiledGraph.findTask(spanBuild);
-    const Graphics::GpuCompiledTask* const compiledCombine = compiledGraph.findTask(combine);
-    const Graphics::GpuCompiledTask* const compiledSample = compiledGraph.findTask(sample);
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
+    const Graphics::GpuCompiledTask* const compiledSpanBuild = compiledPlan.findTask(spanBuild).plan;
+    const Graphics::GpuCompiledTask* const compiledCombine = compiledPlan.findTask(combine).plan;
+    const Graphics::GpuCompiledTask* const compiledSample = compiledPlan.findTask(sample).plan;
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledSpanBuild, nullptr);
     ASSERT_NE(compiledCombine, nullptr);
@@ -45916,12 +46219,12 @@ TEST(GpuTaskGraph, PlansCsgGbufferSpanBuildCombineAndSampleUavDependenciesAcross
     ASSERT_EQ(compiledCombine->prologueBarrierCount, 9u);
     ASSERT_EQ(compiledSample->prologueStateSeedCount, 4u);
     ASSERT_EQ(compiledSample->prologueBarrierCount, 4u);
-    const Graphics::GpuPacketStateSeed* const spanBuildSeeds = compiledGraph.taskPrologueStateSeeds(spanBuild);
-    const Graphics::GpuPacketStateSeed* const combineSeeds = compiledGraph.taskPrologueStateSeeds(combine);
-    const Graphics::GpuPacketStateSeed* const sampleSeeds = compiledGraph.taskPrologueStateSeeds(sample);
-    const Graphics::GpuCompiledBarrier* const spanBuildBarriers = compiledGraph.taskPrologueBarriers(spanBuild);
-    const Graphics::GpuCompiledBarrier* const combineBarriers = compiledGraph.taskPrologueBarriers(combine);
-    const Graphics::GpuCompiledBarrier* const sampleBarriers = compiledGraph.taskPrologueBarriers(sample);
+    const Graphics::GpuPacketStateSeed* const spanBuildSeeds = compiledPlan.findTask(spanBuild).prologueStateSeeds;
+    const Graphics::GpuPacketStateSeed* const combineSeeds = compiledPlan.findTask(combine).prologueStateSeeds;
+    const Graphics::GpuPacketStateSeed* const sampleSeeds = compiledPlan.findTask(sample).prologueStateSeeds;
+    const Graphics::GpuCompiledBarrier* const spanBuildBarriers = compiledPlan.findTask(spanBuild).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const combineBarriers = compiledPlan.findTask(combine).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const sampleBarriers = compiledPlan.findTask(sample).prologueBarriers;
     ASSERT_NE(spanBuildSeeds, nullptr);
     ASSERT_NE(combineSeeds, nullptr);
     ASSERT_NE(sampleSeeds, nullptr);
@@ -46446,6 +46749,8 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerSpanBuildCombineToOccupancyUavD
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     ASSERT_NE(FindEdge(analysis, pre, spanBuild), nullptr);
     ASSERT_NE(FindEdge(analysis, pre, combine), nullptr);
     ASSERT_NE(FindEdge(analysis, spanBuild, combine), nullptr);
@@ -46537,32 +46842,32 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerSpanBuildCombineToOccupancyUavD
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
 
-    ASSERT_EQ(compiledGraph.packetCount(), 1u);
-    const Graphics::GpuSubmissionPacketId prePacket = compiledGraph.packetForTask(pre);
-    const Graphics::GpuSubmissionPacketId spanBuildPacket = compiledGraph.packetForTask(spanBuild);
-    const Graphics::GpuSubmissionPacketId combinePacket = compiledGraph.packetForTask(combine);
-    const Graphics::GpuSubmissionPacketId clearPacket = compiledGraph.packetForTask(clear);
-    const Graphics::GpuSubmissionPacketId occupancyPacket = compiledGraph.packetForTask(occupancy);
+    ASSERT_EQ(compiledPlan.packetCount(), 1u);
+    const Graphics::GpuSubmissionPacketId prePacket = compiledPlan.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId spanBuildPacket = compiledPlan.packetForTask(spanBuild);
+    const Graphics::GpuSubmissionPacketId combinePacket = compiledPlan.packetForTask(combine);
+    const Graphics::GpuSubmissionPacketId clearPacket = compiledPlan.packetForTask(clear);
+    const Graphics::GpuSubmissionPacketId occupancyPacket = compiledPlan.packetForTask(occupancy);
     ASSERT_TRUE(prePacket.valid());
     EXPECT_EQ(spanBuildPacket, prePacket);
     EXPECT_EQ(combinePacket, prePacket);
     EXPECT_EQ(clearPacket, prePacket);
     EXPECT_EQ(occupancyPacket, prePacket);
-    const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(prePacket);
+    const Graphics::GpuSubmissionPacket& packet = *compiledPlan.packet(prePacket).plan;
     ASSERT_EQ(packet.taskCount, 5u);
-    ASSERT_NE(compiledGraph.packetTasks(prePacket), nullptr);
-    EXPECT_EQ(compiledGraph.packetTasks(prePacket)[0u], pre);
-    EXPECT_EQ(compiledGraph.packetTasks(prePacket)[1u], spanBuild);
-    EXPECT_EQ(compiledGraph.packetTasks(prePacket)[2u], combine);
-    EXPECT_EQ(compiledGraph.packetTasks(prePacket)[3u], clear);
-    EXPECT_EQ(compiledGraph.packetTasks(prePacket)[4u], occupancy);
+    ASSERT_NE(compiledPlan.packet(prePacket).tasks, nullptr);
+    EXPECT_EQ(compiledPlan.packet(prePacket).tasks[0u], pre);
+    EXPECT_EQ(compiledPlan.packet(prePacket).tasks[1u], spanBuild);
+    EXPECT_EQ(compiledPlan.packet(prePacket).tasks[2u], combine);
+    EXPECT_EQ(compiledPlan.packet(prePacket).tasks[3u], clear);
+    EXPECT_EQ(compiledPlan.packet(prePacket).tasks[4u], occupancy);
     EXPECT_EQ(packet.dependencyCount, 0u);
 
-    const Graphics::GpuCompiledTask* const compiledPre = compiledGraph.findTask(pre);
-    const Graphics::GpuCompiledTask* const compiledSpanBuild = compiledGraph.findTask(spanBuild);
-    const Graphics::GpuCompiledTask* const compiledCombine = compiledGraph.findTask(combine);
-    const Graphics::GpuCompiledTask* const compiledClear = compiledGraph.findTask(clear);
-    const Graphics::GpuCompiledTask* const compiledOccupancy = compiledGraph.findTask(occupancy);
+    const Graphics::GpuCompiledTask* const compiledPre = compiledPlan.findTask(pre).plan;
+    const Graphics::GpuCompiledTask* const compiledSpanBuild = compiledPlan.findTask(spanBuild).plan;
+    const Graphics::GpuCompiledTask* const compiledCombine = compiledPlan.findTask(combine).plan;
+    const Graphics::GpuCompiledTask* const compiledClear = compiledPlan.findTask(clear).plan;
+    const Graphics::GpuCompiledTask* const compiledOccupancy = compiledPlan.findTask(occupancy).plan;
     ASSERT_NE(compiledPre, nullptr);
     ASSERT_NE(compiledSpanBuild, nullptr);
     ASSERT_NE(compiledCombine, nullptr);
@@ -46578,11 +46883,11 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerSpanBuildCombineToOccupancyUavD
     EXPECT_EQ(compiledCombine->prologueBarrierCount, 9u);
     EXPECT_EQ(compiledClear->prologueBarrierCount, 1u);
     EXPECT_EQ(compiledOccupancy->prologueBarrierCount, 6u);
-    const Graphics::GpuCompiledBarrier* const preBarriers = compiledGraph.taskPrologueBarriers(pre);
-    const Graphics::GpuCompiledBarrier* const spanBuildBarriers = compiledGraph.taskPrologueBarriers(spanBuild);
-    const Graphics::GpuCompiledBarrier* const combineBarriers = compiledGraph.taskPrologueBarriers(combine);
-    const Graphics::GpuCompiledBarrier* const clearBarriers = compiledGraph.taskPrologueBarriers(clear);
-    const Graphics::GpuCompiledBarrier* const occupancyBarriers = compiledGraph.taskPrologueBarriers(occupancy);
+    const Graphics::GpuCompiledBarrier* const preBarriers = compiledPlan.findTask(pre).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const spanBuildBarriers = compiledPlan.findTask(spanBuild).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const combineBarriers = compiledPlan.findTask(combine).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const clearBarriers = compiledPlan.findTask(clear).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const occupancyBarriers = compiledPlan.findTask(occupancy).prologueBarriers;
     ASSERT_NE(preBarriers, nullptr);
     ASSERT_NE(spanBuildBarriers, nullptr);
     ASSERT_NE(combineBarriers, nullptr);
@@ -46972,6 +47277,8 @@ TEST(GpuTaskGraph, SeedsSplitAvboitCsgReceiverSpanBuildCombineAndOccupancyUavDep
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     ASSERT_NE(FindEdge(analysis, pre, spanBuild), nullptr);
     ASSERT_NE(FindEdge(analysis, pre, combine), nullptr);
     ASSERT_NE(FindEdge(analysis, spanBuild, combine), nullptr);
@@ -47062,12 +47369,12 @@ TEST(GpuTaskGraph, SeedsSplitAvboitCsgReceiverSpanBuildCombineAndOccupancyUavDep
         coverage,
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
-    ASSERT_EQ(compiledGraph.packetCount(), 5u);
-    const Graphics::GpuSubmissionPacketId prePacket = compiledGraph.packetForTask(pre);
-    const Graphics::GpuSubmissionPacketId spanBuildPacket = compiledGraph.packetForTask(spanBuild);
-    const Graphics::GpuSubmissionPacketId combinePacket = compiledGraph.packetForTask(combine);
-    const Graphics::GpuSubmissionPacketId clearPacket = compiledGraph.packetForTask(clear);
-    const Graphics::GpuSubmissionPacketId occupancyPacket = compiledGraph.packetForTask(occupancy);
+    ASSERT_EQ(compiledPlan.packetCount(), 5u);
+    const Graphics::GpuSubmissionPacketId prePacket = compiledPlan.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId spanBuildPacket = compiledPlan.packetForTask(spanBuild);
+    const Graphics::GpuSubmissionPacketId combinePacket = compiledPlan.packetForTask(combine);
+    const Graphics::GpuSubmissionPacketId clearPacket = compiledPlan.packetForTask(clear);
+    const Graphics::GpuSubmissionPacketId occupancyPacket = compiledPlan.packetForTask(occupancy);
     ASSERT_TRUE(prePacket.valid());
     ASSERT_TRUE(spanBuildPacket.valid());
     ASSERT_TRUE(combinePacket.valid());
@@ -47078,15 +47385,15 @@ TEST(GpuTaskGraph, SeedsSplitAvboitCsgReceiverSpanBuildCombineAndOccupancyUavDep
     EXPECT_NE(spanBuildPacket, combinePacket);
     EXPECT_NE(combinePacket, clearPacket);
     EXPECT_NE(clearPacket, occupancyPacket);
-    EXPECT_EQ(compiledGraph.packet(prePacket).taskCount, 1u);
-    EXPECT_EQ(compiledGraph.packet(spanBuildPacket).taskCount, 1u);
-    EXPECT_EQ(compiledGraph.packet(combinePacket).taskCount, 1u);
-    EXPECT_EQ(compiledGraph.packet(clearPacket).taskCount, 1u);
-    EXPECT_EQ(compiledGraph.packet(occupancyPacket).taskCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(prePacket).plan->taskCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(spanBuildPacket).plan->taskCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(combinePacket).plan->taskCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(clearPacket).plan->taskCount, 1u);
+    EXPECT_EQ(compiledPlan.packet(occupancyPacket).plan->taskCount, 1u);
     const auto packetWaitsFor = [&](const Graphics::GpuSubmissionPacketId packet,
                                     const Graphics::GpuSubmissionPacketId producer){
-        const Graphics::GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
-        const Graphics::GpuPacketDependency* const dependencies = compiledGraph.packetDependencies(packet);
+        const Graphics::GpuSubmissionPacket& packetPlan = *compiledPlan.packet(packet).plan;
+        const Graphics::GpuPacketDependency* const dependencies = compiledPlan.packet(packet).dependencies;
         for(u32 dependencyIndex = 0u; dependencyIndex < packetPlan.dependencyCount; ++dependencyIndex){
             if(dependencies[dependencyIndex].producer == producer)
                 return true;
@@ -47100,11 +47407,11 @@ TEST(GpuTaskGraph, SeedsSplitAvboitCsgReceiverSpanBuildCombineAndOccupancyUavDep
     EXPECT_TRUE(packetWaitsFor(occupancyPacket, combinePacket));
     EXPECT_TRUE(packetWaitsFor(occupancyPacket, clearPacket));
 
-    const Graphics::GpuCompiledTask* const compiledPre = compiledGraph.findTask(pre);
-    const Graphics::GpuCompiledTask* const compiledSpanBuild = compiledGraph.findTask(spanBuild);
-    const Graphics::GpuCompiledTask* const compiledCombine = compiledGraph.findTask(combine);
-    const Graphics::GpuCompiledTask* const compiledClear = compiledGraph.findTask(clear);
-    const Graphics::GpuCompiledTask* const compiledOccupancy = compiledGraph.findTask(occupancy);
+    const Graphics::GpuCompiledTask* const compiledPre = compiledPlan.findTask(pre).plan;
+    const Graphics::GpuCompiledTask* const compiledSpanBuild = compiledPlan.findTask(spanBuild).plan;
+    const Graphics::GpuCompiledTask* const compiledCombine = compiledPlan.findTask(combine).plan;
+    const Graphics::GpuCompiledTask* const compiledClear = compiledPlan.findTask(clear).plan;
+    const Graphics::GpuCompiledTask* const compiledOccupancy = compiledPlan.findTask(occupancy).plan;
     ASSERT_NE(compiledPre, nullptr);
     ASSERT_NE(compiledSpanBuild, nullptr);
     ASSERT_NE(compiledCombine, nullptr);
@@ -47120,14 +47427,14 @@ TEST(GpuTaskGraph, SeedsSplitAvboitCsgReceiverSpanBuildCombineAndOccupancyUavDep
     EXPECT_EQ(compiledClear->prologueBarrierCount, 1u);
     EXPECT_EQ(compiledOccupancy->prologueStateSeedCount, 5u);
     EXPECT_EQ(compiledOccupancy->prologueBarrierCount, 5u);
-    const Graphics::GpuPacketStateSeed* const spanBuildSeeds = compiledGraph.taskPrologueStateSeeds(spanBuild);
-    const Graphics::GpuPacketStateSeed* const combineSeeds = compiledGraph.taskPrologueStateSeeds(combine);
-    const Graphics::GpuPacketStateSeed* const occupancySeeds = compiledGraph.taskPrologueStateSeeds(occupancy);
-    const Graphics::GpuCompiledBarrier* const preBarriers = compiledGraph.taskPrologueBarriers(pre);
-    const Graphics::GpuCompiledBarrier* const spanBuildBarriers = compiledGraph.taskPrologueBarriers(spanBuild);
-    const Graphics::GpuCompiledBarrier* const combineBarriers = compiledGraph.taskPrologueBarriers(combine);
-    const Graphics::GpuCompiledBarrier* const clearBarriers = compiledGraph.taskPrologueBarriers(clear);
-    const Graphics::GpuCompiledBarrier* const occupancyBarriers = compiledGraph.taskPrologueBarriers(occupancy);
+    const Graphics::GpuPacketStateSeed* const spanBuildSeeds = compiledPlan.findTask(spanBuild).prologueStateSeeds;
+    const Graphics::GpuPacketStateSeed* const combineSeeds = compiledPlan.findTask(combine).prologueStateSeeds;
+    const Graphics::GpuPacketStateSeed* const occupancySeeds = compiledPlan.findTask(occupancy).prologueStateSeeds;
+    const Graphics::GpuCompiledBarrier* const preBarriers = compiledPlan.findTask(pre).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const spanBuildBarriers = compiledPlan.findTask(spanBuild).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const combineBarriers = compiledPlan.findTask(combine).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const clearBarriers = compiledPlan.findTask(clear).prologueBarriers;
+    const Graphics::GpuCompiledBarrier* const occupancyBarriers = compiledPlan.findTask(occupancy).prologueBarriers;
     ASSERT_NE(spanBuildSeeds, nullptr);
     ASSERT_NE(combineSeeds, nullptr);
     ASSERT_NE(occupancySeeds, nullptr);
@@ -47525,6 +47832,8 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToExtinctionSampleAcrossAsyncGa
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     EXPECT_TRUE(HasInferredHazard(
         analysis,
         intervals,
@@ -47554,19 +47863,19 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToExtinctionSampleAcrossAsyncGa
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
 
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
-    const Graphics::GpuSubmissionPacketId intervalsPacket = compiledGraph.packetForTask(intervals);
-    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledGraph.packetForTask(depthWarp);
-    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledGraph.packetForTask(extinction);
+    ASSERT_EQ(compiledPlan.packetCount(), 3u);
+    const Graphics::GpuSubmissionPacketId intervalsPacket = compiledPlan.packetForTask(intervals);
+    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledPlan.packetForTask(depthWarp);
+    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledPlan.packetForTask(extinction);
     ASSERT_TRUE(intervalsPacket.valid());
     ASSERT_TRUE(depthWarpPacket.valid());
     ASSERT_TRUE(extinctionPacket.valid());
     EXPECT_NE(intervalsPacket, depthWarpPacket);
     EXPECT_NE(depthWarpPacket, extinctionPacket);
     EXPECT_NE(intervalsPacket, extinctionPacket);
-    const Graphics::GpuSubmissionPacket& extinctionPacketPlan = compiledGraph.packet(extinctionPacket);
+    const Graphics::GpuSubmissionPacket& extinctionPacketPlan = *compiledPlan.packet(extinctionPacket).plan;
     ASSERT_EQ(extinctionPacketPlan.dependencyCount, 2u);
-    const Graphics::GpuPacketDependency* const extinctionDependencies = compiledGraph.packetDependencies(extinctionPacket);
+    const Graphics::GpuPacketDependency* const extinctionDependencies = compiledPlan.packet(extinctionPacket).dependencies;
     ASSERT_NE(extinctionDependencies, nullptr);
     bool waitsForIntervals = false;
     bool waitsForDepthWarp = false;
@@ -47577,16 +47886,16 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToExtinctionSampleAcrossAsyncGa
     EXPECT_TRUE(waitsForIntervals);
     EXPECT_TRUE(waitsForDepthWarp);
 
-    const Graphics::GpuCompiledTask* const compiledIntervals = compiledGraph.findTask(intervals);
-    const Graphics::GpuCompiledTask* const compiledExtinction = compiledGraph.findTask(extinction);
+    const Graphics::GpuCompiledTask* const compiledIntervals = compiledPlan.findTask(intervals).plan;
+    const Graphics::GpuCompiledTask* const compiledExtinction = compiledPlan.findTask(extinction).plan;
     ASSERT_NE(compiledIntervals, nullptr);
     ASSERT_NE(compiledExtinction, nullptr);
     ASSERT_EQ(compiledIntervals->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledIntervals->prologueBarrierCount, 4u);
     ASSERT_EQ(compiledExtinction->prologueStateSeedCount, 4u);
     ASSERT_EQ(compiledExtinction->prologueBarrierCount, 5u);
-    const Graphics::GpuPacketStateSeed* const extinctionSeeds = compiledGraph.taskPrologueStateSeeds(extinction);
-    const Graphics::GpuCompiledBarrier* const extinctionBarriers = compiledGraph.taskPrologueBarriers(extinction);
+    const Graphics::GpuPacketStateSeed* const extinctionSeeds = compiledPlan.findTask(extinction).prologueStateSeeds;
+    const Graphics::GpuCompiledBarrier* const extinctionBarriers = compiledPlan.findTask(extinction).prologueBarriers;
     ASSERT_NE(extinctionSeeds, nullptr);
     ASSERT_NE(extinctionBarriers, nullptr);
     const auto hasExtinctionStateSeed = [&](const Graphics::GpuGraphResourceId resource){
@@ -47828,6 +48137,8 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToAccumulationSampleAcrossInteg
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
     EXPECT_TRUE(HasInferredHazard(
         analysis,
         intervals,
@@ -47857,12 +48168,12 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToAccumulationSampleAcrossInteg
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
 
-    ASSERT_EQ(compiledGraph.packetCount(), 5u);
-    const Graphics::GpuSubmissionPacketId intervalsPacket = compiledGraph.packetForTask(intervals);
-    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledGraph.packetForTask(depthWarp);
-    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledGraph.packetForTask(extinction);
-    const Graphics::GpuSubmissionPacketId integrationPacket = compiledGraph.packetForTask(integration);
-    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledGraph.packetForTask(accumulation);
+    ASSERT_EQ(compiledPlan.packetCount(), 5u);
+    const Graphics::GpuSubmissionPacketId intervalsPacket = compiledPlan.packetForTask(intervals);
+    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledPlan.packetForTask(depthWarp);
+    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledPlan.packetForTask(extinction);
+    const Graphics::GpuSubmissionPacketId integrationPacket = compiledPlan.packetForTask(integration);
+    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledPlan.packetForTask(accumulation);
     ASSERT_TRUE(intervalsPacket.valid());
     ASSERT_TRUE(depthWarpPacket.valid());
     ASSERT_TRUE(extinctionPacket.valid());
@@ -47872,9 +48183,9 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToAccumulationSampleAcrossInteg
     EXPECT_NE(depthWarpPacket, extinctionPacket);
     EXPECT_NE(extinctionPacket, integrationPacket);
     EXPECT_NE(integrationPacket, accumulationPacket);
-    const Graphics::GpuSubmissionPacket& accumulationPacketPlan = compiledGraph.packet(accumulationPacket);
+    const Graphics::GpuSubmissionPacket& accumulationPacketPlan = *compiledPlan.packet(accumulationPacket).plan;
     ASSERT_EQ(accumulationPacketPlan.dependencyCount, 2u);
-    const Graphics::GpuPacketDependency* const accumulationDependencies = compiledGraph.packetDependencies(accumulationPacket);
+    const Graphics::GpuPacketDependency* const accumulationDependencies = compiledPlan.packet(accumulationPacket).dependencies;
     ASSERT_NE(accumulationDependencies, nullptr);
     bool waitsForIntervals = false;
     bool waitsForIntegration = false;
@@ -47885,16 +48196,16 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToAccumulationSampleAcrossInteg
     EXPECT_TRUE(waitsForIntervals);
     EXPECT_TRUE(waitsForIntegration);
 
-    const Graphics::GpuCompiledTask* const compiledIntervals = compiledGraph.findTask(intervals);
-    const Graphics::GpuCompiledTask* const compiledAccumulation = compiledGraph.findTask(accumulation);
+    const Graphics::GpuCompiledTask* const compiledIntervals = compiledPlan.findTask(intervals).plan;
+    const Graphics::GpuCompiledTask* const compiledAccumulation = compiledPlan.findTask(accumulation).plan;
     ASSERT_NE(compiledIntervals, nullptr);
     ASSERT_NE(compiledAccumulation, nullptr);
     ASSERT_EQ(compiledIntervals->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledIntervals->prologueBarrierCount, 4u);
     ASSERT_EQ(compiledAccumulation->prologueStateSeedCount, 4u);
     ASSERT_EQ(compiledAccumulation->prologueBarrierCount, 5u);
-    const Graphics::GpuPacketStateSeed* const accumulationSeeds = compiledGraph.taskPrologueStateSeeds(accumulation);
-    const Graphics::GpuCompiledBarrier* const accumulationBarriers = compiledGraph.taskPrologueBarriers(accumulation);
+    const Graphics::GpuPacketStateSeed* const accumulationSeeds = compiledPlan.findTask(accumulation).prologueStateSeeds;
+    const Graphics::GpuCompiledBarrier* const accumulationBarriers = compiledPlan.findTask(accumulation).prologueBarriers;
     ASSERT_NE(accumulationSeeds, nullptr);
     ASSERT_NE(accumulationBarriers, nullptr);
     const auto hasAccumulationStateSeed = [&](const Graphics::GpuGraphResourceId resource){
@@ -47974,16 +48285,18 @@ TEST(GpuTaskGraph, CompilesTransferPreferenceToGraphicsFallbackWithoutARendererP
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(copyTask);
     ASSERT_NE(assignment, nullptr);
     EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
     EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::Fallback);
 
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(copyTask);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(copyTask);
     ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledGraph.packet(packet).queue, assignment->queue);
-    const Graphics::GpuPhysicalQueueInfo* const packetQueue = compiledGraph.queueInfo(compiledGraph.packet(packet).queue);
+    EXPECT_EQ(compiledPlan.packet(packet).plan->queue, assignment->queue);
+    const Graphics::GpuPhysicalQueueInfo* const packetQueue = compiledPlan.queueInfo(compiledPlan.packet(packet).plan->queue);
     ASSERT_NE(packetQueue, nullptr);
     EXPECT_EQ(packetQueue->queueClass, Graphics::CommandQueue::Graphics);
 }
@@ -48026,6 +48339,8 @@ TEST(GpuTaskGraph, CompilesEligibleTransferPreferenceToDedicatedTransferQueue){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+
 
     const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(copyTask);
     ASSERT_NE(assignment, nullptr);
@@ -48033,9 +48348,9 @@ TEST(GpuTaskGraph, CompilesEligibleTransferPreferenceToDedicatedTransferQueue){
     EXPECT_TRUE(assignment->dedicated);
     EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedTransfer);
 
-    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(copyTask);
+    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(copyTask);
     ASSERT_TRUE(packet.valid());
-    const Graphics::GpuPhysicalQueueInfo* const packetQueue = compiledGraph.queueInfo(compiledGraph.packet(packet).queue);
+    const Graphics::GpuPhysicalQueueInfo* const packetQueue = compiledPlan.queueInfo(compiledPlan.packet(packet).plan->queue);
     ASSERT_NE(packetQueue, nullptr);
     EXPECT_EQ(packetQueue->queueClass, Graphics::CommandQueue::Transfer);
     EXPECT_EQ(packetQueue->capabilities, Graphics::GpuQueueCapability::Transfer);
@@ -48090,7 +48405,13 @@ TEST(GpuTaskGraph, RetainsTinyTransferTasksOnGraphics){
 TEST(GpuTaskGraph, RejectsExplicitCyclesAndExportsExternalMetadata){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuTaskId futureSecond{ 1u, graph.generation() };
+    u64 graphGeneration = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        graphGeneration = declarations.generation();
+    }
+    const Graphics::GpuTaskId futureSecond{ 1u, graphGeneration };
     const Graphics::GpuTaskId first = AddTask(
         graph,
         Name("tests/task_graph/cycle_first"),
@@ -48145,7 +48466,11 @@ TEST(GpuTaskGraph, RejectsExplicitCyclesAndExportsExternalMetadata){
     Telemetry::FrameGraphPendingNameEdges pendingEdges(testArena.arena);
     Telemetry::FrameGraphBuilder builder(nodes, edges, pendingEdges);
     Core::Alloc::ScratchArena telemetryScratchArena(s_TaskGraphScratchArena);
-    EXPECT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, telemetryScratchArena));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        EXPECT_TRUE(declarations.appendFrameGraphTelemetry(builder, analysis, telemetryScratchArena));
+    }
     ASSERT_EQ(nodes.size(), 2u);
     ASSERT_EQ(edges.size(), 1u);
     EXPECT_EQ(edges[0].kind, Telemetry::FrameGraphEdgeKind::DependsOn);
@@ -48155,7 +48480,11 @@ TEST(GpuTaskGraph, RejectsExplicitCyclesAndExportsExternalMetadata){
             .setIdentity(Name("tests/task_graph/late_external"))
             .setMarkerLabel("Late External")
     ).valid());
-    EXPECT_FALSE(graph.appendFrameGraphTelemetry(builder, analysis, telemetryScratchArena));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        EXPECT_FALSE(declarations.appendFrameGraphTelemetry(builder, analysis, telemetryScratchArena));
+    }
 }
 
 TEST(GpuTaskGraph, RejectsDeepExplicitCyclesWithoutCallStackGrowth){
@@ -48163,11 +48492,17 @@ TEST(GpuTaskGraph, RejectsDeepExplicitCyclesWithoutCallStackGrowth){
 
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
+    u64 graphGeneration = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        graphGeneration = declarations.generation();
+    }
     const Name taskBaseName("tests/task_graph/deep_cycle_task_");
     char taskIndexBuffer[32u] = {};
     const Graphics::GpuTaskId futureLast{
         static_cast<u32>(s_TaskCount - 1u),
-        graph.generation(),
+        graphGeneration,
     };
     const Graphics::GpuTaskId first = AddTask(
         graph,
@@ -48198,7 +48533,7 @@ TEST(GpuTaskGraph, RejectsDeepExplicitCyclesWithoutCallStackGrowth){
     ASSERT_EQ(analysis.cyclePath().size(), s_TaskCount + 1u);
     ASSERT_EQ(analysis.cycleEdges().size(), s_TaskCount);
     for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
-        const Graphics::GpuTaskId expectedTask{ static_cast<u32>(taskIndex), graph.generation() };
+        const Graphics::GpuTaskId expectedTask{ static_cast<u32>(taskIndex), graphGeneration };
         EXPECT_EQ(analysis.cyclePath()[taskIndex], expectedTask);
         EXPECT_EQ(analysis.cycleEdges()[taskIndex].producer, analysis.cyclePath()[taskIndex]);
         EXPECT_EQ(analysis.cycleEdges()[taskIndex].consumer, analysis.cyclePath()[taskIndex + 1u]);
@@ -48227,31 +48562,39 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
             .setToken(token)
     );
     ASSERT_TRUE(completion.valid());
-    ASSERT_EQ(graph.externalCompletionCount(), 1u);
+    u64 tokenFirstRevision = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        ASSERT_EQ(declarations.externalCompletionCount(), 1u);
 
-    const Graphics::GpuTaskGraphExternalCompletionView view = graph.externalCompletionAt(completion.index);
-    EXPECT_EQ(view.id, completion);
-    EXPECT_TRUE(view.hasToken);
-    EXPECT_EQ(view.token.queue, token.queue);
-    EXPECT_EQ(view.token.value, token.value);
-    EXPECT_EQ(view.token.physicalQueueIndex, token.physicalQueueIndex);
-    EXPECT_EQ(view.token.deviceGeneration, token.deviceGeneration);
-    const Graphics::QueueSubmissionToken* const storedToken = graph.externalCompletionToken(completion);
-    ASSERT_NE(storedToken, nullptr);
-    EXPECT_EQ(storedToken->queue, token.queue);
-    EXPECT_EQ(storedToken->value, token.value);
-    EXPECT_EQ(storedToken->physicalQueueIndex, token.physicalQueueIndex);
-    EXPECT_EQ(storedToken->deviceGeneration, token.deviceGeneration);
-    EXPECT_TRUE(graph.validForDeviceGeneration(token.deviceGeneration));
-
-    const u64 tokenFirstRevision = graph.declarationRevision();
+        const Graphics::GpuTaskGraphExternalCompletionView view = declarations.externalCompletionAt(completion.index);
+        EXPECT_EQ(view.id, completion);
+        EXPECT_TRUE(view.hasToken);
+        EXPECT_EQ(view.token.queue, token.queue);
+        EXPECT_EQ(view.token.value, token.value);
+        EXPECT_EQ(view.token.physicalQueueIndex, token.physicalQueueIndex);
+        EXPECT_EQ(view.token.deviceGeneration, token.deviceGeneration);
+        const Graphics::QueueSubmissionToken* const storedToken = declarations.externalCompletionToken(completion);
+        ASSERT_NE(storedToken, nullptr);
+        EXPECT_EQ(storedToken->queue, token.queue);
+        EXPECT_EQ(storedToken->value, token.value);
+        EXPECT_EQ(storedToken->physicalQueueIndex, token.physicalQueueIndex);
+        EXPECT_EQ(storedToken->deviceGeneration, token.deviceGeneration);
+        EXPECT_TRUE(declarations.validForDeviceGeneration(token.deviceGeneration));
+        tokenFirstRevision = declarations.declarationRevision();
+    }
     const Graphics::GpuExternalCompletionId repeatedMetadataImport = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
             .setIdentity(Name("tests/task_graph/owned_external_completion"))
             .setMarkerLabel("Compatible Metadata Reference")
     );
     EXPECT_EQ(repeatedMetadataImport, completion);
-    EXPECT_EQ(graph.declarationRevision(), tokenFirstRevision);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        EXPECT_EQ(declarations.declarationRevision(), tokenFirstRevision);
+    }
     const Graphics::GpuExternalCompletionId repeatedTokenImport = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
             .setIdentity(Name("tests/task_graph/owned_external_completion"))
@@ -48259,7 +48602,11 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
             .setToken(token)
     );
     EXPECT_EQ(repeatedTokenImport, completion);
-    EXPECT_EQ(graph.declarationRevision(), tokenFirstRevision);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        EXPECT_EQ(declarations.declarationRevision(), tokenFirstRevision);
+    }
 
     Graphics::QueueSubmissionToken conflictingToken = token;
     ++conflictingToken.value;
@@ -48278,7 +48625,11 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
             .setMarkerLabel("Stale Owned External Completion")
             .setToken(staleToken)
     ).valid());
-    EXPECT_FALSE(graph.validForDeviceGeneration(staleToken.deviceGeneration));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        EXPECT_FALSE(declarations.validForDeviceGeneration(staleToken.deviceGeneration));
+    }
 
     Graphics::QueueSubmissionToken missingPhysicalIdentity = token;
     missingPhysicalIdentity.physicalQueueIndex = Limit<u16>::s_Max;
@@ -48296,8 +48647,12 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
             .setMarkerLabel("Metadata External Completion")
     );
     ASSERT_TRUE(metadataCompletion.valid());
-    EXPECT_FALSE(graph.externalCompletionAt(metadataCompletion.index).hasToken);
-    EXPECT_EQ(graph.externalCompletionToken(metadataCompletion), nullptr);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        EXPECT_FALSE(declarations.externalCompletionAt(metadataCompletion.index).hasToken);
+        EXPECT_EQ(declarations.externalCompletionToken(metadataCompletion), nullptr);
+    }
 
     const Graphics::GpuExternalCompletionId taskExternalDependencies[] = { completion, metadataCompletion };
     Graphics::GpuTaskDesc consumerDesc;
@@ -48321,12 +48676,15 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_TRUE(analysis.validFor(graph));
-    ASSERT_TRUE(assignments.validFor(graph));
-    ASSERT_TRUE(compiledGraph.validFor(graph));
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
-    ASSERT_NE(compiledConsumer, nullptr);
-    EXPECT_EQ(compiledConsumer->queue, queues[0u].id);
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        ASSERT_TRUE(views.valid());
+        ASSERT_TRUE(analysis.validFor(views.declarations));
+        ASSERT_TRUE(assignments.validFor(views.declarations, views.compiled));
+        const Graphics::GpuCompiledTaskView compiledConsumer = views.compiled.findTask(consumer);
+        ASSERT_TRUE(compiledConsumer.valid());
+        EXPECT_EQ(compiledConsumer.plan->queue, queues[0u].id);
+    }
 
     const Graphics::GpuPhysicalQueueInfo missingProducerQueues[] = {
         GraphicsQueue(),
@@ -48377,10 +48735,29 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
         .completion = metadataCompletion,
         .token = token,
     };
-    EXPECT_FALSE(storedCompletionFallback.validFallbackFor(graph, compiledGraph));
-    EXPECT_TRUE(metadataCompletionFallback.validFallbackFor(graph, compiledGraph));
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        ASSERT_TRUE(views.valid());
+        EXPECT_FALSE(storedCompletionFallback.validFallbackFor(
+            graph,
+            views.declarations,
+            compiledGraph,
+            views.compiled
+        ));
+        EXPECT_TRUE(metadataCompletionFallback.validFallbackFor(
+            graph,
+            views.declarations,
+            compiledGraph,
+            views.compiled
+        ));
+    }
 
-    const u64 metadataFirstRevision = graph.declarationRevision();
+    u64 metadataFirstRevision = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        metadataFirstRevision = declarations.declarationRevision();
+    }
     const Graphics::GpuExternalCompletionId upgradedCompletion = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
             .setIdentity(Name("tests/task_graph/metadata_external_completion"))
@@ -48388,19 +48765,32 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
             .setToken(token)
     );
     EXPECT_EQ(upgradedCompletion, metadataCompletion);
-    EXPECT_NE(graph.declarationRevision(), metadataFirstRevision);
-    EXPECT_TRUE(graph.externalCompletionAt(metadataCompletion.index).hasToken);
-    const Graphics::QueueSubmissionToken* const upgradedToken = graph.externalCompletionToken(metadataCompletion);
-    ASSERT_NE(upgradedToken, nullptr);
-    EXPECT_EQ(upgradedToken->queue, token.queue);
-    EXPECT_EQ(upgradedToken->value, token.value);
-    EXPECT_EQ(upgradedToken->physicalQueueIndex, token.physicalQueueIndex);
-    EXPECT_EQ(upgradedToken->deviceGeneration, token.deviceGeneration);
-    EXPECT_FALSE(analysis.validFor(graph));
-    EXPECT_FALSE(assignments.validFor(graph));
-    EXPECT_FALSE(compiledGraph.validFor(graph));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        ASSERT_TRUE(declarations.valid());
+        ASSERT_TRUE(compiledPlan.valid());
+        EXPECT_NE(declarations.declarationRevision(), metadataFirstRevision);
+        EXPECT_TRUE(declarations.externalCompletionAt(metadataCompletion.index).hasToken);
+        const Graphics::QueueSubmissionToken* const upgradedToken = declarations.externalCompletionToken(
+            metadataCompletion
+        );
+        ASSERT_NE(upgradedToken, nullptr);
+        EXPECT_EQ(upgradedToken->queue, token.queue);
+        EXPECT_EQ(upgradedToken->value, token.value);
+        EXPECT_EQ(upgradedToken->physicalQueueIndex, token.physicalQueueIndex);
+        EXPECT_EQ(upgradedToken->deviceGeneration, token.deviceGeneration);
+        EXPECT_FALSE(analysis.validFor(declarations));
+        EXPECT_FALSE(assignments.validFor(declarations, compiledPlan));
+        EXPECT_FALSE(compiledPlan.validFor(declarations));
+    }
 
-    const u64 upgradedRevision = graph.declarationRevision();
+    u64 upgradedRevision = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        upgradedRevision = declarations.declarationRevision();
+    }
     EXPECT_EQ(graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
             .setIdentity(Name("tests/task_graph/metadata_external_completion"))
@@ -48412,7 +48802,11 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
             .setMarkerLabel("Upgraded Token Reference")
             .setToken(token)
     ), metadataCompletion);
-    EXPECT_EQ(graph.declarationRevision(), upgradedRevision);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        EXPECT_EQ(declarations.declarationRevision(), upgradedRevision);
+    }
 
     Graphics::GpuPhysicalQueueInfo staleTopologyQueues[] = {
         GraphicsQueue(),
@@ -48430,11 +48824,29 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     Graphics::GpuCompiledGraph staleCompiledGraph(testArena.arena);
     EXPECT_FALSE(Compile(graph, staleAnalysis, staleTopology, staleAssignments, staleCompiledGraph));
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    EXPECT_FALSE(storedCompletionFallback.validFallbackFor(graph, compiledGraph));
-    EXPECT_FALSE(metadataCompletionFallback.validFallbackFor(graph, compiledGraph));
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        ASSERT_TRUE(views.valid());
+        EXPECT_FALSE(storedCompletionFallback.validFallbackFor(
+            graph,
+            views.declarations,
+            compiledGraph,
+            views.compiled
+        ));
+        EXPECT_FALSE(metadataCompletionFallback.validFallbackFor(
+            graph,
+            views.declarations,
+            compiledGraph,
+            views.compiled
+        ));
+    }
 
     graph.reset();
-    EXPECT_EQ(graph.externalCompletionToken(completion), nullptr);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        EXPECT_EQ(declarations.externalCompletionToken(completion), nullptr);
+    }
 }
 
 

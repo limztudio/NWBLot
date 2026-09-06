@@ -136,7 +136,7 @@ namespace GpuTaskGraphCompilerDetail{
 
 
 [[nodiscard]] bool PlanTaskResourceStates(GpuTaskGraphResourceStatePlan& plan){
-    const GpuTaskGraph& graph = plan.graph;
+    const GpuTaskGraph::DeclarationReadView& graph = plan.graph;
     const GpuTaskGraphQueueTopology& topology = plan.topology;
     const GraphicsVector<GpuTaskId>& topologicalOrder = plan.topologicalOrder;
     GpuTaskGraphCompiledPlanStorage& compiledPlan = plan.compiledPlan;

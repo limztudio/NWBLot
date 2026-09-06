@@ -3,6 +3,7 @@
 
 
 #include "backend_context.h"
+#include "backend_context_capabilities.h"
 #include "backend_context_detail.h"
 #include "dispatch.h"
 #include "device_detail.h"
@@ -55,6 +56,8 @@ bool BackendContext::createVulkanDevice(){
     m_meshTaskShaderSupported = false;
     m_rayTracingSpheresSupported = false;
     m_rayTracingLinearSweptSpheresSupported = false;
+    m_computeQueueEnabled = false;
+    m_asyncComputeLaneEnabled = false;
 
     uint32_t extCount = 0;
     res = m_instanceDispatch.vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, nullptr);
@@ -134,40 +137,41 @@ bool BackendContext::createVulkanDevice(){
 
     constexpr usize kOptionalDeviceFeatureCount = static_cast<usize>(DeviceExtensionFeature::Count);
 
-    void* pNext = nullptr;
+    const VulkanDetail::PhysicalDeviceFeatureQueryOptions featureQueryOptions{
+        .apiSupportsVulkan13 = apiSupportsVulkan13,
+        .descriptorBufferExtensionAvailable = isDeviceExtensionEnabled(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME),
+        .dynamicRenderingExtensionAvailable = dynamicRenderingExtensionEnabled,
+        .synchronization2ExtensionAvailable = synchronization2ExtensionEnabled,
+        .maintenance4ExtensionAvailable = maintenance4ExtensionEnabled,
+    };
+    VulkanDetail::PhysicalDeviceFeatureSupport featureSupport;
+    VulkanDetail::QueryPhysicalDeviceFeatureSupport(
+        m_instanceDispatch,
+        m_vulkanPhysicalDevice,
+        featureQueryOptions,
+        featureSupport
+    );
+    if(const char* const missingFeature = VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(featureSupport)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device feature '{}' is not supported by the selected GPU."), StringConvert(missingFeature));
+        return false;
+    }
 
-    auto physicalDeviceFeatures2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
+    const VkPhysicalDeviceFeatures& supportedCoreFeatures = featureSupport.features.features;
+    const VkPhysicalDeviceVulkan11Features& supportedVulkan11Features = featureSupport.vulkan11;
+    const VkPhysicalDeviceVulkan12Features& supportedVulkan12Features = featureSupport.vulkan12;
+    const VkPhysicalDeviceVulkan13Features& supportedVulkan13Features = featureSupport.vulkan13;
+    VkPhysicalDeviceSynchronization2Features synchronization2Features = featureSupport.synchronization2;
+    VkPhysicalDeviceMaintenance4Features maintenance4Features = featureSupport.maintenance4;
+    VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures = featureSupport.dynamicRendering;
+
+    void* pNext = nullptr;
+    auto optionalPhysicalDeviceFeatures = VulkanDetail::MakeVkStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
 
     VulkanDetail::OptionalDeviceFeatureSet requestedOptionalFeatures = VulkanDetail::MakeRequestedOptionalDeviceFeatures();
     if(!m_deviceParams.enableNativeMeshShaders)
         requestedOptionalFeatures.meshShader.meshShader = VK_FALSE;
     VulkanDetail::OptionalDeviceFeatureSet supportedOptionalFeatures;
-
-    VkPhysicalDeviceVulkan11Features supportedVulkan11Features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan11Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
-    VulkanDetail::AppendFeatureStruct(pNext, &supportedVulkan11Features);
-
-    VkPhysicalDeviceVulkan12Features supportedVulkan12Features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan12Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
-    VulkanDetail::AppendFeatureStruct(pNext, &supportedVulkan12Features);
-
-    VkPhysicalDeviceVulkan13Features supportedVulkan13Features = VulkanDetail::MakeVkFeatureStruct<
-        VkPhysicalDeviceVulkan13Features
-    >(
-        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES
-    );
-    if(apiSupportsVulkan13)
-        VulkanDetail::AppendFeatureStruct(pNext, &supportedVulkan13Features);
-
-    VkPhysicalDeviceSynchronization2Features synchronization2Features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceSynchronization2Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES);
-    if(!apiSupportsVulkan13 && synchronization2ExtensionEnabled)
-        VulkanDetail::AppendFeatureStruct(pNext, &synchronization2Features);
-
-    VkPhysicalDeviceMaintenance4Features maintenance4Features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceMaintenance4Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES);
-    if(!apiSupportsVulkan13 && maintenance4ExtensionEnabled)
-        VulkanDetail::AppendFeatureStruct(pNext, &maintenance4Features);
-
-    VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceDynamicRenderingFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES);
-    if(!apiSupportsVulkan13 && dynamicRenderingExtensionEnabled)
-        VulkanDetail::AppendFeatureStruct(pNext, &dynamicRenderingFeatures);
+    supportedOptionalFeatures.descriptorBuffer.descriptorBuffer = featureSupport.descriptorBuffer.descriptorBuffer;
 
     VkPhysicalDeviceCooperativeVectorFeaturesNV cooperativeVectorFeatures = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceCooperativeVectorFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV);
     if(coopVecExtensionEnabled)
@@ -175,19 +179,16 @@ bool BackendContext::createVulkanDevice(){
 
     bool queriedOptionalFeatures[kOptionalDeviceFeatureCount] = {};
     for(const auto& [_, feature] : m_enabledExtensions.device){
-        if(apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr)
+        if(
+            feature == DeviceExtensionFeature::DescriptorBuffer
+            || (apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr)
+        )
             continue;
         VulkanDetail::AppendOptionalDeviceFeature(pNext, supportedOptionalFeatures, feature, queriedOptionalFeatures);
     }
 
-    physicalDeviceFeatures2.pNext = pNext;
-    m_instanceDispatch.vkGetPhysicalDeviceFeatures2(m_vulkanPhysicalDevice, &physicalDeviceFeatures2);
-
-    if(apiSupportsVulkan13){
-        synchronization2Features.synchronization2 = supportedVulkan13Features.synchronization2;
-        maintenance4Features.maintenance4 = supportedVulkan13Features.maintenance4;
-        dynamicRenderingFeatures.dynamicRendering = supportedVulkan13Features.dynamicRendering;
-    }
+    optionalPhysicalDeviceFeatures.pNext = pNext;
+    m_instanceDispatch.vkGetPhysicalDeviceFeatures2(m_vulkanPhysicalDevice, &optionalPhysicalDeviceFeatures);
 
     GraphicsVector<GraphicsString> unsupportedFeatureExtensions{ m_arena };
     unsupportedFeatureExtensions.reserve(m_enabledExtensions.device.size());
@@ -256,51 +257,6 @@ bool BackendContext::createVulkanDevice(){
             ss << "\n    " << name;
         NWB_LOGGER_INFO(StringConvert(ss.str()));
     }
-
-    auto requireFeature = [&](const VkBool32 supported, const AStringView featureName)->bool{
-        if(supported == VK_TRUE)
-            return true;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device feature '{}' is not supported by the selected GPU."), StringConvert(featureName));
-        return false;
-    };
-
-    const VkPhysicalDeviceFeatures& supportedCoreFeatures = physicalDeviceFeatures2.features;
-    if(
-        !requireFeature(supportedCoreFeatures.shaderImageGatherExtended, "shaderImageGatherExtended")
-        || !requireFeature(supportedCoreFeatures.samplerAnisotropy, "samplerAnisotropy")
-        || !requireFeature(supportedCoreFeatures.tessellationShader, "tessellationShader")
-        || !requireFeature(supportedCoreFeatures.geometryShader, "geometryShader")
-        || !requireFeature(supportedCoreFeatures.imageCubeArray, "imageCubeArray")
-        || !requireFeature(supportedCoreFeatures.shaderInt16, "shaderInt16")
-        || !requireFeature(supportedCoreFeatures.depthClamp, "depthClamp")
-        || !requireFeature(supportedCoreFeatures.fillModeNonSolid, "fillModeNonSolid")
-        || !requireFeature(supportedCoreFeatures.fragmentStoresAndAtomics, "fragmentStoresAndAtomics")
-        || !requireFeature(supportedCoreFeatures.dualSrcBlend, "dualSrcBlend")
-        || !requireFeature(supportedCoreFeatures.vertexPipelineStoresAndAtomics, "vertexPipelineStoresAndAtomics")
-        || !requireFeature(supportedCoreFeatures.shaderInt64, "shaderInt64")
-        || !requireFeature(supportedCoreFeatures.shaderStorageImageWriteWithoutFormat, "shaderStorageImageWriteWithoutFormat")
-        || !requireFeature(supportedCoreFeatures.shaderStorageImageReadWithoutFormat, "shaderStorageImageReadWithoutFormat")
-        || !requireFeature(supportedCoreFeatures.independentBlend, "independentBlend")
-        || !requireFeature(supportedCoreFeatures.fullDrawIndexUint32, "fullDrawIndexUint32")
-        || !requireFeature(supportedCoreFeatures.multiDrawIndirect, "multiDrawIndirect")
-        || !requireFeature(supportedCoreFeatures.drawIndirectFirstInstance, "drawIndirectFirstInstance")
-        || !requireFeature(supportedVulkan11Features.storageBuffer16BitAccess, "storageBuffer16BitAccess")
-        || !requireFeature(supportedVulkan11Features.shaderDrawParameters, "shaderDrawParameters")
-        || !requireFeature(supportedVulkan12Features.bufferDeviceAddress, "bufferDeviceAddress")
-        || !requireFeature(supportedVulkan12Features.descriptorIndexing, "descriptorIndexing")
-        || !requireFeature(supportedVulkan12Features.runtimeDescriptorArray, "runtimeDescriptorArray")
-        || !requireFeature(supportedVulkan12Features.timelineSemaphore, "timelineSemaphore")
-        || !requireFeature(supportedVulkan12Features.shaderFloat16, "shaderFloat16")
-        || !requireFeature(supportedVulkan12Features.shaderSampledImageArrayNonUniformIndexing, "shaderSampledImageArrayNonUniformIndexing")
-        // Bindless geometry uses non-uniform storage-buffer indexing.
-        || !requireFeature(supportedVulkan12Features.shaderStorageBufferArrayNonUniformIndexing, "shaderStorageBufferArrayNonUniformIndexing")
-        || !requireFeature(supportedVulkan12Features.shaderSubgroupExtendedTypes, "shaderSubgroupExtendedTypes")
-        || !requireFeature(supportedVulkan12Features.scalarBlockLayout, "scalarBlockLayout")
-        || !requireFeature(dynamicRenderingEnabled ? dynamicRenderingFeatures.dynamicRendering : VK_FALSE, "dynamicRendering")
-        || !requireFeature(synchronization2Enabled ? synchronization2Features.synchronization2 : VK_FALSE, "synchronization2")
-    )
-        return false;
 
     m_dynamicRenderingSupported = true;
     m_synchronization2Supported = true;
@@ -377,16 +333,20 @@ bool BackendContext::createVulkanDevice(){
         && static_cast<usize>(m_secondaryGraphicsQueueFamily) < physicalQueueFamilies.size()
         && physicalQueueFamilies[static_cast<usize>(m_secondaryGraphicsQueueFamily)].queueCount > s_GraphicsQueueIndex
     ;
-    const bool createAsyncComputeQueue =
-        m_deviceParams.enableAsyncComputeLane
-        && m_computeQueueFamily != s_InvalidQueueFamilyIndex
+    const i32 schedulerComputeQueueFamily = m_asyncComputeQueueFamily != s_InvalidQueueFamilyIndex
+        ? m_asyncComputeQueueFamily
+        : m_computeQueueFamily
+    ;
+    const bool createComputeQueue =
+        schedulerComputeQueueFamily != s_InvalidQueueFamilyIndex
+        && schedulerComputeQueueFamily != m_graphicsQueueFamily
     ;
     const bool createCrossFamilySecondaryComputeQueue =
-        createAsyncComputeQueue
+        createComputeQueue
         && m_deviceParams.enableSameClassMultiQueue
         && m_deviceParams.enableCrossFamilySameClassQueueRouting
         && m_secondaryComputeQueueFamily != s_InvalidQueueFamilyIndex
-        && m_secondaryComputeQueueFamily != m_computeQueueFamily
+        && m_secondaryComputeQueueFamily != schedulerComputeQueueFamily
         && static_cast<usize>(m_secondaryComputeQueueFamily) < physicalQueueFamilies.size()
         && physicalQueueFamilies[static_cast<usize>(m_secondaryComputeQueueFamily)].queueCount > s_ComputeQueueIndex
     ;
@@ -470,10 +430,10 @@ bool BackendContext::createVulkanDevice(){
 
     if(createCrossFamilySecondaryComputeQueue)
         appendSameClassQueue(CommandQueue::Compute, secondaryComputeQueueFamily, s_ComputeQueueIndex);
-    if(createAsyncComputeQueue){
+    if(createComputeQueue){
         appendPrimaryFamilyQueues(
             CommandQueue::Compute,
-            m_computeQueueFamily,
+            schedulerComputeQueueFamily,
             s_ComputeQueueIndex + 1u
         );
     }
@@ -504,8 +464,8 @@ bool BackendContext::createVulkanDevice(){
 
     if(!m_deviceParams.headlessDevice)
         appendUniqueQueueFamily(m_presentQueueFamily);
-    if(createAsyncComputeQueue)
-        appendUniqueQueueFamily(m_computeQueueFamily);
+    if(createComputeQueue)
+        appendUniqueQueueFamily(schedulerComputeQueueFamily);
     if(createCrossFamilySecondaryComputeQueue)
         appendUniqueQueueFamily(secondaryComputeQueueFamily);
     if(createDedicatedTransferQueue)
@@ -690,8 +650,8 @@ bool BackendContext::createVulkanDevice(){
     if(
         findNativeQueueIndex(static_cast<u32>(m_graphicsQueueFamily), s_GraphicsQueueIndex) == Limit<u32>::s_Max
         || (
-            createAsyncComputeQueue
-            && findNativeQueueIndex(static_cast<u32>(m_computeQueueFamily), s_ComputeQueueIndex) == Limit<u32>::s_Max
+            createComputeQueue
+            && findNativeQueueIndex(static_cast<u32>(schedulerComputeQueueFamily), s_ComputeQueueIndex) == Limit<u32>::s_Max
         )
         || (
             createDedicatedTransferQueue
@@ -792,7 +752,7 @@ bool BackendContext::createVulkanDevice(){
         physicalDeviceProperties,
         maintenance4Enabled,
         maintenance4Features,
-        createAsyncComputeQueue,
+        createComputeQueue,
         createCrossFamilySecondaryComputeQueue,
         secondaryComputeQueueFamily,
         createDedicatedTransferQueue,

@@ -95,6 +95,8 @@ using LockGuard = std::lock_guard<Mutex>;
 template<typename Mutex>
 using UniqueLock = std::unique_lock<Mutex>;
 
+inline constexpr auto s_TryToLock = std::try_to_lock;
+
 template<typename Function, typename... Args>
 inline void CallOnce(OnceFlag& flag, Function&& function, Args&&... args){
     std::call_once(flag, Forward<Function>(function), Forward<Args>(args)...);

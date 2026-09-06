@@ -233,6 +233,10 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
     if(copyDesc.acceptedToken)
         *copyDesc.acceptedToken = {};
 
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(
         desc.resourceUses
         || desc.resourceUseCount != 0u
@@ -247,9 +251,10 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
         return {};
 
     using CopyTask = __hidden_gpu_task_graph_builtin_texture_transfers::CopyTextureTask;
-    CopyTask::Payload* const payload = NewArenaObject<CopyTask::Payload>(m_arena, m_arena);
-    if(!payload)
+    CopyTask::Payload* const payloadObject = NewArenaObject<CopyTask::Payload>(m_arena, m_arena);
+    if(!payloadObject)
         return {};
+    ProvisionalPayloadOwner<CopyTask::Payload> payload(m_arena, payloadObject);
     payload->copies.reserve(copyDesc.regionCount);
     payload->acceptedToken = copyDesc.acceptedToken;
 
@@ -351,7 +356,7 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
     }
     if(!valid){
         discardAndDestroyUnappendedPayload(
-            payload,
+            payload.release(),
             &DiscardPayload<CopyTask>,
             &DestroyPayload<CopyTask::Payload>
         );
@@ -370,18 +375,21 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
     )
         resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Compute;
     resolvedDesc.setResourceUses(resourceUses.data(), resourceUses.size());
-    const GpuTaskId task = appendTask(
+    const GpuTaskId task = appendTaskWithinMutation(
         resolvedDesc,
-        payload,
+        payload.get(),
         &RecordPayload<CopyTask>,
         &AcceptPayload<CopyTask>,
         &DiscardPayload<CopyTask>,
         &DestroyPayload<CopyTask::Payload>,
-        sizeof(CopyTask::Payload)
+        sizeof(CopyTask::Payload),
+        mutation
     );
-    if(!task.valid())
+    if(task.valid())
+        payload.publish();
+    else
         discardAndDestroyUnappendedPayload(
-            payload,
+            payload.release(),
             &DiscardPayload<CopyTask>,
             &DestroyPayload<CopyTask::Payload>
         );
@@ -394,6 +402,10 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
 ){
     if(resolveDesc.acceptedToken)
         *resolveDesc.acceptedToken = {};
+
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
 
     if(
         desc.resourceUses
@@ -409,9 +421,10 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
         return {};
 
     using ResolveTask = __hidden_gpu_task_graph_builtin_texture_transfers::ResolveTextureTask;
-    ResolveTask::Payload* const payload = NewArenaObject<ResolveTask::Payload>(m_arena, m_arena);
-    if(!payload)
+    ResolveTask::Payload* const payloadObject = NewArenaObject<ResolveTask::Payload>(m_arena, m_arena);
+    if(!payloadObject)
         return {};
+    ProvisionalPayloadOwner<ResolveTask::Payload> payload(m_arena, payloadObject);
     payload->resolves.reserve(resolveDesc.regionCount);
     payload->acceptedToken = resolveDesc.acceptedToken;
 
@@ -500,7 +513,7 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
     }
     if(!valid){
         discardAndDestroyUnappendedPayload(
-            payload,
+            payload.release(),
             &DiscardPayload<ResolveTask>,
             &DestroyPayload<ResolveTask::Payload>
         );
@@ -509,18 +522,21 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
 
     GpuTaskDesc resolvedDesc = desc;
     resolvedDesc.setResourceUses(resourceUses.data(), resourceUses.size());
-    const GpuTaskId task = appendTask(
+    const GpuTaskId task = appendTaskWithinMutation(
         resolvedDesc,
-        payload,
+        payload.get(),
         &RecordPayload<ResolveTask>,
         &AcceptPayload<ResolveTask>,
         &DiscardPayload<ResolveTask>,
         &DestroyPayload<ResolveTask::Payload>,
-        sizeof(ResolveTask::Payload)
+        sizeof(ResolveTask::Payload),
+        mutation
     );
-    if(!task.valid()){
+    if(task.valid())
+        payload.publish();
+    else{
         discardAndDestroyUnappendedPayload(
-            payload,
+            payload.release(),
             &DiscardPayload<ResolveTask>,
             &DestroyPayload<ResolveTask::Payload>
         );

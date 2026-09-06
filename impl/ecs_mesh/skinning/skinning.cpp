@@ -95,7 +95,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningDeformation(
         return false;
 
     const auto resolveBuffer = [&](const Core::GpuGraphResourceId resource){
-        return context.taskGraph.bufferForResource(resource);
+        return context.declarations.bufferForResource(resource);
     };
 
     Core::Buffer* const bindlessResourceSlots = resolveBuffer(plan.bindlessResourceSlotsResource);
@@ -111,7 +111,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningDeformation(
     Core::Buffer* const attributeSkins = resolveBuffer(plan.attributeSkinResource);
     Core::Buffer* const skinInfluences = resolveBuffer(plan.skinResource);
     Core::Buffer* const jointPalette = resolveBuffer(plan.jointPaletteResource);
-    Core::ComputePipeline* const skinningPipeline = context.taskGraph.computePipelineFor(plan.skinningPipeline);
+    Core::ComputePipeline* const skinningPipeline = context.declarations.computePipelineFor(plan.skinningPipeline);
     if(
         !bindlessResourceSlots
         || !skinnedPosition
@@ -169,7 +169,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(
         return false;
 
     const auto resolveBuffer = [&](const Core::GpuGraphResourceId resource){
-        return context.taskGraph.bufferForResource(resource);
+        return context.declarations.bufferForResource(resource);
     };
 
     Core::Buffer* const bindlessResourceSlots = resolveBuffer(plan.bindlessResourceSlotsResource);
@@ -179,7 +179,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(
     Core::Buffer* const meshletLocalVertexRefs = resolveBuffer(plan.meshletLocalVertexRefResource);
     Core::Buffer* const meshletPrimitiveIndices = resolveBuffer(plan.meshletPrimitiveIndexResource);
     Core::Buffer* const meshletBounds = resolveBuffer(plan.meshletBoundsResource);
-    Core::ComputePipeline* const boundsPipeline = context.taskGraph.computePipelineFor(plan.boundsPipeline);
+    Core::ComputePipeline* const boundsPipeline = context.declarations.computePipelineFor(plan.boundsPipeline);
     if(
         !bindlessResourceSlots
         || !skinnedPosition
@@ -218,7 +218,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(
         Core::Buffer* const skinnedNormal = resolveBuffer(plan.skinnedNormalResource);
         Core::Buffer* const meshletAttributeRefDeltas = resolveBuffer(plan.meshletAttributeRefDeltaResource);
         Core::Buffer* const attributeBuffer = resolveBuffer(plan.attributeResource);
-        Core::ComputePipeline* const repackPipeline = context.taskGraph.computePipelineFor(plan.repackPipeline);
+        Core::ComputePipeline* const repackPipeline = context.declarations.computePipelineFor(plan.repackPipeline);
         if(!skinnedNormal || !meshletAttributeRefDeltas || !attributeBuffer || !repackPipeline)
             return false;
 

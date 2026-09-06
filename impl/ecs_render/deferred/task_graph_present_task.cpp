@@ -53,7 +53,7 @@ namespace RendererTaskGraphDetail{
     if(
         presentationFramebufferDesc.colorAttachments.size() != 1u
         || presentationFramebufferDesc.colorAttachments[0].texture != payload.presentationFrame.backBuffer.texture.get()
-        || context.taskGraph.textureForResource(payload.backBuffer) != payload.presentationFrame.backBuffer.texture.get()
+        || context.declarations.textureForResource(payload.backBuffer) != payload.presentationFrame.backBuffer.texture.get()
     )
         return false;
 
@@ -65,7 +65,8 @@ namespace RendererTaskGraphDetail{
             payload.graphics->getDevice(),
             commandList
         );
-        payload.asyncFinalTiming->value().finishMarker();
+        if(!Core::FinishSplitGpuTimingMarker(payload.asyncFinalTiming))
+            return false;
     }
 
     const bool presentRecorded = payload.deferredSystem->renderDeferredPresent(

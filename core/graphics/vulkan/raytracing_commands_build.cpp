@@ -243,6 +243,7 @@ bool CommandList::validateAccelStructBuildSignature(
     bool& outHasPriorBuild
 ){
     outHasPriorBuild = false;
+    accelStruct.collectRetiredBuildSignatureRoles();
 
     const auto validatePriorSignature = [
         accelStructType,
@@ -302,7 +303,8 @@ bool CommandList::validateAccelStructBuildSignature(
     }
 
     ScopedLock lock(accelStruct.m_acceptedBuildSignatureMutex);
-    outHasPriorBuild = accelStruct.m_hasAcceptedBuild;
+    const AccelStructBuildSignatureRole* const acceptedRole = accelStruct.m_acceptedBuildSignatureRole;
+    outHasPriorBuild = acceptedRole != nullptr;
     if(!performUpdate)
         return true;
     if(!outHasPriorBuild){
@@ -314,10 +316,10 @@ bool CommandList::validateAccelStructBuildSignature(
     }
 
     return validatePriorSignature(
-        accelStruct.m_acceptedBuildType,
-        accelStruct.m_acceptedBuildFlags,
-        accelStruct.m_acceptedBuildGeometrySignatures.data(),
-        accelStruct.m_acceptedBuildGeometrySignatures.size()
+        acceptedRole->accelStructType,
+        acceptedRole->buildFlags,
+        acceptedRole->geometrySignatures.data(),
+        acceptedRole->geometrySignatures.size()
     );
 }
 
@@ -436,16 +438,17 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
     rangeInfo.primitiveCount = primitiveCount;
     const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
-    m_context.deviceDispatch.vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
-
-    m_currentCmdBuf->appendPendingAccelStructBuildCommit(
+    if(!m_currentCmdBuf->appendPendingAccelStructBuildCommit(
         as,
         VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR,
         vkBuildFlags,
         &geometrySignature,
         1u
-    );
-    retainResource(&as);
+    )){
+        rejectCommandRecording(operationName, NWB_TEXT("failed to retain acceleration-structure build signature"));
+        return false;
+    }
+    m_context.deviceDispatch.vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
     return true;
 }
 
@@ -975,15 +978,20 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         return;
 
     const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos = blasScratch.rangeInfos.data();
-    m_context.deviceDispatch.vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfos);
-
-    m_currentCmdBuf->appendPendingAccelStructBuildCommit(
+    if(!m_currentCmdBuf->appendPendingAccelStructBuildCommit(
         *as,
         VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
         vkBuildFlags,
         geometrySignatures.data(),
         geometrySignatures.size()
-    );
+    )){
+        rejectCommandRecording(
+            NWB_TEXT("build bottom-level acceleration structure"),
+            NWB_TEXT("failed to retain acceleration-structure build signature")
+        );
+        return;
+    }
+    m_context.deviceDispatch.vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfos);
 
     if(transformBuffer)
         m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(transformBuffer));
@@ -1022,7 +1030,6 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         }
     }
 
-    retainResource(accelStructResource);
 }
 
 void CommandList::buildTopLevelAccelStructFromBuffer(

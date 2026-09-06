@@ -98,7 +98,7 @@ bool TimerQuery::discardUnacceptedRecording(const TimerQueryRecordingToken& toke
     if(!token.valid() || token.query != this || token.queryIncarnation != m_incarnation)
         return false;
 
-    ScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
     if(
         m_beginAccepted
         || m_nextRecordingGeneration != token.generation
@@ -201,22 +201,27 @@ bool Device::pollTimerQuery(TimerQuery* queryResource){
     if(queueGetCompletedInstance(completionQueue) < completedSubmission.value)
         return false;
 
-    ScopedLock queryLock(query->m_mutex);
-    const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(query->m_timestampQueue);
-    if(
-        query->m_resetRecordingOwner.commandBuffer
-        || query->m_cycleGeneration != 0u
-        || query->m_recordingActive
-        || query->m_completedCycleGeneration != completedGeneration
-        || !__hidden_vulkan_queries::MatchesSubmissionToken(query->m_completedCycleSubmission, completedSubmission)
-        || !queueInfo
-        || query->m_timestampValidBits == 0u
-        || queueInfo->timestampValidBits != query->m_timestampValidBits
-    )
-        return false;
+    VkResult res = VK_SUCCESS;
+    {
+        ScopedLock queryLock(query->m_mutex);
+        const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(query->m_timestampQueue);
+        if(
+            query->m_resetRecordingOwner.commandBuffer
+            || query->m_cycleGeneration != 0u
+            || query->m_recordingActive
+            || query->m_completedCycleGeneration != completedGeneration
+            || !__hidden_vulkan_queries::MatchesSubmissionToken(query->m_completedCycleSubmission, completedSubmission)
+            || !queueInfo
+            || query->m_timestampValidBits == 0u
+            || queueInfo->timestampValidBits != query->m_timestampValidBits
+        )
+            return false;
 
-    u64 timestamps[s_TimerQueryTimestampCount] = {};
-    const VkResult res = __hidden_vulkan_queries::GetTimerQueryResults(m_context, query->m_queryPool, timestamps);
+        u64 timestamps[s_TimerQueryTimestampCount] = {};
+        res = __hidden_vulkan_queries::GetTimerQueryResults(m_context, query->m_queryPool, timestamps);
+        if(res == VK_ERROR_DEVICE_LOST)
+            markDeviceLost();
+    }
     if(res == VK_ERROR_DEVICE_LOST)
         captureDeviceLoss("timer query poll");
     return res == VK_SUCCESS;
@@ -252,22 +257,38 @@ bool Device::getTimerQueryResult(TimerQuery* queryResource, TimerQueryResult& ou
     if(queueGetCompletedInstance(completionQueue) < completedSubmission.value)
         return false;
 
-    ScopedLock queryLock(query->m_mutex);
-    const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(query->m_timestampQueue);
-    if(
-        query->m_resetRecordingOwner.commandBuffer
-        || query->m_cycleGeneration != 0u
-        || query->m_recordingActive
-        || query->m_completedCycleGeneration != completedGeneration
-        || !__hidden_vulkan_queries::MatchesSubmissionToken(query->m_completedCycleSubmission, completedSubmission)
-        || !queueInfo
-        || query->m_timestampValidBits == 0u
-        || queueInfo->timestampValidBits != query->m_timestampValidBits
-    )
-        return false;
-
     u64 timestamps[s_TimerQueryTimestampCount] = {};
-    const VkResult res = __hidden_vulkan_queries::GetTimerQueryResults(m_context, query->m_queryPool, timestamps);
+    VkResult res = VK_SUCCESS;
+    {
+        ScopedLock queryLock(query->m_mutex);
+        const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(query->m_timestampQueue);
+        if(
+            query->m_resetRecordingOwner.commandBuffer
+            || query->m_cycleGeneration != 0u
+            || query->m_recordingActive
+            || query->m_completedCycleGeneration != completedGeneration
+            || !__hidden_vulkan_queries::MatchesSubmissionToken(query->m_completedCycleSubmission, completedSubmission)
+            || !queueInfo
+            || query->m_timestampValidBits == 0u
+            || queueInfo->timestampValidBits != query->m_timestampValidBits
+        )
+            return false;
+
+        res = __hidden_vulkan_queries::GetTimerQueryResults(m_context, query->m_queryPool, timestamps);
+        if(res == VK_ERROR_DEVICE_LOST)
+            markDeviceLost();
+        if(res == VK_SUCCESS){
+            const f64 secondsPerTick = static_cast<f64>(m_context.physicalDeviceProperties.limits.timestampPeriod)
+                * __hidden_vulkan_queries::s_TimestampNanosecondsToSeconds
+            ;
+            outResult.beginTicks = timestamps[s_TimerQueryBeginIndex];
+            outResult.endTicks = timestamps[s_TimerQueryEndIndex];
+            outResult.secondsPerTick = secondsPerTick;
+            outResult.timestampValidBits = query->m_timestampValidBits;
+            outResult.physicalQueue = query->m_timestampQueue;
+            outResult.comparableAcrossSubmissions = supportsComparableGpuTimestamps(query->m_timestampQueue);
+        }
+    }
     if(res != VK_SUCCESS){
         if(res == VK_ERROR_DEVICE_LOST)
             captureDeviceLoss("timer query results");
@@ -276,15 +297,6 @@ bool Device::getTimerQueryResult(TimerQuery* queryResource, TimerQueryResult& ou
         return false;
     }
 
-    const f64 secondsPerTick = static_cast<f64>(m_context.physicalDeviceProperties.limits.timestampPeriod)
-        * __hidden_vulkan_queries::s_TimestampNanosecondsToSeconds
-    ;
-    outResult.beginTicks = timestamps[s_TimerQueryBeginIndex];
-    outResult.endTicks = timestamps[s_TimerQueryEndIndex];
-    outResult.secondsPerTick = secondsPerTick;
-    outResult.timestampValidBits = query->m_timestampValidBits;
-    outResult.physicalQueue = query->m_timestampQueue;
-    outResult.comparableAcrossSubmissions = supportsComparableGpuTimestamps(query->m_timestampQueue);
     return outResult.valid();
 }
 
@@ -356,6 +368,8 @@ bool Device::resetTimerQuery(TimerQuery* queryResource){
 
 
 bool CommandList::resetTimerQuery(TimerQuery* queryResource){
+    if(!publicCommandStateAccessible())
+        return false;
     auto* query = queryResource;
     if(!query || query->m_queryPool == VK_NULL_HANDLE || &query->m_context != &m_context){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot reset an invalid or foreign timer query"));
@@ -365,7 +379,7 @@ bool CommandList::resetTimerQuery(TimerQuery* queryResource){
 
     if(!validateCommandRecordingScope(NWB_TEXT("reset timer query")))
         return false;
-    if(!canResetTimerQueryHere()){
+    if(!canResetTimerQueryHereUnchecked()){
         NWB_LOGGER_CRITICAL_WARNING(
             NWB_TEXT("Vulkan: Cannot reset a timer query outside recording or on an exact physical queue without Graphics or Compute capability")
         );
@@ -459,6 +473,16 @@ bool CommandList::resetTimerQuery(TimerQuery* queryResource){
 }
 
 bool CommandList::canRecordTimerQueryHere()const{
+    const GraphPublicationReadOwnership ownership(*this);
+    return ownership.m_readable && canRecordTimerQueryHereUnchecked();
+}
+
+bool CommandList::canResetTimerQueryHere()const{
+    const GraphPublicationReadOwnership ownership(*this);
+    return ownership.m_readable && canResetTimerQueryHereUnchecked();
+}
+
+bool CommandList::canRecordTimerQueryHereUnchecked()const noexcept{
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Graphics)
         | static_cast<u8>(GpuQueueCapability::Compute)
@@ -477,8 +501,8 @@ bool CommandList::canRecordTimerQueryHere()const{
     ;
 }
 
-bool CommandList::canResetTimerQueryHere()const{
-    if(m_renderPassActive || !canRecordTimerQueryHere())
+bool CommandList::canResetTimerQueryHereUnchecked()const noexcept{
+    if(m_renderPassActive || !canRecordTimerQueryHereUnchecked())
         return false;
 
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
@@ -488,8 +512,48 @@ bool CommandList::canResetTimerQueryHere()const{
     return (static_cast<u8>(queueInfo->capabilities) & s_ResetCapableBits) != 0u;
 }
 
+bool CommandList::inspectExactTimerQueryRecordingEndpoints(
+    const TimerQueryRecordingToken& token,
+    const u64 recordingLeaseSerial,
+    bool& outRecordsBegin,
+    bool& outRecordsEnd
+)const noexcept{
+    outRecordsBegin = false;
+    outRecordsEnd = false;
+
+    const GraphPublicationReadOwnership ownership(*this);
+    if(!ownership.m_readable)
+        return false;
+    if(
+        !token.valid()
+        || recordingLeaseSerial == 0u
+        || recordingLeaseSerial != m_recordingLeaseSerial
+        || !matchesNativeLeaseIdentity()
+        || !m_currentCmdBuf
+    )
+        return true;
+
+    for(const TrackedCommandBuffer::TimerQueryRecordingClaim& claim : m_currentCmdBuf->m_timerQueryRecordingClaims){
+        if(
+            claim.query != token.query
+            || claim.queryIncarnation != token.queryIncarnation
+            || claim.generation != token.generation
+            || claim.recordingID != m_currentCmdBuf->m_recordingID
+            || claim.queue != token.physicalQueue
+        )
+            continue;
+
+        outRecordsBegin = claim.recordsBegin;
+        outRecordsEnd = claim.recordsEnd;
+        break;
+    }
+    return true;
+}
+
 bool CommandList::beginTimerQuery(TimerQuery* queryResource, TimerQueryRecordingToken& outToken){
     outToken = {};
+    if(!publicCommandStateAccessible())
+        return false;
     auto* query = queryResource;
     if(!query || query->m_queryPool == VK_NULL_HANDLE || &query->m_context != &m_context){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to begin an invalid or foreign timer query"));
@@ -498,14 +562,7 @@ bool CommandList::beginTimerQuery(TimerQuery* queryResource, TimerQueryRecording
     }
     if(!validateCommandRecordingScope(NWB_TEXT("begin timer query")))
         return false;
-
-    if(!m_renderPassActive && !canResetTimerQueryHere()){
-        NWB_LOGGER_CRITICAL_WARNING(
-            NWB_TEXT("Vulkan: Cannot begin a timer query outside rendering on an exact physical queue without Graphics or Compute capability")
-        );
-        invalidateCommandRecording();
-        return false;
-    }
+    const bool recordsInlineReset = canResetTimerQueryHereUnchecked();
 
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     if(!queueInfo || queueInfo->timestampValidBits == 0u || queueInfo->timestampValidBits > 64u){
@@ -526,14 +583,14 @@ bool CommandList::beginTimerQuery(TimerQuery* queryResource, TimerQueryRecording
             query->m_recordingActive
             || query->m_cycleGeneration != 0u
             || (query->m_resetRecordingOwner.commandBuffer && !resetOwnedByCurrentCommandBuffer)
-            || (m_renderPassActive && !resetOwnedByCurrentCommandBuffer && !query->m_resetAuthorizationAvailable)
+            || (!recordsInlineReset && !resetOwnedByCurrentCommandBuffer && !query->m_resetAuthorizationAvailable)
         ){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Refusing a timer-query begin without an exclusive cycle and ordered reset"));
             invalidateCommandRecording();
             return false;
         }
 
-        if(m_renderPassActive && !resetOwnedByCurrentCommandBuffer){
+        if(!recordsInlineReset && !resetOwnedByCurrentCommandBuffer){
             priorSubmission = query->m_resetAuthorizationSubmission;
         }
         else{
@@ -555,7 +612,7 @@ bool CommandList::beginTimerQuery(TimerQuery* queryResource, TimerQueryRecording
             && query->m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID
             && query->m_resetRecordingAuthorizationGeneration != 0u
         ;
-        const QueueSubmissionToken currentPriorSubmission = m_renderPassActive && !resetOwnedByCurrentCommandBuffer
+        const QueueSubmissionToken currentPriorSubmission = !recordsInlineReset && !resetOwnedByCurrentCommandBuffer
             ? query->m_resetAuthorizationSubmission
             : (
                 query->m_completedCycleSubmission.valid()
@@ -567,7 +624,7 @@ bool CommandList::beginTimerQuery(TimerQuery* queryResource, TimerQueryRecording
             !query->m_recordingActive
             && query->m_cycleGeneration == 0u
             && (!query->m_resetRecordingOwner.commandBuffer || resetOwnedByCurrentCommandBuffer)
-            && (!m_renderPassActive || resetOwnedByCurrentCommandBuffer || query->m_resetAuthorizationAvailable)
+            && (recordsInlineReset || resetOwnedByCurrentCommandBuffer || query->m_resetAuthorizationAvailable)
             && __hidden_vulkan_queries::MatchesSubmissionToken(currentPriorSubmission, priorSubmission)
             && query->m_nextRecordingGeneration != Limit<u64>::s_Max
         ){
@@ -604,8 +661,8 @@ bool CommandList::beginTimerQuery(TimerQuery* queryResource, TimerQueryRecording
                 claim.generation = query->m_cycleGeneration;
                 claim.recordingID = m_currentCmdBuf->m_recordingID;
                 claim.recordsBegin = true;
-                claim.recordsReset = claim.recordsReset || !m_renderPassActive;
-                claim.consumesResetAuthorization = m_renderPassActive && !resetOwnedByCurrentCommandBuffer;
+                claim.recordsReset = claim.recordsReset || recordsInlineReset;
+                claim.consumesResetAuthorization = !recordsInlineReset && !resetOwnedByCurrentCommandBuffer;
                 claim.resetAuthorizationSubmission = claim.consumesResetAuthorization
                     ? query->m_resetAuthorizationSubmission
                     : QueueSubmissionToken{}
@@ -615,9 +672,9 @@ bool CommandList::beginTimerQuery(TimerQuery* queryResource, TimerQueryRecording
                     : 0u
                 ;
 
-            // Outside rendering, reset and begin are ordered in this command buffer. Inside rendering, the
-            // frame-open reset packet owns the reset because vkCmdResetQueryPool is not legal in a render pass.
-                if(!m_renderPassActive){
+                // Inline-capable positions order reset and begin in this command buffer. Render-pass and transfer-only
+                // timestamp positions consume the reset authorization recorded on a compatible physical queue.
+                if(recordsInlineReset){
                     m_context.deviceDispatch.vkCmdResetQueryPool(
                         m_currentCmdBuf->m_cmdBuf,
                         query->m_queryPool,
@@ -651,6 +708,8 @@ bool CommandList::beginTimerQuery(TimerQuery* queryResource, TimerQueryRecording
 }
 
 bool CommandList::endTimerQuery(TimerQuery* queryResource, const TimerQueryRecordingToken& token){
+    if(!publicCommandStateAccessible())
+        return false;
     auto* query = queryResource;
     if(!query || query->m_queryPool == VK_NULL_HANDLE || &query->m_context != &m_context){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to end an invalid or foreign timer query"));
@@ -719,6 +778,73 @@ bool CommandList::endTimerQuery(TimerQuery* queryResource, const TimerQueryRecor
         return false;
     }
     return true;
+}
+
+bool CommandList::endTimerQueryFromExistingClaim(
+    TimerQuery* queryResource,
+    const TimerQueryRecordingToken& token
+)noexcept{
+    if(!publicCommandStateAccessible())
+        return false;
+
+    auto* query = queryResource;
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    if(
+        !query
+        || query->m_queryPool == VK_NULL_HANDLE
+        || &query->m_context != &m_context
+        || m_commandRecordingFailed
+        || !matchesActiveNativeLeaseIdentity()
+        || !token.valid()
+        || token.query != query
+        || token.queryIncarnation != query->m_incarnation
+        || !queueInfo
+        || queueInfo->id != m_creationDesc.physicalQueue
+    ){
+        invalidateCommandRecording();
+        return false;
+    }
+
+    bool endRecorded = false;
+    {
+        NothrowScopedLock queryLock(query->m_mutex);
+        TrackedCommandBuffer::TimerQueryRecordingClaim* const claim =
+            m_currentCmdBuf->findTimerQueryRecordingClaim(*query, token.generation)
+        ;
+        const bool matchingOpeningClaim = claim
+            && claim->recordsBegin
+            && !claim->recordsEnd
+            && claim->queue == queueInfo->id
+            && query->m_cycleGeneration == token.generation
+            && query->m_cycleGeneration != 0u
+            && !query->m_cycleInvalidated
+            && !query->m_beginAccepted
+            && token.physicalQueue == queueInfo->id
+            && query->m_cycleQueue == queueInfo->id
+            && query->m_cycleValidBits != 0u
+            && query->m_cycleValidBits == queueInfo->timestampValidBits
+            && query->m_beginRecordingOwner.commandBuffer == m_currentCmdBuf.get()
+            && query->m_beginRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID
+            && !query->m_endRecordingOwner.commandBuffer
+        ;
+        if(matchingOpeningClaim){
+            query->m_endRecordingOwner = TimerQuery::RecordingOwner{
+                .commandBuffer = m_currentCmdBuf.get(),
+                .recordingID = m_currentCmdBuf->m_recordingID,
+            };
+            claim->recordsEnd = true;
+            m_context.deviceDispatch.vkCmdWriteTimestamp(
+                m_currentCmdBuf->m_cmdBuf,
+                VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                query->m_queryPool,
+                s_TimerQueryEndIndex
+            );
+            endRecorded = true;
+        }
+    }
+    if(!endRecorded)
+        invalidateCommandRecording();
+    return endRecorded;
 }
 
 

@@ -82,7 +82,8 @@ struct CausticAccumulatorDecayGraphTask{
             payload.graphics->getDevice(),
             commandList
         );
-        payload.causticPhotonTiming->value().finishMarker();
+        if(!Core::FinishSplitGpuTimingMarker(payload.causticPhotonTiming))
+            return false;
         const bool dispatched = payload.raytracingSystem->dispatchCausticAccumulatorDecay(
             commandList,
             *payload.targets,
@@ -295,8 +296,7 @@ struct CausticGeometryDownsampleGraphTask{
         );
         // The next callback writes the timestamp endpoint on this same primary command list. Close this callback's
         // nested marker now, before the packet recorder advances to the wavelet task marker.
-        payload.causticResolveTiming->value().finishMarker();
-        return true;
+        return Core::FinishSplitGpuTimingMarker(payload.causticResolveTiming);
     }
 
     static void discarded(Payload& payload){

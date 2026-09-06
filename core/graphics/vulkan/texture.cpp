@@ -6,6 +6,8 @@
 #include "backend.h"
 #include "texture_resource_detail.h"
 
+#include <global/termination.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -592,46 +594,66 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
     return view;
 }
 
-bool Texture::canRevokeUnmanagedNativeImage(const VkImage expectedNativeImage)noexcept{
+bool Texture::canRevokeUnmanagedNativeImage(const VkImage expectedNativeImage){
     if(expectedNativeImage == VK_NULL_HANDLE)
         return false;
 
-    ScopedLock bindingLock(m_memoryBindingMutex);
+    NothrowScopedLock bindingLock(m_memoryBindingMutex);
     if(m_managed || m_image != expectedNativeImage)
         return false;
+    if(m_preparedRevokedNativeImage == expectedNativeImage)
+        return true;
 
-    return m_allocator.isTextureNativeIdentityRegistered(expectedNativeImage, *this);
+    return true;
 }
 
-bool Texture::revokeUnmanagedNativeImage(const VkImage expectedNativeImage)noexcept{
+bool Texture::prepareRevokeUnmanagedNativeImage(const VkImage expectedNativeImage){
     if(expectedNativeImage == VK_NULL_HANDLE)
         return false;
 
-    ScopedLock bindingLock(m_memoryBindingMutex);
+    NothrowScopedLock bindingLock(m_memoryBindingMutex);
     if(m_managed || m_image != expectedNativeImage)
         return false;
+    if(m_preparedRevokedNativeImage == expectedNativeImage)
+        return true;
+    if(!m_allocator.isTextureNativeIdentityRegistered(expectedNativeImage, *this))
+        return false;
 
-    ScopedLock viewsLock(m_viewsMutex);
-    const bool identityRegistered = m_allocator.isTextureNativeIdentityRegistered(expectedNativeImage, *this);
+    m_preparedRevokedNativeImage = expectedNativeImage;
+    return true;
+}
+
+void Texture::commitRevokeUnmanagedNativeImage(const VkImage expectedNativeImage)noexcept{
+    NothrowScopedLock bindingLock(m_memoryBindingMutex);
+    if(
+        expectedNativeImage == VK_NULL_HANDLE
+        || m_managed
+        || m_image != expectedNativeImage
+        || m_preparedRevokedNativeImage != expectedNativeImage
+    )
+        TerminateInvariant();
+
+    NothrowScopedLock viewsLock(m_viewsMutex);
+    static_assert(noexcept(m_views.clear()), "prepared swapchain view release must remain non-throwing");
     for(const auto& [_, view] : m_views)
         m_context.deviceDispatch.vkDestroyImageView(m_context.device, view, m_context.allocationCallbacks);
     m_views.clear();
     m_image = VK_NULL_HANDLE;
-    return identityRegistered;
 }
 
-void Texture::releaseRevokedNativeImageIdentity(const VkImage expectedNativeImage)noexcept{
-    if(expectedNativeImage == VK_NULL_HANDLE)
-        return;
+void Texture::releasePreparedRevokeUnmanagedNativeImageIdentity(const VkImage expectedNativeImage)noexcept{
+    NothrowScopedLock bindingLock(m_memoryBindingMutex);
+    const bool identityMatches = expectedNativeImage != VK_NULL_HANDLE
+        && !m_managed
+        && m_image == VK_NULL_HANDLE
+        && m_preparedRevokedNativeImage == expectedNativeImage
+    ;
+    NWB_FATAL_ASSERT_MSG(identityMatches, "prepared swapchain Texture identity must outlive its native VkImage");
+    if(!identityMatches)
+        TerminateInvariant();
 
-    {
-        ScopedLock bindingLock(m_memoryBindingMutex);
-        if(m_managed || m_image != VK_NULL_HANDLE){
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Only a revoked unmanaged Texture can release a native identity"));
-            return;
-        }
-    }
     m_allocator.unregisterTextureNativeIdentity(expectedNativeImage, *this);
+    m_preparedRevokedNativeImage = VK_NULL_HANDLE;
 }
 
 bool Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel){
@@ -645,7 +667,7 @@ bool Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const
     const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_creationDesc.mipLevels)
         + static_cast<usize>(mipLevel)
     ;
-    ScopedLock lock(m_retainedSubresourceStatesMutex);
+    NothrowScopedLock lock(m_retainedSubresourceStatesMutex);
     NWB_ASSERT(index < m_retainedSubresourceStates.size());
     return index < m_retainedSubresourceStates.size() && m_retainedSubresourceStates[index] != 0u;
 }
@@ -661,7 +683,7 @@ void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, cons
     const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_creationDesc.mipLevels)
         + static_cast<usize>(mipLevel)
     ;
-    ScopedLock lock(m_retainedSubresourceStatesMutex);
+    NothrowScopedLock lock(m_retainedSubresourceStatesMutex);
     NWB_ASSERT(index < m_retainedSubresourceStates.size());
     if(index >= m_retainedSubresourceStates.size())
         return;

@@ -22,22 +22,28 @@ NWB_CORE_BEGIN
 typedef u32 ObjectType;
 
 struct Object{
-    union{
-        u64 integer;
-        void* pointer;
-    };
+    u64 integer;
 
 
     constexpr Object(u64 i)noexcept
         : integer(i)
     {}
-    constexpr Object(void* p)noexcept
-        : pointer(p)
+    Object(void* p)noexcept
+        : integer(static_cast<u64>(reinterpret_cast<usize>(p)))
     {}
 
+    [[nodiscard]] void* pointer()const noexcept{ return reinterpret_cast<void*>(static_cast<usize>(integer)); }
+
     template<typename T>
-    explicit operator T*()const noexcept{ return static_cast<T*>(pointer); }
+    explicit operator T*()const noexcept{ return static_cast<T*>(pointer()); }
 };
+
+static_assert(sizeof(void*) == sizeof(usize), "Object pointer conversion requires usize to preserve the complete pointer representation");
+static_assert(sizeof(usize) == sizeof(u64), "Object native identities require the engine's supported 64-bit address space");
+static_assert(sizeof(Object) == sizeof(u64), "Object must remain one canonical 64-bit native identity");
+static_assert(alignof(Object) == alignof(u64), "Object alignment must match its canonical 64-bit native identity");
+static_assert(IsStandardLayout_V<Object>, "Object must remain layout-stable across graphics module boundaries");
+static_assert(IsTriviallyCopyable_V<Object>, "Object must remain trivially copyable across graphics module boundaries");
 
 NWB_INLINE bool operator==(const Object& lhs, const Object& rhs)noexcept{ return lhs.integer == rhs.integer; }
 NWB_INLINE bool operator!=(const Object& lhs, const Object& rhs)noexcept{ return lhs.integer != rhs.integer; }

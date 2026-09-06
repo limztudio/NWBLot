@@ -97,7 +97,7 @@ public:
     void resetTaskGraphStage()noexcept;
     [[nodiscard]] RendererAvboitTaskGraphStageState& taskGraphStage()noexcept{ return m_taskGraphStage; }
     [[nodiscard]] RendererAvboitTaskGraphValidation validateTaskGraphStage(
-        const Core::GpuCompiledGraph& compiledGraph,
+        const Core::GpuCompiledGraph::ReadView& compiledPlan,
         bool clearTargets,
         bool hasTransparentRenderers
     )const;

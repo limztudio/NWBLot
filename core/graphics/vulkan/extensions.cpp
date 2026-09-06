@@ -19,6 +19,8 @@ NWB_VULKAN_BEGIN
 
 
 void CommandList::setPushConstants(const void* data, usize byteSize){
+    if(!publicCommandStateAccessible())
+        return;
     if(byteSize == 0)
         return;
     if(!VulkanDetail::AreAllPointersValid(data)){

@@ -109,6 +109,10 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
     if(copyDesc.acceptedToken)
         *copyDesc.acceptedToken = {};
 
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(
         desc.resourceUses
         || desc.resourceUseCount != 0u
@@ -123,9 +127,10 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
         return {};
 
     using CopyTask = __hidden_gpu_task_graph_builtin_buffer_copy::CopyBufferTask;
-    CopyTask::Payload* const payload = NewArenaObject<CopyTask::Payload>(m_arena, m_arena);
-    if(!payload)
+    CopyTask::Payload* const payloadObject = NewArenaObject<CopyTask::Payload>(m_arena, m_arena);
+    if(!payloadObject)
         return {};
+    ProvisionalPayloadOwner<CopyTask::Payload> payload(m_arena, payloadObject);
     payload->copies.reserve(copyDesc.regionCount);
     payload->acceptedToken = copyDesc.acceptedToken;
 
@@ -199,7 +204,7 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
     }
     if(!valid){
         discardAndDestroyUnappendedPayload(
-            payload,
+            payload.release(),
             &DiscardPayload<CopyTask>,
             &DestroyPayload<CopyTask::Payload>
         );
@@ -208,18 +213,21 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
 
     GpuTaskDesc resolvedDesc = desc;
     resolvedDesc.setResourceUses(resourceUses.data(), resourceUses.size());
-    const GpuTaskId task = appendTask(
+    const GpuTaskId task = appendTaskWithinMutation(
         resolvedDesc,
-        payload,
+        payload.get(),
         &RecordPayload<CopyTask>,
         &AcceptPayload<CopyTask>,
         &DiscardPayload<CopyTask>,
         &DestroyPayload<CopyTask::Payload>,
-        sizeof(CopyTask::Payload)
+        sizeof(CopyTask::Payload),
+        mutation
     );
-    if(!task.valid())
+    if(task.valid())
+        payload.publish();
+    else
         discardAndDestroyUnappendedPayload(
-            payload,
+            payload.release(),
             &DiscardPayload<CopyTask>,
             &DestroyPayload<CopyTask::Payload>
         );

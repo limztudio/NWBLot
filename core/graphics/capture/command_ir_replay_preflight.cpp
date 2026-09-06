@@ -156,8 +156,8 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateRecordContext(
     const GpuCommandIrBuiltinTaskRecord& record,
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuCompiledGraph::ReadView& compiledGraph,
     const GpuSubmissionPacketId packet,
     const GpuPhysicalQueueInfo& queue,
     u32& inOutPreviousTaskOrder,
@@ -170,23 +170,22 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     if(!graph.validTask(record.task))
         return GpuCommandIrReplayError::InvalidTask;
 
-    const GpuCompiledTask* const compiledTask = compiledGraph.findTask(record.task);
+    const GpuCompiledTaskView compiledTask = compiledGraph.findTask(record.task);
     if(
-        !compiledTask
-        || compiledTask->packet != packet
-        || compiledTask->queue != queue.id
+        !compiledTask.valid()
+        || compiledTask.plan->packet != packet
+        || compiledTask.plan->queue != queue.id
         || compiledGraph.packetForTask(record.task) != packet
     )
         return GpuCommandIrReplayError::CompiledTaskMismatch;
 
-    const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
-    const GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
-    if(!packetTasks || packetPlan.taskCount == 0u)
+    const GpuCompiledPacketView packetView = compiledGraph.packet(packet);
+    if(!packetView.valid() || packetView.plan->taskCount == 0u)
         return GpuCommandIrReplayError::CompiledTaskMismatch;
 
     u32 taskOrder = Limit<u32>::s_Max;
-    for(u32 taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-        if(packetTasks[taskIndex] == record.task){
+    for(u32 taskIndex = 0u; taskIndex < packetView.plan->taskCount; ++taskIndex){
+        if(packetView.tasks[taskIndex] == record.task){
             taskOrder = taskIndex;
             break;
         }
@@ -203,7 +202,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBufferCopyRecord(
     const GpuCommandIrBuiltinTaskRecord& record,
-    const GpuTaskGraph& graph,
+    const GpuTaskGraphDeclarationReadView& graph,
     const GpuTaskGraphTaskView& task
 )noexcept{
     if(
@@ -264,7 +263,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureCopyRecord(
     const GpuCommandIrBuiltinTaskRecord& record,
-    const GpuTaskGraph& graph,
+    const GpuTaskGraphDeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& queue
 )noexcept{
@@ -364,7 +363,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBufferClearRecord(
     const GpuCommandIrBuiltinTaskRecord& record,
-    const GpuTaskGraph& graph,
+    const GpuTaskGraphDeclarationReadView& graph,
     const GpuTaskGraphTaskView& task
 )noexcept{
     if(!graph.validResource(record.destination))
@@ -399,7 +398,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureClearRecord(
     const GpuCommandIrBuiltinTaskRecord& record,
-    const GpuTaskGraph& graph,
+    const GpuTaskGraphDeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& queue
 )noexcept{
@@ -455,7 +454,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureRectUIntClearRecord(
     const GpuCommandIrBuiltinTaskRecord& record,
-    const GpuTaskGraph& graph,
+    const GpuTaskGraphDeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& queue
 )noexcept{
@@ -517,7 +516,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateOperation(
     const GpuCommandIrBuiltinTaskRecord& record,
-    const GpuTaskGraph& graph,
+    const GpuTaskGraphDeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& queue
 )noexcept{
@@ -549,8 +548,8 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 
 GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
     const BinaryByteView bytes,
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuCompiledGraph::ReadView& compiledGraph,
     const GpuSubmissionPacketId packet
 )noexcept{
     const GpuCommandIrStreamValidationResult streamValidation = ValidateGpuCommandIrStream(bytes);
@@ -576,8 +575,13 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
             streamValidation
         );
 
-    const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
-    const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packetPlan.queue);
+    const GpuCompiledPacketView packetView = compiledGraph.packet(packet);
+    if(!packetView.valid())
+        return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(
+            GpuCommandIrReplayError::InvalidPacket,
+            streamValidation
+        );
+    const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packetView.plan->queue);
     if(!queue || queue->queueClass >= CommandQueue::kCount)
         return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(
             GpuCommandIrReplayError::PacketQueueUnavailable,

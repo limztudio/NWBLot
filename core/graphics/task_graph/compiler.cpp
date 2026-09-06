@@ -23,6 +23,32 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename RollbackT>
+class CompilePublicationScope final : NoCopy{
+    static_assert(IsNothrowMoveConstructible_V<RollbackT>);
+
+
+public:
+    explicit CompilePublicationScope(RollbackT rollback)noexcept
+        : m_rollback(Move(rollback))
+    {}
+    ~CompilePublicationScope()noexcept{
+        static_assert(noexcept(m_rollback()));
+        if(!m_published)
+            m_rollback();
+    }
+
+
+public:
+    void publish()noexcept{ m_published = true; }
+
+
+private:
+    RollbackT m_rollback;
+    bool m_published = false;
+};
+
+
 struct InitialOwnershipCompletionRequirement{
     GpuPhysicalQueueId sourceQueue;
     u64 minimumValue = 0u;
@@ -199,7 +225,7 @@ struct InitialOwnershipCompletionRequirement{
 
 
 bool GpuTaskGraphCompiler::compile(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     GpuTaskGraphAnalysis& outAnalysis,
     const GpuTaskGraphQueueTopology& topology,
     GpuTaskGraphQueueAssignments& outAssignments,
@@ -209,13 +235,26 @@ bool GpuTaskGraphCompiler::compile(
 )const{
     using namespace GpuTaskGraphCompilerDetail;
 
-    if(!outCompiledGraph.tryReset()){
+    if(!graph.valid()){
         outAnalysis.reset();
-        outAnalysis.m_diagnostic.status = GpuTaskGraphAnalysisStatus::OutputPlanInUse;
-        outAssignments.reset();
+        outAnalysis.m_diagnostic.status = GpuTaskGraphAnalysisStatus::InputGraphInUse;
         return false;
     }
+
     outAssignments.reset();
+    CompilePublicationScope assignmentPublication([&outAssignments]()noexcept{
+        const GpuTaskQueueAssignmentDiagnostic diagnostic = outAssignments.m_diagnostic;
+        outAssignments.reset();
+        outAssignments.m_diagnostic = diagnostic;
+    });
+
+    GpuCompiledGraph::CompilationScope compilation(outCompiledGraph);
+    if(!compilation.valid()){
+        outAnalysis.reset();
+        outAnalysis.m_diagnostic.status = GpuTaskGraphAnalysisStatus::OutputPlanInUse;
+        return false;
+    }
+
     const Timer compileBegin = TimerNow();
     const Timer analysisBegin = compileBegin;
     if(!analyze(graph, outAnalysis, scratchArena))
@@ -226,7 +265,6 @@ bool GpuTaskGraphCompiler::compile(
         for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
             const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
             if(!task.hasPayload || !task.hasRecordPayload){
-                outAssignments.reset();
                 outAnalysis.m_diagnostic.status = GpuTaskGraphAnalysisStatus::MissingTaskRecordPayload;
                 outAnalysis.m_diagnostic.task = task.id;
                 outAnalysis.m_diagnostic.relatedTask = {};
@@ -257,7 +295,6 @@ bool GpuTaskGraphCompiler::compile(
                     break;
                 }
 
-                outAssignments.reset();
                 outAnalysis.m_diagnostic.status = GpuTaskGraphAnalysisStatus::InvalidResourceUse;
                 outAnalysis.m_diagnostic.task = task.id;
                 outAnalysis.m_diagnostic.relatedTask = {};
@@ -381,7 +418,6 @@ bool GpuTaskGraphCompiler::compile(
                 || !FindCompiledQueueInfo(compiledPlan, resource.externalFinalReleaseDestinationQueue)
             )
         ){
-            outCompiledGraph.reset();
             return false;
         }
         if(resource.initialOwnerHandoffSourceCount != 0u){
@@ -391,7 +427,6 @@ bool GpuTaskGraphCompiler::compile(
                 || !resource.initialOwnerHandoffSources
                 || ResourceUsesConcurrentQueueSharing(resource, topology)
             ){
-                outCompiledGraph.reset();
                 return false;
             }
             for(usize sourceIndex = 0u;
@@ -426,7 +461,6 @@ bool GpuTaskGraphCompiler::compile(
                         source.minimumCompletionToken.value
                     )
                 ){
-                    outCompiledGraph.reset();
                     return false;
                 }
             }
@@ -462,7 +496,6 @@ bool GpuTaskGraphCompiler::compile(
                 )
             )
         ){
-            outCompiledGraph.reset();
             return false;
         }
     }
@@ -489,7 +522,6 @@ bool GpuTaskGraphCompiler::compile(
             )
             || completion.token.value < requirement.minimumValue
         ){
-            outCompiledGraph.reset();
             return false;
         }
     }
@@ -504,7 +536,6 @@ bool GpuTaskGraphCompiler::compile(
         compiledPlan,
         outCompiledGraph.m_packetTimingEnvelopeRange
     )){
-        outCompiledGraph.reset();
         return false;
     }
     const f64 packetizationSeconds = DurationInSeconds<f64>(TimerNow(), packetizationBegin);
@@ -545,7 +576,6 @@ bool GpuTaskGraphCompiler::compile(
         !PlanTaskResourceStates(resourceStatePlan)
         || !PlanExternalResourceExports(resourceStatePlan)
     ){
-        outCompiledGraph.reset();
         return false;
     }
     AppendPendingEpilogueBarriers(resourceStatePlan);
@@ -561,7 +591,6 @@ bool GpuTaskGraphCompiler::compile(
         compiledPlan,
         scratchArena
     )){
-        outCompiledGraph.reset();
         return false;
     }
     const f64 packetDependencyPlanningSeconds = DurationInSeconds<f64>(TimerNow(), packetDependencyPlanningBegin);
@@ -571,8 +600,6 @@ bool GpuTaskGraphCompiler::compile(
         const GpuTaskId relatedTask = {},
         const GpuGraphResourceId resource = {}
     ){
-        outCompiledGraph.reset();
-        outAssignments.reset();
         outAnalysis.m_diagnostic = GpuTaskGraphAnalysisDiagnostic{
             .status = GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask,
             .task = task,
@@ -663,11 +690,19 @@ bool GpuTaskGraphCompiler::compile(
     statistics.resourceCount = graph.resourceCount();
     statistics.resourceVersionCount = graph.resourceVersionCount();
     statistics.resourceVersionEdgeCount = outAnalysis.resourceVersionEdgeCount();
-    statistics.resourceSetCount = graph.m_resourceSets.size();
-    statistics.resourceSetMemberCount = graph.m_resourceSetMembers.size();
-    statistics.uploadBlobCount = graph.m_uploadBlobs.size();
-    for(const auto& blob : graph.m_uploadBlobs)
-        statistics.uploadBlobBytes += blob.bytes.size();
+    statistics.resourceSetCount = graph.resourceSetCount();
+    for(usize resourceSetIndex = 0u; resourceSetIndex < graph.resourceSetCount(); ++resourceSetIndex)
+        statistics.resourceSetMemberCount += graph.resourceSetAt(resourceSetIndex).memberCount;
+    statistics.uploadBlobCount = graph.uploadBlobCount();
+    for(usize uploadBlobIndex = 0u; uploadBlobIndex < graph.uploadBlobCount(); ++uploadBlobIndex){
+        usize byteSize = 0u;
+        if(!graph.uploadBlobData(
+            GpuUploadBlobId{ static_cast<u32>(uploadBlobIndex), graph.generation() },
+            byteSize
+        ))
+            return false;
+        statistics.uploadBlobBytes += byteSize;
+    }
     statistics.explicitDependencyCount = outAnalysis.explicitEdgeCount();
     statistics.inferredDependencyCount = outAnalysis.inferredEdgeCount();
     statistics.declaredExternalDependencyCount = outAnalysis.externalDependencies().size();
@@ -682,14 +717,13 @@ bool GpuTaskGraphCompiler::compile(
     statistics.epilogueBarrierCount = outCompiledGraph.m_epilogueBarriers.size();
     for(const GpuCompiledTask& compiledTask : outCompiledGraph.m_tasks){
         const GpuTaskGraphTaskView task = graph.taskAt(compiledTask.task.index);
-        const auto& declaredTask = graph.m_tasks[compiledTask.task.index];
         statistics.resourceUseCount += task.resourceUseCount;
-        statistics.directResourceUseCount += declaredTask.directResourceUseCount;
-        statistics.declaredResourceSetUseCount += declaredTask.declaredResourceSetUseCount;
-        statistics.expandedResourceSetMemberUseCount += declaredTask.expandedResourceSetMemberUseCount;
-        if(declaredTask.payload){
+        statistics.directResourceUseCount += task.directResourceUseCount;
+        statistics.declaredResourceSetUseCount += task.declaredResourceSetUseCount;
+        statistics.expandedResourceSetMemberUseCount += task.expandedResourceSetMemberUseCount;
+        if(task.hasPayload){
             ++statistics.payloadObjectCount;
-            statistics.payloadObjectBytes += declaredTask.payloadObjectSize;
+            statistics.payloadObjectBytes += task.payloadObjectSize;
         }
         if(compiledTask.packetizationDecision < GpuTaskPacketizationDecision::kCount)
             ++statistics.packetizationDecisionCounts[compiledTask.packetizationDecision];
@@ -842,7 +876,8 @@ bool GpuTaskGraphCompiler::compile(
     statistics.totalSeconds = DurationInSeconds<f64>(TimerNow(), compileBegin);
 
     outAssignments.m_compiledPlanGeneration = outCompiledGraph.m_planGeneration;
-    outCompiledGraph.m_valid = true;
+    compilation.publish();
+    assignmentPublication.publish();
     return true;
 }
 

@@ -21,13 +21,22 @@ NWB_CORE_BEGIN
 
 bool GpuRecordedGraph::buildPacketInitialStateSeed(
     PacketRecordingScratch& scratch,
+    Alloc::ScratchArena& stateFanInScratchArena,
     const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph& compiledGraph,
+    const GpuCompiledGraph::ReadView& planAccess,
+    const ArtifactOperation& artifactAccess,
     const GpuSubmissionPacketId& packetID,
     const CommandListResourceStateHandoff*& outInitialStates
 ){
     outInitialStates = nullptr;
-    if(!validFor(compiledGraph) || !compiledGraph.validPacket(packetID))
+    if(
+        !declarationAccess.validFor(graph)
+        || !planAccess.validFor(declarationAccess)
+        || !validForWithinArtifactOperation(compiledGraph, planAccess, artifactAccess)
+        || !planAccess.validPacket(packetID)
+    )
         return false;
 
     scratch.initialStateSeed.reset();
@@ -47,7 +56,12 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             return scratch.stateMergeScratch.copyFrom(scratch.stateSubsetScratch);
 
         const CommandListResourceStateHandoff* const branches[] = { &scratch.stateSubsetScratch };
-        if(!scratch.initialStateSeed.buildFanIn(scratch.stateMergeScratch, branches, LengthOf(branches)))
+        if(!scratch.initialStateSeed.buildFanIn(
+            scratch.stateMergeScratch,
+            branches,
+            LengthOf(branches),
+            stateFanInScratchArena
+        ))
             return false;
         return scratch.stateMergeScratch.copyFrom(scratch.initialStateSeed);
     };
@@ -69,15 +83,21 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             &scratch.externalMergedStateSeed,
             &scratch.stateMergeScratch,
         };
-        if(!scratch.initialStateSeed.buildFanIn(scratch.externalBaseStateSeed, branches, LengthOf(branches)))
+        if(!scratch.initialStateSeed.buildFanIn(
+            scratch.externalBaseStateSeed,
+            branches,
+            LengthOf(branches),
+            stateFanInScratchArena
+        ))
             return false;
         return scratch.externalMergedStateSeed.copyFrom(scratch.initialStateSeed);
     };
 
-    const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
-    const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
-    if(!tasks || packet.taskCount == 0u)
+    const GpuCompiledPacketView packetView = planAccess.packet(packetID);
+    if(!packetView.valid() || packetView.plan->taskCount == 0u)
         return false;
+    const GpuSubmissionPacket& packet = *packetView.plan;
+    const GpuTaskId* const tasks = packetView.tasks;
 
     const auto appendStateSource = [&](
         const CommandListResourceStateHandoff* const sourceStates,
@@ -86,7 +106,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     ){
         if(
             !sourceStates
-            || !sourceStates->validForDeviceGeneration(compiledGraph.deviceGeneration())
+            || !sourceStates->validForDeviceGeneration(planAccess.deviceGeneration())
             || (sourceTaskCount != 0u && !sourceTasks)
         )
             return false;
@@ -94,15 +114,15 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         scratch.stateMergeScratch.reset();
 
         for(u32 taskIndex = 0u; taskIndex < sourceTaskCount; ++taskIndex){
-            const GpuTaskGraphTaskView task = graph.taskAt(sourceTasks[taskIndex].index);
+            const GpuTaskGraphTaskView task = declarationAccess.taskAt(sourceTasks[taskIndex].index);
             for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
                 const GpuTaskResourceUse& use = task.resourceUses[useIndex];
-                const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
+                const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(use.resource.index);
                 scratch.stateSubsetScratch.reset();
 
                 switch(resource.type){
                 case GpuGraphResourceType::Texture:{
-                    Texture* const texture = graph.textureForResource(use.resource);
+                    Texture* const texture = declarationAccess.textureForResource(use.resource);
                     if(!texture || !scratch.stateSubsetScratch.buildTextureRangeSubset(
                         *sourceStates,
                         texture,
@@ -112,7 +132,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                     break;
                 }
                 case GpuGraphResourceType::Buffer:{
-                    Buffer* const buffer = graph.bufferForResource(use.resource);
+                    Buffer* const buffer = declarationAccess.bufferForResource(use.resource);
                     if(!buffer)
                         return false;
                     Buffer* const buffers[] = { buffer };
@@ -121,7 +141,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                     break;
                 }
                 case GpuGraphResourceType::AccelStruct:{
-                    RayTracingAccelStruct* const accelStruct = graph.accelStructForResource(use.resource);
+                    RayTracingAccelStruct* const accelStruct = declarationAccess.accelStructForResource(use.resource);
                     Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
                     if(!backingBuffer)
                         return false;
@@ -148,7 +168,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     };
 
     const auto appendInitialOwnerStateSource = [&](const GpuCompiledBarrier& barrier){
-        const GpuTaskGraphResourceView resource = graph.resourceAt(barrier.resource.index);
+        const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
         const GpuTaskGraphInitialOwnerHandoffSourceView* const multiSource = GpuPacketRuntimeDetail::FindInitialOwnerHandoffSource(resource, barrier);
         if(resource.initialOwnerHandoffSourceCount != 0u && !multiSource)
             return false;
@@ -158,7 +178,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         ;
         if(
             !sourceStates
-            || !sourceStates->validForDeviceGeneration(compiledGraph.deviceGeneration())
+            || !sourceStates->validForDeviceGeneration(planAccess.deviceGeneration())
             || (
                 multiSource
                     ? (
@@ -177,7 +197,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         scratch.stateSubsetScratch.reset();
         switch(resource.type){
         case GpuGraphResourceType::Texture:{
-            Texture* const texture = graph.textureForResource(barrier.resource);
+            Texture* const texture = declarationAccess.textureForResource(barrier.resource);
             if(
                 !texture
                 || !sourceStates->coversTextureRangeWithOwnership(
@@ -196,7 +216,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             break;
         }
         case GpuGraphResourceType::Buffer:{
-            Buffer* const buffer = graph.bufferForResource(barrier.resource);
+            Buffer* const buffer = declarationAccess.bufferForResource(barrier.resource);
             if(
                 !buffer
                 || !sourceStates->coversBufferWithOwnership(
@@ -212,7 +232,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             break;
         }
         case GpuGraphResourceType::AccelStruct:{
-            RayTracingAccelStruct* const accelStruct = graph.accelStructForResource(barrier.resource);
+            RayTracingAccelStruct* const accelStruct = declarationAccess.accelStructForResource(barrier.resource);
             Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
             if(
                 !backingBuffer
@@ -244,11 +264,12 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     // They are imported before ordinary task sources so the native command list opens with the released ownership
     // and emits the paired Vulkan acquire before any graph prologue transition records.
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
-        const GpuCompiledTask* const compiledTask = compiledGraph.findTask(tasks[taskIndex]);
-        const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(tasks[taskIndex]);
-        if(!compiledTask || (compiledTask->prologueBarrierCount != 0u && !barriers))
+        const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);
+        if(!compiledTaskView.valid())
             return false;
-        for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledTask& compiledTask = *compiledTaskView.plan;
+        const GpuCompiledBarrier* const barriers = compiledTaskView.prologueBarriers;
+        for(u32 barrierIndex = 0u; barrierIndex < compiledTask.prologueBarrierCount; ++barrierIndex){
             const GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
                 !barrier.isInitialOwnerHandoff
@@ -259,7 +280,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                 )
             )
                 continue;
-            const GpuTaskGraphResourceView resource = graph.resourceAt(barrier.resource.index);
+            const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
             const GpuTaskGraphInitialOwnerHandoffSourceView* const multiSource = GpuPacketRuntimeDetail::FindInitialOwnerHandoffSource(resource, barrier);
             if(resource.initialOwnerHandoffSourceCount != 0u && !multiSource)
                 return false;
@@ -273,13 +294,13 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     // Declaration-owned sources are attached to the task that needs their imported state. That preserves the
     // source/resource relationship across packet coalescing and lets ordinary record traversal remain compiler-owned.
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
-        const GpuTaskGraphTaskView task = graph.taskAt(tasks[taskIndex].index);
+        const GpuTaskGraphTaskView task = declarationAccess.taskAt(tasks[taskIndex].index);
         if(task.externalStateSourceCount != 0u && !task.externalStateSources)
             return false;
         if(task.externalStateSourceCount == 0u)
             continue;
 
-        const GpuPhysicalQueueInfo* const taskQueue = compiledGraph.queueInfoForTask(tasks[taskIndex]);
+        const GpuPhysicalQueueInfo* const taskQueue = planAccess.queueInfoForTask(tasks[taskIndex]);
         if(!taskQueue || taskQueue->queueClass >= CommandQueue::kCount)
             return false;
         for(usize sourceIndex = 0u; sourceIndex < task.externalStateSourceCount; ++sourceIndex){
@@ -316,28 +337,37 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             return scratch.initialStateSeed.copyFrom(scratch.stateSubsetScratch);
 
         const CommandListResourceStateHandoff* const branches[] = { &scratch.stateSubsetScratch };
-        if(!scratch.stateMergeScratch.buildFanIn(scratch.initialStateSeed, branches, LengthOf(branches)))
+        if(!scratch.stateMergeScratch.buildFanIn(
+            scratch.initialStateSeed,
+            branches,
+            LengthOf(branches),
+            stateFanInScratchArena
+        ))
             return false;
         return scratch.initialStateSeed.copyFrom(scratch.stateMergeScratch);
     };
 
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
-        const GpuCompiledTask* const compiledTask = compiledGraph.findTask(tasks[taskIndex]);
-        const GpuPacketStateSeed* const stateSeeds = compiledGraph.taskPrologueStateSeeds(tasks[taskIndex]);
-        if(!compiledTask || (compiledTask->prologueStateSeedCount != 0u && !stateSeeds))
+        const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);
+        if(!compiledTaskView.valid())
             return false;
+        const GpuCompiledTask& compiledTask = *compiledTaskView.plan;
+        const GpuPacketStateSeed* const stateSeeds = compiledTaskView.prologueStateSeeds;
 
-        for(u32 seedIndex = 0u; seedIndex < compiledTask->prologueStateSeedCount; ++seedIndex){
+        for(u32 seedIndex = 0u; seedIndex < compiledTask.prologueStateSeedCount; ++seedIndex){
             const GpuPacketStateSeed& seed = stateSeeds[seedIndex];
-            const CommandListResourceStateHandoff* const sourceStates = packetStateSeed(seed.sourcePacket);
-            if(!sourceStates || !sourceStates->validForDeviceGeneration(compiledGraph.deviceGeneration()))
+            const CommandListResourceStateHandoff* const sourceStates = packetStateSeed(
+                seed.sourcePacket,
+                artifactAccess
+            );
+            if(!sourceStates || !sourceStates->validForDeviceGeneration(planAccess.deviceGeneration()))
                 return false;
 
             // An empty subset means the producer thunk never tracked a resource it declared as a state source.  Do
             // not silently fall back to the descriptor's creation state: that would reintroduce the stale-state bug
             // this graph-owned seed is meant to eliminate.
             scratch.stateSubsetScratch.reset();
-            if(Texture* const texture = graph.textureForResource(seed.resource)){
+            if(Texture* const texture = declarationAccess.textureForResource(seed.resource)){
                 if(!scratch.stateSubsetScratch.buildTextureRangeSubset(
                     *sourceStates,
                     texture,
@@ -345,12 +375,12 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                 ))
                     return false;
             }
-            else if(Buffer* const buffer = graph.bufferForResource(seed.resource)){
+            else if(Buffer* const buffer = declarationAccess.bufferForResource(seed.resource)){
                 Buffer* const buffers[] = { buffer };
                 if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))
                     return false;
             }
-            else if(RayTracingAccelStruct* const accelStruct = graph.accelStructForResource(seed.resource)){
+            else if(RayTracingAccelStruct* const accelStruct = declarationAccess.accelStructForResource(seed.resource)){
                 Buffer* const backingBuffer = accelStruct->getBackingBuffer();
                 if(!backingBuffer)
                     return false;

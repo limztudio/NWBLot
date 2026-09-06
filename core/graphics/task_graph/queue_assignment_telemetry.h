@@ -56,18 +56,18 @@ public:
 public:
     void reset();
     [[nodiscard]] bool update(
-        const GpuTaskGraph& graph,
+        const GpuTaskGraph::DeclarationReadView& declarations,
         const GpuTaskGraphQueueAssignments& assignments,
-        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& compiledPlan,
         const GpuGraphSubmissionTransaction& transaction,
         Alloc::ScratchArena& scratchArena
     );
 
     [[nodiscard]] bool validFor(
-        const GpuTaskGraph& graph,
+        const GpuTaskGraph::DeclarationReadView& declarations,
         const GpuTaskGraphQueueAssignments& assignments,
-        const GpuCompiledGraph& compiledGraph
-    )const noexcept;
+        const GpuCompiledGraph::ReadView& compiledPlan
+    )const;
     [[nodiscard]] const GpuTaskQueueAssignmentTelemetry* find(GpuTaskId task)const noexcept;
 
 

@@ -51,6 +51,82 @@ thread_local GpuTimingSubmissionTicket* GpuTimingRecorder::s_activeSubmissionTic
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class GpuTimingRecorder::BeginQueryPublicationUnwindScope final : NoCopy{
+public:
+    BeginQueryPublicationUnwindScope(
+        GpuTimingRecorder& recorder,
+        GpuTimingSubmissionTicket& ticket,
+        GpuTimingAccumulator& accumulator,
+        GpuTimingScope& scope,
+        const usize publicationIndex
+    )noexcept
+        : m_recorder(recorder)
+        , m_ticket(ticket)
+        , m_accumulator(accumulator)
+        , m_scope(scope)
+        , m_publicationIndex(publicationIndex)
+    {}
+    ~BeginQueryPublicationUnwindScope()noexcept{
+        if(!m_active)
+            return;
+
+        m_ticket.cancelScopePublication(m_publicationIndex);
+        if(m_scope.valid()){
+            if(m_accumulator.abandonQuery(
+                m_scope,
+                m_recorder.m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)
+            ))
+                m_recorder.m_pendingAttributionRetirements = true;
+            m_scope = {};
+        }
+        ++m_recorder.m_statistics.beginFailureCount;
+    }
+
+
+public:
+    void release()noexcept{ m_active = false; }
+
+
+private:
+    GpuTimingRecorder& m_recorder;
+    GpuTimingSubmissionTicket& m_ticket;
+    GpuTimingAccumulator& m_accumulator;
+    GpuTimingScope& m_scope;
+    usize m_publicationIndex = Limit<usize>::s_Max;
+    bool m_active = true;
+};
+
+
+class GpuTimingRecorder::PrerequisiteTrackingUnwindScope final : NoCopy{
+public:
+    PrerequisiteTrackingUnwindScope(GpuTimingRecorder& recorder, GpuTimingScope& scope)noexcept
+        : m_recorder(recorder)
+        , m_scope(scope)
+    {}
+    ~PrerequisiteTrackingUnwindScope()noexcept{
+        if(!m_active)
+            return;
+
+        m_recorder.abandonScopeWithoutCallbacks(m_scope);
+        NothrowScopedLock lock(m_recorder.m_mutex);
+        ++m_recorder.m_statistics.beginFailureCount;
+    }
+
+
+public:
+    void release()noexcept{ m_active = false; }
+
+
+private:
+    GpuTimingRecorder& m_recorder;
+    GpuTimingScope& m_scope;
+    bool m_active = true;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 GpuTimingRecorder::GpuTimingRecorder(Alloc::GlobalArena& arena, Perf::TimingSink& timing)
     : m_arena(arena)
     , m_timing(timing)
@@ -146,21 +222,33 @@ void GpuTimingRecorder::resetQueries(){
 void GpuTimingRecorder::collect(Device& device){
     Alloc::ScratchArena scratchArena(__hidden_gpu_timing::s_GpuTimingScratchArena);
     SampleDispatchVector completedSamples{ scratchArena };
-    try{
+    GpuTimingSinkSampleVector performanceSamples{ scratchArena };
+
+    {
+        ScopedLock collectionLock(m_collectionMutex);
         u64 subscriptionIdentityLimit = 0u;
         {
             ScopedLock listenerLock(m_sampleListenerMutex);
             subscriptionIdentityLimit = sampleSubscriptionIdentityLimitLocked();
         }
 
+        u64 publishFrameIndex = 0u;
+        bool publishPerformanceSamples = false;
         {
             ScopedLock recorderLock(m_mutex);
-            collectLocked(device, m_currentFrameIndex, subscriptionIdentityLimit, completedSamples, scratchArena);
+            publishFrameIndex = m_currentFrameIndex;
+            publishPerformanceSamples = collectLocked(
+                device,
+                subscriptionIdentityLimit,
+                completedSamples,
+                performanceSamples,
+                scratchArena
+            );
         }
-    }
-    catch(...){
-        dispatchCompletedSamples(completedSamples);
-        throw;
+        for(const GpuTimingSinkSample& sample : performanceSamples)
+            m_timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);
+        if(publishPerformanceSamples)
+            m_timing.publishFrame(publishFrameIndex);
     }
     dispatchCompletedSamples(completedSamples);
 }
@@ -168,21 +256,31 @@ void GpuTimingRecorder::collect(Device& device){
 void GpuTimingRecorder::collect(Device& device, const u64 publishFrameIndex){
     Alloc::ScratchArena scratchArena(__hidden_gpu_timing::s_GpuTimingScratchArena);
     SampleDispatchVector completedSamples{ scratchArena };
-    try{
+    GpuTimingSinkSampleVector performanceSamples{ scratchArena };
+
+    {
+        ScopedLock collectionLock(m_collectionMutex);
         u64 subscriptionIdentityLimit = 0u;
         {
             ScopedLock listenerLock(m_sampleListenerMutex);
             subscriptionIdentityLimit = sampleSubscriptionIdentityLimitLocked();
         }
 
+        bool publishPerformanceSamples = false;
         {
             ScopedLock recorderLock(m_mutex);
-            collectLocked(device, publishFrameIndex, subscriptionIdentityLimit, completedSamples, scratchArena);
+            publishPerformanceSamples = collectLocked(
+                device,
+                subscriptionIdentityLimit,
+                completedSamples,
+                performanceSamples,
+                scratchArena
+            );
         }
-    }
-    catch(...){
-        dispatchCompletedSamples(completedSamples);
-        throw;
+        for(const GpuTimingSinkSample& sample : performanceSamples)
+            m_timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);
+        if(publishPerformanceSamples)
+            m_timing.publishFrame(publishFrameIndex);
     }
     dispatchCompletedSamples(completedSamples);
 }
@@ -359,7 +457,21 @@ bool GpuTimingRecorder::beginScope(
             return true;
         }
 
-        if(!found.value()->beginQuery(
+        const usize publicationIndex = ticket->reserveScopePublication();
+        if(publicationIndex == Limit<usize>::s_Max){
+            ++m_statistics.beginFailureCount;
+            return false;
+        }
+
+        GpuTimingAccumulator& accumulator = *found.value();
+        BeginQueryPublicationUnwindScope publicationUnwind(
+            *this,
+            *ticket,
+            accumulator,
+            outScope,
+            publicationIndex
+        );
+        const bool began = accumulator.beginQuery(
             commandList,
             m_currentFrameIndex,
             m_epoch,
@@ -367,26 +479,32 @@ bool GpuTimingRecorder::beginScope(
             attribution,
             outScope,
             resetSubmission
-        )){
+        );
+        if(!began)
+            return false;
+        if(!outScope.valid()){
+            ticket->cancelScopePublication(publicationIndex);
+            publicationUnwind.release();
+            return true;
+        }
+
+        outScope.submissionTicket = ticket;
+        outScope.submissionPublicationIndex = publicationIndex;
+        if(!ticket->bindScopePublication(publicationIndex, outScope, commandList))
+            return false;
+        publicationUnwind.release();
+    }
+
+    if(outScope.valid() && resetSubmission.valid()){
+        PrerequisiteTrackingUnwindScope prerequisiteUnwind(*this, outScope);
+        const bool prerequisiteTracked = ticket->trackSubmissionPrerequisite(resetSubmission);
+        prerequisiteUnwind.release();
+        if(!prerequisiteTracked){
+            abandonScopeWithoutCallbacks(outScope);
+            ScopedLock lock(m_mutex);
             ++m_statistics.beginFailureCount;
             return false;
         }
-        if(outScope.valid())
-            outScope.submissionTicket = ticket;
-    }
-
-    if(outScope.valid() && resetSubmission.valid() && !ticket->trackSubmissionPrerequisite(resetSubmission)){
-        ScopedLock lock(m_mutex);
-        if(GpuTimingAccumulator* const accumulator = findAccumulator(outScope)){
-            if(accumulator->discardQuery(
-                outScope,
-                m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)
-            ))
-                m_pendingAttributionRetirements = true;
-        }
-        outScope = {};
-        ++m_statistics.beginFailureCount;
-        return false;
     }
     return true;
 }
@@ -403,28 +521,59 @@ bool GpuTimingRecorder::beginDeferredScope(
     // The frame transaction owns this reservation until the end packet is accepted. The begin packet's submission
     // ticket deliberately has no rollback handle for it: a later recovery endpoint may be required after that begin
     // has already executed on the device timeline.
+    if(outScope.submissionTicket)
+        outScope.submissionTicket->cancelScopePublication(outScope.submissionPublicationIndex);
     outScope.submissionTicket = nullptr;
+    outScope.submissionPublicationIndex = Limit<usize>::s_Max;
     return true;
 }
 
-void GpuTimingRecorder::endScope(CommandList& commandList, const GpuTimingScope& scope){
+void GpuTimingRecorder::endScope(CommandList& commandList, GpuTimingScope& scope){
     if(!scope.valid())
         return;
 
     GpuTimingAccumulator::QueryEndResult endResult = GpuTimingAccumulator::QueryEndResult::Invalid;
     {
-        // Do not retain this lock while trackScope() takes the ticket lock: discard() rolls tickets back in the
-        // opposite direction (ticket first, recorder second).
+        // Do not retain this lock while publishing into the ticket: terminal ticket paths take the ticket first and
+        // then release or quarantine query ownership through the recorder.
         ScopedLock lock(m_mutex);
         GpuTimingAccumulator* accumulator = findAccumulator(scope);
         if(accumulator)
             endResult = accumulator->endQuery(commandList, scope);
     }
-    if(endResult == GpuTimingAccumulator::QueryEndResult::Invalid)
+    if(endResult == GpuTimingAccumulator::QueryEndResult::Invalid){
+        abandonScopeWithoutCallbacks(scope);
+        return;
+    }
+
+    if(scope.submissionTicket && !scope.submissionTicket->publishScope(scope, commandList)){
+        abandonScopeWithoutCallbacks(scope);
+        return;
+    }
+    scope = {};
+}
+
+void GpuTimingRecorder::endScopeFromOpeningCommandList(CommandList& commandList, GpuTimingScope& scope)noexcept{
+    if(!scope.valid())
         return;
 
-    if(scope.submissionTicket)
-        scope.submissionTicket->trackScope(scope);
+    GpuTimingAccumulator::QueryEndResult endResult = GpuTimingAccumulator::QueryEndResult::Invalid;
+    {
+        // Preserve recorder -> accumulator lock ordering while the already-reserved scope is closed.
+        NothrowScopedLock lock(m_mutex);
+        GpuTimingAccumulator* const accumulator = findAccumulator(scope);
+        if(accumulator)
+            endResult = accumulator->endQueryFromExistingClaim(commandList, scope);
+    }
+    if(endResult == GpuTimingAccumulator::QueryEndResult::Invalid){
+        abandonScopeWithoutCallbacks(scope);
+        return;
+    }
+    if(scope.submissionTicket && !scope.submissionTicket->publishScope(scope, commandList)){
+        abandonScopeWithoutCallbacks(scope);
+        return;
+    }
+    scope = {};
 }
 
 bool GpuTimingRecorder::recordDeferredScopeEnd(CommandList& commandList, const GpuTimingScope& scope){
@@ -452,11 +601,11 @@ bool GpuTimingRecorder::confirmScope(
     const GpuTimingScope& scope,
     const QueueSubmissionToken& token,
     const bool publishSample
-){
+)noexcept{
     if(!scope.valid())
         return true;
 
-    ScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
     GpuTimingAccumulator* accumulator = findAccumulator(scope);
     if(!accumulator)
         return false;
@@ -494,11 +643,11 @@ bool GpuTimingRecorder::prepareDeferredScopeForRecovery(const GpuTimingScope& sc
     return prepared;
 }
 
-bool GpuTimingRecorder::retireScope(const GpuTimingScope& scope, const QueueSubmissionToken& token){
+bool GpuTimingRecorder::retireScope(const GpuTimingScope& scope, const QueueSubmissionToken& token)noexcept{
     if(!scope.valid())
         return true;
 
-    ScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
     GpuTimingAccumulator* accumulator = findAccumulator(scope);
     if(!accumulator)
         return false;
@@ -515,27 +664,61 @@ bool GpuTimingRecorder::retireScope(const GpuTimingScope& scope, const QueueSubm
     return retired;
 }
 
-void GpuTimingRecorder::discardScope(const GpuTimingScope& scope){
-    if(!scope.valid())
+void GpuTimingRecorder::discardScope(GpuTimingScope& scope){
+    if(!scope.valid()){
+        scope = {};
         return;
+    }
+
+    GpuTimingScope discardedScope = scope;
+    if(discardedScope.submissionTicket)
+        discardedScope.submissionTicket->cancelScopePublication(discardedScope.submissionPublicationIndex);
+    discardedScope.submissionTicket = nullptr;
+    discardedScope.submissionPublicationIndex = Limit<usize>::s_Max;
+    scope = {};
 
     ScopedLock lock(m_mutex);
-    GpuTimingAccumulator* accumulator = findAccumulator(scope);
+    GpuTimingAccumulator* accumulator = findAccumulator(discardedScope);
     if(
         accumulator
         && accumulator->discardQuery(
-            scope,
+            discardedScope,
             m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)
         )
     )
         m_pendingAttributionRetirements = true;
 }
 
-void GpuTimingRecorder::quarantineScope(const GpuTimingScope& scope){
+void GpuTimingRecorder::abandonScopeWithoutCallbacks(GpuTimingScope& scope)noexcept{
+    if(!scope.valid()){
+        scope = {};
+        return;
+    }
+
+    GpuTimingScope abandonedScope = scope;
+    if(abandonedScope.submissionTicket)
+        abandonedScope.submissionTicket->cancelScopePublication(abandonedScope.submissionPublicationIndex);
+    abandonedScope.submissionTicket = nullptr;
+    abandonedScope.submissionPublicationIndex = Limit<usize>::s_Max;
+    scope = {};
+
+    NothrowScopedLock lock(m_mutex);
+    GpuTimingAccumulator* const accumulator = findAccumulator(abandonedScope);
+    if(
+        accumulator
+        && accumulator->abandonQuery(
+            abandonedScope,
+            m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)
+        )
+    )
+        m_pendingAttributionRetirements = true;
+}
+
+void GpuTimingRecorder::quarantineScope(const GpuTimingScope& scope)noexcept{
     if(!scope.valid())
         return;
 
-    ScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
     GpuTimingAccumulator* accumulator = findAccumulator(scope);
     if(
         accumulator
@@ -552,7 +735,7 @@ GpuTimingSubmissionTicket* GpuTimingRecorder::activeSubmissionTicket()const{
     return ticket && &ticket->m_recorder == this ? ticket : nullptr;
 }
 
-GpuTimingAccumulator* GpuTimingRecorder::findAccumulator(const GpuTimingScope& scope){
+GpuTimingAccumulator* GpuTimingRecorder::findAccumulator(const GpuTimingScope& scope)noexcept{
     const auto found = m_accumulators.find(scope.scopeName);
     return found != m_accumulators.end() ? found.value().get() : nullptr;
 }
@@ -585,11 +768,11 @@ GpuTimingAccumulator* GpuTimingRecorder::findOrCreateAccumulator(const Name& sco
     return it.value().get();
 }
 
-void GpuTimingRecorder::collectLocked(
+bool GpuTimingRecorder::collectLocked(
     Device& device,
-    const u64 publishFrameIndex,
     const u64 subscriptionIdentityLimit,
     SampleDispatchVector& completedSamples,
+    GpuTimingSinkSampleVector& performanceSamples,
     Alloc::ScratchArena& scratchArena
 ){
     syncActiveState();
@@ -606,11 +789,8 @@ void GpuTimingRecorder::collectLocked(
     if(m_pendingAttributionRetirements){
         retireMarkedPendingAttributionsLocked(completedSamples);
     }
-    if(!hasPendingAcceptedQueries){
-        if(publishPerformanceSamples)
-            m_timing.publishFrame(publishFrameIndex);
-        return;
-    }
+    if(!hasPendingAcceptedQueries)
+        return publishPerformanceSamples;
 
     for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
         it.value()->collect(
@@ -621,10 +801,10 @@ void GpuTimingRecorder::collectLocked(
             subscriptionIdentityLimit,
             publishPerformanceSamples,
             completedSamples,
+            performanceSamples,
             scratchArena
         );
-    if(publishPerformanceSamples)
-        m_timing.publishFrame(publishFrameIndex);
+    return publishPerformanceSamples;
 }
 
 bool GpuTimingRecorder::submissionCompleted(Device& device, const QueueSubmissionToken& token){

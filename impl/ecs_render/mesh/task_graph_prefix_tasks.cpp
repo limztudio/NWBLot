@@ -36,7 +36,7 @@ bool MeshViewSetupGraphTask::record(
 ){
     const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue =
         payload.shadowVisibilityTask && payload.shadowVisibilityTask->valid()
-            ? context.graph.queueInfoForTask(*payload.shadowVisibilityTask)
+            ? context.compiledPlan.queueInfoForTask(*payload.shadowVisibilityTask)
             : nullptr
     ;
     if(
@@ -65,7 +65,8 @@ bool MeshViewSetupGraphTask::record(
             payload.graphics->getDevice(),
             commandList
         );
-        payload.asyncPrefixTiming->value().finishMarker();
+        if(!Core::FinishSplitGpuTimingMarker(payload.asyncPrefixTiming))
+            return false;
     }
 
     if(recordsGraphicsFrameMarker)

@@ -167,7 +167,8 @@ inline constexpr Name s_ResourceVersionScratchArena("tests/graphics/task_graph_r
 [[nodiscard]] inline bool Analyze(const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis){
     Core::Alloc::ScratchArena scratchArena(s_ResourceVersionScratchArena);
     const Graphics::GpuTaskGraphCompiler compiler;
-    return compiler.analyze(graph, analysis, scratchArena);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    return compiler.analyze(declarations, analysis, scratchArena);
 }
 
 [[nodiscard]] inline bool Assign(
@@ -178,7 +179,8 @@ inline constexpr Name s_ResourceVersionScratchArena("tests/graphics/task_graph_r
 ){
     Core::Alloc::ScratchArena scratchArena(s_ResourceVersionScratchArena);
     const Graphics::GpuTaskGraphCompiler compiler;
-    return compiler.assignQueues(graph, analysis, topology, assignments, scratchArena);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    return compiler.assignQueues(declarations, analysis, topology, assignments, scratchArena);
 }
 
 [[nodiscard]] inline bool Compile(
@@ -196,7 +198,8 @@ inline constexpr Name s_ResourceVersionScratchArena("tests/graphics/task_graph_r
     options.allowMetadataOnlyTasks = true;
     Core::Alloc::ScratchArena scratchArena(s_ResourceVersionScratchArena);
     const Graphics::GpuTaskGraphCompiler compiler;
-    return compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, options);
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    return compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, options);
 }
 
 inline void ExpectClosedCycle(const Graphics::GpuTaskGraphAnalysis& analysis){

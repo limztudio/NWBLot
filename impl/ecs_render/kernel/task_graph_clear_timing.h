@@ -52,8 +52,7 @@ struct GraphClearTimingRecordState{
         graphics->getDevice(),
         commandList
     );
-    timing->value().finishMarker();
-    return true;
+    return Core::FinishSplitGpuTimingMarker(timing);
 }
 
 [[nodiscard]] inline bool EndGraphClearTiming(

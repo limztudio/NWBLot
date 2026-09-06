@@ -4,6 +4,8 @@
 
 #include "command_ir_internal.h"
 
+#include <global/termination.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -182,8 +184,19 @@ static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum
 
 
 void GpuCommandIrCapture::reset()noexcept{
-    m_records.clear();
-    m_commandBytes.resize(sizeof(GpuCommandIrStreamHeader));
+    static_assert(noexcept(m_records.pop_back()));
+    static_assert(noexcept(m_commandBytes.pop_back()));
+    NWB_FATAL_ASSERT_MSG(
+        m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader),
+        "Command IR capture reset requires its reserved stream header storage"
+    );
+    if(m_commandBytes.size() < sizeof(GpuCommandIrStreamHeader))
+        TerminateInvariant();
+
+    while(!m_records.empty())
+        m_records.pop_back();
+    while(m_commandBytes.size() > sizeof(GpuCommandIrStreamHeader))
+        m_commandBytes.pop_back();
     m_graphGeneration = 0u;
     m_planGeneration = 0u;
     m_recordingAttemptGeneration = 0u;
@@ -213,8 +226,12 @@ void GpuCommandIrCapture::rollback(const usize recordCount)noexcept{
         return;
     }
 
-    m_records.resize(recordCount);
-    m_commandBytes.resize(byteOffset);
+    static_assert(noexcept(m_records.pop_back()));
+    static_assert(noexcept(m_commandBytes.pop_back()));
+    while(m_records.size() > recordCount)
+        m_records.pop_back();
+    while(m_commandBytes.size() > byteOffset)
+        m_commandBytes.pop_back();
     m_graphGeneration = m_records.empty() ? 0u : m_records[0u].task.generation;
     m_planGeneration = m_records.empty() ? 0u : m_records[0u].packet.generation;
     if(m_records.empty())
@@ -328,6 +345,8 @@ bool GpuCommandIrCapture::captureClearTextureRectUInt(
 }
 
 bool GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
+    static_assert(IsTriviallyCopyable_V<GpuCommandIrBuiltinTaskRecord>, "Command IR inspection records must stay trivially copyable");
+
     if(!GpuCommandIrDetail::ValidateBuiltinRecord(record))
         return false;
 
@@ -335,22 +354,19 @@ bool GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
         return false;
     if(m_planGeneration != 0u && m_planGeneration != record.packet.generation)
         return false;
-    const usize recordCountBefore = m_records.size();
-    const usize byteCountBefore = m_commandBytes.size();
-    try{
-        // Keep the legacy inspection cache and the POD stream transactional as one capture record. In particular,
-        // an allocator failure in either update must not strand an uncounted byte record in the stream.
-        m_records.push_back(record);
-        if(!appendCommandBytes(record)){
-            m_records.pop_back();
-            return false;
-        }
-    }
-    catch(...){
-        m_records.resize(recordCountBefore);
-        m_commandBytes.resize(byteCountBefore);
+
+    const usize nextRecordCount = m_records.size() + 1u;
+    if(nextRecordCount == 0u || !BinaryDetail::CanStoreValueCount(m_records, nextRecordCount))
         return false;
-    }
+
+    // Reserve the inspection record before the stream helper reserves and writes its bytes. Once both reservations
+    // return, the POD appends cannot allocate, so an allocation exception leaves both logical sequences unchanged
+    // and unwinds to the application boundary.
+    m_records.reserve(nextRecordCount);
+
+    if(!appendCommandBytes(record))
+        return false;
+    m_records.push_back(record);
 
     if(m_graphGeneration == 0u)
         m_graphGeneration = record.task.generation;

@@ -57,7 +57,7 @@ void* Device::mapBuffer(Buffer* bufferResource, const CpuAccessMode::Enum reques
         return nullptr;
     }
 
-    ScopedLock resourceLock(buffer.m_memoryBindingMutex);
+    NothrowScopedLock resourceLock(buffer.m_memoryBindingMutex);
     if(buffer.m_creationDesc.isVirtual){
         if(!buffer.m_boundHeap || buffer.m_heapBindingRange.size == 0u || !buffer.m_mappedMemory){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: virtual buffer has no mapped heap binding"));

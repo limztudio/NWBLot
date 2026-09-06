@@ -217,7 +217,7 @@ void HostReadbackBarrierTracker::appendBarriers(
         barriers.push_back(BuildHostReadBufferBarrier(buffer));
 }
 
-void HostReadbackBarrierTracker::clear(){
+void HostReadbackBarrierTracker::clear()noexcept{
     m_buffers.clear();
 }
 

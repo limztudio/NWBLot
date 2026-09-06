@@ -94,7 +94,8 @@ namespace RendererTaskGraphDetail{
     );
     // Accumulation's raster half records after this producer in the selected terminal Graphics packet. Close
     // the opening command-list marker now; its consumer owns finishTiming/discard.
-    payload.accumulationTiming->value().finishMarker();
+    if(!Core::FinishSplitGpuTimingMarker(payload.accumulationTiming))
+        return false;
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(
         payload.targets->avboit.accumulationFramebuffer->getFramebufferInfo().getViewport()
@@ -171,7 +172,8 @@ namespace RendererTaskGraphDetail{
             );
             // The range spans serial callbacks, but this opening command list still needs its marker closed
             // before recording advances to the raster consumer.
-            payload.accumulationTiming->value().finishMarker();
+            if(!Core::FinishSplitGpuTimingMarker(payload.accumulationTiming))
+                return false;
         }
         else if(!payload.accumulationTiming->has_value())
             return false;

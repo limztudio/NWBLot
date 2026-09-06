@@ -17,6 +17,7 @@
 #include <core/graphics/task_graph/task_graph.h>
 #include <core/graphics/vulkan/backend.h>
 #include <tests/common/capturing_logger.h>
+#include <tests/common/gpu_task_graph_read_views.h>
 #include <tests/common/headless_graphics_scope.h>
 #include <tests/common/test_context.h>
 
@@ -355,11 +356,14 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsUnboundTextureBeforeThunk
     GpuCompiledGraph compiledGraph(GpuResourceReadinessTest::arena());
     Alloc::ScratchArena scratchArena(Name("tests/gpu_readiness/unbound_packet_scratch"));
     const GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
-    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(prefixTask);
+    const GpuTaskGraph::DeclarationReadView compilationDeclarations(graph);
+    ASSERT_TRUE(compiler.compile(compilationDeclarations, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuTaskGraphReadViews views(graph, compiledGraph);
+    ASSERT_TRUE(views.valid());
+    const GpuSubmissionPacketId packet = views.compiled.packetForTask(prefixTask);
     ASSERT_TRUE(packet.valid());
-    ASSERT_EQ(compiledGraph.packetForTask(tailTask), packet);
-    ASSERT_TRUE(compiledGraph.taskPrecedesInSamePacket(prefixTask, tailTask));
+    ASSERT_EQ(views.compiled.packetForTask(tailTask), packet);
+    ASSERT_TRUE(views.compiled.taskPrecedesInSamePacket(prefixTask, tailTask));
 
     GpuRecordedGraph recordedGraph(GpuResourceReadinessTest::arena());
     GpuCommandIrCapture capture(GpuResourceReadinessTest::arena());
@@ -378,7 +382,7 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsUnboundTextureBeforeThunk
     EXPECT_EQ(tailDiscardedCount, 1u);
     EXPECT_EQ(capture.recordCount(), 0u);
     EXPECT_EQ(capture.recordingAttemptGeneration(), 0u);
-    EXPECT_EQ(recordedGraph.find(packet), nullptr);
+    EXPECT_FALSE(recordedGraph.packetSnapshot(packet).has_value());
 }
 
 TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsInvalidGraphInitialTextureState){
@@ -446,18 +450,19 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsInvalidGraphInitialTextur
     GpuCompiledGraph compiledGraph(GpuResourceReadinessTest::arena());
     Alloc::ScratchArena scratchArena(Name("tests/gpu_readiness/unsupported_initial_texture_scratch"));
     const GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
-    const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
-    ASSERT_NE(compiledTask, nullptr);
-    const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
-    ASSERT_NE(barriers, nullptr);
-    ASSERT_EQ(compiledTask->prologueBarrierCount, 1u);
-    EXPECT_EQ(barriers[0u].type, GpuCompiledBarrierType::TextureTransition);
-    EXPECT_EQ(barriers[0u].before, ResourceStates::VertexBuffer);
-    EXPECT_EQ(barriers[0u].after, ResourceStates::ShaderResource);
-    EXPECT_TRUE(barriers[0u].isGraphInitialState);
+    const GpuTaskGraph::DeclarationReadView compilationDeclarations(graph);
+    ASSERT_TRUE(compiler.compile(compilationDeclarations, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuTaskGraphReadViews views(graph, compiledGraph);
+    ASSERT_TRUE(views.valid());
+    const GpuCompiledTaskView compiledTask = views.compiled.findTask(task);
+    ASSERT_TRUE(compiledTask.valid());
+    ASSERT_EQ(compiledTask.plan->prologueBarrierCount, 1u);
+    EXPECT_EQ(compiledTask.prologueBarriers[0u].type, GpuCompiledBarrierType::TextureTransition);
+    EXPECT_EQ(compiledTask.prologueBarriers[0u].before, ResourceStates::VertexBuffer);
+    EXPECT_EQ(compiledTask.prologueBarriers[0u].after, ResourceStates::ShaderResource);
+    EXPECT_TRUE(compiledTask.prologueBarriers[0u].isGraphInitialState);
 
-    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    const GpuSubmissionPacketId packet = views.compiled.packetForTask(task);
     ASSERT_TRUE(packet.valid());
     GpuRecordedGraph recordedGraph(GpuResourceReadinessTest::arena());
     GpuCommandIrCapture capture(GpuResourceReadinessTest::arena());
@@ -474,7 +479,7 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsInvalidGraphInitialTextur
     EXPECT_EQ(discardedCount, 1u);
     EXPECT_EQ(capture.recordCount(), 0u);
     EXPECT_EQ(capture.recordingAttemptGeneration(), 0u);
-    EXPECT_EQ(recordedGraph.find(packet), nullptr);
+    EXPECT_FALSE(recordedGraph.packetSnapshot(packet).has_value());
 }
 
 
@@ -571,7 +576,8 @@ TEST_F(GpuResourceReadinessTest, OrderedUploadCopyDestConflictRejectsMergedPacke
     );
     ASSERT_TRUE(uploadTask.valid());
     EXPECT_FALSE(acceptedToken.valid());
-    const GpuTaskGraphTaskView uploadView = graph.taskAt(uploadTask.index);
+    const GpuTaskGraph::DeclarationReadView taskDeclarations(graph);
+    const GpuTaskGraphTaskView uploadView = taskDeclarations.taskAt(uploadTask.index);
     ASSERT_EQ(uploadView.resourceUseCount, 2u);
     EXPECT_EQ(uploadView.resourceUses[0u].requiredState, ResourceStates::CopyDest);
     EXPECT_EQ(uploadView.resourceUses[1u].requiredState, ResourceStates::ShaderResource);
@@ -582,11 +588,14 @@ TEST_F(GpuResourceReadinessTest, OrderedUploadCopyDestConflictRejectsMergedPacke
     GpuCompiledGraph compiledGraph(GpuResourceReadinessTest::arena());
     Alloc::ScratchArena scratchArena(Name("tests/gpu_readiness/permanent_upload_scratch"));
     const GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
-    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(prefixTask);
+    const GpuTaskGraph::DeclarationReadView compilationDeclarations(graph);
+    ASSERT_TRUE(compiler.compile(compilationDeclarations, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuTaskGraphReadViews views(graph, compiledGraph);
+    ASSERT_TRUE(views.valid());
+    const GpuSubmissionPacketId packet = views.compiled.packetForTask(prefixTask);
     ASSERT_TRUE(packet.valid());
-    ASSERT_EQ(compiledGraph.packetForTask(uploadTask), packet);
-    ASSERT_TRUE(compiledGraph.taskPrecedesInSamePacket(prefixTask, uploadTask));
+    ASSERT_EQ(views.compiled.packetForTask(uploadTask), packet);
+    ASSERT_TRUE(views.compiled.taskPrecedesInSamePacket(prefixTask, uploadTask));
 
     GpuRecordedGraph recordedGraph(GpuResourceReadinessTest::arena());
     const GpuNativePacketRecorder recorder(device);
@@ -599,7 +608,7 @@ TEST_F(GpuResourceReadinessTest, OrderedUploadCopyDestConflictRejectsMergedPacke
     EXPECT_FALSE(prefixRecorded);
     EXPECT_EQ(prefixDiscardedCount, 1u);
     EXPECT_FALSE(acceptedToken.valid());
-    EXPECT_EQ(recordedGraph.find(packet), nullptr);
+    EXPECT_FALSE(recordedGraph.packetSnapshot(packet).has_value());
 }
 
 
@@ -657,8 +666,11 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsBufferSpanBeyondImportedD
     GpuCompiledGraph compiledGraph(GpuResourceReadinessTest::arena());
     Alloc::ScratchArena scratchArena(Name("tests/gpu_readiness/out_of_bounds_buffer_scratch"));
     const GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
-    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    const GpuTaskGraph::DeclarationReadView compilationDeclarations(graph);
+    ASSERT_TRUE(compiler.compile(compilationDeclarations, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuTaskGraphReadViews views(graph, compiledGraph);
+    ASSERT_TRUE(views.valid());
+    const GpuSubmissionPacketId packet = views.compiled.packetForTask(task);
     ASSERT_TRUE(packet.valid());
 
     GpuRecordedGraph recordedGraph(GpuResourceReadinessTest::arena());
@@ -671,7 +683,7 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsBufferSpanBeyondImportedD
     ));
     EXPECT_FALSE(recorded);
     EXPECT_EQ(discardedCount, 1u);
-    EXPECT_EQ(recordedGraph.find(packet), nullptr);
+    EXPECT_FALSE(recordedGraph.packetSnapshot(packet).has_value());
 }
 
 
@@ -720,9 +732,19 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightAcceptsBackendlessHazardDomainWi
     GpuCompiledGraph compiledGraph(GpuResourceReadinessTest::arena());
     Alloc::ScratchArena scratchArena(Name("tests/gpu_readiness/hazard_domain_scratch"));
     const GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
-    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
-    ASSERT_TRUE(packet.valid());
+    {
+        const GpuTaskGraph::DeclarationReadView compilationDeclarations(graph);
+
+        ASSERT_TRUE(compiler.compile(compilationDeclarations, analysis, topology, assignments, compiledGraph, scratchArena));
+    }
+    GpuSubmissionPacketId packet;
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        ASSERT_TRUE(views.valid());
+
+        packet = views.compiled.packetForTask(task);
+        ASSERT_TRUE(packet.valid());
+    }
 
     GpuRecordedGraph recordedGraph(GpuResourceReadinessTest::arena());
     const GpuNativePacketRecorder recorder(device);
@@ -734,7 +756,11 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightAcceptsBackendlessHazardDomainWi
     ));
     EXPECT_TRUE(recorded);
     EXPECT_EQ(discardedCount, 0u);
-    EXPECT_NE(recordedGraph.find(packet), nullptr);
+    EXPECT_TRUE(recordedGraph.packetSnapshot(packet).has_value());
+
+    GpuGraphSubmissionTransaction transaction(GpuResourceReadinessTest::arena());
+    transaction.reset(compiledGraph);
+    EXPECT_TRUE(transaction.discardUnaccepted(graph, compiledGraph, recordedGraph.recordingAttemptGeneration()));
 }
 
 

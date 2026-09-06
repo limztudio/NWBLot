@@ -317,7 +317,12 @@ Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(
     const Core::GpuGraphResourceId backbuffer,
     const Core::GpuTaskId previousTask
 ){
-    if(m_taskGraphPresentationClaimed && m_preparedGraphGeneration != graph.generation()){
+    u64 graphGeneration = 0u;
+    {
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+        graphGeneration = declarations.generation();
+    }
+    if(m_taskGraphPresentationClaimed && m_preparedGraphGeneration != graphGeneration){
         m_taskGraphPresentationClaimed = false;
         m_preparedGraphGeneration = 0u;
     }
@@ -403,7 +408,7 @@ Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(
     }
 
     m_taskGraphPresentationClaimed = true;
-    m_preparedGraphGeneration = graph.generation();
+    m_preparedGraphGeneration = graphGeneration;
     return readbackTask;
 }
 

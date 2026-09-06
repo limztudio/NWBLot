@@ -137,15 +137,15 @@ bool ShadowPrepareHybridSoftwareTailGraphTask::record(
     usize hybridHardwareFallbackInstanceMaterialByteCount = 0u;
     usize hybridHardwareFallbackInstanceByteCount = 0u;
     usize hybridHardwareFallbackMaterialTypedByteCount = 0u;
-    hybridHardwareFallbackInstanceMaterialData = context.taskGraph.uploadBlobData(
+    hybridHardwareFallbackInstanceMaterialData = context.declarations.uploadBlobData(
         payload.hybridHardwareFallbackInstanceMaterialBlob,
         hybridHardwareFallbackInstanceMaterialByteCount
     );
-    hybridHardwareFallbackInstanceData = context.taskGraph.uploadBlobData(
+    hybridHardwareFallbackInstanceData = context.declarations.uploadBlobData(
         payload.hybridHardwareFallbackInstanceBlob,
         hybridHardwareFallbackInstanceByteCount
     );
-    hybridHardwareFallbackMaterialTypedData = context.taskGraph.uploadBlobData(
+    hybridHardwareFallbackMaterialTypedData = context.declarations.uploadBlobData(
         payload.hybridHardwareFallbackMaterialTypedBlob,
         hybridHardwareFallbackMaterialTypedByteCount
     );

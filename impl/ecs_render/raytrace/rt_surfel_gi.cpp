@@ -91,7 +91,7 @@ struct SurfelGiAgeFreeGraphTask{
         )
             return false;
 
-        const Core::GpuPhysicalQueueInfo* const queue = context.graph.queueInfo(context.queue);
+        const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
         if(!queue || payload.asyncTiming->has_value())
             return false;
 
@@ -119,8 +119,8 @@ struct SurfelGiAgeFreeGraphTask{
         }
         // The timestamp endpoint follows in the remaining-GI callback, but this callback's nested marker must
         // close before the packet recorder advances to the graph-owned cell-head clear task.
-        if(payload.asyncTiming->has_value())
-            payload.asyncTiming->value().finishMarker();
+        if(payload.asyncTiming->has_value() && !Core::FinishSplitGpuTimingMarker(payload.asyncTiming))
+            return false;
         return true;
     }
 
@@ -154,7 +154,7 @@ struct SurfelGiHashBuildGraphTask{
         )
             return false;
 
-        const Core::GpuPhysicalQueueInfo* const queue = context.graph.queueInfo(context.queue);
+        const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
         if(
             !queue
             || (queue->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming->has_value())
@@ -207,7 +207,7 @@ struct SurfelGiSpawnGraphTask{
         )
             return false;
 
-        const Core::GpuPhysicalQueueInfo* const queue = context.graph.queueInfo(context.queue);
+        const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
         if(
             !queue
             || (queue->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming->has_value())
@@ -260,7 +260,7 @@ struct SurfelGiTraceBuildArgsGraphTask{
         )
             return false;
 
-        const Core::GpuPhysicalQueueInfo* const queue = context.graph.queueInfo(context.queue);
+        const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
         if(
             !queue
             || (queue->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming->has_value())
@@ -313,7 +313,7 @@ struct SurfelGiTraceGraphTask{
         )
             return false;
 
-        const Core::GpuPhysicalQueueInfo* const queue = context.graph.queueInfo(context.queue);
+        const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
         if(
             !queue
             || (queue->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming->has_value())
@@ -366,7 +366,7 @@ struct SurfelGiResolveGraphTask{
         )
             return false;
 
-        const Core::GpuPhysicalQueueInfo* const queue = context.graph.queueInfo(context.queue);
+        const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
         if(
             !queue
             || (queue->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming->has_value())
@@ -420,7 +420,7 @@ struct SurfelGiGraphTask{
         if(!payload.raytracingSystem || !payload.graphics || !payload.targets || !payload.deferredLightingResources.valid() || !payload.timingTicket)
             return false;
 
-        const Core::GpuPhysicalQueueInfo* const queue = context.graph.queueInfo(context.queue);
+        const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
         if(!queue)
             return false;
 

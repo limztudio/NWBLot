@@ -138,7 +138,7 @@ Graphics::Graphics(
     m_deviceCreationParams.enableRayTracingExtensions = true;
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
 }
-Graphics::~Graphics()noexcept{
+Graphics::~Graphics()noexcept(false){
     // An active unwind is already terminal. Retire scheduler captures without re-entering the throwing Vulkan
     // lifecycle path, so the original exception reaches the application-entry boundary.
     if(UncaughtExceptionCount() > 0){
@@ -415,7 +415,7 @@ bool Graphics::confirmFramePresentationSignal(
     return m_backend->confirmFramePresentationSignal(claim, token);
 }
 
-bool Graphics::cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim)noexcept{
+bool Graphics::cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim){
     return m_backend->cancelFramePresentationSignal(claim);
 }
 

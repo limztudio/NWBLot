@@ -62,11 +62,11 @@ struct QueueSubmissionNativeSignal{
 
 // Called immediately before one validated native submission reaches its selected physical queue. It returns an
 // opaque binary signal that Device attaches directly to that submission, rather than appending it to a queue-global
-// pending list where another concurrent submit could consume it. A false return must leave owner state failure
-// atomic and creates no resolution obligation. Device contains an exception as an indeterminate preparation,
-// rejects the submission, and invokes resolved exactly once with an invalid token. The hook is a borrowed one-shot
-// value: context must outlive executeCommandLists, and copies must not be retained past resolution or their owner's
-// lifecycle.
+// pending list where another concurrent submit could consume it. A false return is an expected rejection and must
+// leave owner state failure atomic; it creates no resolution obligation. An unexpected exception is not converted
+// into rejection and unwinds to the application entry boundary, so throwing preparation must also leave owner state
+// unchanged. The hook is a borrowed one-shot value: context must outlive executeCommandLists, and copies must not be
+// retained past resolution or their owner's lifecycle.
 using QueueSubmissionPreSubmitCallback = bool(*) (
     void* context,
     u64 identity,
@@ -75,8 +75,7 @@ using QueueSubmissionPreSubmitCallback = bool(*) (
 );
 
 // Called exactly once after successful hook preparation, with the accepted physical-queue timeline token or an
-// invalid token when native submission was rejected. It is also called with an invalid token when preparation exits
-// by exception because owner state may already have changed. Callbacks must resolve both states without throwing or
+// invalid token when native submission was rejected. Callbacks must resolve one-shot state without throwing or
 // synchronously draining Device.
 using QueueSubmissionResolvedCallback = bool(*) (
     void* context,
@@ -177,67 +176,60 @@ typedef GraphicsBackend::Handle<CommandList> CommandListHandle;
 // GPU crash diagnostics
 
 
-// Non-owning view into a tracker's stored marker string (or the static not-found sentinel). Returned by value
-// so device-lost capture resolves markers WITHOUT allocating on the growable object arena. Consume promptly:
-// the view points into GpuCrashMarkerTracker storage that recording could mutate (best-effort at device-lost).
+// Non-owning view into immutable device-lifetime marker history (or the static not-found sentinel). Recording may
+// publish more history concurrently without invalidating the view. The owning GpuCrashTracker must outlive it.
 typedef Pair<bool, AStringView> ResolvedMarker;
+
+class GpuCrashTracker;
 
 // On a device-lost the GPU driver reports the payload of the last marker the GPU executed
 // (NVIDIA device-diagnostic checkpoints / AMD buffer markers).
 // In cases of nested regimes, we want the marker payloads to represent the whole "stack" of regimes.
-// GpuCrashMarkerTracker pushes/pops regimes to this stack.
-// The payload itself is a 64bit value, so GpuCrashMarkerTracker stores the mappings of strings<->hashes.
+// GpuCrashMarkerTracker pushes/pops regimes to this stack and interns completed paths in its device tracker.
+// The payload itself is a 64bit value resolved through immutable device-lifetime history.
 // There should be one GpuCrashMarkerTracker per graphics API-level command list.
-class GpuCrashMarkerTracker{
+class GpuCrashMarkerTracker : NoCopy{
 public:
-    explicit GpuCrashMarkerTracker(GraphicsArena& arena);
+    GpuCrashMarkerTracker(GpuCrashTracker& tracker, GraphicsArena& arena);
 
 
 public:
     usize pushEvent(const char* name);
-    void popEvent();
-    // Clears only active nesting. Historical hash-to-string mappings remain available for in-flight crash reports.
-    void resetEventStack();
-    ResolvedMarker getEventString(usize hash);
+    void popEvent()noexcept;
+    // Clears only active nesting. Published device history remains available for in-flight crash reports.
+    void resetEventStack()noexcept;
 
 
 private:
-    GraphicsArena& m_arena;
+    GpuCrashTracker& m_tracker;
     // Nested marker labels joined by "/" with an offset stack to pop the most recent segment.
     GraphicsString m_eventStack;
     GraphicsVector<usize> m_eventStackOffsets;
-
-    Array<usize, s_MaxGpuCrashMarkerStrings> m_eventHashes;
-    usize m_oldestHashIndex;
-    GraphicsHashMap<usize, GraphicsString> m_eventStrings;
 };
 
 // GpuCrashTracker tracks all Device-level constructs needed when reporting a GPU crash.
 // It resolves a last-executed marker payload hash back to the original nested marker string.
 // There should be one GpuCrashTracker per Device.
-// All command lists will register their GpuCrashMarkerTrackers with the GpuCrashTracker.
-class GpuCrashTracker{
+// Its concurrent map is append-only: exact paths reuse IDs, while published strings never move or disappear.
+class GpuCrashTracker : NoCopy{
+    friend class GpuCrashMarkerTracker;
+
+
 public:
     explicit GpuCrashTracker(GraphicsArena& arena);
 
 
 public:
-    void registerGpuCrashMarkerTracker(GpuCrashMarkerTracker& tracker);
-    void unRegisterGpuCrashMarkerTracker(GpuCrashMarkerTracker& tracker);
-
     ResolvedMarker resolveMarker(usize markerHash);
 
 
 private:
-    // Guards the containers below: command lists register/unregister from worker threads (create/destroy)
-    // while a device-lost capture iterates them via resolveMarker on another thread. Without this the
-    // Set/Deque could be mutated mid-iteration. (Per-tracker locking is impossible — destroyed trackers
-    // are copied by value into m_destroyedMarkerTrackers, so GpuCrashMarkerTracker must stay copyable.)
-    Futex m_mutex;
-    GraphicsSet<GpuCrashMarkerTracker*> m_markerTrackers;
-    // Command lists deleted on CPU could still be executing (and crashing) on GPU,
-    // so keep a small number of recently destroyed marker trackers
-    GraphicsDeque<GpuCrashMarkerTracker> m_destroyedMarkerTrackers;
+    [[nodiscard]] usize internEvent(const GraphicsString& eventString);
+
+
+private:
+    GraphicsArena& m_arena;
+    ParallelHashMap<usize, GraphicsString, GraphicsArena> m_eventStrings;
 };
 
 namespace GpuCrashDumpKind{
@@ -375,8 +367,9 @@ struct DeviceCreationParameters : public InstanceParameters{
 #else
     bool enableNativeMeshShaders = true;
 #endif
-    // Best-effort asynchronous Compute topology. A dedicated compute-only family is used when present; otherwise
-    // device creation succeeds without fabricating an alias queue.
+    // Best-effort asynchronous Compute offload. Universal Graphics+Compute hardware aliases the required roles
+    // unless a dedicated offload family exists. Split Graphics-only/Compute-only hardware always creates the
+    // functionally required Compute transport, even when this optional preference is disabled.
     bool enableAsyncComputeLane = true;
     // Best-effort optional transfer transport. Only a distinct transfer-only Vulkan family is exposed as a
     // CommandQueue::Transfer; task-graph copy work otherwise falls back to the existing Compute/Graphics queues.

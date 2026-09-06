@@ -14,6 +14,7 @@
 #include <core/graphics/task_graph/task_graph.h>
 #include <core/graphics/vulkan/backend.h>
 #include <tests/common/capturing_logger.h>
+#include <tests/common/gpu_task_graph_read_views.h>
 #include <tests/common/headless_graphics_scope.h>
 
 
@@ -276,8 +277,9 @@ struct BackendOperandGraph{
         GpuTaskGraphCompileOptions compileOptions;
         compileOptions.allowMetadataOnlyTasks = true;
         const GpuTaskGraphCompiler compiler;
+        const GpuTaskGraph::DeclarationReadView compilationDeclarations(m_graph);
         if(!compiler.compile(
-            m_graph,
+            compilationDeclarations,
             m_analysis,
             m_device.getPhysicalQueueTopology(),
             m_assignments,
@@ -287,12 +289,20 @@ struct BackendOperandGraph{
         ))
             return false;
 
-        m_prefixPacket = m_compiledGraph.packetForTask(m_prefixTask);
-        m_targetPacket = m_compiledGraph.packetForTask(m_targetTask);
+        const GpuTaskGraphReadViews views(m_graph, m_compiledGraph);
+        if(!views.valid())
+            return false;
+
+        m_prefixPacket = views.compiled.packetForTask(m_prefixTask);
+        m_targetPacket = views.compiled.packetForTask(m_targetTask);
         if(!m_prefixPacket.valid() || !m_targetPacket.valid() || m_prefixPacket == m_targetPacket)
             return false;
-        m_queue = m_compiledGraph.packet(m_targetPacket).queue;
-        return m_compiledGraph.packet(m_prefixPacket).queue == m_queue;
+        const GpuCompiledPacketView prefixPacket = views.compiled.packet(m_prefixPacket);
+        const GpuCompiledPacketView targetPacket = views.compiled.packet(m_targetPacket);
+        if(!prefixPacket.valid() || !targetPacket.valid())
+            return false;
+        m_queue = targetPacket.plan->queue;
+        return prefixPacket.plan->queue == m_queue;
     }
 
     [[nodiscard]] bool captureInvalidPrefix(GpuCommandIrCapture& capture)const{
@@ -585,6 +595,8 @@ TEST_F(CommandIrBackendOperandTest, EveryOpcodeAndOperandRoleRejectsPermanentSta
 
     BackendOperandGraph resources(CommandIrBackendOperandTest::device(), CommandIrBackendOperandTest::arena());
     ASSERT_TRUE(resources.initialize());
+    const GpuTaskGraphReadViews views(resources.m_graph, resources.m_compiledGraph);
+    ASSERT_TRUE(views.valid());
     static constexpr PermanentConflictCase s_Cases[] = {
         { BackendOperandOperation::CopyBuffer, true, false }, { BackendOperandOperation::CopyBuffer, false, false },
         { BackendOperandOperation::CopyBuffer, true, true }, { BackendOperandOperation::CopyBuffer, false, true },
@@ -613,15 +625,15 @@ TEST_F(CommandIrBackendOperandTest, EveryOpcodeAndOperandRoleRejectsPermanentSta
         const GpuCommandIrReplayResult replay = testCase.directVulkan
             ? ReplayGpuCommandIrPacketDirectVulkan(
                 capture.commandBytes(),
-                resources.m_graph,
-                resources.m_compiledGraph,
+                views.declarations,
+                views.compiled,
                 resources.m_targetPacket,
                 *commandList
             )
             : ReplayGpuCommandIrPacket(
                 capture.commandBytes(),
-                resources.m_graph,
-                resources.m_compiledGraph,
+                views.declarations,
+                views.compiled,
                 resources.m_targetPacket,
                 *commandList
             )
@@ -641,6 +653,8 @@ TEST_F(CommandIrBackendOperandTest, LateUnboundBufferIsAtomicForNormalAndDirectR
 
     BackendOperandGraph resources(CommandIrBackendOperandTest::device(), CommandIrBackendOperandTest::arena());
     ASSERT_TRUE(resources.initialize());
+    const GpuTaskGraphReadViews views(resources.m_graph, resources.m_compiledGraph);
+    ASSERT_TRUE(views.valid());
     GpuCommandIrCapture rejectedCapture(CommandIrBackendOperandTest::arena());
     ASSERT_TRUE(resources.captureInvalidPrefix(rejectedCapture));
     ASSERT_TRUE(resources.captureReadyBufferCopy(rejectedCapture));
@@ -681,15 +695,15 @@ TEST_F(CommandIrBackendOperandTest, LateUnboundBufferIsAtomicForNormalAndDirectR
         const GpuCommandIrReplayResult rejected = directVulkan
             ? ReplayGpuCommandIrPacketDirectVulkan(
                 rejectedCapture.commandBytes(),
-                resources.m_graph,
-                resources.m_compiledGraph,
+                views.declarations,
+                views.compiled,
                 resources.m_targetPacket,
                 *commandList
             )
             : ReplayGpuCommandIrPacket(
                 rejectedCapture.commandBytes(),
-                resources.m_graph,
-                resources.m_compiledGraph,
+                views.declarations,
+                views.compiled,
                 resources.m_targetPacket,
                 *commandList
             )
@@ -703,15 +717,15 @@ TEST_F(CommandIrBackendOperandTest, LateUnboundBufferIsAtomicForNormalAndDirectR
         const GpuCommandIrReplayResult retry = directVulkan
             ? ReplayGpuCommandIrPacketDirectVulkan(
                 retryCapture.commandBytes(),
-                resources.m_graph,
-                resources.m_compiledGraph,
+                views.declarations,
+                views.compiled,
                 resources.m_targetPacket,
                 *commandList
             )
             : ReplayGpuCommandIrPacket(
                 retryCapture.commandBytes(),
-                resources.m_graph,
-                resources.m_compiledGraph,
+                views.declarations,
+                views.compiled,
                 resources.m_targetPacket,
                 *commandList
             )
@@ -732,6 +746,8 @@ TEST_F(CommandIrBackendOperandTest, LateUnboundTextureLeavesEarlierSelectedBuffe
 
     BackendOperandGraph resources(CommandIrBackendOperandTest::device(), CommandIrBackendOperandTest::arena());
     ASSERT_TRUE(resources.initialize());
+    const GpuTaskGraphReadViews views(resources.m_graph, resources.m_compiledGraph);
+    ASSERT_TRUE(views.valid());
     GpuCommandIrCapture rejectedCapture(CommandIrBackendOperandTest::arena());
     ASSERT_TRUE(resources.captureInvalidPrefix(rejectedCapture));
     ASSERT_TRUE(resources.captureReadyBufferCopy(rejectedCapture));
@@ -756,8 +772,8 @@ TEST_F(CommandIrBackendOperandTest, LateUnboundTextureLeavesEarlierSelectedBuffe
     const ReplayMutationSnapshot before = CaptureReplayMutationSnapshot(resources, rejectedCapture, *commandList);
     const GpuCommandIrReplayResult rejected = ReplayGpuCommandIrPacket(
         rejectedCapture.commandBytes(),
-        resources.m_graph,
-        resources.m_compiledGraph,
+        views.declarations,
+        views.compiled,
         resources.m_targetPacket,
         *commandList
     );
@@ -769,8 +785,8 @@ TEST_F(CommandIrBackendOperandTest, LateUnboundTextureLeavesEarlierSelectedBuffe
     const ReplayMutationSnapshot retryBefore = CaptureReplayMutationSnapshot(resources, retryCapture, *commandList);
     const GpuCommandIrReplayResult retry = ReplayGpuCommandIrPacket(
         retryCapture.commandBytes(),
-        resources.m_graph,
-        resources.m_compiledGraph,
+        views.declarations,
+        views.compiled,
         resources.m_targetPacket,
         *commandList
     );

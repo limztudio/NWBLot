@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "compiled_graph.h"
 #include "task_contract.h"
 #include "task_desc.h"
 
@@ -25,7 +26,6 @@ NWB_CORE_BEGIN
 class GpuTaskGraphAnalysis;
 class GpuTaskGraphQueueAssignments;
 class GpuTaskGraphQueueAssignmentTelemetryTracker;
-class GpuCompiledGraph;
 struct GpuCompiledBarrier;
 
 namespace Telemetry{
@@ -51,6 +51,10 @@ struct GpuTaskGraphTaskView{
     usize resourceUseCount = 0u;
     const GpuTaskResourceVersionUse* resourceVersionUses = nullptr;
     usize resourceVersionUseCount = 0u;
+    usize payloadObjectSize = 0u;
+    usize directResourceUseCount = 0u;
+    usize declaredResourceSetUseCount = 0u;
+    usize expandedResourceSetMemberUseCount = 0u;
     bool hasPayload = false;
     bool hasRecordPayload = false;
     bool hasAcceptedPayload = false;
@@ -137,7 +141,7 @@ struct GpuPresentEndpoint{
 
 struct GpuTaskGraphTelemetryOptions{
     const GpuTaskGraphQueueAssignments* queueAssignments = nullptr;
-    const GpuCompiledGraph* compiledGraph = nullptr;
+    const GpuCompiledGraph::ReadView* compiledPlan = nullptr;
     const GpuTaskGraphQueueAssignmentTelemetryTracker* queueAssignmentTelemetry = nullptr;
 };
 
@@ -146,6 +150,100 @@ class GpuNativePacketRecorder;
 class GpuGraphSubmissionTransaction;
 class GpuRecordedGraph;
 class GpuTaskGraphSubmitter;
+
+
+// Lexical proof that immutable declaration storage cannot be reset or mutated. Compiler/tooling callers acquire a
+// waiting view before any other operation gate; runtime paths use nonblocking acquisition after taking other gates.
+class GpuTaskGraphDeclarationReadView final : NoCopy{
+    friend class GpuCompiledGraph::ReadView;
+    friend class GpuTaskGraph;
+
+private:
+    struct TryAcquireTag{};
+
+
+public:
+    [[nodiscard]] static GpuTaskGraphDeclarationReadView tryAcquire(const GpuTaskGraph& graph)noexcept;
+
+
+public:
+    explicit GpuTaskGraphDeclarationReadView(const GpuTaskGraph& graph);
+    GpuTaskGraphDeclarationReadView(GpuTaskGraphDeclarationReadView&&) = delete;
+    ~GpuTaskGraphDeclarationReadView()noexcept;
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{ return m_graph != nullptr; }
+    [[nodiscard]] bool validFor(const GpuTaskGraph& graph)const noexcept{ return m_graph == &graph; }
+    [[nodiscard]] u64 generation()const noexcept;
+    [[nodiscard]] u64 declarationRevision()const noexcept;
+    [[nodiscard]] bool validForDeviceGeneration(u16 deviceGeneration)const noexcept;
+    [[nodiscard]] bool validTask(const GpuTaskId& id)const noexcept;
+    [[nodiscard]] bool validResource(const GpuGraphResourceId& id)const noexcept;
+    [[nodiscard]] bool validResourceVersion(const GpuGraphResourceVersionId& id)const noexcept;
+    [[nodiscard]] bool validResourceSet(const GpuGraphResourceSetId& id)const noexcept;
+    [[nodiscard]] bool validUploadBlob(const GpuUploadBlobId& id)const noexcept;
+    [[nodiscard]] bool validPipeline(const GpuGraphPipelineId& id)const noexcept;
+    [[nodiscard]] bool validExternalCompletion(const GpuExternalCompletionId& id)const noexcept;
+    [[nodiscard]] usize taskCount()const noexcept;
+    [[nodiscard]] usize resourceCount()const noexcept;
+    [[nodiscard]] usize resourceVersionCount()const noexcept;
+    [[nodiscard]] usize resourceSetCount()const noexcept;
+    [[nodiscard]] usize uploadBlobCount()const noexcept;
+    [[nodiscard]] usize pipelineCount()const noexcept;
+    [[nodiscard]] usize externalCompletionCount()const noexcept;
+    // Borrowed declaration storage remains valid only while this named lvalue view stays alive.
+    [[nodiscard]] GpuTaskGraphTaskView taskAt(usize index)const & noexcept;
+    [[nodiscard]] GpuTaskGraphTaskView taskAt(usize index)const && = delete;
+    [[nodiscard]] GpuTaskGraphResourceView resourceAt(usize index)const & noexcept;
+    [[nodiscard]] GpuTaskGraphResourceView resourceAt(usize index)const && = delete;
+    [[nodiscard]] GpuTaskGraphResourceVersionView resourceVersionAt(usize index)const noexcept;
+    [[nodiscard]] GpuTaskGraphResourceSetView resourceSetAt(usize index)const & noexcept;
+    [[nodiscard]] GpuTaskGraphResourceSetView resourceSetAt(usize index)const && = delete;
+    [[nodiscard]] GpuTaskGraphPipelineView pipelineAt(usize index)const & noexcept;
+    [[nodiscard]] GpuTaskGraphPipelineView pipelineAt(usize index)const && = delete;
+    [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const & noexcept;
+    [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const && = delete;
+    [[nodiscard]] const QueueSubmissionToken* externalCompletionToken(
+        const GpuExternalCompletionId& completion
+    )const & noexcept;
+    [[nodiscard]] const QueueSubmissionToken* externalCompletionToken(const GpuExternalCompletionId& completion)const && = delete;
+    [[nodiscard]] Texture* textureForResource(const GpuGraphResourceId& resource)const & noexcept;
+    [[nodiscard]] Texture* textureForResource(const GpuGraphResourceId& resource)const && = delete;
+    [[nodiscard]] Buffer* bufferForResource(const GpuGraphResourceId& resource)const & noexcept;
+    [[nodiscard]] Buffer* bufferForResource(const GpuGraphResourceId& resource)const && = delete;
+    [[nodiscard]] RayTracingAccelStruct* accelStructForResource(const GpuGraphResourceId& resource)const & noexcept;
+    [[nodiscard]] RayTracingAccelStruct* accelStructForResource(const GpuGraphResourceId& resource)const && = delete;
+    [[nodiscard]] const void* uploadBlobData(const GpuUploadBlobId& blob, usize& outByteSize)const & noexcept;
+    [[nodiscard]] const void* uploadBlobData(const GpuUploadBlobId& blob, usize& outByteSize)const && = delete;
+    [[nodiscard]] GraphicsPipeline* graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const & noexcept;
+    [[nodiscard]] GraphicsPipeline* graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const && = delete;
+    [[nodiscard]] ComputePipeline* computePipelineFor(const GpuGraphPipelineId& pipeline)const & noexcept;
+    [[nodiscard]] ComputePipeline* computePipelineFor(const GpuGraphPipelineId& pipeline)const && = delete;
+    [[nodiscard]] MeshletPipeline* meshletPipelineFor(const GpuGraphPipelineId& pipeline)const & noexcept;
+    [[nodiscard]] MeshletPipeline* meshletPipelineFor(const GpuGraphPipelineId& pipeline)const && = delete;
+    [[nodiscard]] RayTracingPipeline* rayTracingPipelineFor(const GpuGraphPipelineId& pipeline)const & noexcept;
+    [[nodiscard]] RayTracingPipeline* rayTracingPipelineFor(const GpuGraphPipelineId& pipeline)const && = delete;
+    [[nodiscard]] GpuGraphResourceId findImportedTexture(const TextureHandle& texture)const noexcept;
+    [[nodiscard]] GpuGraphResourceId findImportedBuffer(const BufferHandle& buffer)const noexcept;
+    [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const & noexcept;
+    [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const && = delete;
+    [[nodiscard]] bool appendFrameGraphTelemetry(
+        Telemetry::FrameGraphBuilder& builder,
+        const GpuTaskGraphAnalysis& analysis,
+        Alloc::ScratchArena& scratchArena,
+        const GpuTaskGraphTelemetryOptions& options = {}
+    )const;
+
+
+private:
+    GpuTaskGraphDeclarationReadView(const GpuTaskGraph& graph, TryAcquireTag)noexcept;
+    void acquire(const GpuTaskGraph& graph)noexcept;
+
+
+private:
+    const GpuTaskGraph* m_graph = nullptr;
+};
 
 
 class GpuGraphSubmissionBinding final{
@@ -199,27 +297,61 @@ private:
 
 
 class GpuTaskGraph final : NoCopy{
+    friend class GpuTaskGraphDeclarationReadView;
     friend class GpuTaskGraphCompiler;
+    friend class GpuTaskGraphQueueAssignmentTelemetryTracker;
     friend class GpuNativePacketRecorder;
     friend class GpuGraphSubmissionTransaction;
     friend class GpuRecordedGraph;
     friend class GpuTaskGraphSubmitter;
 
 
+public:
+    using DeclarationReadView = GpuTaskGraphDeclarationReadView;
+
+
 private:
+    class RecordThunkClaimGuard;
+    class RecordingAttemptResolutionGuard;
+
+    template<typename PayloadT>
+    class ProvisionalPayloadOwner final : NoCopy{
+        static_assert(IsNothrowDestructible_V<PayloadT>);
+
+
+    public:
+        ProvisionalPayloadOwner(GraphicsArena& arena, PayloadT* const payload)noexcept
+            : m_arena(arena)
+            , m_payload(payload)
+        {}
+        ~ProvisionalPayloadOwner()noexcept{
+            DestroyArenaObjectNoexcept(m_arena, m_payload);
+        }
+        [[nodiscard]] PayloadT& operator*()const noexcept{ return *m_payload; }
+        [[nodiscard]] PayloadT* operator->()const noexcept{ return m_payload; }
+
+
+    public:
+        [[nodiscard]] PayloadT* get()const noexcept{ return m_payload; }
+        [[nodiscard]] PayloadT* release()noexcept{
+            PayloadT* const payload = m_payload;
+            m_payload = nullptr;
+            return payload;
+        }
+        void publish()noexcept{ m_payload = nullptr; }
+
+
+    private:
+        GraphicsArena& m_arena;
+        PayloadT* m_payload = nullptr;
+    };
+
     enum class TaskLifecycleState : u8{
         Declared,
         Recording,
         Recorded,
-        Discarding,
         Submitting,
         Accepting,
-        Accepted,
-        Discarded,
-    };
-
-    enum class TaskPayloadCallbackPhase : u8{
-        Record,
         Accepted,
         Discarded,
     };
@@ -227,7 +359,114 @@ private:
     enum class SubmissionBindingState : u8{
         None,
         Active,
+        ExceptionClosing,
         Resolved,
+    };
+
+    class DeclarationMutationScope final : NoCopy{
+    public:
+        explicit DeclarationMutationScope(GpuTaskGraph& graph);
+        ~DeclarationMutationScope();
+
+
+    public:
+        [[nodiscard]] bool valid()const noexcept{ return m_valid; }
+        [[nodiscard]] bool validFor(const GpuTaskGraph& graph)const noexcept{ return m_valid && &m_graph == &graph; }
+
+
+    private:
+        GpuTaskGraph& m_graph;
+        UniqueLock<RecursiveMutex> m_declarationLock;
+        bool m_valid = false;
+    };
+
+    class DiscardNotificationScope final : NoCopy{
+    public:
+        explicit DiscardNotificationScope(const GpuTaskGraph& graph)noexcept;
+        ~DiscardNotificationScope();
+
+
+    public:
+        void complete()noexcept;
+        void activateWithinLock()noexcept;
+        void adoptPacketRecordingClaimWithinLock()noexcept;
+
+
+    private:
+        const GpuTaskGraph& m_graph;
+        bool m_active = false;
+        bool m_ownsPacketRecordingClaim = false;
+    };
+
+    class TaskPayloadDestroyScope final : NoCopy{
+    public:
+        explicit TaskPayloadDestroyScope(GpuTaskGraph& graph)noexcept;
+        ~TaskPayloadDestroyScope();
+
+
+    public:
+        void activateWithinLock()noexcept;
+
+
+    private:
+        GpuTaskGraph& m_graph;
+        bool m_active = false;
+    };
+
+    class ResetCompletionScope final : NoCopy{
+    public:
+        explicit ResetCompletionScope(GpuTaskGraph& graph)noexcept;
+        ~ResetCompletionScope();
+
+
+    public:
+        void activateWithinLock()noexcept;
+        void complete()noexcept;
+
+
+    private:
+        GpuTaskGraph& m_graph;
+        bool m_active = false;
+    };
+
+    class RecordingAttemptScope final : NoCopy{
+        friend class GpuTaskGraph;
+        friend class GpuGraphSubmissionTransaction;
+        friend class GpuNativePacketRecorder;
+        friend class GpuTaskGraphSubmitter;
+
+    public:
+        RecordingAttemptScope() = default;
+        ~RecordingAttemptScope()noexcept;
+
+
+    public:
+        void complete()noexcept;
+
+
+    private:
+        void activateWithinLock(
+            const GpuTaskGraph& graph,
+            const GpuCompiledGraph& compiledGraph,
+            u64 recordingAttemptGeneration,
+            u64 preparationSerial,
+            bool previousPlanWasActive
+        )noexcept;
+        void completeWithinLock()noexcept;
+        [[nodiscard]] bool validPreparationWithinLock(
+            const GpuTaskGraph& graph,
+            const GpuCompiledGraph& compiledGraph,
+            u64 recordingAttemptGeneration,
+            u64 preparationSerial
+        )const noexcept;
+
+
+    private:
+        const GpuTaskGraph* m_graph = nullptr;
+        const GpuCompiledGraph* m_compiledGraph = nullptr;
+        u64 m_recordingAttemptGeneration = 0u;
+        u64 m_preparationSerial = 0u;
+        bool m_previousPlanWasActive = false;
     };
 
 private:
@@ -272,6 +511,7 @@ private:
     // complete native recording, or abandon that exact packet attempt.
     class PacketRecordingLease final : NoCopy{
         friend class GpuTaskGraph;
+        friend class PacketRecordingAccess;
 
     public:
         PacketRecordingLease() = default;
@@ -287,6 +527,12 @@ private:
                 && m_claimGeneration != 0u
             ;
         }
+        [[nodiscard]] bool validFor(
+            const GpuTaskGraph& graph,
+            const GpuCompiledGraph& compiledGraph,
+            const GpuCompiledGraph::ReadView& planAccess,
+            GpuSubmissionPacketId packet
+        )const noexcept;
 
 
     private:
@@ -299,6 +545,46 @@ private:
 
 
     private:
+        GpuSubmissionPacketId m_packet;
+        u64 m_planGeneration = 0u;
+        u64 m_recordingAttemptGeneration = 0u;
+        u64 m_claimGeneration = 0u;
+    };
+
+    // Authenticates one exact recording claim once, then carries the lexical graph/plan read proof through packet
+    // preflight and native barrier/state lowering without repeatedly taking the graph lifecycle mutex.
+    class PacketRecordingAccess final : NoCopy{
+        friend class GpuTaskGraph;
+        friend class GpuNativePacketRecorder;
+
+    public:
+        PacketRecordingAccess(
+            const GpuTaskGraph& graph,
+            const GpuCompiledGraph& compiledGraph,
+            const GpuCompiledGraph::ReadView& planAccess,
+            const PacketRecordingLease& lease
+        )noexcept;
+
+
+    public:
+        [[nodiscard]] bool validFor(
+            const GpuTaskGraph& graph,
+            const GpuCompiledGraph& compiledGraph,
+            const GpuCompiledGraph::ReadView& planAccess,
+            GpuSubmissionPacketId packet
+        )const noexcept;
+        [[nodiscard]] bool validForTask(
+            const GpuTaskGraph& graph,
+            const GpuCompiledGraph& compiledGraph,
+            const GpuCompiledGraph::ReadView& planAccess,
+            const GpuTaskId& task
+        )const noexcept;
+
+
+    private:
+        const GpuTaskGraph* m_graph = nullptr;
+        const GpuCompiledGraph* m_compiledGraph = nullptr;
+        const PacketRecordingLease* m_lease = nullptr;
         GpuSubmissionPacketId m_packet;
         u64 m_planGeneration = 0u;
         u64 m_recordingAttemptGeneration = 0u;
@@ -380,6 +666,7 @@ private:
         mutable u64 lifecycleAttemptGeneration = 0u;
         mutable u64 recordingClaimGeneration = 0u;
         mutable u64 submissionClaimGeneration = 0u;
+        mutable u64 discardNotificationGeneration = 0u;
         mutable bool recordThunkInProgress = false;
         mutable bool recordThunkCompleted = false;
     };
@@ -390,10 +677,9 @@ private:
         BufferHandle buffer;
         RayTracingAccelStructHandle accelStruct;
         u16 deviceGeneration = 0u;
-        // The graph retains its own immutable copy for late recording. Keep the declaration source identity
-        // separately so repeated typed imports continue to reject incompatible external handoff metadata.
+        // The graph retains its own immutable copy for late recording. Repeated typed imports compare this owned
+        // value, never the producer allocation address, so retired snapshot storage cannot alias through ABA reuse.
         CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
-        const CommandListResourceStateHandoff* initialOwnerStateSourceIdentity = nullptr;
         GpuExternalCompletionId initialOwnerCompletion;
         QueueSubmissionToken initialOwnerMinimumCompletionToken;
         GpuExternalCompletionId initialAvailabilityCompletion;
@@ -459,12 +745,11 @@ private:
 
 private:
     [[nodiscard]] static u64 allocateGeneration()noexcept;
-    static void reportTaskPayloadCallbackException(TaskPayloadCallbackPhase phase)noexcept;
 
 
 public:
     explicit GpuTaskGraph(GraphicsArena& arena);
-    ~GpuTaskGraph();
+    ~GpuTaskGraph()noexcept(false);
 
 
 public:
@@ -521,10 +806,16 @@ public:
     template<typename TaskT>
     [[nodiscard]] GpuTaskId addTask(const GpuTaskDesc& desc, typename TaskT::Payload&& payload){
         using Payload = typename TaskT::Payload;
+        static_assert(IsNothrowDestructible_V<Payload>, "GPU task payload cleanup must remain no-throw");
 
-        Payload* const storedPayload = NewArenaObject<Payload>(m_arena, Move(payload));
-        if(!storedPayload)
+        DeclarationMutationScope mutation(*this);
+        if(!mutation.valid())
             return {};
+
+        Payload* const payloadObject = NewArenaObject<Payload>(m_arena, Move(payload));
+        if(!payloadObject)
+            return {};
+        ProvisionalPayloadOwner<Payload> storedPayload(m_arena, payloadObject);
 
         GpuTaskRecordThunk recordPayload = nullptr;
         if constexpr(GpuGraphTaskContract::RecordApi<TaskT>)
@@ -538,17 +829,20 @@ public:
         if constexpr(GpuGraphTaskContract::DiscardedApi<TaskT>)
             discardPayload = &DiscardPayload<TaskT>;
 
-        const GpuTaskId task = appendTask(
+        const GpuTaskId task = appendTaskWithinMutation(
             desc,
-            storedPayload,
+            storedPayload.get(),
             recordPayload,
             acceptPayload,
             discardPayload,
             &DestroyPayload<Payload>,
-            sizeof(Payload)
+            sizeof(Payload),
+            mutation
         );
-        if(!task.valid())
-            discardAndDestroyUnappendedPayload(storedPayload, discardPayload, &DestroyPayload<Payload>);
+        if(task.valid())
+            storedPayload.publish();
+        else
+            discardAndDestroyUnappendedPayload(storedPayload.release(), discardPayload, &DestroyPayload<Payload>);
         return task;
     }
 
@@ -559,10 +853,8 @@ public:
     [[nodiscard]] GpuGraphResourceId importBuffer(const BufferHandle& buffer, const GpuGraphResourceDesc& desc);
     // Reuses a typed texture import whose identity may have been chosen by an earlier producer. This lets later
     // consumers add resource uses for the same physical texture without inventing incompatible graph metadata.
-    [[nodiscard]] GpuGraphResourceId findImportedTexture(const TextureHandle& texture)const noexcept;
     // Reuses a typed buffer import whose identity may have been chosen by an earlier producer. This lets later
     // consumers add resource uses for the same physical buffer without inventing incompatible graph metadata.
-    [[nodiscard]] GpuGraphResourceId findImportedBuffer(const BufferHandle& buffer)const noexcept;
     [[nodiscard]] GpuGraphResourceId importAccelStruct(
         const RayTracingAccelStructHandle& accelStruct,
         const GpuGraphResourceDesc& desc
@@ -598,69 +890,12 @@ public:
     // its single-sink acquisition/final-state contract, every user-to-producer dependency, at least one real
     // writer, and exact physical Graphics routing before exposing it to native presentation policy.
     [[nodiscard]] bool declarePresentEndpoint(const GpuPresentEndpoint& endpoint);
-    [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const noexcept{
-        return m_hasPresentEndpoint ? &m_presentEndpoint : nullptr;
-    }
 
     // Reset is externally serialized against *starting* native recording/submission entrypoints. A bound partial
     // attempt and every transient packet claim refuse teardown; callers must resolve the owner before retrying.
     [[nodiscard]] bool tryReset();
     void reset();
 
-    [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
-    // Every successful compile-relevant declaration or owned-storage mutation advances this revision, including
-    // changes that leave task/resource handle generations and counts unchanged.
-    [[nodiscard]] u64 declarationRevision()const noexcept{ return m_declarationRevision; }
-
-public:
-    [[nodiscard]] bool validForDeviceGeneration(u16 deviceGeneration)const noexcept;
-    [[nodiscard]] bool validTask(const GpuTaskId& id)const noexcept;
-    [[nodiscard]] bool validResource(const GpuGraphResourceId& id)const noexcept;
-    [[nodiscard]] bool validResourceVersion(const GpuGraphResourceVersionId& id)const noexcept;
-    [[nodiscard]] bool validResourceSet(const GpuGraphResourceSetId& id)const noexcept;
-    [[nodiscard]] bool validUploadBlob(const GpuUploadBlobId& id)const noexcept;
-    [[nodiscard]] bool validPipeline(const GpuGraphPipelineId& id)const noexcept;
-    [[nodiscard]] bool validExternalCompletion(const GpuExternalCompletionId& id)const noexcept;
-    [[nodiscard]] usize taskCount()const noexcept{ return m_tasks.size(); }
-    [[nodiscard]] usize resourceCount()const noexcept{ return m_resources.size(); }
-    [[nodiscard]] usize resourceVersionCount()const noexcept{ return m_resourceVersions.size(); }
-    [[nodiscard]] usize resourceSetCount()const noexcept{ return m_resourceSets.size(); }
-    [[nodiscard]] usize uploadBlobCount()const noexcept{ return m_uploadBlobs.size(); }
-    [[nodiscard]] usize pipelineCount()const noexcept{ return m_pipelines.size(); }
-    [[nodiscard]] usize externalCompletionCount()const noexcept{ return m_externalCompletions.size(); }
-    [[nodiscard]] GpuTaskGraphTaskView taskAt(usize index)const;
-    [[nodiscard]] GpuTaskGraphResourceView resourceAt(usize index)const;
-    [[nodiscard]] GpuTaskGraphResourceVersionView resourceVersionAt(usize index)const;
-    [[nodiscard]] GpuTaskGraphResourceSetView resourceSetAt(usize index)const;
-    [[nodiscard]] GpuTaskGraphPipelineView pipelineAt(usize index)const;
-    [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const;
-    // Returns the immutable accepted token retained by a bound completion. Metadata-only and stale IDs return null
-    // so submission may apply its temporary compatibility fallback without confusing it with graph ownership. The
-    // borrowed pointer is invalidated by a later external-completion import or graph reset.
-    [[nodiscard]] const QueueSubmissionToken* externalCompletionToken(
-        const GpuExternalCompletionId& completion
-    )const noexcept;
-    [[nodiscard]] Texture* textureForResource(const GpuGraphResourceId& resource)const noexcept;
-    [[nodiscard]] Buffer* bufferForResource(const GpuGraphResourceId& resource)const noexcept;
-    // Acceleration structures expose their concrete backing allocation only for graph-runtime state handoffs.
-    // Renderer declarations remain typed as AccelStruct resources; callers should not need to import the backing
-    // buffer merely to preserve cross-packet state or queue-family ownership.
-    [[nodiscard]] RayTracingAccelStruct* accelStructForResource(const GpuGraphResourceId& resource)const noexcept;
-    // Immutable byte view for graph-owned task recorders. Callers must consume it only while the graph generation
-    // remains valid; `outByteSize` is zero and the return value is null for an invalid/stale blob handle.
-    [[nodiscard]] const void* uploadBlobData(const GpuUploadBlobId& blob, usize& outByteSize)const noexcept;
-    [[nodiscard]] GraphicsPipeline* graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
-    [[nodiscard]] ComputePipeline* computePipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
-    [[nodiscard]] MeshletPipeline* meshletPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
-    [[nodiscard]] RayTracingPipeline* rayTracingPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
-
-public:
-    [[nodiscard]] bool appendFrameGraphTelemetry(
-        Telemetry::FrameGraphBuilder& builder,
-        const GpuTaskGraphAnalysis& analysis,
-        Alloc::ScratchArena& scratchArena,
-        const GpuTaskGraphTelemetryOptions& options = {}
-    )const;
 
 private:
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
@@ -668,16 +903,26 @@ private:
     // every task from the previous attempt was discarded; accepted-frontier recovery remains in that same attempt.
     [[nodiscard]] bool beginRecordingAttempt(
         const GpuCompiledGraph& compiledGraph,
-        GpuSubmissionPacketId packet
+        GpuSubmissionPacketId packet,
+        const DeclarationReadView& declarationAccess,
+        const GpuCompiledGraph::ReadView& planAccess,
+        RecordingAttemptScope& outAttempt
     )const noexcept;
+    void cancelRecordingAttempt(RecordingAttemptScope& attempt)const noexcept;
+    void completeRecordingPreparation(RecordingAttemptScope& attempt)const noexcept;
     [[nodiscard]] bool matchesRecordingAttempt(
+        const GpuCompiledGraph& compiledGraph,
+        u64 recordingAttemptGeneration
+    )const noexcept;
+    [[nodiscard]] bool resolveRecordingAttemptIfTerminal(
         const GpuCompiledGraph& compiledGraph,
         u64 recordingAttemptGeneration
     )const noexcept;
     [[nodiscard]] bool bindSubmissionTransaction(
         const GpuCompiledGraph& compiledGraph,
         u64 recordingAttemptGeneration,
-        const GpuGraphSubmissionBinding& submissionBinding
+        const GpuGraphSubmissionBinding& submissionBinding,
+        const RecordingAttemptScope* preparationAttempt = nullptr
     )const noexcept;
     [[nodiscard]] bool matchesSubmissionTransaction(
         const GpuCompiledGraph& compiledGraph,
@@ -685,6 +930,16 @@ private:
         const GpuGraphSubmissionBinding& submissionBinding
     )const noexcept;
     [[nodiscard]] bool resolveSubmissionTransaction(
+        const GpuCompiledGraph& compiledGraph,
+        u64 recordingAttemptGeneration,
+        const GpuGraphSubmissionBinding& submissionBinding
+    )const noexcept;
+    [[nodiscard]] bool beginSubmissionExceptionClosing(
+        const GpuCompiledGraph& compiledGraph,
+        u64 recordingAttemptGeneration,
+        const GpuGraphSubmissionBinding& submissionBinding
+    )const noexcept;
+    [[nodiscard]] bool waitForSubmissionExceptionRecordingClaims(
         const GpuCompiledGraph& compiledGraph,
         u64 recordingAttemptGeneration,
         const GpuGraphSubmissionBinding& submissionBinding
@@ -704,6 +959,7 @@ private:
     // The returned opaque lease authenticates the one recorder that may invoke task thunks, complete, or abort it.
     [[nodiscard]] bool beginPacketRecording(
         const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
         GpuSubmissionPacketId packet,
         u64 recordingAttemptGeneration,
         PacketRecordingLease& outLease
@@ -711,12 +967,14 @@ private:
     // A claimed native packet becomes submission-eligible only after every one of its task record thunks completed.
     [[nodiscard]] bool completePacketRecording(
         const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
         GpuSubmissionPacketId packet,
         PacketRecordingLease& lease
     )const noexcept;
     // Transfers a failed recorder's exact claim without invoking user code or changing task lifecycle on its worker.
     [[nodiscard]] bool deferPacketRecordingAbort(
         const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
         GpuSubmissionPacketId packet,
         PacketRecordingLease& lease,
         PacketRecordingAbort& outAbort
@@ -724,6 +982,19 @@ private:
     // Invokes typed discard callbacks and finalizes one transferred abort. Callers choose the serial drain order.
     [[nodiscard]] bool completePacketRecordingAbort(
         const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        PacketRecordingAbort& abort
+    )const;
+    // Exception unwind consumes exact recording capabilities without invoking extensible discard observers.
+    [[nodiscard]] bool abandonPacketRecordingWithoutCallbacks(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        GpuSubmissionPacketId packet,
+        PacketRecordingLease& lease
+    )const noexcept;
+    [[nodiscard]] bool abandonPacketRecordingAbortWithoutCallbacks(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
         PacketRecordingAbort& abort
     )const noexcept;
     // Abandons an active packet claim after its owning recorder has stopped invoking task thunks. Ordinary
@@ -731,11 +1002,13 @@ private:
     // re-arm graph payload while the original recorder still owns it.
     void abortPacketRecording(
         const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
         GpuSubmissionPacketId packet,
         PacketRecordingLease& lease
-    )const noexcept;
+    )const;
     [[nodiscard]] bool packetReadyForSubmission(
         const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
         GpuSubmissionPacketId packet,
         u64 recordingAttemptGeneration
     )const noexcept;
@@ -743,19 +1016,41 @@ private:
 private:
     [[nodiscard]] bool beginPacketSubmission(
         const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
         GpuSubmissionPacketId packet,
         u64 recordingAttemptGeneration,
         const GpuGraphSubmissionBinding& submissionBinding,
         PacketSubmissionLease& outLease
     )const noexcept;
-    [[nodiscard]] bool completePacketSubmission(
+    void beginPacketSubmissionAcceptance(
         const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
         GpuSubmissionPacketId packet,
         const QueueSubmissionToken& token,
         PacketSubmissionLease& lease
     )const noexcept;
+    void notifyPacketSubmissionAccepted(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        GpuSubmissionPacketId packet,
+        const QueueSubmissionToken& token,
+        const PacketSubmissionLease& lease
+    )const;
+    void completePacketSubmissionAcceptance(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        GpuSubmissionPacketId packet,
+        PacketSubmissionLease& lease
+    )const noexcept;
     void abortPacketSubmission(
         const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        GpuSubmissionPacketId packet,
+        PacketSubmissionLease& lease
+    )const;
+    [[nodiscard]] bool abandonPacketSubmissionWithoutCallbacks(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
         GpuSubmissionPacketId packet,
         PacketSubmissionLease& lease
     )const noexcept;
@@ -763,6 +1058,16 @@ private:
     // transaction cancellation cannot race native command recording or reopen the graph for a retry.
     [[nodiscard]] bool discardUnacceptedPacket(
         const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        GpuSubmissionPacketId packet,
+        u64 recordingAttemptGeneration,
+        const GpuGraphSubmissionBinding& submissionBinding
+    )const;
+    // Unexpected observer failure must resolve the graph-owned attempt without invoking another extensible
+    // callback while the original exception is active. Payload destruction remains owned by normal graph teardown.
+    [[nodiscard]] bool abandonUnacceptedPacketWithoutCallbacks(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
         GpuSubmissionPacketId packet,
         u64 recordingAttemptGeneration,
         const GpuGraphSubmissionBinding& submissionBinding
@@ -773,6 +1078,9 @@ private:
     // retain responsibility only for barriers internal to their own command sequence.
     [[nodiscard]] bool applyCompiledBarrier(
         const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        const PacketRecordingAccess& recordingAccess,
+        const GpuTaskId& task,
         const GpuCompiledBarrier& barrier,
         CommandList& commandList
     )const;
@@ -780,6 +1088,9 @@ private:
     // graph-owned packet handoffs when a required state already matches an imported automatic-state resource and
     // therefore needs no Vulkan transition command.
     [[nodiscard]] bool seedTaskRetainedResourceStates(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        const PacketRecordingAccess& recordingAccess,
         const GpuTaskId& task,
         CommandList& commandList
     )const;
@@ -790,60 +1101,73 @@ private:
         const void* const payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
-    )noexcept{
+    ){
         using Payload = typename TaskT::Payload;
-        try{
-            return TaskT::record(*static_cast<const Payload*>(payload), commandList, context);
-        }
-        catch(...){
-            reportTaskPayloadCallbackException(TaskPayloadCallbackPhase::Record);
-            return false;
-        }
+        return TaskT::record(*static_cast<const Payload*>(payload), commandList, context);
     }
     template<typename TaskT>
-    static void AcceptPayload(void* const payload, const QueueSubmissionToken& token)noexcept{
+    static void AcceptPayload(void* const payload, const QueueSubmissionToken& token){
         using Payload = typename TaskT::Payload;
-        try{
-            TaskT::accepted(*static_cast<Payload*>(payload), token);
-        }
-        catch(...){
-            reportTaskPayloadCallbackException(TaskPayloadCallbackPhase::Accepted);
-        }
+        TaskT::accepted(*static_cast<Payload*>(payload), token);
     }
     template<typename TaskT>
-    static void DiscardPayload(void* const payload)noexcept{
+    static void DiscardPayload(void* const payload){
         using Payload = typename TaskT::Payload;
-        try{
-            TaskT::discarded(*static_cast<Payload*>(payload));
-        }
-        catch(...){
-            reportTaskPayloadCallbackException(TaskPayloadCallbackPhase::Discarded);
-        }
+        TaskT::discarded(*static_cast<Payload*>(payload));
     }
     template<typename PayloadT>
     static void DestroyPayload(GraphicsArena& arena, void* payload)noexcept{
-        DestroyArenaObject(arena, static_cast<PayloadT*>(payload));
+        static_assert(noexcept(DestroyArenaObjectNoexcept(arena, static_cast<PayloadT*>(payload))));
+        DestroyArenaObjectNoexcept(arena, static_cast<PayloadT*>(payload));
     }
 
-    [[nodiscard]] GpuTaskId appendTask(
+private:
+    [[nodiscard]] bool validForDeviceGeneration(u16 deviceGeneration)const noexcept;
+    [[nodiscard]] bool validTask(const GpuTaskId& id)const noexcept;
+    [[nodiscard]] bool validResource(const GpuGraphResourceId& id)const noexcept;
+    [[nodiscard]] bool validResourceVersion(const GpuGraphResourceVersionId& id)const noexcept;
+    [[nodiscard]] bool validResourceSet(const GpuGraphResourceSetId& id)const noexcept;
+    [[nodiscard]] bool validUploadBlob(const GpuUploadBlobId& id)const noexcept;
+    [[nodiscard]] bool validPipeline(const GpuGraphPipelineId& id)const noexcept;
+    [[nodiscard]] bool validExternalCompletion(const GpuExternalCompletionId& id)const noexcept;
+    [[nodiscard]] GpuTaskGraphTaskView taskAt(usize index)const;
+    [[nodiscard]] GpuTaskGraphResourceView resourceAt(usize index)const;
+    [[nodiscard]] GpuTaskGraphResourceVersionView resourceVersionAt(usize index)const;
+    [[nodiscard]] GpuTaskGraphResourceSetView resourceSetAt(usize index)const;
+    [[nodiscard]] GpuTaskGraphPipelineView pipelineAt(usize index)const;
+    [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const;
+    [[nodiscard]] const QueueSubmissionToken* externalCompletionToken(
+        const GpuExternalCompletionId& completion
+    )const noexcept;
+    [[nodiscard]] Texture* textureForResource(const GpuGraphResourceId& resource)const noexcept;
+    [[nodiscard]] Buffer* bufferForResource(const GpuGraphResourceId& resource)const noexcept;
+    [[nodiscard]] RayTracingAccelStruct* accelStructForResource(const GpuGraphResourceId& resource)const noexcept;
+    [[nodiscard]] const void* uploadBlobData(const GpuUploadBlobId& blob, usize& outByteSize)const noexcept;
+    [[nodiscard]] GraphicsPipeline* graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
+    [[nodiscard]] ComputePipeline* computePipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
+    [[nodiscard]] MeshletPipeline* meshletPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
+    [[nodiscard]] RayTracingPipeline* rayTracingPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
+
+    [[nodiscard]] GpuTaskId appendTaskWithinMutation(
         const GpuTaskDesc& desc,
         void* payload,
         GpuTaskRecordThunk recordPayload,
         GpuTaskAcceptedThunk acceptPayload,
         GpuTaskDiscardedThunk discardPayload,
         GpuTaskPayloadDestroyThunk destroyPayload,
-        usize payloadObjectSize
+        usize payloadObjectSize,
+        const DeclarationMutationScope& mutationAccess
     );
     void discardAndDestroyUnappendedPayload(
         void* payload,
         GpuTaskDiscardedThunk discardPayload,
         GpuTaskPayloadDestroyThunk destroyPayload
-    )noexcept;
-    void retainResourceQueueAdmission(
-        GpuGraphResourceNode& resource,
-        const ResourceQueueAdmissionSnapshot& admission
     );
-    [[nodiscard]] GpuGraphResourceId appendResource(const GpuGraphResourceDesc& desc);
+    [[nodiscard]] GpuGraphResourceId appendResourceWithinMutation(
+        const GpuGraphResourceDesc& desc,
+        const ResourceQueueAdmissionSnapshot* queueAdmission,
+        const DeclarationMutationScope& mutationAccess
+    );
     [[nodiscard]] GpuGraphResourceVersionId appendResourceVersion(const GpuGraphResourceVersionDesc& desc);
     [[nodiscard]] GpuGraphResourceSetId appendResourceSet(const GpuGraphResourceSetDesc& desc);
     [[nodiscard]] GpuGraphPipelineId appendPipeline(const GpuGraphPipelineDesc& desc);
@@ -851,13 +1175,18 @@ private:
     [[nodiscard]] const GpuUploadBlobNode* findUploadBlob(const GpuUploadBlobId& blob)const noexcept;
     [[nodiscard]] bool appendMarkerLabel(AStringView text, u32& outOffset, u32& outSize);
     [[nodiscard]] AStringView markerLabel(u32 offset, u32 size)const;
-    [[nodiscard]] bool destroyTaskPayloads()noexcept;
+    [[nodiscard]] bool destroyTaskPayloads();
+    [[nodiscard]] bool destroyTaskPayloadsWithoutCallbacks()noexcept;
+    void releasePacketRecordingClaimWithinLock()const noexcept;
+    void destroyTaskPayloadObjects()noexcept;
     void destroyTaskStateSnapshots()noexcept;
     void destroyResourceStateSnapshots()noexcept;
+    void completeResetWithoutCallbacks()noexcept;
 
 
 private:
     GraphicsArena& m_arena;
+    mutable RecursiveMutex m_declarationMutex;
     mutable Futex m_lifecycleMutex;
     GraphicsVector<GpuTaskNode> m_tasks;
     GraphicsVector<GpuTaskId> m_dependencies;
@@ -879,8 +1208,14 @@ private:
     GpuPresentEndpoint m_presentEndpoint;
     u64 m_generation = 0u;
     u64 m_declarationRevision = 0u;
+    mutable u32 m_activeDeclarationAccessCount = 0u;
+    mutable u32 m_activeDeclarationReadCount = 0u;
+    mutable u32 m_activeDiscardNotificationCount = 0u;
+    mutable Atomic<u32> m_activePacketRecordingClaimCount{ 0u };
     mutable u64 m_activeRecordingAttemptGeneration = 0u;
     mutable u64 m_activeRecordingPlanGeneration = 0u;
+    mutable u64 m_activeRecordingPreparationSerial = 0u;
+    mutable const GpuCompiledGraph* m_activeCompiledGraph = nullptr;
     mutable GpuGraphSubmissionBinding m_activeSubmissionBinding;
     mutable SubmissionBindingState m_submissionBindingState = SubmissionBindingState::None;
     bool m_hasPresentEndpoint = false;

@@ -690,7 +690,13 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& resources,
         const Core::BufferHandle& buffer
     ){
-        const Core::GpuGraphResourceId resource = m_deferredLightingTaskGraph.findImportedBuffer(buffer);
+        Core::GpuGraphResourceId resource;
+        {
+            const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
+            if(!declarations.valid())
+                return false;
+            resource = declarations.findImportedBuffer(buffer);
+        }
         if(!resource.valid() || !isShadowTraceGeometryResource(resource))
             return false;
         for(const Core::GpuGraphResourceId existing : resources){
@@ -946,16 +952,30 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     bool pureSoftwareMeshSwBvhBuildsGraphOwned = pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate;
     if(pureSoftwareMeshSwBvhBuildsGraphOwned){
         for(const PreparedMeshSwBvhBuild& build : preparedMeshSwBvhBuilds){
-            const PreparedMeshSwBvhGraphResources resources{
-                .build = build,
-                .position = m_deferredLightingTaskGraph.findImportedBuffer(build.positionBuffer),
-                .triangleIndex = m_deferredLightingTaskGraph.findImportedBuffer(build.triangleIndexBuffer),
-                .node = m_deferredLightingTaskGraph.findImportedBuffer(build.nodeBuffer),
-                .parent = m_deferredLightingTaskGraph.findImportedBuffer(build.parentBuffer),
-                .sortKeys = m_deferredLightingTaskGraph.findImportedBuffer(build.sortKeysBuffer),
-                .sortPayload = m_deferredLightingTaskGraph.findImportedBuffer(build.sortPayloadBuffer),
-                .visitCounter = m_deferredLightingTaskGraph.findImportedBuffer(build.visitCounterBuffer),
-            };
+            const PreparedMeshSwBvhGraphResources resources = [&](){
+                const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
+                if(!declarations.valid())
+                    return PreparedMeshSwBvhGraphResources{
+                        .build = build,
+                        .position = {},
+                        .triangleIndex = {},
+                        .node = {},
+                        .parent = {},
+                        .sortKeys = {},
+                        .sortPayload = {},
+                        .visitCounter = {},
+                    };
+                return PreparedMeshSwBvhGraphResources{
+                    .build = build,
+                    .position = declarations.findImportedBuffer(build.positionBuffer),
+                    .triangleIndex = declarations.findImportedBuffer(build.triangleIndexBuffer),
+                    .node = declarations.findImportedBuffer(build.nodeBuffer),
+                    .parent = declarations.findImportedBuffer(build.parentBuffer),
+                    .sortKeys = declarations.findImportedBuffer(build.sortKeysBuffer),
+                    .sortPayload = declarations.findImportedBuffer(build.sortPayloadBuffer),
+                    .visitCounter = declarations.findImportedBuffer(build.visitCounterBuffer),
+                };
+            }();
             if(
                 !resources.position.valid()
                 || !resources.triangleIndex.valid()

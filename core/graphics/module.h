@@ -159,7 +159,7 @@ public:
         Perf::TimingSink& gpuTiming,
         Perf::TimingSink* cpuTiming
     );
-    ~Graphics()noexcept;
+    ~Graphics()noexcept(false);
 
 
 public:
@@ -229,7 +229,7 @@ public:
         const QueueSubmissionPreSubmitHook& claim,
         const QueueSubmissionToken& token
     )noexcept;
-    [[nodiscard]] bool cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim)noexcept;
+    [[nodiscard]] bool cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim);
 
     // Optional overlays register here instead of coupling a renderer directly to their module. The active
     // contributor may append one final Graphics packet to a renderer-owned task graph before presentation.

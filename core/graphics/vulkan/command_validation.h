@@ -200,33 +200,49 @@ struct RenderPassAttachmentOperations{
     VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 };
 
-[[nodiscard]] constexpr RenderPassAttachmentOperations GetColorRenderPassAttachmentOperations(
-    const RenderPassParameters& params,
-    const u32 attachmentIndex
+[[nodiscard]] constexpr bool IsRenderPassAttachmentActionsValid(
+    const RenderPassAttachmentActions& actions
 )noexcept{
-    return {
-        params.clearColorTargets && params.clearColorTarget(attachmentIndex)
-            ? VK_ATTACHMENT_LOAD_OP_CLEAR
-            : VK_ATTACHMENT_LOAD_OP_LOAD,
-        VK_ATTACHMENT_STORE_OP_STORE,
-    };
+    return
+        actions.loadAction < RenderPassLoadAction::Count
+        && actions.storeAction < RenderPassStoreAction::Count
+    ;
 }
 
-[[nodiscard]] constexpr RenderPassAttachmentOperations GetDepthRenderPassAttachmentOperations(
-    const RenderPassParameters& params
+[[nodiscard]] constexpr VkAttachmentLoadOp ConvertRenderPassLoadAction(
+    const RenderPassLoadAction::Enum action
 )noexcept{
-    return {
-        params.clearDepthTarget ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
-        VK_ATTACHMENT_STORE_OP_STORE,
-    };
+    switch(action){
+    case RenderPassLoadAction::Load:
+        return VK_ATTACHMENT_LOAD_OP_LOAD;
+    case RenderPassLoadAction::Clear:
+        return VK_ATTACHMENT_LOAD_OP_CLEAR;
+    case RenderPassLoadAction::Discard:
+        return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    default:
+        return VK_ATTACHMENT_LOAD_OP_MAX_ENUM;
+    }
 }
 
-[[nodiscard]] constexpr RenderPassAttachmentOperations GetStencilRenderPassAttachmentOperations(
-    const RenderPassParameters& params
+[[nodiscard]] constexpr VkAttachmentStoreOp ConvertRenderPassStoreAction(
+    const RenderPassStoreAction::Enum action
+)noexcept{
+    switch(action){
+    case RenderPassStoreAction::Store:
+        return VK_ATTACHMENT_STORE_OP_STORE;
+    case RenderPassStoreAction::Discard:
+        return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    default:
+        return VK_ATTACHMENT_STORE_OP_MAX_ENUM;
+    }
+}
+
+[[nodiscard]] constexpr RenderPassAttachmentOperations ConvertRenderPassAttachmentActions(
+    const RenderPassAttachmentActions& actions
 )noexcept{
     return {
-        params.clearStencilTarget ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
-        VK_ATTACHMENT_STORE_OP_STORE,
+        ConvertRenderPassLoadAction(actions.loadAction),
+        ConvertRenderPassStoreAction(actions.storeAction),
     };
 }
 

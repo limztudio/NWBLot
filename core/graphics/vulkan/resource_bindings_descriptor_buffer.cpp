@@ -103,15 +103,12 @@ DescriptorBufferManager::DescriptorBufferManager(Device& device, const VulkanCon
     , m_resourceSegment(context.objectArena, VulkanDetail::AllocateDescriptorBufferStorageIdentity())
     , m_samplerSegment(context.objectArena, VulkanDetail::AllocateDescriptorBufferStorageIdentity())
 {}
-DescriptorBufferManager::~DescriptorBufferManager(){
-    const bool shutdownSucceeded = shutdown();
-    NWB_FATAL_ASSERT_MSG(
-        shutdownSucceeded,
-        NWB_TEXT("Vulkan: DescriptorBufferManager destruction requires either a completed device join or terminal device loss.")
-    );
+DescriptorBufferManager::~DescriptorBufferManager()noexcept{
+    shutdownForDeviceTeardown();
 }
 
-bool DescriptorBufferManager::shutdownForLifecycleOperation(const bool deviceIdleOrLostAlreadyProven){
+bool DescriptorBufferManager::shutdownForLifecycleOperation(VkResult& outIdleResult){
+    outIdleResult = VK_SUCCESS;
     {
         ScopedLock lifecycleLock(m_lifecycleMutex);
         if(m_lifecycleTransitioning){
@@ -134,11 +131,15 @@ bool DescriptorBufferManager::shutdownForLifecycleOperation(const bool deviceIdl
         m_enabled = false;
     }
 
-    const bool deviceIdle = deviceIdleOrLostAlreadyProven || m_device.waitForIdle();
-    if(!deviceIdle && !m_device.isDeviceLost()){
-        ScopedLock lifecycleLock(m_lifecycleMutex);
+    outIdleResult = m_device.waitForNativeIdle();
+    if(outIdleResult == VK_ERROR_DEVICE_LOST)
+        m_device.markDeviceLost();
+    if(outIdleResult != VK_SUCCESS && outIdleResult != VK_ERROR_DEVICE_LOST){
+        {
+            ScopedLock lifecycleLock(m_lifecycleMutex);
 
-        m_lifecycleTransitioning = false;
+            m_lifecycleTransitioning = false;
+        }
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer shutdown is refusing to destroy storage after device-idle wait failed."));
         return false;
     }
@@ -154,10 +155,16 @@ bool DescriptorBufferManager::shutdownForLifecycleOperation(const bool deviceIdl
 }
 
 bool DescriptorBufferManager::initialize(){
-    ScopedLock operationLock(m_lifecycleOperationMutex);
+    UniqueLock<Futex> operationLock(m_lifecycleOperationMutex);
 
-    if(!shutdownForLifecycleOperation())
+    VkResult idleResult = VK_SUCCESS;
+    if(!shutdownForLifecycleOperation(idleResult))
         return false;
+    if(idleResult == VK_ERROR_DEVICE_LOST){
+        operationLock.unlock();
+        m_device.captureDeviceLoss("descriptor-buffer initialization idle");
+        return false;
+    }
 
     ScopedLock lifecycleLock(m_lifecycleMutex);
     if(m_lifecycleTransitioning){
@@ -255,15 +262,27 @@ bool DescriptorBufferManager::initialize(){
 }
 
 bool DescriptorBufferManager::shutdown(){
-    ScopedLock operationLock(m_lifecycleOperationMutex);
+    UniqueLock<Futex> operationLock(m_lifecycleOperationMutex);
 
-    return shutdownForLifecycleOperation();
+    VkResult idleResult = VK_SUCCESS;
+    const bool result = shutdownForLifecycleOperation(idleResult);
+    operationLock.unlock();
+    if(idleResult == VK_ERROR_DEVICE_LOST)
+        m_device.captureDeviceLoss("descriptor-buffer shutdown idle");
+    return result;
 }
 
-bool DescriptorBufferManager::shutdownAfterDeviceIdleOrLoss(){
-    ScopedLock operationLock(m_lifecycleOperationMutex);
+void DescriptorBufferManager::shutdownForDeviceTeardown()noexcept{
+    NothrowScopedLock operationLock(m_lifecycleOperationMutex);
+    NothrowScopedLock lifecycleLock(m_lifecycleMutex);
+    NothrowScopedLock resourceLock(m_resourceSegment.mutex);
+    NothrowScopedLock samplerLock(m_samplerSegment.mutex);
 
-    return shutdownForLifecycleOperation(true);
+    m_bindingGeneration = 0u;
+    m_enabled = false;
+    shutdownSegment(m_resourceSegment);
+    shutdownSegment(m_samplerSegment);
+    m_lifecycleTransitioning = false;
 }
 
 bool DescriptorBufferManager::isEnabled()const{
@@ -986,7 +1005,9 @@ bool DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const A
     return true;
 }
 
-void DescriptorBufferManager::shutdownSegment(SegmentStorage& segment){
+void DescriptorBufferManager::shutdownSegment(SegmentStorage& segment)noexcept{
+    static_assert(noexcept(segment.freeRanges.clear()), "descriptor free-range teardown must be non-throwing");
+    static_assert(noexcept(segment.liveAllocations.clear()), "descriptor live-allocation teardown must be non-throwing");
     m_allocator.destroyHostMappedBuffer(segment.buffer, segment.allocation, segment.mappedMemory);
     segment.deviceAddress = 0;
     segment.capacityBytes = 0;

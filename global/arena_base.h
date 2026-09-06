@@ -46,7 +46,7 @@ public:
         m_reservedBytes.fetch_add(bytes, MemoryOrder::relaxed);
     }
 
-    void removeReservedBytes(const u64 bytes){
+    void removeReservedBytes(const u64 bytes)noexcept{
         if(bytes == 0u)
             return;
 
@@ -83,7 +83,7 @@ public:
         m_reallocationCount.fetch_add(1u, MemoryOrder::relaxed);
     }
 
-    void recordDeallocation(const u64 bytes){
+    void recordDeallocation(const u64 bytes)noexcept{
         if(bytes == 0u)
             return;
 

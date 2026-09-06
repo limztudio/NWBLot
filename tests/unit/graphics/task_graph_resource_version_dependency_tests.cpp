@@ -5,6 +5,7 @@
 #include "task_graph_resource_version_test_utils.h"
 
 #include <core/telemetry/frame_graph_contributor.h>
+#include <tests/common/gpu_task_graph_read_views.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,7 +93,11 @@ TEST(GpuTaskGraphResourceVersion, OrdersConsumerBeforeProducerAndPublishesCompil
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, assignments, compiledGraph));
-    ASSERT_TRUE(analysis.validFor(graph));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        ASSERT_TRUE(analysis.validFor(declarations));
+    }
     ASSERT_EQ(analysis.topologicalOrder().size(), 2u);
     EXPECT_EQ(analysis.topologicalOrder()[0], producer);
     EXPECT_EQ(analysis.topologicalOrder()[1], consumer);
@@ -107,7 +112,9 @@ TEST(GpuTaskGraphResourceVersion, OrdersConsumerBeforeProducerAndPublishesCompil
     EXPECT_EQ(analysis.resourceVersionEdgeCount(), 1u);
     EXPECT_TRUE(analysis.hasInferredEdge(producer, consumer));
 
-    const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledGraph.compileStatistics();
+    const GpuTaskGraphReadViews views(graph, compiledGraph);
+    ASSERT_TRUE(views.valid());
+    const Graphics::GpuTaskGraphCompileStatistics statistics = views.compiled.compileStatistics();
     ASSERT_TRUE(statistics.valid());
     EXPECT_EQ(statistics.resourceVersionCount, 1u);
     EXPECT_EQ(statistics.resourceVersionEdgeCount, 1u);
@@ -212,9 +219,13 @@ TEST(GpuTaskGraphResourceVersion, ExportsDependencyAndLifetimeReasonsWithExplici
     Telemetry::FrameGraphPendingNameEdges pendingEdges(testArena.arena);
     Telemetry::FrameGraphBuilder builder(nodes, edges, pendingEdges);
     Core::Alloc::ScratchArena scratchArena(s_ResourceVersionScratchArena);
-    ASSERT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena));
-
-    const u32 taskNodeOffset = static_cast<u32>(graph.resourceCount());
+    u32 taskNodeOffset = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        ASSERT_TRUE(declarations.appendFrameGraphTelemetry(builder, analysis, scratchArena));
+        taskNodeOffset = static_cast<u32>(declarations.resourceCount());
+    }
     const u32 producerNode = taskNodeOffset + producer.index;
     const u32 consumerNode = taskNodeOffset + consumer.index;
     const u32 overwriterNode = taskNodeOffset + overwriter.index;
@@ -402,17 +413,25 @@ TEST(GpuTaskGraphResourceVersion, RetainsExternalCompletionForImportedRootConsum
     ASSERT_EQ(analysis.externalDependencies().size(), 1u);
     EXPECT_EQ(analysis.externalDependencies()[0].completion, completion);
     EXPECT_EQ(analysis.externalDependencies()[0].consumer, consumer);
-    ASSERT_TRUE(analysis.validFor(graph));
-
-    const u64 analyzedRevision = graph.declarationRevision();
+    u64 analyzedRevision = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        ASSERT_TRUE(analysis.validFor(declarations));
+        analyzedRevision = declarations.declarationRevision();
+    }
     const Graphics::GpuGraphResourceVersionId lateVersion = AddVersion(
         graph,
         resource,
         Graphics::GpuGraphResourceVersionOrigin::ImportedRoot
     );
     ASSERT_TRUE(lateVersion.valid());
-    EXPECT_NE(graph.declarationRevision(), analyzedRevision);
-    EXPECT_FALSE(analysis.validFor(graph));
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(declarations.valid());
+        EXPECT_NE(declarations.declarationRevision(), analyzedRevision);
+        EXPECT_FALSE(analysis.validFor(declarations));
+    }
 }
 
 TEST(GpuTaskGraphResourceVersion, ReportsClosedPureResourceVersionCycle){

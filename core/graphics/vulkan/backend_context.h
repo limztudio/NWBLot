@@ -92,9 +92,11 @@ private:
         Rejected,
         Accepted,
         Failed,
+        Retiring,
     };
     enum class SwapChainLifecycleState : u8{
         Ready,
+        RetiringPresentation,
         Preparing,
         PreparedResize,
         PreparedDestroy,
@@ -197,7 +199,7 @@ public:
     [[nodiscard]] BeginFrameResult beginFrame();
     // Idempotently retires synchronization for a healthy aborted frame. The acquired WSI image stays quarantined
     // until swap-chain or device teardown; an already-resolved frame is a successful no-op.
-    [[nodiscard]] bool abandonAcquiredFrame()noexcept;
+    [[nodiscard]] bool abandonAcquiredFrame();
     bool present();
     // Claims the acquired image's completion semaphore for one exact graph packet. A null hook leaves the
     // compatibility transition-submit path in present() active.
@@ -209,7 +211,7 @@ public:
     )noexcept;
     // A hook that reached a rejected or abandoned submission cannot be reused blindly; retire that binary signal
     // before the next frame instead of allowing it to leak into another present.
-    [[nodiscard]] bool cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim)noexcept;
+    [[nodiscard]] bool cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim);
     void reportLiveObjects()const{}
 
 private:
@@ -226,7 +228,7 @@ private:
         const VkPhysicalDeviceProperties& physicalDeviceProperties,
         bool maintenance4Enabled,
         const VkPhysicalDeviceMaintenance4Features& maintenance4Features,
-        bool createAsyncComputeQueue,
+        bool createComputeQueue,
         bool createCrossFamilySecondaryComputeQueue,
         i32 secondaryComputeQueueFamily,
         bool createDedicatedTransferQueue,
@@ -235,14 +237,15 @@ private:
     );
     bool createVulkanSwapChain();
     [[nodiscard]] bool createSwapChainResources();
-    [[nodiscard]] bool preflightSwapChainImageRevocation()noexcept;
-    [[nodiscard]] bool destroySwapChainPrepared()noexcept;
-    void clearSemaphores(SemaphoreVector& semaphores);
+    [[nodiscard]] bool prepareSwapChainImageRevocation();
+    void commitPreparedSwapChainDestruction()noexcept;
+    [[nodiscard]] bool destroySwapChainAfterCreateFailure();
+    void clearSemaphores(SemaphoreVector& semaphores)noexcept;
     bool recreateSemaphores(SemaphoreVector& semaphores, usize count, AStringView operationName);
     void clearAcquireSyncSlots()noexcept;
     [[nodiscard]] bool recreateAcquireSyncSlots(usize count);
-    [[nodiscard]] bool prepareAcquireSyncSlot(AcquireSyncSlot& slot)noexcept;
-    [[nodiscard]] bool waitAcquireSyncSlotsForLifecycle()noexcept;
+    [[nodiscard]] bool prepareAcquireSyncSlot(AcquireSyncSlot& slot);
+    [[nodiscard]] bool waitAcquireSyncSlotsForLifecycle();
     [[nodiscard]] bool createFrameSyncQueries();
     [[nodiscard]] static bool PrepareFramePresentationSignal(
         void* context,
@@ -264,10 +267,12 @@ private:
         u64 identity,
         const QueueSubmissionToken& token
     )noexcept;
-    [[nodiscard]] bool replaceFramePresentationSemaphoreAfterIdle()noexcept;
+    [[nodiscard]] bool replaceFramePresentationSemaphoreAfterIdle();
     void resetFramePresentationSignal()noexcept;
-    [[nodiscard]] bool cancelFramePresentationSignal()noexcept;
-    [[nodiscard]] bool cancelFramePresentationSignalLocked()noexcept;
+    [[nodiscard]] bool cancelFramePresentationSignalDeferred(
+        const QueueSubmissionPreSubmitHook* claim,
+        UniqueLock<Futex>& lifecycleLock
+    );
     [[nodiscard]] bool validPreparedTicket(
         const SwapChainTransitionTicket& ticket,
         SwapChainTransitionKind::Enum kind
@@ -301,6 +306,9 @@ private:
     // enabled cross-family routing.
     i32 m_secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_computeQueueFamily = s_InvalidQueueFamilyIndex;
+    // Optional offload family is distinct from the required Compute role, which aliases Graphics on universal
+    // hardware and remains mandatory on split Graphics-only/Compute-only hardware.
+    i32 m_asyncComputeQueueFamily = s_InvalidQueueFamilyIndex;
     // Dedicated Compute and Transfer paths may likewise expose one cross-family auxiliary transport. Device
     // registration is opt-in, and task-level scheduling must separately select the resulting route.
     i32 m_secondaryComputeQueueFamily = s_InvalidQueueFamilyIndex;
@@ -384,6 +392,7 @@ private:
     bool m_sameClassGraphicsQueueEnabled = false;
     bool m_sameClassComputeQueueEnabled = false;
     bool m_sameClassTransferQueueEnabled = false;
+    bool m_computeQueueEnabled = false;
     bool m_asyncComputeLaneEnabled = false;
     bool m_transferQueueEnabled = false;
     bool m_meshTaskShaderSupported = false;

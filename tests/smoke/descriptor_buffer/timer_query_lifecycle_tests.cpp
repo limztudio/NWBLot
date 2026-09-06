@@ -295,7 +295,7 @@ TEST_F(TimerQueryLifecycleTest, StaleDiscardSurvivesRejectedCommandResetReservat
     resetOnly->close();
 
     const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
-        device().getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, m_graphicsQueue).pointer
+        device().getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, m_graphicsQueue).pointer()
     );
     ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
     CommandList* const commandLists[] = { resetOnly.get() };

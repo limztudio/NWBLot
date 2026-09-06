@@ -158,8 +158,8 @@ TEST(PermanentStateOwnership, StateTrackerValuesOwnSnapshotsTransactionally){
         EXPECT_EQ(baselineTexture->getReferenceCount(), 2u);
 
         tracker.beginRecordingAttempt();
-        EXPECT_EQ(baselineBuffer->getReferenceCount(), 3u);
-        EXPECT_EQ(baselineTexture->getReferenceCount(), 3u);
+        EXPECT_EQ(baselineBuffer->getReferenceCount(), 2u);
+        EXPECT_EQ(baselineTexture->getReferenceCount(), 2u);
         tracker.setPermanentBufferState(*provisionalBuffer, ResourceStates::Common);
         tracker.setPermanentTextureState(*provisionalTexture, ResourceStates::Common);
         EXPECT_EQ(provisionalBuffer->getReferenceCount(), 2u);

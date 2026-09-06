@@ -27,7 +27,7 @@ namespace __hidden_gpu_task_resource_versions{
 }
 
 [[nodiscard]] static bool ResolvePhysicalRange(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphResourceView& resource,
     const GpuTaskResourceRange& range,
     GpuTaskResourceRange& outRange
@@ -55,7 +55,7 @@ namespace __hidden_gpu_task_resource_versions{
 }
 
 [[nodiscard]] static bool ResolveVersionRange(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphResourceView& resource,
     const GpuTaskResourceRange& range,
     GpuTaskResourceRange& outRange
@@ -106,7 +106,7 @@ namespace __hidden_gpu_task_resource_versions{
 }
 
 [[nodiscard]] static bool RangeContainsVersion(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphResourceView& resource,
     const GpuTaskResourceRange& outer,
     const GpuTaskResourceRange& inner
@@ -135,7 +135,7 @@ namespace __hidden_gpu_task_resource_versions{
 }
 
 [[nodiscard]] static bool RangeOverlapsVersion(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphResourceView& resource,
     const GpuTaskResourceRange& physicalRange,
     const GpuTaskResourceRange& versionRange
@@ -164,7 +164,7 @@ namespace __hidden_gpu_task_resource_versions{
 }
 
 [[nodiscard]] static bool HasCoveringPhysicalUse(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
     const GpuTaskGraphResourceVersionView& version,
     const GpuTaskResourceVersionRole::Enum role
@@ -191,7 +191,7 @@ namespace __hidden_gpu_task_resource_versions{
 }
 
 [[nodiscard]] static bool HasOverlappingPhysicalWrite(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
     const GpuTaskGraphResourceVersionView& version
 )noexcept{
@@ -313,7 +313,7 @@ namespace GpuTaskGraphCompilerDetail{
 
 
 bool BuildResourceVersionDependencyEdges(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& outEdges,
     GpuTaskGraphAnalysisDiagnostic& outDiagnostic,
     Alloc::ScratchArena& scratchArena

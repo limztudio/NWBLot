@@ -89,7 +89,7 @@ static void BuildTaskDependencyAdjacency(
 }
 
 static bool BuildTopologicalOrder(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GraphicsVector<GpuTaskDependencyEdge>& edges,
     const TaskDependencyAdjacency& adjacency,
     GraphicsVector<GpuTaskId>& outOrder,
@@ -365,7 +365,7 @@ void GpuTaskGraphAnalysis::reset(){
     m_valid = false;
 }
 
-bool GpuTaskGraphAnalysis::validFor(const GpuTaskGraph& graph)const noexcept{
+bool GpuTaskGraphAnalysis::validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept{
     return m_valid
         && m_generation == graph.generation()
         && m_declarationRevision == graph.declarationRevision()
@@ -448,13 +448,16 @@ bool GpuTaskGraphAnalysis::hasInferredEdge(const GpuTaskId& producer, const GpuT
 
 
 bool GpuTaskGraphCompiler::analyze(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     GpuTaskGraphAnalysis& outAnalysis,
     Alloc::ScratchArena& scratchArena
 )const{
     using namespace GpuTaskGraphCompilerDetail;
 
+    if(!graph.valid())
+        return false;
     outAnalysis.reset();
+
     outAnalysis.m_generation = graph.generation();
     outAnalysis.m_declarationRevision = graph.declarationRevision();
     outAnalysis.m_taskCount = graph.taskCount();

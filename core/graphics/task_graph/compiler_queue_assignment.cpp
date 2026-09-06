@@ -24,7 +24,7 @@ namespace GpuTaskGraphCompilerDetail{
 // ownership transfer. Cross-family balancing is deliberately separate: opted-in tasks may use it, and resource
 // planning below then emits the paired exclusive ownership handoff when required.
 [[nodiscard]] static const GpuPhysicalQueueInfo* FindLeastLoadedSameClassQueue(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
     const GpuTaskGraphQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
@@ -70,7 +70,7 @@ namespace GpuTaskGraphCompilerDetail{
 }
 
 [[nodiscard]] static const GpuPhysicalQueueInfo* FindDirectDependencySameClassQueue(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuTaskGraphTaskView& task,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
@@ -126,7 +126,7 @@ namespace GpuTaskGraphCompilerDetail{
 // the separate family opt-in. Cross-class timing is a stronger explicit opt-in and can only use classes already
 // admitted by a flexible queue request; candidate validation still owns capability and resource-sharing checks.
 [[nodiscard]] static bool IsLegalTimingFeedbackRoute(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& incumbent,
@@ -164,7 +164,7 @@ namespace GpuTaskGraphCompilerDetail{
 }
 
 [[nodiscard]] static const GpuPhysicalQueueInfo* FindTimingFeedbackIncumbent(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& staticQueue,
@@ -200,7 +200,7 @@ namespace GpuTaskGraphCompilerDetail{
 }
 
 [[nodiscard]] static const GpuPhysicalQueueInfo* FindTimingFeedbackQueue(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
     const GraphicsVector<u32>& assignmentIndicesByTask,
@@ -295,7 +295,7 @@ namespace GpuTaskGraphCompilerDetail{
 // routes until each has enough accepted samples, then ordinary hysteresis resumes. Returning the incumbent is
 // meaningful: it reserves this frame for a baseline sample instead of switching on incomplete data.
 [[nodiscard]] static const GpuPhysicalQueueInfo* FindTimingFeedbackCalibrationQueue(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& incumbent,
@@ -360,7 +360,10 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void GpuTaskGraphQueueAssignments::reset(){
+void GpuTaskGraphQueueAssignments::reset()noexcept{
+    static_assert(noexcept(m_assignments.clear()));
+    static_assert(noexcept(m_assignmentIndicesByTask.clear()));
+
     m_assignments.clear();
     m_assignmentIndicesByTask.clear();
     m_diagnostic = GpuTaskQueueAssignmentDiagnostic{};
@@ -371,7 +374,7 @@ void GpuTaskGraphQueueAssignments::reset(){
     m_valid = false;
 }
 
-bool GpuTaskGraphQueueAssignments::validFor(const GpuTaskGraph& graph)const noexcept{
+bool GpuTaskGraphQueueAssignments::validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept{
     return m_valid
         && m_generation == graph.generation()
         && m_declarationRevision == graph.declarationRevision()
@@ -382,13 +385,13 @@ bool GpuTaskGraphQueueAssignments::validFor(const GpuTaskGraph& graph)const noex
 }
 
 bool GpuTaskGraphQueueAssignments::validFor(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuCompiledGraph::ReadView& compiledPlan
 )const noexcept{
     return validFor(graph)
-        && compiledGraph.validFor(graph)
+        && compiledPlan.validFor(graph)
         && m_compiledPlanGeneration != 0u
-        && m_compiledPlanGeneration == compiledGraph.planGeneration()
+        && m_compiledPlanGeneration == compiledPlan.planGeneration()
     ;
 }
 
@@ -403,7 +406,7 @@ const GpuTaskQueueAssignment* GpuTaskGraphQueueAssignments::find(const GpuTaskId
 
 
 bool GpuTaskGraphCompiler::assignQueues(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuTaskGraphQueueTopology& topology,
     GpuTaskGraphQueueAssignments& outAssignments,
@@ -412,7 +415,10 @@ bool GpuTaskGraphCompiler::assignQueues(
 )const{
     using namespace GpuTaskGraphCompilerDetail;
 
+    if(!graph.valid())
+        return false;
     outAssignments.reset();
+
     const auto fail = [&](const GpuTaskGraphQueueAssignmentStatus::Enum status, const GpuTaskId task = {}, const GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None){
         outAssignments.m_diagnostic.status = status;
         outAssignments.m_diagnostic.task = task;

@@ -64,7 +64,13 @@ template<typename Plan>
     for(const Core::BufferHandle& buffer : plan.outputBuffers){
         if(!buffer)
             return false;
-        Core::GpuGraphResourceId resource = graph.findImportedBuffer(buffer);
+        Core::GpuGraphResourceId resource;
+        {
+            const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+            if(!declarations.valid())
+                return false;
+            resource = declarations.findImportedBuffer(buffer);
+        }
         if(!resource.valid()){
             const Name bufferIdentity = buffer->getCreationDescription().debugName;
             if(!bufferIdentity)

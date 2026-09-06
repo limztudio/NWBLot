@@ -4,8 +4,9 @@
 
 #include "compiler_internal.h"
 
-#include <global/atomic.h>
 #include <core/graphics/rhi/queue_sharing.h>
+#include <global/atomic.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,10 +36,20 @@ inline constexpr u8 s_ValidQueueCapabilityMask =
 static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
 [[nodiscard]] u64 AllocateCompiledPlanGeneration()noexcept{
-    u64 generation = s_NextCompiledPlanGeneration.fetch_add(1u, MemoryOrder::relaxed);
-    if(generation == 0u)
-        generation = s_NextCompiledPlanGeneration.fetch_add(1u, MemoryOrder::relaxed);
-    return generation;
+    u64 nextGeneration = s_NextCompiledPlanGeneration.load(MemoryOrder::relaxed);
+    while(true){
+        if(nextGeneration == 0u || nextGeneration == Limit<u64>::s_Max){
+            NWB_FATAL_ASSERT_MSG(false, "GPU compiled plan generation identity space is exhausted");
+            TerminateInvariant();
+        }
+        if(s_NextCompiledPlanGeneration.compare_exchange_weak(
+            nextGeneration,
+            nextGeneration + 1u,
+            MemoryOrder::relaxed,
+            MemoryOrder::relaxed
+        ))
+            return nextGeneration;
+    }
 }
 
 [[nodiscard]] bool HasCapabilities(

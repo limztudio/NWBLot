@@ -26,6 +26,7 @@ namespace GpuTaskGraphAnalysisStatus{
         NotAnalyzed,
         Success,
         OutputPlanInUse,
+        InputGraphInUse,
         InvalidTask,
         MissingTaskRecordPayload,
         InvalidResource,
@@ -200,7 +201,7 @@ public:
     void reset();
 
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
-    [[nodiscard]] bool validFor(const GpuTaskGraph& graph)const noexcept;
+    [[nodiscard]] bool validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept;
     [[nodiscard]] const GpuTaskGraphAnalysisDiagnostic& diagnostic()const noexcept{ return m_diagnostic; }
     // Raw dependency pairs retain direct declarations and hazard reasons for validation and diagnostics, including
     // edges that are transitively redundant for scheduling.
@@ -269,13 +270,13 @@ public:
 
 
 public:
-    void reset();
+    void reset()noexcept;
 
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
-    [[nodiscard]] bool validFor(const GpuTaskGraph& graph)const noexcept;
+    [[nodiscard]] bool validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept;
     [[nodiscard]] bool validFor(
-        const GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph
+        const GpuTaskGraph::DeclarationReadView& graph,
+        const GpuCompiledGraph::ReadView& compiledPlan
     )const noexcept;
     [[nodiscard]] const GpuTaskQueueAssignmentDiagnostic& diagnostic()const noexcept{ return m_diagnostic; }
     [[nodiscard]] const GpuTaskQueueAssignment* find(const GpuTaskId& task)const noexcept;
@@ -302,7 +303,7 @@ public:
     // Graph validation and hazards remain independent from physical queue policy, so later packet, barrier,
     // recording, and submission stages can consume one validated, immutable analysis result.
     [[nodiscard]] bool analyze(
-        const GpuTaskGraph& graph,
+        const GpuTaskGraph::DeclarationReadView& graph,
         GpuTaskGraphAnalysis& outAnalysis,
         Alloc::ScratchArena& scratchArena
     )const;
@@ -310,7 +311,7 @@ public:
     // This produces only a physical-queue decision. It never creates a command list or changes submission; the
     // caller supplies the concrete topology discovered from its current device.
     [[nodiscard]] bool assignQueues(
-        const GpuTaskGraph& graph,
+        const GpuTaskGraph::DeclarationReadView& graph,
         const GpuTaskGraphAnalysis& analysis,
         const GpuTaskGraphQueueTopology& topology,
         GpuTaskGraphQueueAssignments& outAssignments,
@@ -322,7 +323,7 @@ public:
     // live packet creation consume exactly the same immutable decisions.  Tasks retain one packet by default;
     // explicitly requested compatible successors may merge into the preceding packet.
     [[nodiscard]] bool compile(
-        const GpuTaskGraph& graph,
+        const GpuTaskGraph::DeclarationReadView& graph,
         GpuTaskGraphAnalysis& outAnalysis,
         const GpuTaskGraphQueueTopology& topology,
         GpuTaskGraphQueueAssignments& outAssignments,

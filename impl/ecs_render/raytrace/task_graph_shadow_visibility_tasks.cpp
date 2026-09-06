@@ -31,7 +31,7 @@ bool ShadowVisibilityAllLitClearGraphTask::record(
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
 ){
-    Core::Texture* const destination = context.taskGraph.textureForResource(payload.destination);
+    Core::Texture* const destination = context.declarations.textureForResource(payload.destination);
     if(!destination || commandList.isRenderPassActive())
         return false;
 

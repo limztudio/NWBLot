@@ -425,7 +425,7 @@ bool CommandList::beginDynamicRendering(Framebuffer* framebuffer, const RenderPa
         colorAttachments[i].imageView = view;
         colorAttachments[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         const VulkanDetail::RenderPassAttachmentOperations operations =
-            VulkanDetail::GetColorRenderPassAttachmentOperations(params, i)
+            VulkanDetail::ConvertRenderPassAttachmentActions(params.colorAttachmentActions[i])
         ;
         colorAttachments[i].loadOp = operations.loadOp;
         colorAttachments[i].storeOp = operations.storeOp;
@@ -468,7 +468,7 @@ bool CommandList::beginDynamicRendering(Framebuffer* framebuffer, const RenderPa
         ;
         if((depthTex->m_aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) != 0){
             const VulkanDetail::RenderPassAttachmentOperations operations =
-                VulkanDetail::GetDepthRenderPassAttachmentOperations(params)
+                VulkanDetail::ConvertRenderPassAttachmentActions(params.depthAttachmentActions)
             ;
             depthAttachment.imageView = depthView;
             depthAttachment.imageLayout = depthStencilLayout;
@@ -479,7 +479,7 @@ bool CommandList::beginDynamicRendering(Framebuffer* framebuffer, const RenderPa
         }
         if((depthTex->m_aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) != 0){
             const VulkanDetail::RenderPassAttachmentOperations operations =
-                VulkanDetail::GetStencilRenderPassAttachmentOperations(params)
+                VulkanDetail::ConvertRenderPassAttachmentActions(params.stencilAttachmentActions)
             ;
             stencilAttachment.imageView = depthView;
             stencilAttachment.imageLayout = depthStencilLayout;
@@ -542,6 +542,8 @@ void CommandList::beginRenderPass(Framebuffer* const framebuffer, const RenderPa
 }
 
 void CommandList::endRenderPass(){
+    if(!publicCommandStateAccessible())
+        return;
     if(!m_renderPassActive)
         return;
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("end render pass")))

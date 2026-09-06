@@ -20,7 +20,7 @@ NWB_VULKAN_BEGIN
 bool CommandList::validateFramebufferForRendering(
     Framebuffer* const framebuffer,
     const tchar* const operationName
-)noexcept{
+){
     if(!framebuffer)
         return true;
     if(&framebuffer->m_context != &m_context){
@@ -251,7 +251,7 @@ bool CommandList::validateRenderPassBegin(
     Framebuffer* const framebuffer,
     const RenderPassParameters& params,
     const tchar* const operationName
-)noexcept{
+){
     if(m_renderPassActive){
         rejectCommandRecording(operationName, NWB_TEXT("a render pass is already active"));
         return false;
@@ -265,50 +265,79 @@ bool CommandList::validateRenderPassBegin(
 
     const FramebufferDesc& framebufferDesc = framebuffer->m_desc;
     const u32 colorAttachmentCount = static_cast<u32>(framebufferDesc.colorAttachments.size());
-    const u8 liveColorMask = static_cast<u8>((1u << colorAttachmentCount) - 1u);
-    if(params.clearColorTargets && (params.colorClearMask & liveColorMask) == 0u){
-        rejectCommandRecording(operationName, NWB_TEXT("color clear mask selects no framebuffer attachment"));
-        return false;
-    }
-    if(params.clearColorTargets){
-        for(u32 colorIndex = 0u; colorIndex < colorAttachmentCount; ++colorIndex){
-            if(!params.clearColorTarget(colorIndex))
-                continue;
-            const FramebufferAttachment& attachment = framebufferDesc.colorAttachments[colorIndex];
-            const Format::Enum format = attachment.format == Format::UNKNOWN
-                ? attachment.texture->m_creationDesc.format
-                : attachment.format
-            ;
-            if(GetFormatInfo(format).kind == FormatKind::Integer){
-                rejectCommandRecording(operationName, NWB_TEXT("float color clear value targets an integer attachment"));
-                return false;
-            }
+    for(u32 colorIndex = 0u; colorIndex < s_MaxRenderTargets; ++colorIndex){
+        const RenderPassAttachmentActions& actions = params.colorAttachmentActions[colorIndex];
+        if(!VulkanDetail::IsRenderPassAttachmentActionsValid(actions)){
+            rejectCommandRecording(operationName, NWB_TEXT("color attachment actions are invalid"));
+            return false;
+        }
+        if(
+            colorIndex >= colorAttachmentCount
+            && (
+                actions.loadAction != RenderPassLoadAction::Load
+                || actions.storeAction != RenderPassStoreAction::Store
+            )
+        ){
+            rejectCommandRecording(operationName, NWB_TEXT("color attachment actions select no framebuffer attachment"));
+            return false;
+        }
+        if(colorIndex >= colorAttachmentCount || actions.loadAction != RenderPassLoadAction::Clear)
+            continue;
+
+        const FramebufferAttachment& attachment = framebufferDesc.colorAttachments[colorIndex];
+        const Format::Enum format = attachment.format == Format::UNKNOWN
+            ? attachment.texture->m_creationDesc.format
+            : attachment.format
+        ;
+        if(GetFormatInfo(format).kind == FormatKind::Integer){
+            rejectCommandRecording(operationName, NWB_TEXT("float color clear value targets an integer attachment"));
+            return false;
         }
     }
 
-    if(!params.clearDepthTarget && !params.clearStencilTarget)
-        return true;
-    const FramebufferAttachment& depthAttachment = framebufferDesc.depthAttachment;
-    if(!depthAttachment.valid()){
-        rejectCommandRecording(operationName, NWB_TEXT("depth/stencil clear requested without an attachment"));
+    if(
+        !VulkanDetail::IsRenderPassAttachmentActionsValid(params.depthAttachmentActions)
+        || !VulkanDetail::IsRenderPassAttachmentActionsValid(params.stencilAttachmentActions)
+    ){
+        rejectCommandRecording(operationName, NWB_TEXT("depth/stencil attachment actions are invalid"));
         return false;
     }
-    if(depthAttachment.isReadOnly){
+
+    const bool depthActionsRequested =
+        params.depthAttachmentActions.loadAction != RenderPassLoadAction::Load
+        || params.depthAttachmentActions.storeAction != RenderPassStoreAction::Store
+    ;
+    const bool stencilActionsRequested =
+        params.stencilAttachmentActions.loadAction != RenderPassLoadAction::Load
+        || params.stencilAttachmentActions.storeAction != RenderPassStoreAction::Store
+    ;
+    const FramebufferAttachment& depthAttachment = framebufferDesc.depthAttachment;
+    if(!depthAttachment.valid()){
+        if(depthActionsRequested || stencilActionsRequested){
+            rejectCommandRecording(operationName, NWB_TEXT("depth/stencil attachment actions requested without an attachment"));
+            return false;
+        }
+        return true;
+    }
+
+    const bool clearDepth = params.depthAttachmentActions.loadAction == RenderPassLoadAction::Clear;
+    const bool clearStencil = params.stencilAttachmentActions.loadAction == RenderPassLoadAction::Clear;
+    if(depthAttachment.isReadOnly && (clearDepth || clearStencil)){
         rejectCommandRecording(operationName, NWB_TEXT("depth/stencil clear requested for a read-only attachment"));
         return false;
     }
 
     const VkImageAspectFlags attachmentAspects = depthAttachment.texture->m_aspectMask;
-    if(params.clearDepthTarget && (attachmentAspects & VK_IMAGE_ASPECT_DEPTH_BIT) == 0u){
-        rejectCommandRecording(operationName, NWB_TEXT("depth clear requested for an attachment without depth"));
+    if(depthActionsRequested && (attachmentAspects & VK_IMAGE_ASPECT_DEPTH_BIT) == 0u){
+        rejectCommandRecording(operationName, NWB_TEXT("depth attachment actions requested for an attachment without depth"));
         return false;
     }
-    if(params.clearStencilTarget && (attachmentAspects & VK_IMAGE_ASPECT_STENCIL_BIT) == 0u){
-        rejectCommandRecording(operationName, NWB_TEXT("stencil clear requested for an attachment without stencil"));
+    if(stencilActionsRequested && (attachmentAspects & VK_IMAGE_ASPECT_STENCIL_BIT) == 0u){
+        rejectCommandRecording(operationName, NWB_TEXT("stencil attachment actions requested for an attachment without stencil"));
         return false;
     }
     if(
-        params.clearDepthTarget
+        clearDepth
         && (
             !IsFinite(params.depthClearValue)
             || params.depthClearValue < 0.0f
@@ -324,7 +353,7 @@ bool CommandList::validateRenderPassBegin(
 bool CommandList::prepareFramebufferForRendering(
     Framebuffer* const framebuffer,
     const tchar* const operationName
-)noexcept{
+){
     if(!framebuffer)
         return true;
 
@@ -361,7 +390,7 @@ bool CommandList::prepareFramebufferForRendering(
 bool CommandList::validateViewportState(
     const ViewportState& viewportState,
     const tchar* const operationName
-)noexcept{
+){
     if(viewportState.viewports.size() > 1u || viewportState.scissorRects.size() > 1u){
         rejectCommandRecording(operationName, NWB_TEXT("only one viewport and scissor are supported"));
         return false;
@@ -399,7 +428,9 @@ bool CommandList::validateTextureForGpuState(
     const ResourceStates::Mask requiredState,
     const tchar* const operationName,
     const VkImageUsageFlags explicitRequiredUsage
-)noexcept{
+){
+    if(!publicCommandStateAccessible())
+        return false;
     if(!VulkanTextureDetail::IsTextureResourceStateMaskValid(requiredState)){
         rejectCommandRecording(operationName, NWB_TEXT("state is invalid for a texture"));
         return false;
@@ -425,7 +456,9 @@ bool CommandList::validateBufferForGpuState(
     const ResourceStates::Mask requiredState,
     const tchar* const operationName,
     const VkBufferUsageFlags explicitRequiredUsage
-)noexcept{
+){
+    if(!publicCommandStateAccessible())
+        return false;
     if(!VulkanBufferDetail::IsBufferResourceStateMaskValid(requiredState)){
         rejectCommandRecording(operationName, NWB_TEXT("state is invalid for a buffer"));
         return false;
@@ -458,7 +491,7 @@ bool CommandList::validateBufferForGpuState(
     return true;
 }
 
-bool CommandList::validateGraphicsState(const GraphicsState& state)noexcept{
+bool CommandList::validateGraphicsState(const GraphicsState& state){
     constexpr const tchar* s_OperationName = NWB_TEXT("set graphics state");
     if(state.pipeline && &state.pipeline->m_context != &m_context){
         rejectCommandRecording(s_OperationName, NWB_TEXT("graphics pipeline belongs to another device"));
@@ -608,7 +641,7 @@ bool CommandList::validateGraphicsState(const GraphicsState& state)noexcept{
     return true;
 }
 
-bool CommandList::validateMeshletState(const MeshletState& state)noexcept{
+bool CommandList::validateMeshletState(const MeshletState& state){
     constexpr const tchar* s_OperationName = NWB_TEXT("set meshlet state");
     if(state.pipeline && &state.pipeline->m_context != &m_context){
         rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet pipeline belongs to another device"));
@@ -687,7 +720,7 @@ bool CommandList::validateMeshletState(const MeshletState& state)noexcept{
 bool CommandList::validateGraphicsDrawState(
     const tchar* const operationName,
     const bool indexed
-)noexcept{
+){
     GraphicsPipeline* const pipeline = m_currentGraphicsState.pipeline;
     if(
         !m_renderPassActive
@@ -734,7 +767,7 @@ bool CommandList::validateGraphicsDrawArguments(
     const DrawArguments& arguments,
     const bool indexed,
     const tchar* const operationName
-)noexcept{
+){
     if(!validateGraphicsDrawState(operationName, indexed))
         return false;
 
@@ -808,7 +841,7 @@ bool CommandList::validateIndirectBuffer(
     const u64 commandSizeBytes,
     const u32 commandCount,
     const tchar* const commandName
-)noexcept{
+){
     if(!buffer){
         rejectCommandRecording(commandName, NWB_TEXT("no indirect-argument buffer is bound"));
         return false;
@@ -841,7 +874,7 @@ bool CommandList::prepareDrawIndirect(
     const tchar* const commandName,
     const VulkanDetail::IndirectDrawIndexMode::Enum indexMode,
     Buffer*& outIndirectBuffer
-)noexcept{
+){
     outIndirectBuffer = nullptr;
     if(drawCount == 0u)
         return false;

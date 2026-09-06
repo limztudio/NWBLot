@@ -24,7 +24,6 @@ namespace __hidden_gpu_task_graph_imports{
 
 [[nodiscard]] static bool CompatibleResourceMetadata(
     const GpuTaskGraphResourceView& resource,
-    const CommandListResourceStateHandoff* const initialOwnerStateSourceIdentity,
     const GpuGraphResourceDesc& desc
 )noexcept{
     // Re-importing a multi-producer source through the ordinary typed-import overload could silently exchange one
@@ -35,6 +34,14 @@ namespace __hidden_gpu_task_graph_imports{
         || desc.initialOwnerHandoffSourceCount != 0u
     )
         return false;
+    const bool initialOwnerStateEquivalent =
+        (!resource.initialOwnerStateSource && !desc.initialOwnerStateSource)
+        || (
+            resource.initialOwnerStateSource
+            && desc.initialOwnerStateSource
+            && resource.initialOwnerStateSource->equivalentTo(*desc.initialOwnerStateSource)
+        )
+    ;
     return resource.identity == desc.identity
         && resource.type == desc.type
         && resource.initialState == desc.initialState
@@ -47,7 +54,7 @@ namespace __hidden_gpu_task_graph_imports{
         && resource.initialOwnerMinimumCompletionToken.value == desc.initialOwnerMinimumCompletionToken.value
         && resource.initialOwnerMinimumCompletionToken.physicalQueueIndex == desc.initialOwnerMinimumCompletionToken.physicalQueueIndex
         && resource.initialOwnerMinimumCompletionToken.deviceGeneration == desc.initialOwnerMinimumCompletionToken.deviceGeneration
-        && initialOwnerStateSourceIdentity == desc.initialOwnerStateSource
+        && initialOwnerStateEquivalent
         && resource.queueSharing == desc.queueSharing
         && resource.initialAvailabilityCompletion == desc.initialAvailabilityCompletion
     ;
@@ -118,6 +125,10 @@ namespace __hidden_gpu_task_graph_imports{
 
 
 GpuGraphResourceId GpuTaskGraph::importResource(const GpuGraphResourceDesc& desc){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(!desc.identity || desc.markerLabel.empty() || desc.type >= GpuGraphResourceType::kCount)
         return {};
 
@@ -127,17 +138,20 @@ GpuGraphResourceId GpuTaskGraph::importResource(const GpuGraphResourceDesc& desc
             continue;
         if(!__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(
             existing,
-            m_resources[resourceIndex].initialOwnerStateSourceIdentity,
             desc
         ))
             return {};
         return GpuGraphResourceId{ static_cast<u32>(resourceIndex), m_generation };
     }
 
-    return appendResource(desc);
+    return appendResourceWithinMutation(desc, nullptr, mutation);
 }
 
 GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, const GpuGraphResourceDesc& desc){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(!texture || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphResourceType::Texture)
         return {};
     if(!texture->descriptionMatchesCreation())
@@ -173,7 +187,6 @@ GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, con
         if(existing.type == GpuGraphResourceType::Texture && existing.texture.get() == texture.get()){
             if(!__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(
                 resourceAt(resourceIndex),
-                existing.initialOwnerStateSourceIdentity,
                 resolvedDesc
             ))
                 return {};
@@ -183,10 +196,9 @@ GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, con
             return {};
     }
 
-    const GpuGraphResourceId resource = appendResource(resolvedDesc);
+    const GpuGraphResourceId resource = appendResourceWithinMutation(resolvedDesc, &queueAdmission, mutation);
     if(resource.valid()){
         GpuGraphResourceNode& importedResource = m_resources[resource.index];
-        retainResourceQueueAdmission(importedResource, queueAdmission);
         importedResource.texture = texture;
         importedResource.deviceGeneration = texture->getDeviceGeneration();
     }
@@ -194,6 +206,10 @@ GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, con
 }
 
 GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const GpuGraphResourceDesc& desc){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(
         !buffer
         || !buffer->descriptionMatchesCreation()
@@ -230,7 +246,6 @@ GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const 
         if(existing.type == GpuGraphResourceType::Buffer && existing.buffer.get() == buffer.get()){
             if(!__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(
                 resourceAt(resourceIndex),
-                existing.initialOwnerStateSourceIdentity,
                 resolvedDesc
             ))
                 return {};
@@ -240,44 +255,51 @@ GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const 
             return {};
     }
 
-    const GpuGraphResourceId resource = appendResource(resolvedDesc);
+    const GpuGraphResourceId resource = appendResourceWithinMutation(resolvedDesc, &queueAdmission, mutation);
     if(resource.valid()){
         GpuGraphResourceNode& importedResource = m_resources[resource.index];
-        retainResourceQueueAdmission(importedResource, queueAdmission);
         importedResource.buffer = buffer;
         importedResource.deviceGeneration = buffer->getDeviceGeneration();
     }
     return resource;
 }
 
-GpuGraphResourceId GpuTaskGraph::findImportedTexture(const TextureHandle& texture)const noexcept{
-    if(!texture)
+GpuGraphResourceId GpuTaskGraphDeclarationReadView::findImportedTexture(const TextureHandle& texture)const noexcept{
+    if(!m_graph || !texture)
         return {};
 
-    for(usize resourceIndex = 0u; resourceIndex < m_resources.size(); ++resourceIndex){
-        const GpuGraphResourceNode& resource = m_resources[resourceIndex];
+    for(usize resourceIndex = 0u; resourceIndex < m_graph->m_resources.size(); ++resourceIndex){
+        const GpuTaskGraph::GpuGraphResourceNode& resource = m_graph->m_resources[resourceIndex];
         if(resource.type == GpuGraphResourceType::Texture && resource.texture.get() == texture.get())
-            return GpuGraphResourceId{ static_cast<u32>(resourceIndex), m_generation };
+            return GpuGraphResourceId{ static_cast<u32>(resourceIndex), m_graph->m_generation };
     }
     return {};
 }
 
-GpuGraphResourceId GpuTaskGraph::findImportedBuffer(const BufferHandle& buffer)const noexcept{
-    if(!buffer)
+GpuGraphResourceId GpuTaskGraphDeclarationReadView::findImportedBuffer(const BufferHandle& buffer)const noexcept{
+    if(!m_graph || !buffer)
         return {};
 
-    for(usize resourceIndex = 0u; resourceIndex < m_resources.size(); ++resourceIndex){
-        const GpuGraphResourceNode& existing = m_resources[resourceIndex];
+    for(usize resourceIndex = 0u; resourceIndex < m_graph->m_resources.size(); ++resourceIndex){
+        const GpuTaskGraph::GpuGraphResourceNode& existing = m_graph->m_resources[resourceIndex];
         if(existing.type == GpuGraphResourceType::Buffer && existing.buffer.get() == buffer.get())
-            return GpuGraphResourceId{ static_cast<u32>(resourceIndex), m_generation };
+            return GpuGraphResourceId{ static_cast<u32>(resourceIndex), m_graph->m_generation };
     }
     return {};
+}
+
+const GpuPresentEndpoint* GpuTaskGraphDeclarationReadView::presentEndpoint()const & noexcept{
+    return m_graph && m_graph->m_hasPresentEndpoint ? &m_graph->m_presentEndpoint : nullptr;
 }
 
 GpuGraphResourceId GpuTaskGraph::importAccelStruct(
     const RayTracingAccelStructHandle& accelStruct,
     const GpuGraphResourceDesc& desc
 ){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(!accelStruct || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphResourceType::AccelStruct)
         return {};
 
@@ -325,7 +347,6 @@ GpuGraphResourceId GpuTaskGraph::importAccelStruct(
         if(existing.type == GpuGraphResourceType::AccelStruct && existing.accelStruct.get() == accelStruct.get()){
             if(!__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(
                 resourceAt(resourceIndex),
-                existing.initialOwnerStateSourceIdentity,
                 resolvedDesc
             ))
                 return {};
@@ -335,11 +356,13 @@ GpuGraphResourceId GpuTaskGraph::importAccelStruct(
             return {};
     }
 
-    const GpuGraphResourceId resource = appendResource(resolvedDesc);
+    const GpuGraphResourceId resource = appendResourceWithinMutation(
+        resolvedDesc,
+        backingBuffer ? &queueAdmission : nullptr,
+        mutation
+    );
     if(resource.valid()){
         GpuGraphResourceNode& importedResource = m_resources[resource.index];
-        if(backingBuffer)
-            retainResourceQueueAdmission(importedResource, queueAdmission);
         importedResource.accelStruct = accelStruct;
         importedResource.deviceGeneration = accelStruct->getDeviceGeneration();
     }
@@ -347,12 +370,20 @@ GpuGraphResourceId GpuTaskGraph::importAccelStruct(
 }
 
 GpuGraphResourceId GpuTaskGraph::importHazardDomain(const GpuGraphResourceDesc& desc){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(desc.type != GpuGraphResourceType::HazardDomain)
         return {};
     return importResource(desc);
 }
 
 GpuGraphResourceSetId GpuTaskGraph::importResourceSet(const GpuGraphResourceSetDesc& desc){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(
         !desc.identity
         || desc.markerLabel.empty()
@@ -377,6 +408,10 @@ GpuGraphResourceSetId GpuTaskGraph::importResourceSet(const GpuGraphResourceSetD
 }
 
 GpuGraphPipelineId GpuTaskGraph::importPipeline(const GpuGraphPipelineDesc& desc){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(!desc.identity || desc.markerLabel.empty() || desc.type >= GpuGraphPipelineType::kCount)
         return {};
 
@@ -396,6 +431,10 @@ GpuGraphPipelineId GpuTaskGraph::importGraphicsPipeline(
     const GraphicsPipelineHandle& pipeline,
     const GpuGraphPipelineDesc& desc
 ){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(!pipeline || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphPipelineType::Graphics)
         return {};
 
@@ -423,6 +462,10 @@ GpuGraphPipelineId GpuTaskGraph::importComputePipeline(
     const ComputePipelineHandle& pipeline,
     const GpuGraphPipelineDesc& desc
 ){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(!pipeline || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphPipelineType::Compute)
         return {};
 
@@ -450,6 +493,10 @@ GpuGraphPipelineId GpuTaskGraph::importMeshletPipeline(
     const MeshletPipelineHandle& pipeline,
     const GpuGraphPipelineDesc& desc
 ){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(!pipeline || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphPipelineType::Meshlet)
         return {};
 
@@ -477,6 +524,10 @@ GpuGraphPipelineId GpuTaskGraph::importRayTracingPipeline(
     const RayTracingPipelineHandle& pipeline,
     const GpuGraphPipelineDesc& desc
 ){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(!pipeline || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphPipelineType::RayTracing)
         return {};
 
@@ -501,6 +552,10 @@ GpuGraphPipelineId GpuTaskGraph::importRayTracingPipeline(
 }
 
 GpuExternalCompletionId GpuTaskGraph::importExternalCompletion(const GpuExternalCompletionDesc& desc){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     const bool hasToken = __hidden_gpu_task_graph_imports::HasExternalCompletionTokenValue(desc.token);
     if(
         !desc.identity
@@ -535,6 +590,10 @@ GpuExternalCompletionId GpuTaskGraph::importExternalCompletion(const GpuExternal
 }
 
 bool GpuTaskGraph::declarePresentEndpoint(const GpuPresentEndpoint& endpoint){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return false;
+
     if(
         m_hasPresentEndpoint
         || !validTask(endpoint.producer)

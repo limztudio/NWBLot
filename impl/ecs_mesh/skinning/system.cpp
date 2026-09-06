@@ -212,9 +212,9 @@ struct MeshSkinningSystem::TaskGraphSkinningFinalizerTask{
 
         for(const GraphOwnedSkinningDispatchPlan& plan : payload.plans){
             if(plan.hasActiveSkin || plan.copiedRestStreams){
-                Core::Buffer* const skinnedPosition = context.taskGraph.bufferForResource(plan.skinnedPositionResource);
-                Core::Buffer* const skinnedNormal = context.taskGraph.bufferForResource(plan.skinnedNormalResource);
-                Core::Buffer* const skinnedTangent = context.taskGraph.bufferForResource(plan.skinnedTangentResource);
+                Core::Buffer* const skinnedPosition = context.declarations.bufferForResource(plan.skinnedPositionResource);
+                Core::Buffer* const skinnedNormal = context.declarations.bufferForResource(plan.skinnedNormalResource);
+                Core::Buffer* const skinnedTangent = context.declarations.bufferForResource(plan.skinnedTangentResource);
                 if(
                     !skinnedPosition
                     || !skinnedNormal
@@ -226,12 +226,12 @@ struct MeshSkinningSystem::TaskGraphSkinningFinalizerTask{
                     return false;
             }
             if(plan.updatesMeshletBounds){
-                Core::Buffer* const meshletBounds = context.taskGraph.bufferForResource(plan.meshletBoundsResource);
+                Core::Buffer* const meshletBounds = context.declarations.bufferForResource(plan.meshletBoundsResource);
                 if(!meshletBounds || commandList.getBufferState(meshletBounds) != Core::ResourceStates::ShaderResource)
                     return false;
             }
             if(plan.repacksNormals){
-                Core::Buffer* const attributes = context.taskGraph.bufferForResource(plan.attributeResource);
+                Core::Buffer* const attributes = context.declarations.bufferForResource(plan.attributeResource);
                 if(!attributes || commandList.getBufferState(attributes) != Core::ResourceStates::ShaderResource)
                     return false;
             }
@@ -1124,17 +1124,24 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     const Core::GpuTaskGraphCompiler compiler;
     Core::GpuTaskGraphCompileOptions compileOptions;
     compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierScored;
-    if(!compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions)){
+    const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+    if(!compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to compile graph-owned skinning work"));
         return false;
     }
 
-    if(compiledGraph.packetCount() != 1u){
+    const Core::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    if(!declarations.valid() || !compiledPlan.validFor(declarations)){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain graph-owned skinning compiler inputs"));
+        return false;
+    }
+
+    if(compiledPlan.packetCount() != 1u){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning work did not merge into one primary Graphics packet"));
         return false;
     }
 
-    const Core::GpuPhysicalQueueInfo* const terminalQueue = compiledGraph.queueInfoForTask(terminalTask);
+    const Core::GpuPhysicalQueueInfo* const terminalQueue = compiledPlan.queueInfoForTask(terminalTask);
     const Core::GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
     if(!terminalQueue || terminalQueue->id != graphicsQueue){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning work did not retain the primary Graphics queue"));
@@ -1147,6 +1154,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     Core::GpuPersistentResourceStateCache::Candidate acceptedStateCandidate(m_acceptedSkinningState);
     struct SkinningStateContext{
         Core::GpuPersistentResourceStateCache* cache = nullptr;
+        Core::Alloc::ScratchArena& scratchArena;
         Core::GpuPersistentResourceStateCache::Candidate* candidate = nullptr;
         const Core::BufferHandle* buffers = nullptr;
         usize bufferCount = 0u;
@@ -1155,6 +1163,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         bool stateAccepted = false;
     } skinningState{
         .cache = &m_acceptedSkinningState,
+        .scratchArena = scratchArena,
         .candidate = &acceptedStateCandidate,
         .buffers = liveBuffers.data(),
         .bufferCount = liveBuffers.size(),
@@ -1178,7 +1187,8 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             *context->candidate,
             *finalState,
             context->buffers,
-            context->bufferCount
+            context->bufferCount,
+            context->scratchArena
         );
         return context->statePrepared;
     };
@@ -1228,7 +1238,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         transaction,
         scratchArena
     );
-    const Core::QueueSubmissionToken skinningToken = transaction.taskToken(compiledGraph, terminalTask);
+    const Core::QueueSubmissionToken skinningToken = transaction.taskToken(compiledPlan, terminalTask);
     if(!skinningToken.valid()){
         if(!transaction.discardUnaccepted(
             graph,

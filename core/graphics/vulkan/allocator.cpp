@@ -290,26 +290,7 @@ VulkanAllocator::VulkanAllocator(const VulkanContext& context)
     , m_bufferNativeIdentities(0u, Hasher<u64>(), EqualTo<u64>(), context.objectArena)
     , m_textureNativeIdentities(0u, Hasher<VkImage>(), EqualTo<VkImage>(), context.objectArena)
 {}
-VulkanAllocator::~VulkanAllocator(){
-    usize registeredBufferCount = 0u;
-    {
-        ScopedLock lock(m_bufferNativeIdentityMutex);
-        registeredBufferCount = m_bufferNativeIdentities.size();
-    }
-    usize registeredTextureCount = 0u;
-    {
-        ScopedLock lock(m_textureNativeIdentityMutex);
-        registeredTextureCount = m_textureNativeIdentities.size();
-    }
-    if(registeredBufferCount != 0u || registeredTextureCount != 0u){
-        NWB_LOGGER_CRITICAL_WARNING(
-            NWB_TEXT("Vulkan: Allocator destruction found {} live Buffer and {} live Texture native identities")
-            , registeredBufferCount
-            , registeredTextureCount
-        );
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Buffer and Texture resources must not outlive their allocator"));
-    }
-
+VulkanAllocator::~VulkanAllocator()noexcept{
     if(m_allocator){
         vmaDestroyAllocator(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator));
         m_allocator = nullptr;
@@ -599,7 +580,7 @@ VkResult VulkanAllocator::createHostMappedBuffer(
     );
 }
 
-void VulkanAllocator::destroyHostMappedBuffer(VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory){
+void VulkanAllocator::destroyHostMappedBuffer(VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory)noexcept{
     __hidden_vulkan_allocator::DestroyBufferAllocation(m_allocator, buffer, allocation, mappedMemory, true);
 }
 
@@ -608,7 +589,7 @@ bool VulkanAllocator::tryRegisterBufferNativeIdentity(Buffer& buffer){
         return false;
 
     const u64 nativeIdentity = Object(buffer.m_buffer).integer;
-    ScopedLock lock(m_bufferNativeIdentityMutex);
+    NothrowScopedLock lock(m_bufferNativeIdentityMutex);
     return m_bufferNativeIdentities.emplace(nativeIdentity, &buffer).second;
 }
 
@@ -617,7 +598,7 @@ void VulkanAllocator::unregisterBufferNativeIdentity(const VkBuffer nativeBuffer
         return;
 
     const u64 nativeIdentity = Object(nativeBuffer).integer;
-    ScopedLock lock(m_bufferNativeIdentityMutex);
+    NothrowScopedLock lock(m_bufferNativeIdentityMutex);
     const auto found = m_bufferNativeIdentities.find(nativeIdentity);
     if(found != m_bufferNativeIdentities.end() && found.value() == &buffer)
         m_bufferNativeIdentities.erase(found);
@@ -628,7 +609,7 @@ bool VulkanAllocator::isBufferNativeIdentityRegistered(const Buffer& buffer)cons
         return false;
 
     const u64 nativeIdentity = Object(buffer.m_buffer).integer;
-    ScopedLock lock(m_bufferNativeIdentityMutex);
+    NothrowScopedLock lock(m_bufferNativeIdentityMutex);
     const auto found = m_bufferNativeIdentities.find(nativeIdentity);
     return found != m_bufferNativeIdentities.end() && found.value() == &buffer;
 }
@@ -637,7 +618,7 @@ bool VulkanAllocator::tryRegisterTextureNativeIdentity(Texture& texture){
     if(texture.m_image == VK_NULL_HANDLE)
         return false;
 
-    ScopedLock lock(m_textureNativeIdentityMutex);
+    NothrowScopedLock lock(m_textureNativeIdentityMutex);
     return m_textureNativeIdentities.emplace(texture.m_image, &texture).second;
 }
 
@@ -645,7 +626,7 @@ void VulkanAllocator::unregisterTextureNativeIdentity(const VkImage nativeImage,
     if(nativeImage == VK_NULL_HANDLE)
         return;
 
-    ScopedLock lock(m_textureNativeIdentityMutex);
+    NothrowScopedLock lock(m_textureNativeIdentityMutex);
     const auto found = m_textureNativeIdentities.find(nativeImage);
     if(found != m_textureNativeIdentities.end() && found.value() == &texture)
         m_textureNativeIdentities.erase(found);
@@ -658,7 +639,7 @@ bool VulkanAllocator::isTextureNativeIdentityRegistered(
     if(nativeImage == VK_NULL_HANDLE)
         return false;
 
-    ScopedLock lock(m_textureNativeIdentityMutex);
+    NothrowScopedLock lock(m_textureNativeIdentityMutex);
     const auto found = m_textureNativeIdentities.find(nativeImage);
     return found != m_textureNativeIdentities.end() && found.value() == &texture;
 }

@@ -8,6 +8,7 @@
 
 #include <core/common/log.h>
 #include <global/containers.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,8 +23,8 @@ NWB_VULKAN_BEGIN
 StateTracker::StateTracker(const VulkanContext& context)
     : m_permanentTextureStates(0, Hasher<Texture*>(), EqualTo<Texture*>(), context.objectArena)
     , m_permanentBufferStates(0, Hasher<Buffer*>(), EqualTo<Buffer*>(), context.objectArena)
-    , m_attemptPermanentTextureStates(0, Hasher<Texture*>(), EqualTo<Texture*>(), context.objectArena)
-    , m_attemptPermanentBufferStates(0, Hasher<Buffer*>(), EqualTo<Buffer*>(), context.objectArena)
+    , m_attemptPermanentTextures(context.objectArena)
+    , m_attemptPermanentBuffers(context.objectArena)
     , m_textureStates(0, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo(), context.objectArena)
     , m_bufferStates(0, Hasher<Buffer*>(), EqualTo<Buffer*>(), context.objectArena)
     , m_textureUavBarriers(0, Hasher<Texture*>(), EqualTo<Texture*>(), context.objectArena)
@@ -39,20 +40,18 @@ void StateTracker::reset(){
 
 void StateTracker::beginRecordingAttempt(){
     NWB_ASSERT(!m_recordingAttemptActive);
-    m_attemptPermanentTextureStates.clear();
-    m_attemptPermanentBufferStates.clear();
-    m_attemptPermanentTextureStates.reserve(m_permanentTextureStates.size());
-    m_attemptPermanentBufferStates.reserve(m_permanentBufferStates.size());
-    for(auto it = m_permanentTextureStates.begin(); it != m_permanentTextureStates.end(); ++it)
-        m_attemptPermanentTextureStates.insert_or_assign(it->first, it.value());
-    for(auto it = m_permanentBufferStates.begin(); it != m_permanentBufferStates.end(); ++it)
-        m_attemptPermanentBufferStates.insert_or_assign(it->first, it.value());
+    m_attemptPermanentTextures.clear();
+    m_attemptPermanentBuffers.clear();
     m_recordingAttemptActive = true;
 }
 
 void StateTracker::commitRecordingAttempt()noexcept{
-    m_attemptPermanentTextureStates.clear();
-    m_attemptPermanentBufferStates.clear();
+    static_assert(noexcept(m_attemptPermanentTextures.clear()), "accepted texture journal release must be non-throwing");
+    static_assert(noexcept(m_attemptPermanentBuffers.clear()), "accepted buffer journal release must be non-throwing");
+    if(!m_recordingAttemptActive)
+        TerminateInvariant();
+    m_attemptPermanentTextures.clear();
+    m_attemptPermanentBuffers.clear();
     m_recordingAttemptActive = false;
 }
 
@@ -60,11 +59,21 @@ void StateTracker::rollbackRecordingAttempt()noexcept{
     if(!m_recordingAttemptActive)
         return;
 
-    m_permanentTextureStates.swap(m_attemptPermanentTextureStates);
-    m_permanentBufferStates.swap(m_attemptPermanentBufferStates);
+    // Journaling precedes the potentially throwing map insertion. A missing key is therefore the valid unwind state
+    // for an insertion that did not publish; a successfully or partially published entry is erased below.
+    for(Texture* texture : m_attemptPermanentTextures){
+        const auto found = m_permanentTextureStates.find(texture);
+        if(found != m_permanentTextureStates.end())
+            m_permanentTextureStates.erase(found);
+    }
+    for(Buffer* buffer : m_attemptPermanentBuffers){
+        const auto found = m_permanentBufferStates.find(buffer);
+        if(found != m_permanentBufferStates.end())
+            m_permanentBufferStates.erase(found);
+    }
 
-    m_attemptPermanentTextureStates.clear();
-    m_attemptPermanentBufferStates.clear();
+    m_attemptPermanentTextures.clear();
+    m_attemptPermanentBuffers.clear();
     m_recordingAttemptActive = false;
 }
 
@@ -76,14 +85,20 @@ void StateTracker::setPermanentTextureState(Texture& texture, ResourceStates::Ma
     if(existing != m_permanentTextureStates.end())
         return;
 
+    if(m_recordingAttemptActive)
+        m_attemptPermanentTextures.push_back(&texture);
+
     if(!m_permanentTextureStates.emplace(
         &texture,
         PermanentTextureStateValue{
             state,
             TextureHandle(&texture, TextureHandle::deleter_type(&texture.m_context.objectArena))
         }
-    ).second)
+    ).second){
+        if(m_recordingAttemptActive)
+            m_attemptPermanentTextures.pop_back();
         NWB_ASSERT(false);
+    }
 }
 
 void StateTracker::setPermanentBufferState(Buffer& buffer, ResourceStates::Mask state){
@@ -94,14 +109,20 @@ void StateTracker::setPermanentBufferState(Buffer& buffer, ResourceStates::Mask 
     if(existing != m_permanentBufferStates.end())
         return;
 
+    if(m_recordingAttemptActive)
+        m_attemptPermanentBuffers.push_back(&buffer);
+
     if(!m_permanentBufferStates.emplace(
         &buffer,
         PermanentBufferStateValue{
             state,
             BufferHandle(&buffer, BufferHandle::deleter_type(&buffer.m_context.objectArena))
         }
-    ).second)
+    ).second){
+        if(m_recordingAttemptActive)
+            m_attemptPermanentBuffers.pop_back();
         NWB_ASSERT(false);
+    }
 }
 
 bool StateTracker::isPermanentTexture(Texture& texture)const{
@@ -453,18 +474,30 @@ void CommandList::beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask 
 }
 
 ResourceStates::Mask CommandList::getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel){
+    const GraphPublicationReadOwnership ownership(*this);
+    if(!ownership.m_readable)
+        return ResourceStates::Unknown;
     return m_stateTracker.getTextureState(texture, arraySlice, mipLevel);
 }
 
 ResourceStates::Mask CommandList::getBufferState(Buffer* buffer){
+    const GraphPublicationReadOwnership ownership(*this);
+    if(!ownership.m_readable)
+        return ResourceStates::Unknown;
     return m_stateTracker.getBufferState(buffer);
 }
 
 ResourceStates::Mask CommandList::getPermanentTextureState(Texture* texture)const{
+    const GraphPublicationReadOwnership ownership(*this);
+    if(!ownership.m_readable)
+        return ResourceStates::Unknown;
     return m_stateTracker.getPermanentTextureState(texture);
 }
 
 ResourceStates::Mask CommandList::getPermanentBufferState(Buffer* buffer)const{
+    const GraphPublicationReadOwnership ownership(*this);
+    if(!ownership.m_readable)
+        return ResourceStates::Unknown;
     return m_stateTracker.getPermanentBufferState(buffer);
 }
 
@@ -473,10 +506,16 @@ bool CommandList::hasExplicitTextureSubresourceState(
     const ArraySlice arraySlice,
     const MipLevel mipLevel
 )const{
+    const GraphPublicationReadOwnership ownership(*this);
+    if(!ownership.m_readable)
+        return false;
     return m_stateTracker.hasExplicitTextureSubresourceState(texture, arraySlice, mipLevel);
 }
 
 bool CommandList::hasExplicitBufferState(Buffer* const buffer)const{
+    const GraphPublicationReadOwnership ownership(*this);
+    if(!ownership.m_readable)
+        return false;
     return m_stateTracker.hasExplicitBufferState(buffer);
 }
 

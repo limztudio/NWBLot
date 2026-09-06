@@ -80,6 +80,20 @@ public:
         else
             CoreFreeAligned(p, log());
     }
+
+    template<typename T>
+    inline void deallocateObject(T* const p)noexcept{
+        constexpr usize allocationSize = Alignment(alignof(T), sizeof(T));
+
+        if(p){
+            m_memoryStats.recordDeallocation(allocationSize);
+            m_memoryStats.removeReservedBytes(allocationSize);
+        }
+        if constexpr(alignof(T) <= 1u)
+            CoreFreeSize(p, allocationSize, "GlobalArena::deallocateObject");
+        else
+            CoreFreeSizeAligned(p, allocationSize, "GlobalArena::deallocateObject");
+    }
 };
 
 

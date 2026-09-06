@@ -133,18 +133,33 @@ bool BackendContext::createDevice(){
         return physicalQueueFamilies[static_cast<usize>(queueFamily)].timestampValidBits;
     };
     const GpuQueueCapability::Mask graphicsQueueCapabilities = queueCapabilitiesForFamily(m_graphicsQueueFamily);
-    const GpuQueueCapability::Mask computeQueueCapabilities = queueCapabilitiesForFamily(m_computeQueueFamily);
+    const i32 schedulerComputeQueueFamily = m_asyncComputeQueueFamily != s_InvalidQueueFamilyIndex
+        ? m_asyncComputeQueueFamily
+        : m_computeQueueFamily
+    ;
+    const GpuQueueCapability::Mask requiredComputeQueueCapabilities = queueCapabilitiesForFamily(m_computeQueueFamily);
+    const GpuQueueCapability::Mask computeQueueCapabilities = queueCapabilitiesForFamily(schedulerComputeQueueFamily);
     const GpuQueueCapability::Mask transferQueueCapabilities = queueCapabilitiesForFamily(m_transferQueueFamily);
     const GpuQueueCapability::Mask requiredGraphicsQueueCapabilities = static_cast<GpuQueueCapability::Mask>(
         static_cast<u8>(GpuQueueCapability::Graphics)
-        | static_cast<u8>(GpuQueueCapability::Compute)
+        | static_cast<u8>(GpuQueueCapability::Transfer)
+    );
+    const GpuQueueCapability::Mask requiredComputeQueueCapabilitiesMask = static_cast<GpuQueueCapability::Mask>(
+        static_cast<u8>(GpuQueueCapability::Compute)
         | static_cast<u8>(GpuQueueCapability::Transfer)
     );
     if(
         (static_cast<u8>(graphicsQueueCapabilities) & static_cast<u8>(requiredGraphicsQueueCapabilities))
         != static_cast<u8>(requiredGraphicsQueueCapabilities)
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: selected primary Graphics queue family does not support Graphics, Compute, and Transfer."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: selected required Graphics queue family does not support Graphics and Transfer."));
+        return false;
+    }
+    if(
+        (static_cast<u8>(requiredComputeQueueCapabilities) & static_cast<u8>(requiredComputeQueueCapabilitiesMask))
+        != static_cast<u8>(requiredComputeQueueCapabilitiesMask)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: selected required Compute queue family does not support Compute and Transfer."));
         return false;
     }
     const u32 graphicsNativeQueueIndex = findNativeQueueIndex(
@@ -152,7 +167,7 @@ bool BackendContext::createDevice(){
         s_GraphicsQueueIndex
     );
     const u32 computeNativeQueueIndex = findNativeQueueIndex(
-        static_cast<u32>(m_computeQueueFamily),
+        static_cast<u32>(schedulerComputeQueueFamily),
         s_ComputeQueueIndex
     );
     const u32 transferNativeQueueIndex = findNativeQueueIndex(
@@ -161,7 +176,7 @@ bool BackendContext::createDevice(){
     );
     if(
         graphicsNativeQueueIndex == Limit<u32>::s_Max
-        || (m_asyncComputeLaneEnabled && computeNativeQueueIndex == Limit<u32>::s_Max)
+        || (m_computeQueueEnabled && computeNativeQueueIndex == Limit<u32>::s_Max)
         || (m_transferQueueEnabled && transferNativeQueueIndex == Limit<u32>::s_Max)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Scheduler queue projection references a missing native queue."));
@@ -184,12 +199,12 @@ bool BackendContext::createDevice(){
         .primaryForClass = true,
     });
     appendSameClassQueues(CommandQueue::Graphics);
-    if(m_asyncComputeLaneEnabled){
+    if(m_computeQueueEnabled){
         physicalQueues.push_back(VulkanPhysicalQueueDesc{
             .nativeQueueIndex = computeNativeQueueIndex,
             .queueClass = CommandQueue::Compute,
             .capabilities = computeQueueCapabilities,
-            .timestampValidBits = timestampValidBitsForFamily(m_computeQueueFamily),
+            .timestampValidBits = timestampValidBitsForFamily(schedulerComputeQueueFamily),
             .dedicated = true,
             .primaryForClass = true,
         });
@@ -264,7 +279,7 @@ bool BackendContext::createSwapChainResources(){
 
     usize const numPresentSemaphores = m_swapChainImages.size();
     if(!recreateSemaphores(m_presentSemaphores, numPresentSemaphores, "create present semaphores")){
-        if(!destroySwapChainPrepared())
+        if(!destroySwapChainAfterCreateFailure())
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after present-semaphore creation failure."));
         return false;
     }
@@ -272,7 +287,7 @@ bool BackendContext::createSwapChainResources(){
     const usize numAcquireSyncSlots = Max(static_cast<usize>(m_maxFramesInFlight), m_swapChainImages.size());
     if(!recreateAcquireSyncSlots(numAcquireSyncSlots)){
         clearSemaphores(m_presentSemaphores);
-        if(!destroySwapChainPrepared())
+        if(!destroySwapChainAfterCreateFailure())
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after acquire-slot creation failure."));
         return false;
     }
@@ -280,7 +295,7 @@ bool BackendContext::createSwapChainResources(){
     if(!createFrameSyncQueries()){
         clearSemaphores(m_presentSemaphores);
         clearAcquireSyncSlots();
-        if(!destroySwapChainPrepared())
+        if(!destroySwapChainAfterCreateFailure())
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after frame-query creation failure."));
         return false;
     }
@@ -346,7 +361,7 @@ bool BackendContext::prepareSwapChainTransition(
     const SwapChainTransitionKind::Enum kind,
     SwapChainTransitionTicket& outTicket
 ){
-    ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
+    UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
     outTicket = {};
     if(kind >= SwapChainTransitionKind::kCount)
         return false;
@@ -374,6 +389,13 @@ bool BackendContext::prepareSwapChainTransition(
         }
         if(m_swapChainLifecycleState != SwapChainLifecycleState::PreparedResize || kind != SwapChainTransitionKind::Destroy)
             return false;
+        m_swapChainLifecycleState = SwapChainLifecycleState::Preparing;
+        DeviceHandle device = m_rhiDevice;
+        if(device){
+            lifecycleLock.unlock();
+            device->prepareForDestructionAfterIdleOrLoss();
+            lifecycleLock.lock();
+        }
         if(m_rhiDevice && !m_rhiDevice->sealLifecycleDrainForDestruction()){
             m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to seal an already prepared resize for destruction."));
@@ -390,7 +412,8 @@ bool BackendContext::prepareSwapChainTransition(
         return true;
     }
     if(
-        m_swapChainLifecycleState == SwapChainLifecycleState::Preparing
+        m_swapChainLifecycleState == SwapChainLifecycleState::RetiringPresentation
+        || m_swapChainLifecycleState == SwapChainLifecycleState::Preparing
         || (m_swapChainLifecycleState == SwapChainLifecycleState::NeedsDestroy && kind != SwapChainTransitionKind::Destroy)
     )
         return false;
@@ -413,7 +436,7 @@ bool BackendContext::prepareSwapChainTransition(
     }
     m_swapChainLifecycleState = SwapChainLifecycleState::Preparing;
 
-    if(!preflightSwapChainImageRevocation()){
+    if(!prepareSwapChainImageRevocation()){
         m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
         return false;
     }
@@ -424,10 +447,24 @@ bool BackendContext::prepareSwapChainTransition(
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain transition could not prove WSI acquire completion."));
         return false;
     }
+    if(!acquireProofsComplete && m_rhiDevice && m_rhiDevice->isDeviceLost()){
+        DeviceHandle device = m_rhiDevice;
+        lifecycleLock.unlock();
+        device->captureDeviceLoss("acquire lifecycle fence wait");
+        lifecycleLock.lock();
+    }
 
     if(m_rhiDevice){
-        const bool deviceIdle = m_rhiDevice->waitForIdle();
-        if(!deviceIdle && !m_rhiDevice->isDeviceLost()){
+        const VkResult idleResult = m_rhiDevice->waitForNativeIdle();
+        if(idleResult == VK_ERROR_DEVICE_LOST)
+            m_rhiDevice->markDeviceLost();
+        if(idleResult == VK_ERROR_DEVICE_LOST){
+            DeviceHandle device = m_rhiDevice;
+            lifecycleLock.unlock();
+            device->captureDeviceLoss("swapchain lifecycle idle");
+            lifecycleLock.lock();
+        }
+        if(idleResult != VK_SUCCESS && !m_rhiDevice->isDeviceLost()){
             m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain transition could not prove device idle."));
             return false;
@@ -436,10 +473,16 @@ bool BackendContext::prepareSwapChainTransition(
             m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
             return false;
         }
-        if(kind == SwapChainTransitionKind::Destroy && !m_rhiDevice->sealLifecycleDrainForDestruction()){
-            m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to seal the prepared device destruction state."));
-            return false;
+        if(kind == SwapChainTransitionKind::Destroy){
+            DeviceHandle device = m_rhiDevice;
+            lifecycleLock.unlock();
+            device->prepareForDestructionAfterIdleOrLoss();
+            lifecycleLock.lock();
+            if(!m_rhiDevice->sealLifecycleDrainForDestruction()){
+                m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to seal the prepared device destruction state."));
+                return false;
+            }
         }
     }
 
@@ -461,10 +504,7 @@ bool BackendContext::commitSwapChainResize(SwapChainTransitionTicket&& ticket){
     if(!validPreparedTicket(ticket, SwapChainTransitionKind::Resize))
         return false;
 
-    if(!destroySwapChainPrepared()){
-        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-        return false;
-    }
+    commitPreparedSwapChainDestruction();
     while(!m_framesInFlight.empty())
         m_framesInFlight.pop();
     m_queryPool.clear();
@@ -489,7 +529,7 @@ bool BackendContext::commitSwapChainResize(SwapChainTransitionTicket&& ticket){
 }
 
 bool BackendContext::commitDestroy(SwapChainTransitionTicket&& ticket)noexcept{
-    ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
+    NothrowScopedLock lifecycleLock(m_swapChainLifecycleMutex);
     if(m_swapChainLifecycleState == SwapChainLifecycleState::Destroyed){
         const bool validNoOpTicket = ticket.valid()
             && ticket.owner == this
@@ -502,10 +542,7 @@ bool BackendContext::commitDestroy(SwapChainTransitionTicket&& ticket)noexcept{
     if(!validPreparedTicket(ticket, SwapChainTransitionKind::Destroy))
         return false;
 
-    if(!destroySwapChainPrepared()){
-        m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-        return false;
-    }
+    commitPreparedSwapChainDestruction();
 
     while(!m_framesInFlight.empty())
         m_framesInFlight.pop();
@@ -526,8 +563,7 @@ bool BackendContext::commitDestroy(SwapChainTransitionTicket&& ticket)noexcept{
         m_vulkanDevice = VK_NULL_HANDLE;
     }
 
-    if(m_windowSurface){
-        NWB_ASSERT(m_vulkanInstance);
+    if(m_windowSurface && m_vulkanInstance){
         m_instanceDispatch.vkDestroySurfaceKHR(m_vulkanInstance, m_windowSurface, nullptr);
         m_windowSurface = VK_NULL_HANDLE;
     }

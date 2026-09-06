@@ -109,7 +109,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBackendOperands(
     const GpuCommandIrBuiltinTaskRecord& record,
-    const GpuTaskGraph& graph,
+    const GpuTaskGraphDeclarationReadView& graph,
     CommandList& commandList,
     const GpuPhysicalQueueInfo& commandQueue
 )noexcept{
@@ -188,7 +188,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
 // the complete selected packet before taking the recording lease so a late backend failure cannot partially lower.
 [[nodiscard]] static GpuCommandIrReplayResult ValidateBackendOperandPacket(
     const BinaryByteView bytes,
-    const GpuTaskGraph& graph,
+    const GpuTaskGraphDeclarationReadView& graph,
     const GpuSubmissionPacketId packet,
     CommandList& commandList,
     const GpuCommandIrStreamValidationResult& expectedStreamValidation
@@ -243,7 +243,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
 
 static void LowerOperation(
     const GpuCommandIrBuiltinTaskRecord& record,
-    const GpuTaskGraph& graph,
+    const GpuTaskGraphDeclarationReadView& graph,
     CommandList& commandList
 )noexcept{
     switch(record.opcode){
@@ -376,8 +376,8 @@ static void LowerOperation(
 
 GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
     const BinaryByteView bytes,
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuCompiledGraph::ReadView& compiledGraph,
     const GpuSubmissionPacketId packet,
     CommandList& commandList
 )noexcept{
@@ -385,7 +385,14 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
     if(!result.valid())
         return result;
 
-    const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
+    const GpuCompiledPacketView packetView = compiledGraph.packet(packet);
+    if(!packetView.valid()){
+        return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
+            GpuCommandIrReplayError::InvalidPacket,
+            result.streamValidation
+        );
+    }
+    const GpuSubmissionPacket& packetPlan = *packetView.plan;
     const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packetPlan.queue);
     if(!queue){
         return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
@@ -488,8 +495,8 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
 
 GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
     const BinaryByteView bytes,
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuCompiledGraph::ReadView& compiledGraph,
     const GpuSubmissionPacketId packet,
     CommandList& commandList
 )noexcept{
@@ -505,7 +512,14 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
     if(!result.valid())
         return result;
 
-    const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
+    const GpuCompiledPacketView packetView = compiledGraph.packet(packet);
+    if(!packetView.valid()){
+        return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
+            GpuCommandIrReplayError::InvalidPacket,
+            result.streamValidation
+        );
+    }
+    const GpuSubmissionPacket& packetPlan = *packetView.plan;
     const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packetPlan.queue);
     if(!queue){
         return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(

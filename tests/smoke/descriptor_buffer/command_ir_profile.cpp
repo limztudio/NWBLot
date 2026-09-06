@@ -26,6 +26,7 @@
 #include <core/perf/timing.h>
 #include <impl/assets/graphics/bindless/runtime_abi.h>
 #include <tests/common/capturing_logger.h>
+#include <tests/common/gpu_task_graph_read_views.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -253,7 +254,8 @@ struct Result{
     const GpuCompiledGraph& compiledGraph,
     GpuRecordedGraph& recordedGraph
 ){
-    if(!recordedGraph.validFor(graph, compiledGraph))
+    const Tests::GpuTaskGraphReadViews views(graph, compiledGraph);
+    if(!views.valid() || !recordedGraph.validFor(graph, views.declarations, compiledGraph, views.compiled))
         return false;
     transaction.reset(compiledGraph);
     if(!transaction.discardUnaccepted(graph, compiledGraph, recordedGraph.recordingAttemptGeneration()))
@@ -295,7 +297,15 @@ struct Result{
     u64& outCount
 ){
     outCount = 0u;
-    const GpuCommandIrReplayResult replay = PreflightGpuCommandIrPacket(bytes, graph, compiledGraph, packet);
+    const Tests::GpuTaskGraphReadViews views(graph, compiledGraph);
+    if(!views.valid())
+        return false;
+    const GpuCommandIrReplayResult replay = PreflightGpuCommandIrPacket(
+        bytes,
+        views.declarations,
+        views.compiled,
+        packet
+    );
     if(!replay.valid() || !replay.streamValidation.valid())
         return false;
     outCount = replay.recordIndex;
@@ -304,17 +314,19 @@ struct Result{
 
 [[nodiscard]] static CommandListHandle CreatePacketCommandList(
     Device& device,
+    const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packet
 ){
-    if(!compiledGraph.validPacket(packet))
+    const Tests::GpuTaskGraphReadViews views(graph, compiledGraph);
+    if(!views.valid() || !views.compiled.validPacket(packet))
         return {};
-    const GpuPhysicalQueueId packetQueue = compiledGraph.packet(packet).queue;
-    if(!compiledGraph.queueInfo(packetQueue))
+    const GpuCompiledPacketView packetView = views.compiled.packet(packet);
+    if(!packetView.valid() || !views.compiled.queueInfo(packetView.plan->queue))
         return {};
 
     CommandListParameters parameters;
-    parameters.setPhysicalQueue(packetQueue);
+    parameters.setPhysicalQueue(packetView.plan->queue);
     return device.createCommandList(parameters);
 }
 
@@ -332,15 +344,24 @@ struct Result{
     if(outNanoseconds)
         *outNanoseconds = 0.0;
 
-    CommandListHandle commandList = CreatePacketCommandList(device, compiledGraph, packet);
+    CommandListHandle commandList = CreatePacketCommandList(device, graph, compiledGraph, packet);
     if(!commandList)
         return false;
     commandList->open();
     if(!commandList->isRecording())
         return false;
+    const Tests::GpuTaskGraphReadViews views(graph, compiledGraph);
+    if(!views.valid())
+        return false;
 
     const Timer begin = TimerNow();
-    const GpuCommandIrReplayResult replay = ReplayGpuCommandIrPacket(bytes, graph, compiledGraph, packet, *commandList);
+    const GpuCommandIrReplayResult replay = ReplayGpuCommandIrPacket(
+        bytes,
+        views.declarations,
+        views.compiled,
+        packet,
+        *commandList
+    );
     const Timer end = TimerNow();
     commandList->close();
     if(!replay.valid() || !replay.streamValidation.valid())
@@ -384,18 +405,21 @@ struct Result{
     if(outNanoseconds)
         *outNanoseconds = 0.0;
 
-    CommandListHandle commandList = CreatePacketCommandList(device, compiledGraph, packet);
+    CommandListHandle commandList = CreatePacketCommandList(device, graph, compiledGraph, packet);
     if(!commandList)
         return false;
     commandList->open();
     if(!PrepareDirectVulkanReplayState(*commandList, source, destination))
         return false;
+    const Tests::GpuTaskGraphReadViews views(graph, compiledGraph);
+    if(!views.valid())
+        return false;
 
     const Timer begin = TimerNow();
     const GpuCommandIrReplayResult replay = ReplayGpuCommandIrPacketDirectVulkan(
         bytes,
-        graph,
-        compiledGraph,
+        views.declarations,
+        views.compiled,
         packet,
         *commandList
     );
@@ -421,20 +445,32 @@ struct Result{
     const usize byteCount,
     Result& outResult
 ){
-    CommandListHandle commandList = CreatePacketCommandList(device, compiledGraph, packet);
+    CommandListHandle commandList = CreatePacketCommandList(device, graph, compiledGraph, packet);
     if(!commandList)
         return false;
     commandList->open();
     if(!commandList->isRecording())
         return false;
+    const Tests::GpuTaskGraphReadViews views(graph, compiledGraph);
+    if(!views.valid())
+        return false;
 
-    const GpuCommandIrReplayResult replay = ReplayGpuCommandIrPacket(bytes, graph, compiledGraph, packet, *commandList);
+    const GpuCommandIrReplayResult replay = ReplayGpuCommandIrPacket(
+        bytes,
+        views.declarations,
+        views.compiled,
+        packet,
+        *commandList
+    );
     commandList->close();
     if(!replay.valid() || !replay.streamValidation.valid() || replay.recordIndex != expectedCount)
         return false;
 
     CommandList* const commandLists[] = { commandList.get() };
-    const GpuPhysicalQueueId packetQueue = compiledGraph.packet(packet).queue;
+    const GpuCompiledPacketView packetView = views.compiled.packet(packet);
+    if(!views.valid() || !packetView.valid())
+        return false;
+    const GpuPhysicalQueueId packetQueue = packetView.plan->queue;
     bool submitted = false;
     if(
         device.executeCommandLists(commandLists, LengthOf(commandLists), packetQueue, &submitted) == 0u
@@ -465,17 +501,20 @@ struct Result{
     const usize byteCount,
     Result& outResult
 ){
-    CommandListHandle commandList = CreatePacketCommandList(device, compiledGraph, packet);
+    CommandListHandle commandList = CreatePacketCommandList(device, graph, compiledGraph, packet);
     if(!commandList)
         return false;
     commandList->open();
     if(!PrepareDirectVulkanReplayState(*commandList, source, destination))
         return false;
+    const Tests::GpuTaskGraphReadViews views(graph, compiledGraph);
+    if(!views.valid())
+        return false;
 
     const GpuCommandIrReplayResult replay = ReplayGpuCommandIrPacketDirectVulkan(
         bytes,
-        graph,
-        compiledGraph,
+        views.declarations,
+        views.compiled,
         packet,
         *commandList
     );
@@ -484,7 +523,10 @@ struct Result{
         return false;
 
     CommandList* const commandLists[] = { commandList.get() };
-    const GpuPhysicalQueueId packetQueue = compiledGraph.packet(packet).queue;
+    const GpuCompiledPacketView packetView = views.compiled.packet(packet);
+    if(!views.valid() || !packetView.valid())
+        return false;
+    const GpuPhysicalQueueId packetQueue = packetView.plan->queue;
     bool submitted = false;
     if(
         device.executeCommandLists(commandLists, LengthOf(commandLists), packetQueue, &submitted) == 0u
@@ -612,10 +654,15 @@ struct Result{
     GpuCompiledGraph compiledGraph(arena);
     Alloc::ScratchArena scratchArena(Name("tests/ab/command_ir/scratch"));
     const GpuTaskGraphCompiler compiler;
-    if(!compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena))
+    const GpuTaskGraph::DeclarationReadView compilationDeclarations(graph);
+    if(!compiler.compile(compilationDeclarations, analysis, topology, assignments, compiledGraph, scratchArena))
         return false;
-    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(copyTask);
-    if(!packet.valid() || compiledGraph.packet(packet).queue != queue.id)
+    const Tests::GpuTaskGraphReadViews views(graph, compiledGraph);
+    if(!views.valid())
+        return false;
+    const GpuSubmissionPacketId packet = views.compiled.packetForTask(copyTask);
+    const GpuCompiledPacketView packetView = views.compiled.packet(packet);
+    if(!packetView.valid() || packetView.plan->queue != queue.id)
         return false;
 
     const GpuNativePacketRecorder recorder(device);

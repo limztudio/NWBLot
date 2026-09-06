@@ -391,6 +391,131 @@ TEST_F(CommandListSubmissionProvenanceTest, UploadLedgerDiscardRequiresExactNati
 }
 
 
+TEST_F(CommandListSubmissionProvenanceTest, UploadLedgerAcceptedAndRejectedRetirementReuseOnlyExactNativeIdentity){
+    constexpr u64 s_WorkerDomain = 0x7cf4952a10bd683eull;
+    constexpr u32 s_WorkerIndex = 19u;
+    constexpr u64 s_SubmittedRecordingID = 0x1138au;
+    constexpr u64 s_UnrelatedRecordingID = 0x25c91u;
+    constexpr u64 s_AcceptedReuseRecordingID = 0x397e2u;
+    constexpr u64 s_RejectedReuseRecordingID = 0x4ab63u;
+    constexpr usize s_ChunkByteCount = GraphicsBackend::s_DefaultUploadSuballocationAlignment + sizeof(u32);
+    const GpuPhysicalQueueId queue = device().getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(queue.valid());
+    ASSERT_TRUE(device().waitForIdle());
+    GraphicsBackend::Queue* const physicalQueue = device().getQueue(queue);
+    ASSERT_NE(physicalQueue, nullptr);
+    GraphicsBackend::TrackedCommandBufferPtr owner = physicalQueue->getOrCreateCommandBuffer(
+        s_WorkerDomain,
+        s_WorkerIndex
+    );
+    ASSERT_TRUE(owner);
+    const u64 completedVersion = device().queueGetCompletedInstance(queue);
+    ASSERT_NE(completedVersion, Limit<u64>::s_Max);
+    const u64 submittedVersion = completedVersion + 1u;
+    GraphicsBackend::UploadManager uploadManager(device(), s_ChunkByteCount, 0u, false);
+
+    Buffer* submittedBuffer = nullptr;
+    u64 submittedOffset = 0u;
+    ASSERT_TRUE(uploadManager.suballocateBuffer(
+        sizeof(u32),
+        &submittedBuffer,
+        &submittedOffset,
+        nullptr,
+        owner.get(),
+        s_SubmittedRecordingID,
+        queue,
+        completedVersion
+    ));
+    ASSERT_NE(submittedBuffer, nullptr);
+    EXPECT_EQ(submittedOffset, 0u);
+
+    Buffer* unrelatedBuffer = nullptr;
+    u64 unrelatedOffset = 0u;
+    ASSERT_TRUE(uploadManager.suballocateBuffer(
+        sizeof(u32),
+        &unrelatedBuffer,
+        &unrelatedOffset,
+        nullptr,
+        owner.get(),
+        s_UnrelatedRecordingID,
+        queue,
+        completedVersion
+    ));
+    ASSERT_NE(unrelatedBuffer, nullptr);
+    EXPECT_NE(unrelatedBuffer, submittedBuffer);
+    EXPECT_EQ(unrelatedOffset, 0u);
+
+    const GraphicsBackend::Queue::SubmissionCommandListIdentity submittedCommandLists[]{
+        {
+            .owner = owner.get(),
+            .nativeRecordingID = s_SubmittedRecordingID,
+        },
+    };
+    Alloc::GlobalArena lookupArena(Name("tests/upload_ledger/accepted_retirement"));
+    GraphicsBackend::VulkanDetail::SubmittedCommandBufferOwnerLookup submittedOwners{lookupArena};
+    static_assert(noexcept(uploadManager.submitChunks(
+        queue,
+        submittedVersion,
+        submittedCommandLists,
+        LengthOf(submittedCommandLists),
+        submittedOwners
+    )), "accepted upload-ledger retirement must remain non-throwing");
+    uploadManager.submitChunks(
+        queue,
+        submittedVersion,
+        submittedCommandLists,
+        LengthOf(submittedCommandLists),
+        submittedOwners
+    );
+
+    Buffer* acceptedReuseBuffer = nullptr;
+    u64 acceptedReuseOffset = 0u;
+    ASSERT_TRUE(uploadManager.suballocateBuffer(
+        s_ChunkByteCount,
+        &acceptedReuseBuffer,
+        &acceptedReuseOffset,
+        nullptr,
+        owner.get(),
+        s_AcceptedReuseRecordingID,
+        queue,
+        submittedVersion
+    ));
+    EXPECT_EQ(acceptedReuseBuffer, submittedBuffer);
+    EXPECT_EQ(acceptedReuseOffset, 0u);
+
+    Buffer* continuedUnrelatedBuffer = nullptr;
+    u64 continuedUnrelatedOffset = 0u;
+    ASSERT_TRUE(uploadManager.suballocateBuffer(
+        sizeof(u32),
+        &continuedUnrelatedBuffer,
+        &continuedUnrelatedOffset,
+        nullptr,
+        owner.get(),
+        s_UnrelatedRecordingID,
+        queue,
+        submittedVersion
+    ));
+    EXPECT_EQ(continuedUnrelatedBuffer, unrelatedBuffer);
+    EXPECT_EQ(continuedUnrelatedOffset, GraphicsBackend::s_DefaultUploadSuballocationAlignment);
+
+    uploadManager.discardChunks(queue, owner.get(), s_AcceptedReuseRecordingID, submittedVersion);
+    Buffer* rejectedReuseBuffer = nullptr;
+    u64 rejectedReuseOffset = 0u;
+    ASSERT_TRUE(uploadManager.suballocateBuffer(
+        s_ChunkByteCount,
+        &rejectedReuseBuffer,
+        &rejectedReuseOffset,
+        nullptr,
+        owner.get(),
+        s_RejectedReuseRecordingID,
+        queue,
+        submittedVersion
+    ));
+    EXPECT_EQ(rejectedReuseBuffer, submittedBuffer);
+    EXPECT_EQ(rejectedReuseOffset, 0u);
+}
+
+
 TEST_F(CommandListSubmissionProvenanceTest, InjectedNativeFailureRecyclesWorkerOwnerForFollowingUpload){
     constexpr u64 s_WorkerDomain = 0x86d731c542af901eull;
     constexpr u32 s_WorkerIndex = 7u;
@@ -400,7 +525,7 @@ TEST_F(CommandListSubmissionProvenanceTest, InjectedNativeFailureRecyclesWorkerO
     ASSERT_TRUE(queue.valid());
     ASSERT_TRUE(device().waitForIdle());
     const VkQueue nativeQueue = static_cast<VkQueue>(
-        device().getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, queue).pointer
+        device().getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, queue).pointer()
     );
     ASSERT_NE(nativeQueue, VK_NULL_HANDLE);
     VulkanTestQueueSubmit2Observer submissionObserver(device());

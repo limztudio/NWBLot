@@ -7,6 +7,8 @@
 #include <core/telemetry/frame_graph_registry.h>
 #include <core/telemetry/session.h>
 
+#include <core/graphics/task_graph/compiler.h>
+
 #include <tests/common/test_context.h>
 
 #include <global/filesystem/operations.h>
@@ -403,7 +405,7 @@ TEST(EcsGraphics, FrameGraphExportsEveryCompiledPhysicalQueueAsStructuredRuntime
 
     const usize runtimeTopologyOffset = frameGraph.find(
         "const Core::GpuPhysicalQueueTopology runtimeQueueTopology = "
-        "m_deferredLightingCompiledGraph.queueTopology();"
+        "deferredCompiledPlan.queueTopology();"
     );
     const usize snapshotLoopOffset = frameGraph.find(
         "for(usize queueIndex = 0u; queueIndex < runtimeQueueTopology.queueCount; ++queueIndex){",
@@ -411,7 +413,7 @@ TEST(EcsGraphics, FrameGraphExportsEveryCompiledPhysicalQueueAsStructuredRuntime
     );
     const usize rendererFrameOffset = frameGraph.find("const Handle rendererFrame = builder.addPass(");
     const usize packetSnapshotLoopOffset = frameGraph.find(
-        "for(usize packetIndex = 0u; packetIndex < m_deferredLightingCompiledGraph.packetCount(); ++packetIndex){",
+        "for(usize packetIndex = 0u; packetIndex < deferredCompiledPlan.packetCount(); ++packetIndex){",
         snapshotLoopOffset
     );
     const usize structuredLoopOffset = frameGraph.find(
@@ -530,16 +532,40 @@ TEST(EcsGraphics, FrameGraphRuntimeStatisticsSelectsOnlyMatchingCoherentSnapshot
 
 TEST(EcsGraphics, FrameGraphRuntimeStatisticsOmitsResetArtifactsForMatchingFrame){
     NWB::Tests::TestArena<> testArena;
+    NWB::Core::GpuTaskGraph graph(testArena.arena);
     NWB::Core::GpuCompiledGraph compiledGraph(testArena.arena);
     NWB::Core::GpuRecordedGraph recordedGraph(testArena.arena);
     NWB::Core::GpuGraphSubmissionTransaction transaction(testArena.arena);
 
-    compiledGraph.reset();
-    recordedGraph.reset(compiledGraph);
-    transaction.reset(compiledGraph);
+    const NWB::Core::GpuTaskGraph::DeclarationReadView declarationAccess(graph);
+    ASSERT_TRUE(declarationAccess.valid());
+    const NWB::Core::GpuPhysicalQueueInfo queue{
+        .id = NWB::Core::GpuPhysicalQueueId{ 0u, 1u },
+        .queueClass = NWB::Core::CommandQueue::Graphics,
+        .capabilities = static_cast<NWB::Core::GpuQueueCapability::Mask>(
+            static_cast<u8>(NWB::Core::GpuQueueCapability::Graphics)
+            | static_cast<u8>(NWB::Core::GpuQueueCapability::Compute)
+            | static_cast<u8>(NWB::Core::GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = 0u,
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const NWB::Core::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    NWB::Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+    NWB::Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/ecs_graphics/reset_runtime_statistics_scratch"));
+    const NWB::Core::GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(declarationAccess, analysis, topology, assignments, compiledGraph, scratchArena));
 
+    const NWB::Core::GpuCompiledGraph::ReadView planAccess(compiledGraph);
+    ASSERT_TRUE(planAccess.validFor(declarationAccess));
     const NWB::Core::GpuTaskGraphRuntimeStatistics resetStatistics = NWB::Core::CollectGpuTaskGraphRuntimeStatistics(
         compiledGraph,
+        planAccess,
         recordedGraph,
         transaction
     );

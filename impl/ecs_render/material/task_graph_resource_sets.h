@@ -74,7 +74,15 @@ namespace RendererTaskGraphDetail{
 
     outResourceUses.reserve(sourceBuffers.size());
     for(const Core::BufferHandle& buffer : sourceBuffers){
-        Core::GpuGraphResourceId resource = graph.findImportedBuffer(buffer);
+        Core::GpuGraphResourceId resource;
+        {
+            const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+            if(!declarations.valid()){
+                outResourceUses.clear();
+                return false;
+            }
+            resource = declarations.findImportedBuffer(buffer);
+        }
         if(!resource.valid()){
             const Name identity = buffer->getCreationDescription().debugName;
             if(!identity){
@@ -140,7 +148,12 @@ namespace RendererTaskGraphDetail{
     if(!plan.captured || !plan.outputBuffer)
         return false;
 
-    outResource = graph.findImportedBuffer(plan.outputBuffer);
+    {
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+        if(!declarations.valid())
+            return false;
+        outResource = declarations.findImportedBuffer(plan.outputBuffer);
+    }
     if(!outResource.valid()){
         const Name identity = plan.outputBuffer->getCreationDescription().debugName;
         if(!identity)
@@ -173,7 +186,13 @@ namespace RendererTaskGraphDetail{
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> members{ scratchArena };
     members.reserve(sampledTextures.size());
     for(const Core::TextureHandle& texture : sampledTextures){
-        Core::GpuGraphResourceId resource = graph.findImportedTexture(texture);
+        Core::GpuGraphResourceId resource;
+        {
+            const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+            if(!declarations.valid())
+                return false;
+            resource = declarations.findImportedTexture(texture);
+        }
         if(!resource.valid()){
             const Name textureIdentity = texture->getCreationDescription().name;
             if(!textureIdentity)

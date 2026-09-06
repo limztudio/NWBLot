@@ -20,9 +20,17 @@ NWB_CORE_BEGIN
 
 
 class GpuTaskGraph;
+class GpuTaskGraphDeclarationReadView;
 class GpuTaskGraphCompiler;
 class GpuCommandIrCapture;
 class GpuGraphSubmissionBinding;
+class GpuGraphSubmissionTransaction;
+class GpuNativePacketRecorder;
+class GpuRecordedGraph;
+class GpuTaskGraphSubmitter;
+class GpuTaskGraphExternalResourceHandoffSnapshot;
+struct GpuTaskGraphExternalCompletionToken;
+struct GpuTaskGraphRuntimeStatistics;
 
 
 // Tasks describe semantic work. Packets are compiler-generated native-recording and submission units; a packet
@@ -54,6 +62,26 @@ struct GpuSubmissionPacket{
 struct GpuPacketDependency{
     GpuSubmissionPacketId producer;
     GpuSubmissionPacketId consumer;
+};
+
+// One lexically protected immutable packet plan. Every borrowed array belongs to the compiled graph retained by
+// GpuCompiledGraph::ReadView; callers must not store this value beyond that proof's lifetime. Invalid/stale packet
+// identities return an empty view instead of indexing plan storage in release builds.
+struct GpuCompiledPacketView{
+    GpuSubmissionPacketId id;
+    const GpuSubmissionPacket* plan = nullptr;
+    const GpuTaskId* tasks = nullptr;
+    const GpuPacketDependency* dependencies = nullptr;
+    const GpuExternalCompletionId* externalDependencies = nullptr;
+
+    [[nodiscard]] bool valid()const noexcept{
+        return id.valid()
+            && plan
+            && (plan->taskCount == 0u || tasks)
+            && (plan->dependencyCount == 0u || dependencies)
+            && (plan->externalDependencyCount == 0u || externalDependencies)
+        ;
+    }
 };
 
 // Explains each compiler packetization decision without exposing mutable compiler internals. Tooling can distinguish
@@ -94,6 +122,23 @@ struct GpuCompiledTask{
     u32 epilogueBarrierCount = 0u;
 };
 
+// One checked task lookup and all of its borrowed compiler-owned lowering slices. Keep this value inside the
+// GpuCompiledGraph::ReadView lifetime that produced it.
+struct GpuCompiledTaskView{
+    const GpuCompiledTask* plan = nullptr;
+    const GpuPacketStateSeed* prologueStateSeeds = nullptr;
+    const GpuCompiledBarrier* prologueBarriers = nullptr;
+    const GpuCompiledBarrier* epilogueBarriers = nullptr;
+
+    [[nodiscard]] bool valid()const noexcept{
+        return plan
+            && (plan->prologueStateSeedCount == 0u || prologueStateSeeds)
+            && (plan->prologueBarrierCount == 0u || prologueBarriers)
+            && (plan->epilogueBarrierCount == 0u || epilogueBarriers)
+        ;
+    }
+};
+
 // One terminal declared range that contributes to an explicit graph-to-external release.  Textures may have
 // several disjoint terminal subresource ranges, potentially recorded by different packets and physical queues.
 // The runtime turns every source into one acceptance-gated producer token and merges their exact exported state
@@ -107,7 +152,8 @@ struct GpuCompiledExternalResourceExportSource{
 
 // Imported texture/buffer/AS graph-to-external release metadata.  `producerTask`/`sourceQueue` retain the
 // original one-producer convenience contract whenever every terminal range resolves to the same packet.  Callers
-// that need the complete contract must consume `sourceCount` sources through externalResourceExportSources().
+// that need the complete contract must consume `sourceCount` entries through the checked export view's `.sources`
+// slice.
 struct GpuCompiledExternalResourceExport{
     GpuGraphResourceId resource;
     GpuTaskId producerTask;
@@ -116,6 +162,17 @@ struct GpuCompiledExternalResourceExport{
     u32 sourceCount = 0u;
     GpuPhysicalQueueId destinationQueue;
     ResourceStates::Mask finalState = ResourceStates::Unknown;
+};
+
+// One checked external-export lookup and its complete terminal-source slice. The source memory is borrowed from the
+// immutable compiled plan protected by the producing GpuCompiledGraph::ReadView.
+struct GpuCompiledExternalResourceExportView{
+    const GpuCompiledExternalResourceExport* plan = nullptr;
+    const GpuCompiledExternalResourceExportSource* sources = nullptr;
+
+    [[nodiscard]] bool valid()const noexcept{
+        return plan && plan->sourceCount != 0u && sources;
+    }
 };
 
 // Immutable presentation completion resolved from a strict typed-texture declaration. It retains the semantic
@@ -345,13 +402,134 @@ struct GpuTaskGraphPhysicalQueueCompileStatistics{
 class GpuCompiledGraph final : NoCopy{
     friend class GpuTaskGraph;
     friend class GpuTaskGraphCompiler;
+    friend class GpuGraphSubmissionTransaction;
+    friend class GpuNativePacketRecorder;
+    friend class GpuRecordedGraph;
+    friend class GpuTaskGraphQueueAssignmentTelemetryTracker;
+    friend class GpuTaskGraphSubmitter;
+    friend class GpuTaskGraphExternalResourceHandoffSnapshot;
+    friend struct GpuTaskGraphExternalCompletionToken;
 
 private:
-    enum class SubmissionBindingState : u8{
+    static constexpr u32 s_PlanAccessWriterBit = 1u << 31u;
+    static constexpr u32 s_PlanAccessReaderMask = s_PlanAccessWriterBit - 1u;
+
+    enum class AttemptBindingState : u8{
         None,
-        Active,
+        Recording,
+        Submitting,
         Resolved,
     };
+
+    class CompilationScope final : NoCopy{
+    public:
+        explicit CompilationScope(GpuCompiledGraph& graph)noexcept;
+        ~CompilationScope()noexcept;
+
+
+    public:
+        [[nodiscard]] bool valid()const noexcept{ return m_graph != nullptr; }
+        void publish()noexcept;
+
+
+    private:
+        GpuCompiledGraph* m_graph = nullptr;
+        bool m_published = false;
+    };
+
+public:
+    // Runtime entry points use a short nonblocking read claim while they derive packet identities or initialize
+    // plan-indexed storage before an exact graph attempt can provide the persistent immutable-plan lease. The view
+    // is deliberately nonmovable because its address participates in the thread-local lexical proof chain.
+    class ReadView final : NoCopy{
+        friend class GpuCompiledGraph;
+
+    private:
+        static thread_local ReadView* s_activeView;
+
+
+    public:
+        explicit ReadView(const GpuCompiledGraph& graph)noexcept;
+        ReadView(ReadView&&) = delete;
+        ~ReadView()noexcept;
+
+
+    public:
+        // Pointer- and slice-bearing results borrow immutable plan storage. They require a live lvalue ReadView and
+        // deliberately reject calls on a temporary proof.
+        [[nodiscard]] bool valid()const noexcept{ return m_graph != nullptr; }
+        [[nodiscard]] bool validFor(const GpuCompiledGraph& graph)const noexcept{ return m_graph == &graph; }
+        [[nodiscard]] bool validFor(const GpuTaskGraphDeclarationReadView& graph)const noexcept;
+        [[nodiscard]] u64 generation()const noexcept;
+        [[nodiscard]] u64 planGeneration()const noexcept;
+        [[nodiscard]] u16 deviceGeneration()const noexcept;
+        [[nodiscard]] u64 objectIdentity()const noexcept{ return m_graph ? m_graph->m_objectIdentity : 0u; }
+        [[nodiscard]] usize taskCount()const noexcept;
+        [[nodiscard]] usize packetCount()const noexcept;
+        [[nodiscard]] bool validPacket(const GpuSubmissionPacketId& packet)const noexcept;
+        [[nodiscard]] bool validPacketRange(const GpuSubmissionPacketRange& range)const noexcept;
+        [[nodiscard]] GpuSubmissionPacketId packetIdAt(usize index)const noexcept;
+        [[nodiscard]] GpuSubmissionPacketRange packetRange(
+            const GpuSubmissionPacketId& first,
+            const GpuSubmissionPacketId& last
+        )const noexcept;
+        [[nodiscard]] GpuSubmissionPacketRange packetRangeForTasks(
+            const GpuTaskId& first,
+            const GpuTaskId& last
+        )const noexcept;
+        [[nodiscard]] GpuSubmissionPacketRange allPacketRange()const noexcept;
+        [[nodiscard]] GpuSubmissionPacketRange packetTimingEnvelopeRange()const noexcept;
+        [[nodiscard]] GpuCompiledTaskView findTask(const GpuTaskId& task)const & noexcept;
+        GpuCompiledTaskView findTask(const GpuTaskId& task)const && = delete;
+        [[nodiscard]] GpuSubmissionPacketId packetForTask(const GpuTaskId& task)const noexcept;
+        [[nodiscard]] GpuTaskPacketizationDecision::Enum packetizationDecisionForTask(const GpuTaskId& task)const noexcept;
+        [[nodiscard]] bool tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
+        [[nodiscard]] bool taskPrecedesOrSharesPacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
+        [[nodiscard]] bool taskPrecedesInSamePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
+        [[nodiscard]] bool tasksFormContiguousPacketSequence(const GpuTaskId* tasks, usize taskCount)const noexcept;
+        [[nodiscard]] bool taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept;
+        [[nodiscard]] const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const & noexcept;
+        const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const && = delete;
+        [[nodiscard]] GpuCompiledPacketView packet(const GpuSubmissionPacketId& packet)const & noexcept;
+        GpuCompiledPacketView packet(const GpuSubmissionPacketId& packet)const && = delete;
+        [[nodiscard]] usize logicalOwnershipTransferCount()const noexcept;
+        [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransfers()const & noexcept;
+        const GpuCompiledOwnershipTransfer* logicalOwnershipTransfers()const && = delete;
+        [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransferAt(usize index)const & noexcept;
+        const GpuCompiledOwnershipTransfer* logicalOwnershipTransferAt(usize index)const && = delete;
+        [[nodiscard]] GpuCompiledExternalResourceExportView externalResourceExport(
+            const GpuGraphResourceId& resource
+        )const & noexcept;
+        GpuCompiledExternalResourceExportView externalResourceExport(const GpuGraphResourceId& resource)const && = delete;
+        [[nodiscard]] usize externalResourceExportCount()const noexcept;
+        [[nodiscard]] const GpuCompiledPresentEndpoint* presentEndpoint()const & noexcept;
+        const GpuCompiledPresentEndpoint* presentEndpoint()const && = delete;
+        [[nodiscard]] GpuTaskGraphCompileStatistics compileStatistics()const noexcept;
+        [[nodiscard]] GpuCompiledExternalResourceExportView externalResourceExportAt(usize index)const & noexcept;
+        GpuCompiledExternalResourceExportView externalResourceExportAt(usize index)const && = delete;
+        [[nodiscard]] GpuTaskGraphPhysicalQueueCompileStatistics physicalQueueCompileStatistics(
+            const GpuPhysicalQueueId& queue
+        )const noexcept;
+        [[nodiscard]] const GpuPhysicalQueueInfo* queueInfo(const GpuPhysicalQueueId& queue)const & noexcept;
+        const GpuPhysicalQueueInfo* queueInfo(const GpuPhysicalQueueId& queue)const && = delete;
+        [[nodiscard]] GpuPhysicalQueueTopology queueTopology()const & noexcept;
+        GpuPhysicalQueueTopology queueTopology()const && = delete;
+
+
+    private:
+        void release()noexcept;
+
+
+    private:
+        const GpuCompiledGraph* m_graph = nullptr;
+        ReadView* m_previousView = nullptr;
+        bool m_ownsAdmission = false;
+    };
+
+
+private:
+    void clearAttemptBindingWithinLock()noexcept;
+    void resetPlanStorageWithinPlanWriteScope()noexcept;
 
 
 public:
@@ -365,98 +543,75 @@ public:
     [[nodiscard]] bool tryReset();
     void reset();
 
+
+private:
+    // Compilation writes these helpers while holding CompilationScope; ReadView is the only read-side API surface.
     [[nodiscard]] bool valid()const noexcept{ return m_valid && m_planGeneration != 0u; }
-    [[nodiscard]] bool validFor(const GpuTaskGraph& graph)const noexcept;
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
-    // Graph tasks/resources retain generation(), while compiler-owned packet identities use this immutable-plan
-    // generation so a same-graph recompile cannot alias old native recording or submission state.
     [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
     [[nodiscard]] usize taskCount()const noexcept{ return m_tasks.size(); }
     [[nodiscard]] usize packetCount()const noexcept{ return m_packets.size(); }
     [[nodiscard]] bool validPacket(const GpuSubmissionPacketId& packet)const noexcept;
     [[nodiscard]] bool validPacketRange(const GpuSubmissionPacketRange& range)const noexcept;
-    // Compiler packet indices follow the stable topological task order.  Full-graph native record/submit traversal
-    // consumes this order so each packet observes already-recorded and accepted internal producers.
     [[nodiscard]] GpuSubmissionPacketId packetIdAt(usize index)const noexcept;
-    // Derives an inclusive contiguous compiler-order range from packet handles. This keeps callers independent from
-    // the compiler's raw packet indices while still rejecting handles from another immutable compiled plan.
     [[nodiscard]] GpuSubmissionPacketRange packetRange(
         const GpuSubmissionPacketId& first,
         const GpuSubmissionPacketId& last
     )const noexcept;
-    // Semantic companion to packetRange(). Resolves both declared task endpoints through this compiled generation,
-    // keeping renderer record/submit spans independent from packet splitting and merging. The result remains an
-    // inclusive contiguous compiler-order range, so deliberately late tails retain their existing traversal rules.
     [[nodiscard]] GpuSubmissionPacketRange packetRangeForTasks(
         const GpuTaskId& first,
         const GpuTaskId& last
     )const noexcept;
     [[nodiscard]] GpuSubmissionPacketRange allPacketRange()const noexcept;
-    // Immutable compiler-selected timing span. Endpoint packets are included whole because packet queries bracket
-    // native submissions rather than individual merged task payloads.
     [[nodiscard]] GpuSubmissionPacketRange packetTimingEnvelopeRange()const noexcept{
         return validPacketRange(m_packetTimingEnvelopeRange) ? m_packetTimingEnvelopeRange : GpuSubmissionPacketRange{};
     }
     [[nodiscard]] const GpuCompiledTask* findTask(const GpuTaskId& task)const noexcept;
     [[nodiscard]] GpuSubmissionPacketId packetForTask(const GpuTaskId& task)const noexcept;
     [[nodiscard]] GpuTaskPacketizationDecision::Enum packetizationDecisionForTask(const GpuTaskId& task)const noexcept;
-    // Semantic packet-topology queries.  Renderer policy can validate coalescing and routing without retaining
-    // compiler packet IDs; packet handles remain available below for packet-local runtime compatibility only.
     [[nodiscard]] bool tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
     [[nodiscard]] bool taskPrecedesOrSharesPacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
-    // Strict semantic compiler-order query for two tasks in one packet. This keeps renderer validation out of the
-    // packet task array while retaining the difference between an in-packet ordering guarantee and an ordinary
-    // cross-packet dependency.
     [[nodiscard]] bool taskPrecedesInSamePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
-    // Returns true only when the declared tasks occur as one exact contiguous sequence in the same compiled
-    // packet. The runtime owns the packet-local search, so renderer code need not retain compiler packet IDs just
-    // to validate graph-owned producer/raster alternation.
-    [[nodiscard]] bool tasksFormContiguousPacketSequence(
-        const GpuTaskId* tasks,
-        usize taskCount
-    )const noexcept;
+    [[nodiscard]] bool tasksFormContiguousPacketSequence(const GpuTaskId* tasks, usize taskCount)const noexcept;
     [[nodiscard]] bool taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const noexcept;
-    [[nodiscard]] const GpuSubmissionPacket& packet(const GpuSubmissionPacketId& packet)const noexcept;
-    [[nodiscard]] const GpuTaskId* packetTasks(const GpuSubmissionPacketId& packet)const noexcept;
-    [[nodiscard]] const GpuPacketDependency* packetDependencies(const GpuSubmissionPacketId& packet)const noexcept;
-    [[nodiscard]] const GpuExternalCompletionId* packetExternalDependencies(
-        const GpuSubmissionPacketId& packet
-    )const noexcept;
-    [[nodiscard]] const GpuPacketStateSeed* taskPrologueStateSeeds(const GpuTaskId& task)const noexcept;
-    [[nodiscard]] const GpuCompiledBarrier* taskPrologueBarriers(const GpuTaskId& task)const noexcept;
-    [[nodiscard]] const GpuCompiledBarrier* taskEpilogueBarriers(const GpuTaskId& task)const noexcept;
-    [[nodiscard]] usize logicalOwnershipTransferCount()const noexcept{ return m_ownershipTransfers.size(); }
     [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransfers()const noexcept;
     [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransferAt(usize index)const noexcept;
-    // Resolves the terminal graph-to-external release declaration for this imported resource. No result means the
-    // resource did not request a graph-to-external handoff in this compiled generation.
     [[nodiscard]] const GpuCompiledExternalResourceExport* externalResourceExport(
         const GpuGraphResourceId& resource
     )const noexcept;
-    [[nodiscard]] usize externalResourceExportCount()const noexcept{ return m_externalResourceExports.size(); }
-    [[nodiscard]] const GpuCompiledPresentEndpoint* presentEndpoint()const noexcept{
-        return valid() && m_hasPresentEndpoint ? &m_presentEndpoint : nullptr;
-    }
-    [[nodiscard]] const GpuTaskGraphCompileStatistics& compileStatistics()const noexcept{ return m_compileStatistics; }
     [[nodiscard]] const GpuCompiledExternalResourceExport* externalResourceExportAt(usize index)const noexcept;
     [[nodiscard]] const GpuCompiledExternalResourceExportSource* externalResourceExportSources(
         const GpuCompiledExternalResourceExport& exportInfo
     )const noexcept;
-    // Builds a value snapshot from immutable accepted-plan storage. A topology queue with no tasks or packets
-    // returns a valid zero snapshot; stale, non-plan, reset, and failed-plan queries return an invalid result.
-    // Callers externally serialize this scan with reset/recompile.
     [[nodiscard]] GpuTaskGraphPhysicalQueueCompileStatistics physicalQueueCompileStatistics(
         const GpuPhysicalQueueId& queue
     )const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* queueInfo(const GpuPhysicalQueueId& queue)const noexcept;
-    // Borrowed immutable-plan topology view. It is empty after reset/invalid compilation; callers serialize access
-    // with reset/recompile and consume or copy queue identities before that compiled-plan storage can change.
     [[nodiscard]] GpuPhysicalQueueTopology queueTopology()const noexcept;
 
 
 private:
+    [[nodiscard]] bool beginRecordingAttempt(
+        const GpuTaskGraph& graph,
+        const GpuTaskGraphDeclarationReadView& declarations,
+        GpuSubmissionPacketId packet,
+        u64 expectedPlanGeneration,
+        u64 recordingAttemptGeneration,
+        u64 previousRecordingAttemptGeneration,
+        const ReadView& planAccess
+    )const noexcept;
+    [[nodiscard]] bool matchesRecordingAttempt(
+        const GpuTaskGraph& graph,
+        u64 expectedPlanGeneration,
+        u64 recordingAttemptGeneration
+    )const noexcept;
+    [[nodiscard]] bool resolveRecordingAttempt(
+        const GpuTaskGraph& graph,
+        u64 expectedPlanGeneration,
+        u64 recordingAttemptGeneration
+    )const noexcept;
     [[nodiscard]] bool bindSubmissionTransaction(
         const GpuTaskGraph& graph,
         u64 expectedPlanGeneration,
@@ -474,6 +629,16 @@ private:
         u64 expectedPlanGeneration,
         u64 recordingAttemptGeneration,
         const GpuGraphSubmissionBinding& submissionBinding
+    )const noexcept;
+    // Artifact reset already owns ArtifactOperation, then ReadView. Attempt-binding code never acquires either
+    // lock in reverse, so this final scalar comparison cannot form an artifact/plan/attempt ABBA cycle. `graphIdentity`
+    // is compared only as an opaque address; it is never dereferenced after the graph's lifetime may have ended.
+    [[nodiscard]] bool matchesActiveAttemptIdentity(
+        const GpuTaskGraph* graphIdentity,
+        u64 compiledObjectIdentity,
+        u64 expectedPlanGeneration,
+        u64 recordingAttemptGeneration,
+        const ReadView& planAccess
     )const noexcept;
 
 
@@ -500,11 +665,15 @@ private:
     u16 m_deviceGeneration = 0u;
     usize m_graphTaskCount = 0u;
     GpuTaskGraphCompileStatistics m_compileStatistics;
-    mutable Futex m_submissionBindingMutex;
-    mutable u64 m_submissionRecordingAttemptGeneration = 0u;
-    mutable u64 m_submissionTransactionIdentity = 0u;
-    mutable u64 m_submissionTransactionResetGeneration = 0u;
-    mutable SubmissionBindingState m_submissionBindingState = SubmissionBindingState::None;
+    mutable Atomic<u32> m_planAccessState = 0u;
+    mutable Futex m_attemptBindingMutex;
+    mutable const GpuTaskGraph* m_attemptGraph = nullptr;
+    mutable u64 m_attemptPlanGeneration = 0u;
+    mutable u64 m_attemptRecordingGeneration = 0u;
+    mutable u64 m_attemptTransactionIdentity = 0u;
+    mutable u64 m_attemptTransactionResetGeneration = 0u;
+    mutable AttemptBindingState m_attemptBindingState = AttemptBindingState::None;
+    const u64 m_objectIdentity;
     bool m_hasPresentEndpoint = false;
     bool m_valid = false;
 };
@@ -513,8 +682,8 @@ private:
 // Recording happens only after the compiler has selected a concrete physical queue and packet.  Task record thunks
 // receive immutable compiled metadata rather than a nullable renderer-specific context.
 struct GpuTaskRecordContext{
-    const GpuTaskGraph& taskGraph;
-    const GpuCompiledGraph& graph;
+    const GpuTaskGraphDeclarationReadView& declarations;
+    const GpuCompiledGraph::ReadView& compiledPlan;
     GpuTaskId task;
     GpuSubmissionPacketId packet;
     GpuPhysicalQueueId queue;

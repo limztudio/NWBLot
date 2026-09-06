@@ -95,7 +95,8 @@ public:
         const TextureHandle* textures,
         usize textureCount,
         const BufferHandle* buffers,
-        usize bufferCount
+        usize bufferCount,
+        Alloc::ScratchArena& scratchArena
     );
 
     // Builds an acceptance-only candidate from the retained base state and `source`. The caller must call commit()
@@ -106,7 +107,8 @@ public:
         const TextureHandle* textures,
         usize textureCount,
         const BufferHandle* buffers,
-        usize bufferCount
+        usize bufferCount,
+        Alloc::ScratchArena& scratchArena
     )const;
 
     // Produces a typed, filtered source for recording without altering the accepted cache. This preserves the last
@@ -148,18 +150,20 @@ public:
     [[nodiscard]] bool mergeBufferSubset(
         const CommandListResourceStateHandoff& source,
         const BufferHandle* buffers,
-        const usize bufferCount
+        const usize bufferCount,
+        Alloc::ScratchArena& scratchArena
     ){
-        return mergeResourceSubset(source, nullptr, 0u, buffers, bufferCount);
+        return mergeResourceSubset(source, nullptr, 0u, buffers, bufferCount, scratchArena);
     }
 
     [[nodiscard]] bool buildMergedBufferSubset(
         Candidate& outCandidate,
         const CommandListResourceStateHandoff& source,
         const BufferHandle* buffers,
-        const usize bufferCount
+        const usize bufferCount,
+        Alloc::ScratchArena& scratchArena
     )const{
-        return buildMergedResourceSubset(outCandidate, source, nullptr, 0u, buffers, bufferCount);
+        return buildMergedResourceSubset(outCandidate, source, nullptr, 0u, buffers, bufferCount, scratchArena);
     }
 
     [[nodiscard]] bool buildFilteredBufferSubset(

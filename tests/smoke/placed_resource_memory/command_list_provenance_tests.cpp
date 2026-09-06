@@ -14,6 +14,7 @@
 #include <core/graphics/task_graph/packet_runtime.h>
 #include <core/graphics/task_graph/task_graph.h>
 #include <core/graphics/vulkan/backend.h>
+#include <tests/common/gpu_task_graph_read_views.h>
 #include <tests/common/headless_gtest_fixture.h>
 
 
@@ -257,11 +258,17 @@ struct LeaseProvenanceGraph{
             .queueCount = 1u,
         };
         const GpuTaskGraphCompiler compiler;
-        if(!compiler.compile(m_graph, m_analysis, topology, m_assignments, m_compiledGraph, scratchArena))
+        const GpuTaskGraph::DeclarationReadView compilationDeclarations(m_graph);
+        if(!compiler.compile(compilationDeclarations, m_analysis, topology, m_assignments, m_compiledGraph, scratchArena))
             return false;
 
-        m_packet = m_compiledGraph.packetForTask(m_task);
-        return m_packet.valid() && m_compiledGraph.packet(m_packet).queue == m_queue;
+        const GpuTaskGraphReadViews views(m_graph, m_compiledGraph);
+        if(!views.valid())
+            return false;
+
+        m_packet = views.compiled.packetForTask(m_task);
+        const GpuCompiledPacketView packet = views.compiled.packet(m_packet);
+        return packet.valid() && packet.plan->queue == m_queue;
     }
 
     [[nodiscard]] bool capture(GpuCommandIrCapture& capture)const{
@@ -517,7 +524,7 @@ TEST_F(CommandListProvenanceTest, NativePacketRecorderDiscardsForgeRestoreThunkA
         rejectedGraph
     ));
     EXPECT_TRUE(attempted);
-    EXPECT_EQ(rejectedGraph.find(resources.m_packet), nullptr);
+    EXPECT_FALSE(rejectedGraph.packetSnapshot(resources.m_packet).has_value());
     EXPECT_EQ(discardedCount, 1u);
 
     attack = false;
@@ -529,8 +536,16 @@ TEST_F(CommandListProvenanceTest, NativePacketRecorderDiscardsForgeRestoreThunkA
         rejectedGraph
     ));
     EXPECT_TRUE(attempted);
-    EXPECT_NE(rejectedGraph.find(resources.m_packet), nullptr);
+    EXPECT_TRUE(rejectedGraph.packetSnapshot(resources.m_packet).has_value());
     EXPECT_EQ(discardedCount, 1u);
+
+    GpuGraphSubmissionTransaction transaction(arena());
+    transaction.reset(resources.m_compiledGraph);
+    EXPECT_TRUE(transaction.discardUnaccepted(
+        resources.m_graph,
+        resources.m_compiledGraph,
+        rejectedGraph.recordingAttemptGeneration()
+    ));
 }
 
 
@@ -543,6 +558,8 @@ TEST_F(CommandListProvenanceTest, CommandIrReplayRejectsForgedPublicQueueWithout
     LeaseProvenanceGraph resources(device(), arena());
     Alloc::ScratchArena scratchArena(Name("tests/command_list_provenance/replay_compiler_scratch"));
     ASSERT_TRUE(resources.initialize(attack, attempted, discardedCount, scratchArena));
+    const GpuTaskGraphReadViews views(resources.m_graph, resources.m_compiledGraph);
+    ASSERT_TRUE(views.valid());
     GpuCommandIrCapture capture(arena());
     ASSERT_TRUE(resources.capture(capture));
     ASSERT_EQ(capture.recordCount(), 1u);
@@ -567,8 +584,8 @@ TEST_F(CommandListProvenanceTest, CommandIrReplayRejectsForgedPublicQueueWithout
     EXPECT_TRUE(DescriptionsMatch(commandList->getResolvedDescription(), resolvedDescription));
     const GpuCommandIrReplayResult forgedReplay = ReplayGpuCommandIrPacket(
         capture.commandBytes(),
-        resources.m_graph,
-        resources.m_compiledGraph,
+        views.declarations,
+        views.compiled,
         resources.m_packet,
         *commandList
     );
@@ -576,8 +593,8 @@ TEST_F(CommandListProvenanceTest, CommandIrReplayRejectsForgedPublicQueueWithout
     EXPECT_TRUE(forgedReplay.streamValidation.valid());
     const GpuCommandIrReplayResult forgedDirectReplay = ReplayGpuCommandIrPacketDirectVulkan(
         capture.commandBytes(),
-        resources.m_graph,
-        resources.m_compiledGraph,
+        views.declarations,
+        views.compiled,
         resources.m_packet,
         *commandList
     );
@@ -590,8 +607,8 @@ TEST_F(CommandListProvenanceTest, CommandIrReplayRejectsForgedPublicQueueWithout
     EXPECT_TRUE(commandList->matchesRecordingLease(recordingLease));
     const GpuCommandIrReplayResult actualQueueReplay = ReplayGpuCommandIrPacket(
         capture.commandBytes(),
-        resources.m_graph,
-        resources.m_compiledGraph,
+        views.declarations,
+        views.compiled,
         resources.m_packet,
         *commandList
     );
@@ -599,8 +616,8 @@ TEST_F(CommandListProvenanceTest, CommandIrReplayRejectsForgedPublicQueueWithout
     EXPECT_TRUE(actualQueueReplay.streamValidation.valid());
     const GpuCommandIrReplayResult actualQueueDirectReplay = ReplayGpuCommandIrPacketDirectVulkan(
         capture.commandBytes(),
-        resources.m_graph,
-        resources.m_compiledGraph,
+        views.declarations,
+        views.compiled,
         resources.m_packet,
         *commandList
     );

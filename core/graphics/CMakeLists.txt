@@ -56,6 +56,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_builtin_clears.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_builtin_texture_transfers.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_builtin_uploads.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_declaration_admission.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_declarations.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_imports.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_packet_lifecycle.cpp"
@@ -147,6 +148,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler.h"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime.h"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_artifact.h"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_builtin_internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/texture_clear_value.h"
@@ -162,6 +164,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context.h"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context_capabilities.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context_detail.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/buffer_resource_detail.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/command_validation.h"
@@ -200,4 +203,3 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_compile_definitions(nwb_graphics PRIVATE NWB_WITH_WAYLAND=1)
     endif()
 endif()
-

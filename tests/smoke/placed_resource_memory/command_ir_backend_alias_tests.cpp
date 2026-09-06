@@ -14,6 +14,7 @@
 #include <core/graphics/task_graph/task_graph.h>
 #include <core/graphics/vulkan/backend.h>
 #include <tests/common/capturing_logger.h>
+#include <tests/common/gpu_task_graph_read_views.h>
 #include <tests/common/headless_graphics_scope.h>
 
 
@@ -83,11 +84,14 @@ struct SameBufferCopyGraph{
                 .setInitialState(ResourceStates::Common)
         );
         m_destinationResource = m_sourceResource;
-        if(
-            !m_sourceResource.valid()
-            || m_graph.bufferForResource(m_sourceResource) != m_buffer.get()
-        )
-            return false;
+        {
+            const GpuTaskGraph::DeclarationReadView declarations(m_graph);
+            if(
+                !m_sourceResource.valid()
+                || declarations.bufferForResource(m_sourceResource) != m_buffer.get()
+            )
+                return false;
+        }
 
         GpuTaskResourceRange sourceRange;
         sourceRange.bufferRange = BufferRange(0u, 16u);
@@ -125,8 +129,9 @@ struct SameBufferCopyGraph{
         GpuTaskGraphCompileOptions compileOptions;
         compileOptions.allowMetadataOnlyTasks = true;
         const GpuTaskGraphCompiler compiler;
+        const GpuTaskGraph::DeclarationReadView compilationDeclarations(m_graph);
         if(!compiler.compile(
-            m_graph,
+            compilationDeclarations,
             m_analysis,
             m_device.getPhysicalQueueTopology(),
             m_assignments,
@@ -136,10 +141,17 @@ struct SameBufferCopyGraph{
         ))
             return false;
 
-        m_packet = m_compiledGraph.packetForTask(m_task);
+        const GpuTaskGraphReadViews views(m_graph, m_compiledGraph);
+        if(!views.valid())
+            return false;
+
+        m_packet = views.compiled.packetForTask(m_task);
         if(!m_packet.valid())
             return false;
-        m_queue = m_compiledGraph.packet(m_packet).queue;
+        const GpuCompiledPacketView packet = views.compiled.packet(m_packet);
+        if(!packet.valid())
+            return false;
+        m_queue = packet.plan->queue;
         return m_queue.valid();
     }
 
@@ -217,6 +229,8 @@ TEST_F(CommandIrBackendAliasTest, NonOverlappingSameBufferCopyAcceptsCombinedPer
 
     SameBufferCopyGraph resources(CommandIrBackendAliasTest::device(), CommandIrBackendAliasTest::arena());
     ASSERT_TRUE(resources.initialize());
+    const GpuTaskGraphReadViews views(resources.m_graph, resources.m_compiledGraph);
+    ASSERT_TRUE(views.valid());
     GpuCommandIrCapture capture(CommandIrBackendAliasTest::arena());
     ASSERT_TRUE(resources.capture(capture));
     ASSERT_EQ(capture.recordCount(), 1u);
@@ -241,15 +255,15 @@ TEST_F(CommandIrBackendAliasTest, NonOverlappingSameBufferCopyAcceptsCombinedPer
         const GpuCommandIrReplayResult replay = directVulkan
             ? ReplayGpuCommandIrPacketDirectVulkan(
                 capture.commandBytes(),
-                resources.m_graph,
-                resources.m_compiledGraph,
+                views.declarations,
+                views.compiled,
                 resources.m_packet,
                 *commandList
             )
             : ReplayGpuCommandIrPacket(
                 capture.commandBytes(),
-                resources.m_graph,
-                resources.m_compiledGraph,
+                views.declarations,
+                views.compiled,
                 resources.m_packet,
                 *commandList
             )

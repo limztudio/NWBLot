@@ -30,6 +30,16 @@ void DestroyArenaObject(Arena& arena, Concrete* p){
     }
 }
 
+template<typename Concrete, typename Arena>
+void DestroyArenaObjectNoexcept(Arena& arena, Concrete* p)noexcept{
+    static_assert(IsNothrowDestructible_V<Concrete>, "No-throw arena destruction requires a no-throw object destructor");
+    static_assert(noexcept(arena.template deallocateObject<Concrete>(p)));
+    if(p){
+        p->~Concrete();
+        arena.template deallocateObject<Concrete>(p);
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

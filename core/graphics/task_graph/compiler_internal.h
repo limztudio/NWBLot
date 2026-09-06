@@ -65,7 +65,7 @@ struct PendingCompiledEpilogueBarrier{
 };
 
 struct GpuTaskGraphResourceStatePlan{
-    const GpuTaskGraph& graph;
+    const GpuTaskGraph::DeclarationReadView& graph;
     const GpuTaskGraphQueueTopology& topology;
     const GraphicsVector<GpuTaskId>& topologicalOrder;
     GpuTaskGraphCompiledPlanStorage& compiledPlan;
@@ -140,14 +140,14 @@ struct GpuTaskGraphResourceStatePlan{
 )noexcept;
 
 [[nodiscard]] bool IsLegalQueueAssignmentCandidate(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& candidate
 )noexcept;
 
 [[nodiscard]] const GpuPhysicalQueueInfo* FindBestLegalQueueAssignmentCandidate(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     CommandQueue::Enum requiredClass = CommandQueue::kCount,
@@ -156,7 +156,7 @@ struct GpuTaskGraphResourceStatePlan{
 
 class GpuTaskSchedulingReachability final : NoCopy{
     friend bool BuildGpuTaskSchedulingReachability(
-        const GpuTaskGraph& graph,
+        const GpuTaskGraph::DeclarationReadView& graph,
         const GpuTaskGraphAnalysis& analysis,
         GpuTaskSchedulingReachability& outReachability
     );
@@ -177,13 +177,13 @@ private:
 };
 
 [[nodiscard]] bool BuildGpuTaskSchedulingReachability(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     GpuTaskSchedulingReachability& outReachability
 );
 
 [[nodiscard]] bool HasTransitivelyIndependentRequiredGraphicsTask(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskGraphTaskView& task
@@ -196,7 +196,7 @@ private:
 )noexcept;
 
 [[nodiscard]] GpuQueueAssignmentScore BuildQueueAssignmentScore(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
     const GraphicsVector<u32>& assignmentIndicesByTask,
@@ -238,7 +238,7 @@ private:
 )noexcept;
 
 [[nodiscard]] bool BuildResourceVersionDependencyEdges(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& outEdges,
     GpuTaskGraphAnalysisDiagnostic& outDiagnostic,
     Alloc::ScratchArena& scratchArena
@@ -310,7 +310,7 @@ private:
 );
 
 [[nodiscard]] bool BuildSubmissionPackets(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuTaskGraphQueueAssignments& assignments,
     GpuTaskGraphPacketizationPolicy::Enum policy,
@@ -348,7 +348,7 @@ private:
 void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan);
 
 [[nodiscard]] bool PlanPacketDependencies(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies,
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies,

@@ -275,6 +275,15 @@ bool RendererDeferredSystem::renderDeferredPresent(
 
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_DeferredPresent, m_graphics.getDevice(), commandList);
 
+    // The full-screen triangle overwrites the complete acquired image. Discarding its old contents avoids a tile
+    // restore on integrated GPUs, while STORE preserves the rendered image for UI composition and presentation.
+    Core::RenderPassParameters renderPassParameters;
+    renderPassParameters.colorAttachmentActions[0u].loadAction = Core::RenderPassLoadAction::Discard;
+    renderPassParameters.colorAttachmentActions[0u].storeAction = Core::RenderPassStoreAction::Store;
+    commandList.beginRenderPass(&presentationFramebuffer, renderPassParameters);
+    if(!commandList.isRenderPassActive())
+        return false;
+
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(presentationFramebuffer.getFramebufferInfo().getViewport());
 
@@ -296,7 +305,8 @@ bool RendererDeferredSystem::renderDeferredPresent(
     Core::DrawArguments drawArgs;
     drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);
     commandList.draw(drawArgs);
-    return true;
+    commandList.endRenderPass();
+    return !commandList.isRenderPassActive();
 }
 
 

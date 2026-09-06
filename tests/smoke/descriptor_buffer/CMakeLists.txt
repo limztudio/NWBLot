@@ -10,6 +10,7 @@
 # descriptor-buffer-only contract coverage; a skipped run is an environment limitation, not a renderer queue-routing test.
 nwb_declare_gtest_executable(nwb_descriptor_buffer_tests)
 target_sources(nwb_descriptor_buffer_tests PRIVATE
+    "${CMAKE_SOURCE_DIR}/tests/common/gpu_task_graph_read_views.h"
     "${CMAKE_SOURCE_DIR}/tests/common/vulkan_test_sync.h"
     "${CMAKE_CURRENT_LIST_DIR}/cooperative_vector_query_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/descriptor_heap_bind_ingress_tests.cpp"
@@ -21,6 +22,7 @@ target_sources(nwb_descriptor_buffer_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/ray_tracing_build_ingress_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ray_tracing_dispatch_ingress_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ray_tracing_shader_table_ingress_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph_runtime_ownership_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/timer_query_lifecycle_tests.cpp"
 )
 target_link_libraries(nwb_descriptor_buffer_tests PRIVATE
@@ -50,6 +52,7 @@ target_link_libraries(nwb_transfer_upload_profile PRIVATE
 # overhead is reported separately from the native renderer path.
 nwb_declare_executable(nwb_command_ir_profile)
 target_sources(nwb_command_ir_profile PRIVATE
+    "${CMAKE_SOURCE_DIR}/tests/common/gpu_task_graph_read_views.h"
     "${CMAKE_CURRENT_LIST_DIR}/command_ir_profile.cpp"
 )
 target_link_libraries(nwb_command_ir_profile PRIVATE

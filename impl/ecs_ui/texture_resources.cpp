@@ -294,11 +294,16 @@ Core::GpuGraphResourceId UiSystem::importTaskGraphTexture(
 ){
     if(!resource.texture)
         return {};
-    if(
-        resource.taskGraphGeneration == graph.generation()
-        && graph.validResource(resource.taskGraphResource)
-    )
-        return resource.taskGraphResource;
+    {
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+        if(!declarations.valid())
+            return {};
+        if(
+            resource.taskGraphGeneration == declarations.generation()
+            && declarations.validResource(resource.taskGraphResource)
+        )
+            return resource.taskGraphResource;
+    }
 
     const Core::GpuGraphResourceId imported = graph.importTexture(
         resource.texture,
@@ -306,7 +311,7 @@ Core::GpuGraphResourceId UiSystem::importTaskGraphTexture(
     );
     if(imported.valid()){
         resource.taskGraphResource = imported;
-        resource.taskGraphGeneration = graph.generation();
+        resource.taskGraphGeneration = imported.generation;
     }
     return imported;
 }

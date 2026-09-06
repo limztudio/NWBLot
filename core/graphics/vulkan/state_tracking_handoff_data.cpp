@@ -3,9 +3,8 @@
 
 
 #include "backend.h"
-#include "arena_names.h"
 
-#include <core/common/log.h>
+#include <core/alloc/scratch.h>
 #include <global/containers.h>
 
 
@@ -25,15 +24,121 @@ namespace __hidden_command_list_state_handoff{
 
 
 using TextureStateKey = GraphicsBackend::TextureSubresourceStateKey;
-using TextureStateIndexMap = HashMap<
+
+
+// ScratchArena reclaims one most-recent allocation per alignment bucket. Keep each temporary index in one fixed
+// allocation so destruction rewinds it exactly; node/bucket hash containers can leave non-LIFO storage behind and
+// grow the arena on every repeated fan-in query.
+template<typename Key, typename Hash, typename Equal>
+class ScratchStateIndexMap final : NoCopy{
+private:
+    struct Slot{
+        Key key{};
+        usize value = 0u;
+        bool occupied = false;
+    };
+
+
+public:
+    ScratchStateIndexMap(
+        Alloc::ScratchArena& arena,
+        const usize maximumEntryCount,
+        const Hash& hash = Hash(),
+        const Equal& equal = Equal()
+    )
+        : m_slots(arena)
+        , m_hash(hash)
+        , m_equal(equal)
+    {
+        if(maximumEntryCount == 0u)
+            return;
+
+        if(AddOverflows<usize>(maximumEntryCount, maximumEntryCount)){
+            m_valid = false;
+            return;
+        }
+        const usize doubledEntryCount = maximumEntryCount + maximumEntryCount;
+        if(AddOverflows<usize>(doubledEntryCount, 1u)){
+            m_valid = false;
+            return;
+        }
+        m_slots.resize(doubledEntryCount + 1u);
+    }
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{ return m_valid; }
+
+    [[nodiscard]] const usize* find(const Key& key)const noexcept{
+        if(m_slots.empty())
+            return nullptr;
+
+        usize slotIndex = m_hash(key) % m_slots.size();
+        for(usize probedSlotCount = 0u; probedSlotCount < m_slots.size(); ++probedSlotCount){
+            const Slot& slot = m_slots[slotIndex];
+            if(!slot.occupied)
+                return nullptr;
+            if(m_equal(slot.key, key))
+                return &slot.value;
+            if(++slotIndex == m_slots.size())
+                slotIndex = 0u;
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] bool insertOrAssign(const Key& key, const usize value)noexcept{
+        if(m_slots.empty())
+            return false;
+
+        usize slotIndex = m_hash(key) % m_slots.size();
+        for(usize probedSlotCount = 0u; probedSlotCount < m_slots.size(); ++probedSlotCount){
+            Slot& slot = m_slots[slotIndex];
+            if(!slot.occupied){
+                slot.key = key;
+                slot.value = value;
+                slot.occupied = true;
+                return true;
+            }
+            if(m_equal(slot.key, key)){
+                slot.value = value;
+                return true;
+            }
+            if(++slotIndex == m_slots.size())
+                slotIndex = 0u;
+        }
+        return false;
+    }
+
+
+private:
+    Vector<Slot, Alloc::ScratchArena> m_slots;
+    Hash m_hash;
+    Equal m_equal;
+    bool m_valid = true;
+};
+
+
+using TextureStateIndexMap = ScratchStateIndexMap<
     TextureStateKey,
-    usize,
     GraphicsBackend::TextureSubresourceStateKeyHasher,
-    GraphicsBackend::TextureSubresourceStateKeyEqualTo,
-    Alloc::GlobalArena
+    GraphicsBackend::TextureSubresourceStateKeyEqualTo
 >;
-using BufferStateIndexMap = HashMap<Buffer*, usize, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena>;
-using PermanentTextureStateIndexMap = HashMap<Texture*, usize, Hasher<Texture*>, EqualTo<Texture*>, Alloc::GlobalArena>;
+using BufferStateIndexMap = ScratchStateIndexMap<Buffer*, Hasher<Buffer*>, EqualTo<Buffer*>>;
+using PermanentTextureStateIndexMap = ScratchStateIndexMap<Texture*, Hasher<Texture*>, EqualTo<Texture*>>;
+
+
+template<typename StateVector, typename Predicate>
+void RetainSelectedStates(StateVector& states, const Predicate& selected){
+    usize retainedStateCount = 0u;
+    for(usize stateIndex = 0u; stateIndex < states.size(); ++stateIndex){
+        if(!selected(states[stateIndex]))
+            continue;
+        if(retainedStateCount != stateIndex)
+            states[retainedStateCount] = states[stateIndex];
+        ++retainedStateCount;
+    }
+    states.resize(retainedStateCount);
+}
 
 
 [[nodiscard]] static bool OwnershipMatches(
@@ -63,7 +168,8 @@ using PermanentTextureStateIndexMap = HashMap<Texture*, usize, Hasher<Texture*>,
 bool CommandListResourceStateHandoff::buildFanIn(
     const CommandListResourceStateHandoff& base,
     const CommandListResourceStateHandoff* const* branches,
-    const usize branchCount
+    const usize branchCount,
+    Alloc::ScratchArena& scratchArena
 ){
     if(this == &base)
         return false;
@@ -92,10 +198,30 @@ bool CommandListResourceStateHandoff::buildFanIn(
         }
     }
 
+    usize textureStateCapacity = base.m_textureStates.size();
+    usize bufferStateCapacity = base.m_bufferStates.size();
+    usize permanentTextureStateCapacity = base.m_permanentTextureStates.size();
+    usize permanentBufferStateCapacity = base.m_permanentBufferStates.size();
+    for(usize branchIndex = 0u; branchIndex < branchCount; ++branchIndex){
+        const CommandListResourceStateHandoff& branch = *branches[branchIndex];
+        if(
+            AddOverflows<usize>(textureStateCapacity, branch.m_textureStates.size())
+            || AddOverflows<usize>(bufferStateCapacity, branch.m_bufferStates.size())
+            || AddOverflows<usize>(permanentTextureStateCapacity, branch.m_permanentTextureStates.size())
+            || AddOverflows<usize>(permanentBufferStateCapacity, branch.m_permanentBufferStates.size())
+        ){
+            reset();
+            return false;
+        }
+        textureStateCapacity += branch.m_textureStates.size();
+        bufferStateCapacity += branch.m_bufferStates.size();
+        permanentTextureStateCapacity += branch.m_permanentTextureStates.size();
+        permanentBufferStateCapacity += branch.m_permanentBufferStates.size();
+    }
+
     reset();
     m_deviceGeneration = base.m_deviceGeneration;
 
-    auto& arena = m_textureStates.get_allocator().arena();
     using namespace __hidden_command_list_state_handoff;
     const auto sameTextureState = [](const TextureState& lhs, const TextureState& rhs){
         return
@@ -122,188 +248,210 @@ bool CommandListResourceStateHandoff::buildFanIn(
         ;
     };
 
-    TextureStateIndexMap baseTextureIndices(
-        0u,
-        GraphicsBackend::TextureSubresourceStateKeyHasher(),
-        GraphicsBackend::TextureSubresourceStateKeyEqualTo(),
-        arena
-    );
-    TextureStateIndexMap resultTextureIndices(
-        0u,
-        GraphicsBackend::TextureSubresourceStateKeyHasher(),
-        GraphicsBackend::TextureSubresourceStateKeyEqualTo(),
-        arena
-    );
-    BufferStateIndexMap baseBufferIndices(0u, Hasher<Buffer*>(), EqualTo<Buffer*>(), arena);
-    BufferStateIndexMap resultBufferIndices(0u, Hasher<Buffer*>(), EqualTo<Buffer*>(), arena);
-    PermanentTextureStateIndexMap basePermanentTextureIndices(0u, Hasher<Texture*>(), EqualTo<Texture*>(), arena);
-    PermanentTextureStateIndexMap resultPermanentTextureIndices(0u, Hasher<Texture*>(), EqualTo<Texture*>(), arena);
-    BufferStateIndexMap basePermanentBufferIndices(0u, Hasher<Buffer*>(), EqualTo<Buffer*>(), arena);
-    BufferStateIndexMap resultPermanentBufferIndices(0u, Hasher<Buffer*>(), EqualTo<Buffer*>(), arena);
+    m_textureStates.reserve(textureStateCapacity);
+    m_bufferStates.reserve(bufferStateCapacity);
+    m_permanentTextureStates.reserve(permanentTextureStateCapacity);
+    m_permanentBufferStates.reserve(permanentBufferStateCapacity);
 
-    m_textureStates.reserve(base.m_textureStates.size());
-    baseTextureIndices.reserve(base.m_textureStates.size());
-    resultTextureIndices.reserve(base.m_textureStates.size());
-    for(const TextureState& state : base.m_textureStates){
-        const TextureStateKey key{ state.texture, state.mipLevel, state.arraySlice };
-        const usize index = m_textureStates.size();
-        m_textureStates.push_back(state);
-        baseTextureIndices.insert_or_assign(key, index);
-        resultTextureIndices.insert_or_assign(key, index);
-    }
-
-    m_bufferStates.reserve(base.m_bufferStates.size());
-    baseBufferIndices.reserve(base.m_bufferStates.size());
-    resultBufferIndices.reserve(base.m_bufferStates.size());
-    for(const BufferState& state : base.m_bufferStates){
-        const usize index = m_bufferStates.size();
-        m_bufferStates.push_back(state);
-        baseBufferIndices.insert_or_assign(state.buffer, index);
-        resultBufferIndices.insert_or_assign(state.buffer, index);
-    }
-
-    m_permanentTextureStates.reserve(base.m_permanentTextureStates.size());
-    basePermanentTextureIndices.reserve(base.m_permanentTextureStates.size());
-    resultPermanentTextureIndices.reserve(base.m_permanentTextureStates.size());
-    for(const PermanentTextureState& state : base.m_permanentTextureStates){
-        const usize index = m_permanentTextureStates.size();
-        m_permanentTextureStates.push_back(state);
-        basePermanentTextureIndices.insert_or_assign(state.texture, index);
-        resultPermanentTextureIndices.insert_or_assign(state.texture, index);
-    }
-
-    m_permanentBufferStates.reserve(base.m_permanentBufferStates.size());
-    basePermanentBufferIndices.reserve(base.m_permanentBufferStates.size());
-    resultPermanentBufferIndices.reserve(base.m_permanentBufferStates.size());
-    for(const BufferState& state : base.m_permanentBufferStates){
-        const usize index = m_permanentBufferStates.size();
-        m_permanentBufferStates.push_back(state);
-        basePermanentBufferIndices.insert_or_assign(state.buffer, index);
-        resultPermanentBufferIndices.insert_or_assign(state.buffer, index);
-    }
-
-    const auto mergeTextureState = [&](const TextureState& state){
-        const TextureStateKey key{ state.texture, state.mipLevel, state.arraySlice };
-        const auto baseIt = baseTextureIndices.find(key);
-        const TextureState* const baseState = baseIt != baseTextureIndices.end()
-            ? &base.m_textureStates[baseIt.value()]
-            : nullptr
-        ;
-        if(baseState && sameTextureState(state, *baseState))
-            return true;
-
-        const auto resultIt = resultTextureIndices.find(key);
-        if(resultIt == resultTextureIndices.end()){
+    {
+        TextureStateIndexMap resultIndices(
+            scratchArena,
+            textureStateCapacity,
+            GraphicsBackend::TextureSubresourceStateKeyHasher(),
+            GraphicsBackend::TextureSubresourceStateKeyEqualTo()
+        );
+        if(!resultIndices.valid()){
+            reset();
+            return false;
+        }
+        for(const TextureState& state : base.m_textureStates){
+            const TextureStateKey key{ state.texture, state.mipLevel, state.arraySlice };
             const usize index = m_textureStates.size();
             m_textureStates.push_back(state);
-            resultTextureIndices.insert_or_assign(key, index);
-            return true;
+            if(!resultIndices.insertOrAssign(key, index)){
+                reset();
+                return false;
+            }
         }
 
-        TextureState& resultState = m_textureStates[resultIt.value()];
-        if((!baseState || !sameTextureState(resultState, *baseState)) && !sameTextureState(resultState, state))
-            return false;
+        const usize baseStateCount = base.m_textureStates.size();
+        const auto mergeState = [&](const TextureState& state){
+            const TextureStateKey key{ state.texture, state.mipLevel, state.arraySlice };
+            const usize* const resultIndex = resultIndices.find(key);
+            if(!resultIndex){
+                const usize index = m_textureStates.size();
+                m_textureStates.push_back(state);
+                return resultIndices.insertOrAssign(key, index);
+            }
 
-        resultState = state;
-        return true;
-    };
-    const auto mergeBufferState = [&](const BufferState& state){
-        const auto baseIt = baseBufferIndices.find(state.buffer);
-        const BufferState* const baseState = baseIt != baseBufferIndices.end()
-            ? &base.m_bufferStates[baseIt.value()]
-            : nullptr
-        ;
-        if(baseState && sameBufferState(state, *baseState))
+            const TextureState* const baseState = *resultIndex < baseStateCount
+                ? &base.m_textureStates[*resultIndex]
+                : nullptr
+            ;
+            if(baseState && sameTextureState(state, *baseState))
+                return true;
+
+            TextureState& resultState = m_textureStates[*resultIndex];
+            if((!baseState || !sameTextureState(resultState, *baseState)) && !sameTextureState(resultState, state))
+                return false;
+
+            resultState = state;
             return true;
+        };
 
-        const auto resultIt = resultBufferIndices.find(state.buffer);
-        if(resultIt == resultBufferIndices.end()){
+        for(usize branchIndex = 0u; branchIndex < branchCount; ++branchIndex){
+            for(const TextureState& state : branches[branchIndex]->m_textureStates){
+                if(!mergeState(state)){
+                    reset();
+                    return false;
+                }
+            }
+        }
+    }
+
+    {
+        BufferStateIndexMap resultIndices(scratchArena, bufferStateCapacity);
+        if(!resultIndices.valid()){
+            reset();
+            return false;
+        }
+        for(const BufferState& state : base.m_bufferStates){
             const usize index = m_bufferStates.size();
             m_bufferStates.push_back(state);
-            resultBufferIndices.insert_or_assign(state.buffer, index);
-            return true;
+            if(!resultIndices.insertOrAssign(state.buffer, index)){
+                reset();
+                return false;
+            }
         }
 
-        BufferState& resultState = m_bufferStates[resultIt.value()];
-        if((!baseState || !sameBufferState(resultState, *baseState)) && !sameBufferState(resultState, state))
-            return false;
+        const usize baseStateCount = base.m_bufferStates.size();
+        const auto mergeState = [&](const BufferState& state){
+            const usize* const resultIndex = resultIndices.find(state.buffer);
+            if(!resultIndex){
+                const usize index = m_bufferStates.size();
+                m_bufferStates.push_back(state);
+                return resultIndices.insertOrAssign(state.buffer, index);
+            }
 
-        resultState = state;
-        return true;
-    };
-    const auto mergePermanentTextureState = [&](const PermanentTextureState& state){
-        const auto baseIt = basePermanentTextureIndices.find(state.texture);
-        const PermanentTextureState* const baseState = baseIt != basePermanentTextureIndices.end()
-            ? &base.m_permanentTextureStates[baseIt.value()]
-            : nullptr
-        ;
-        if(baseState && samePermanentTextureState(state, *baseState))
+            const BufferState* const baseState = *resultIndex < baseStateCount
+                ? &base.m_bufferStates[*resultIndex]
+                : nullptr
+            ;
+            if(baseState && sameBufferState(state, *baseState))
+                return true;
+
+            BufferState& resultState = m_bufferStates[*resultIndex];
+            if((!baseState || !sameBufferState(resultState, *baseState)) && !sameBufferState(resultState, state))
+                return false;
+
+            resultState = state;
             return true;
+        };
 
-        const auto resultIt = resultPermanentTextureIndices.find(state.texture);
-        if(resultIt == resultPermanentTextureIndices.end()){
+        for(usize branchIndex = 0u; branchIndex < branchCount; ++branchIndex){
+            for(const BufferState& state : branches[branchIndex]->m_bufferStates){
+                if(!mergeState(state)){
+                    reset();
+                    return false;
+                }
+            }
+        }
+    }
+
+    {
+        PermanentTextureStateIndexMap resultIndices(scratchArena, permanentTextureStateCapacity);
+        if(!resultIndices.valid()){
+            reset();
+            return false;
+        }
+        for(const PermanentTextureState& state : base.m_permanentTextureStates){
             const usize index = m_permanentTextureStates.size();
             m_permanentTextureStates.push_back(state);
-            resultPermanentTextureIndices.insert_or_assign(state.texture, index);
-            return true;
+            if(!resultIndices.insertOrAssign(state.texture, index)){
+                reset();
+                return false;
+            }
         }
 
-        PermanentTextureState& resultState = m_permanentTextureStates[resultIt.value()];
-        if((!baseState || !samePermanentTextureState(resultState, *baseState)) && !samePermanentTextureState(resultState, state))
-            return false;
+        const usize baseStateCount = base.m_permanentTextureStates.size();
+        const auto mergeState = [&](const PermanentTextureState& state){
+            const usize* const resultIndex = resultIndices.find(state.texture);
+            if(!resultIndex){
+                const usize index = m_permanentTextureStates.size();
+                m_permanentTextureStates.push_back(state);
+                return resultIndices.insertOrAssign(state.texture, index);
+            }
 
-        resultState = state;
-        return true;
-    };
-    const auto mergePermanentBufferState = [&](const BufferState& state){
-        const auto baseIt = basePermanentBufferIndices.find(state.buffer);
-        const BufferState* const baseState = baseIt != basePermanentBufferIndices.end()
-            ? &base.m_permanentBufferStates[baseIt.value()]
-            : nullptr
-        ;
-        if(baseState && sameBufferState(state, *baseState))
+            const PermanentTextureState* const baseState = *resultIndex < baseStateCount
+                ? &base.m_permanentTextureStates[*resultIndex]
+                : nullptr
+            ;
+            if(baseState && samePermanentTextureState(state, *baseState))
+                return true;
+
+            PermanentTextureState& resultState = m_permanentTextureStates[*resultIndex];
+            if((!baseState || !samePermanentTextureState(resultState, *baseState)) && !samePermanentTextureState(resultState, state))
+                return false;
+
+            resultState = state;
             return true;
+        };
 
-        const auto resultIt = resultPermanentBufferIndices.find(state.buffer);
-        if(resultIt == resultPermanentBufferIndices.end()){
+        for(usize branchIndex = 0u; branchIndex < branchCount; ++branchIndex){
+            for(const PermanentTextureState& state : branches[branchIndex]->m_permanentTextureStates){
+                if(!mergeState(state)){
+                    reset();
+                    return false;
+                }
+            }
+        }
+    }
+
+    {
+        BufferStateIndexMap resultIndices(scratchArena, permanentBufferStateCapacity);
+        if(!resultIndices.valid()){
+            reset();
+            return false;
+        }
+        for(const BufferState& state : base.m_permanentBufferStates){
             const usize index = m_permanentBufferStates.size();
             m_permanentBufferStates.push_back(state);
-            resultPermanentBufferIndices.insert_or_assign(state.buffer, index);
+            if(!resultIndices.insertOrAssign(state.buffer, index)){
+                reset();
+                return false;
+            }
+        }
+
+        const usize baseStateCount = base.m_permanentBufferStates.size();
+        const auto mergeState = [&](const BufferState& state){
+            const usize* const resultIndex = resultIndices.find(state.buffer);
+            if(!resultIndex){
+                const usize index = m_permanentBufferStates.size();
+                m_permanentBufferStates.push_back(state);
+                return resultIndices.insertOrAssign(state.buffer, index);
+            }
+
+            const BufferState* const baseState = *resultIndex < baseStateCount
+                ? &base.m_permanentBufferStates[*resultIndex]
+                : nullptr
+            ;
+            if(baseState && sameBufferState(state, *baseState))
+                return true;
+
+            BufferState& resultState = m_permanentBufferStates[*resultIndex];
+            if((!baseState || !sameBufferState(resultState, *baseState)) && !sameBufferState(resultState, state))
+                return false;
+
+            resultState = state;
             return true;
-        }
+        };
 
-        BufferState& resultState = m_permanentBufferStates[resultIt.value()];
-        if((!baseState || !sameBufferState(resultState, *baseState)) && !sameBufferState(resultState, state))
-            return false;
-
-        resultState = state;
-        return true;
-    };
-
-    for(usize branchIndex = 0u; branchIndex < branchCount; ++branchIndex){
-        const CommandListResourceStateHandoff& branch = *branches[branchIndex];
-        for(const TextureState& state : branch.m_textureStates){
-            if(!mergeTextureState(state)){
-                reset();
-                return false;
-            }
-        }
-        for(const BufferState& state : branch.m_bufferStates){
-            if(!mergeBufferState(state)){
-                reset();
-                return false;
-            }
-        }
-        for(const PermanentTextureState& state : branch.m_permanentTextureStates){
-            if(!mergePermanentTextureState(state)){
-                reset();
-                return false;
-            }
-        }
-        for(const BufferState& state : branch.m_permanentBufferStates){
-            if(!mergePermanentBufferState(state)){
-                reset();
-                return false;
+        for(usize branchIndex = 0u; branchIndex < branchCount; ++branchIndex){
+            for(const BufferState& state : branches[branchIndex]->m_permanentBufferStates){
+                if(!mergeState(state)){
+                    reset();
+                    return false;
+                }
             }
         }
     }
@@ -320,15 +468,12 @@ bool CommandListResourceStateHandoff::buildResourceSubset(
     const usize bufferCount
 ){
     if(
-        this == &source
-        || !source.valid()
+        !source.valid()
         || source.m_deviceGeneration == 0u
         || (textureCount != 0u && !textures)
         || (bufferCount != 0u && !buffers)
-    ){
-        reset();
+    )
         return false;
-    }
 
     const auto containsTexture = [&](Texture* texture){
         if(!texture)
@@ -349,25 +494,72 @@ bool CommandListResourceStateHandoff::buildResourceSubset(
         return false;
     };
 
-    reset();
-    m_deviceGeneration = source.m_deviceGeneration;
+    usize textureStateCount = 0u;
     for(const TextureState& state : source.m_textureStates){
         if(containsTexture(state.texture))
-            m_textureStates.push_back(state);
+            ++textureStateCount;
     }
+    usize bufferStateCount = 0u;
     for(const BufferState& state : source.m_bufferStates){
         if(containsBuffer(state.buffer))
-            m_bufferStates.push_back(state);
+            ++bufferStateCount;
     }
+    usize permanentTextureStateCount = 0u;
     for(const PermanentTextureState& state : source.m_permanentTextureStates){
         if(containsTexture(state.texture))
-            m_permanentTextureStates.push_back(state);
+            ++permanentTextureStateCount;
     }
+    usize permanentBufferStateCount = 0u;
     for(const BufferState& state : source.m_permanentBufferStates){
         if(containsBuffer(state.buffer))
-            m_permanentBufferStates.push_back(state);
+            ++permanentBufferStateCount;
     }
 
+    // Reserve every destination vector before changing logical state. An allocation exception therefore leaves the
+    // published snapshot intact, while the commit phase only copies trivially copyable states into warmed storage.
+    m_textureStates.reserve(textureStateCount);
+    m_bufferStates.reserve(bufferStateCount);
+    m_permanentTextureStates.reserve(permanentTextureStateCount);
+    m_permanentBufferStates.reserve(permanentBufferStateCount);
+    const u16 sourceDeviceGeneration = source.m_deviceGeneration;
+    if(this == &source){
+        using namespace __hidden_command_list_state_handoff;
+        RetainSelectedStates(m_textureStates, [&](const TextureState& state){
+            return containsTexture(state.texture);
+        });
+        RetainSelectedStates(m_bufferStates, [&](const BufferState& state){
+            return containsBuffer(state.buffer);
+        });
+        RetainSelectedStates(m_permanentTextureStates, [&](const PermanentTextureState& state){
+            return containsTexture(state.texture);
+        });
+        RetainSelectedStates(m_permanentBufferStates, [&](const BufferState& state){
+            return containsBuffer(state.buffer);
+        });
+    }
+    else{
+        m_textureStates.clear();
+        m_bufferStates.clear();
+        m_permanentTextureStates.clear();
+        m_permanentBufferStates.clear();
+        for(const TextureState& state : source.m_textureStates){
+            if(containsTexture(state.texture))
+                m_textureStates.push_back(state);
+        }
+        for(const BufferState& state : source.m_bufferStates){
+            if(containsBuffer(state.buffer))
+                m_bufferStates.push_back(state);
+        }
+        for(const PermanentTextureState& state : source.m_permanentTextureStates){
+            if(containsTexture(state.texture))
+                m_permanentTextureStates.push_back(state);
+        }
+        for(const BufferState& state : source.m_permanentBufferStates){
+            if(containsBuffer(state.buffer))
+                m_permanentBufferStates.push_back(state);
+        }
+    }
+    m_deviceGeneration = sourceDeviceGeneration;
     m_valid = true;
     return true;
 }
@@ -386,19 +578,19 @@ bool CommandListResourceStateHandoff::buildTextureRangeSubset(
     const TextureSubresourceSet subresources
 ){
     if(
-        this == &source
-        || !source.valid()
+        !source.valid()
         || source.m_deviceGeneration == 0u
         || !texture
-    ){
-        reset();
+    )
         return false;
-    }
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(
         texture->getCreationDescription(),
         TextureSubresourceMipResolve::Range
     );
+    if(resolvedSubresources.numMipLevels == 0u || resolvedSubresources.numArraySlices == 0u)
+        return false;
+
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
     const auto contains = [&](const MipLevel mipLevel, const ArraySlice arraySlice){
@@ -409,16 +601,46 @@ bool CommandListResourceStateHandoff::buildTextureRangeSubset(
         ;
     };
 
-    reset();
-    m_deviceGeneration = source.m_deviceGeneration;
+    usize textureStateCount = 0u;
     for(const TextureState& state : source.m_textureStates){
         if(state.texture == texture && contains(state.mipLevel, state.arraySlice))
-            m_textureStates.push_back(state);
+            ++textureStateCount;
     }
+    usize permanentTextureStateCount = 0u;
     for(const PermanentTextureState& state : source.m_permanentTextureStates){
         if(state.texture == texture)
-            m_permanentTextureStates.push_back(state);
+            ++permanentTextureStateCount;
     }
+
+    m_textureStates.reserve(textureStateCount);
+    m_permanentTextureStates.reserve(permanentTextureStateCount);
+    const u16 sourceDeviceGeneration = source.m_deviceGeneration;
+    if(this == &source){
+        using namespace __hidden_command_list_state_handoff;
+        RetainSelectedStates(m_textureStates, [&](const TextureState& state){
+            return state.texture == texture && contains(state.mipLevel, state.arraySlice);
+        });
+        RetainSelectedStates(m_permanentTextureStates, [&](const PermanentTextureState& state){
+            return state.texture == texture;
+        });
+        m_bufferStates.clear();
+        m_permanentBufferStates.clear();
+    }
+    else{
+        m_textureStates.clear();
+        m_bufferStates.clear();
+        m_permanentTextureStates.clear();
+        m_permanentBufferStates.clear();
+        for(const TextureState& state : source.m_textureStates){
+            if(state.texture == texture && contains(state.mipLevel, state.arraySlice))
+                m_textureStates.push_back(state);
+        }
+        for(const PermanentTextureState& state : source.m_permanentTextureStates){
+            if(state.texture == texture)
+                m_permanentTextureStates.push_back(state);
+        }
+    }
+    m_deviceGeneration = sourceDeviceGeneration;
     m_valid = true;
     return true;
 }
@@ -549,24 +771,77 @@ bool CommandListResourceStateHandoff::copyFrom(const CommandListResourceStateHan
     if(this == &source)
         return source.valid() && source.m_deviceGeneration != 0u;
 
-    reset();
     if(!source.valid() || source.m_deviceGeneration == 0u)
         return false;
 
     m_textureStates.reserve(source.m_textureStates.size());
-    for(const TextureState& state : source.m_textureStates)
-        m_textureStates.push_back(state);
     m_bufferStates.reserve(source.m_bufferStates.size());
-    for(const BufferState& state : source.m_bufferStates)
-        m_bufferStates.push_back(state);
     m_permanentTextureStates.reserve(source.m_permanentTextureStates.size());
-    for(const PermanentTextureState& state : source.m_permanentTextureStates)
-        m_permanentTextureStates.push_back(state);
     m_permanentBufferStates.reserve(source.m_permanentBufferStates.size());
-    for(const BufferState& state : source.m_permanentBufferStates)
-        m_permanentBufferStates.push_back(state);
+    AssignTriviallyCopyableVector(m_textureStates, source.m_textureStates);
+    AssignTriviallyCopyableVector(m_bufferStates, source.m_bufferStates);
+    AssignTriviallyCopyableVector(m_permanentTextureStates, source.m_permanentTextureStates);
+    AssignTriviallyCopyableVector(m_permanentBufferStates, source.m_permanentBufferStates);
     m_deviceGeneration = source.m_deviceGeneration;
     m_valid = true;
+    return true;
+}
+
+bool CommandListResourceStateHandoff::equivalentTo(const CommandListResourceStateHandoff& snapshot)const noexcept{
+    if(
+        m_valid != snapshot.m_valid
+        || m_deviceGeneration != snapshot.m_deviceGeneration
+        || m_textureStates.size() != snapshot.m_textureStates.size()
+        || m_bufferStates.size() != snapshot.m_bufferStates.size()
+        || m_permanentTextureStates.size() != snapshot.m_permanentTextureStates.size()
+        || m_permanentBufferStates.size() != snapshot.m_permanentBufferStates.size()
+    )
+        return false;
+
+    const auto sameTextureState = [](const TextureState& lhs, const TextureState& rhs)noexcept{
+        return lhs.texture == rhs.texture
+            && lhs.mipLevel == rhs.mipLevel
+            && lhs.arraySlice == rhs.arraySlice
+            && lhs.state == rhs.state
+            && lhs.queueSharing == rhs.queueSharing
+            && lhs.ownerQueue == rhs.ownerQueue
+            && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
+        ;
+    };
+    for(usize stateIndex = 0u; stateIndex < m_textureStates.size(); ++stateIndex){
+        if(!sameTextureState(m_textureStates[stateIndex], snapshot.m_textureStates[stateIndex]))
+            return false;
+    }
+
+    const auto sameBufferState = [](const BufferState& lhs, const BufferState& rhs)noexcept{
+        return lhs.buffer == rhs.buffer
+            && lhs.state == rhs.state
+            && lhs.queueSharing == rhs.queueSharing
+            && lhs.ownerQueue == rhs.ownerQueue
+            && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
+        ;
+    };
+    for(usize stateIndex = 0u; stateIndex < m_bufferStates.size(); ++stateIndex){
+        if(!sameBufferState(m_bufferStates[stateIndex], snapshot.m_bufferStates[stateIndex]))
+            return false;
+    }
+
+    const auto samePermanentTextureState = [](const PermanentTextureState& lhs, const PermanentTextureState& rhs)noexcept{
+        return lhs.texture == rhs.texture
+            && lhs.state == rhs.state
+            && lhs.queueSharing == rhs.queueSharing
+            && lhs.ownerQueue == rhs.ownerQueue
+            && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
+        ;
+    };
+    for(usize stateIndex = 0u; stateIndex < m_permanentTextureStates.size(); ++stateIndex){
+        if(!samePermanentTextureState(m_permanentTextureStates[stateIndex], snapshot.m_permanentTextureStates[stateIndex]))
+            return false;
+    }
+    for(usize stateIndex = 0u; stateIndex < m_permanentBufferStates.size(); ++stateIndex){
+        if(!sameBufferState(m_permanentBufferStates[stateIndex], snapshot.m_permanentBufferStates[stateIndex]))
+            return false;
+    }
     return true;
 }
 

@@ -241,7 +241,7 @@ bool Device::bindTextureMemory(Texture* textureResource, Heap* heap, u64 offset)
         return false;
     }
     HeapHandle retainedHeap(heap, HeapHandle::deleter_type(&memoryHeap.m_context.objectArena));
-    ScopedLock resourceLock(texture.m_memoryBindingMutex);
+    NothrowScopedLock resourceLock(texture.m_memoryBindingMutex);
     if(texture.m_boundHeap){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: texture memory was already bound"));
         return false;

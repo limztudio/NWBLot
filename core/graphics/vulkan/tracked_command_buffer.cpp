@@ -5,15 +5,13 @@
 #include "backend.h"
 
 #include <core/common/log.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_VULKAN_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TrackedCommandBuffer::TrackedCommandBuffer(
@@ -80,6 +78,8 @@ TrackedCommandBuffer::TrackedCommandBuffer(
 }
 
 TrackedCommandBuffer::~TrackedCommandBuffer(){
+    abandonPendingAccelStructBuildCommits();
+
     if(m_cmdBuf && m_cmdPool){
         if(m_sharedCommandPoolMutex){
             ScopedLock lock(*m_sharedCommandPoolMutex);
@@ -124,6 +124,22 @@ TrackedCommandBuffer::TimerQueryRecordingClaim& TrackedCommandBuffer::findOrAppe
     return claim;
 }
 
+TrackedCommandBuffer::TimerQueryRecordingClaim* TrackedCommandBuffer::findTimerQueryRecordingClaim(
+    TimerQuery& query,
+    const u64 generation
+)noexcept{
+    for(TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
+        if(
+            claim.query == &query
+            && claim.queryIncarnation == query.m_incarnation
+            && claim.generation == generation
+            && claim.recordingID == m_recordingID
+        )
+            return &claim;
+    }
+    return nullptr;
+}
+
 bool TrackedCommandBuffer::recordsTimerQueryBegin(const TimerQuery& query, const u64 generation)const noexcept{
     for(const TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
         if(
@@ -156,7 +172,7 @@ bool TrackedCommandBuffer::validateTimerQueryRecordingClaims(
         )
             return false;
 
-        ScopedLock queryLock(query->m_mutex);
+        NothrowScopedLock queryLock(query->m_mutex);
         const QueueSubmissionToken currentPrerequisite = query->m_completedCycleSubmission.valid()
             ? query->m_completedCycleSubmission
             : query->m_resetAuthorizationSubmission
@@ -249,12 +265,20 @@ bool TrackedCommandBuffer::validateTimerQueryRecordingClaims(
 }
 
 void TrackedCommandBuffer::commitTimerQueryRecordingClaims(const QueueSubmissionToken& submissionToken)noexcept{
+    static_assert(noexcept(m_timerQueryRecordingClaims.clear()), "accepted timer-query claim release must be non-throwing");
     for(const TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
         TimerQuery* const query = claim.query;
-        if(!query || claim.queryIncarnation == 0u || query->m_incarnation != claim.queryIncarnation)
-            continue;
+        if(
+            !query
+            || claim.queryIncarnation == 0u
+            || query->m_incarnation != claim.queryIncarnation
+            || claim.recordingID == 0u
+            || claim.recordingID != m_recordingID
+            || (!claim.recordsReset && !claim.recordsBegin && !claim.recordsEnd)
+        )
+            TerminateInvariant();
 
-        ScopedLock queryLock(query->m_mutex);
+        NothrowScopedLock queryLock(query->m_mutex);
         const bool resetOwnerMatches =
             query->m_resetRecordingOwner.commandBuffer == this
             && query->m_resetRecordingOwner.recordingID == claim.recordingID
@@ -272,7 +296,9 @@ void TrackedCommandBuffer::commitTimerQueryRecordingClaims(const QueueSubmission
             && query->m_cycleGeneration == claim.generation
         ;
 
-        if(claim.recordsReset && !claim.recordsBegin && resetOwnerMatches){
+        if(claim.recordsReset && !claim.recordsBegin){
+            if(!resetOwnerMatches)
+                TerminateInvariant();
             query->m_resetRecordingOwner = {};
             query->m_resetAuthorizationGeneration = query->m_resetRecordingAuthorizationGeneration;
             query->m_resetRecordingAuthorizationGeneration = 0u;
@@ -284,7 +310,9 @@ void TrackedCommandBuffer::commitTimerQueryRecordingClaims(const QueueSubmission
             query->m_resetAuthorizationAvailable = true;
             query->m_recordingActive = false;
         }
-        if(claim.recordsBegin && beginOwnerMatches){
+        if(claim.recordsBegin){
+            if(!beginOwnerMatches)
+                TerminateInvariant();
             query->m_beginRecordingOwner = {};
             query->m_beginAccepted = true;
             query->m_lastAcceptedRecordingGeneration = claim.generation;
@@ -297,7 +325,9 @@ void TrackedCommandBuffer::commitTimerQueryRecordingClaims(const QueueSubmission
             query->m_resetAuthorizationAvailable = false;
             query->m_recordingActive = true;
         }
-        if(claim.recordsEnd && endOwnerMatches && (query->m_beginAccepted || claim.recordsBegin)){
+        if(claim.recordsEnd){
+            if(!endOwnerMatches || (!query->m_beginAccepted && !claim.recordsBegin))
+                TerminateInvariant();
             query->m_endRecordingOwner = {};
             query->m_recordingActive = false;
             query->m_completedCycleSubmission = submissionToken;
@@ -319,11 +349,12 @@ void TrackedCommandBuffer::commitTimerQueryRecordingClaims(const QueueSubmission
 }
 
 void TrackedCommandBuffer::discardTimerQueryRecordingClaims()noexcept{
+    static_assert(noexcept(m_timerQueryRecordingClaims.clear()), "timer-query claim discard must be non-throwing");
     for(const TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
         TimerQuery* const query = claim.query;
         if(!query || claim.queryIncarnation == 0u || query->m_incarnation != claim.queryIncarnation)
             continue;
-        ScopedLock queryLock(query->m_mutex);
+        NothrowScopedLock queryLock(query->m_mutex);
         if(
             claim.recordsReset
             && !claim.recordsBegin
@@ -402,9 +433,11 @@ void TrackedCommandBuffer::appendRetainedBufferStateCommit(Buffer& buffer){
 }
 
 void TrackedCommandBuffer::commitRetainedBufferStateCommits()noexcept{
+    static_assert(noexcept(m_retainedBufferStateCommits.clear()), "accepted buffer-state commit release must be non-throwing");
     for(const RetainedBufferStateCommit& commit : m_retainedBufferStateCommits){
-        if(commit.buffer)
-            commit.buffer->setRetainedStateKnown(true);
+        if(!commit.buffer)
+            TerminateInvariant();
+        commit.buffer->setRetainedStateKnown(true);
     }
     m_retainedBufferStateCommits.clear();
 }
@@ -444,9 +477,11 @@ void TrackedCommandBuffer::appendRetainedTextureStateCommit(
 }
 
 void TrackedCommandBuffer::commitRetainedTextureStateCommits()noexcept{
+    static_assert(noexcept(m_retainedTextureStateCommits.clear()), "accepted texture-state commit release must be non-throwing");
     for(const RetainedTextureStateCommit& commit : m_retainedTextureStateCommits){
-        if(commit.texture)
-            commit.texture->setRetainedSubresourceStateKnown(commit.arraySlice, commit.mipLevel, true);
+        if(!commit.texture)
+            TerminateInvariant();
+        commit.texture->setRetainedSubresourceStateKnown(commit.arraySlice, commit.mipLevel, true);
     }
     m_retainedTextureStateCommits.clear();
 }
@@ -455,7 +490,7 @@ void TrackedCommandBuffer::discardRetainedTextureStateCommits()noexcept{
     m_retainedTextureStateCommits.clear();
 }
 
-void TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
+bool TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
     AccelStruct& accelStruct,
     const VkAccelerationStructureTypeKHR accelStructType,
     const VkBuildAccelerationStructureFlagsKHR buildFlags,
@@ -465,17 +500,27 @@ void TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
     NWB_ASSERT(geometrySignatureCount <= UINT32_MAX);
     NWB_ASSERT(geometrySignatureCount == 0u || geometrySignatures);
     if(geometrySignatureCount > UINT32_MAX || (geometrySignatureCount != 0u && !geometrySignatures))
-        return;
+        return false;
 
-    PendingAccelStructBuildCommit commit{m_context.objectArena};
-    commit.accelStruct = &accelStruct;
-    commit.accelStructType = accelStructType;
-    commit.buildFlags = buildFlags;
+    GlobalUniquePtr<AccelStructBuildSignatureRole> preparedRole = MakeGlobalUnique<AccelStructBuildSignatureRole>(
+        m_context.objectArena,
+        m_context.objectArena
+    );
+    if(!preparedRole)
+        return false;
+
+    preparedRole->accelStructType = accelStructType;
+    preparedRole->buildFlags = buildFlags;
     if(geometrySignatureCount != 0u)
-        commit.geometrySignatures.assign(geometrySignatures, geometrySignatures + geometrySignatureCount);
+        preparedRole->geometrySignatures.assign(geometrySignatures, geometrySignatures + geometrySignatureCount);
 
     retainResource(accelStruct);
-    m_pendingAccelStructBuildCommits.push_back(Move(commit));
+    m_pendingAccelStructBuildCommits.push_back(PendingAccelStructBuildCommit{
+        .accelStruct = &accelStruct,
+        .preparedRole = preparedRole.get(),
+    });
+    preparedRole.release();
+    return true;
 }
 
 bool TrackedCommandBuffer::getPendingAccelStructBuildSignature(
@@ -488,10 +533,14 @@ bool TrackedCommandBuffer::getPendingAccelStructBuildSignature(
     for(usize commitIndex = m_pendingAccelStructBuildCommits.size(); commitIndex > 0u; --commitIndex){
         const PendingAccelStructBuildCommit& commit = m_pendingAccelStructBuildCommits[commitIndex - 1u];
         if(commit.accelStruct == &accelStruct){
-            outAccelStructType = commit.accelStructType;
-            outBuildFlags = commit.buildFlags;
-            outGeometrySignatures = commit.geometrySignatures.empty() ? nullptr : commit.geometrySignatures.data();
-            outGeometrySignatureCount = commit.geometrySignatures.size();
+            NWB_ASSERT(commit.preparedRole);
+            if(!commit.preparedRole)
+                return false;
+
+            outAccelStructType = commit.preparedRole->accelStructType;
+            outBuildFlags = commit.preparedRole->buildFlags;
+            outGeometrySignatures = commit.preparedRole->geometrySignatures.empty() ? nullptr : commit.preparedRole->geometrySignatures.data();
+            outGeometrySignatureCount = commit.preparedRole->geometrySignatures.size();
             return true;
         }
     }
@@ -499,22 +548,53 @@ bool TrackedCommandBuffer::getPendingAccelStructBuildSignature(
     return false;
 }
 
+bool TrackedCommandBuffer::validatePendingAccelStructBuildCommits()const noexcept{
+    for(const PendingAccelStructBuildCommit& commit : m_pendingAccelStructBuildCommits){
+        if(!commit.accelStruct || !commit.preparedRole || commit.displacedRole)
+            return false;
+    }
+    return true;
+}
+
 void TrackedCommandBuffer::commitPendingAccelStructBuildCommits()noexcept{
     for(PendingAccelStructBuildCommit& commit : m_pendingAccelStructBuildCommits){
-        if(!commit.accelStruct)
-            continue;
+        if(!commit.accelStruct || !commit.preparedRole || commit.displacedRole)
+            TerminateInvariant();
 
         AccelStruct& accelStruct = *commit.accelStruct;
-        ScopedLock lock(accelStruct.m_acceptedBuildSignatureMutex);
-        accelStruct.m_acceptedBuildGeometrySignatures = Move(commit.geometrySignatures);
-        accelStruct.m_acceptedBuildType = commit.accelStructType;
-        accelStruct.m_acceptedBuildFlags = commit.buildFlags;
-        accelStruct.m_hasAcceptedBuild = true;
+        NothrowScopedLock lock(accelStruct.m_acceptedBuildSignatureMutex);
+        commit.displacedRole = accelStruct.m_acceptedBuildSignatureRole;
+        accelStruct.m_acceptedBuildSignatureRole = commit.preparedRole;
+        commit.preparedRole = nullptr;
+    }
+}
+
+void TrackedCommandBuffer::releasePendingAccelStructBuildCommits(){
+    for(PendingAccelStructBuildCommit& commit : m_pendingAccelStructBuildCommits){
+        AccelStructBuildSignatureRole* const preparedRole = commit.preparedRole;
+        AccelStructBuildSignatureRole* const displacedRole = commit.displacedRole;
+        commit.preparedRole = nullptr;
+        commit.displacedRole = nullptr;
+        if(preparedRole)
+            DestroyArenaObject(m_context.objectArena, preparedRole);
+        if(displacedRole)
+            DestroyArenaObject(m_context.objectArena, displacedRole);
     }
     m_pendingAccelStructBuildCommits.clear();
 }
 
-void TrackedCommandBuffer::discardPendingAccelStructBuildCommits()noexcept{
+void TrackedCommandBuffer::abandonPendingAccelStructBuildCommits()noexcept{
+    static_assert(noexcept(m_pendingAccelStructBuildCommits.clear()), "abandoned acceleration-structure journal release must be non-throwing");
+    for(PendingAccelStructBuildCommit& commit : m_pendingAccelStructBuildCommits){
+        if(commit.preparedRole){
+            commit.accelStruct->retireBuildSignatureRole(*commit.preparedRole);
+            commit.preparedRole = nullptr;
+        }
+        if(commit.displacedRole){
+            commit.accelStruct->retireBuildSignatureRole(*commit.displacedRole);
+            commit.displacedRole = nullptr;
+        }
+    }
     m_pendingAccelStructBuildCommits.clear();
 }
 
@@ -535,9 +615,11 @@ bool TrackedCommandBuffer::hasPendingOpacityMicromapBuild(const OpacityMicromap&
 }
 
 void TrackedCommandBuffer::commitPendingOpacityMicromapBuildCommits()noexcept{
+    static_assert(noexcept(m_pendingOpacityMicromapBuildCommits.clear()), "accepted opacity-micromap commit release must be non-throwing");
     for(const PendingOpacityMicromapBuildCommit& commit : m_pendingOpacityMicromapBuildCommits){
-        if(commit.opacityMicromap)
-            commit.opacityMicromap->m_acceptedConstructed.store(true, MemoryOrder::release);
+        if(!commit.opacityMicromap)
+            TerminateInvariant();
+        commit.opacityMicromap->m_acceptedConstructed.store(true, MemoryOrder::release);
     }
     m_pendingOpacityMicromapBuildCommits.clear();
 }
@@ -550,7 +632,7 @@ void TrackedCommandBuffer::clearTrackedReferences()noexcept{
     discardTimerQueryRecordingClaims();
     discardRetainedBufferStateCommits();
     discardRetainedTextureStateCommits();
-    discardPendingAccelStructBuildCommits();
+    abandonPendingAccelStructBuildCommits();
     discardPendingOpacityMicromapBuildCommits();
 
     for(GpuDescriptorHeap* heap : m_referencedDescriptorHeaps){

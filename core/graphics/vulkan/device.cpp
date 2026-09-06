@@ -8,6 +8,7 @@
 #include "resource_bindings_detail.h"
 
 #include <core/common/log.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,32 +29,6 @@ namespace __hidden_vulkan_device{
 // Queue timeline values are only meaningful within one logical-device lifetime. Physical queue indices are assigned
 // by the Device registry (not CommandQueue ordinals) and the generation makes a recreated Device reject old tokens.
 static VulkanDetail::DeviceGenerationAllocator s_DeviceGenerationAllocator;
-
-using DeviceWaitMutexVector = Vector<Futex*, Alloc::ScratchArena>;
-
-class DeviceWaitLockSet final : NoCopy{
-public:
-    explicit DeviceWaitLockSet(const DeviceWaitMutexVector& mutexes)
-        : m_mutexes(mutexes)
-    {
-        for(Futex* const mutex : m_mutexes){
-            NWB_ASSERT(mutex);
-            mutex->lock();
-            ++m_lockedCount;
-        }
-    }
-    ~DeviceWaitLockSet(){
-        while(m_lockedCount > 0u){
-            --m_lockedCount;
-            m_mutexes[m_lockedCount]->unlock();
-        }
-    }
-
-
-private:
-    const DeviceWaitMutexVector& m_mutexes;
-    usize m_lockedCount = 0u;
-};
 
 [[nodiscard]] static u16 AllocateDeviceGeneration()noexcept{
     const u16 generation = s_DeviceGenerationAllocator.allocate();
@@ -654,34 +629,32 @@ Device::Device(const DeviceDesc& desc)
     }
 
 }
-Device::~Device(){
+Device::~Device()noexcept{
     const bool lifecycleDestructionPrepared = m_lifecycleDestructionPrepared.load(MemoryOrder::acquire);
-    const bool deviceIdle = lifecycleDestructionPrepared || waitForIdle();
-    NWB_FATAL_ASSERT_MSG(
-        deviceIdle || isDeviceLost(),
-        NWB_TEXT("Vulkan Device destruction requires either a completed device join or terminal device loss")
-    );
+    const VkResult nativeIdleResult = lifecycleDestructionPrepared ? VK_SUCCESS : waitForNativeIdle();
+    const bool nativeTeardownSafe = nativeIdleResult == VK_SUCCESS || nativeIdleResult == VK_ERROR_DEVICE_LOST;
+    NWB_FATAL_ASSERT_MSG(nativeTeardownSafe, "Vulkan Device destruction requires a completed native idle join or terminal device loss");
+    if(!nativeTeardownSafe)
+        TerminateInvariant();
+    if(nativeIdleResult == VK_ERROR_DEVICE_LOST)
+        markDeviceLost();
 
     m_uploadManager.clear();
     m_scratchManager.clear();
 
     m_gpuDescriptorHeap.shutdownForDeviceTeardown();
-    const bool descriptorBufferShutdownSucceeded = m_descriptorBufferManager.shutdownAfterDeviceIdleOrLoss();
-    NWB_FATAL_ASSERT_MSG(
-        descriptorBufferShutdownSucceeded,
-        NWB_TEXT("Vulkan Device destruction could not safely shut down descriptor-buffer storage")
-    );
+    m_descriptorBufferManager.shutdownForDeviceTeardown();
 
     for(Queue* queue : m_physicalQueues){
         if(queue)
-            DestroyArenaObject(m_context.objectArena, queue);
+            DestroyArenaObjectNoexcept(m_context.objectArena, queue);
     }
     m_physicalQueues.clear();
     m_physicalQueueInfos.clear();
 
     for(NativeQueueState* nativeQueueState : m_nativeQueueStates){
         if(nativeQueueState)
-            DestroyArenaObject(m_context.objectArena, nativeQueueState);
+            DestroyArenaObjectNoexcept(m_context.objectArena, nativeQueueState);
     }
     m_nativeQueueStates.clear();
 
@@ -689,7 +662,6 @@ Device::~Device(){
         m_allocator.destroyHostMappedBuffer(m_amdBreadcrumb.buffer, m_amdBreadcrumb.allocation, m_amdBreadcrumb.mappedMemory);
 
     if(m_context.pipelineCache){
-        savePipelineCacheData();
         m_context.deviceDispatch.vkDestroyPipelineCache(m_context.device, m_context.pipelineCache, m_context.allocationCallbacks);
         m_context.pipelineCache = VK_NULL_HANDLE;
     }
@@ -699,31 +671,9 @@ Device::~Device(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 bool Device::waitForIdle(){
-    Alloc::ScratchArena waitArena(VulkanArenaScope::s_DeviceWaitIdleArena);
-    __hidden_vulkan_device::DeviceWaitMutexVector waitMutexes{waitArena};
-    waitMutexes.reserve(m_physicalQueues.size() + m_nativeQueueStates.size());
-    for(Queue* queue : m_physicalQueues){
-        if(queue)
-            waitMutexes.push_back(&queue->m_mutex);
-    }
-    for(NativeQueueState* nativeQueueState : m_nativeQueueStates){
-        if(nativeQueueState)
-            waitMutexes.push_back(&nativeQueueState->hostMutex);
-    }
-
-    VkResult res = VK_SUCCESS;
-    {
-        __hidden_vulkan_device::DeviceWaitLockSet lockSet(waitMutexes);
-        res = isDeviceLost() ? VK_ERROR_DEVICE_LOST : m_context.deviceDispatch.vkDeviceWaitIdle(m_context.device);
-        if(res == VK_SUCCESS){
-            for(Queue* queue : m_physicalQueues){
-                if(queue)
-                    queue->m_lastFinishedID = queue->m_lastSubmittedID;
-            }
-        }
-    }
+    const VkResult res = waitForNativeIdle();
     if(res == VK_ERROR_DEVICE_LOST){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Device was lost during waitForIdle."));
+        markDeviceLost();
         captureDeviceLoss("wait idle");
         return false;
     }
@@ -744,6 +694,72 @@ bool Device::waitForIdle(){
     return true;
 }
 
+VkResult Device::waitForNativeIdle()noexcept{
+    for(Queue* queue : m_physicalQueues){
+        if(queue)
+            queue->m_mutex.lock();
+    }
+    for(NativeQueueState* nativeQueueState : m_nativeQueueStates){
+        if(nativeQueueState)
+            nativeQueueState->hostMutex.lock();
+    }
+
+    const VkResult result = isDeviceLost() ? VK_ERROR_DEVICE_LOST : m_context.deviceDispatch.vkDeviceWaitIdle(m_context.device);
+    if(result == VK_SUCCESS){
+        for(Queue* queue : m_physicalQueues){
+            if(queue)
+                queue->m_lastFinishedID = queue->m_lastSubmittedID;
+        }
+    }
+
+    for(usize nativeQueueIndex = m_nativeQueueStates.size(); nativeQueueIndex > 0u; --nativeQueueIndex){
+        NativeQueueState* const nativeQueueState = m_nativeQueueStates[nativeQueueIndex - 1u];
+        if(nativeQueueState)
+            nativeQueueState->hostMutex.unlock();
+    }
+    for(usize queueIndex = m_physicalQueues.size(); queueIndex > 0u; --queueIndex){
+        Queue* const queue = m_physicalQueues[queueIndex - 1u];
+        if(queue)
+            queue->m_mutex.unlock();
+    }
+    return result;
+}
+
+void Device::prepareForDestructionAfterIdleOrLoss(){
+    usize activePendingRecordingLeaseCount = 0u;
+    usize heapUseCount = 0u;
+    {
+        ScopedLock heapLock(m_gpuDescriptorHeap.m_mutex);
+        activePendingRecordingLeaseCount = m_gpuDescriptorHeap.m_activePendingRecordingLeaseCount;
+        heapUseCount = m_gpuDescriptorHeap.m_heapUses.size();
+    }
+    if(activePendingRecordingLeaseCount != 0u){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device teardown is discarding {} active GpuDescriptorHeap pending-recording leases.")
+            , activePendingRecordingLeaseCount
+        );
+    }
+    if(heapUseCount != 0u){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device teardown is discarding {} command buffers that still reference GpuDescriptorHeap.")
+            , heapUseCount
+        );
+    }
+
+    bool descriptorLifecycleTransitioning = false;
+    {
+        ScopedLock descriptorLifecycleLock(m_descriptorBufferManager.m_lifecycleMutex);
+        descriptorLifecycleTransitioning = m_descriptorBufferManager.m_lifecycleTransitioning;
+    }
+    if(descriptorLifecycleTransitioning){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("Vulkan: Device teardown is completing an interrupted descriptor-buffer lifecycle transition.")
+        );
+    }
+
+    savePipelineCacheData();
+    m_gpuDescriptorHeap.shutdownForDeviceTeardown();
+    m_descriptorBufferManager.shutdownForDeviceTeardown();
+}
+
 void Device::runGarbageCollection(){
     // Avoid extra queue queries after device loss.
     if(isDeviceLost())
@@ -751,11 +767,21 @@ void Device::runGarbageCollection(){
 
     for(Queue* queue : m_physicalQueues){
         if(queue){
-            ScopedLock lock(queue->m_mutex);
-            queue->updateLastFinishedID();
-            if(isDeviceLost())
+            VkResult completionResult = VK_SUCCESS;
+            {
+                ScopedLock lock(queue->m_mutex);
+                completionResult = queue->updateLastFinishedID();
+                if(completionResult == VK_SUCCESS)
+                    queue->collectCompletedCommandBuffers();
+            }
+            if(completionResult == VK_ERROR_DEVICE_LOST){
+                captureDeviceLoss("queue timeline query");
                 return;
-            queue->collectCompletedCommandBuffers();
+            }
+            if(completionResult != VK_SUCCESS){
+                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(completionResult));
+                return;
+            }
         }
     }
     m_scratchManager.collectCompletedChunks();

@@ -14,186 +14,166 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace VulkanDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SubmittedOwnersContext{
-    const Queue::SubmissionCommandListIdentity* commandLists = nullptr;
-    usize count = 0;
-};
-
-struct OwnerIdentityContext{
-    TrackedCommandBuffer* owner = nullptr;
-    u64 nativeRecordingID = 0u;
-};
-
-static bool IsSubmittedOwner(
-    TrackedCommandBuffer* const owner,
-    const u64 nativeRecordingID,
-    const void* const context
-)noexcept{
-    const auto& submitted = *static_cast<const SubmittedOwnersContext*>(context);
-    for(usize i = 0; i < submitted.count; ++i){
-        const Queue::SubmissionCommandListIdentity& commandList = submitted.commandLists[i];
-        if(commandList.owner.get() == owner && commandList.nativeRecordingID == nativeRecordingID)
-            return true;
-    }
-    return false;
-}
-
-static bool IsSubmittedOwnerInLookup(
-    TrackedCommandBuffer* const owner,
-    const u64 nativeRecordingID,
-    const void* const context
-)noexcept{
-    if(!owner)
-        return false;
-
-    const auto& submitted = *static_cast<const SubmittedCommandBufferOwnerLookup*>(context);
-    return submitted.contains(*owner, nativeRecordingID);
-}
-
-static bool IsMatchingOwner(
-    TrackedCommandBuffer* const owner,
-    const u64 nativeRecordingID,
-    const void* const context
-)noexcept{
-    const auto& expected = *static_cast<const OwnerIdentityContext*>(context);
-    return owner == expected.owner && nativeRecordingID == expected.nativeRecordingID;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLimit, bool isScratchBuffer)
     : m_device(pParent)
     , m_defaultChunkSize(defaultChunkSize)
     , m_memoryLimit(memoryLimit)
     , m_isScratchBuffer(isScratchBuffer)
-    , m_chunkPool(m_device.m_context.objectArena)
-    , m_activeChunks(m_device.m_context.objectArena)
+    , m_queueChunkLedgers(m_device.m_context.objectArena)
 {}
 UploadManager::~UploadManager(){
     clear();
 }
 
 void UploadManager::clear(){
-    m_chunkPool.clear();
-    for(ActiveQueueChunks& entry : m_activeChunks)
+    for(QueueChunkLedger& entry : m_queueChunkLedgers)
         entry.chunks.clear();
-    m_activeChunks.clear();
-    m_chunkPoolBytes = 0u;
+    m_queueChunkLedgers.clear();
+    m_retiredChunkBytes = 0u;
 }
 
 void UploadManager::collectCompletedChunks(){
-    ScopedLock lock(m_mutex);
+    for(const GpuPhysicalQueueInfo& queueInfo : m_device.m_physicalQueueInfos){
+        const u64 completedVersion = m_device.queueGetCompletedInstance(queueInfo.id);
+        ScopedLock lock(m_mutex);
 
-    trimChunkPoolLocked();
+        trimRetiredChunksLocked(queueInfo.id, completedVersion);
+    }
 }
 
-void UploadManager::trimChunkPoolLocked(){
-    if(m_memoryLimit == 0)
+void UploadManager::trimRetiredChunksLocked(const GpuPhysicalQueueId queue, const u64 completedVersion){
+    if(m_memoryLimit == 0 || m_retiredChunkBytes <= m_memoryLimit)
         return;
 
-    auto it = m_chunkPool.begin();
-    while(m_chunkPoolBytes > m_memoryLimit && it != m_chunkPool.end()){
+    QueueChunkLedger* const ledger = findQueueLedgerLocked(queue);
+    if(!ledger)
+        return;
+
+    auto it = ledger->chunks.begin();
+    while(m_retiredChunkBytes > m_memoryLimit && it != ledger->chunks.end()){
         BufferChunkPtr& chunk = *it;
         if(!chunk){
-            it = m_chunkPool.erase(it);
+            it = ledger->chunks.erase(it);
             continue;
         }
-
-        const u64 completedVersion = m_device.queueGetCompletedInstance(chunk->physicalQueue);
-        if(!chunk->physicalQueue.valid() || chunk->version > completedVersion){
+        if(chunk->owner || chunk->physicalQueue != queue || chunk->version > completedVersion){
             ++it;
             continue;
         }
 
-        if(m_chunkPoolBytes >= chunk->size)
-            m_chunkPoolBytes -= chunk->size;
+        if(m_retiredChunkBytes >= chunk->size)
+            m_retiredChunkBytes -= chunk->size;
         else
-            m_chunkPoolBytes = 0;
-        it = m_chunkPool.erase(it);
+            m_retiredChunkBytes = 0u;
+        it = ledger->chunks.erase(it);
     }
 }
 
-UploadManager::BufferChunkList* UploadManager::findActiveChunksLocked(const GpuPhysicalQueueId queue)noexcept{
+UploadManager::QueueChunkLedger* UploadManager::findQueueLedgerLocked(const GpuPhysicalQueueId queue)noexcept{
     if(!queue.valid())
         return nullptr;
-    for(ActiveQueueChunks& entry : m_activeChunks){
+    for(QueueChunkLedger& entry : m_queueChunkLedgers){
         if(entry.queue == queue)
-            return &entry.chunks;
+            return &entry;
     }
     return nullptr;
 }
 
-UploadManager::BufferChunkList* UploadManager::findOrCreateActiveChunksLocked(const GpuPhysicalQueueId queue){
-    BufferChunkList* const chunks = findActiveChunksLocked(queue);
-    if(chunks || !queue.valid())
-        return chunks;
+UploadManager::QueueChunkLedger* UploadManager::findOrCreateQueueLedgerLocked(const GpuPhysicalQueueId queue){
+    QueueChunkLedger* const ledger = findQueueLedgerLocked(queue);
+    if(ledger || !queue.valid())
+        return ledger;
 
-    m_activeChunks.emplace_back(m_device.m_context.objectArena, queue);
-    return &m_activeChunks.back().chunks;
+    m_queueChunkLedgers.emplace_back(m_device.m_context.objectArena, queue);
+    return &m_queueChunkLedgers.back();
 }
 
-UploadManager::BufferChunkList::iterator UploadManager::recycleActiveChunkLocked(
-    BufferChunkList& activeChunks,
-    const BufferChunkList::iterator it,
+void UploadManager::linkActiveChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept{
+    chunk.previousActiveChunk = nullptr;
+    chunk.nextActiveChunk = ledger.firstActiveChunk;
+    if(ledger.firstActiveChunk)
+        ledger.firstActiveChunk->previousActiveChunk = &chunk;
+    ledger.firstActiveChunk = &chunk;
+}
+
+void UploadManager::retireChunkLocked(
+    QueueChunkLedger& ledger,
+    BufferChunk& chunk,
     const u64 version,
     const bool resetAllocated
 )noexcept{
-    auto next = it;
-    ++next;
-    BufferChunkPtr& chunk = *it;
-    chunk->owner = nullptr;
-    chunk->nativeRecordingID = 0u;
-    if(resetAllocated)
-        chunk->allocated = 0u;
-    chunk->version = version;
-    const u64 chunkSize = chunk->size;
-
-    m_chunkPool.splice(m_chunkPool.end(), activeChunks, it);
-    if(m_chunkPoolBytes > UINT64_MAX - chunkSize)
-        m_chunkPoolBytes = UINT64_MAX;
+    if(chunk.previousActiveChunk)
+        chunk.previousActiveChunk->nextActiveChunk = chunk.nextActiveChunk;
     else
-        m_chunkPoolBytes += chunkSize;
-    return next;
+        ledger.firstActiveChunk = chunk.nextActiveChunk;
+    if(chunk.nextActiveChunk)
+        chunk.nextActiveChunk->previousActiveChunk = chunk.previousActiveChunk;
+
+    chunk.owner = nullptr;
+    chunk.previousActiveChunk = nullptr;
+    chunk.nextActiveChunk = nullptr;
+    chunk.nativeRecordingID = 0u;
+    if(resetAllocated)
+        chunk.allocated = 0u;
+    chunk.version = version;
+    if(m_retiredChunkBytes > UINT64_MAX - chunk.size)
+        m_retiredChunkBytes = UINT64_MAX;
+    else
+        m_retiredChunkBytes += chunk.size;
 }
 
-void UploadManager::recycleMatchingActiveChunksLocked(
+void UploadManager::retireSubmittedChunksLocked(
+    const GpuPhysicalQueueId queue,
+    const u64 version,
+    const Queue::SubmissionCommandListIdentity* const submittedCommandLists,
+    const usize submittedCommandListCount,
+    const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners
+)noexcept{
+    QueueChunkLedger* const ledger = findQueueLedgerLocked(queue);
+    if(!ledger)
+        return;
+
+    BufferChunk* chunk = ledger->firstActiveChunk;
+    while(chunk){
+        BufferChunk* const nextChunk = chunk->nextActiveChunk;
+        bool submitted = false;
+        if(chunk->owner){
+            if(submittedOwners.indexed())
+                submitted = submittedOwners.contains(*chunk->owner, chunk->nativeRecordingID);
+            else{
+                for(usize i = 0u; i < submittedCommandListCount; ++i){
+                    const Queue::SubmissionCommandListIdentity& commandList = submittedCommandLists[i];
+                    if(commandList.owner == chunk->owner && commandList.nativeRecordingID == chunk->nativeRecordingID){
+                        submitted = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if(submitted)
+            retireChunkLocked(*ledger, *chunk, version, false);
+        chunk = nextChunk;
+    }
+}
+
+void UploadManager::retireOwnerChunksLocked(
     const GpuPhysicalQueueId queue,
     const u64 version,
     const bool resetAllocated,
-    const ChunkRecyclePredicate predicate,
-    const void* const predicateContext
+    TrackedCommandBuffer& owner,
+    const u64 nativeRecordingID
 )noexcept{
-    BufferChunkList* const activeChunks = findActiveChunksLocked(queue);
-    if(!activeChunks)
+    QueueChunkLedger* const ledger = findQueueLedgerLocked(queue);
+    if(!ledger)
         return;
 
-    auto it = activeChunks->begin();
-    while(it != activeChunks->end()){
-        BufferChunkPtr& chunk = *it;
-        if(!chunk){
-            it = activeChunks->erase(it);
-            continue;
-        }
-        if(!predicate(chunk->owner, chunk->nativeRecordingID, predicateContext)){
-            ++it;
-            continue;
-        }
-
-        it = recycleActiveChunkLocked(*activeChunks, it, version, resetAllocated);
+    BufferChunk* chunk = ledger->firstActiveChunk;
+    while(chunk){
+        BufferChunk* const nextChunk = chunk->nextActiveChunk;
+        if(chunk->owner == &owner && chunk->nativeRecordingID == nativeRecordingID)
+            retireChunkLocked(*ledger, *chunk, version, resetAllocated);
+        chunk = nextChunk;
     }
 }
 
@@ -214,8 +194,8 @@ bool UploadManager::suballocateBuffer(
         return false;
 
     ScopedLock lock(m_mutex);
-    BufferChunkList* const activeChunks = findOrCreateActiveChunksLocked(queue);
-    if(!activeChunks)
+    QueueChunkLedger* const ledger = findOrCreateQueueLedgerLocked(queue);
+    if(!ledger)
         return false;
 
     const auto trySuballocateFromChunk = [&](BufferChunk& chunk) -> bool {
@@ -235,31 +215,35 @@ bool UploadManager::suballocateBuffer(
         return true;
     };
 
-    for(auto it = activeChunks->rbegin(); it != activeChunks->rend(); ++it){
+    for(BufferChunk* chunk = ledger->firstActiveChunk; chunk; chunk = chunk->nextActiveChunk){
         if(
-            (*it)->owner == owner
-            && (*it)->nativeRecordingID == nativeRecordingID
-            && trySuballocateFromChunk(**it)
+            chunk->owner == owner
+            && chunk->nativeRecordingID == nativeRecordingID
+            && trySuballocateFromChunk(*chunk)
         )
             return true;
     }
 
-    for(auto it = m_chunkPool.begin(); it != m_chunkPool.end(); ++it){
-        BufferChunkPtr& pooledChunk = *it;
-        if(pooledChunk->physicalQueue == queue && pooledChunk->size >= size && pooledChunk->version <= completedVersion){
-            const u64 pooledChunkSize = pooledChunk->size;
-            activeChunks->splice(activeChunks->end(), m_chunkPool, it);
-            if(m_chunkPoolBytes >= pooledChunkSize)
-                m_chunkPoolBytes -= pooledChunkSize;
+    for(BufferChunkPtr& retiredChunk : ledger->chunks){
+        if(
+            retiredChunk
+            && !retiredChunk->owner
+            && retiredChunk->nativeRecordingID == 0u
+            && retiredChunk->physicalQueue == queue
+            && retiredChunk->size >= size
+            && retiredChunk->version <= completedVersion
+        ){
+            if(m_retiredChunkBytes >= retiredChunk->size)
+                m_retiredChunkBytes -= retiredChunk->size;
             else
-                m_chunkPoolBytes = 0;
-            BufferChunkPtr& currentChunk = activeChunks->back();
-            currentChunk->owner = owner;
-            currentChunk->nativeRecordingID = nativeRecordingID;
-            currentChunk->allocated = 0;
-            currentChunk->version = completedVersion;
+                m_retiredChunkBytes = 0u;
+            retiredChunk->owner = owner;
+            retiredChunk->nativeRecordingID = nativeRecordingID;
+            retiredChunk->allocated = 0u;
+            retiredChunk->version = completedVersion;
+            linkActiveChunkLocked(*ledger, *retiredChunk);
 
-            return trySuballocateFromChunk(*currentChunk);
+            return trySuballocateFromChunk(*retiredChunk);
         }
     }
 
@@ -279,7 +263,7 @@ bool UploadManager::suballocateBuffer(
     if(!bufferHandle)
         return false;
 
-    activeChunks->push_back(MakeRefCount<BufferChunk>(
+    ledger->chunks.push_back(MakeRefCount<BufferChunk>(
         m_device.m_context.threadPool,
         Move(bufferHandle),
         owner,
@@ -287,8 +271,9 @@ bool UploadManager::suballocateBuffer(
         queue,
         chunkSize
     ));
-    BufferChunkPtr& currentChunk = activeChunks->back();
+    BufferChunkPtr& currentChunk = ledger->chunks.back();
     currentChunk->version = completedVersion;
+    linkActiveChunkLocked(*ledger, *currentChunk);
 
     return trySuballocateFromChunk(*currentChunk);
 }
@@ -300,26 +285,24 @@ void UploadManager::submitChunks(
     const usize submittedCommandListCount,
     const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners
 )noexcept{
+    static_assert(noexcept(retireSubmittedChunksLocked(
+        queue,
+        submittedVersion,
+        submittedCommandLists,
+        submittedCommandListCount,
+        submittedOwners
+    )), "accepted upload-chunk retirement must remain non-throwing");
     if(!m_device.matchesPhysicalQueueIdentity(queue) || !submittedCommandLists || submittedCommandListCount == 0u)
         return;
 
-    ScopedLock lock(m_mutex);
-    if(submittedOwners.indexed()){
-        recycleMatchingActiveChunksLocked(
-            queue,
-            submittedVersion,
-            false,
-            VulkanDetail::IsSubmittedOwnerInLookup,
-            &submittedOwners
-        );
-        return;
-    }
-
-    const VulkanDetail::SubmittedOwnersContext submittedContext{
+    NothrowScopedLock lock(m_mutex);
+    retireSubmittedChunksLocked(
+        queue,
+        submittedVersion,
         submittedCommandLists,
         submittedCommandListCount,
-    };
-    recycleMatchingActiveChunksLocked(queue, submittedVersion, false, VulkanDetail::IsSubmittedOwner, &submittedContext);
+        submittedOwners
+    );
 }
 
 void UploadManager::discardChunks(
@@ -331,10 +314,21 @@ void UploadManager::discardChunks(
     if(!m_device.matchesPhysicalQueueIdentity(queue) || !owner || nativeRecordingID == 0u)
         return;
 
-    const VulkanDetail::OwnerIdentityContext ownerIdentity{ owner, nativeRecordingID };
     ScopedLock lock(m_mutex);
-    recycleMatchingActiveChunksLocked(queue, reusableVersion, true, VulkanDetail::IsMatchingOwner, &ownerIdentity);
-    trimChunkPoolLocked();
+    retireOwnerChunksLocked(queue, reusableVersion, true, *owner, nativeRecordingID);
+    trimRetiredChunksLocked(queue, reusableVersion);
+}
+
+void UploadManager::abandonChunks(
+    const GpuPhysicalQueueId queue,
+    TrackedCommandBuffer* const owner,
+    const u64 nativeRecordingID
+)noexcept{
+    if(!m_device.matchesPhysicalQueueIdentity(queue) || !owner || nativeRecordingID == 0u)
+        return;
+
+    NothrowScopedLock lock(m_mutex);
+    retireOwnerChunksLocked(queue, 0u, true, *owner, nativeRecordingID);
 }
 
 

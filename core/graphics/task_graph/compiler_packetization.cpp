@@ -232,7 +232,7 @@ namespace GpuTaskGraphCompilerDetail{
 
 
 [[nodiscard]] bool BuildSubmissionPackets(
-    const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuTaskGraphQueueAssignments& assignments,
     const GpuTaskGraphPacketizationPolicy::Enum policy,

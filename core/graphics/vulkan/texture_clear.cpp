@@ -16,6 +16,8 @@ NWB_VULKAN_BEGIN
 
 
 void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil){
+    if(!publicCommandStateAccessible())
+        return;
     if(!clearDepth && !clearStencil)
         return;
     constexpr const tchar* s_OperationName = NWB_TEXT("clear depth/stencil texture");
@@ -240,6 +242,8 @@ void CommandList::clearDepthStencilTextureBox(
     const bool clearStencil,
     const u8 stencil
 ){
+    if(!publicCommandStateAccessible())
+        return;
     if(!clearDepth && !clearStencil)
         return;
     if(VulkanTextureDetail::TextureClearBoxEmpty(box))

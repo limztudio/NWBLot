@@ -51,10 +51,12 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // tracker owns persistent history; every graph artifact below is about to be reset for the next declaration.
     if(m_deferredLightingTaskGraphValid){
         Core::Alloc::ScratchArena queueAssignmentTelemetryScratchArena(RendererArenaScope::s_TaskGraphArena);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
+        const Core::GpuCompiledGraph::ReadView compiledPlan(m_deferredLightingCompiledGraph);
         if(!m_deferredLightingTaskGraphQueueAssignmentTelemetry.update(
-            m_deferredLightingTaskGraph,
+            declarations,
             m_deferredLightingTaskGraphQueueAssignments,
-            m_deferredLightingCompiledGraph,
+            compiledPlan,
             m_deferredLightingSubmissionTransaction,
             queueAssignmentTelemetryScratchArena
         ))
@@ -142,12 +144,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     m_deferredFrameRecoveryArmed = false;
     m_deferredFrameRecoveryRetiresTiming = false;
     m_deferredPresentationOverlayRequired = false;
-    m_deferredLightingTaskGraph.reset();
-    m_deferredLightingTaskGraphAnalysis.reset();
-    m_deferredLightingTaskGraphQueueAssignments.reset();
-    m_deferredLightingCompiledGraph.reset();
-    m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
-    m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
+    resetDeferredTaskGraphRuntime();
 
     if(!framebuffer)
         return;
@@ -433,6 +430,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     Optional<Core::GpuTimingMeasure> causticResolveTiming;
     const bool clearAvboitTargets = m_avboitSystem.shouldClearTargets(hasTransparentRenderers);
     Core::GpuTimingSubmissionTicket avboitPreTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket avboitDepthWarpTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket avboitExtinctionTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket avboitIntegrationTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket avboitAccumulationTimingTicket(m_graphics.gpuTiming());
     Optional<Core::GpuTimingMeasure> avboitClearTiming;
     GraphClearTimingRecordState avboitClearTimingState{
         .graphics = &m_graphics,
@@ -455,17 +456,13 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     Optional<Core::GpuTimingMeasure> avboitExtinctionComputeEmulationTiming;
     // The split Accumulation handoff starts this interval in its compute producer and closes it in the raster consumer.
     Optional<Core::GpuTimingMeasure> avboitAccumulationComputeEmulationTiming;
-    Core::GpuTimingSubmissionTicket avboitDepthWarpTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket avboitExtinctionTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket avboitIntegrationTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket avboitAccumulationTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket deferredLightingTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket deferredCompositeTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket deferredPresentTimingTicket(m_graphics.gpuTiming());
     // Publish the frame endpoint only after the terminal Graphics Present packet accepts. This also covers the
     // serialized Graphics-only route when no dedicated compute family exists.
     Core::GpuTimingFrameTransaction frameTimingTransaction(m_graphics.gpuTiming());
     Optional<Core::GpuTimingMeasure> asyncFinalTiming;
-    Core::GpuTimingSubmissionTicket deferredPresentTimingTicket(m_graphics.gpuTiming());
     const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(
         deferredTargets.framebuffer->getFramebufferInfo()
     );
@@ -578,9 +575,11 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             false
         );
     }
+    const Core::GpuTaskGraph::DeclarationReadView deferredTaskGraphView(m_deferredLightingTaskGraph);
+    const Core::GpuCompiledGraph::ReadView deferredCompiledPlan(m_deferredLightingCompiledGraph);
     const bool captureLaggedLightingHistory = m_deferredLaggedLightingHistoryTask.valid();
     const auto taskIsCompiled = [&](const Core::GpuTaskId task){
-        return m_deferredLightingCompiledGraph.findTask(task) != nullptr;
+        return deferredCompiledPlan.findTask(task).valid();
     };
     // Pure-software per-mesh typed clears and their native compute callbacks are part of the same accepting Shadow
     // Preparation packet. The semantic range still starts at Shadow Preparation, so a split would otherwise omit
@@ -590,11 +589,11 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             ? !m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid()
             : (
                 m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid()
-                && m_deferredLightingCompiledGraph.tasksSharePacket(
+                && deferredCompiledPlan.tasksSharePacket(
                     m_deferredShadowPrepareTask,
                     m_deferredShadowPrepareSoftwareBvhBuildFirstTask
                 )
-                && m_deferredLightingCompiledGraph.tasksSharePacket(
+                && deferredCompiledPlan.tasksSharePacket(
                     m_deferredShadowPrepareTask,
                     m_deferredShadowPrepareSoftwareBvhBuildLastTask
                 )
@@ -604,7 +603,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // fallback boundary by remaining in this exact first Graphics packet.
     const bool shadowPrepareHybridSoftwareTailMerged =
         !m_deferredShadowPrepareHybridSoftwareTailTask.valid()
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
+        || deferredCompiledPlan.tasksSharePacket(
             m_deferredShadowPrepareTask,
             m_deferredShadowPrepareHybridSoftwareTailTask
         )
@@ -614,7 +613,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // build so CPU cache publication and the retained packet-state handoff stay atomic.
     const bool shadowPrepareAccelStructFinalizeMerged =
         !m_deferredShadowPrepareAccelStructFinalizeTask.valid()
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
+        || deferredCompiledPlan.tasksSharePacket(
             m_deferredShadowPrepareTask,
             m_deferredShadowPrepareAccelStructFinalizeTask
         )
@@ -623,7 +622,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // compiler keeps it in that exact packet; otherwise it would be recorded but omitted from the accepted range.
     const bool deferredBindlessSlotsUploadMergedIntoShadowPreparePacket =
         !m_deferredBindlessSlotsUploadTask.valid()
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
+        || deferredCompiledPlan.tasksSharePacket(
             m_deferredShadowPrepareTask,
             m_deferredBindlessSlotsUploadTask
         )
@@ -632,7 +631,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // Preparation. Keep the immutable upload in that exact first packet so Shadow Preparation becomes the handoff.
     const bool rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket =
         !m_rayTraceMaterialContextSlotsUploadTask.valid()
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
+        || deferredCompiledPlan.tasksSharePacket(
             m_deferredShadowPrepareTask,
             m_rayTraceMaterialContextSlotsUploadTask
         )
@@ -641,7 +640,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // exact Shadow Preparation packet that owns the following ShaderResource handoff to later Compute consumers.
     const bool causticEmissionTargetsUploadMergedIntoShadowPreparePacket =
         !m_causticEmissionTargetsUploadTask.valid()
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
+        || deferredCompiledPlan.tasksSharePacket(
             m_deferredShadowPrepareTask,
             m_causticEmissionTargetsUploadTask
         )
@@ -650,7 +649,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // first Graphics packet so that task remains the handoff producer for the asynchronous Surfel-GI consumer.
     const bool surfelFrameConstantsUploadMergedIntoShadowPreparePacket =
         !m_surfelFrameConstantsUploadTask.valid()
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
+        || deferredCompiledPlan.tasksSharePacket(
             m_deferredShadowPrepareTask,
             m_surfelFrameConstantsUploadTask
         )
@@ -659,17 +658,17 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // upload writers as the ShaderResource producer observed by later asynchronous trace passes.
     const bool shadowMaterialContextUploadsMergedIntoShadowPreparePacket =
         (!m_shadowInstanceMaterialUploadTask.valid()
-            || m_deferredLightingCompiledGraph.tasksSharePacket(
+            || deferredCompiledPlan.tasksSharePacket(
                 m_deferredShadowPrepareTask,
                 m_shadowInstanceMaterialUploadTask
             ))
         && (!m_shadowInstanceUploadTask.valid()
-            || m_deferredLightingCompiledGraph.tasksSharePacket(
+            || deferredCompiledPlan.tasksSharePacket(
                 m_deferredShadowPrepareTask,
                 m_shadowInstanceUploadTask
             ))
         && (!m_shadowMaterialTypedUploadTask.valid()
-            || m_deferredLightingCompiledGraph.tasksSharePacket(
+            || deferredCompiledPlan.tasksSharePacket(
                 m_deferredShadowPrepareTask,
                 m_shadowMaterialTypedUploadTask
             ))
@@ -680,11 +679,11 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         m_sceneBvhNodesUploadTask.valid() == m_sceneBvhInstancesUploadTask.valid()
         && (!m_sceneBvhNodesUploadTask.valid()
             || (
-                m_deferredLightingCompiledGraph.tasksSharePacket(
+                deferredCompiledPlan.tasksSharePacket(
                     m_deferredShadowPrepareTask,
                     m_sceneBvhNodesUploadTask
                 )
-                && m_deferredLightingCompiledGraph.tasksSharePacket(
+                && deferredCompiledPlan.tasksSharePacket(
                     m_deferredShadowPrepareTask,
                     m_sceneBvhInstancesUploadTask
                 )
@@ -713,10 +712,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     for(usize prefixTaskIndex = 0u; prefixTaskIndex < graphicsPrefixTimingTicketCount; ++prefixTaskIndex){
         const Core::GpuTaskId task = graphicsPrefixTimingTasks[prefixTaskIndex];
         if(
-            !m_deferredLightingCompiledGraph.findTask(task)
+            !deferredCompiledPlan.findTask(task).valid()
             || (
                 prefixTaskIndex != 0u
-                && !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
+                && !deferredCompiledPlan.taskPrecedesOrSharesPacket(
                     graphicsPrefixTimingTasks[prefixTaskIndex - 1u],
                     task
                 )
@@ -727,7 +726,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         }
         bool sharesPacketWithEarlierTask = false;
         for(usize earlierTaskIndex = 0u; earlierTaskIndex < prefixTaskIndex; ++earlierTaskIndex){
-            if(!m_deferredLightingCompiledGraph.tasksSharePacket(
+            if(!deferredCompiledPlan.tasksSharePacket(
                 task,
                 graphicsPrefixTimingTasks[earlierTaskIndex]
             ))
@@ -745,7 +744,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // exposes a frontier between its endpoints. Immutable built-in uploads may add untimed packets between these
     // semantic anchors; their enclosing Graphics submission remains graph-owned and deterministic.
     asyncPrefixTimingSpansOnePacket = graphicsPrefixTimingBindingsValid
-        && m_deferredLightingCompiledGraph.tasksSharePacket(
+        && deferredCompiledPlan.tasksSharePacket(
             m_graphicsPrefixMeshViewSetupTask,
             m_graphicsPrefixTask
         )
@@ -753,34 +752,34 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const bool shadowVisibilityPreparedTasksMerged =
         !m_deferredShadowVisibilityOpaqueTask.valid()
         || (
-            m_deferredLightingCompiledGraph.tasksSharePacket(
+            deferredCompiledPlan.tasksSharePacket(
                 m_deferredShadowVisibilityTask,
                 m_deferredShadowVisibilityOpaqueTask
             )
             && m_deferredShadowVisibilityOpaqueFirstWaveletTask.valid()
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_deferredShadowVisibilityTask,
                 m_deferredShadowVisibilityOpaqueFirstWaveletTask
             )
             && m_deferredShadowVisibilityOpaqueResolveTask.valid()
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_deferredShadowVisibilityTask,
                 m_deferredShadowVisibilityOpaqueResolveTask
             )
             && m_deferredShadowVisibilityTransparentTraceTask.valid()
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_deferredShadowVisibilityTask,
                 m_deferredShadowVisibilityTransparentTraceTask
             )
             && (
                 !m_deferredShadowVisibilityTransparentTemporalMergeTask.valid()
-                || m_deferredLightingCompiledGraph.tasksSharePacket(
+                || deferredCompiledPlan.tasksSharePacket(
                     m_deferredShadowVisibilityTask,
                     m_deferredShadowVisibilityTransparentTemporalMergeTask
                 )
             )
             && m_deferredShadowVisibilityTransparentFirstWaveletTask.valid()
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_deferredShadowVisibilityTask,
                 m_deferredShadowVisibilityTransparentFirstWaveletTask
             )
@@ -792,7 +791,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const bool shadowVisibilityAllLitClearMerged = m_deferredShadowVisibilityOpaqueTask.valid()
         ? !m_deferredShadowVisibilityAllLitClearTask.valid()
         : m_deferredShadowVisibilityAllLitClearTask.valid()
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_deferredShadowVisibilityTask,
                 m_deferredShadowVisibilityAllLitClearTask
             )
@@ -802,46 +801,46 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // diagnostic state observable before the traversal packet accepts.
     const bool shadowVisibilityAdaptivePrimitivesMerged =
         (!m_deferredShadowVisibilityAdaptiveStatsClearTask.valid()
-            || m_deferredLightingCompiledGraph.tasksSharePacket(
+            || deferredCompiledPlan.tasksSharePacket(
                 m_deferredShadowVisibilityTask,
                 m_deferredShadowVisibilityAdaptiveStatsClearTask
             ))
         && (!m_deferredShadowVisibilityAdaptiveCounterClearTask.valid()
-            || m_deferredLightingCompiledGraph.tasksSharePacket(
+            || deferredCompiledPlan.tasksSharePacket(
                 m_deferredShadowVisibilityTask,
                 m_deferredShadowVisibilityAdaptiveCounterClearTask
             ))
         && (!m_deferredShadowVisibilityAdaptiveStatsReadbackTask.valid()
-            || m_deferredLightingCompiledGraph.tasksSharePacket(
+            || deferredCompiledPlan.tasksSharePacket(
                 m_deferredShadowVisibilityTask,
                 m_deferredShadowVisibilityAdaptiveStatsReadbackTask
             ))
     ;
     const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredShadowVisibilityTask);
+        deferredCompiledPlan.queueInfoForTask(m_deferredShadowVisibilityTask);
     const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_graphicsPrefixTask);
+        deferredCompiledPlan.queueInfoForTask(m_graphicsPrefixTask);
     const Core::GpuPhysicalQueueInfo* const graphicsPrefixOpaqueComputeEmulationQueue =
         m_graphicsPrefixOpaqueComputeEmulationTask.valid()
-            ? m_deferredLightingCompiledGraph.queueInfoForTask(m_graphicsPrefixOpaqueComputeEmulationTask)
+            ? deferredCompiledPlan.queueInfoForTask(m_graphicsPrefixOpaqueComputeEmulationTask)
             : nullptr
     ;
     const Core::GpuPhysicalQueueInfo* const graphicsPrefixOpaqueSharedComputeEmulationQueue =
         m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount != 0u
         && m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u].valid()
-            ? m_deferredLightingCompiledGraph.queueInfoForTask(
+            ? deferredCompiledPlan.queueInfoForTask(
                 m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u]
             )
             : nullptr
     ;
     const Core::GpuPhysicalQueueInfo* const graphicsPrefixOpaqueCsgReceiverComputeEmulationQueue =
         m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask.valid()
-            ? m_deferredLightingCompiledGraph.queueInfoForTask(m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask)
+            ? deferredCompiledPlan.queueInfoForTask(m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask)
             : nullptr
     ;
     const Core::GpuPhysicalQueueInfo* const graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationQueue =
         m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask.valid()
-            ? m_deferredLightingCompiledGraph.queueInfoForTask(
+            ? deferredCompiledPlan.queueInfoForTask(
                 m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask
             )
             : nullptr
@@ -852,7 +851,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         ++prefixTaskIndex
     ){
         const Core::GpuPhysicalQueueInfo* const queue =
-            m_deferredLightingCompiledGraph.queueInfoForTask(graphicsPrefixTimingTasks[prefixTaskIndex]);
+            deferredCompiledPlan.queueInfoForTask(graphicsPrefixTimingTasks[prefixTaskIndex]);
         graphicsPrefixPacketsAreGraphics = queue && queue->queueClass == Core::CommandQueue::Graphics;
     }
     // The optional alias-free regular-emulation producer shares G-buffer's primary Graphics packet. Its required
@@ -861,7 +860,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         !m_graphicsPrefixOpaqueComputeEmulationTask.valid()
         || (
             taskIsCompiled(m_graphicsPrefixOpaqueComputeEmulationTask)
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_graphicsPrefixOpaqueComputeEmulationTask,
                 m_graphicsPrefixGbufferTask
             )
@@ -886,7 +885,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         if(
             !graphicsPrefixOpaqueSharedComputeEmulationQueue
             || graphicsPrefixOpaqueSharedComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
-            || !m_deferredLightingCompiledGraph.tasksSharePacket(
+            || !deferredCompiledPlan.tasksSharePacket(
                 m_graphicsPrefixGbufferTask,
                 m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u]
             )
@@ -894,12 +893,12 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             return false;
         for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
             const Core::GpuTaskId task = m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex];
-            const Core::GpuPhysicalQueueInfo* const queue = m_deferredLightingCompiledGraph.queueInfoForTask(task);
+            const Core::GpuPhysicalQueueInfo* const queue = deferredCompiledPlan.queueInfoForTask(task);
             if(
                 !task.valid()
                 || !queue
                 || queue->queueClass != Core::CommandQueue::Graphics
-                || !m_deferredLightingCompiledGraph.tasksSharePacket(
+                || !deferredCompiledPlan.tasksSharePacket(
                     m_graphicsPrefixGbufferTask,
                     task
                 )
@@ -913,10 +912,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             if(m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex].valid())
                 return false;
         }
-        return m_deferredLightingCompiledGraph.tasksFormContiguousPacketSequence(
+        return deferredCompiledPlan.tasksFormContiguousPacketSequence(
             m_graphicsPrefixOpaqueSharedComputeEmulationTasks,
             phaseCount
-        ) && m_deferredLightingCompiledGraph.taskPrecedesInSamePacket(
+        ) && deferredCompiledPlan.taskPrecedesInSamePacket(
             m_graphicsPrefixGbufferTask,
             m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u]
         );
@@ -928,7 +927,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         !m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask.valid()
         || (
             taskIsCompiled(m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask)
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask,
                 m_graphicsPrefixGbufferTask
             )
@@ -948,11 +947,11 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             || !graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationQueue
             || graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationQueue->queueClass
                 != Core::CommandQueue::Graphics
-            || !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
+            || !deferredCompiledPlan.taskPrecedesOrSharesPacket(
                 m_graphicsPrefixCsgIntervalCombineTask,
                 m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask
             )
-            || !m_deferredLightingCompiledGraph.tasksSharePacket(
+            || !deferredCompiledPlan.tasksSharePacket(
                 m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask,
                 m_graphicsPrefixCsgIntervalSampleTask
             )
@@ -962,7 +961,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask,
             m_graphicsPrefixCsgIntervalSampleTask,
         };
-        return m_deferredLightingCompiledGraph.tasksFormContiguousPacketSequence(
+        return deferredCompiledPlan.tasksFormContiguousPacketSequence(
             sequence,
             LengthOf(sequence)
         );
@@ -972,7 +971,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // native submission even though the compiler still preserves resource ordering.
     const Core::GpuPhysicalQueueInfo* const graphicsPrefixCsgIntervalClearQueue =
         m_graphicsPrefixCsgIntervalClearTask.valid()
-            ? m_deferredLightingCompiledGraph.queueInfoForTask(m_graphicsPrefixCsgIntervalClearTask)
+            ? deferredCompiledPlan.queueInfoForTask(m_graphicsPrefixCsgIntervalClearTask)
             : nullptr
     ;
     const bool graphicsPrefixCsgIntervalClearBundleMerged = !hasOpaqueCsgFrameWork
@@ -982,11 +981,11 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             && m_graphicsPrefixCsgIntervalClearTask.valid()
             && taskIsCompiled(m_graphicsPrefixCsgIntervalClearFirstTask)
             && taskIsCompiled(m_graphicsPrefixCsgIntervalClearTask)
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_graphicsPrefixCsgIntervalClearFirstTask,
                 m_graphicsPrefixCsgIntervalClearTask
             )
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_graphicsPrefixCsgIntervalClearTask,
                 m_graphicsPrefixGbufferTask
             )
@@ -995,9 +994,9 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         )
     ;
     const Core::GpuPhysicalQueueInfo* const shadowPrepareQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredShadowPrepareTask);
+        deferredCompiledPlan.queueInfoForTask(m_deferredShadowPrepareTask);
     const Core::GpuPhysicalQueueInfo* const softwareCausticsQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredSoftwareCausticsTask);
+        deferredCompiledPlan.queueInfoForTask(m_deferredSoftwareCausticsTask);
     const bool shadowVisibilityRunsOnCompute = shadowVisibilityQueue
         && shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute
     ;
@@ -1006,7 +1005,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         && softwareCausticsQueue->queueClass == Core::CommandQueue::Compute
     ;
     const RendererAvboitTaskGraphValidation avboitValidation = m_avboitSystem.validateTaskGraphStage(
-        m_deferredLightingCompiledGraph,
+        deferredCompiledPlan,
         clearAvboitTargets,
         hasTransparentRenderers
     );
@@ -1018,7 +1017,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // selector publication cannot accept independently of the consumer.
     const bool laggedLightingHistorySlotsUploadMergedIntoLightingPacket =
         !m_deferredLaggedLightingHistorySlotsUploadTask.valid()
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
+        || deferredCompiledPlan.tasksSharePacket(
             m_deferredLightingTask,
             m_deferredLaggedLightingHistorySlotsUploadTask
         )
@@ -1026,42 +1025,42 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // Resolve the terminal task, queue, signal hook, and accepted token through the compiler-owned presentation
     // endpoint instead of mirroring generated packet identity in renderer policy.
     const Core::GpuCompiledPresentEndpoint* const presentationEndpoint =
-        m_deferredLightingCompiledGraph.presentEndpoint();
+        deferredCompiledPlan.presentEndpoint();
     const Core::GpuTaskId terminalPresentationTask = presentationEndpoint
         ? presentationEndpoint->producer
         : Core::GpuTaskId{}
     ;
     const Core::GpuPhysicalQueueInfo* const deferredLightingQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredLightingTask);
+        deferredCompiledPlan.queueInfoForTask(m_deferredLightingTask);
     const Core::GpuPhysicalQueueInfo* const deferredCompositeQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredCompositeTask);
+        deferredCompiledPlan.queueInfoForTask(m_deferredCompositeTask);
     const Core::GpuPhysicalQueueInfo* const deferredPresentQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredPresentTask);
+        deferredCompiledPlan.queueInfoForTask(m_deferredPresentTask);
     const Core::GpuPhysicalQueueInfo* const deferredPresentationOverlayQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredPresentationOverlayTask);
+        deferredCompiledPlan.queueInfoForTask(m_deferredPresentationOverlayTask);
     const Core::GpuPhysicalQueueInfo* const terminalPresentationQueue = presentationEndpoint
-        ? m_deferredLightingCompiledGraph.queueInfo(presentationEndpoint->queue)
+        ? deferredCompiledPlan.queueInfo(presentationEndpoint->queue)
         : nullptr
     ;
     const Core::GpuPhysicalQueueInfo* const deferredLaggedLightingHistoryQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredLaggedLightingHistoryTask);
+        deferredCompiledPlan.queueInfoForTask(m_deferredLaggedLightingHistoryTask);
     const Core::GpuPhysicalQueueInfo* const deferredFrameRecoveryQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredFrameRecoveryTask);
+        deferredCompiledPlan.queueInfoForTask(m_deferredFrameRecoveryTask);
     const Core::GpuPhysicalQueueInfo* const hardwareCausticsQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredHardwareCausticsTask);
+        deferredCompiledPlan.queueInfoForTask(m_deferredHardwareCausticsTask);
     const Core::GpuPhysicalQueueInfo* const surfelGiQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredSurfelGiTask);
+        deferredCompiledPlan.queueInfoForTask(m_deferredSurfelGiTask);
     const Core::GpuPhysicalQueueInfo* const surfelGiPreparationQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredSurfelGiPreparationTask);
+        deferredCompiledPlan.queueInfoForTask(m_deferredSurfelGiPreparationTask);
     const Core::GpuPhysicalQueueInfo* const surfelGiSnapshotCopyQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredSurfelGiSnapshotCopyTask);
+        deferredCompiledPlan.queueInfoForTask(m_deferredSurfelGiSnapshotCopyTask);
     const Core::GpuPhysicalQueueInfo* const surfelGiCounterReadbackQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredSurfelGiCounterReadbackTask);
+        deferredCompiledPlan.queueInfoForTask(m_deferredSurfelGiCounterReadbackTask);
     // The clear must remain in GI's semantic packet. If it split, the standard effects range would either gain a
     // hidden submission or record an output write outside the acceptance/timing endpoint it protects.
     const bool surfelGiOutputClearMergedIntoGiPacket =
         m_deferredSurfelGiIrradianceClearTask.valid()
-        && m_deferredLightingCompiledGraph.tasksSharePacket(
+        && deferredCompiledPlan.tasksSharePacket(
             m_deferredSurfelGiIrradianceClearTask,
             m_deferredSurfelGiTask
         )
@@ -1088,31 +1087,31 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             && m_deferredSurfelGiTraceBuildArgsTask.valid()
             && m_deferredSurfelGiTraceTask.valid()
             && m_deferredSurfelGiResolveTask.valid()
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_deferredSurfelGiAgeFreeTask,
                 m_deferredSurfelGiTask
             )
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_deferredSurfelGiCellHeadClearTask,
                 m_deferredSurfelGiTask
             )
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_deferredSurfelGiHashBuildTask,
                 m_deferredSurfelGiTask
             )
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_deferredSurfelGiSpawnTask,
                 m_deferredSurfelGiTask
             )
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_deferredSurfelGiTraceBuildArgsTask,
                 m_deferredSurfelGiTask
             )
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_deferredSurfelGiTraceTask,
                 m_deferredSurfelGiTask
             )
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_deferredSurfelGiResolveTask,
                 m_deferredSurfelGiTask
             )
@@ -1125,7 +1124,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         !m_deferredSurfelGiInitializationLifecycleTask.valid()
         || (
             m_deferredSurfelGiPreparationTask.valid()
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
+            && deferredCompiledPlan.tasksSharePacket(
                 m_deferredSurfelGiPreparationTask,
                 m_deferredSurfelGiInitializationLifecycleTask
             )
@@ -1139,70 +1138,70 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // submission: clear acceptance, timing, and all dependent effects keep the established packet endpoint.
     const bool causticPhotonMergedIntoCausticsPacket =
         m_deferredCausticPhotonTask.valid()
-        && m_deferredLightingCompiledGraph.tasksSharePacket(
+        && deferredCompiledPlan.tasksSharePacket(
             m_deferredCausticPhotonTask,
             causticsTask
         )
     ;
     const bool causticGeometryMergedIntoCausticsPacket =
         m_deferredCausticGeometryTask.valid()
-        && m_deferredLightingCompiledGraph.tasksSharePacket(
+        && deferredCompiledPlan.tasksSharePacket(
             m_deferredCausticGeometryTask,
             causticsTask
         )
     ;
     const bool causticResolvePrepareMergedIntoCausticsPacket =
         m_deferredCausticResolvePrepareTask.valid()
-        && m_deferredLightingCompiledGraph.tasksSharePacket(
+        && deferredCompiledPlan.tasksSharePacket(
             m_deferredCausticResolvePrepareTask,
             causticsTask
         )
     ;
     const bool causticResolveWaveletMergedIntoCausticsPacket =
         m_deferredCausticResolveWaveletTask.valid()
-        && m_deferredLightingCompiledGraph.tasksSharePacket(
+        && deferredCompiledPlan.tasksSharePacket(
             m_deferredCausticResolveWaveletTask,
             causticsTask
         )
     ;
     const bool causticResolveSecondWaveletMergedIntoCausticsPacket =
         m_deferredCausticResolveSecondWaveletTask.valid()
-        && m_deferredLightingCompiledGraph.tasksSharePacket(
+        && deferredCompiledPlan.tasksSharePacket(
             m_deferredCausticResolveSecondWaveletTask,
             causticsTask
         )
     ;
     const bool causticResolveThirdWaveletMergedIntoCausticsPacket =
         m_deferredCausticResolveThirdWaveletTask.valid()
-        && m_deferredLightingCompiledGraph.tasksSharePacket(
+        && deferredCompiledPlan.tasksSharePacket(
             m_deferredCausticResolveThirdWaveletTask,
             causticsTask
         )
     ;
     const bool causticResolveFourthWaveletMergedIntoCausticsPacket =
         m_deferredCausticResolveFourthWaveletTask.valid()
-        && m_deferredLightingCompiledGraph.tasksSharePacket(
+        && deferredCompiledPlan.tasksSharePacket(
             m_deferredCausticResolveFourthWaveletTask,
             causticsTask
         )
     ;
     const bool causticResolveFifthWaveletMergedIntoCausticsPacket =
         m_deferredCausticResolveFifthWaveletTask.valid()
-        && m_deferredLightingCompiledGraph.tasksSharePacket(
+        && deferredCompiledPlan.tasksSharePacket(
             m_deferredCausticResolveFifthWaveletTask,
             causticsTask
         )
     ;
     const bool causticResolveUpsampleMergedIntoCausticsPacket =
         m_deferredCausticResolveUpsampleTask.valid()
-        && m_deferredLightingCompiledGraph.tasksSharePacket(
+        && deferredCompiledPlan.tasksSharePacket(
             m_deferredCausticResolveUpsampleTask,
             causticsTask
         )
     ;
     const bool causticIrradianceClearMergedIntoCausticsPacket =
         m_deferredCausticIrradianceClearTask.valid()
-        && m_deferredLightingCompiledGraph.tasksSharePacket(
+        && deferredCompiledPlan.tasksSharePacket(
             m_deferredCausticIrradianceClearTask,
             causticsTask
         )
@@ -1211,7 +1210,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // producer commits the matching CPU reset only after that shared packet accepts.
     const bool causticAccumulatorNonTemporalClearMergedIntoCausticsPacket =
         !m_deferredCausticAccumulatorNonTemporalClearTask.valid()
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
+        || deferredCompiledPlan.tasksSharePacket(
             m_deferredCausticAccumulatorNonTemporalClearTask,
             causticsTask
         )
@@ -1221,7 +1220,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // the initialized mirror and no hidden submission can write the accumulator.
     const bool causticAccumulatorBootstrapClearMergedIntoCausticsPacket =
         !m_deferredCausticAccumulatorBootstrapClearTask.valid()
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
+        || deferredCompiledPlan.tasksSharePacket(
             m_deferredCausticAccumulatorBootstrapClearTask,
             causticsTask
         )
@@ -1231,7 +1230,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // following atomic producer.
     const bool causticAccumulatorDecayMergedIntoCausticsPacket =
         !m_deferredCausticAccumulatorDecayTask.valid()
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
+        || deferredCompiledPlan.tasksSharePacket(
             m_deferredCausticAccumulatorDecayTask,
             causticsTask
         )
@@ -1240,18 +1239,18 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // Snapshot. This preserves their distinct acceptance and timing boundaries without exposing packet identities.
     const bool surfelGiSnapshotCopyAndTimingPacketsAreDistinct =
         !m_deferredSurfelGiSnapshotCopyTask.valid()
-        || !m_deferredLightingCompiledGraph.tasksSharePacket(
+        || !deferredCompiledPlan.tasksSharePacket(
             m_deferredSurfelGiSnapshotCopyTask,
             m_deferredSurfelGiTask
         )
     ;
     const bool surfelCounterReadbackFollowsPresentation = !m_deferredSurfelGiCounterReadbackTask.valid()
         || (
-            m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
+            deferredCompiledPlan.taskPrecedesOrSharesPacket(
                 terminalPresentationTask,
                 m_deferredSurfelGiCounterReadbackTask
             )
-            && !m_deferredLightingCompiledGraph.tasksSharePacket(
+            && !deferredCompiledPlan.tasksSharePacket(
                 terminalPresentationTask,
                 m_deferredSurfelGiCounterReadbackTask
             )
@@ -1259,11 +1258,11 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     ;
     const bool laggedLightingHistoryFollowsPresentation = !captureLaggedLightingHistory
         || (
-            m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
+            deferredCompiledPlan.taskPrecedesOrSharesPacket(
                 terminalPresentationTask,
                 m_deferredLaggedLightingHistoryTask
             )
-            && !m_deferredLightingCompiledGraph.tasksSharePacket(
+            && !deferredCompiledPlan.tasksSharePacket(
                 terminalPresentationTask,
                 m_deferredLaggedLightingHistoryTask
             )
@@ -1303,9 +1302,9 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || !taskIsCompiled(m_graphicsPrefixDeferredClearTask)
         || !taskIsCompiled(m_graphicsPrefixGbufferTask)
         || (hasOpaqueCsgFrameWork && (
-            !m_deferredLightingCompiledGraph.findTask(m_graphicsPrefixCsgReceiverSpanTask)
-            || !m_deferredLightingCompiledGraph.findTask(m_graphicsPrefixCsgIntervalCombineTask)
-            || !m_deferredLightingCompiledGraph.findTask(m_graphicsPrefixCsgIntervalSampleTask)
+            !deferredCompiledPlan.findTask(m_graphicsPrefixCsgReceiverSpanTask).valid()
+            || !deferredCompiledPlan.findTask(m_graphicsPrefixCsgIntervalCombineTask).valid()
+            || !deferredCompiledPlan.findTask(m_graphicsPrefixCsgIntervalSampleTask).valid()
         ))
         || !taskIsCompiled(m_graphicsPrefixTask)
         || !graphicsPrefixTimingBindingsValid
@@ -1408,7 +1407,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || !presentationEndpoint
         || !presentationEndpoint->valid()
         || presentationEndpoint->producer != m_deferredFrameTimingEndTask
-        || !m_deferredLightingTaskGraph.validResource(presentationEndpoint->backBuffer)
+        || !deferredTaskGraphView.validResource(presentationEndpoint->backBuffer)
         || !taskIsCompiled(m_deferredFrameRecoveryTask)
         || !deferredLightingQueue
         || !deferredCompositeQueue
@@ -1513,7 +1512,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         }
         const bool shadowPrepareAccepted = taskIsCompiled(m_deferredShadowPrepareTask)
             && m_deferredLightingSubmissionTransaction.taskToken(
-                m_deferredLightingCompiledGraph,
+                deferredCompiledPlan,
                 m_deferredShadowPrepareTask
             ).valid()
         ;
@@ -1587,7 +1586,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         if(
             !m_deferredLightingTaskGraphValid
             || !m_deferredFrameRecoveryTask.valid()
-            || !m_deferredLightingCompiledGraph.findTask(m_deferredFrameRecoveryTask)
+            || !deferredCompiledPlan.findTask(m_deferredFrameRecoveryTask).valid()
         ){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred frame recovery task was unavailable"));
             m_deferredFrameRecoveryArmed = false;
@@ -1644,6 +1643,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     struct ShadowPrepareStateLifecycleContext{
         Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
         RendererFramePipeline* renderer = nullptr;
+        Core::Alloc::ScratchArena& scratchArena;
         Core::GpuPersistentResourceStateCache::Candidate* stateCandidate = nullptr;
         const Core::BufferHandle* buffers = nullptr;
         usize bufferCount = 0u;
@@ -1653,6 +1653,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     } shadowPrepareStateLifecycle{
         .frameTimingTransaction = &frameTimingTransaction,
         .renderer = this,
+        .scratchArena = shadowPrepareStateScratchArena,
         .stateCandidate = &shadowPrepareAcceptedStateCandidate,
         .buffers = shadowPrepareLiveStateBuffers.data(),
         .bufferCount = shadowPrepareLiveStateBuffers.size(),
@@ -1674,7 +1675,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             *context->stateCandidate,
             *finalState,
             context->buffers,
-            context->bufferCount
+            context->bufferCount,
+            context->scratchArena
         );
         const bool candidatePresent = context->stateCandidate->valid() && !context->stateCandidate->empty();
         context->statePrepared = candidateBuilt && (candidatePresent || !context->stateCandidateRequired);
@@ -2381,14 +2383,14 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         const Core::GpuTaskId task = graphicsPrefixTimingTasks[prefixTaskIndex];
         bool packetAlreadyTimed = false;
         for(usize earlierTaskIndex = 0u; earlierTaskIndex < prefixTaskIndex; ++earlierTaskIndex){
-            if(m_deferredLightingCompiledGraph.tasksSharePacket(task, graphicsPrefixTimingTasks[earlierTaskIndex])){
+            if(deferredCompiledPlan.tasksSharePacket(task, graphicsPrefixTimingTasks[earlierTaskIndex])){
                 packetAlreadyTimed = true;
                 break;
             }
         }
         if(packetAlreadyTimed)
             continue;
-        if(!m_deferredLightingCompiledGraph.findTask(task) || !graphicsPrefixTimingTickets[prefixTaskIndex]){
+        if(!deferredCompiledPlan.findTask(task).valid() || !graphicsPrefixTimingTickets[prefixTaskIndex]){
             normalTimingTicketsReady = false;
             break;
         }
@@ -2469,19 +2471,19 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
 
     const Core::QueueSubmissionToken shadowPrepareSubmissionToken =
         m_deferredLightingSubmissionTransaction.taskToken(
-            m_deferredLightingCompiledGraph,
+            deferredCompiledPlan,
             m_deferredShadowPrepareTask
         )
     ;
     const Core::QueueSubmissionToken graphicsPrefixSubmissionToken =
         m_deferredLightingSubmissionTransaction.taskToken(
-            m_deferredLightingCompiledGraph,
+            deferredCompiledPlan,
             m_graphicsPrefixTask
         )
     ;
     const Core::QueueSubmissionToken shadowVisibilitySubmissionToken =
         m_deferredLightingSubmissionTransaction.taskToken(
-            m_deferredLightingCompiledGraph,
+            deferredCompiledPlan,
             m_deferredShadowVisibilityTask
         )
     ;
@@ -2491,49 +2493,49 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     ;
     const Core::QueueSubmissionToken selectedCausticsSubmissionToken =
         m_deferredLightingSubmissionTransaction.taskToken(
-            m_deferredLightingCompiledGraph,
+            deferredCompiledPlan,
             selectedCausticsTask
         )
     ;
     const Core::QueueSubmissionToken surfelGiSubmissionToken =
         m_deferredLightingSubmissionTransaction.taskToken(
-            m_deferredLightingCompiledGraph,
+            deferredCompiledPlan,
             m_deferredSurfelGiTask
         )
     ;
     const Core::QueueSubmissionToken avboitPreSubmissionToken =
         m_deferredLightingSubmissionTransaction.taskToken(
-            m_deferredLightingCompiledGraph,
+            deferredCompiledPlan,
             avboitValidation.stage().firstTask
         )
     ;
     const Core::QueueSubmissionToken avboitCompletionSubmissionToken =
         m_deferredLightingSubmissionTransaction.taskToken(
-            m_deferredLightingCompiledGraph,
+            deferredCompiledPlan,
             avboitValidation.stage().completionTask
         )
     ;
     const Core::QueueSubmissionToken deferredLightingSubmissionToken =
         m_deferredLightingSubmissionTransaction.taskToken(
-            m_deferredLightingCompiledGraph,
+            deferredCompiledPlan,
             m_deferredLightingTask
         )
     ;
     const Core::QueueSubmissionToken deferredCompositeSubmissionToken =
         m_deferredLightingSubmissionTransaction.taskToken(
-            m_deferredLightingCompiledGraph,
+            deferredCompiledPlan,
             m_deferredCompositeTask
         )
     ;
     const Core::QueueSubmissionToken deferredPresentSubmissionToken =
         m_deferredLightingSubmissionTransaction.taskToken(
-            m_deferredLightingCompiledGraph,
+            deferredCompiledPlan,
             m_deferredPresentTask
         )
     ;
     const Core::QueueSubmissionToken finalPresentationSubmissionToken =
         m_deferredLightingSubmissionTransaction.taskToken(
-            m_deferredLightingCompiledGraph,
+            deferredCompiledPlan,
             terminalPresentationTask
         )
     ;
@@ -2665,7 +2667,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         const bool readbackTailAvailable =
             finalPresentationSubmissionToken.valid()
             && m_deferredLightingTaskGraphValid
-            && m_deferredLightingCompiledGraph.findTask(m_deferredSurfelGiCounterReadbackTask)
+            && deferredCompiledPlan.findTask(m_deferredSurfelGiCounterReadbackTask).valid()
             && surfelGiCounterReadbackQueue
             && (static_cast<u8>(surfelGiCounterReadbackQueue->capabilities)
                 & static_cast<u8>(Core::GpuQueueCapability::Transfer)) != 0u
@@ -2762,7 +2764,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             );
             const Core::QueueSubmissionToken readbackSubmissionToken =
                 m_deferredLightingSubmissionTransaction.taskToken(
-                    m_deferredLightingCompiledGraph,
+                    deferredCompiledPlan,
                     m_deferredSurfelGiCounterReadbackTask
                 )
             ;
@@ -2939,7 +2941,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             );
             const Core::QueueSubmissionToken historyCopySubmissionToken =
                 m_deferredLightingSubmissionTransaction.taskToken(
-                    m_deferredLightingCompiledGraph,
+                    deferredCompiledPlan,
                     m_deferredLaggedLightingHistoryTask
                 )
             ;

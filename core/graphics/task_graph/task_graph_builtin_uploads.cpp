@@ -40,7 +40,7 @@ struct UploadBufferTask{
         const GpuTaskRecordContext& context
     ){
         usize byteSize = 0u;
-        const void* const bytes = context.taskGraph.uploadBlobData(payload.source, byteSize);
+        const void* const bytes = context.declarations.uploadBlobData(payload.source, byteSize);
         if(
             !payload.destination
             || !bytes
@@ -96,7 +96,7 @@ struct UploadTextureTask{
         const GpuTaskRecordContext& context
     ){
         usize byteSize = 0u;
-        const void* const bytes = context.taskGraph.uploadBlobData(payload.source, byteSize);
+        const void* const bytes = context.declarations.uploadBlobData(payload.source, byteSize);
         if(
             !payload.destination
             || !bytes
@@ -264,6 +264,10 @@ GpuUploadBlobId GpuTaskGraph::copyUploadData(
     const usize byteSize,
     const usize alignment
 ){
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
+
     if(
         !data
         || byteSize == 0u
@@ -273,16 +277,17 @@ GpuUploadBlobId GpuTaskGraph::copyUploadData(
     )
         return {};
 
-    m_uploadBlobs.emplace_back(m_arena);
-    GpuUploadBlobNode& blob = m_uploadBlobs.back();
+    GpuUploadBlobNode blob(m_arena);
     const u8* const sourceBytes = static_cast<const u8*>(data);
     blob.bytes.assign(sourceBytes, sourceBytes + byteSize);
-    if(blob.bytes.size() != byteSize){
-        m_uploadBlobs.pop_back();
+    if(blob.bytes.size() != byteSize)
         return {};
-    }
+
+    m_uploadBlobs.reserve(m_uploadBlobs.size() + 1u);
+    const u32 index = static_cast<u32>(m_uploadBlobs.size());
+    m_uploadBlobs.push_back(Move(blob));
     m_declarationRevision = allocateGeneration();
-    return GpuUploadBlobId{ static_cast<u32>(m_uploadBlobs.size() - 1u), m_generation };
+    return GpuUploadBlobId{ index, m_generation };
 }
 
 GpuTaskId GpuTaskGraph::addUploadBufferTask(
@@ -291,6 +296,10 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
 ){
     if(uploadDesc.acceptedToken)
         *uploadDesc.acceptedToken = {};
+
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
 
     if(
         desc.resourceUses
@@ -334,9 +343,10 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
         return {};
 
     using UploadTask = __hidden_gpu_task_graph_builtin_uploads::UploadBufferTask;
-    UploadTask::Payload* const payload = NewArenaObject<UploadTask::Payload>(m_arena);
-    if(!payload)
+    UploadTask::Payload* const payloadObject = NewArenaObject<UploadTask::Payload>(m_arena);
+    if(!payloadObject)
         return {};
+    ProvisionalPayloadOwner<UploadTask::Payload> payload(m_arena, payloadObject);
     payload->source = uploadDesc.source;
     payload->destination = destinationResource.buffer;
     payload->destinationOffsetBytes = uploadDesc.destinationOffsetBytes;
@@ -360,18 +370,21 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
     const usize resourceUseCount = uploadDesc.finalState == ResourceStates::CopyDest ? 1u : LengthOf(resourceUses);
     GpuTaskDesc resolvedDesc = desc;
     resolvedDesc.setResourceUses(resourceUses, resourceUseCount);
-    const GpuTaskId task = appendTask(
+    const GpuTaskId task = appendTaskWithinMutation(
         resolvedDesc,
-        payload,
+        payload.get(),
         &RecordPayload<UploadTask>,
         &AcceptPayload<UploadTask>,
         &DiscardPayload<UploadTask>,
         &DestroyPayload<UploadTask::Payload>,
-        sizeof(UploadTask::Payload)
+        sizeof(UploadTask::Payload),
+        mutation
     );
-    if(!task.valid())
+    if(task.valid())
+        payload.publish();
+    else
         discardAndDestroyUnappendedPayload(
-            payload,
+            payload.release(),
             &DiscardPayload<UploadTask>,
             &DestroyPayload<UploadTask::Payload>
         );
@@ -384,6 +397,10 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
 ){
     if(uploadDesc.acceptedToken)
         *uploadDesc.acceptedToken = {};
+
+    DeclarationMutationScope mutation(*this);
+    if(!mutation.valid())
+        return {};
 
     if(
         desc.resourceUses
@@ -435,9 +452,10 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
         return {};
 
     using UploadTask = __hidden_gpu_task_graph_builtin_uploads::UploadTextureTask;
-    UploadTask::Payload* const payload = NewArenaObject<UploadTask::Payload>(m_arena);
-    if(!payload)
+    UploadTask::Payload* const payloadObject = NewArenaObject<UploadTask::Payload>(m_arena);
+    if(!payloadObject)
         return {};
+    ProvisionalPayloadOwner<UploadTask::Payload> payload(m_arena, payloadObject);
     payload->source = uploadDesc.source;
     payload->destination = destinationResource.texture;
     payload->arraySlice = uploadDesc.arraySlice;
@@ -470,18 +488,21 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
     if(resolvedAspect != TextureUploadAspect::Color)
         resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Graphics;
     resolvedDesc.setResourceUses(resourceUses, resourceUseCount);
-    const GpuTaskId task = appendTask(
+    const GpuTaskId task = appendTaskWithinMutation(
         resolvedDesc,
-        payload,
+        payload.get(),
         &RecordPayload<UploadTask>,
         &AcceptPayload<UploadTask>,
         &DiscardPayload<UploadTask>,
         &DestroyPayload<UploadTask::Payload>,
-        sizeof(UploadTask::Payload)
+        sizeof(UploadTask::Payload),
+        mutation
     );
-    if(!task.valid())
+    if(task.valid())
+        payload.publish();
+    else
         discardAndDestroyUnappendedPayload(
-            payload,
+            payload.release(),
             &DiscardPayload<UploadTask>,
             &DestroyPayload<UploadTask::Payload>
         );

@@ -26,25 +26,18 @@ namespace GpuGraphTaskContract{
 
 
 template<typename TaskT>
-concept RecordApi = requires(
-    const typename TaskT::Payload& payload,
-    CommandList& commandList,
-    const GpuTaskRecordContext& context
-){
-    { TaskT::record(payload, commandList, context) }->SameAs<bool>;
+concept RecordApi = requires{
+    static_cast<bool (*)(const typename TaskT::Payload&, CommandList&, const GpuTaskRecordContext&)>(&TaskT::record);
 };
 
 template<typename TaskT>
-concept AcceptedApi = requires(
-    typename TaskT::Payload& payload,
-    const QueueSubmissionToken& token
-){
-    TaskT::accepted(payload, token);
+concept AcceptedApi = requires{
+    static_cast<void (*)(typename TaskT::Payload&, const QueueSubmissionToken&)>(&TaskT::accepted);
 };
 
 template<typename TaskT>
-concept DiscardedApi = requires(typename TaskT::Payload& payload){
-    TaskT::discarded(payload);
+concept DiscardedApi = requires{
+    static_cast<void (*)(typename TaskT::Payload&)>(&TaskT::discarded);
 };
 
 

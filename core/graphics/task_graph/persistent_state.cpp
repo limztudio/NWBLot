@@ -160,10 +160,11 @@ bool GpuPersistentResourceStateCache::mergeResourceSubset(
     const TextureHandle* const textures,
     const usize textureCount,
     const BufferHandle* const buffers,
-    const usize bufferCount
+    const usize bufferCount,
+    Alloc::ScratchArena& scratchArena
 ){
     Candidate candidate(*this);
-    if(!buildMergedResourceSubset(candidate, source, textures, textureCount, buffers, bufferCount))
+    if(!buildMergedResourceSubset(candidate, source, textures, textureCount, buffers, bufferCount, scratchArena))
         return false;
 
     return commit(candidate);
@@ -186,7 +187,8 @@ bool GpuPersistentResourceStateCache::buildMergedResourceSubset(
     const TextureHandle* const textures,
     const usize textureCount,
     const BufferHandle* const buffers,
-    const usize bufferCount
+    const usize bufferCount,
+    Alloc::ScratchArena& scratchArena
 )const{
     if(&outCandidate.m_owner != this)
         return false;
@@ -216,7 +218,12 @@ bool GpuPersistentResourceStateCache::buildMergedResourceSubset(
             return false;
 
         const CommandListResourceStateHandoff* const branches[] = { &sourceCandidate.m_states };
-        if(!outCandidate.m_states.buildFanIn(retainedCandidate.m_states, branches, LengthOf(branches)))
+        if(!outCandidate.m_states.buildFanIn(
+            retainedCandidate.m_states,
+            branches,
+            LengthOf(branches),
+            scratchArena
+        ))
             return false;
     }else if(!outCandidate.m_states.copyFrom(sourceCandidate.m_states))
         return false;

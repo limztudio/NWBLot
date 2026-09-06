@@ -208,7 +208,7 @@ static bool HasPendingTextureUploads(const ImDrawData& drawData){
 }
 
 [[nodiscard]] static bool GraphBindsAcquiredPresentationTexture(
-    const Core::GpuTaskGraph& graph,
+    const Core::GpuTaskGraph::DeclarationReadView& graph,
     const Core::AcquiredPresentationFrame& frame,
     const Core::GpuGraphResourceId backbuffer
 ){
@@ -1051,13 +1051,15 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
 ){
     // A failed optional tail may rebuild the renderer graph in the same ImGui frame.  Retain only a same-generation
     // claim; graph-owned blobs and imported IDs from the discarded attempt must never suppress the retry.
-    if(
-        m_taskGraphPresentationClaimed
-        && m_taskGraphPresentationGraphGeneration != graph.generation()
-    ){
-        m_taskGraphPresentationClaimed = false;
-        m_taskGraphPresentationGraphGeneration = 0u;
-        m_textureUploadBatch.reset();
+    if(m_taskGraphPresentationClaimed){
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+        if(!declarations.valid())
+            return {};
+        if(m_taskGraphPresentationGraphGeneration != declarations.generation()){
+            m_taskGraphPresentationClaimed = false;
+            m_taskGraphPresentationGraphGeneration = 0u;
+            m_textureUploadBatch.reset();
+        }
     }
     if(
         !m_taskGraphPresentationPrepared
@@ -1155,17 +1157,20 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         );
         if(task.valid()){
             m_taskGraphPresentationClaimed = true;
-            m_taskGraphPresentationGraphGeneration = graph.generation();
+            m_taskGraphPresentationGraphGeneration = task.generation;
         }
         else
             m_textureUploadBatch.reset();
         return task;
     }
 
-    if(!__hidden_ui::GraphBindsAcquiredPresentationTexture(graph, frame, backbuffer)){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("UiSystem: presentation graph does not bind the acquired back-buffer texture; requesting recreation"));
-        m_graphics.requestDeviceRecreation();
-        return {};
+    {
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+        if(!declarations.valid() || !__hidden_ui::GraphBindsAcquiredPresentationTexture(declarations, frame, backbuffer)){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("UiSystem: presentation graph does not bind the acquired back-buffer texture; requesting recreation"));
+            m_graphics.requestDeviceRecreation();
+            return {};
+        }
     }
 
     if(
@@ -1245,7 +1250,13 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
     const auto appendDrawTextureUse = [&](const TaskGraphDrawCommand& drawCommand){
         if(!drawCommand.texture)
             return true;
-        Core::GpuGraphResourceId textureResource = graph.findImportedTexture(drawCommand.texture);
+        Core::GpuGraphResourceId textureResource;
+        {
+            const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+            if(!declarations.valid())
+                return false;
+            textureResource = declarations.findImportedTexture(drawCommand.texture);
+        }
         if(!textureResource.valid()){
             textureResource = graph.importTexture(
                 drawCommand.texture,
@@ -1301,7 +1312,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
     );
     if(task.valid()){
         m_taskGraphPresentationClaimed = true;
-        m_taskGraphPresentationGraphGeneration = graph.generation();
+        m_taskGraphPresentationGraphGeneration = task.generation;
     }
     else
         m_textureUploadBatch.reset();
@@ -1368,8 +1379,14 @@ bool UiSystem::submitStandaloneTaskGraphPresentation(const Core::AcquiredPresent
                     Name("ui.imgui_standalone_presentation.backbuffer_availability"),
                     "Standalone ImGui Presentation Back Buffer Availability"
                 );
-                if(!__hidden_ui::GraphBindsAcquiredPresentationTexture(graph, context->frame, backbuffer))
-                    return Core::GpuTaskId{};
+                {
+                    const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+                    if(
+                        !declarations.valid()
+                        || !__hidden_ui::GraphBindsAcquiredPresentationTexture(declarations, context->frame, backbuffer)
+                    )
+                        return Core::GpuTaskId{};
+                }
             }
             return context->ui->declareTaskGraphPresentation(
                 graph,
@@ -1453,13 +1470,17 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
             m_indexBuffer->getCreationDescription()
         )
     );
-    if(
-        !__hidden_ui::GraphBindsAcquiredPresentationTexture(graph, frame, backbuffer)
-        || !opaqueCallbackDomain.valid()
-        || !vertexBuffer.valid()
-        || !indexBuffer.valid()
-    )
-        return {};
+    {
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+        if(
+            !declarations.valid()
+            || !__hidden_ui::GraphBindsAcquiredPresentationTexture(declarations, frame, backbuffer)
+            || !opaqueCallbackDomain.valid()
+            || !vertexBuffer.valid()
+            || !indexBuffer.valid()
+        )
+            return {};
+    }
 
     Core::Alloc::ScratchArena scratchArena(__hidden_ui::s_TaskGraphDeclarationArena);
     Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> uploadTasks(scratchArena);
@@ -1731,7 +1752,7 @@ bool UiSystem::recordTaskGraphDrawSnapshot(
     const TaskGraphDrawSnapshot& snapshot = m_taskGraphDrawSnapshot;
     if(
         !__hidden_ui::ValidAcquiredPresentationFrame(frame)
-        || !__hidden_ui::GraphBindsAcquiredPresentationTexture(context.taskGraph, frame, backbuffer)
+        || !__hidden_ui::GraphBindsAcquiredPresentationTexture(context.declarations, frame, backbuffer)
         || !snapshot.valid
         || !snapshot.vertexBuffer
         || !snapshot.indexBuffer
@@ -1853,7 +1874,7 @@ bool UiSystem::recordStandaloneLegacyTaskGraphPresentation(
 ){
     if(
         !__hidden_ui::ValidAcquiredPresentationFrame(frame)
-        || !__hidden_ui::GraphBindsAcquiredPresentationTexture(context.taskGraph, frame, backbuffer)
+        || !__hidden_ui::GraphBindsAcquiredPresentationTexture(context.declarations, frame, backbuffer)
         || !drawData
         || !m_taskGraphLegacyPresentationClaimed
         || !m_frameFinished

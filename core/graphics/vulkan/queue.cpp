@@ -5,12 +5,32 @@
 #include "backend.h"
 
 #include <core/common/log.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_VULKAN_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_vulkan_queue{
+
+
+u64 DecrementOrAbort(Atomic<u64>& value)noexcept{
+    u64 previous = value.load(MemoryOrder::relaxed);
+    do{
+        if(previous == 0u)
+            TerminateInvariant();
+    }while(!value.compare_exchange_weak(previous, previous - 1u, MemoryOrder::relaxed));
+    return previous;
+}
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,6 +52,15 @@ Queue::Queue(
     , m_waitSemaphoreValues(context.objectArena)
     , m_signalSemaphores(context.objectArena)
     , m_signalSemaphoreValues(context.objectArena)
+    , m_submitDescriptorHeapUseCommitTickets(context.objectArena)
+    , m_submitValidatedTimerQueryCommandBuffers(context.objectArena)
+    , m_submitWaitInfos(context.objectArena)
+    , m_submitSignalInfos(context.objectArena)
+    , m_submitCommandBufferInfos(context.objectArena)
+    , m_submitPreparedCommandBuffers(context.objectArena)
+    , m_executeLocalWaits(context.objectArena)
+    , m_executeExpectedCommandLists(context.objectArena)
+    , m_executeSubmittedOwners(context.objectArena)
     , m_lastRecordingID(0u)
     , m_lastSubmittedID(0)
     , m_lastFinishedID(0)
@@ -53,18 +82,9 @@ Queue::Queue(
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create queue timeline semaphore: {}"), ResultToString(res));
     }
 }
-Queue::~Queue(){
-    if(m_trackingSemaphore && m_lastSubmittedID > 0){
-        auto waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreWaitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO);
-        waitInfo.semaphoreCount = 1;
-        waitInfo.pSemaphores = &m_trackingSemaphore;
-        waitInfo.pValues = &m_lastSubmittedID;
-
-        const VkResult res = m_context.deviceDispatch.vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
-        if(res != VK_SUCCESS)
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait on queue timeline semaphore during teardown: {}"), ResultToString(res));
-    }
-
+Queue::~Queue()noexcept{
+    m_submitPreparedCommandBuffers.clear();
+    m_executeExpectedCommandLists.clear();
     m_commandBuffersInFlight.clear();
     m_commandBuffersPool.clear();
     destroyWorkerCommandArenas();
@@ -168,12 +188,12 @@ u64 Queue::nextRecordingID()noexcept{
 }
 
 void Queue::registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
-    if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot register a command buffer with a foreign queue or context"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Command buffer registration owner mismatch"));
-        return;
-    }
-    NWB_ASSERT(commandBuffer.m_arenaState == TrackedCommandBufferArenaState::Untracked);
+    if(
+        &commandBuffer.m_queue != this
+        || &commandBuffer.m_context != &m_context
+        || commandBuffer.m_arenaState != TrackedCommandBufferArenaState::Untracked
+    )
+        TerminateInvariant();
     commandBuffer.m_arenaState = TrackedCommandBufferArenaState::Leased;
     const u64 currentCount = m_currentCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
     m_leasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
@@ -189,26 +209,65 @@ void Queue::registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
             commandBuffer.m_recordingWorkerDomain,
             commandBuffer.m_recordingWorkerIndex
         );
-        NWB_ASSERT(arena);
-        if(arena){
-            const u64 workerCurrentCount = arena->currentCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
-            arena->leasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
-            arena->growthEventCount.fetch_add(1u, MemoryOrder::relaxed);
-            updateCommandBufferHighWater(arena->highWaterCommandBufferCount, workerCurrentCount);
-        }
+        if(!arena)
+            TerminateInvariant();
+        const u64 workerCurrentCount = arena->currentCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+        arena->leasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+        arena->growthEventCount.fetch_add(1u, MemoryOrder::relaxed);
+        updateCommandBufferHighWater(arena->highWaterCommandBufferCount, workerCurrentCount);
     }
     updateCommandBufferHighWater(m_highWaterCommandBufferCount, currentCount);
+}
+
+bool Queue::validateCommandBufferSubmissionState(const TrackedCommandBuffer& commandBuffer)const{
+    if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot submit a command buffer through a foreign queue or context"));
+        return false;
+    }
+    if(commandBuffer.m_arenaState != TrackedCommandBufferArenaState::Leased){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission requires a leased command buffer"));
+        return false;
+    }
+    if(m_leasedCommandBufferCount.load(MemoryOrder::relaxed) == 0u){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission observed an empty leased command-buffer count"));
+        return false;
+    }
+    if(commandBuffer.m_recordingWorkerIndex == 0u){
+        if(m_directLeasedCommandBufferCount.load(MemoryOrder::relaxed) != 0u)
+            return true;
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission observed an empty direct leased command-buffer count"));
+        return false;
+    }
+
+    const WorkerCommandArena* const workerArena = findWorkerCommandArena(
+        commandBuffer.m_recordingWorkerDomain,
+        commandBuffer.m_recordingWorkerIndex
+    );
+    if(workerArena && workerArena->leasedCommandBufferCount.load(MemoryOrder::relaxed) != 0u)
+        return true;
+    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission could not validate its worker command-buffer arena"));
+    return false;
 }
 
 void Queue::transitionCommandBufferState(
     TrackedCommandBuffer& commandBuffer,
     const TrackedCommandBufferArenaState::Enum nextState
-)noexcept{
+){
     if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot transition a command buffer through a foreign queue"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Command buffer arena transition owner mismatch"));
         return;
     }
+
+    commitCommandBufferStateTransition(commandBuffer, nextState);
+}
+
+void Queue::commitCommandBufferStateTransition(
+    TrackedCommandBuffer& commandBuffer,
+    const TrackedCommandBufferArenaState::Enum nextState
+)noexcept{
+    if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context)
+        TerminateInvariant();
     const TrackedCommandBufferArenaState::Enum previousState = commandBuffer.m_arenaState;
     if(previousState == nextState)
         return;
@@ -216,60 +275,39 @@ void Queue::transitionCommandBufferState(
         ? nullptr
         : findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex)
     ;
-    NWB_ASSERT(commandBuffer.m_recordingWorkerIndex == 0u || workerArena);
+    if(commandBuffer.m_recordingWorkerIndex != 0u && !workerArena)
+        TerminateInvariant();
 
     switch(previousState){
     case TrackedCommandBufferArenaState::Leased:{
-        const u64 previousLeasedCount = m_leasedCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
-        if(previousLeasedCount == 0u)
-            NWB_ASSERT_MSG(false, NWB_TEXT("Command arena leased-buffer count underflow"));
+        __hidden_vulkan_queue::DecrementOrAbort(m_leasedCommandBufferCount);
         if(commandBuffer.m_recordingWorkerIndex == 0u){
-            const u64 previousDirectLeasedCount = m_directLeasedCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
-            if(previousDirectLeasedCount == 0u)
-                NWB_ASSERT_MSG(false, NWB_TEXT("Direct command arena leased-buffer count underflow"));
+            __hidden_vulkan_queue::DecrementOrAbort(m_directLeasedCommandBufferCount);
         }
-        else if(workerArena){
-            const u64 previousWorkerLeasedCount = workerArena->leasedCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
-            if(previousWorkerLeasedCount == 0u)
-                NWB_ASSERT_MSG(false, NWB_TEXT("Worker command arena leased-buffer count underflow"));
-        }
+        else
+            __hidden_vulkan_queue::DecrementOrAbort(workerArena->leasedCommandBufferCount);
         break;
     }
     case TrackedCommandBufferArenaState::Reusable:{
-        const u64 previousReusableCount = m_reusableCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
-        if(previousReusableCount == 0u)
-            NWB_ASSERT_MSG(false, NWB_TEXT("Command arena reusable-buffer count underflow"));
+        __hidden_vulkan_queue::DecrementOrAbort(m_reusableCommandBufferCount);
         if(commandBuffer.m_recordingWorkerIndex == 0u){
-            const u64 previousDirectReusableCount = m_directReusableCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
-            if(previousDirectReusableCount == 0u)
-                NWB_ASSERT_MSG(false, NWB_TEXT("Direct command arena reusable-buffer count underflow"));
+            __hidden_vulkan_queue::DecrementOrAbort(m_directReusableCommandBufferCount);
         }
-        else if(workerArena){
-            const u64 previousWorkerReusableCount = workerArena->reusableCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
-            if(previousWorkerReusableCount == 0u)
-                NWB_ASSERT_MSG(false, NWB_TEXT("Worker command arena reusable-buffer count underflow"));
-        }
+        else
+            __hidden_vulkan_queue::DecrementOrAbort(workerArena->reusableCommandBufferCount);
         break;
     }
     case TrackedCommandBufferArenaState::Pending:{
-        const u64 previousPendingCommandBufferCount = m_pendingCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
-        if(previousPendingCommandBufferCount == 0u)
-            NWB_ASSERT_MSG(false, NWB_TEXT("Command arena pending-buffer count underflow"));
+        __hidden_vulkan_queue::DecrementOrAbort(m_pendingCommandBufferCount);
         if(commandBuffer.m_recordingWorkerIndex == 0u){
-            const u64 previousDirectPendingCount = m_pendingDirectCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
-            if(previousDirectPendingCount == 0u)
-                NWB_ASSERT_MSG(false, NWB_TEXT("Command arena direct pending-buffer count underflow"));
+            __hidden_vulkan_queue::DecrementOrAbort(m_pendingDirectCommandBufferCount);
         }
         else{
-            if(workerArena){
-                const u64 previousPendingCount = workerArena->pendingCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
-                NWB_ASSERT(previousPendingCount > 0u);
-                if(previousPendingCount == 1u){
-                    const u64 previousPendingEpochCount = m_pendingWorkerEpochCount.fetch_sub(1u, MemoryOrder::relaxed);
-                    if(previousPendingEpochCount == 0u)
-                        NWB_ASSERT_MSG(false, NWB_TEXT("Command arena pending worker-epoch count underflow"));
-                }
-            }
+            const u64 previousPendingCount = __hidden_vulkan_queue::DecrementOrAbort(
+                workerArena->pendingCommandBufferCount
+            );
+            if(previousPendingCount == 1u)
+                __hidden_vulkan_queue::DecrementOrAbort(m_pendingWorkerEpochCount);
         }
         break;
     }
@@ -311,25 +349,21 @@ void Queue::unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept
     if(commandBuffer.m_arenaState == TrackedCommandBufferArenaState::Untracked)
         return;
 
-    transitionCommandBufferState(commandBuffer, TrackedCommandBufferArenaState::Untracked);
-    const u64 previousCurrentCount = m_currentCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
-    if(previousCurrentCount == 0u)
-        NWB_ASSERT_MSG(false, NWB_TEXT("Command arena current-buffer count underflow"));
+    if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context)
+        TerminateInvariant();
+    commitCommandBufferStateTransition(commandBuffer, TrackedCommandBufferArenaState::Untracked);
+    __hidden_vulkan_queue::DecrementOrAbort(m_currentCommandBufferCount);
     if(commandBuffer.m_recordingWorkerIndex == 0u){
-        const u64 previousDirectCount = m_directCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
-        if(previousDirectCount == 0u)
-            NWB_ASSERT_MSG(false, NWB_TEXT("Command arena direct-buffer count underflow"));
+        __hidden_vulkan_queue::DecrementOrAbort(m_directCommandBufferCount);
     }
     else{
         WorkerCommandArena* const arena = findWorkerCommandArena(
             commandBuffer.m_recordingWorkerDomain,
             commandBuffer.m_recordingWorkerIndex
         );
-        if(arena){
-            const u64 previousWorkerCount = arena->currentCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
-            if(previousWorkerCount == 0u)
-                NWB_ASSERT_MSG(false, NWB_TEXT("Worker command arena current-buffer count underflow"));
-        }
+        if(!arena)
+            TerminateInvariant();
+        __hidden_vulkan_queue::DecrementOrAbort(arena->currentCommandBufferCount);
     }
 }
 
@@ -382,7 +416,7 @@ TrackedCommandBufferPtr Queue::createCommandBuffer(
 Queue::WorkerCommandArena* Queue::findWorkerCommandArena(
     const u64 recordingWorkerDomain,
     const u32 recordingWorkerIndex
-)const{
+)const noexcept{
     NWB_ASSERT(recordingWorkerIndex != 0u);
     if(recordingWorkerIndex == 0u)
         return nullptr;
@@ -452,7 +486,7 @@ Queue::WorkerCommandArena* Queue::getOrCreateWorkerCommandArena(
             recordingWorkerIndex,
             ResultToString(createResult)
         );
-        DestroyArenaObject(m_context.objectArena, arena);
+        DestroyArenaObjectNoexcept(m_context.objectArena, arena);
         return nullptr;
     }
 
@@ -465,9 +499,16 @@ Queue::WorkerCommandArena* Queue::getOrCreateWorkerCommandArena(
 
 
 TrackedCommandBufferPtr Queue::getOrCreateDirectCommandBuffer(){
-    ScopedLock lock(m_mutex);
+    UniqueLock<Futex> lock(m_mutex);
 
-    updateLastFinishedID();
+    const VkResult completionResult = updateLastFinishedID();
+    if(completionResult != VK_SUCCESS){
+        lock.unlock();
+        if(completionResult == VK_ERROR_DEVICE_LOST)
+            m_device.captureDeviceLoss("queue timeline query");
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(completionResult));
+        return nullptr;
+    }
     collectCompletedCommandBuffers();
 
     auto available = m_commandBuffersPool.end();
@@ -559,14 +600,14 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(
 }
 
 
-void Queue::destroyWorkerCommandArenas(){
-    ScopedLock workerArenasLock(m_workerCommandArenasMutex);
+void Queue::destroyWorkerCommandArenas()noexcept{
+    NothrowScopedLock workerArenasLock(m_workerCommandArenasMutex);
     for(WorkerCommandArena* const arena : m_workerCommandArenas){
         if(!arena)
             continue;
 
         {
-            ScopedLock arenaLock(arena->mutex);
+            NothrowScopedLock arenaLock(arena->mutex);
             for(TrackedCommandBufferPtr& commandBuffer : arena->commandBuffersPool){
                 if(!commandBuffer)
                     continue;

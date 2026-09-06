@@ -6,9 +6,6 @@
 
 #include "task_graph.h"
 
-#include <core/common/log.h>
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -24,32 +21,12 @@ namespace __hidden_gpu_packet_runtime_execution{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool InvokeTaskRecordedCallback(
-    const GpuTaskGraphTaskRecordedCallback& callback,
-    const CommandListResourceStateHandoff* const finalState
-)noexcept{
-    try{
-        return callback.invoke(callback.context, finalState);
-    }
-    catch(...){
-        try{
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Compatibility task-recorded callback threw; recording rejected"));
-        }
-        catch(...){}
-        return false;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // A frontier packet is meaningful only as an explicit recovery/finalization tail. The compiler prevents it from
 // merging with ordinary work, but does not force declaration order, so normal graph execution rejects one inside
 // either its semantic endpoint prefix or its automatically derived ordinary prefix before recording begins.
 [[nodiscard]] bool FindNormalGraphPacketRange(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskGraph::DeclarationReadView& declarations,
+    const GpuCompiledGraph::ReadView& planAccess,
     const GpuTaskId& terminalTask,
     GpuSubmissionPacketRange& outRange,
     GpuSubmissionPacketId* const outFailedPacket
@@ -58,33 +35,39 @@ namespace __hidden_gpu_packet_runtime_execution{
     if(outFailedPacket)
         *outFailedPacket = {};
 
-    const usize packetCount = compiledGraph.packetCount();
+    const usize packetCount = planAccess.packetCount();
     if(packetCount == 0u)
         return false;
 
     if(terminalTask.valid()){
-        if(!graph.validTask(terminalTask) || !compiledGraph.findTask(terminalTask))
+        if(!declarations.validTask(terminalTask) || !planAccess.findTask(terminalTask).valid())
             return false;
-        const GpuSubmissionPacketId terminalPacket = compiledGraph.packetForTask(terminalTask);
+        const GpuSubmissionPacketId terminalPacket = planAccess.packetForTask(terminalTask);
         if(!terminalPacket.valid())
             return false;
         for(usize packetIndex = 0u; packetIndex <= terminalPacket.index; ++packetIndex){
-            const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
-            if(!compiledGraph.packet(packet).joinsAcceptedQueueFrontier)
+            const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
+            const GpuCompiledPacketView packetView = planAccess.packet(packet);
+            if(!packetView.valid())
+                return false;
+            if(!packetView.plan->joinsAcceptedQueueFrontier)
                 continue;
             if(outFailedPacket)
                 *outFailedPacket = packet;
             return false;
         }
 
-        outRange = compiledGraph.packetRange(compiledGraph.packetIdAt(0u), terminalPacket);
-        return compiledGraph.validPacketRange(outRange);
+        outRange = planAccess.packetRange(planAccess.packetIdAt(0u), terminalPacket);
+        return planAccess.validPacketRange(outRange);
     }
 
     usize firstFrontierPacketIndex = packetCount;
     for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex){
-        const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
-        if(compiledGraph.packet(packet).joinsAcceptedQueueFrontier){
+        const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
+        const GpuCompiledPacketView packetView = planAccess.packet(packet);
+        if(!packetView.valid())
+            return false;
+        if(packetView.plan->joinsAcceptedQueueFrontier){
             if(firstFrontierPacketIndex == packetCount)
                 firstFrontierPacketIndex = packetIndex;
             continue;
@@ -98,21 +81,21 @@ namespace __hidden_gpu_packet_runtime_execution{
 
     if(firstFrontierPacketIndex == 0u){
         if(outFailedPacket)
-            *outFailedPacket = compiledGraph.packetIdAt(0u);
+            *outFailedPacket = planAccess.packetIdAt(0u);
         return false;
     }
 
-    const GpuSubmissionPacketId firstPacket = compiledGraph.packetIdAt(0u);
-    const GpuSubmissionPacketId lastPacket = compiledGraph.packetIdAt(
+    const GpuSubmissionPacketId firstPacket = planAccess.packetIdAt(0u);
+    const GpuSubmissionPacketId lastPacket = planAccess.packetIdAt(
         firstFrontierPacketIndex == packetCount ? packetCount - 1u : firstFrontierPacketIndex - 1u
     );
-    outRange = compiledGraph.packetRange(firstPacket, lastPacket);
-    return compiledGraph.validPacketRange(outRange);
+    outRange = planAccess.packetRange(firstPacket, lastPacket);
+    return planAccess.validPacketRange(outRange);
 }
 
 [[nodiscard]] bool ValidateNormalGraphTaskRecordedCallbacks(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskGraph::DeclarationReadView& declarations,
+    const GpuCompiledGraph::ReadView& planAccess,
     const GpuSubmissionPacketRange& range,
     const GpuTaskGraphTaskRecordedCallback* const callbacks,
     const usize callbackCount
@@ -123,10 +106,10 @@ namespace __hidden_gpu_packet_runtime_execution{
     const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
     for(usize callbackIndex = 0u; callbackIndex < callbackCount; ++callbackIndex){
         const GpuTaskGraphTaskRecordedCallback& callback = callbacks[callbackIndex];
-        if(!callback.invoke || !graph.validTask(callback.task) || !compiledGraph.findTask(callback.task))
+        if(!callback.invoke || !declarations.validTask(callback.task) || !planAccess.findTask(callback.task).valid())
             return false;
 
-        const GpuSubmissionPacketId packet = compiledGraph.packetForTask(callback.task);
+        const GpuSubmissionPacketId packet = planAccess.packetForTask(callback.task);
         if(
             !packet.valid()
             || packet.index < range.first.index
@@ -164,51 +147,75 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
+    SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, compiledGraph, recordedGraph, transaction);
+    GpuCompiledGraph::ReadView planAccess(compiledGraph);
+    if(!planAccess.valid())
+        return false;
+    GpuRecordedGraph::ArtifactOperation artifactOperation(
+        recordedGraph,
+        GpuRecordedGraph::ArtifactOperationMode::Exclusive
+    );
+    if(!artifactOperation.valid())
+        return false;
     GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(
         transaction,
-        GpuGraphSubmissionTransaction::SubmissionOperationMode::CompositeBarrier
+        GpuGraphSubmissionTransaction::SubmissionOperationMode::CompositeBarrier,
+        &artifactOperation
     );
     if(!submissionOperation.valid())
         return false;
-    if(!compiledGraph.validFor(graph) || !transaction.validFor(compiledGraph))
-        return false;
+    SubmissionAttemptExceptionScope exceptionScope(graph, compiledGraph, recordedGraph, transaction, outFailedPacket);
 
     GpuSubmissionPacketRange normalRange;
     GpuSubmissionPacketId failedPacket;
-    if(!__hidden_gpu_packet_runtime_execution::FindNormalGraphPacketRange(
-        graph,
-        compiledGraph,
-        desc.terminalTask,
-        normalRange,
-        &failedPacket
-    )){
-        if(outFailedPacket)
-            *outFailedPacket = failedPacket;
-        return false;
-    }
-    if(
-        (desc.externalCompletionTokenCount != 0u && !desc.externalCompletionTokens)
-        || (desc.taskTimingTicketCount != 0u && !desc.taskTimingTickets)
-        || (desc.taskAcceptedCallbackCount != 0u && !desc.taskAcceptedCallbacks)
-        || (desc.taskSubmissionHookCount != 0u && !desc.taskSubmissionHooks)
-        || !__hidden_gpu_packet_runtime_execution::ValidateNormalGraphTaskRecordedCallbacks(
+    {
+        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+        if(
+            !declarationAccess.valid()
+            || !planAccess.validFor(declarationAccess)
+            || !transaction.validFor(planAccess)
+        )
+            return false;
+        if(!__hidden_gpu_packet_runtime_execution::FindNormalGraphPacketRange(
+            declarationAccess,
+            planAccess,
+            desc.terminalTask,
+            normalRange,
+            &failedPacket
+        )){
+            if(outFailedPacket)
+                *outFailedPacket = failedPacket;
+            return false;
+        }
+        exceptionScope.setFailedPacket(normalRange.first);
+        if(
+            (desc.externalCompletionTokenCount != 0u && !desc.externalCompletionTokens)
+            || (desc.taskTimingTicketCount != 0u && !desc.taskTimingTickets)
+            || (desc.taskAcceptedCallbackCount != 0u && !desc.taskAcceptedCallbacks)
+            || (desc.taskSubmissionHookCount != 0u && !desc.taskSubmissionHooks)
+            || !__hidden_gpu_packet_runtime_execution::ValidateNormalGraphTaskRecordedCallbacks(
+                declarationAccess,
+                planAccess,
+                normalRange,
+                desc.taskRecordedCallbacks,
+                desc.taskRecordedCallbackCount
+            )
+        )
+            return false;
+
+        if(!prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
             graph,
             compiledGraph,
-            normalRange,
-            desc.taskRecordedCallbacks,
-            desc.taskRecordedCallbackCount
-        )
-    )
-        return false;
-
-    if(!prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
-        graph,
-        compiledGraph,
-        normalRange.first,
-        recordedGraph,
-        transaction
-    ))
-        return false;
+            normalRange.first,
+            recorder.m_timingRecorder,
+            recordedGraph,
+            transaction,
+            artifactOperation,
+            declarationAccess,
+            planAccess
+        ))
+            return false;
+    }
 
     const bool recorded = desc.readyFrontierWorkerPool
         ? recorder.recordPacketRangeInReadyFrontiers(
@@ -237,14 +244,16 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
 
     const usize normalRangeEnd = static_cast<usize>(normalRange.first.index) + normalRange.packetCount;
     for(usize packetIndex = normalRange.first.index; packetIndex < normalRangeEnd; ++packetIndex){
-        const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
-        const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
-        const GpuTaskId* const tasks = compiledGraph.packetTasks(packet);
-        if(!tasks){
+        const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
+        exceptionScope.setFailedPacket(packet);
+        const GpuCompiledPacketView packetView = planAccess.packet(packet);
+        if(!packetView.valid()){
             if(outFailedPacket)
                 *outFailedPacket = packet;
             return false;
         }
+        const GpuSubmissionPacket& packetPlan = *packetView.plan;
+        const GpuTaskId* const tasks = packetView.tasks;
 
         for(u32 taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
             const GpuTaskId task = tasks[taskIndex];
@@ -252,9 +261,9 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
                 const GpuTaskGraphTaskRecordedCallback& callback = desc.taskRecordedCallbacks[callbackIndex];
                 if(callback.task != task)
                     continue;
-                if(__hidden_gpu_packet_runtime_execution::InvokeTaskRecordedCallback(
-                    callback,
-                    recordedGraph.taskFinalStateSeed(compiledGraph, task)
+                if(callback.invoke(
+                    callback.context,
+                    recordedGraph.packetStateSeed(packet, artifactOperation)
                 ))
                     continue;
                 if(outFailedPacket)
@@ -303,38 +312,65 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskRangeInCompileOrder(
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
+    SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, compiledGraph, recordedGraph, transaction);
+    GpuCompiledGraph::ReadView planAccess(compiledGraph);
+    if(!planAccess.valid())
+        return false;
+    GpuRecordedGraph::ArtifactOperation artifactOperation(
+        recordedGraph,
+        GpuRecordedGraph::ArtifactOperationMode::Exclusive
+    );
+    if(!artifactOperation.valid())
+        return false;
     GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(
         transaction,
-        GpuGraphSubmissionTransaction::SubmissionOperationMode::CompositeBarrier
+        GpuGraphSubmissionTransaction::SubmissionOperationMode::CompositeBarrier,
+        &artifactOperation
     );
     if(!submissionOperation.valid())
         return false;
-    const GpuSubmissionPacketRange range = compiledGraph.packetRangeForTasks(firstTask, lastTask);
-    if(
-        !compiledGraph.validFor(graph)
-        || !transaction.validFor(compiledGraph)
-        || !compiledGraph.validPacketRange(range)
-    )
-        return false;
+    SubmissionAttemptExceptionScope exceptionScope(graph, compiledGraph, recordedGraph, transaction, outFailedPacket);
 
-    const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
-    for(usize packetIndex = range.first.index; packetIndex < rangeEnd; ++packetIndex){
-        const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
-        if(!compiledGraph.packet(packet).joinsAcceptedQueueFrontier)
-            continue;
-        if(outFailedPacket)
-            *outFailedPacket = packet;
-        return false;
+    GpuSubmissionPacketRange range;
+    {
+        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+        if(!declarationAccess.valid())
+            return false;
+        range = planAccess.packetRangeForTasks(firstTask, lastTask);
+        if(
+            !planAccess.validFor(declarationAccess)
+            || !transaction.validFor(planAccess)
+            || !planAccess.validPacketRange(range)
+        )
+            return false;
+        exceptionScope.setFailedPacket(range.first);
+
+        const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
+        for(usize packetIndex = range.first.index; packetIndex < rangeEnd; ++packetIndex){
+            const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
+            const GpuCompiledPacketView packetView = planAccess.packet(packet);
+            if(!packetView.valid())
+                return false;
+            if(!packetView.plan->joinsAcceptedQueueFrontier)
+                continue;
+            if(outFailedPacket)
+                *outFailedPacket = packet;
+            return false;
+        }
+
+        if(!prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
+            graph,
+            compiledGraph,
+            range.first,
+            recorder.m_timingRecorder,
+            recordedGraph,
+            transaction,
+            artifactOperation,
+            declarationAccess,
+            planAccess
+        ))
+            return false;
     }
-
-    if(!prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
-        graph,
-        compiledGraph,
-        range.first,
-        recordedGraph,
-        transaction
-    ))
-        return false;
 
     GpuSubmissionPacketId failedPacket;
     if(!recorder.recordPacketRangeInCompileOrder(
@@ -388,38 +424,65 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskRangeInReadyFrontiers(
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
+    SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, compiledGraph, recordedGraph, transaction);
+    GpuCompiledGraph::ReadView planAccess(compiledGraph);
+    if(!planAccess.valid())
+        return false;
+    GpuRecordedGraph::ArtifactOperation artifactOperation(
+        recordedGraph,
+        GpuRecordedGraph::ArtifactOperationMode::Exclusive
+    );
+    if(!artifactOperation.valid())
+        return false;
     GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(
         transaction,
-        GpuGraphSubmissionTransaction::SubmissionOperationMode::CompositeBarrier
+        GpuGraphSubmissionTransaction::SubmissionOperationMode::CompositeBarrier,
+        &artifactOperation
     );
     if(!submissionOperation.valid())
         return false;
-    const GpuSubmissionPacketRange range = compiledGraph.packetRangeForTasks(firstTask, lastTask);
-    if(
-        !compiledGraph.validFor(graph)
-        || !transaction.validFor(compiledGraph)
-        || !compiledGraph.validPacketRange(range)
-    )
-        return false;
+    SubmissionAttemptExceptionScope exceptionScope(graph, compiledGraph, recordedGraph, transaction, outFailedPacket);
 
-    const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
-    for(usize packetIndex = range.first.index; packetIndex < rangeEnd; ++packetIndex){
-        const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
-        if(!compiledGraph.packet(packet).joinsAcceptedQueueFrontier)
-            continue;
-        if(outFailedPacket)
-            *outFailedPacket = packet;
-        return false;
+    GpuSubmissionPacketRange range;
+    {
+        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+        if(!declarationAccess.valid())
+            return false;
+        range = planAccess.packetRangeForTasks(firstTask, lastTask);
+        if(
+            !planAccess.validFor(declarationAccess)
+            || !transaction.validFor(planAccess)
+            || !planAccess.validPacketRange(range)
+        )
+            return false;
+        exceptionScope.setFailedPacket(range.first);
+
+        const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
+        for(usize packetIndex = range.first.index; packetIndex < rangeEnd; ++packetIndex){
+            const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
+            const GpuCompiledPacketView packetView = planAccess.packet(packet);
+            if(!packetView.valid())
+                return false;
+            if(!packetView.plan->joinsAcceptedQueueFrontier)
+                continue;
+            if(outFailedPacket)
+                *outFailedPacket = packet;
+            return false;
+        }
+
+        if(!prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
+            graph,
+            compiledGraph,
+            range.first,
+            recorder.m_timingRecorder,
+            recordedGraph,
+            transaction,
+            artifactOperation,
+            declarationAccess,
+            planAccess
+        ))
+            return false;
     }
-
-    if(!prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
-        graph,
-        compiledGraph,
-        range.first,
-        recordedGraph,
-        transaction
-    ))
-        return false;
 
     GpuSubmissionPacketId failedPacket;
     if(!recorder.recordPacketRangeInReadyFrontiers(
@@ -472,62 +535,108 @@ bool GpuTaskGraphSubmitter::recordAndSubmitAcceptedFrontierTask(
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
+    SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, compiledGraph, recordedGraph, transaction);
+    GpuCompiledGraph::ReadView planAccess(compiledGraph);
+    if(!planAccess.valid())
+        return false;
+    GpuRecordedGraph::ArtifactOperation artifactOperation(
+        recordedGraph,
+        GpuRecordedGraph::ArtifactOperationMode::Exclusive
+    );
+    if(!artifactOperation.valid())
+        return false;
     GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(
         transaction,
-        GpuGraphSubmissionTransaction::SubmissionOperationMode::CompositeBarrier
+        GpuGraphSubmissionTransaction::SubmissionOperationMode::CompositeBarrier,
+        &artifactOperation
     );
     if(!submissionOperation.valid())
         return false;
+    SubmissionAttemptExceptionScope exceptionScope(graph, compiledGraph, recordedGraph, transaction, outFailedPacket);
 
-    const auto rejectTask = [&]{
+
+    const auto rejectTask = [&](const GpuTaskGraph::DeclarationReadView& declarationAccess){
         if(
-            compiledGraph.validFor(graph)
-            && transaction.validFor(compiledGraph)
-            && graph.validTask(task)
-            && compiledGraph.findTask(task)
+            planAccess.validFor(declarationAccess)
+            && transaction.validFor(planAccess)
+            && declarationAccess.validTask(task)
+            && planAccess.findTask(task).valid()
         ){
             u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();
             if(recordingAttemptGeneration == 0u){
-                const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
-                if(!graph.beginRecordingAttempt(compiledGraph, packet))
+                const GpuSubmissionPacketId packet = planAccess.packetForTask(task);
+                GpuTaskGraph::RecordingAttemptScope provisionalAttempt;
+                if(!graph.beginRecordingAttempt(
+                    compiledGraph,
+                    packet,
+                    declarationAccess,
+                    planAccess,
+                    provisionalAttempt
+                ))
                     return;
                 recordingAttemptGeneration = graph.recordingAttemptGeneration();
+                if(!transaction.bindRecordingAttemptWithinSubmissionOperation(
+                    graph,
+                    compiledGraph,
+                    recordingAttemptGeneration,
+                    &provisionalAttempt
+                ))
+                    return;
+                provisionalAttempt.complete();
             }
             transaction.rejectTaskWithinSubmissionOperation(
                 graph,
+                declarationAccess,
                 compiledGraph,
+                planAccess,
                 task,
                 recordingAttemptGeneration
             );
         }
     };
-    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
-    if(
-        !compiledGraph.validFor(graph)
-        || !transaction.validFor(compiledGraph)
-        || !graph.validTask(task)
-        || !compiledGraph.findTask(task)
-        || !compiledGraph.taskJoinsAcceptedQueueFrontier(task)
-    ){
-        rejectTask();
-        return false;
+    GpuSubmissionPacketId packet;
+    {
+        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+        if(!declarationAccess.valid())
+            return false;
+        packet = planAccess.packetForTask(task);
+        exceptionScope.setFailedPacket(packet);
+        if(
+            !planAccess.validFor(declarationAccess)
+            || !transaction.validFor(planAccess)
+            || !declarationAccess.validTask(task)
+            || !planAccess.findTask(task).valid()
+            || !planAccess.taskJoinsAcceptedQueueFrontier(task)
+        ){
+            rejectTask(declarationAccess);
+            return false;
+        }
+        if(!prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
+            graph,
+            compiledGraph,
+            packet,
+            recorder.m_timingRecorder,
+            recordedGraph,
+            transaction,
+            artifactOperation,
+            declarationAccess,
+            planAccess
+        ))
+            return false;
     }
-    if(!prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
-        graph,
-        compiledGraph,
-        packet,
-        recordedGraph,
-        transaction
-    ))
-        return false;
     if(!transaction.waitForSubmissionPublicationAndHasAcceptedPacketsWithinSubmissionOperation()){
-        rejectTask();
+        if(outFailedPacket)
+            *outFailedPacket = packet;
+        GpuTaskGraph::DeclarationReadView rejectionDeclarations = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+        rejectTask(rejectionDeclarations);
         return false;
     }
 
     return recordAndSubmitTaskWithinSubmissionOperation(
         graph,
         compiledGraph,
+        planAccess,
+        artifactOperation,
         recorder,
         recordedGraph,
         task,
@@ -554,16 +663,57 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTask(
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
+    SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, compiledGraph, recordedGraph, transaction);
+    GpuCompiledGraph::ReadView planAccess(compiledGraph);
+    if(!planAccess.valid())
+        return false;
+    GpuRecordedGraph::ArtifactOperation artifactOperation(
+        recordedGraph,
+        GpuRecordedGraph::ArtifactOperationMode::Exclusive
+    );
+    if(!artifactOperation.valid())
+        return false;
     GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(
         transaction,
-        GpuGraphSubmissionTransaction::SubmissionOperationMode::CompositeBarrier
+        GpuGraphSubmissionTransaction::SubmissionOperationMode::CompositeBarrier,
+        &artifactOperation
     );
     if(!submissionOperation.valid())
         return false;
+    SubmissionAttemptExceptionScope exceptionScope(graph, compiledGraph, recordedGraph, transaction, outFailedPacket);
+
+    {
+        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+        if(
+            !declarationAccess.valid()
+            || !planAccess.validFor(declarationAccess)
+            || !transaction.validFor(planAccess)
+            || !declarationAccess.validTask(task)
+            || !planAccess.findTask(task).valid()
+        )
+            return false;
+
+        const GpuSubmissionPacketId packet = planAccess.packetForTask(task);
+        exceptionScope.setFailedPacket(packet);
+        if(!prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
+            graph,
+            compiledGraph,
+            packet,
+            recorder.m_timingRecorder,
+            recordedGraph,
+            transaction,
+            artifactOperation,
+            declarationAccess,
+            planAccess
+        ))
+            return false;
+    }
 
     return recordAndSubmitTaskWithinSubmissionOperation(
         graph,
         compiledGraph,
+        planAccess,
+        artifactOperation,
         recorder,
         recordedGraph,
         task,
@@ -579,6 +729,8 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTask(
 bool GpuTaskGraphSubmitter::recordAndSubmitTaskWithinSubmissionOperation(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
+    const GpuCompiledGraph::ReadView& planAccess,
+    const GpuRecordedGraph::ArtifactOperation& artifactAccess,
     const GpuNativePacketRecorder& recorder,
     GpuRecordedGraph& recordedGraph,
     const GpuTaskId task,
@@ -588,30 +740,39 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskWithinSubmissionOperation(
     GpuSubmissionPacketId* const outFailedPacket,
     const GpuTaskGraphTaskAcceptedCallback* const acceptedCallback
 )const{
-    if(!GpuGraphSubmissionTransaction::SubmissionOperation::activeExclusiveFor(transaction))
-        return false;
-
     if(
-        !compiledGraph.validFor(graph)
-        || !transaction.validFor(compiledGraph)
-        || !graph.validTask(task)
-        || !compiledGraph.findTask(task)
+        !planAccess.validFor(compiledGraph)
+        || !artifactAccess.exclusiveFor(recordedGraph)
+        || !GpuGraphSubmissionTransaction::SubmissionOperation::activeExclusiveFor(transaction)
     )
         return false;
 
-    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
-    if(!prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
-        graph,
-        compiledGraph,
-        packet,
-        recordedGraph,
-        transaction
-    ))
+    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+    if(
+        !declarationAccess.valid()
+        || !planAccess.validFor(declarationAccess)
+        || !transaction.validFor(planAccess)
+        || !declarationAccess.validTask(task)
+        || !planAccess.findTask(task).valid()
+    )
         return false;
+
     const u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();
+    if(
+        recordingAttemptGeneration == 0u
+        || !graph.matchesRecordingAttempt(compiledGraph, recordingAttemptGeneration)
+    )
+        return false;
 
     const auto rejectTask = [&]{
-        transaction.rejectTaskWithinSubmissionOperation(graph, compiledGraph, task, recordingAttemptGeneration);
+        transaction.rejectTaskWithinSubmissionOperation(
+            graph,
+            declarationAccess,
+            compiledGraph,
+            planAccess,
+            task,
+            recordingAttemptGeneration
+        );
     };
     if(
         (recordedCallback && (!recordedCallback->invoke || recordedCallback->task != task))
@@ -639,13 +800,13 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskWithinSubmissionOperation(
 
     if(
         recordedCallback
-        && !__hidden_gpu_packet_runtime_execution::InvokeTaskRecordedCallback(
-            *recordedCallback,
-            recordedGraph.taskFinalStateSeed(compiledGraph, task)
+        && !recordedCallback->invoke(
+            recordedCallback->context,
+            recordedGraph.packetStateSeed(planAccess.packetForTask(task), artifactAccess)
         )
     ){
         if(outFailedPacket)
-            *outFailedPacket = compiledGraph.packetForTask(task);
+            *outFailedPacket = planAccess.packetForTask(task);
         rejectTask();
         return false;
     }
@@ -654,7 +815,7 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskWithinSubmissionOperation(
         graph,
         compiledGraph,
         recordedGraph,
-        compiledGraph.packetRangeForTasks(task, task),
+        planAccess.packetRangeForTasks(task, task),
         PacketRangeSubmissionOperationPolicy::ActiveExclusiveBarrier,
         nullptr,
         0u,
@@ -683,27 +844,71 @@ bool GpuTaskGraphSubmitter::prepareRecordingAttemptAndBindTransactionWithinSubmi
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packet,
+    GpuTimingRecorder* const timingRecorder,
     GpuRecordedGraph& recordedGraph,
-    GpuGraphSubmissionTransaction& transaction
+    GpuGraphSubmissionTransaction& transaction,
+    const GpuRecordedGraph::ArtifactOperation& artifactAccess,
+    const GpuTaskGraph::DeclarationReadView& declarationAccess,
+    const GpuCompiledGraph::ReadView& planAccess
 )const{
     if(
-        !GpuGraphSubmissionTransaction::SubmissionOperation::activeExclusiveFor(transaction)
-        || !compiledGraph.validFor(graph)
-        || !compiledGraph.validPacket(packet)
-        || !transaction.validFor(compiledGraph)
-        || !graph.beginRecordingAttempt(compiledGraph, packet)
+        !planAccess.validFor(compiledGraph)
+        || !artifactAccess.exclusiveFor(recordedGraph)
+        || !GpuGraphSubmissionTransaction::SubmissionOperation::activeExclusiveFor(transaction)
+        || !declarationAccess.validFor(graph)
+        || !planAccess.validFor(declarationAccess)
+        || !planAccess.validPacket(packet)
+        || !transaction.validFor(planAccess)
     )
         return false;
-
-    if(!recordedGraph.validFor(graph, compiledGraph))
-        recordedGraph.resetForRecording(graph, compiledGraph);
-    if(!recordedGraph.validFor(graph, compiledGraph))
+    if(recordedGraph.validForWithinArtifactOperation(
+        graph,
+        declarationAccess,
+        compiledGraph,
+        planAccess,
+        artifactAccess
+    )){
+        GpuTimingRecorder* const artifactTimingRecorder =
+            recordedGraph.timingRecorderWithinArtifactOperation(artifactAccess)
+        ;
+        if(artifactTimingRecorder && artifactTimingRecorder != timingRecorder)
+            return false;
+        return transaction.bindRecordingAttemptWithinSubmissionOperation(
+            graph,
+            compiledGraph,
+            recordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactAccess)
+        );
+    }
+    if(!recordedGraph.prepareRecordingStorageCandidate(compiledGraph, planAccess, timingRecorder))
         return false;
 
-    return transaction.bindRecordingAttemptWithinSubmissionOperation(
+    GpuTaskGraph::RecordingAttemptScope provisionalAttempt;
+    if(!graph.beginRecordingAttempt(compiledGraph, packet, declarationAccess, planAccess, provisionalAttempt))
+        return false;
+    if(!provisionalAttempt.m_graph)
+        return false;
+
+    if(!transaction.bindRecordingAttemptWithinSubmissionOperation(
         graph,
         compiledGraph,
-        recordedGraph.recordingAttemptGeneration()
+        provisionalAttempt.m_recordingAttemptGeneration,
+        &provisionalAttempt
+    ))
+        return false;
+    recordedGraph.publishStorageCandidate(
+        &graph,
+        compiledGraph,
+        planAccess,
+        provisionalAttempt.m_recordingAttemptGeneration,
+        artifactAccess
+    );
+    provisionalAttempt.complete();
+    return recordedGraph.validForWithinArtifactOperation(
+        graph,
+        declarationAccess,
+        compiledGraph,
+        planAccess,
+        artifactAccess
     );
 }
 

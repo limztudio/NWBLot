@@ -11,6 +11,7 @@
 #include <core/graphics/task_graph/packet_runtime.h>
 #include <core/graphics/vulkan/texture_clear_detail.h>
 #include <tests/common/capturing_logger.h>
+#include <tests/common/gpu_task_graph_read_views.h>
 #include <tests/common/headless_graphics_scope.h>
 
 
@@ -57,7 +58,7 @@ struct PoisonedClearHookResult{
     bool recordPacketAccepted = false;
     bool acceptedTokenCleared = false;
     bool recordedPacketPresent = false;
-    bool discardUnacceptedSucceeded = false;
+    bool resolvedAttemptDiscardRejected = false;
 };
 
 [[nodiscard]] static bool PoisonClearBeforeRecord(
@@ -192,12 +193,23 @@ static void CountDiscardedClear(void* const rawResult){
     GpuCompiledGraph compiledGraph(arena);
     Alloc::ScratchArena scratchArena(Name("tests/texture_clear_staging/poisoned_hook_scratch"));
     const GpuTaskGraphCompiler compiler;
-    if(!compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena))
-        return false;
+    {
+        const GpuTaskGraph::DeclarationReadView compilationDeclarations(graph);
 
-    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
-    if(!packet.valid())
-        return false;
+        if(!compiler.compile(compilationDeclarations, analysis, topology, assignments, compiledGraph, scratchArena))
+            return false;
+    }
+
+    GpuSubmissionPacketId packet;
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        if(!views.valid())
+            return false;
+
+        packet = views.compiled.packetForTask(task);
+        if(!packet.valid())
+            return false;
+    }
     GpuRecordedGraph recordedGraph(arena);
     GpuCommandIrCapture commandIrCapture(arena);
     const GpuNativePacketRecorder recorder(device);
@@ -210,14 +222,20 @@ static void CountDiscardedClear(void* const rawResult){
         &commandIrCapture
     );
     result.acceptedTokenCleared = !acceptedToken.valid();
-    result.recordedPacketPresent = recordedGraph.find(packet) != nullptr;
+    result.recordedPacketPresent = recordedGraph.packetSnapshot(packet).has_value();
     result.commandIrRecordCount = commandIrCapture.recordCount();
-    result.recordingStatistics = recordedGraph.recordingStatistics(compiledGraph);
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        if(!views.valid())
+            return false;
+
+        result.recordingStatistics = recordedGraph.recordingStatistics(compiledGraph, views.compiled);
+    }
 
     {
         GpuGraphSubmissionTransaction transaction(arena);
         transaction.reset(compiledGraph);
-        result.discardUnacceptedSucceeded = transaction.discardUnaccepted(
+        result.resolvedAttemptDiscardRejected = !transaction.discardUnaccepted(
             graph,
             compiledGraph,
             recordedGraph.recordingAttemptGeneration()
@@ -367,7 +385,7 @@ TEST_F(TextureClearStagingTest, PoisonedBeforeClearSuppressesAfterClearAndRollsB
         EXPECT_TRUE(result.acceptedTokenCleared);
         EXPECT_FALSE(result.recordedPacketPresent);
         EXPECT_EQ(result.commandIrRecordCount, 0u);
-        EXPECT_TRUE(result.discardUnacceptedSucceeded);
+        EXPECT_TRUE(result.resolvedAttemptDiscardRejected);
         ASSERT_TRUE(result.recordingStatistics.valid());
         EXPECT_EQ(result.recordingStatistics.packetCount, 0u);
         EXPECT_EQ(result.recordingStatistics.taskCount, 0u);

@@ -6,6 +6,7 @@
 
 #include <core/common/log.h>
 #include <global/atomic.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,25 +18,55 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Device::beginSubmissionOperation()noexcept{
-    ScopedLock lock(m_submissionOperationMutex);
-    if(submissionsBlocked())
-        return false;
+Device::SubmissionOperationLease::~SubmissionOperationLease()noexcept{
+    if(!m_device)
+        return;
+    NWB_FATAL_ASSERT(activeLease() == this);
+    if(activeLease() != this)
+        TerminateInvariant();
+    activeLease() = m_previousActiveLease;
+    m_device->endSubmissionOperation();
+}
 
-    ++m_activeSubmissionOperationCount;
-    return true;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool Device::beginSubmissionOperation()noexcept{
+    u64 state = m_submissionOperationState.load(MemoryOrder::acquire);
+    for(;;){
+        if(
+            (state & s_SubmissionDrainBit) != 0u
+            || requiresRecreation()
+            || (state & s_SubmissionOperationCountMask) == s_SubmissionOperationCountMask
+        )
+            return false;
+        if(m_submissionOperationState.compare_exchange_weak(
+            state,
+            state + 1u,
+            MemoryOrder::acquire,
+            MemoryOrder::relaxed
+        ))
+            return true;
+    }
 }
 
 void Device::endSubmissionOperation()noexcept{
-    bool drained = false;
-    {
-        ScopedLock lock(m_submissionOperationMutex);
-        NWB_ASSERT(m_activeSubmissionOperationCount > 0u);
-        --m_activeSubmissionOperationCount;
-        drained = m_activeSubmissionOperationCount == 0u;
+    u64 state = m_submissionOperationState.load(MemoryOrder::relaxed);
+    for(;;){
+        if((state & s_SubmissionOperationCountMask) == 0u)
+            TerminateInvariant();
+        if(m_submissionOperationState.compare_exchange_weak(
+            state,
+            state - 1u,
+            MemoryOrder::release,
+            MemoryOrder::relaxed
+        )){
+            if((state & s_SubmissionOperationCountMask) == 1u)
+                m_submissionOperationState.notify_all();
+            return;
+        }
     }
-    if(drained)
-        m_submissionOperationCondition.notify_all();
 }
 
 bool Device::beginLifecycleDrain()noexcept{
@@ -44,28 +75,43 @@ bool Device::beginLifecycleDrain()noexcept{
     if(submissionOperationActiveOnCurrentThread())
         return false;
 
-    UniqueLock<Futex> lock(m_submissionOperationMutex);
-    if(m_submissionSuspended.load(MemoryOrder::acquire))
-        return false;
+    u64 state = m_submissionOperationState.load(MemoryOrder::acquire);
+    for(;;){
+        if((state & s_SubmissionDrainBit) != 0u)
+            return false;
+        if(m_submissionOperationState.compare_exchange_weak(
+            state,
+            state | s_SubmissionDrainBit,
+            MemoryOrder::acq_rel,
+            MemoryOrder::acquire
+        ))
+            break;
+    }
 
-    m_submissionSuspended.store(true, MemoryOrder::release);
-    m_submissionOperationCondition.wait(lock, [this](){ return m_activeSubmissionOperationCount == 0u; });
+    state |= s_SubmissionDrainBit;
+    while((state & s_SubmissionOperationCountMask) != 0u){
+        m_submissionOperationState.wait(state, MemoryOrder::acquire);
+        state = m_submissionOperationState.load(MemoryOrder::acquire);
+        NWB_FATAL_ASSERT((state & s_SubmissionDrainBit) != 0u);
+        if((state & s_SubmissionDrainBit) == 0u)
+            TerminateInvariant();
+    }
     return true;
 }
 
 void Device::endLifecycleDrain()noexcept{
-    ScopedLock lock(m_submissionOperationMutex);
-    NWB_ASSERT(!m_lifecycleDestructionPrepared.load(MemoryOrder::acquire));
-    NWB_ASSERT(m_activeSubmissionOperationCount == 0u);
-    NWB_ASSERT(m_submissionSuspended.load(MemoryOrder::acquire));
-    m_submissionSuspended.store(false, MemoryOrder::release);
+    const bool lifecycleDestructionPrepared = m_lifecycleDestructionPrepared.load(MemoryOrder::acquire);
+    const u64 submissionOperationState = m_submissionOperationState.load(MemoryOrder::acquire);
+    NWB_FATAL_ASSERT(!lifecycleDestructionPrepared);
+    NWB_FATAL_ASSERT(submissionOperationState == s_SubmissionDrainBit);
+    if(lifecycleDestructionPrepared || submissionOperationState != s_SubmissionDrainBit)
+        TerminateInvariant();
+    m_submissionOperationState.store(0u, MemoryOrder::release);
 }
 
 bool Device::sealLifecycleDrainForDestruction()noexcept{
-    ScopedLock lock(m_submissionOperationMutex);
-    if(!m_submissionSuspended.load(MemoryOrder::acquire))
+    if(m_submissionOperationState.load(MemoryOrder::acquire) != s_SubmissionDrainBit)
         return false;
-    NWB_ASSERT(m_activeSubmissionOperationCount == 0u);
     m_lifecycleDestructionPrepared.store(true, MemoryOrder::release);
     return true;
 }
@@ -89,6 +135,7 @@ QueueSubmissionToken Device::consumeAcquiredImageSemaphore(const VkSemaphore sem
         &acquireWait,
         1u,
         &submissionAccepted,
+        nullptr,
         nullptr,
         0u,
         true

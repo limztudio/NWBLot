@@ -20,7 +20,7 @@ void BackendContext::logVulkanDeviceConfiguration(
     const VkPhysicalDeviceProperties& physicalDeviceProperties,
     const bool maintenance4Enabled,
     const VkPhysicalDeviceMaintenance4Features& maintenance4Features,
-    const bool createAsyncComputeQueue,
+    const bool createComputeQueue,
     const bool createCrossFamilySecondaryComputeQueue,
     const i32 secondaryComputeQueueFamily,
     const bool createDedicatedTransferQueue,
@@ -46,10 +46,11 @@ void BackendContext::logVulkanDeviceConfiguration(
         else
             ss << " present=" << m_presentQueueFamily;
 
-        if(createAsyncComputeQueue)
-            ss << " asyncCompute=" << m_computeQueueFamily;
+        ss << " requiredCompute=" << m_computeQueueFamily;
+        if(createComputeQueue)
+            ss << " schedulerCompute=" << (m_asyncComputeQueueFamily != s_InvalidQueueFamilyIndex ? m_asyncComputeQueueFamily : m_computeQueueFamily);
         else
-            ss << " asyncCompute=not-requested";
+            ss << " schedulerCompute=graphics-alias";
         if(createCrossFamilySecondaryComputeQueue)
             ss << " auxiliaryAsyncCompute=" << secondaryComputeQueueFamily;
 
@@ -114,12 +115,17 @@ void BackendContext::logVulkanDeviceConfiguration(
         , StringConvert(sameClassGraphicsQueueReason)
     );
 
-    m_asyncComputeLaneEnabled =
-        m_deviceParams.enableAsyncComputeLane
-        && m_computeQueueFamily != s_InvalidQueueFamilyIndex
-        && m_computeQueueFamily != m_graphicsQueueFamily
-        && findNativeQueueIndex(static_cast<u32>(m_computeQueueFamily), s_ComputeQueueIndex) != Limit<u32>::s_Max
+    const i32 schedulerComputeQueueFamily = m_asyncComputeQueueFamily != s_InvalidQueueFamilyIndex
+        ? m_asyncComputeQueueFamily
+        : m_computeQueueFamily
     ;
+    m_computeQueueEnabled =
+        createComputeQueue
+        && schedulerComputeQueueFamily != s_InvalidQueueFamilyIndex
+        && schedulerComputeQueueFamily != m_graphicsQueueFamily
+        && findNativeQueueIndex(static_cast<u32>(schedulerComputeQueueFamily), s_ComputeQueueIndex) != Limit<u32>::s_Max
+    ;
+    m_asyncComputeLaneEnabled = m_deviceParams.enableAsyncComputeLane && m_computeQueueEnabled;
     const bool asyncComputeLaneEffective = m_asyncComputeLaneEnabled;
     const char* const asyncComputeLaneReason = !m_deviceParams.enableAsyncComputeLane
         ? "disabled"
@@ -131,16 +137,16 @@ void BackendContext::logVulkanDeviceConfiguration(
         , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableAsyncComputeLane))
         , StringConvert(VulkanDetail::BoolToString(asyncComputeLaneEffective))
         , m_graphicsQueueFamily
-        , m_computeQueueFamily
+        , schedulerComputeQueueFamily
         , StringConvert(asyncComputeLaneReason)
     );
 
     const char* const sameClassComputeQueueReason = !m_deviceParams.enableSameClassMultiQueue
         ? "disabled"
-        : !asyncComputeLaneEffective
+        : !m_computeQueueEnabled
             ? "primary dedicated Compute queue unavailable"
             : m_sameClassComputeQueueEnabled
-                ? m_secondaryComputeQueueFamily != m_computeQueueFamily
+            ? m_secondaryComputeQueueFamily != schedulerComputeQueueFamily
                     ? "cross-family and/or primary-family Compute queues selected"
                     : "additional queues from the Compute family selected"
                 : m_deviceParams.enableCrossFamilySameClassQueueRouting

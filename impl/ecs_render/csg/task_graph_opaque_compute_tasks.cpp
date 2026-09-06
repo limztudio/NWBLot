@@ -190,7 +190,8 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
     );
     // The scope crosses the following raster callback, so close its marker in this producer before command-list
     // finalization. The terminal sample callback owns finishTiming/discard.
-    payload.opaqueCsgTiming->value().finishMarker();
+    if(!Core::FinishSplitGpuTimingMarker(payload.opaqueCsgTiming))
+        return false;
     const MaterialPassDrawContext drawContext{
         commandList,
         *payload.targets,

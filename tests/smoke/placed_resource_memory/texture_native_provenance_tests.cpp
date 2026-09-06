@@ -396,8 +396,10 @@ TEST_F(TextureNativeProvenanceTest, InitialStateKnowledgeSurvivesTypedTaskGraphI
     );
     ASSERT_TRUE(unknownResource.valid());
     ASSERT_TRUE(knownResource.valid());
-    EXPECT_EQ(graph.resourceAt(unknownResource.index).initialState, ResourceStates::Unknown);
-    EXPECT_EQ(graph.resourceAt(knownResource.index).initialState, ResourceStates::ShaderResource);
+    const GpuTaskGraph::DeclarationReadView declarations(graph);
+    ASSERT_TRUE(declarations.valid());
+    EXPECT_EQ(declarations.resourceAt(unknownResource.index).initialState, ResourceStates::Unknown);
+    EXPECT_EQ(declarations.resourceAt(knownResource.index).initialState, ResourceStates::ShaderResource);
 }
 
 

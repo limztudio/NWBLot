@@ -12,6 +12,8 @@
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
 
+#include <global/termination.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -212,12 +214,7 @@ void RendererFramePipeline::invalidateResources(){
     m_deferredFrameRecoveryRetiresTiming = false;
     m_preparedTaskGraphPresentationContributor = nullptr;
     m_deferredPresentationOverlayRequired = false;
-    m_deferredLightingTaskGraph.reset();
-    m_deferredLightingTaskGraphAnalysis.reset();
-    m_deferredLightingTaskGraphQueueAssignments.reset();
-    m_deferredLightingCompiledGraph.reset();
-    m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
-    m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
+    resetDeferredTaskGraphRuntime();
     resetInvalidatedResourceStateHandoffs();
     resetLaggedLightingHistoryTracking();
     m_frameRenderRecoveryFailed = false;
@@ -347,6 +344,33 @@ void RendererFramePipeline::resetFrameTargets(){
     // AVBOIT owns descriptor registrations embedded in the aggregate, so retire them before Deferred clears it.
     m_avboitSystem.resetAvboitFrameTargets(m_frameTargets.avboit);
     m_deferredSystem.resetDeferredFrameTargets(m_frameTargets);
+}
+
+void RendererFramePipeline::resetDeferredTaskGraphRuntime(){
+    {
+        Core::GpuCompiledGraph::ReadView planAccess(m_deferredLightingCompiledGraph);
+        if(planAccess.valid()){
+            const u64 recordingAttemptGeneration = m_deferredLightingRecordedGraph.recordingAttemptGeneration();
+            if(
+                recordingAttemptGeneration != 0u
+                && !m_deferredLightingSubmissionTransaction.discardUnaccepted(
+                    m_deferredLightingTaskGraph,
+                    m_deferredLightingCompiledGraph,
+                    recordingAttemptGeneration
+                )
+            ){
+                NWB_FATAL_ASSERT_MSG(false, "renderer task-graph reset must resolve every unaccepted packet");
+                TerminateInvariant();
+            }
+            m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
+            m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
+        }
+    }
+
+    m_deferredLightingTaskGraph.reset();
+    m_deferredLightingTaskGraphAnalysis.reset();
+    m_deferredLightingTaskGraphQueueAssignments.reset();
+    m_deferredLightingCompiledGraph.reset();
 }
 
 bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){

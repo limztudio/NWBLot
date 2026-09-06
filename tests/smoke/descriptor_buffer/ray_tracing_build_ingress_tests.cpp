@@ -845,16 +845,52 @@ TEST_F(RayTracingBuildIngressTest, AcceptedAccelerationStructureBuildSignatureRe
     initialBuild->open();
     initialBuild->buildBottomLevelAccelStruct(blas.get(), &initialGeometry, 1u, initialBuildFlags);
     ASSERT_FALSE(initialBuild->commandRecordingFailed());
+    const u32 blasReferencesAfterFirstBuild = blas->getReferenceCount();
+    initialBuild->buildBottomLevelAccelStruct(blas.get(), &initialGeometry, 1u, matchingUpdateFlags);
+    ASSERT_FALSE(initialBuild->commandRecordingFailed());
+    EXPECT_EQ(blas->getReferenceCount(), blasReferencesAfterFirstBuild)
+        << "two pending roles for the same AS retained it more than once";
     initialBuild->close();
 
-    CommandList* const initialBuilds[]{ initialBuild.get() };
-    const QueueSubmissionToken acceptedToken = device().executeCommandLists(
-        initialBuilds,
-        LengthOf(initialBuilds),
-        CommandQueue::Graphics,
-        QueueSubmissionDesc{}
-    );
-    ASSERT_TRUE(acceptedToken.valid());
+    struct AcceptedTailProbe{
+        Alloc::GlobalArena* arena = nullptr;
+        ArenaMemoryStats nativeReturnStats;
+        Atomic<bool> captured = false;
+    };
+    AcceptedTailProbe acceptedTailProbe{
+        .arena = &arena(),
+        .nativeReturnStats = {},
+        .captured = false,
+    };
+    const u32 messageCountBeforeSubmission = s_logger->messageCount();
+    {
+        VulkanTestQueueSubmit2Observer submissionObserver(device());
+        ASSERT_TRUE(submissionObserver.valid());
+        ASSERT_TRUE(submissionObserver.configureNativeSubmitHooks(
+            &acceptedTailProbe,
+            nullptr,
+            [](void* const context)noexcept{
+                auto& probe = *static_cast<AcceptedTailProbe*>(context);
+                probe.nativeReturnStats = probe.arena->memoryStats();
+                probe.captured.store(true, MemoryOrder::release);
+            }
+        ));
+
+        CommandList* const initialBuilds[]{ initialBuild.get() };
+        const QueueSubmissionToken acceptedToken = device().executeCommandLists(
+            initialBuilds,
+            LengthOf(initialBuilds),
+            CommandQueue::Graphics,
+            QueueSubmissionDesc{}
+        );
+        ASSERT_TRUE(acceptedToken.valid());
+    }
+    ASSERT_TRUE(acceptedTailProbe.captured.load(MemoryOrder::acquire));
+    const ArenaMemoryStats afterAcceptedTail = arena().memoryStats();
+    EXPECT_EQ(afterAcceptedTail.allocationCount, acceptedTailProbe.nativeReturnStats.allocationCount);
+    EXPECT_EQ(afterAcceptedTail.reallocationCount, acceptedTailProbe.nativeReturnStats.reallocationCount);
+    EXPECT_EQ(afterAcceptedTail.deallocationCount, acceptedTailProbe.nativeReturnStats.deallocationCount);
+    EXPECT_EQ(s_logger->messageCount(), messageCountBeforeSubmission);
     ASSERT_TRUE(device().waitForIdle());
 
     CommandListHandle update = device().createCommandList();
@@ -895,7 +931,7 @@ TEST_F(RayTracingBuildIngressTest, InjectedNativeSubmissionFailureDoesNotPublish
     const GpuPhysicalQueueId graphicsQueue = device().getPrimaryPhysicalQueue(CommandQueue::Graphics);
     ASSERT_TRUE(graphicsQueue.valid());
     const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
-        device().getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+        device().getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer()
     );
     ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
     VulkanTestQueueSubmit2Observer submissionObserver(device());
@@ -920,6 +956,8 @@ TEST_F(RayTracingBuildIngressTest, InjectedNativeSubmissionFailureDoesNotPublish
     createDesc.addBottomLevelGeometry(geometry).setBuildFlags(RayTracingAccelStructBuildFlags::AllowUpdate);
     const RayTracingAccelStructHandle blas = device().createAccelStruct(createDesc);
     ASSERT_TRUE(blas);
+    const u32 blasReferencesBeforeRecording = blas->getReferenceCount();
+    const u32 vertexReferencesBeforeRecording = vertex->getReferenceCount();
 
     const auto updateFlags = static_cast<RayTracingAccelStructBuildFlags::Mask>(
         RayTracingAccelStructBuildFlags::AllowUpdate | RayTracingAccelStructBuildFlags::PerformUpdate
@@ -957,6 +995,8 @@ TEST_F(RayTracingBuildIngressTest, InjectedNativeSubmissionFailureDoesNotPublish
     ASSERT_TRUE(idleAfterUnexpectedSubmission);
     EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
     EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
+    EXPECT_EQ(blas->getReferenceCount(), blasReferencesBeforeRecording);
+    EXPECT_EQ(vertex->getReferenceCount(), vertexReferencesBeforeRecording);
 
     CommandListHandle rejectedUpdate = device().createCommandList();
     ASSERT_TRUE(rejectedUpdate);
@@ -986,7 +1026,7 @@ TEST_F(RayTracingBuildIngressTest, InjectedNativeSubmissionFailureReusesBuildScr
     const GpuPhysicalQueueId graphicsQueue = scratchDevice.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     ASSERT_TRUE(graphicsQueue.valid());
     const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
-        scratchDevice.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+        scratchDevice.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer()
     );
     ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
     VulkanTestQueueSubmit2Observer submissionObserver(scratchDevice);
@@ -1260,7 +1300,7 @@ TEST_F(RayTracingBuildIngressTest, InjectedNativeSubmissionFailureDoesNotPublish
     const GpuPhysicalQueueId graphicsQueue = device().getPrimaryPhysicalQueue(CommandQueue::Graphics);
     ASSERT_TRUE(graphicsQueue.valid());
     const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
-        device().getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer
+        device().getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, graphicsQueue).pointer()
     );
     ASSERT_NE(nativeGraphicsQueue, VK_NULL_HANDLE);
     VulkanTestQueueSubmit2Observer submissionObserver(device());

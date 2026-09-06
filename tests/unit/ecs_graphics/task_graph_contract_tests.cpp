@@ -378,13 +378,51 @@ TEST(EcsGraphics, DeferredGraphExportsAcceptedQueueAssignmentHistory){
         "m_deferredLightingTaskGraphQueueAssignmentTelemetry.update("
     );
     const usize validResetOffset = render.find("m_deferredLightingTaskGraphValid = false;", previousRefreshOffset);
-    const usize graphResetOffset = render.find("m_deferredLightingTaskGraph.reset();", previousRefreshOffset);
+    const usize runtimeResetOffset = render.find("resetDeferredTaskGraphRuntime();", previousRefreshOffset);
     ASSERT_NE(previousRefreshOffset, AStringView::npos);
     ASSERT_NE(validResetOffset, AStringView::npos);
-    ASSERT_NE(graphResetOffset, AStringView::npos);
+    ASSERT_NE(runtimeResetOffset, AStringView::npos);
     EXPECT_LT(previousRefreshOffset, validResetOffset);
-    EXPECT_LT(previousRefreshOffset, graphResetOffset);
+    EXPECT_LT(previousRefreshOffset, runtimeResetOffset);
     EXPECT_TRUE(ContainsText(render, "deferred queue-assignment history refresh failed before graph reset"));
+
+    const usize resetHelperOffset = resources.find("void RendererFramePipeline::resetDeferredTaskGraphRuntime()");
+    const usize planReadOffset = resources.find("Core::GpuCompiledGraph::ReadView planAccess(", resetHelperOffset);
+    const usize discardOffset = resources.find(
+        "m_deferredLightingSubmissionTransaction.discardUnaccepted(",
+        planReadOffset
+    );
+    const usize transactionResetOffset = resources.find(
+        "m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);",
+        discardOffset
+    );
+    const usize recordedResetOffset = resources.find(
+        "m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);",
+        transactionResetOffset
+    );
+    const usize graphResetOffset = resources.find("m_deferredLightingTaskGraph.reset();", recordedResetOffset);
+    const usize analysisResetOffset = resources.find("m_deferredLightingTaskGraphAnalysis.reset();", graphResetOffset);
+    const usize assignmentResetOffset = resources.find(
+        "m_deferredLightingTaskGraphQueueAssignments.reset();",
+        analysisResetOffset
+    );
+    const usize compiledResetOffset = resources.find("m_deferredLightingCompiledGraph.reset();", assignmentResetOffset);
+    ASSERT_NE(resetHelperOffset, AStringView::npos);
+    ASSERT_NE(planReadOffset, AStringView::npos);
+    ASSERT_NE(discardOffset, AStringView::npos);
+    ASSERT_NE(transactionResetOffset, AStringView::npos);
+    ASSERT_NE(recordedResetOffset, AStringView::npos);
+    ASSERT_NE(graphResetOffset, AStringView::npos);
+    ASSERT_NE(analysisResetOffset, AStringView::npos);
+    ASSERT_NE(assignmentResetOffset, AStringView::npos);
+    ASSERT_NE(compiledResetOffset, AStringView::npos);
+    EXPECT_LT(planReadOffset, discardOffset);
+    EXPECT_LT(discardOffset, transactionResetOffset);
+    EXPECT_LT(transactionResetOffset, recordedResetOffset);
+    EXPECT_LT(recordedResetOffset, graphResetOffset);
+    EXPECT_LT(graphResetOffset, analysisResetOffset);
+    EXPECT_LT(analysisResetOffset, assignmentResetOffset);
+    EXPECT_LT(assignmentResetOffset, compiledResetOffset);
 
     const usize currentRefreshOffset = frameGraph.find(
         "m_deferredLightingTaskGraphQueueAssignmentTelemetry.update("
@@ -395,7 +433,7 @@ TEST(EcsGraphics, DeferredGraphExportsAcceptedQueueAssignmentHistory){
         guardedExportOffset
     );
     const usize taskGraphExportOffset = frameGraph.find(
-        "m_deferredLightingTaskGraph.appendFrameGraphTelemetry(",
+        "deferredTaskGraphView.appendFrameGraphTelemetry(",
         telemetryOptionsOffset
     );
     ASSERT_NE(currentRefreshOffset, AStringView::npos);
@@ -411,7 +449,7 @@ TEST(EcsGraphics, DeferredGraphExportsAcceptedQueueAssignmentHistory){
         frameGraph,
         ".queueAssignments = &m_deferredLightingTaskGraphQueueAssignments,"
     ));
-    EXPECT_TRUE(ContainsText(frameGraph, ".compiledGraph = &m_deferredLightingCompiledGraph,"));
+    EXPECT_TRUE(ContainsText(frameGraph, ".compiledPlan = &deferredCompiledPlan,"));
     EXPECT_TRUE(ContainsText(
         frameGraph,
         ".queueAssignmentTelemetry = &m_deferredLightingTaskGraphQueueAssignmentTelemetry,"
@@ -659,16 +697,22 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
     AString timingHeaderSource;
     AString timingSource;
     AString timingAccumulatorSource;
+    AString timingMetricCorrelatorSource;
     AString timingSubmissionSource;
     AString frameGraphSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "gpu_timing.h", timingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "gpu_timing.cpp", timingSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "gpu_timing_accumulator.cpp", timingAccumulatorSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "gpu_timing_metric_correlator.cpp",
+        timingMetricCorrelatorSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "gpu_timing_submission.cpp", timingSubmissionSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_telemetry.cpp", frameGraphSource));
     const AStringView timingHeader(timingHeaderSource.data(), timingHeaderSource.size());
     const AStringView timing(timingSource.data(), timingSource.size());
     const AStringView timingAccumulator(timingAccumulatorSource.data(), timingAccumulatorSource.size());
+    const AStringView timingMetricCorrelator(timingMetricCorrelatorSource.data(), timingMetricCorrelatorSource.size());
     const AStringView timingSubmission(timingSubmissionSource.data(), timingSubmissionSource.size());
     const AStringView frameGraph(frameGraphSource.data(), frameGraphSource.size());
 
@@ -705,14 +749,65 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
         "m_accumulatorsActive = m_performanceCollectionActive || !m_feedbackScopeDemands.empty();"
     ));
 
-    const usize collectLockedOffset = timing.find("void GpuTimingRecorder::collectLocked(");
+    const usize collectLockedOffset = timing.find("bool GpuTimingRecorder::collectLocked(");
     const usize submissionCompletedOffset = timing.find("bool GpuTimingRecorder::submissionCompleted(", collectLockedOffset);
     ASSERT_NE(collectLockedOffset, AStringView::npos);
     ASSERT_NE(submissionCompletedOffset, AStringView::npos);
     const AStringView collectLocked = timing.substr(collectLockedOffset, submissionCompletedOffset - collectLockedOffset);
     EXPECT_TRUE(ContainsText(collectLocked, "const bool publishPerformanceSamples = m_performanceCollectionActive;"));
+    EXPECT_TRUE(ContainsText(collectLocked, "return publishPerformanceSamples;"));
     EXPECT_FALSE(ContainsText(collectLocked, "m_enabled && m_timing.enabled()"));
     EXPECT_FALSE(ContainsText(collectLocked, "m_feedbackScopeDemands"));
+    EXPECT_FALSE(ContainsText(collectLocked, "m_timing.recordSample("));
+    EXPECT_FALSE(ContainsText(collectLocked, "m_timing.publishFrame("));
+
+    EXPECT_TRUE(ContainsText(timingHeader, "Futex m_collectionMutex;"));
+    EXPECT_EQ(CountText(timing, "ScopedLock collectionLock(m_collectionMutex);"), 2u);
+    EXPECT_EQ(CountText(timing, "for(const GpuTimingSinkSample& sample : performanceSamples)"), 2u);
+    EXPECT_EQ(CountText(
+        timing,
+        "m_timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);"
+    ), 2u);
+    EXPECT_EQ(CountText(timing, "m_timing.publishFrame(publishFrameIndex);"), 2u);
+
+    const usize implicitCollectOffset = timing.find("void GpuTimingRecorder::collect(Device& device){");
+    const usize explicitCollectOffset = timing.find(
+        "void GpuTimingRecorder::collect(Device& device, const u64 publishFrameIndex){",
+        implicitCollectOffset
+    );
+    const usize beginFrameOffset = timing.find("void GpuTimingRecorder::beginFrame(", explicitCollectOffset);
+    ASSERT_NE(implicitCollectOffset, AStringView::npos);
+    ASSERT_NE(explicitCollectOffset, AStringView::npos);
+    ASSERT_NE(beginFrameOffset, AStringView::npos);
+    const AStringView implicitCollect = timing.substr(
+        implicitCollectOffset,
+        explicitCollectOffset - implicitCollectOffset
+    );
+    const AStringView explicitCollect = timing.substr(explicitCollectOffset, beginFrameOffset - explicitCollectOffset);
+    for(const AStringView collection : { implicitCollect, explicitCollect }){
+        const usize stateLockOffset = collection.find("ScopedLock recorderLock(m_mutex);");
+        const usize stagingOffset = collection.find("publishPerformanceSamples = collectLocked(", stateLockOffset);
+        const usize sinkOffset = collection.find(
+            "m_timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);",
+            stagingOffset
+        );
+        const usize publishOffset = collection.find("m_timing.publishFrame(publishFrameIndex);", sinkOffset);
+        const usize dispatchOffset = collection.find("dispatchCompletedSamples(completedSamples);", publishOffset);
+        ASSERT_NE(stateLockOffset, AStringView::npos);
+        ASSERT_NE(stagingOffset, AStringView::npos);
+        ASSERT_NE(sinkOffset, AStringView::npos);
+        ASSERT_NE(publishOffset, AStringView::npos);
+        ASSERT_NE(dispatchOffset, AStringView::npos);
+        EXPECT_LT(stateLockOffset, stagingOffset);
+        EXPECT_LT(stagingOffset, sinkOffset);
+        EXPECT_LT(sinkOffset, publishOffset);
+        EXPECT_LT(publishOffset, dispatchOffset);
+        EXPECT_TRUE(ContainsText(
+            collection,
+            "        }\n        for(const GpuTimingSinkSample& sample : performanceSamples)"
+        ));
+        EXPECT_TRUE(ContainsText(collection, "    }\n    dispatchCompletedSamples(completedSamples);"));
+    }
 
     const usize resetQueriesOffset = timing.find("void GpuTimingRecorder::resetQueries(){");
     const usize collectOffset = timing.find("void GpuTimingRecorder::collect(", resetQueriesOffset);
@@ -724,7 +819,7 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
     ASSERT_NE(advanceEpochOffset, AStringView::npos);
     ASSERT_NE(resetPerformanceCaptureOffset, AStringView::npos);
     EXPECT_LT(advanceEpochOffset, resetPerformanceCaptureOffset);
-    EXPECT_TRUE(ContainsText(timing, "if(publishPerformanceSamples)\n        m_timing.publishFrame(publishFrameIndex);"));
+    EXPECT_TRUE(ContainsText(timing, "if(publishPerformanceSamples)\n            m_timing.publishFrame(publishFrameIndex);"));
     EXPECT_TRUE(ContainsText(timing, "++m_statistics.scopeAttemptCount;"));
     EXPECT_TRUE(ContainsText(timing, "GpuTimingScopeSkipReason::CollectionInactive"));
     EXPECT_TRUE(ContainsText(timing, "GpuTimingScopeSkipReason::QueueTimestampsUnsupported"));
@@ -735,14 +830,168 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
     EXPECT_TRUE(ContainsText(timingAccumulator, "const bool retirementPending = quarantineRecord("));
     const usize queryResultOffset = timingAccumulator.find("if(!device.getTimerQueryResult(record.query.get(), result))");
     const usize sampleStageOffset = timingAccumulator.find("completedSamples.push_back(SampleDispatch{", queryResultOffset);
-    const usize queryReleaseOffset = timingAccumulator.find("releaseQuery(record);", sampleStageOffset);
-    const usize perfPublicationOffset = timingAccumulator.find("recorder.m_timing.recordSample(", queryReleaseOffset);
+    const usize performanceSampleStageOffset = timingAccumulator.find(
+        "performanceSamples.push_back(GpuTimingSinkSample{",
+        sampleStageOffset
+    );
+    const usize derivedSampleStageOffset = timingAccumulator.find(
+        "recorder.m_metricCorrelator.recordTimestampRange(",
+        performanceSampleStageOffset
+    );
+    const usize queryReleaseOffset = timingAccumulator.find("releaseQuery(record);", derivedSampleStageOffset);
     ASSERT_NE(queryResultOffset, AStringView::npos);
     ASSERT_NE(sampleStageOffset, AStringView::npos);
+    ASSERT_NE(performanceSampleStageOffset, AStringView::npos);
+    ASSERT_NE(derivedSampleStageOffset, AStringView::npos);
     ASSERT_NE(queryReleaseOffset, AStringView::npos);
-    ASSERT_NE(perfPublicationOffset, AStringView::npos);
-    EXPECT_LT(sampleStageOffset, queryReleaseOffset);
-    EXPECT_LT(queryReleaseOffset, perfPublicationOffset);
+    EXPECT_LT(sampleStageOffset, performanceSampleStageOffset);
+    EXPECT_LT(performanceSampleStageOffset, derivedSampleStageOffset);
+    EXPECT_LT(derivedSampleStageOffset, queryReleaseOffset);
+    EXPECT_FALSE(ContainsText(timingAccumulator, "recorder.m_timing.recordSample("));
+    EXPECT_FALSE(ContainsText(timingMetricCorrelator, "m_timing.recordSample("));
+
+    const usize correlatorRangeOffset = timingMetricCorrelator.find(
+        "void GpuTimingMetricCorrelator::recordTimestampRange("
+    );
+    const usize packetEnvelopeOffset = timingMetricCorrelator.find(
+        "for(auto it = m_pendingPacketEnvelopeMetrics.begin();",
+        correlatorRangeOffset
+    );
+    const usize outputRoleOffset = timingMetricCorrelator.find(
+        "bool GpuTimingMetricCorrelator::hasOutputRole(",
+        packetEnvelopeOffset
+    );
+    ASSERT_NE(correlatorRangeOffset, AStringView::npos);
+    ASSERT_NE(packetEnvelopeOffset, AStringView::npos);
+    ASSERT_NE(outputRoleOffset, AStringView::npos);
+    const AStringView overlapRange = timingMetricCorrelator.substr(
+        correlatorRangeOffset,
+        packetEnvelopeOffset - correlatorRangeOffset
+    );
+    const AStringView packetEnvelopeRange = timingMetricCorrelator.substr(
+        packetEnvelopeOffset,
+        outputRoleOffset - packetEnvelopeOffset
+    );
+    const usize overlapStageOffset = overlapRange.find("performanceSamples.push_back(GpuTimingSinkSample{");
+    const usize overlapRetireOffset = overlapRange.find("record.pendingFrames.erase(it);", overlapStageOffset);
+    const usize packetReserveOffset = packetEnvelopeRange.find(
+        "performanceSamples.reserve(performanceSamples.size() + 1u + it->queueOutputs.size());"
+    );
+    const usize packetScratchOffset = packetEnvelopeRange.find(
+        "Vector<GpuComparableTimestampRange, Alloc::ScratchArena> packetRanges{scratchArena};",
+        packetReserveOffset
+    );
+    const usize packetOverlapStageOffset = packetEnvelopeRange.find(
+        "performanceSamples.push_back(GpuTimingSinkSample{",
+        packetScratchOffset
+    );
+    const usize packetIdleStageOffset = packetEnvelopeRange.find(
+        "performanceSamples.push_back(GpuTimingSinkSample{",
+        packetOverlapStageOffset + 1u
+    );
+    const usize packetRetireOffset = packetEnvelopeRange.find(
+        "it = m_pendingPacketEnvelopeMetrics.erase(it);",
+        packetIdleStageOffset
+    );
+    ASSERT_NE(overlapStageOffset, AStringView::npos);
+    ASSERT_NE(overlapRetireOffset, AStringView::npos);
+    ASSERT_NE(packetReserveOffset, AStringView::npos);
+    ASSERT_NE(packetScratchOffset, AStringView::npos);
+    ASSERT_NE(packetOverlapStageOffset, AStringView::npos);
+    ASSERT_NE(packetIdleStageOffset, AStringView::npos);
+    ASSERT_NE(packetRetireOffset, AStringView::npos);
+    EXPECT_LT(overlapStageOffset, overlapRetireOffset);
+    EXPECT_LT(packetReserveOffset, packetScratchOffset);
+    EXPECT_LT(packetScratchOffset, packetOverlapStageOffset);
+    EXPECT_LT(packetOverlapStageOffset, packetIdleStageOffset);
+    EXPECT_LT(packetIdleStageOffset, packetRetireOffset);
+
+    const usize confirmQueryDeclarationOffset = timingHeader.find("[[nodiscard]] bool confirmQuery(");
+    const usize retireQueryDeclarationOffset = timingHeader.find(
+        "[[nodiscard]] bool retireQuery(",
+        confirmQueryDeclarationOffset
+    );
+    const usize confirmScopeDeclarationOffset = timingHeader.find("[[nodiscard]] bool confirmScope(");
+    const usize prepareRecoveryDeclarationOffset = timingHeader.find(
+        "[[nodiscard]] bool prepareDeferredScopeForRecovery(",
+        confirmScopeDeclarationOffset
+    );
+    ASSERT_NE(confirmQueryDeclarationOffset, AStringView::npos);
+    ASSERT_NE(retireQueryDeclarationOffset, AStringView::npos);
+    ASSERT_NE(confirmScopeDeclarationOffset, AStringView::npos);
+    ASSERT_NE(prepareRecoveryDeclarationOffset, AStringView::npos);
+    EXPECT_TRUE(ContainsText(timingHeader.substr(
+        confirmQueryDeclarationOffset,
+        retireQueryDeclarationOffset - confirmQueryDeclarationOffset
+    ), ")noexcept;"));
+    EXPECT_TRUE(ContainsText(timingHeader.substr(
+        confirmScopeDeclarationOffset,
+        prepareRecoveryDeclarationOffset - confirmScopeDeclarationOffset
+    ), ")noexcept;"));
+    EXPECT_TRUE(ContainsText(
+        timingHeader,
+        "[[nodiscard]] bool resolveSubmission(const QueueSubmissionToken& token)noexcept;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        timingHeader,
+        "[[nodiscard]] bool confirm(const QueueSubmissionToken& token)noexcept;"
+    ));
+
+    const usize confirmQueryDefinitionOffset = timingAccumulator.find("bool GpuTimingAccumulator::confirmQuery(");
+    const usize retireQueryDefinitionOffset = timingAccumulator.find(
+        "bool GpuTimingAccumulator::retireQuery(",
+        confirmQueryDefinitionOffset
+    );
+    const usize confirmScopeDefinitionOffset = timing.find("bool GpuTimingRecorder::confirmScope(");
+    const usize prepareRecoveryDefinitionOffset = timing.find(
+        "bool GpuTimingRecorder::prepareDeferredScopeForRecovery(",
+        confirmScopeDefinitionOffset
+    );
+    const usize resolveSubmissionDefinitionOffset = timingSubmission.find(
+        "bool GpuTimingSubmissionTicket::resolveSubmission(const QueueSubmissionToken& token)noexcept{"
+    );
+    const usize reserveScopeDefinitionOffset = timingSubmission.find(
+        "usize GpuTimingSubmissionTicket::reserveScopePublication()",
+        resolveSubmissionDefinitionOffset
+    );
+    const usize ticketConfirmDefinitionOffset = timingSubmission.find(
+        "bool GpuTimingSubmissionTicket::confirm(const QueueSubmissionToken& token)noexcept{"
+    );
+    const usize frameTransactionDefinitionOffset = timingSubmission.find(
+        "GpuTimingFrameTransaction::GpuTimingFrameTransaction(",
+        ticketConfirmDefinitionOffset
+    );
+    ASSERT_NE(confirmQueryDefinitionOffset, AStringView::npos);
+    ASSERT_NE(retireQueryDefinitionOffset, AStringView::npos);
+    ASSERT_NE(confirmScopeDefinitionOffset, AStringView::npos);
+    ASSERT_NE(prepareRecoveryDefinitionOffset, AStringView::npos);
+    ASSERT_NE(resolveSubmissionDefinitionOffset, AStringView::npos);
+    ASSERT_NE(reserveScopeDefinitionOffset, AStringView::npos);
+    ASSERT_NE(ticketConfirmDefinitionOffset, AStringView::npos);
+    ASSERT_NE(frameTransactionDefinitionOffset, AStringView::npos);
+    EXPECT_TRUE(ContainsText(timingAccumulator.substr(
+        confirmQueryDefinitionOffset,
+        retireQueryDefinitionOffset - confirmQueryDefinitionOffset
+    ), ")noexcept{"));
+    EXPECT_TRUE(ContainsText(timing.substr(
+        confirmScopeDefinitionOffset,
+        prepareRecoveryDefinitionOffset - confirmScopeDefinitionOffset
+    ), ")noexcept{"));
+    EXPECT_TRUE(ContainsText(timing.substr(
+        confirmScopeDefinitionOffset,
+        prepareRecoveryDefinitionOffset - confirmScopeDefinitionOffset
+    ), "NothrowScopedLock lock(m_mutex);"));
+    const AStringView resolveSubmission = timingSubmission.substr(
+        resolveSubmissionDefinitionOffset,
+        reserveScopeDefinitionOffset - resolveSubmissionDefinitionOffset
+    );
+    EXPECT_TRUE(ContainsText(resolveSubmission, "abandonWithoutCallbacks();"));
+    EXPECT_FALSE(ContainsText(resolveSubmission, "discardPreparedSubmission();"));
+    const AStringView ticketConfirm = timingSubmission.substr(
+        ticketConfirmDefinitionOffset,
+        frameTransactionDefinitionOffset - ticketConfirmDefinitionOffset
+    );
+    EXPECT_TRUE(ContainsText(ticketConfirm, "NothrowScopedLock lock(m_mutex);"));
     EXPECT_TRUE(ContainsText(timingSubmission, "beginScope(scopeDefinition.identity, device, commandList, attribution, false, m_scope)"));
     EXPECT_FALSE(ContainsText(timingSubmission, "if(!device.supportsComparableGpuTimestamps(commandList.getResolvedDescription().physicalQueue))"));
 
@@ -859,10 +1108,7 @@ TEST(EcsGraphics, DeferredGraphMeasuresDeclarationAttemptBeforeCoreCompile){
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
 
     const usize lightingOffset = taskGraph.find("void RendererFramePipeline::buildDeferredLightingTaskGraph");
-    const usize resetOffset = taskGraph.find(
-        "m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);",
-        lightingOffset
-    );
+    const usize resetOffset = taskGraph.find("resetDeferredTaskGraphRuntime();", lightingOffset);
     const usize declarationBeginOffset = taskGraph.find("const Timer declarationBegin = TimerNow();", resetOffset);
     const usize feedbackOffset = taskGraph.find(
         "m_deferredTaskTimingFeedback.configureCompileOptions(",
@@ -912,9 +1158,9 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     EXPECT_TRUE(ContainsText(commandHeader, "struct GpuCommandArenaWorkerStatistics{"));
     EXPECT_TRUE(ContainsText(commandHeader, "Direct recording is always queryable"));
     EXPECT_TRUE(ContainsText(commandHeader, "nativeHandleStorageLowerBoundBytes counts only the"));
-    EXPECT_TRUE(ContainsText(compiledGraphHeader, "GpuPhysicalQueueTopology queueTopology()const noexcept;"));
-    EXPECT_TRUE(ContainsText(compiledGraphHeader, "Borrowed immutable-plan topology view."));
-    EXPECT_TRUE(ContainsText(compiledGraphHeader, "serialize access\n    // with reset/recompile"));
+    EXPECT_TRUE(ContainsText(compiledGraphHeader, "GpuPhysicalQueueTopology queueTopology()const & noexcept;"));
+    EXPECT_TRUE(ContainsText(compiledGraphHeader, "Pointer- and slice-bearing results borrow immutable plan storage."));
+    EXPECT_TRUE(ContainsText(compiledGraphHeader, "deliberately reject calls on a temporary proof."));
     EXPECT_TRUE(ContainsText(
         compiledGraphHeader,
         "GpuTaskGraphPhysicalQueueCompileStatistics physicalQueueCompileStatistics("
@@ -938,7 +1184,7 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     EXPECT_TRUE(ContainsText(compiledGraph, ".queueCount = m_queueTopology.size(),"));
 
     EXPECT_TRUE(ContainsText(frameGraph, "if(deferredRuntimeStatistics.valid()){"));
-    EXPECT_TRUE(ContainsText(frameGraph, "m_deferredLightingCompiledGraph.queueTopology()"));
+    EXPECT_TRUE(ContainsText(frameGraph, "deferredCompiledPlan.queueTopology()"));
     const usize gpuTimingTopologyOffset = frameGraph.find(
         "const Core::GpuPhysicalQueueTopology gpuTimingQueueTopology"
     );
@@ -951,19 +1197,20 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
-        "m_deferredLightingCompiledGraph.physicalQueueCompileStatistics(queue)"
+        "deferredCompiledPlan.physicalQueueCompileStatistics(queue)"
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
         "m_deferredLightingRecordedGraph.physicalQueueRecordingStatistics(\n"
         "                        m_deferredLightingCompiledGraph,\n"
+        "                        deferredCompiledPlan,\n"
         "                        queue\n"
         "                    )"
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
         "m_deferredLightingSubmissionTransaction.physicalQueueSubmissionStatistics(\n"
-        "                        m_deferredLightingCompiledGraph,\n"
+        "                        deferredCompiledPlan,\n"
         "                        queue\n"
         "                    )"
     ));
@@ -1029,7 +1276,7 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
         "for(usize queueIndex = 0u; queueIndex < runtimeQueueTopology.queueCount; ++queueIndex){"
     );
     const usize queueCompileQueryOffset = frameGraph.find(
-        "m_deferredLightingCompiledGraph.physicalQueueCompileStatistics(queue)"
+        "deferredCompiledPlan.physicalQueueCompileStatistics(queue)"
     );
     const usize queueRecordingQueryOffset = frameGraph.find(
         "m_deferredLightingRecordedGraph.physicalQueueRecordingStatistics("
@@ -1114,7 +1361,7 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
-        "m_deferredLightingCompiledGraph.packetIdAt(packetIndex)"
+        "deferredCompiledPlan.packetIdAt(packetIndex)"
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
@@ -1230,12 +1477,12 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryReportsLogicalOwnershipPlan){
     // The human-readable route triplet stays here; the structured triplet has its own mapper owner and contract.
     EXPECT_EQ(CountText(frameGraph, "compileStatistics.logicalOwnershipTransferCountByRoute["), 3u);
 
-    EXPECT_EQ(CountText(frameGraph, "m_deferredLightingCompiledGraph.logicalOwnershipTransfers()"), 1u);
-    EXPECT_EQ(CountText(frameGraph, "m_deferredLightingCompiledGraph.logicalOwnershipTransferAt("), 0u);
+    EXPECT_EQ(CountText(frameGraph, "deferredCompiledPlan.logicalOwnershipTransfers()"), 1u);
+    EXPECT_EQ(CountText(frameGraph, "deferredCompiledPlan.logicalOwnershipTransferAt("), 0u);
     EXPECT_TRUE(ContainsText(
         frameGraph,
         "const Core::GpuCompiledOwnershipTransfer* const logicalOwnershipTransfers =\n"
-        "            m_deferredLightingCompiledGraph.logicalOwnershipTransfers()"
+        "            deferredCompiledPlan.logicalOwnershipTransfers()"
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
@@ -1328,11 +1575,11 @@ TEST(EcsGraphics, MeshSkinningUsesFrontierScoredSerialPacketization){
 
     EXPECT_TRUE(ContainsText(skinning, "Core::GpuTaskGraphCompileOptions compileOptions;"));
     EXPECT_TRUE(ContainsText(skinning, "compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierScored;"));
-    EXPECT_TRUE(ContainsText(skinning, "compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions)"));
+    EXPECT_TRUE(ContainsText(skinning, "compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions)"));
     EXPECT_EQ(CountText(skinning, "mergeWithPrevious"), 0u);
     EXPECT_EQ(CountText(skinning, "scheduling.frontierScoredMergeDomain = Name(\"mesh_skinning.serial\");"), 2u);
     EXPECT_EQ(CountText(skinning, "setDependencies(&terminalTask, 1u);"), 4u);
-    EXPECT_TRUE(ContainsText(skinning, "if(compiledGraph.packetCount() != 1u)"));
+    EXPECT_TRUE(ContainsText(skinning, "if(compiledPlan.packetCount() != 1u)"));
     EXPECT_TRUE(ContainsText(skinning, "const Core::GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);"));
     EXPECT_TRUE(ContainsText(skinning, "terminalQueue->id != graphicsQueue"));
     EXPECT_EQ(CountText(skinning, "Core::GpuTaskGraphTaskTimingTicket{"), 1u);
@@ -1532,7 +1779,7 @@ TEST(EcsGraphics, SurfelGiTopologyUsesSemanticTaskAnchors){
         system,
         "const bool surfelGiSnapshotCopyAndTimingPacketsAreDistinct =\n"
         "        !m_deferredSurfelGiSnapshotCopyTask.valid()\n"
-        "        || !m_deferredLightingCompiledGraph.tasksSharePacket(\n"
+        "        || !deferredCompiledPlan.tasksSharePacket(\n"
         "            m_deferredSurfelGiSnapshotCopyTask,\n"
         "            m_deferredSurfelGiTask"
     ));
@@ -1902,13 +2149,13 @@ TEST(EcsGraphics, RendererNormalExecutionUsesSemanticTaskAnchors){
     EXPECT_EQ(CountText(system, "GpuSubmissionPacketId"), 0u);
     EXPECT_EQ(CountText(system, "GpuSubmissionPacketRange"), 0u);
     EXPECT_TRUE(ContainsText(system, "GpuCompiledPresentEndpoint* const presentationEndpoint"));
-    EXPECT_TRUE(ContainsText(system, "m_deferredLightingCompiledGraph.presentEndpoint()"));
+    EXPECT_TRUE(ContainsText(system, "deferredCompiledPlan.presentEndpoint()"));
     EXPECT_FALSE(ContainsText(system, "presentationEndpoint->packet"));
     EXPECT_FALSE(ContainsText(system, "terminalPresentationPacket"));
     EXPECT_TRUE(ContainsText(system, "normalExecution.terminalTask = terminalPresentationTask;"));
     EXPECT_TRUE(ContainsText(system, "presentationEndpoint->producer != m_deferredFrameTimingEndTask"));
     EXPECT_TRUE(ContainsText(system, "presentationEndpoint->queue != primaryGraphicsQueue"));
-    EXPECT_TRUE(ContainsText(queueLookup, "return context.graph.queueInfoForTask(*task);"));
+    EXPECT_TRUE(ContainsText(queueLookup, "return context.compiledPlan.queueInfoForTask(*task);"));
     EXPECT_EQ(CountText(queueLookup, "packetForTask("), 0u);
     EXPECT_EQ(CountText(queueLookup, "GpuSubmissionPacketId"), 0u);
     EXPECT_EQ(CountText(system, ".recordAndSubmitNormalGraph("), 1u);
@@ -2069,6 +2316,58 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
 }
 
 
+// Split measures retain non-owning links to their recording tickets. Declare each ticket first so reverse local
+// destruction keeps it alive while an incomplete measure relinquishes its scope during exception unwinding.
+TEST(EcsGraphics, RendererSplitGpuTimingTicketsOutliveTheirMeasures){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString renderSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_execute.cpp",
+        renderSource
+    ));
+    const AStringView render(renderSource.data(), renderSource.size());
+
+    const usize renderFunctionOffset = render.find("void RendererFramePipeline::render(");
+    ASSERT_NE(renderFunctionOffset, AStringView::npos);
+    const usize graphBuildOffset = render.find("buildDeferredLightingTaskGraph(", renderFunctionOffset);
+    ASSERT_NE(graphBuildOffset, AStringView::npos);
+    const AStringView timingOwners = render.substr(renderFunctionOffset, graphBuildOffset - renderFunctionOffset);
+
+    const usize avboitPreTicketOffset = timingOwners.find("GpuTimingSubmissionTicket avboitPreTimingTicket");
+    const usize avboitDepthWarpTicketOffset = timingOwners.find("GpuTimingSubmissionTicket avboitDepthWarpTimingTicket");
+    const usize avboitExtinctionTicketOffset = timingOwners.find("GpuTimingSubmissionTicket avboitExtinctionTimingTicket");
+    const usize avboitIntegrationTicketOffset = timingOwners.find("GpuTimingSubmissionTicket avboitIntegrationTimingTicket");
+    const usize avboitAccumulationTicketOffset = timingOwners.find("GpuTimingSubmissionTicket avboitAccumulationTimingTicket");
+    const usize deferredPresentTicketOffset = timingOwners.find("GpuTimingSubmissionTicket deferredPresentTimingTicket");
+    const usize transparentCsgMeasureOffset = timingOwners.find("GpuTimingMeasure> transparentCsgIntervalsTiming");
+    const usize occupancyMeasureOffset = timingOwners.find("GpuTimingMeasure> avboitOccupancyComputeEmulationTiming");
+    const usize extinctionMeasureOffset = timingOwners.find("GpuTimingMeasure> avboitExtinctionComputeEmulationTiming");
+    const usize accumulationMeasureOffset = timingOwners.find("GpuTimingMeasure> avboitAccumulationComputeEmulationTiming");
+    const usize asyncFinalMeasureOffset = timingOwners.find("GpuTimingMeasure> asyncFinalTiming");
+
+    ASSERT_NE(avboitPreTicketOffset, AStringView::npos);
+    ASSERT_NE(avboitDepthWarpTicketOffset, AStringView::npos);
+    ASSERT_NE(avboitExtinctionTicketOffset, AStringView::npos);
+    ASSERT_NE(avboitIntegrationTicketOffset, AStringView::npos);
+    ASSERT_NE(avboitAccumulationTicketOffset, AStringView::npos);
+    ASSERT_NE(deferredPresentTicketOffset, AStringView::npos);
+    ASSERT_NE(transparentCsgMeasureOffset, AStringView::npos);
+    ASSERT_NE(occupancyMeasureOffset, AStringView::npos);
+    ASSERT_NE(extinctionMeasureOffset, AStringView::npos);
+    ASSERT_NE(accumulationMeasureOffset, AStringView::npos);
+    ASSERT_NE(asyncFinalMeasureOffset, AStringView::npos);
+    EXPECT_LT(avboitPreTicketOffset, transparentCsgMeasureOffset);
+    EXPECT_LT(avboitPreTicketOffset, occupancyMeasureOffset);
+    EXPECT_LT(avboitDepthWarpTicketOffset, transparentCsgMeasureOffset);
+    EXPECT_LT(avboitExtinctionTicketOffset, extinctionMeasureOffset);
+    EXPECT_LT(avboitIntegrationTicketOffset, transparentCsgMeasureOffset);
+    EXPECT_LT(avboitAccumulationTicketOffset, accumulationMeasureOffset);
+    EXPECT_LT(deferredPresentTicketOffset, asyncFinalMeasureOffset);
+}
+
+
 // Every normal renderer packet from the packet containing Shadow Preparation through the accepted presentation
 // endpoint owns compiler-selected timing. All recorders for that compiled graph retain the shared timing recorder
 // because even an untimed late-tail attempt validates the graph-owned plan before opening its native command list.
@@ -2118,15 +2417,15 @@ TEST(EcsGraphics, DeferredGraphConfiguresCompilerOwnedPacketTiming){
     ASSERT_NE(metricHelperOffset, AStringView::npos);
     const AStringView metricHelper = build.substr(metricHelperOffset, buildOffset - metricHelperOffset);
     EXPECT_TRUE(ContainsText(metricHelper, "compiledGraph.packetTimingEnvelopeRange()"));
-    EXPECT_TRUE(ContainsText(metricHelper, "compiledGraph.packetTasks(packetID)"));
-    EXPECT_TRUE(ContainsText(metricHelper, "graph.taskAt(packetTasks[0u].index).identity"));
-    EXPECT_TRUE(ContainsText(metricHelper, ".physicalQueue = packet.queue,"));
-    EXPECT_TRUE(ContainsText(metricHelper, "DeferredGraphQueueInternalIdle(packet.queue, scratchArena)"));
+    EXPECT_TRUE(ContainsText(metricHelper, "const Core::GpuCompiledPacketView packetView = compiledGraph.packet(packetID);"));
+    EXPECT_TRUE(ContainsText(metricHelper, "graph.taskAt(packetView.tasks[0u].index).identity"));
+    EXPECT_TRUE(ContainsText(metricHelper, ".physicalQueue = packetView.plan->queue,"));
+    EXPECT_TRUE(ContainsText(metricHelper, "DeferredGraphQueueInternalIdle(packetView.plan->queue, scratchArena)"));
     EXPECT_TRUE(ContainsText(metricHelper, "RendererGpuTimingScope::s_DeferredGraphQueueOverlap.identity"));
     EXPECT_TRUE(ContainsText(metricHelper, "timingRecorder.preparePacketEnvelopeMetrics("));
 
     const usize metricPrepareOffset = build.find(
-        "if(!__hidden_task_graph_deferred_lighting::PreparePacketEnvelopeMetrics(",
+        "|| !__hidden_task_graph_deferred_lighting::PreparePacketEnvelopeMetrics(",
         compilerOffset
     );
     const usize recordedGraphResetOffset = build.find("m_deferredLightingRecordedGraph.reset(", compilerOffset);
@@ -2188,7 +2487,7 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     EXPECT_FALSE(ContainsText(graphicsHeader, "getCurrentFramebuffer"));
     EXPECT_TRUE(ContainsText(backendContract, "{ backend.abandonAcquiredFrame() }->SameAs<bool>;"));
 
-    const usize abandonmentOffset = backendPresentation.find("bool BackendContext::abandonAcquiredFrame()noexcept{");
+    const usize abandonmentOffset = backendPresentation.find("bool BackendContext::abandonAcquiredFrame(){");
     const usize presentDefinitionOffset = backendPresentation.find("bool BackendContext::present(){", abandonmentOffset);
     ASSERT_NE(abandonmentOffset, AStringView::npos);
     ASSERT_NE(presentDefinitionOffset, AStringView::npos);
@@ -2196,26 +2495,38 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
         abandonmentOffset,
         presentDefinitionOffset - abandonmentOffset
     );
-    const usize quarantineOffset = abandonment.find("m_swapChainIndex = Limit<u32>::s_Max;");
-    const usize signalIdleOffset = abandonment.find("presentationSignalNeedsIdle && !m_rhiDevice->waitForIdle()");
-    const usize abandonmentReplacementOffset = abandonment.find(
-        "replaceFramePresentationSemaphoreAfterIdle()",
-        signalIdleOffset
+    const usize imageQuarantineOffset = abandonment.find("m_swapChainIndex = Limit<u32>::s_Max;");
+    const usize presentationUnlockOffset = abandonment.find("presentationLock.unlock();", imageQuarantineOffset);
+    const usize deferredCancellationOffset = abandonment.find(
+        "if(!cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)){",
+        presentationUnlockOffset
     );
-    const usize signalResetOffset = abandonment.find("resetFramePresentationSignal();", abandonmentReplacementOffset);
-    ASSERT_NE(quarantineOffset, AStringView::npos);
-    ASSERT_NE(signalIdleOffset, AStringView::npos);
-    ASSERT_NE(abandonmentReplacementOffset, AStringView::npos);
-    ASSERT_NE(signalResetOffset, AStringView::npos);
-    EXPECT_LT(quarantineOffset, signalIdleOffset);
-    EXPECT_LT(signalIdleOffset, abandonmentReplacementOffset);
-    EXPECT_LT(abandonmentReplacementOffset, signalResetOffset);
+    const usize lifecycleQuarantineOffset = abandonment.find(
+        "m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;",
+        deferredCancellationOffset
+    );
+    const usize deviceQuarantineOffset = abandonment.find("device->quarantineDevice();", lifecycleQuarantineOffset);
+    const usize completionOffset = abandonment.find("m_frameAbandonmentComplete = true;", deviceQuarantineOffset);
+    ASSERT_NE(imageQuarantineOffset, AStringView::npos);
+    ASSERT_NE(presentationUnlockOffset, AStringView::npos);
+    ASSERT_NE(deferredCancellationOffset, AStringView::npos);
+    ASSERT_NE(lifecycleQuarantineOffset, AStringView::npos);
+    ASSERT_NE(deviceQuarantineOffset, AStringView::npos);
+    ASSERT_NE(completionOffset, AStringView::npos);
+    EXPECT_LT(imageQuarantineOffset, presentationUnlockOffset);
+    EXPECT_LT(presentationUnlockOffset, deferredCancellationOffset);
+    EXPECT_LT(deferredCancellationOffset, lifecycleQuarantineOffset);
+    EXPECT_LT(lifecycleQuarantineOffset, deviceQuarantineOffset);
+    EXPECT_LT(deviceQuarantineOffset, completionOffset);
     EXPECT_FALSE(ContainsText(abandonment, "forceNativeSubmission"));
     EXPECT_FALSE(ContainsText(abandonment, "executeCommandLists(nullptr, 0u"));
+    EXPECT_FALSE(ContainsText(abandonment, "waitForIdle()"));
+    EXPECT_FALSE(ContainsText(abandonment, "replaceFramePresentationSemaphoreAfterIdle()"));
+    EXPECT_FALSE(ContainsText(abandonment, "resetFramePresentationSignal();"));
     EXPECT_TRUE(ContainsText(abandonment, "if(!m_frameAcquired)\n        return true;"));
     EXPECT_TRUE(ContainsText(abandonment, "if(m_frameAbandonmentComplete){"));
-    EXPECT_TRUE(ContainsText(abandonment, "replaceFramePresentationSemaphoreAfterIdle()"));
-    EXPECT_GE(CountText(abandonment, "m_rhiDevice->quarantineDevice();"), 2u);
+    EXPECT_TRUE(ContainsText(abandonment, "cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)"));
+    EXPECT_TRUE(ContainsText(abandonment, "device->captureDeviceLoss(\"abandoned presentation signal idle\")"));
     EXPECT_TRUE(ContainsText(abandonment, "m_frameAbandonmentComplete = true;"));
     EXPECT_FALSE(ContainsText(abandonment, "m_frameAcquired = false"));
 
@@ -2227,30 +2538,28 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
         "presentWaitDisposition == VulkanDetail::QueuePresentWaitDisposition::DeviceLost",
         nonConsumedOffset
     );
-    const usize unconsumedIdleOffset = present.find("if(!m_rhiDevice->waitForIdle())", deviceLostOffset);
-    const usize idleFailureQuarantineOffset = present.find("m_rhiDevice->quarantineDevice();", unconsumedIdleOffset);
-    const usize replacementOffset = present.find("if(!replaceFramePresentationSemaphoreAfterIdle())", idleFailureQuarantineOffset);
-    const usize replacementFailureQuarantineOffset = present.find(
-        "m_rhiDevice->quarantineDevice();",
-        replacementOffset
+    const usize unconsumedUnlockOffset = present.find("presentationLock.unlock();", deviceLostOffset);
+    const usize unconsumedCancellationOffset = present.find(
+        "if(!cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)){",
+        unconsumedUnlockOffset
     );
-    const usize unconsumedResetOffset = present.find("resetFramePresentationSignal();", replacementFailureQuarantineOffset);
+    const usize unconsumedFailureOffset = present.find(
+        "captureDeviceLossAfterUnlock(\"unconsumed presentation signal idle\", &presentationLock);",
+        unconsumedCancellationOffset
+    );
     ASSERT_NE(nonConsumedOffset, AStringView::npos);
     ASSERT_NE(deviceLostOffset, AStringView::npos);
-    ASSERT_NE(unconsumedIdleOffset, AStringView::npos);
-    ASSERT_NE(idleFailureQuarantineOffset, AStringView::npos);
-    ASSERT_NE(replacementOffset, AStringView::npos);
-    ASSERT_NE(replacementFailureQuarantineOffset, AStringView::npos);
-    ASSERT_NE(unconsumedResetOffset, AStringView::npos);
+    ASSERT_NE(unconsumedUnlockOffset, AStringView::npos);
+    ASSERT_NE(unconsumedCancellationOffset, AStringView::npos);
+    ASSERT_NE(unconsumedFailureOffset, AStringView::npos);
     EXPECT_LT(nonConsumedOffset, deviceLostOffset);
-    EXPECT_LT(deviceLostOffset, unconsumedIdleOffset);
-    EXPECT_LT(unconsumedIdleOffset, idleFailureQuarantineOffset);
-    EXPECT_LT(idleFailureQuarantineOffset, replacementOffset);
-    EXPECT_LT(replacementOffset, replacementFailureQuarantineOffset);
-    EXPECT_LT(replacementFailureQuarantineOffset, unconsumedResetOffset);
-    EXPECT_TRUE(ContainsText(present, "if(!frameSignalAccepted || !m_rhiDevice){"));
+    EXPECT_LT(deviceLostOffset, unconsumedUnlockOffset);
+    EXPECT_LT(unconsumedUnlockOffset, unconsumedCancellationOffset);
+    EXPECT_LT(unconsumedCancellationOffset, unconsumedFailureOffset);
+    EXPECT_TRUE(ContainsText(present, "if(!frameSignalAccepted){"));
+    EXPECT_TRUE(ContainsText(present, "if(!m_rhiDevice){"));
     EXPECT_FALSE(ContainsText(
-        present.substr(nonConsumedOffset, replacementFailureQuarantineOffset - nonConsumedOffset),
+        present.substr(nonConsumedOffset, unconsumedFailureOffset - nonConsumedOffset),
         "resetFramePresentationSignal();"
     ));
 
@@ -2374,7 +2683,7 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
         backendPrepareOffset
     );
     const usize backendDeviceJoinOffset = backendOrchestration.find(
-        "const bool deviceIdle = m_rhiDevice->waitForIdle();",
+        "const VkResult idleResult = m_rhiDevice->waitForNativeIdle();",
         backendAcquireJoinOffset
     );
     ASSERT_NE(backendPrepareOffset, AStringView::npos);
@@ -2382,6 +2691,10 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     ASSERT_NE(backendDeviceJoinOffset, AStringView::npos);
     EXPECT_LT(backendPrepareOffset, backendAcquireJoinOffset);
     EXPECT_LT(backendAcquireJoinOffset, backendDeviceJoinOffset);
+    EXPECT_TRUE(ContainsText(
+        backendOrchestration.substr(backendDeviceJoinOffset),
+        "idleResult != VK_SUCCESS && !m_rhiDevice->isDeviceLost()"
+    ));
 
     for(const AStringView setupSource : { rendererResources, ui }){
         EXPECT_TRUE(ContainsText(setupSource, "Pipeline compatibility setup uses the stable framebuffer-zero prototype"));
@@ -2451,7 +2764,7 @@ TEST(EcsGraphics, CompatibilityPresentTransitionsExactAcquiredImageBeforeSignal)
         "CommandList* const compatibilityCommandLists[] = { compatibilityCommandList.get() };",
         hookOffset
     );
-    const usize executeOffset = compatibilityBranch.find("m_rhiDevice->executeCommandLists(", listOffset);
+    const usize executeOffset = compatibilityBranch.find("m_rhiDevice->executeCommandListsInternal(", listOffset);
     const usize confirmOffset = compatibilityBranch.find(
         "confirmFramePresentationSignal(presentationSignalHook, fallbackToken)",
         executeOffset
@@ -2488,6 +2801,11 @@ TEST(EcsGraphics, CompatibilityPresentTransitionsExactAcquiredImageBeforeSignal)
     EXPECT_LT(listOffset, executeOffset);
     EXPECT_LT(executeOffset, confirmOffset);
     EXPECT_LT(confirmOffset, acceptedOffset);
+    EXPECT_TRUE(ContainsText(
+        compatibilityBranch,
+        "false,\n"
+        "            Device::DeviceLossDiagnosticPolicy::Defer"
+    ));
 
     EXPECT_TRUE(ContainsText(
         compatibilityBranch,
@@ -2530,8 +2848,9 @@ TEST(EcsGraphics, CompatibilityPresentTransitionsExactAcquiredImageBeforeSignal)
     EXPECT_TRUE(ContainsText(
         compatibilityBranch,
         "if(!fallbackToken.valid()){\n"
-        "            if(!cancelFramePresentationSignal(presentationSignalHook))\n"
+        "            if(!cancelFramePresentationSignalDeferred(&presentationSignalHook, lifecycleLock))\n"
         "                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT(\"Vulkan: Failed to cancel presentation synchronization after submit rejection.\"));\n"
+        "            captureDeviceLossAfterUnlock(\"queue submit\");\n"
         "            NWB_LOGGER_ERROR(NWB_TEXT(\"Vulkan: Compatibility presentation transition/signal "
         "submission was rejected.\"));\n"
         "            return false;\n"
@@ -2540,17 +2859,17 @@ TEST(EcsGraphics, CompatibilityPresentTransitionsExactAcquiredImageBeforeSignal)
     EXPECT_TRUE(ContainsText(
         compatibilityBranch,
         "if(!confirmFramePresentationSignal(presentationSignalHook, fallbackToken)){\n"
-        "            if(!cancelFramePresentationSignal(presentationSignalHook))\n"
+        "            if(!cancelFramePresentationSignalDeferred(&presentationSignalHook, lifecycleLock))\n"
         "                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT(\"Vulkan: Failed to cancel presentation synchronization after confirmation rejection.\"));\n"
+        "            captureDeviceLossAfterUnlock(\"presentation signal cancellation\");\n"
         "            NWB_LOGGER_ERROR(NWB_TEXT(\"Vulkan: Accepted compatibility presentation submission "
         "failed signal confirmation/tracking.\"));\n"
         "            return false;\n"
         "        }"
     ));
     EXPECT_EQ(CountText(compatibilityBranch, "return false;"), 10u);
-    EXPECT_EQ(CountText(compatibilityBranch, "cancelFramePresentationSignal();"), 0u);
-    EXPECT_EQ(CountText(compatibilityBranch, "cancelFramePresentationSignal())"), 3u);
-    EXPECT_EQ(CountText(compatibilityBranch, "cancelFramePresentationSignal(presentationSignalHook)"), 2u);
+    EXPECT_EQ(CountText(compatibilityBranch, "cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)"), 3u);
+    EXPECT_EQ(CountText(compatibilityBranch, "cancelFramePresentationSignalDeferred(&presentationSignalHook, lifecycleLock)"), 2u);
 }
 
 
@@ -2661,7 +2980,7 @@ TEST(EcsGraphics, RendererPresentationGraphBindsExactAcquiredTexture){
     ));
     EXPECT_TRUE(ContainsText(
         presentationTask,
-        "context.taskGraph.textureForResource(payload.backBuffer) != payload.presentationFrame.backBuffer.texture.get()"
+        "context.declarations.textureForResource(payload.backBuffer) != payload.presentationFrame.backBuffer.texture.get()"
     ));
     EXPECT_TRUE(ContainsText(
         presentationTask,
@@ -2792,7 +3111,7 @@ TEST(EcsGraphics, UiPresentationGraphsBindExactAcquiredTexture){
 
     EXPECT_TRUE(ContainsText(
         declaration,
-        "GraphBindsAcquiredPresentationTexture(graph, frame, backbuffer)"
+        "GraphBindsAcquiredPresentationTexture(declarations, frame, backbuffer)"
     ));
     EXPECT_TRUE(ContainsText(
         declaration,
@@ -2833,7 +3152,7 @@ TEST(EcsGraphics, UiPresentationGraphsBindExactAcquiredTexture){
     EXPECT_TRUE(ContainsText(legacyDeclaration, ".requiredState = Core::ResourceStates::RenderTarget,"));
     EXPECT_TRUE(ContainsText(
         legacyDeclaration,
-        "GraphBindsAcquiredPresentationTexture(graph, frame, backbuffer)"
+        "GraphBindsAcquiredPresentationTexture(declarations, frame, backbuffer)"
     ));
     EXPECT_EQ(CountText(legacyDeclaration, "importHazardDomain("), 1u);
     EXPECT_TRUE(ContainsText(legacyDeclaration, "ui.imgui_standalone_legacy_presentation.callback"));
@@ -2841,7 +3160,7 @@ TEST(EcsGraphics, UiPresentationGraphsBindExactAcquiredTexture){
 
     EXPECT_TRUE(ContainsText(
         ui,
-        "GraphBindsAcquiredPresentationTexture(context.taskGraph, frame, backbuffer)"
+        "GraphBindsAcquiredPresentationTexture(context.declarations, frame, backbuffer)"
     ));
     EXPECT_EQ(
         CountText(ui, "failed after its terminal packet was accepted; requesting recreation"),
@@ -2998,14 +3317,17 @@ TEST(EcsGraphics, UiFreshTextureImportsPreserveNativeOrigins){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString uiHeaderSource;
+    AString uiInternalSource;
     AString uiSource;
     AString uiTextureSource;
     AString uiSubmissionSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.h", uiHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "ui_internal.h", uiInternalSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "texture_resources.cpp", uiTextureSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "texture_submission.h", uiSubmissionSource));
     const AStringView uiHeader(uiHeaderSource.data(), uiHeaderSource.size());
+    const AStringView uiInternal(uiInternalSource.data(), uiInternalSource.size());
     const AStringView ui(uiSource.data(), uiSource.size());
     const AStringView uiTextures(uiTextureSource.data(), uiTextureSource.size());
     const AStringView uiSubmission(uiSubmissionSource.data(), uiSubmissionSource.size());
@@ -3031,30 +3353,30 @@ TEST(EcsGraphics, UiFreshTextureImportsPreserveNativeOrigins){
     ));
     EXPECT_FALSE(ContainsText(updateStatus, "initialUploadAccepted"));
 
-    for(const AStringView source : { uiTextures, ui }){
-        EXPECT_TRUE(ContainsText(
-            source,
-            "TextureResourceDesc(\n    const Core::TextureDesc& textureDesc,\n    const bool initialUploadAccepted\n)"
-        ));
-        EXPECT_TRUE(ContainsText(
-            source,
-            ".setInitialState(initialUploadAccepted ? textureDesc.initialState : Core::ResourceStates::Unknown)"
-        ));
-    }
+    EXPECT_TRUE(ContainsText(
+        uiInternal,
+        "TextureResourceDesc(\n    const Core::TextureDesc& textureDesc,\n    const bool initialUploadAccepted\n)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        uiInternal,
+        ".setInitialState(initialUploadAccepted ? textureDesc.initialState : Core::ResourceStates::Unknown)"
+    ));
     EXPECT_TRUE(ContainsText(
         uiTextures,
-        "__hidden_ui::TextureResourceDesc(resource.texture->getCreationDescription(), resource.initialUploadAccepted)"
+        "UiDetail::TextureResourceDesc(resource.texture->getCreationDescription(), resource.initialUploadAccepted)"
     ));
     EXPECT_TRUE(ContainsText(uiTextures, "m_textureUploadBatch.add(*textureData, &resource->initialUploadAccepted)"));
     EXPECT_TRUE(ContainsText(ui, ".textureInitialUploadAccepted = textureResource->initialUploadAccepted,"));
     EXPECT_TRUE(ContainsText(ui, "const auto appendDrawTextureUse = [&](const TaskGraphDrawCommand& drawCommand){"));
     EXPECT_TRUE(ContainsText(
         ui,
-        "__hidden_ui::TextureResourceDesc(\n"
+        "UiDetail::TextureResourceDesc(\n"
         "                    drawCommand.texture->getCreationDescription(),\n"
         "                    drawCommand.textureInitialUploadAccepted\n"
         "                )"
     ));
+    EXPECT_FALSE(ContainsText(uiTextures, "__hidden_ui::TextureResourceDesc"));
+    EXPECT_FALSE(ContainsText(ui, "__hidden_ui::TextureResourceDesc"));
     EXPECT_TRUE(ContainsText(ui, "appendDrawTextureUse(drawCommand)"));
     EXPECT_TRUE(ContainsText(ui, "m_textureUploadBatch.complete(true);"));
 }
@@ -3279,7 +3601,7 @@ TEST(EcsGraphics, SetupUploadReadinessBridgeRemainsGraphOwned){
     EXPECT_TRUE(ContainsText(setupUpload, "bridgePrimaryUploadQueue"));
     EXPECT_TRUE(ContainsText(setupUpload, "requiredTerminalQueue"));
     EXPECT_FALSE(ContainsText(setupUpload, "executeCommandLists"));
-    EXPECT_TRUE(ContainsText(graphics, "outSubmissionToken = transaction.taskToken(compiledGraph, terminalTask);"));
+    EXPECT_TRUE(ContainsText(graphics, "outSubmissionToken = transaction.taskToken(compiledPlan, terminalTask);"));
     EXPECT_FALSE(ContainsText(graphics, "outSubmissionToken = transaction.packetToken(terminalPacket);"));
     EXPECT_TRUE(ContainsText(graphics, "ResolveSetupUploadSameClassRouting"));
     EXPECT_TRUE(ContainsText(graphics, "preferNonPrimarySameClassQueue"));
@@ -3620,7 +3942,7 @@ TEST(EcsGraphics, SurfelIrradianceClearUsesComputeGraphCallback){
     const AStringView callback(surfelTasksSource.data(), surfelTasksSource.size());
     const AStringView surfelGi(surfelGiSource.data(), surfelGiSource.size());
 
-    EXPECT_TRUE(ContainsText(callback, "context.taskGraph.textureForResource(payload.destination)"));
+    EXPECT_TRUE(ContainsText(callback, "context.declarations.textureForResource(payload.destination)"));
     EXPECT_TRUE(ContainsText(callback, "if(!destination || commandList.isRenderPassActive())"));
     EXPECT_FALSE(ContainsText(callback, "endRenderPass()"));
     EXPECT_TRUE(ContainsText(callback, "Core::GpuClearTextureTaskDesc clearDesc{"));
@@ -3660,7 +3982,7 @@ TEST(EcsGraphics, ShadowVisibilityAllLitClearUsesComputeGraphCallback){
     const AStringView callback(allLitClearTaskSource.data(), allLitClearTaskSource.size());
     const AStringView shadowVisibility(shadowVisibilityTaskGraphSource.data(), shadowVisibilityTaskGraphSource.size());
 
-    EXPECT_TRUE(ContainsText(callback, "context.taskGraph.textureForResource(payload.destination)"));
+    EXPECT_TRUE(ContainsText(callback, "context.declarations.textureForResource(payload.destination)"));
     EXPECT_TRUE(ContainsText(callback, "if(!destination || commandList.isRenderPassActive())"));
     EXPECT_FALSE(ContainsText(callback, "endRenderPass()"));
     EXPECT_TRUE(ContainsText(callback, "Core::GpuClearTextureTaskDesc clearDesc{"));
@@ -4137,6 +4459,112 @@ TEST(EcsGraphics, ShadowVisibilityPermitsOptInCrossFamilyComputeRouting){
     EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(allLitClearScheduling)"));
     EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(scheduling)"));
     EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(statsReadbackScheduling)"));
+}
+
+
+// Split timing scopes nest Async Shadow around Shadow Visibility, with Transparent Resolve innermost when active.
+// Marker leases and ending timestamps must close in reverse order so the Vulkan marker stack and measured intervals
+// retain that nesting.
+TEST(EcsGraphics, SplitShadowVisibilityClosesNestedTimingMarkersInReverseOrder){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString shadowSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", shadowSource));
+    const AStringView shadow(shadowSource.data(), shadowSource.size());
+
+    const usize opaqueTaskOffset = shadow.find("struct ShadowVisibilityOpaqueGraphTask{");
+    const usize firstWaveletTaskOffset = shadow.find("struct ShadowVisibilityOpaqueFirstWaveletGraphTask{", opaqueTaskOffset);
+    ASSERT_NE(opaqueTaskOffset, AStringView::npos);
+    ASSERT_NE(firstWaveletTaskOffset, AStringView::npos);
+    ASSERT_LT(opaqueTaskOffset, firstWaveletTaskOffset);
+    const AStringView opaqueTask = shadow.substr(opaqueTaskOffset, firstWaveletTaskOffset - opaqueTaskOffset);
+
+    const usize asyncMarkerBeginOffset = opaqueTask.find("payload.asyncTiming->emplace(");
+    const usize visibilityMarkerBeginOffset = opaqueTask.find("payload.shadowVisibilityTiming->emplace(", asyncMarkerBeginOffset);
+    const usize visibilityMarkerFinishOffset = opaqueTask.find(
+        "const bool visibilityMarkerFinished = Core::FinishSplitGpuTimingMarker(payload.shadowVisibilityTiming);",
+        visibilityMarkerBeginOffset
+    );
+    const usize asyncMarkerFinishOffset = opaqueTask.find(
+        "asyncMarkerFinished = Core::FinishSplitGpuTimingMarker(payload.asyncTiming);",
+        visibilityMarkerFinishOffset
+    );
+    const usize fallbackOffset = opaqueTask.find("if(!opaqueRecorded){", visibilityMarkerBeginOffset);
+    const usize fallbackVisibilityDiscardOffset = opaqueTask.find(
+        "payload.shadowVisibilityTiming->value().discardTiming();",
+        fallbackOffset
+    );
+    const usize fallbackAsyncDiscardOffset = opaqueTask.find(
+        "payload.asyncTiming->value().discardTiming();",
+        fallbackVisibilityDiscardOffset
+    );
+    const usize discardedObserverOffset = opaqueTask.find("static void discarded(Payload& payload){", asyncMarkerFinishOffset);
+    const usize observerVisibilityDiscardOffset = opaqueTask.find(
+        "Core::DiscardGpuTimingMeasure(payload.shadowVisibilityTiming);",
+        discardedObserverOffset
+    );
+    const usize observerAsyncDiscardOffset = opaqueTask.find(
+        "Core::DiscardGpuTimingMeasure(payload.asyncTiming);",
+        observerVisibilityDiscardOffset
+    );
+    ASSERT_NE(asyncMarkerBeginOffset, AStringView::npos);
+    ASSERT_NE(visibilityMarkerBeginOffset, AStringView::npos);
+    ASSERT_NE(visibilityMarkerFinishOffset, AStringView::npos);
+    ASSERT_NE(asyncMarkerFinishOffset, AStringView::npos);
+    ASSERT_NE(fallbackOffset, AStringView::npos);
+    ASSERT_NE(fallbackVisibilityDiscardOffset, AStringView::npos);
+    ASSERT_NE(fallbackAsyncDiscardOffset, AStringView::npos);
+    ASSERT_NE(discardedObserverOffset, AStringView::npos);
+    ASSERT_NE(observerVisibilityDiscardOffset, AStringView::npos);
+    ASSERT_NE(observerAsyncDiscardOffset, AStringView::npos);
+    EXPECT_LT(asyncMarkerBeginOffset, visibilityMarkerBeginOffset);
+    EXPECT_LT(visibilityMarkerBeginOffset, visibilityMarkerFinishOffset);
+    EXPECT_LT(visibilityMarkerFinishOffset, asyncMarkerFinishOffset);
+    EXPECT_LT(fallbackVisibilityDiscardOffset, fallbackAsyncDiscardOffset);
+    EXPECT_LT(observerVisibilityDiscardOffset, observerAsyncDiscardOffset);
+
+    const usize foldTaskOffset = shadow.find("struct ShadowTransparentSoftFoldGraphTask{");
+    const usize foldTaskEndOffset = shadow.find("struct ShadowVisibilityGraphTask{", foldTaskOffset);
+    ASSERT_NE(foldTaskOffset, AStringView::npos);
+    ASSERT_NE(foldTaskEndOffset, AStringView::npos);
+    ASSERT_LT(foldTaskOffset, foldTaskEndOffset);
+    const AStringView foldTask = shadow.substr(foldTaskOffset, foldTaskEndOffset - foldTaskOffset);
+
+    const usize transparentTimingFinishOffset = foldTask.find(
+        "payload.transparentResolveTiming->value().finishTiming(commandList);"
+    );
+    const usize transparentTimingResetOffset = foldTask.find(
+        "payload.transparentResolveTiming->reset();",
+        transparentTimingFinishOffset
+    );
+    const usize visibilityTimingFinishOffset = foldTask.find(
+        "payload.shadowVisibilityTiming->value().finishTiming(commandList);",
+        transparentTimingResetOffset
+    );
+    const usize visibilityTimingResetOffset = foldTask.find(
+        "payload.shadowVisibilityTiming->reset();",
+        visibilityTimingFinishOffset
+    );
+    const usize asyncTimingFinishOffset = foldTask.find(
+        "payload.asyncTiming->value().finishTiming(commandList);",
+        visibilityTimingResetOffset
+    );
+    const usize asyncTimingResetOffset = foldTask.find(
+        "payload.asyncTiming->reset();",
+        asyncTimingFinishOffset
+    );
+    ASSERT_NE(transparentTimingFinishOffset, AStringView::npos);
+    ASSERT_NE(transparentTimingResetOffset, AStringView::npos);
+    ASSERT_NE(visibilityTimingFinishOffset, AStringView::npos);
+    ASSERT_NE(visibilityTimingResetOffset, AStringView::npos);
+    ASSERT_NE(asyncTimingFinishOffset, AStringView::npos);
+    ASSERT_NE(asyncTimingResetOffset, AStringView::npos);
+    EXPECT_LT(transparentTimingFinishOffset, transparentTimingResetOffset);
+    EXPECT_LT(transparentTimingResetOffset, visibilityTimingFinishOffset);
+    EXPECT_LT(visibilityTimingFinishOffset, visibilityTimingResetOffset);
+    EXPECT_LT(visibilityTimingResetOffset, asyncTimingFinishOffset);
+    EXPECT_LT(asyncTimingFinishOffset, asyncTimingResetOffset);
 }
 
 
@@ -4704,7 +5132,7 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
         EXPECT_TRUE(ContainsText(task, ".timingFeedback"));
         EXPECT_TRUE(ContainsText(task, ".timingScope"));
         EXPECT_TRUE(ContainsText(task, "beginSample("));
-        EXPECT_TRUE(ContainsText(task, "compiledTask->recordsNonCommittingTimingSample"));
+        EXPECT_TRUE(ContainsText(task, "compiledTask.plan->recordsNonCommittingTimingSample"));
         EXPECT_TRUE(ContainsText(task, "static void accepted("));
         EXPECT_TRUE(ContainsText(task, "acceptSubmission("));
         EXPECT_TRUE(ContainsText(task, "static void discarded("));
@@ -5833,8 +6261,15 @@ TEST(EcsGraphics, GbufferClearsUseFirstTilePassAndContinuationLoads){
         "renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION] =\n"
         "        ECSRenderDetail::s_GBufferWorldPositionClearColor;"
     ));
-    EXPECT_TRUE(ContainsText(gbufferTask, "renderPassParameters.clearColorTargets = true;"));
-    EXPECT_TRUE(ContainsText(gbufferTask, "renderPassParameters.clearDepthTarget = true;"));
+    EXPECT_TRUE(ContainsText(
+        gbufferTask,
+        "renderPassParameters.colorAttachmentActions[attachmentIndex].loadAction = "
+        "Core::RenderPassLoadAction::Clear;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        gbufferTask,
+        "renderPassParameters.depthAttachmentActions.loadAction = Core::RenderPassLoadAction::Clear;"
+    ));
 
     EXPECT_FALSE(ContainsText(prefix, "render.graphics_prefix.deferred_clear_albedo"));
     EXPECT_FALSE(ContainsText(prefix, "render.graphics_prefix.deferred_clear_normal"));
@@ -5880,6 +6315,71 @@ TEST(EcsGraphics, GbufferClearsUseFirstTilePassAndContinuationLoads){
         prefix,
         "csgIntervalSampleResourceUses.push_back(ReadWriteUse(depth, Core::ResourceStates::DepthWrite));"
     ));
+}
+
+
+// The deferred presentation triangle covers the complete acquired image, so only this proven full-overwrite pass may
+// discard its incoming tiles. Automatic and barrier-resumed passes keep the preserving Load/Store defaults.
+TEST(EcsGraphics, PresentPassDiscardsOnlyItsFullOverwriteLoad){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString presentSource;
+    AString graphicsPipelineSource;
+    AString stateTrackingSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_composite.cpp",
+        presentSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "graphics_pipeline.cpp",
+        graphicsPipelineSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "state_tracking_barriers.cpp",
+        stateTrackingSource
+    ));
+    const AStringView presentFile(presentSource.data(), presentSource.size());
+    const AStringView graphicsPipeline(graphicsPipelineSource.data(), graphicsPipelineSource.size());
+    const AStringView stateTracking(stateTrackingSource.data(), stateTrackingSource.size());
+
+    const usize presentStart = presentFile.find("bool RendererDeferredSystem::renderDeferredPresent(");
+    const usize presentEnd = presentFile.find(
+        "////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////",
+        presentStart
+    );
+    ASSERT_NE(presentStart, AStringView::npos);
+    ASSERT_NE(presentEnd, AStringView::npos);
+    const AStringView present = presentFile.substr(presentStart, presentEnd - presentStart);
+
+    EXPECT_TRUE(ContainsText(
+        present,
+        "presentationFramebuffer.getFramebufferInfo().getViewport()"
+    ));
+    EXPECT_TRUE(ContainsText(
+        present,
+        "renderPassParameters.colorAttachmentActions[0u].loadAction = Core::RenderPassLoadAction::Discard;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        present,
+        "renderPassParameters.colorAttachmentActions[0u].storeAction = Core::RenderPassStoreAction::Store;"
+    ));
+    const usize beginRenderPass = present.find(
+        "commandList.beginRenderPass(&presentationFramebuffer, renderPassParameters);"
+    );
+    const usize setGraphicsState = present.find("commandList.setGraphicsState(graphicsState);");
+    const usize draw = present.find("commandList.draw(drawArgs);");
+    const usize endRenderPass = present.find("commandList.endRenderPass();");
+    ASSERT_NE(beginRenderPass, AStringView::npos);
+    ASSERT_NE(setGraphicsState, AStringView::npos);
+    ASSERT_NE(draw, AStringView::npos);
+    ASSERT_NE(endRenderPass, AStringView::npos);
+    EXPECT_LT(beginRenderPass, setGraphicsState);
+    EXPECT_LT(draw, endRenderPass);
+    EXPECT_TRUE(ContainsText(present, "return !commandList.isRenderPassActive();"));
+
+    EXPECT_EQ(CountText(graphicsPipeline, "RenderPassParameters params = {};"), 1u);
+    EXPECT_EQ(CountText(stateTracking, "RenderPassParameters params = {};"), 1u);
 }
 
 
@@ -6611,24 +7111,24 @@ TEST(EcsGraphics, HybridHardwareFallbackRequiresCompleteGraphOwnedBlobs){
     );
     ASSERT_NE(hybridTailRecordValidationEndOffset, AStringView::npos);
     const AStringView hybridTailRecordValidation = hybridTailRecord.substr(0u, hybridTailRecordValidationEndOffset);
-    EXPECT_EQ(CountText(hybridTailRecordValidation, "context.taskGraph.uploadBlobData("), 3u);
+    EXPECT_EQ(CountText(hybridTailRecordValidation, "context.declarations.uploadBlobData("), 3u);
     EXPECT_EQ(CountText(
         hybridTailRecordValidation,
-        "hybridHardwareFallbackInstanceMaterialData = context.taskGraph.uploadBlobData(\n"
+        "hybridHardwareFallbackInstanceMaterialData = context.declarations.uploadBlobData(\n"
         "        payload.hybridHardwareFallbackInstanceMaterialBlob,\n"
         "        hybridHardwareFallbackInstanceMaterialByteCount\n"
         "    );"
     ), 1u);
     EXPECT_EQ(CountText(
         hybridTailRecordValidation,
-        "hybridHardwareFallbackInstanceData = context.taskGraph.uploadBlobData(\n"
+        "hybridHardwareFallbackInstanceData = context.declarations.uploadBlobData(\n"
         "        payload.hybridHardwareFallbackInstanceBlob,\n"
         "        hybridHardwareFallbackInstanceByteCount\n"
         "    );"
     ), 1u);
     EXPECT_EQ(CountText(
         hybridTailRecordValidation,
-        "hybridHardwareFallbackMaterialTypedData = context.taskGraph.uploadBlobData(\n"
+        "hybridHardwareFallbackMaterialTypedData = context.declarations.uploadBlobData(\n"
         "        payload.hybridHardwareFallbackMaterialTypedBlob,\n"
         "        hybridHardwareFallbackMaterialTypedByteCount\n"
         "    );"
@@ -7491,25 +7991,38 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
     EXPECT_TRUE(ContainsText(heapHeader, "PendingRecordingLease(PendingRecordingLease&&) = delete;"));
     EXPECT_TRUE(ContainsText(heapHeader, "u64 m_descriptorBufferGeneration = 0u;"));
     EXPECT_TRUE(ContainsText(heapHeader, "Vector<GpuDescriptorHandle, Alloc::GlobalArena> m_pendingRecording;"));
+    EXPECT_TRUE(ContainsText(heapHeader, "usize m_pendingRecordingCount = 0u;"));
+    EXPECT_TRUE(ContainsText(heapHeader, "usize m_retiredCount = 0u;"));
+    EXPECT_TRUE(ContainsText(heapHeader, "usize freeCount = 0u;"));
 
+    EXPECT_TRUE(ContainsText(heap, "if(m_activePendingRecordingLeaseCount != 0u){"));
+    EXPECT_TRUE(ContainsText(heap, "allocator.slotStates[handle.slot()] = SlotState::PendingRecording;"));
+    EXPECT_TRUE(ContainsText(heap, "m_pendingRecording[m_pendingRecordingCount] = handle;"));
+    EXPECT_TRUE(ContainsText(heap, "++m_pendingRecordingCount;"));
+    EXPECT_TRUE(ContainsText(heap, "allocator.slotStates[handle.slot()] = SlotState::Retired;"));
+    EXPECT_TRUE(ContainsText(heap, "m_retired[m_retiredCount] = RetiredSlot{ handle, m_lastHeapUseID };"));
     EXPECT_TRUE(ContainsText(
         heap,
-        "if(m_activePendingRecordingLeaseCount != 0u){\n"
-        "            allocator.slotStates[handle.slot()] = SlotState::PendingRecording;\n"
-        "            m_pendingRecording.push_back(handle);"
+        "statistics.pendingRetiredSlotCount = m_pendingRecordingCount + m_retiredCount;"
     ));
-    EXPECT_TRUE(ContainsText(heap, "allocator.slotStates[slot] = SlotState::Retired;"));
-    EXPECT_TRUE(ContainsText(heap, "m_retired.push_back(RetiredSlot{ handle, m_lastHeapUseID });"));
-    EXPECT_TRUE(ContainsText(
-        heap,
-        "descriptorBufferGeneration != m_descriptorBufferGeneration\n"
-        "        )\n"
-        "            return;"
-    ));
-    EXPECT_TRUE(ContainsText(
-        heap,
-        "statistics.pendingRetiredSlotCount = m_pendingRecording.size() + m_retired.size();"
-    ));
+    EXPECT_TRUE(ContainsText(heap, "m_resourceSlots.freeList.resize(resourceCapacity);"));
+    EXPECT_TRUE(ContainsText(heap, "m_samplerSlots.freeList.resize(samplerCapacity);"));
+    EXPECT_TRUE(ContainsText(heap, "m_accelStructSlots.freeList.resize(s_AccelStructCapacity);"));
+    EXPECT_TRUE(ContainsText(heap, "allocator.freeList[allocator.freeCount] = retired.handle.slot();"));
+
+    const usize releasePendingBegin = heap.find("void GpuDescriptorHeap::releasePendingRecordingLease(");
+    const usize collectRetiredBegin = heap.find("void GpuDescriptorHeap::collectRetired(){", releasePendingBegin);
+    ASSERT_NE(releasePendingBegin, AStringView::npos);
+    ASSERT_NE(collectRetiredBegin, AStringView::npos);
+    const AStringView releasePending = heap.substr(releasePendingBegin, collectRetiredBegin - releasePendingBegin);
+    EXPECT_TRUE(ContainsText(releasePending, "NothrowScopedLock lock(m_mutex);"));
+    EXPECT_TRUE(ContainsText(releasePending, "TerminateInvariant();"));
+    EXPECT_FALSE(ContainsText(releasePending, "AbortInvariant"));
+    EXPECT_TRUE(ContainsText(releasePending, "--m_activePendingRecordingLeaseCount;"));
+    EXPECT_TRUE(ContainsText(releasePending, "m_pendingRecordingCount = 0u;"));
+    EXPECT_FALSE(ContainsText(releasePending, "collectRetired()"));
+    EXPECT_FALSE(ContainsText(releasePending, "NWB_LOGGER_"));
+    EXPECT_FALSE(ContainsText(releasePending, ".push_back("));
     EXPECT_TRUE(ContainsText(
         heap,
         "if(m_activePendingRecordingLeaseCount != 0u){\n"
@@ -7573,6 +8086,10 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
     ));
     EXPECT_TRUE(ContainsText(
         smoke,
+        "TEST_F(DescriptorBufferAllocationTest, DescriptorHeapPendingRecordingLeaseUnwindPublishesWithoutArenaTraffic)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        smoke,
         "TEST_F(DescriptorBufferRoundTripTest, DeviceDescriptorHeapPendingRecordingLeaseTracksRecordedUse)"
     ));
     EXPECT_TRUE(ContainsText(
@@ -7609,29 +8126,24 @@ TEST(EcsGraphics, DescriptorStorageTeardownRequiresCompletedDeviceJoinOrActualLo
     const AStringView heap(heapSource.data(), heapSource.size());
     const AStringView device(deviceSource.data(), deviceSource.size());
 
-    EXPECT_TRUE(ContainsText(
-        managerHeader,
-        "[[nodiscard]] bool shutdownForLifecycleOperation(bool deviceIdleOrLostAlreadyProven = false);"
-    ));
-    EXPECT_TRUE(ContainsText(managerHeader, "[[nodiscard]] bool shutdownAfterDeviceIdleOrLoss();"));
+    EXPECT_TRUE(ContainsText(managerHeader, "~DescriptorBufferManager()noexcept;"));
+    EXPECT_TRUE(ContainsText(managerHeader, "[[nodiscard]] bool shutdownForLifecycleOperation(VkResult& outIdleResult);"));
+    EXPECT_TRUE(ContainsText(managerHeader, "void shutdownForDeviceTeardown()noexcept;"));
     EXPECT_TRUE(ContainsText(managerHeader, "[[nodiscard]] bool shutdown();"));
+    EXPECT_FALSE(ContainsText(managerHeader, "shutdownAfterDeviceIdleOrLoss"));
     EXPECT_TRUE(ContainsText(
         manager,
-        "DescriptorBufferManager::~DescriptorBufferManager(){\n"
-        "    const bool shutdownSucceeded = shutdown();\n"
-        "    NWB_FATAL_ASSERT_MSG(\n"
-        "        shutdownSucceeded,"
+        "DescriptorBufferManager::~DescriptorBufferManager()noexcept{\n"
+        "    shutdownForDeviceTeardown();"
     ));
     EXPECT_TRUE(ContainsText(
         manager,
-        "if(!shutdownForLifecycleOperation())\n"
+        "if(!shutdownForLifecycleOperation(idleResult))\n"
         "        return false;"
     ));
     EXPECT_TRUE(ContainsText(
         manager,
-        "if(!deviceIdle && !m_device.isDeviceLost()){\n"
-        "        ScopedLock lifecycleLock(m_lifecycleMutex);\n\n"
-        "        m_lifecycleTransitioning = false;"
+        "outIdleResult != VK_SUCCESS && outIdleResult != VK_ERROR_DEVICE_LOST"
     ));
     EXPECT_TRUE(ContainsText(
         manager,
@@ -7639,35 +8151,67 @@ TEST(EcsGraphics, DescriptorStorageTeardownRequiresCompletedDeviceJoinOrActualLo
     ));
 
     const usize managerWaitOffset = manager.find(
-        "const bool deviceIdle = deviceIdleOrLostAlreadyProven || m_device.waitForIdle();"
+        "outIdleResult = m_device.waitForNativeIdle();"
     );
-    const usize managerRefusalOffset = manager.find("if(!deviceIdle && !m_device.isDeviceLost())", managerWaitOffset);
+    const usize managerLossOffset = manager.find("if(outIdleResult == VK_ERROR_DEVICE_LOST)", managerWaitOffset);
+    const usize managerRefusalOffset = manager.find(
+        "if(outIdleResult != VK_SUCCESS && outIdleResult != VK_ERROR_DEVICE_LOST){",
+        managerLossOffset
+    );
     const usize managerDestroyOffset = manager.find("shutdownSegment(m_resourceSegment);", managerRefusalOffset);
     ASSERT_NE(managerWaitOffset, AStringView::npos);
+    ASSERT_NE(managerLossOffset, AStringView::npos);
     ASSERT_NE(managerRefusalOffset, AStringView::npos);
     ASSERT_NE(managerDestroyOffset, AStringView::npos);
-    EXPECT_LT(managerWaitOffset, managerRefusalOffset);
+    EXPECT_LT(managerWaitOffset, managerLossOffset);
+    EXPECT_LT(managerLossOffset, managerRefusalOffset);
     EXPECT_LT(managerRefusalOffset, managerDestroyOffset);
     EXPECT_TRUE(ContainsText(
         manager,
-        "bool DescriptorBufferManager::shutdownAfterDeviceIdleOrLoss(){\n"
-        "    ScopedLock operationLock(m_lifecycleOperationMutex);\n\n"
-        "    return shutdownForLifecycleOperation(true);"
+        "operationLock.unlock();\n"
+        "    if(idleResult == VK_ERROR_DEVICE_LOST)\n"
+        "        m_device.captureDeviceLoss(\"descriptor-buffer shutdown idle\");"
     ));
     EXPECT_TRUE(ContainsText(
-        device,
-        "m_descriptorBufferManager.shutdownAfterDeviceIdleOrLoss()"
+        manager,
+        "void DescriptorBufferManager::shutdownForDeviceTeardown()noexcept{\n"
+        "    NothrowScopedLock operationLock(m_lifecycleOperationMutex);"
     ));
+    EXPECT_TRUE(ContainsText(
+        heap,
+        "GpuDescriptorHeap::~GpuDescriptorHeap()noexcept{\n"
+        "    shutdownForDeviceTeardown();"
+    ));
+    EXPECT_TRUE(ContainsText(
+        heap,
+        "void GpuDescriptorHeap::shutdownForDeviceTeardown()noexcept{\n"
+        "    NothrowScopedLock lock(m_mutex);\n"
+        "    resetStateForShutdownLocked();"
+    ));
+    EXPECT_FALSE(ContainsText(heap, "waitForIdle()"));
 
-    const usize heapWaitOffset = heap.find("const bool deviceIdle = m_device.waitForIdle();");
-    const usize heapJoinAssertOffset = heap.find("deviceIdle || m_device.isDeviceLost()", heapWaitOffset);
-    const usize heapDestroyOffset = heap.find("shutdownForDeviceTeardown();", heapJoinAssertOffset);
-    ASSERT_NE(heapWaitOffset, AStringView::npos);
-    ASSERT_NE(heapJoinAssertOffset, AStringView::npos);
+    const usize deviceWaitOffset = device.find(
+        "const VkResult nativeIdleResult = lifecycleDestructionPrepared ? VK_SUCCESS : waitForNativeIdle();"
+    );
+    const usize deviceSafetyOffset = device.find(
+        "const bool nativeTeardownSafe = nativeIdleResult == VK_SUCCESS || nativeIdleResult == VK_ERROR_DEVICE_LOST;",
+        deviceWaitOffset
+    );
+    const usize deviceTerminationOffset = device.find("TerminateInvariant();", deviceSafetyOffset);
+    const usize heapDestroyOffset = device.find("m_gpuDescriptorHeap.shutdownForDeviceTeardown();", deviceTerminationOffset);
+    const usize deviceManagerDestroyOffset = device.find(
+        "m_descriptorBufferManager.shutdownForDeviceTeardown();",
+        heapDestroyOffset
+    );
+    ASSERT_NE(deviceWaitOffset, AStringView::npos);
+    ASSERT_NE(deviceSafetyOffset, AStringView::npos);
+    ASSERT_NE(deviceTerminationOffset, AStringView::npos);
     ASSERT_NE(heapDestroyOffset, AStringView::npos);
-    EXPECT_LT(heapWaitOffset, heapJoinAssertOffset);
-    EXPECT_LT(heapJoinAssertOffset, heapDestroyOffset);
-    EXPECT_FALSE(ContainsText(heap, "destruction is continuing after device-idle wait failed"));
+    ASSERT_NE(deviceManagerDestroyOffset, AStringView::npos);
+    EXPECT_LT(deviceWaitOffset, deviceSafetyOffset);
+    EXPECT_LT(deviceSafetyOffset, deviceTerminationOffset);
+    EXPECT_LT(deviceTerminationOffset, heapDestroyOffset);
+    EXPECT_LT(heapDestroyOffset, deviceManagerDestroyOffset);
 }
 
 

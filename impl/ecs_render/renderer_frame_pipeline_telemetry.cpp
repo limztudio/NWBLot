@@ -116,6 +116,9 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
     if(!m_frameTargets.valid())
         return false;
 
+    const Core::GpuTaskGraph::DeclarationReadView deferredTaskGraphView(m_deferredLightingTaskGraph);
+    const Core::GpuCompiledGraph::ReadView deferredCompiledPlan(m_deferredLightingCompiledGraph);
+
     using Handle = Core::Telemetry::FrameGraphNodeHandle;
     namespace Edge = Core::Telemetry::FrameGraphEdgeKind;
 
@@ -141,7 +144,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         builder.frameIndex(),
         m_frameGraphSourceFrameIndex
     );
-    const Core::GpuPhysicalQueueTopology runtimeQueueTopology = m_deferredLightingCompiledGraph.queueTopology();
+    const Core::GpuPhysicalQueueTopology runtimeQueueTopology = deferredCompiledPlan.queueTopology();
     Core::Alloc::ScratchArena physicalQueueRuntimeStatisticsScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<
         Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics,
@@ -162,13 +165,14 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             const Core::GpuPhysicalQueueId queue = runtimeQueueTopology.queues[queueIndex].id;
             const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics queueStatistics =
                 ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
-                    m_deferredLightingCompiledGraph.physicalQueueCompileStatistics(queue),
+                    deferredCompiledPlan.physicalQueueCompileStatistics(queue),
                     m_deferredLightingRecordedGraph.physicalQueueRecordingStatistics(
                         m_deferredLightingCompiledGraph,
+                        deferredCompiledPlan,
                         queue
                     ),
                     m_deferredLightingSubmissionTransaction.physicalQueueSubmissionStatistics(
-                        m_deferredLightingCompiledGraph,
+                        deferredCompiledPlan,
                         queue
                     )
                 )
@@ -185,9 +189,9 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         }
     }
     if(rendererFrameMetadata.runtimeStatistics.present){
-        packetSubmissionStatistics.reserve(m_deferredLightingCompiledGraph.packetCount());
-        for(usize packetIndex = 0u; packetIndex < m_deferredLightingCompiledGraph.packetCount(); ++packetIndex){
-            const Core::GpuSubmissionPacketId packet = m_deferredLightingCompiledGraph.packetIdAt(packetIndex);
+        packetSubmissionStatistics.reserve(deferredCompiledPlan.packetCount());
+        for(usize packetIndex = 0u; packetIndex < deferredCompiledPlan.packetCount(); ++packetIndex){
+            const Core::GpuSubmissionPacketId packet = deferredCompiledPlan.packetIdAt(packetIndex);
             if(!packet.valid()){
                 rendererFrameMetadata.runtimeStatistics = {};
                 physicalQueueRuntimeStatistics.clear();
@@ -197,7 +201,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
 
             const Core::GpuTaskGraphPacketSubmissionStatistics packetStatistics =
                 m_deferredLightingSubmissionTransaction.packetSubmissionStatistics(
-                    m_deferredLightingCompiledGraph,
+                    deferredCompiledPlan,
                     packet
                 )
             ;
@@ -420,23 +424,31 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             // Recorded packets retain the exact worker domain/index used for native allocation. Walk the immutable
             // compiled order and reject any identity already seen on this queue; telemetry packet counts are small,
             // so this allocation-free quadratic pass is preferable to persistent mutable enumeration storage.
-            for(usize packetIndex = 0u; packetIndex < m_deferredLightingCompiledGraph.packetCount(); ++packetIndex){
-                const Core::GpuSubmissionPacketId packet = m_deferredLightingCompiledGraph.packetIdAt(packetIndex);
-                if(m_deferredLightingCompiledGraph.packet(packet).queue != queueInfo.id)
+            for(usize packetIndex = 0u; packetIndex < deferredCompiledPlan.packetCount(); ++packetIndex){
+                const Core::GpuSubmissionPacketId packet = deferredCompiledPlan.packetIdAt(packetIndex);
+                const Core::GpuCompiledPacketView packetView = deferredCompiledPlan.packet(packet);
+                if(!packetView.valid())
+                    return false;
+                if(packetView.plan->queue != queueInfo.id)
                     continue;
-                const Core::GpuRecordedPacket* const recordedPacket = m_deferredLightingRecordedGraph.find(packet);
+                const Optional<Core::GpuRecordedPacket> recordedPacket =
+                    m_deferredLightingRecordedGraph.packetSnapshot(packet)
+                ;
                 if(!recordedPacket || recordedPacket->recordingWorkerIndex == 0u)
                     continue;
 
                 bool alreadyAppended = false;
                 for(usize previousPacketIndex = 0u; previousPacketIndex < packetIndex; ++previousPacketIndex){
                     const Core::GpuSubmissionPacketId previousPacket =
-                        m_deferredLightingCompiledGraph.packetIdAt(previousPacketIndex)
+                        deferredCompiledPlan.packetIdAt(previousPacketIndex)
                     ;
-                    if(m_deferredLightingCompiledGraph.packet(previousPacket).queue != queueInfo.id)
+                    const Core::GpuCompiledPacketView previousPacketView = deferredCompiledPlan.packet(previousPacket);
+                    if(!previousPacketView.valid())
+                        return false;
+                    if(previousPacketView.plan->queue != queueInfo.id)
                         continue;
-                    const Core::GpuRecordedPacket* const previousRecordedPacket =
-                        m_deferredLightingRecordedGraph.find(previousPacket)
+                    const Optional<Core::GpuRecordedPacket> previousRecordedPacket =
+                        m_deferredLightingRecordedGraph.packetSnapshot(previousPacket)
                     ;
                     if(
                         previousRecordedPacket
@@ -466,10 +478,10 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         }
 
         const usize logicalOwnershipTransferCount =
-            m_deferredLightingCompiledGraph.logicalOwnershipTransferCount()
+            deferredCompiledPlan.logicalOwnershipTransferCount()
         ;
         const Core::GpuCompiledOwnershipTransfer* const logicalOwnershipTransfers =
-            m_deferredLightingCompiledGraph.logicalOwnershipTransfers()
+            deferredCompiledPlan.logicalOwnershipTransfers()
         ;
         if(logicalOwnershipTransfers){
             for(usize transferIndex = 0u; transferIndex < logicalOwnershipTransferCount; ++transferIndex){
@@ -711,9 +723,9 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
     if(m_deferredLightingTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
         if(!m_deferredLightingTaskGraphQueueAssignmentTelemetry.update(
-            m_deferredLightingTaskGraph,
+            deferredTaskGraphView,
             m_deferredLightingTaskGraphQueueAssignments,
-            m_deferredLightingCompiledGraph,
+            deferredCompiledPlan,
             m_deferredLightingSubmissionTransaction,
             scratchArena
         )){
@@ -722,10 +734,10 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         else{
             const Core::GpuTaskGraphTelemetryOptions deferredLightingTelemetryOptions{
                 .queueAssignments = &m_deferredLightingTaskGraphQueueAssignments,
-                .compiledGraph = &m_deferredLightingCompiledGraph,
+                .compiledPlan = &deferredCompiledPlan,
                 .queueAssignmentTelemetry = &m_deferredLightingTaskGraphQueueAssignmentTelemetry,
             };
-            if(!m_deferredLightingTaskGraph.appendFrameGraphTelemetry(
+            if(!deferredTaskGraphView.appendFrameGraphTelemetry(
                 builder,
                 m_deferredLightingTaskGraphAnalysis,
                 scratchArena,

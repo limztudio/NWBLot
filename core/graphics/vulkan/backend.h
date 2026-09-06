@@ -3588,6 +3588,10 @@ private:
         Capture,
         Defer,
     };
+    enum class SubmissionCommandListValidationPolicy : u8{
+        Prevalidated,
+        ValidateWithinWorkspace,
+    };
 
 
 private:
@@ -3768,6 +3772,25 @@ public:
 
 
 private:
+    // Requires queue.m_submissionWorkspaceMutex. Builds reusable queue submission identity and ownership state.
+    [[nodiscard]] bool prepareSubmissionCommandListWorkspace(
+        Queue& queue,
+        CommandList* const* pCommandLists,
+        usize numCommandLists,
+        const GpuPhysicalQueueId& executionQueue,
+        bool graphSubmissionAuthorized,
+        SubmissionCommandListValidationPolicy validationPolicy,
+        bool* outHasSubmittedOwner = nullptr
+    );
+    // Requires queue.m_submissionWorkspaceMutex. Publishes accepted chunks or releases rejected recording chunks.
+    void finalizeSubmissionCommandListResources(
+        Queue& queue,
+        CommandList* const* pCommandLists,
+        usize numCommandLists,
+        const GpuPhysicalQueueId& executionQueue,
+        u64 submittedID,
+        bool submissionAccepted
+    );
     [[nodiscard]] QueueSubmissionToken executeGraphCommandLists(
         CommandList* const* pCommandLists,
         usize numCommandLists,

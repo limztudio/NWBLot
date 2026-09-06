@@ -414,40 +414,17 @@ u64 Device::executeCommandLists(
 
     UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);
     auto& expectedCommandLists = queue->m_executeExpectedCommandLists;
-    auto& submittedOwners = queue->m_executeSubmittedOwners;
-    expectedCommandLists.clear();
     bool hasSubmittedOwner = false;
-    if(pCommandLists && numCommandLists > 0){
-        expectedCommandLists.reserve(numCommandLists);
-        for(usize i = 0; i < numCommandLists; ++i){
-            CommandList* const commandList = pCommandLists[i];
-            if(
-                !commandList
-                || &commandList->m_device != this
-                || !commandList->matchesSubmissionLease(executionQueue, queue->m_queueID, false)
-            ){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command-list submission capability is invalid"));
-                return 0u;
-            }
-            TrackedCommandBuffer* const owner = commandList->m_currentCmdBuf.get();
-            expectedCommandLists.push_back(Queue::SubmissionCommandListIdentity{
-                .owner = owner,
-                .recordingLeaseSerial = commandList->m_recordingLeaseSerial,
-                .nativeRecordingID = commandList->m_nativeRecordingID,
-                .recordingWorkerDomain = commandList->m_creationDesc.recordingWorkerDomain,
-                .recordingWorkerIndex = commandList->m_creationDesc.recordingWorkerIndex,
-            });
-            if(owner)
-                hasSubmittedOwner = true;
-        }
-    }
-    submittedOwners.prepare(expectedCommandLists.size());
-    if(submittedOwners.indexed()){
-        for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
-            if(expected.owner)
-                submittedOwners.add(*expected.owner, expected.nativeRecordingID);
-        }
-    }
+    if(!prepareSubmissionCommandListWorkspace(
+        *queue,
+        pCommandLists,
+        numCommandLists,
+        executionQueue,
+        false,
+        SubmissionCommandListValidationPolicy::ValidateWithinWorkspace,
+        &hasSubmittedOwner
+    ))
+        return 0u;
 
     bool submissionAccepted = false;
     VkResult nativeSubmissionResult = VK_SUCCESS;
@@ -461,58 +438,14 @@ u64 Device::executeCommandLists(
         &nativeSubmissionResult
     );
 
-    if(!expectedCommandLists.empty()){
-        if(submissionAccepted){
-            m_uploadManager.submitChunks(
-                executionQueue,
-                submittedID,
-                expectedCommandLists.data(),
-                expectedCommandLists.size(),
-                submittedOwners
-            );
-            m_scratchManager.submitChunks(
-                executionQueue,
-                submittedID,
-                expectedCommandLists.data(),
-                expectedCommandLists.size(),
-                submittedOwners
-            );
-        }
-        else{
-            const auto ownerStillRecorded = [&](const Queue::SubmissionCommandListIdentity& expected) -> bool {
-                if(!expected.owner || expected.nativeRecordingID == 0u || !pCommandLists)
-                    return false;
-                for(usize i = 0; i < numCommandLists; ++i){
-                    auto* cmdList = pCommandLists[i];
-                    if(
-                        cmdList
-                        && cmdList->m_currentCmdBuf.get() == expected.owner
-                        && cmdList->m_nativeRecordingID == expected.nativeRecordingID
-                    )
-                        return true;
-                }
-                return false;
-            };
-
-            const u64 reusableVersion = queueGetCompletedInstance(executionQueue);
-            for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
-                if(ownerStillRecorded(expected))
-                    continue;
-                m_uploadManager.discardChunks(
-                    executionQueue,
-                    expected.owner,
-                    expected.nativeRecordingID,
-                    reusableVersion
-                );
-                m_scratchManager.discardChunks(
-                    executionQueue,
-                    expected.owner,
-                    expected.nativeRecordingID,
-                    reusableVersion
-                );
-            }
-        }
-    }
+    finalizeSubmissionCommandListResources(
+        *queue,
+        pCommandLists,
+        numCommandLists,
+        executionQueue,
+        submittedID,
+        submissionAccepted
+    );
 
     if(outCommandListsSubmitted)
         *outCommandListsSubmitted = submissionAccepted && hasSubmittedOwner;
@@ -545,6 +478,129 @@ QueueSubmissionToken Device::executeCommandLists(
     const QueueSubmissionDesc& submitDesc
 ){
     return executeCommandListsInternal(pCommandLists, numCommandLists, executionQueue, submitDesc, false);
+}
+
+bool Device::prepareSubmissionCommandListWorkspace(
+    Queue& queue,
+    CommandList* const* pCommandLists,
+    const usize numCommandLists,
+    const GpuPhysicalQueueId& executionQueue,
+    const bool graphSubmissionAuthorized,
+    const SubmissionCommandListValidationPolicy validationPolicy,
+    bool* const outHasSubmittedOwner
+){
+    auto& expectedCommandLists = queue.m_executeExpectedCommandLists;
+    auto& submittedOwners = queue.m_executeSubmittedOwners;
+    expectedCommandLists.clear();
+    if(outHasSubmittedOwner)
+        *outHasSubmittedOwner = false;
+
+    if(pCommandLists && numCommandLists > 0u){
+        expectedCommandLists.reserve(numCommandLists);
+        for(usize i = 0u; i < numCommandLists; ++i){
+            CommandList* const commandList = pCommandLists[i];
+            if(
+                validationPolicy == SubmissionCommandListValidationPolicy::ValidateWithinWorkspace
+                && (
+                    !commandList
+                    || &commandList->m_device != this
+                    || !commandList->matchesSubmissionLease(executionQueue, queue.m_queueID, graphSubmissionAuthorized)
+                )
+            ){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command-list submission capability is invalid"));
+                return false;
+            }
+
+            TrackedCommandBuffer* const owner = commandList->m_currentCmdBuf.get();
+            expectedCommandLists.push_back(Queue::SubmissionCommandListIdentity{
+                .owner = owner,
+                .recordingLeaseSerial = commandList->m_recordingLeaseSerial,
+                .nativeRecordingID = commandList->m_nativeRecordingID,
+                .recordingWorkerDomain = commandList->m_creationDesc.recordingWorkerDomain,
+                .graphRecordingOwnershipSerial = graphSubmissionAuthorized
+                    ? commandList->m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire)
+                    : 0u,
+                .recordingWorkerIndex = commandList->m_creationDesc.recordingWorkerIndex,
+                .graphSubmissionAuthorized = graphSubmissionAuthorized,
+            });
+            if(owner && outHasSubmittedOwner)
+                *outHasSubmittedOwner = true;
+        }
+    }
+
+    submittedOwners.prepare(expectedCommandLists.size());
+    if(submittedOwners.indexed()){
+        for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
+            if(expected.owner)
+                submittedOwners.add(*expected.owner, expected.nativeRecordingID);
+        }
+    }
+
+    return true;
+}
+
+void Device::finalizeSubmissionCommandListResources(
+    Queue& queue,
+    CommandList* const* pCommandLists,
+    const usize numCommandLists,
+    const GpuPhysicalQueueId& executionQueue,
+    const u64 submittedID,
+    const bool submissionAccepted
+){
+    const auto& expectedCommandLists = queue.m_executeExpectedCommandLists;
+    if(expectedCommandLists.empty())
+        return;
+
+    if(submissionAccepted){
+        m_uploadManager.submitChunks(
+            executionQueue,
+            submittedID,
+            expectedCommandLists.data(),
+            expectedCommandLists.size(),
+            queue.m_executeSubmittedOwners
+        );
+        m_scratchManager.submitChunks(
+            executionQueue,
+            submittedID,
+            expectedCommandLists.data(),
+            expectedCommandLists.size(),
+            queue.m_executeSubmittedOwners
+        );
+        return;
+    }
+
+    const auto ownerStillRecorded = [&](const Queue::SubmissionCommandListIdentity& expected) -> bool {
+        if(!expected.owner || expected.nativeRecordingID == 0u || !pCommandLists)
+            return false;
+        for(usize i = 0u; i < numCommandLists; ++i){
+            CommandList* const commandList = pCommandLists[i];
+            if(
+                commandList
+                && commandList->m_currentCmdBuf.get() == expected.owner
+                && commandList->m_nativeRecordingID == expected.nativeRecordingID
+            )
+                return true;
+        }
+        return false;
+    };
+
+    const u64 reusableVersion = queueGetCompletedInstance(executionQueue);
+    for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
+        if(ownerStillRecorded(expected))
+            continue;
+        m_uploadManager.discardChunks(
+            executionQueue,
+            expected.owner,
+            expected.nativeRecordingID,
+            reusableVersion
+        );
+        m_scratchManager.discardChunks(
+            executionQueue,
+            expected.owner,
+            expected.nativeRecordingID,
+            reusableVersion
+        );
+    }
 }
 
 QueueSubmissionToken Device::executeGraphCommandLists(
@@ -626,7 +682,6 @@ QueueSubmissionToken Device::executeCommandListsInternal(
     UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);
     auto& localWaits = queue->m_executeLocalWaits;
     auto& expectedCommandLists = queue->m_executeExpectedCommandLists;
-    auto& submittedOwners = queue->m_executeSubmittedOwners;
     localWaits.clear();
     expectedCommandLists.clear();
     if(submitDesc.waitTokenCount > 0u){
@@ -660,31 +715,15 @@ QueueSubmissionToken Device::executeCommandListsInternal(
         }
     }
 
-    if(pCommandLists && numCommandLists > 0u){
-        expectedCommandLists.reserve(numCommandLists);
-        for(usize i = 0u; i < numCommandLists; ++i){
-            CommandList* const commandList = pCommandLists[i];
-            TrackedCommandBuffer* const owner = commandList->m_currentCmdBuf.get();
-            expectedCommandLists.push_back(Queue::SubmissionCommandListIdentity{
-                .owner = owner,
-                .recordingLeaseSerial = commandList->m_recordingLeaseSerial,
-                .nativeRecordingID = commandList->m_nativeRecordingID,
-                .recordingWorkerDomain = commandList->m_creationDesc.recordingWorkerDomain,
-                .graphRecordingOwnershipSerial = graphSubmissionAuthorized
-                    ? commandList->m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire)
-                    : 0u,
-                .recordingWorkerIndex = commandList->m_creationDesc.recordingWorkerIndex,
-                .graphSubmissionAuthorized = graphSubmissionAuthorized,
-            });
-        }
-    }
-    submittedOwners.prepare(expectedCommandLists.size());
-    if(submittedOwners.indexed()){
-        for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
-            if(expected.owner)
-                submittedOwners.add(*expected.owner, expected.nativeRecordingID);
-        }
-    }
+    if(!prepareSubmissionCommandListWorkspace(
+        *queue,
+        pCommandLists,
+        numCommandLists,
+        executionQueue,
+        graphSubmissionAuthorized,
+        SubmissionCommandListValidationPolicy::Prevalidated
+    ))
+        return {};
 
     // The hook runs only after this submission's queue and timeline waits validate. Its native signal is passed as
     // submission-local data into Queue::submit, so a concurrent submit cannot consume the presentation semaphore.
@@ -741,58 +780,14 @@ QueueSubmissionToken Device::executeCommandListsInternal(
         : QueueSubmissionToken{}
     ;
 
-    if(!expectedCommandLists.empty()){
-        if(submissionAccepted){
-            m_uploadManager.submitChunks(
-                executionQueue,
-                submittedID,
-                expectedCommandLists.data(),
-                expectedCommandLists.size(),
-                submittedOwners
-            );
-            m_scratchManager.submitChunks(
-                executionQueue,
-                submittedID,
-                expectedCommandLists.data(),
-                expectedCommandLists.size(),
-                submittedOwners
-            );
-        }
-        else{
-            const auto ownerStillRecorded = [&](const Queue::SubmissionCommandListIdentity& expected) -> bool {
-                if(!expected.owner || expected.nativeRecordingID == 0u || !pCommandLists)
-                    return false;
-                for(usize i = 0u; i < numCommandLists; ++i){
-                    CommandList* const cmdList = pCommandLists[i];
-                    if(
-                        cmdList
-                        && cmdList->m_currentCmdBuf.get() == expected.owner
-                        && cmdList->m_nativeRecordingID == expected.nativeRecordingID
-                    )
-                        return true;
-                }
-                return false;
-            };
-
-            const u64 reusableVersion = queueGetCompletedInstance(executionQueue);
-            for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
-                if(ownerStillRecorded(expected))
-                    continue;
-                m_uploadManager.discardChunks(
-                    executionQueue,
-                    expected.owner,
-                    expected.nativeRecordingID,
-                    reusableVersion
-                );
-                m_scratchManager.discardChunks(
-                    executionQueue,
-                    expected.owner,
-                    expected.nativeRecordingID,
-                    reusableVersion
-                );
-            }
-        }
-    }
+    finalizeSubmissionCommandListResources(
+        *queue,
+        pCommandLists,
+        numCommandLists,
+        executionQueue,
+        submittedID,
+        submissionAccepted
+    );
     hookResolution.resolve(submissionToken);
 
     submissionWorkspaceLock.unlock();

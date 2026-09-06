@@ -468,6 +468,21 @@ public:
 
 
 private:
+    // Records a range only after its caller owns the artifact operation and has prepared the graph recording
+    // attempt. Both public recorder modes use compiler order for their serial path; timing and mode telemetry stay
+    // with those callers so ready-frontier accounting remains one enclosing operation.
+    [[nodiscard]] bool recordPreparedPacketRangeInCompileOrder(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        const GpuRecordedGraph::ArtifactOperation& artifactAccess,
+        const GpuSubmissionPacketRange& range,
+        GpuRecordedGraph& outRecordedGraph,
+        GpuRecordedGraph::PacketRecordingScratch& scratch,
+        Alloc::ScratchArena& stateFanInScratchArena,
+        GpuCommandIrCapture* commandIrCapture,
+        GpuSubmissionPacketId* outFailedPacket
+    )const;
     [[nodiscard]] bool recordPacket(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -1320,6 +1335,33 @@ public:
 
 
 private:
+    // Native packet recording remains serial unless the caller supplies the Vulkan-only ready-frontier pool. This
+    // centralizes the recording-mode policy shared by normal-graph and semantic-range execution.
+    [[nodiscard]] bool recordPacketRange(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuNativePacketRecorder& recorder,
+        const GpuSubmissionPacketRange& range,
+        GpuRecordedGraph& recordedGraph,
+        Alloc::ThreadPool* readyFrontierWorkerPool,
+        GpuCommandIrCapture* commandIrCapture,
+        GpuSubmissionPacketId* outFailedPacket
+    )const;
+    // Semantic range execution shares one composite graph/recorded-artifact/transaction admission sequence. A
+    // non-null pool opts only native recording into ready-frontier parallelism; compile-order submission and all
+    // recovery-tail ownership remain identical across the two public entry points.
+    [[nodiscard]] bool recordAndSubmitTaskRange(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuNativePacketRecorder& recorder,
+        GpuRecordedGraph& recordedGraph,
+        Alloc::ThreadPool* readyFrontierWorkerPool,
+        GpuTaskId firstTask,
+        GpuTaskId lastTask,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuSubmissionPacketId* outFailedPacket
+    )const;
     // The caller owns the transaction's exclusive SubmissionOperation. This internal path lets the accepted-frontier
     // composite reuse the ordinary task executor without attempting forbidden same-transaction gate reentry.
     [[nodiscard]] bool recordAndSubmitTaskWithinSubmissionOperation(

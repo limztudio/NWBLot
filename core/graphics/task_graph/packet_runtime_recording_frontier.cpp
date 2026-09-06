@@ -79,6 +79,44 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool GpuNativePacketRecorder::recordPreparedPacketRangeInCompileOrder(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuCompiledGraph::ReadView& planAccess,
+    const GpuRecordedGraph::ArtifactOperation& artifactAccess,
+    const GpuSubmissionPacketRange& range,
+    GpuRecordedGraph& outRecordedGraph,
+    GpuRecordedGraph::PacketRecordingScratch& scratch,
+    Alloc::ScratchArena& stateFanInScratchArena,
+    GpuCommandIrCapture* const commandIrCapture,
+    GpuSubmissionPacketId* const outFailedPacket
+)const{
+    const usize rangeBegin = range.first.index;
+    const usize rangeEnd = rangeBegin + range.packetCount;
+    // The compiler emits packet IDs in stable topological order, so native recording preserves the graph's
+    // internal state-seed chain without requiring renderer-side packet collectors.
+    for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
+        const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
+        if(!recordPacket(
+            graph,
+            compiledGraph,
+            planAccess,
+            artifactAccess,
+            packet,
+            outRecordedGraph,
+            scratch,
+            stateFanInScratchArena,
+            commandIrCapture
+        )){
+            if(outFailedPacket)
+                *outFailedPacket = packet;
+            return false;
+        }
+    }
+    return true;
+}
+
+
 namespace __hidden_gpu_packet_runtime_recording_frontier{
 
 
@@ -134,8 +172,6 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
     if(!range.valid() || !planAccess.validPacketRange(range))
         return false;
 
-    const usize rangeBegin = range.first.index;
-    const usize rangeEnd = rangeBegin + range.packetCount;
     const Timer recordingOperationBegin = TimerNow();
     {
         GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
@@ -159,26 +195,19 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
     if(!serialScratch || !serialScratch->stateFanInScratchArena)
         return false;
     Alloc::ScratchArena& stateFanInScratchArena = *serialScratch->stateFanInScratchArena;
-    // The compiler emits packet IDs in stable topological order, so native recording preserves the graph's
-    // internal state-seed chain without requiring renderer-side packet collectors.
-    for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
-        const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
-        if(!recordPacket(
-            graph,
-            compiledGraph,
-            planAccess,
-            artifactOperation,
-            packet,
-            outRecordedGraph,
-            *serialScratch,
-            stateFanInScratchArena,
-            commandIrCapture
-        )){
-            if(outFailedPacket)
-                *outFailedPacket = packet;
-            return false;
-        }
-    }
+    if(!recordPreparedPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        planAccess,
+        artifactOperation,
+        range,
+        outRecordedGraph,
+        *serialScratch,
+        stateFanInScratchArena,
+        commandIrCapture,
+        outFailedPacket
+    ))
+        return false;
     outRecordedGraph.addRecordingElapsedSeconds(
         DurationInSeconds<f64>(TimerNow(), recordingOperationBegin),
         artifactOperation
@@ -368,24 +397,19 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         || !workerPool.isParallelEnabled()
         || range.packetCount < 2u
     ){
-        for(const RecordingEntry& entry : recordingEntries){
-            const GpuSubmissionPacketId packet = entry.packet;
-            if(recordPacket(
-                graph,
-                compiledGraph,
-                planAccess,
-                artifactOperation,
-                packet,
-                outRecordedGraph,
-                *serialScratch,
-                serialStateFanInScratchArena,
-                commandIrCapture
-            ))
-                continue;
-            if(outFailedPacket)
-                *outFailedPacket = packet;
+        if(!recordPreparedPacketRangeInCompileOrder(
+            graph,
+            compiledGraph,
+            planAccess,
+            artifactOperation,
+            range,
+            outRecordedGraph,
+            *serialScratch,
+            serialStateFanInScratchArena,
+            commandIrCapture,
+            outFailedPacket
+        ))
             return false;
-        }
         completeReadyFrontierTelemetry();
         return true;
     }

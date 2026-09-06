@@ -217,26 +217,16 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
             return false;
     }
 
-    const bool recorded = desc.readyFrontierWorkerPool
-        ? recorder.recordPacketRangeInReadyFrontiers(
-            graph,
-            compiledGraph,
-            normalRange,
-            recordedGraph,
-            *desc.readyFrontierWorkerPool,
-            &failedPacket,
-            desc.commandIrCapture
-        )
-        : recorder.recordPacketRangeInCompileOrder(
-            graph,
-            compiledGraph,
-            normalRange,
-            recordedGraph,
-            &failedPacket,
-            desc.commandIrCapture
-        )
-    ;
-    if(!recorded){
+    if(!recordPacketRange(
+        graph,
+        compiledGraph,
+        recorder,
+        normalRange,
+        recordedGraph,
+        desc.readyFrontierWorkerPool,
+        desc.commandIrCapture,
+        &failedPacket
+    )){
         if(outFailedPacket)
             *outFailedPacket = failedPacket;
         return false;
@@ -299,6 +289,38 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
 }
 
 
+bool GpuTaskGraphSubmitter::recordPacketRange(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuNativePacketRecorder& recorder,
+    const GpuSubmissionPacketRange& range,
+    GpuRecordedGraph& recordedGraph,
+    Alloc::ThreadPool* const readyFrontierWorkerPool,
+    GpuCommandIrCapture* const commandIrCapture,
+    GpuSubmissionPacketId* const outFailedPacket
+)const{
+    return readyFrontierWorkerPool
+        ? recorder.recordPacketRangeInReadyFrontiers(
+            graph,
+            compiledGraph,
+            range,
+            recordedGraph,
+            *readyFrontierWorkerPool,
+            outFailedPacket,
+            commandIrCapture
+        )
+        : recorder.recordPacketRangeInCompileOrder(
+            graph,
+            compiledGraph,
+            range,
+            recordedGraph,
+            outFailedPacket,
+            commandIrCapture
+        )
+    ;
+}
+
+
 bool GpuTaskGraphSubmitter::recordAndSubmitTaskRangeInCompileOrder(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
@@ -310,103 +332,18 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskRangeInCompileOrder(
     Alloc::ScratchArena& scratchArena,
     GpuSubmissionPacketId* const outFailedPacket
 )const{
-    if(outFailedPacket)
-        *outFailedPacket = {};
-    SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, compiledGraph, recordedGraph, transaction);
-    GpuCompiledGraph::ReadView planAccess(compiledGraph);
-    if(!planAccess.valid())
-        return false;
-    GpuRecordedGraph::ArtifactOperation artifactOperation(
-        recordedGraph,
-        GpuRecordedGraph::ArtifactOperationMode::Exclusive
-    );
-    if(!artifactOperation.valid())
-        return false;
-    GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(
-        transaction,
-        GpuGraphSubmissionTransaction::SubmissionOperationMode::CompositeBarrier,
-        &artifactOperation
-    );
-    if(!submissionOperation.valid())
-        return false;
-    SubmissionAttemptExceptionScope exceptionScope(graph, compiledGraph, recordedGraph, transaction, outFailedPacket);
-
-    GpuSubmissionPacketRange range;
-    {
-        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
-        if(!declarationAccess.valid())
-            return false;
-        range = planAccess.packetRangeForTasks(firstTask, lastTask);
-        if(
-            !planAccess.validFor(declarationAccess)
-            || !transaction.validFor(planAccess)
-            || !planAccess.validPacketRange(range)
-        )
-            return false;
-        exceptionScope.setFailedPacket(range.first);
-
-        const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
-        for(usize packetIndex = range.first.index; packetIndex < rangeEnd; ++packetIndex){
-            const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
-            const GpuCompiledPacketView packetView = planAccess.packet(packet);
-            if(!packetView.valid())
-                return false;
-            if(!packetView.plan->joinsAcceptedQueueFrontier)
-                continue;
-            if(outFailedPacket)
-                *outFailedPacket = packet;
-            return false;
-        }
-
-        if(!prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
-            graph,
-            compiledGraph,
-            range.first,
-            recorder.m_timingRecorder,
-            recordedGraph,
-            transaction,
-            artifactOperation,
-            declarationAccess,
-            planAccess
-        ))
-            return false;
-    }
-
-    GpuSubmissionPacketId failedPacket;
-    if(!recorder.recordPacketRangeInCompileOrder(
+    return recordAndSubmitTaskRange(
         graph,
         compiledGraph,
-        range,
+        recorder,
         recordedGraph,
-        &failedPacket
-    )){
-        if(outFailedPacket)
-            *outFailedPacket = failedPacket;
-        return false;
-    }
-    if(!submitPacketRangeInCompileOrderWithOperationPolicy(
-        graph,
-        compiledGraph,
-        recordedGraph,
-        range,
-        PacketRangeSubmissionOperationPolicy::ActiveExclusiveBarrier,
         nullptr,
-        0u,
-        nullptr,
-        0u,
+        firstTask,
+        lastTask,
         transaction,
         scratchArena,
-        &failedPacket,
-        nullptr,
-        0u,
-        nullptr,
-        0u
-    )){
-        if(outFailedPacket)
-            *outFailedPacket = failedPacket;
-        return false;
-    }
-    return true;
+        outFailedPacket
+    );
 }
 
 
@@ -422,6 +359,33 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskRangeInReadyFrontiers(
     Alloc::ScratchArena& scratchArena,
     GpuSubmissionPacketId* const outFailedPacket
 )const{
+    return recordAndSubmitTaskRange(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        &workerPool,
+        firstTask,
+        lastTask,
+        transaction,
+        scratchArena,
+        outFailedPacket
+    );
+}
+
+
+bool GpuTaskGraphSubmitter::recordAndSubmitTaskRange(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuNativePacketRecorder& recorder,
+    GpuRecordedGraph& recordedGraph,
+    Alloc::ThreadPool* const readyFrontierWorkerPool,
+    const GpuTaskId firstTask,
+    const GpuTaskId lastTask,
+    GpuGraphSubmissionTransaction& transaction,
+    Alloc::ScratchArena& scratchArena,
+    GpuSubmissionPacketId* const outFailedPacket
+)const{
     if(outFailedPacket)
         *outFailedPacket = {};
     SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, compiledGraph, recordedGraph, transaction);
@@ -485,12 +449,14 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskRangeInReadyFrontiers(
     }
 
     GpuSubmissionPacketId failedPacket;
-    if(!recorder.recordPacketRangeInReadyFrontiers(
+    if(!recordPacketRange(
         graph,
         compiledGraph,
+        recorder,
         range,
         recordedGraph,
-        workerPool,
+        readyFrontierWorkerPool,
+        nullptr,
         &failedPacket
     )){
         if(outFailedPacket)

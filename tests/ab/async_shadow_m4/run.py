@@ -1017,7 +1017,7 @@ def run_self_test() -> int:
         backend = mock.Mock()
         backend.wait_for_window.return_value = 17
         backend.capture_client_window.return_value = SimpleNamespace(
-            appears_blank=False,
+            appears_empty_or_white=False,
             has_pixel_variation=True,
         )
         orchestration_lane = LaneStatus(False, False, 0, 1)

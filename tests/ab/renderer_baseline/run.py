@@ -868,7 +868,7 @@ def run_self_test() -> int:
 
         def capture(_window, path):
             path.write_bytes(b"bmp")
-            return SimpleNamespace(appears_blank=False, has_pixel_variation=True)
+            return SimpleNamespace(appears_empty_or_white=False, has_pixel_variation=True)
 
         backend.capture_window.side_effect = capture
         orchestration_args = SimpleNamespace(

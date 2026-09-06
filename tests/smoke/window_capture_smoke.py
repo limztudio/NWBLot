@@ -28,6 +28,8 @@ FRAMEBUFFER_CAPTURE_PATH_ENV = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH"
 FRAMEBUFFER_CAPTURE_FRAME_COUNT_ENV = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT"
 FRAMEBUFFER_CAPTURE_READY_MESSAGE = "FramebufferCapture: capture ready"
 FRAMEBUFFER_CAPTURE_SKIP_MESSAGE = "FramebufferCapture: skipped because swap-chain transfer-source usage is unavailable"
+RENDER_READY_POLL_SECONDS = 0.1
+RENDER_READY_TIMEOUT_SECONDS = 10.0
 WINDOWS_ENUM_CALLBACK = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)(
     ctypes.c_int,
     ctypes.c_void_p,
@@ -62,7 +64,7 @@ class CaptureResult:
     width: int
     height: int
     has_pixel_variation: bool
-    appears_blank: bool
+    appears_empty_or_white: bool
     transparent_multi: "TransparentMultiAnalysis"
     transparent_csg: "TransparentCsgAnalysis"
     texture_smoke: "TextureSmokeAnalysis"
@@ -71,7 +73,7 @@ class CaptureResult:
 @dataclass(frozen=True)
 class ImageAnalysis:
     has_pixel_variation: bool
-    appears_blank: bool
+    appears_empty_or_white: bool
 
 
 @dataclass(frozen=True)
@@ -509,7 +511,7 @@ def capture_result_from_rgb_rows(handle, width, height, rows_rgb):
         width,
         height,
         analysis.has_pixel_variation,
-        analysis.appears_blank,
+        analysis.appears_empty_or_white,
         transparent_multi,
         transparent_csg,
         texture_smoke,
@@ -584,8 +586,6 @@ def analyze_rgb_rows(rows_rgb):
     total_pixels = 0
     non_white_pixels = 0
     luma_sum = 0
-    min_luma = 255
-    max_luma = 0
     has_pixel_variation = False
 
     for row in rows_rgb:
@@ -597,8 +597,6 @@ def analyze_rgb_rows(rows_rgb):
                 has_pixel_variation = True
 
             luma = (54 * red + 183 * green + 19 * blue) >> 8
-            min_luma = min(min_luma, luma)
-            max_luma = max(max_luma, luma)
             luma_sum += luma
             total_pixels += 1
             if red < 247 or green < 247 or blue < 247:
@@ -609,8 +607,8 @@ def analyze_rgb_rows(rows_rgb):
 
     mean_luma = luma_sum / total_pixels
     non_white_fraction = non_white_pixels / total_pixels
-    appears_blank = (max_luma - min_luma) <= 3 or (mean_luma >= 245.0 and non_white_fraction < 0.01)
-    return ImageAnalysis(has_pixel_variation, appears_blank)
+    appears_empty_or_white = mean_luma >= 245.0 and non_white_fraction < 0.01
+    return ImageAnalysis(has_pixel_variation, appears_empty_or_white)
 
 
 def analyze_transparent_multi_rows(rows_rgb):
@@ -1313,15 +1311,15 @@ class LinuxX11Capture:
             raise SmokeFailure(f"window 0x{window:x} has invalid size {attributes.width}x{attributes.height}")
 
         result = self._capture_drawable_region(window, window, 0, 0, attributes.width, attributes.height, output_path)
-        if not result.appears_blank:
+        if result.has_pixel_variation and not result.appears_empty_or_white:
             return result
 
-        write_status(f"window 0x{window:x}: direct XGetImage capture looked blank; retrying from root screen")
+        write_status(f"window 0x{window:x}: direct XGetImage capture looked flat or white; retrying from root screen")
         root_region = self._window_root_region(window, attributes)
         if root_region:
             root_x, root_y, width, height = root_region
             result = self._capture_drawable_region(self.root, window, root_x, root_y, width, height, output_path)
-            if not result.appears_blank:
+            if result.has_pixel_variation and not result.appears_empty_or_white:
                 return result
 
         return result
@@ -1869,7 +1867,7 @@ def shutdown_logserver_and_collect(process, directory, baseline, pattern, shutdo
 
 
 def validate_capture_result(result):
-    if result.appears_blank:
+    if result.appears_empty_or_white:
         raise SmokeFailure(f"captured window 0x{result.handle:x}, but the image appears blank or white")
     if not result.has_pixel_variation:
         raise SmokeFailure(f"captured window 0x{result.handle:x}, but the image appears flat")
@@ -2028,6 +2026,25 @@ def capture_existing_handle(args, backend):
     return capture_checked_window(args, backend, args.window_handle)
 
 
+def capture_render_ready_window(args, backend, handle, process):
+    deadline = time.monotonic() + args.render_ready_timeout
+    while True:
+        ensure_process_running(process, "while waiting for rendered window content")
+        result = backend.capture_window(handle, args.output)
+        if not result.appears_empty_or_white:
+            validate_capture_for_args(args, result)
+            return result
+
+        ensure_process_running(process, "after a blank window capture")
+        remaining_seconds = deadline - time.monotonic()
+        if remaining_seconds <= 0.0:
+            raise SmokeFailure(
+                f"captured window 0x{result.handle:x}, but it remained blank or white for "
+                f"{args.render_ready_timeout:.2f} seconds while waiting for rendered content"
+            )
+        time.sleep(min(RENDER_READY_POLL_SECONDS, remaining_seconds))
+
+
 def launch_and_capture(args, backend):
     executable = Path(args.executable).resolve()
     if not executable.exists():
@@ -2054,7 +2071,7 @@ def launch_and_capture(args, backend):
 
         time.sleep(args.settle_seconds)
         ensure_process_running(testbed_process, "before checked capture")
-        result = capture_checked_window(args, backend, handle)
+        result = capture_render_ready_window(args, backend, handle, testbed_process)
         testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, "testbed", handle)
         testbed_process = None
         require_normal_process_exit(testbed_exit_code, testbed_exit_tail, "testbed")
@@ -2159,6 +2176,12 @@ def parse_args(argv):
     parser.add_argument("--timeout", type=float, default=45.0, help="Seconds to wait for logserver and the testbed window.")
     parser.add_argument("--settle-seconds", type=float, default=2.0, help="Seconds to wait after the window becomes visible.")
     parser.add_argument(
+        "--render-ready-timeout",
+        type=float,
+        default=RENDER_READY_TIMEOUT_SECONDS,
+        help="Seconds to wait for a blank visible window to publish its first rendered frame.",
+    )
+    parser.add_argument(
         "--application-capture",
         action="store_true",
         help="Use the application's Vulkan framebuffer readback instead of desktop window capture.",
@@ -2225,6 +2248,7 @@ def parse_args(argv):
     if args.window_handle is None and not args.executable:
         parser.error("--executable is required unless --window-handle is provided")
     require_positive_arg(parser, "--timeout", args.timeout)
+    require_positive_arg(parser, "--render-ready-timeout", args.render_ready_timeout)
     require_positive_arg(
         parser,
         "--application-capture-frame-count",

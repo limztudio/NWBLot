@@ -492,6 +492,7 @@ class ShutdownLogValidationTests(unittest.TestCase):
                 no_logserver=False,
                 output=log_directory / "capture.bmp",
                 reject_log_message=list(rejected),
+                render_ready_timeout=1.0,
                 settle_seconds=0.0,
                 skip_blocking_log_message=[],
                 skip_log_message=[],
@@ -524,7 +525,7 @@ class ShutdownLogValidationTests(unittest.TestCase):
                      return_value=(logserver_process, 49152, log_directory, {}, "*.log"),
                  ), \
                  mock.patch.object(window_capture_smoke, "launch_testbed", return_value=testbed_process), \
-                 mock.patch.object(window_capture_smoke, "capture_checked_window", return_value="capture"), \
+                 mock.patch.object(window_capture_smoke, "capture_render_ready_window", return_value="capture"), \
                  mock.patch.object(window_capture_smoke, "terminate_process", side_effect=terminate), \
                  mock.patch.object(window_capture_smoke, "wait_for_log_drain", side_effect=drain):
                 result = window_capture_smoke.launch_and_capture(args, backend)
@@ -541,6 +542,115 @@ class ShutdownLogValidationTests(unittest.TestCase):
     def test_teardown_warning_fails_after_graceful_exit(self):
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "rejected log message"):
             self.run_capture_with_shutdown_log("[WARNING] teardown failure", rejected=("[WARNING]",))
+
+
+class RenderReadyCaptureTests(unittest.TestCase):
+    @staticmethod
+    def make_args(directory, timeout=1.0):
+        return SimpleNamespace(
+            expect_texture_smoke=False,
+            expect_transparent_csg=False,
+            expect_transparent_multi=False,
+            output=directory / "capture.bmp",
+            render_ready_timeout=timeout,
+        )
+
+    @staticmethod
+    def make_capture(appears_empty_or_white, has_pixel_variation):
+        return SimpleNamespace(
+            appears_empty_or_white=appears_empty_or_white,
+            handle=0x4A,
+            has_pixel_variation=has_pixel_variation,
+        )
+
+    def test_uniform_gray_is_flat_but_not_a_readiness_placeholder(self):
+        analysis = window_capture_smoke.analyze_rgb_rows([
+            [(128, 128, 128), (128, 128, 128)],
+            [(128, 128, 128), (128, 128, 128)],
+        ])
+
+        self.assertFalse(analysis.appears_empty_or_white)
+        self.assertFalse(analysis.has_pixel_variation)
+
+    def test_near_white_window_is_a_readiness_placeholder(self):
+        rows = [[(250, 250, 250) for _ in range(20)] for _ in range(20)]
+        rows[0][0] = (240, 240, 240)
+
+        analysis = window_capture_smoke.analyze_rgb_rows(rows)
+
+        self.assertTrue(analysis.appears_empty_or_white)
+        self.assertTrue(analysis.has_pixel_variation)
+
+    def test_white_window_is_retried_until_rendered_content_is_ready(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            args = self.make_args(Path(temp_dir))
+            white = self.make_capture(True, False)
+            rendered = self.make_capture(False, True)
+            backend = mock.Mock()
+            backend.capture_window.side_effect = [white, rendered]
+            process = SimpleNamespace(poll=lambda: None)
+
+            with mock.patch.object(window_capture_smoke.time, "monotonic", side_effect=(10.0, 10.25)), \
+                 mock.patch.object(window_capture_smoke.time, "sleep") as sleep:
+                result = window_capture_smoke.capture_render_ready_window(args, backend, 0x4A, process)
+
+            self.assertIs(result, rendered)
+            self.assertEqual(backend.capture_window.call_count, 2)
+            sleep.assert_called_once_with(window_capture_smoke.RENDER_READY_POLL_SECONDS)
+
+    def test_persistent_white_window_fails_at_readiness_deadline(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            args = self.make_args(Path(temp_dir), timeout=0.25)
+            white = self.make_capture(True, False)
+            backend = mock.Mock()
+            backend.capture_window.return_value = white
+            process = SimpleNamespace(poll=lambda: None)
+
+            with mock.patch.object(window_capture_smoke.time, "monotonic", side_effect=(10.0, 10.25)), \
+                 mock.patch.object(window_capture_smoke.time, "sleep") as sleep:
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "remained blank or white"):
+                    window_capture_smoke.capture_render_ready_window(args, backend, 0x4A, process)
+
+            backend.capture_window.assert_called_once_with(0x4A, args.output)
+            sleep.assert_not_called()
+
+    def test_process_exit_after_white_capture_fails_without_another_attempt(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            args = self.make_args(Path(temp_dir))
+            white = self.make_capture(True, False)
+            backend = mock.Mock()
+            backend.capture_window.return_value = white
+            process = mock.Mock()
+            process.poll.side_effect = (None, None, 7)
+            process.returncode = 7
+            process._nwb_output_capture = None
+
+            with mock.patch.object(window_capture_smoke.time, "monotonic", side_effect=(10.0, 10.25)), \
+                 mock.patch.object(window_capture_smoke.time, "sleep") as sleep:
+                with self.assertRaisesRegex(
+                    window_capture_smoke.SmokeFailure,
+                    r"testbed exited while waiting for rendered window content \(exit 7\)",
+                ):
+                    window_capture_smoke.capture_render_ready_window(args, backend, 0x4A, process)
+
+            backend.capture_window.assert_called_once_with(0x4A, args.output)
+            sleep.assert_called_once_with(window_capture_smoke.RENDER_READY_POLL_SECONDS)
+
+    def test_nonblank_invalid_frame_fails_without_retry(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            args = self.make_args(Path(temp_dir))
+            flat = self.make_capture(False, False)
+            backend = mock.Mock()
+            backend.capture_window.return_value = flat
+            process = SimpleNamespace(poll=lambda: None)
+
+            with mock.patch.object(window_capture_smoke.time, "monotonic", return_value=10.0), \
+                 mock.patch.object(window_capture_smoke.time, "sleep") as sleep:
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "image appears flat"):
+                    window_capture_smoke.capture_render_ready_window(args, backend, 0x4A, process)
+
+            backend.capture_window.assert_called_once_with(0x4A, args.output)
+            sleep.assert_not_called()
 
 
 class ApplicationCaptureLifecycleTests(unittest.TestCase):

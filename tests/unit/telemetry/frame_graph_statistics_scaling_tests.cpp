@@ -97,6 +97,8 @@ void PrepareFixture(StatisticsFixture& fixture, const u32 packetCount, const u32
             .name = Name("tests/telemetry/scaling_owner"),
             .label = "Scaling owner",
             .kind = Telemetry::FrameGraphNodeKind::Pass,
+            .queueAssignment = {},
+            .compiledTask = {},
             .runtimeStatistics = OwnerStatistics(packetsPerOwner),
         });
     }
@@ -292,7 +294,11 @@ TEST(Telemetry, PacketStatisticsQueueSourceSurvivesDestinationGrowth){
     Telemetry::FrameGraphBuilder builder(
         fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets
     );
-    const Telemetry::FrameGraphPassMetadata metadata{ .runtimeStatistics = OwnerStatistics(1u) };
+    const Telemetry::FrameGraphPassMetadata metadata{
+        .queueAssignment = {},
+        .compiledTask = {},
+        .runtimeStatistics = OwnerStatistics(1u),
+    };
     const auto firstOwner = builder.addPass(Name("queue_alias_owner"), "Queue alias owner", metadata);
     ASSERT_TRUE(builder.addPhysicalQueueRuntimeStatistics(firstOwner, QueueStatistics(1u, 1u)));
     while(fixture.queues.size() < fixture.queues.capacity()){

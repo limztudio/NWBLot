@@ -90,7 +90,7 @@ private:
             return *found;
         if(!m_map){
             if(m_inlineEntries.size() < s_InlineCapacity){
-                m_inlineEntries.push_back(InlineEntry{ .buffer = buffer });
+                m_inlineEntries.push_back(InlineEntry{ .buffer = buffer, .record = {} });
                 return m_inlineEntries.back().record;
             }
             m_map.emplace(m_maximumBucketCount, IndexMap::hasher{}, IndexMap::key_equal{}, IndexMap::allocator_type(m_scratchArena));

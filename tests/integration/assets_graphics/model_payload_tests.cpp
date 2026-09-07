@@ -45,6 +45,7 @@ struct ModelInputs{
         staticMeshObjects.push_back(ModelStaticMeshObject{
             .name = Name("prop"),
             .mesh = Core::Assets::AssetRef<Mesh>("tests/model_payload/mesh"),
+            .material = {},
             .parentObject = Name("rig"),
             .parentJoint = Name("hand"),
         });
@@ -52,6 +53,7 @@ struct ModelInputs{
             .name = Name("body"),
             .mesh = Core::Assets::AssetRef<Mesh>("tests/model_payload/mesh"),
             .skin = Core::Assets::AssetRef<Skin>("tests/model_payload/skin"),
+            .material = {},
             .skeletonObject = Name("rig"),
         });
         publish();
@@ -325,6 +327,7 @@ TEST(ModelPayloadBenchmark, DISABLED_ValidatesLargeMixedModel){
         inputs.staticMeshObjects.push_back(ModelStaticMeshObject{
             .name = IndexedName(Name("prop/"), index),
             .mesh = Core::Assets::AssetRef<Mesh>("tests/model_payload/mesh"),
+            .material = {},
             .parentObject = parent,
             .parentJoint = Name("hand"),
         });
@@ -332,6 +335,7 @@ TEST(ModelPayloadBenchmark, DISABLED_ValidatesLargeMixedModel){
             .name = IndexedName(Name("body/"), index),
             .mesh = Core::Assets::AssetRef<Mesh>("tests/model_payload/mesh"),
             .skin = Core::Assets::AssetRef<Skin>("tests/model_payload/skin"),
+            .material = {},
             .skeletonObject = parent,
         });
     }

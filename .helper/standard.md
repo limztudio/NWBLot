@@ -1,7 +1,6 @@
 # NWBLot Inferred Code Standard
 
 Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_parties/`).
-Updated: 2026-07-08
 
 ## 1. File and module structure
 - Use lowercase `snake_case` filenames for C++ source and headers.

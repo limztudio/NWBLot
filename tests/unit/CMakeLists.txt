@@ -11,7 +11,7 @@ add_subdirectory(policy)
 add_subdirectory(scene)
 add_subdirectory(telemetry)
 
-if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Python3_Interpreter_FOUND)
+if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Python3_Interpreter_FOUND)
     add_test(
         NAME nwb_launcher_unit
         COMMAND

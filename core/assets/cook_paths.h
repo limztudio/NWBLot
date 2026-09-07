@@ -12,7 +12,7 @@
 
 
 #include "cook_metadata.h"
-#include "cooker.h"
+#include "build_options.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,7 +43,7 @@ struct ResolvedCookPaths{
 
 
 [[nodiscard]] bool ResolveCookPaths(
-    const AssetCookOptions& options,
+    const AssetBuildOptions& options,
     ResolvedCookPaths& outPaths,
     ScratchArena& scratchArena
 );

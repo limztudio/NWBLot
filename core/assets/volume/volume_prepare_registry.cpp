@@ -69,7 +69,7 @@ bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& contex
         if(function(context))
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to run auto-collected volume prepare step"));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to run auto-collected volume prepare step"));
         return false;
     }
 

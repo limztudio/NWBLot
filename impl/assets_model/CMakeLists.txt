@@ -6,7 +6,7 @@ target_sources(nwb_assets_model PRIVATE
 )
 target_link_libraries(nwb_assets_model PUBLIC nwb_assets nwb_assets_material nwb_assets_mesh nwb_assets_skeleton)
 
-if(NWB_BUILD_RESOURCE_COOKER)
+if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_model_cook)
     target_sources(nwb_assets_model_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/asset.h"

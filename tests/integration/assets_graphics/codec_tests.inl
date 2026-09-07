@@ -295,7 +295,7 @@ static bool AssetBytesEqual(const NWB::Core::Assets::AssetBytes& lhs, const NWB:
     return true;
 }
 
-TEST(AssetsGraphics, AssetVolumeCookWritesRegistryObjectCache){
+TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 

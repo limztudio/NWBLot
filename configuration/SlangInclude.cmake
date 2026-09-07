@@ -40,7 +40,7 @@ function(nwb_configure_slang_include)
     endif()
 
     if(NOT _slangc_executable)
-        message(FATAL_ERROR "NWB_BUILD_RESOURCE_COOKER requires slangc. Install slangc, use the repository-local __cmake/slang tool, set VULKAN_SDK, or provide NWB_SLANGC_EXECUTABLE.")
+        message(FATAL_ERROR "NWB_BUILD_PIPELINE requires slangc. Install slangc, use the repository-local __cmake/slang tool, set VULKAN_SDK, or provide NWB_SLANGC_EXECUTABLE.")
     endif()
 
     if(NOT EXISTS "${_slangc_executable}")

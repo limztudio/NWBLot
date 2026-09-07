@@ -140,7 +140,7 @@ static bool ReadObjectFileHeader(
     ErrorCode errorCode;
     if(!ReadBinaryFile(objectPath, objectBytes, errorCode)){
         if(errorCode && !IsMissingPathError(errorCode)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to read object cache '{}': {}")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to read object cache '{}': {}")
                 , PathToString<tchar>(objectPath)
                 , StringConvert(errorCode.message())
             );
@@ -175,7 +175,7 @@ static bool WriteObjectFile(
     Core::Assets::AssetBytes& objectBytes
 ){
     if(payload.size() > Limit<usize>::s_Max - sizeof(AssetVolumeObjectFileHeader)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: object cache payload is too large for '{}'"), PathToString<tchar>(objectPath));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: object cache payload is too large for '{}'"), PathToString<tchar>(objectPath));
         return false;
     }
 
@@ -186,7 +186,7 @@ static bool WriteObjectFile(
 
     ErrorCode errorCode;
     if(!EnsureDirectories(objectPath.parent_path(), errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to create object cache directory '{}': {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create object cache directory '{}': {}")
             , PathToString<tchar>(objectPath.parent_path())
             , StringConvert(errorCode.message())
         );
@@ -195,7 +195,7 @@ static bool WriteObjectFile(
     if(WriteBinaryFile(objectPath, objectBytes))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to write object cache '{}'"), PathToString<tchar>(objectPath));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to write object cache '{}'"), PathToString<tchar>(objectPath));
     return false;
 }
 
@@ -241,7 +241,7 @@ public:
     )override{
         m_payloadBinary.clear();
         if(!codec.serialize(asset, m_payloadBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to serialize {} '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to serialize {} '{}'")
                 , assetKind
                 , StringConvert(virtualPath.c_str())
             );
@@ -326,14 +326,14 @@ static bool RegisterMergedManifestVirtualPath(
     AssetsVolumeCookDetail::VirtualPathHashSet& seenVirtualPathHashes
 ){
     if(!virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: registry manifest produced an empty virtual path"));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: registry manifest produced an empty virtual path"));
         return false;
     }
 
     if(seenVirtualPathHashes.insert(virtualPath.hash()).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate registry manifest virtual path '{}'"), StringConvert(virtualPath.c_str()));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate registry manifest virtual path '{}'"), StringConvert(virtualPath.c_str()));
     return false;
 }
 
@@ -430,7 +430,7 @@ bool ReadCookedObjectPayload(
     __hidden_cooked_object_cache::AssetVolumeObjectFileHeader header;
     usize payloadOffset = 0u;
     if(!__hidden_cooked_object_cache::ReadObjectFileHeader(objectPath, objectBytes, header, payloadOffset)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: invalid object cache '{}' for '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid object cache '{}' for '{}'")
             , PathToString<tchar>(objectPath)
             , StringConvert(expectedVirtualPath.c_str())
         );

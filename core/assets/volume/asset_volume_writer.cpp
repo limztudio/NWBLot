@@ -61,19 +61,19 @@ static u64 EstimateRequiredMetadataBytes(const u64 fileCount){
 
 static bool ConfigureVolumeSizing(const u64 plannedFileCount, Core::Filesystem::VolumeBuildConfig& outConfig){
     if(!outConfig.volumeName.assign(AssetsVolumeCookDetail::s_AssetVolumeName)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: volume name '{}' exceeds ACompactString capacity"), StringConvert(AssetsVolumeCookDetail::s_AssetVolumeName));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: volume name '{}' exceeds ACompactString capacity"), StringConvert(AssetsVolumeCookDetail::s_AssetVolumeName));
         return false;
     }
     outConfig.metadataSize = EstimateRequiredMetadataBytes(plannedFileCount);
     if(outConfig.metadataSize == Limit<u64>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: metadata size overflow while planning volume"));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: metadata size overflow while planning volume"));
         return false;
     }
 
     outConfig.segmentSize = s_DefaultSegmentSize;
     while(outConfig.segmentSize <= outConfig.metadataSize){
         if(outConfig.segmentSize > Limit<u64>::s_Max / 2ull){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: segment size overflow while planning volume"));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: segment size overflow while planning volume"));
             return false;
         }
         outConfig.segmentSize *= 2ull;
@@ -95,7 +95,7 @@ static bool PushManifestObjectFilePayloadToVolume(
         || payload.identity.payloadHash != entry.identity.payloadHash
         || payload.identity.cookKeyHash != entry.identity.cookKeyHash
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: object cache identity mismatch '{}' for '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: object cache identity mismatch '{}' for '{}'")
             , PathToString<tchar>(entry.objectPath)
             , StringConvert(entry.virtualPath.c_str())
         );
@@ -105,7 +105,7 @@ static bool PushManifestObjectFilePayloadToVolume(
     if(filesystem.writeFileDeferred(entry.virtualPath, payload.data, payload.size))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to push cached asset '{}'"), StringConvert(entry.virtualPath.c_str()));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to push cached asset '{}'"), StringConvert(entry.virtualPath.c_str()));
     return false;
 }
 
@@ -120,13 +120,13 @@ static bool PushManifestEntryToVolume(
             entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size())
             || entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size())
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: manifest payload identity mismatch '{}'"), StringConvert(entry.virtualPath.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: manifest payload identity mismatch '{}'"), StringConvert(entry.virtualPath.c_str()));
             return false;
         }
         if(filesystem.writeFileDeferred(entry.virtualPath, entry.payloadBytes))
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to push manifest payload '{}'"), StringConvert(entry.virtualPath.c_str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to push manifest payload '{}'"), StringConvert(entry.virtualPath.c_str()));
         return false;
     case AssetsVolumeCookDetail::AssetVolumePackEntrySource::ObjectFilePayload:
         return PushManifestObjectFilePayloadToVolume(entry, objectBytes, filesystem);
@@ -134,7 +134,7 @@ static bool PushManifestEntryToVolume(
         break;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: manifest entry '{}' has an unknown source"), StringConvert(entry.virtualPath.c_str()));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: manifest entry '{}' has an unknown source"), StringConvert(entry.virtualPath.c_str()));
     return false;
 }
 
@@ -156,7 +156,7 @@ static bool ValidateManifestEntryCount(const AssetsVolumeCookDetail::AssetVolume
     if(static_cast<u64>(manifest.entries.size()) == manifest.plannedFileCount)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: manifest file count mismatch, planned {} but produced {}")
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: manifest file count mismatch, planned {} but produced {}")
         , manifest.plannedFileCount
         , manifest.entries.size()
     );
@@ -204,17 +204,17 @@ bool WriteAssetVolume(
     );
     if(!Core::Filesystem::EnsureEmptyStagedDirectory(
         stagedVolumePaths.stageDirectory,
-        s_AssetVolumeCookerLogPrefix,
+        s_AssetGathererLogPrefix,
         "stage directory"
     ))
         return false;
     Core::Filesystem::StagedDirectoryCleanupGuard stageDirectoryCleanup(
         stagedVolumePaths.stageDirectory,
-        s_AssetVolumeCookerLogPrefix
+        s_AssetGathererLogPrefix
     );
     if(!Core::Filesystem::RemoveStagedDirectoryIfPresent(
         stagedVolumePaths.backupDirectory,
-        s_AssetVolumeCookerLogPrefix,
+        s_AssetGathererLogPrefix,
         "backup directory"
     ))
         return false;
@@ -232,14 +232,14 @@ bool WriteAssetVolume(
         mountDesc.createIfMissing = true;
         mountDesc.usage = Core::Filesystem::VolumeUsage::CookWrite;
         if(!filesystem.mount(mountDesc)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to mount staged volume filesystem"));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to mount staged volume filesystem"));
             return false;
         }
 
         if(!__hidden_asset_volume_writer::PushManifestToVolume(arena, manifest, filesystem))
             return false;
         if(!filesystem.flush()){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to flush staged volume metadata"));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to flush staged volume metadata"));
             return false;
         }
 
@@ -254,7 +254,7 @@ bool WriteAssetVolume(
     stageDirectoryCleanup.dismiss();
 
     if(!outResult.volumeName.assign(s_AssetVolumeName)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: volume name exceeds ACompactString capacity"));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: volume name exceeds ACompactString capacity"));
         return false;
     }
     outResult.fileCount = stagedFileCount;

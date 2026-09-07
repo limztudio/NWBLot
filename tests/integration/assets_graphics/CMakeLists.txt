@@ -32,6 +32,7 @@ nwb_target_link_libraries_whole_archive(nwb_assets_graphics_tests
 )
 target_link_libraries(nwb_assets_graphics_tests PRIVATE
     nwb_ecs_csg
+    nwb_assets_graphics_gather
     nwb_assets_cook
     nwb_shader_archive
     nwb_graphics

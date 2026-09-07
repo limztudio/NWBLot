@@ -18,7 +18,7 @@ SOURCE_DIRECTORIES = (
     "impl",
     "loader",
     "logger",
-    "resource_cooker",
+    "pipeline",
     "tests",
     "utilities",
 )

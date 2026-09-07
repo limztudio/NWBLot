@@ -1,4 +1,4 @@
-if(NWB_BUILD_RESOURCE_COOKER)
+if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_bunch_cook)
     target_sources(nwb_assets_bunch_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"

@@ -21,7 +21,7 @@ target_link_libraries(nwb_assets_texture_loader PRIVATE
     nwb::basis_universal
 )
 
-if(NWB_BUILD_RESOURCE_COOKER)
+if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_texture_cook)
     target_sources(nwb_assets_texture_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"

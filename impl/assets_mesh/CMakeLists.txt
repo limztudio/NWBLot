@@ -33,7 +33,7 @@ target_sources(nwb_assets_mesh PRIVATE
 )
 target_link_libraries(nwb_assets_mesh PUBLIC nwb_assets nwb_assets_skeleton nwb_mesh nwb_assets_skeleton_types)
 
-if(NWB_BUILD_RESOURCE_COOKER)
+if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_mesh_cook)
     target_sources(nwb_assets_mesh_cook PRIVATE
         ${NWB_ASSETS_MESH_RUNTIME_SOURCES}

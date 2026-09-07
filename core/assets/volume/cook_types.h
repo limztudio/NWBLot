@@ -36,7 +36,7 @@ namespace AssetsVolumeCookDetail{
 
 
 inline constexpr AStringView s_AssetVolumeName = "graphics";
-inline constexpr AStringView s_AssetVolumeCookerLogPrefix = "AssetVolumeCooker";
+inline constexpr AStringView s_AssetGathererLogPrefix = "AssetGatherer";
 
 using CookArena = Core::Assets::CookArena;
 using CookString = Core::Assets::CookString;

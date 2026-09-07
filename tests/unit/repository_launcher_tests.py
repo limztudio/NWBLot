@@ -212,7 +212,7 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertEqual("testbed", launcher.infer_output_domain(build_root / "windows-clang-testbed-x64", "windows", "x64"))
 
     def test_target_output_convention_strips_nwb_prefix(self):
-        self.assertEqual("resource_cooker", launcher.target_default_executable_base_name("nwb_resource_cooker"))
+        self.assertEqual("asset_builder", launcher.target_default_executable_base_name("nwb_asset_builder"))
         self.assertEqual("testbed", launcher.target_default_executable_base_name("testbed"))
 
     def test_cmake_cache_domain_overrides_directory_name(self):

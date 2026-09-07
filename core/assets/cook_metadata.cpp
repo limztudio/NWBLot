@@ -259,6 +259,13 @@ bool DiscoverFilesWithExtension(
 
             outFiles.emplace_back(cookArena, assetRoot.path, filePath, normalizedPath, assetRoot.virtualRoot);
         }
+        if(errorCode){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to finish scanning asset root '{}': {}")
+                , PathToString<tchar>(assetRoot.path)
+                , StringConvert(errorCode.message())
+            );
+            return false;
+        }
     }
 
     Sort(

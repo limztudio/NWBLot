@@ -380,6 +380,71 @@ static bool WriteExactEntryPointShaderProbe(const Path& assetRoot){
     return WriteTextFile(assetRoot / "shaders" / "exact_entry_point_ps.slang", s_ExactEntryPointShaderProbeSource);
 }
 
+TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
+
+    TestArena testArena;
+    Path root(testArena.arena);
+    ASSERT_TRUE(PrepareAssetsGraphicsCaseRoot(testArena, "gather_independent_shaders", root));
+    const Path firstAssetRoot = root / "first" / "assets";
+    const Path secondAssetRoot = root / "second" / "assets";
+    const Path firstBuilt = root / "first_built";
+    const Path secondBuilt = root / "second_built";
+    const Path conflictingBuilt = root / "conflicting_built";
+    const Path outputDirectory = root / "gathered";
+    ASSERT_TRUE(WriteStandaloneShaderProbe(firstAssetRoot));
+    ASSERT_TRUE(WriteExactEntryPointShaderProbe(secondAssetRoot));
+    ASSERT_TRUE(BuildPreparedGraphicsAssetRoots(testArena, root, firstBuilt, { firstAssetRoot }));
+    ASSERT_TRUE(BuildPreparedGraphicsAssetRoots(testArena, root, secondBuilt, { secondAssetRoot }));
+
+    ASSERT_TRUE(WriteTextFile(
+        firstAssetRoot / "shaders" / "standalone_ps.slang",
+        "float4 main() : SV_Target0{ return float4(0.0, 1.0, 0.0, 1.0); }\n"
+    ));
+    ASSERT_TRUE(BuildPreparedGraphicsAssetRoots(testArena, root, conflictingBuilt, { firstAssetRoot }));
+
+    ErrorCode errorCode;
+    ASSERT_TRUE(RemoveAllIfExists(firstAssetRoot, errorCode));
+    ASSERT_TRUE(RemoveAllIfExists(secondAssetRoot, errorCode));
+
+    NWB::Core::Assets::AssetGatherOptions options(testArena.arena);
+    options.inputs.emplace_back(PathToString(testArena.arena, firstBuilt));
+    options.inputs.emplace_back(PathToString(testArena.arena, secondBuilt));
+    options.outputDirectory = PathToString(testArena.arena, outputDirectory);
+    options.configuration = "tests";
+    options.mergePayloads = &NWB::Impl::MergeGatheredGraphicsAsset;
+    ASSERT_TRUE(NWB::Core::Assets::GatherAssets(options));
+
+    NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
+    ASSERT_TRUE(LoadCookedShaderArchiveRecords(testArena, outputDirectory, records));
+    ASSERT_EQ(records.size(), 2u);
+    const Name shaderNames[] = { Name("project/shaders/standalone_ps"), Name("project/shaders/exact_entry_point_ps") };
+    for(const Name& shaderName : shaderNames){
+        Name virtualPath;
+        ASSERT_TRUE(NWB::Core::ShaderArchive::findVirtualPath(
+            records, shaderName, NWB::Core::ShaderArchive::s_DefaultVariant, Name("ps"), virtualPath
+        ));
+        UniquePtr<NWB::Core::Assets::IAsset> shader;
+        ASSERT_TRUE(LoadCookedAsset<NWB::Impl::ShaderAssetCodec>(testArena, outputDirectory, virtualPath, shader, 3u));
+        EXPECT_FALSE(static_cast<const NWB::Impl::Shader&>(*shader).bytecode().empty());
+    }
+    EXPECT_EQ(logger.errorCount(), 0u);
+
+    u64 originalChecksum = 0u;
+    ASSERT_TRUE(FindShaderArchiveSourceChecksum(records, shaderNames[0], Name("ps"), originalChecksum));
+    options.inputs.emplace_back(PathToString(testArena.arena, conflictingBuilt));
+    EXPECT_FALSE(NWB::Core::Assets::GatherAssets(options));
+    EXPECT_GT(logger.errorCount(), 0u);
+    records.clear();
+    ASSERT_TRUE(LoadCookedShaderArchiveRecords(testArena, outputDirectory, records));
+    ASSERT_EQ(records.size(), 2u);
+    u64 preservedChecksum = 0u;
+    ASSERT_TRUE(FindShaderArchiveSourceChecksum(records, shaderNames[0], Name("ps"), preservedChecksum));
+    EXPECT_EQ(preservedChecksum, originalChecksum);
+    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+}
+
 TEST(AssetsGraphics, ShaderCookWithoutMaterialBindIncludes){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);

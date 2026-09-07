@@ -15,13 +15,12 @@ target_sources(nwb_assets PRIVATE
 )
 target_link_libraries(nwb_assets PUBLIC nwb_common)
 
-if(NWB_BUILD_RESOURCE_COOKER)
+if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_cook)
     target_sources(nwb_assets_cook PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/cooker.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/cooker.h"
-        "${CMAKE_CURRENT_LIST_DIR}/cooker_registration.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/cooker_registration.h"
+        "${CMAKE_CURRENT_LIST_DIR}/build_options.h"
+        "${CMAKE_CURRENT_LIST_DIR}/input_list.h"
+        "${CMAKE_CURRENT_LIST_DIR}/input_list.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook_entry_registry.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook_entry_registry.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook_paths.cpp"

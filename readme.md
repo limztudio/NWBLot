@@ -19,7 +19,7 @@ Common tools:
 - Ninja
 - LLVM/Clang, including the LLVM linker and archive tools
 - Python 3 for the launcher and test-enabled builds
-- `slangc` for the resource cooker, which is enabled by default
+- `slangc` for the asset pipeline, which is enabled by default
 - A Vulkan loader and a compatible Vulkan driver for rendering
 
 Windows builds also need Visual Studio 2022 Build Tools or Visual Studio 2022 with the C++ workload and a Windows SDK. Install the ARM64 C++ tools when building the ARM64 presets. CMake, Ninja, and LLVM may come from Visual Studio or standalone installations.
@@ -68,10 +68,12 @@ The repository launcher configures when needed, builds the selected target, and 
 
 ```powershell
 python launcher.py testbed --config dbg
-python launcher.py run nwb_resource_cooker -- --help
+python pipeline/cooker.py --help
 python launcher.py smoke --profiles
 python launcher.py profiles
 ```
+
+Asset cooking uses `pipeline/cooker.py`, which runs `dependeny_computer`, `asset_builder`, and `asset_gatherer` in order. The tools build with `NWB_BUILD_PIPELINE=ON` (the default). See [the pipeline guide](pipeline/readme.md) for direct stage commands and [the filesystem guide](docs/filesystem.md) for project filesystem customization.
 
 Use `--with-profile` to start the log server with a launched application. Use `--run-seconds <N>` for a bounded profiling run.
 

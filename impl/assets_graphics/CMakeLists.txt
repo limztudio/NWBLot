@@ -9,7 +9,14 @@ target_link_libraries(nwb_assets_graphics INTERFACE
     nwb_assets_sampler
 )
 
-if(NWB_BUILD_RESOURCE_COOKER)
+if(NWB_BUILD_PIPELINE)
+    nwb_declare_static_library(nwb_assets_graphics_gather)
+    target_sources(nwb_assets_graphics_gather PRIVATE
+        "${CMAKE_CURRENT_LIST_DIR}/gather.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/gather.h"
+    )
+    target_link_libraries(nwb_assets_graphics_gather PUBLIC nwb_assets PRIVATE nwb_shader_archive)
+
     nwb_declare_static_library(nwb_assets_graphics_cook)
     target_sources(nwb_assets_graphics_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/csg_shader_variants.cpp"

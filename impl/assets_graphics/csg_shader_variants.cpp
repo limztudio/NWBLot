@@ -105,7 +105,7 @@ bool AddClipVariantCount(const ShaderCook::ShaderEntry& entry, const u64 sourceV
         return true;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: CSG clip variant count overflow for entry '{}'"), StringConvert(entry.name));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: CSG clip variant count overflow for entry '{}'"), StringConvert(entry.name));
     return false;
 }
 
@@ -117,7 +117,7 @@ static bool BuildClipDefineComboImpl(
 ){
     constexpr usize addedDefineCount = 2u;
     if(sourceCombo.size() > Limit<usize>::s_Max - addedDefineCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: CSG shader define combo size overflow for entry '{}'"), StringConvert(entryName));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: CSG shader define combo size overflow for entry '{}'"), StringConvert(entryName));
         return false;
     }
 
@@ -129,7 +129,7 @@ static bool BuildClipDefineComboImpl(
     ShaderCook::CookString csgIntervalSampleEnabledDefineName(s_IntervalSampleEnabledImplicitDefineName, cookArena);
     ShaderCook::CookString csgIntervalSampleEnabledDefineValue(s_IntervalSampleEnabledImplicitDefineValue, cookArena);
     if(!outDefineCombo.try_emplace(Move(csgIntervalSampleEnabledDefineName), Move(csgIntervalSampleEnabledDefineValue)).second){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: reserved CSG shader define '{}' already exists for entry '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: reserved CSG shader define '{}' already exists for entry '{}'")
             , StringConvert(s_IntervalSampleEnabledImplicitDefineName)
             , StringConvert(entryName)
         );
@@ -141,7 +141,7 @@ static bool BuildClipDefineComboImpl(
     if(outDefineCombo.try_emplace(Move(csgDefineName), Move(csgDefineValue)).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: reserved CSG shader define '{}' already exists for entry '{}'")
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: reserved CSG shader define '{}' already exists for entry '{}'")
         , StringConvert(s_ClipImplicitDefineName)
         , StringConvert(entryName)
     );

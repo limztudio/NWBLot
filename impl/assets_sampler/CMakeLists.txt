@@ -16,7 +16,7 @@ target_link_libraries(nwb_assets_sampler_loader PUBLIC
     nwb_graphics
 )
 
-if(NWB_BUILD_RESOURCE_COOKER)
+if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_sampler_cook)
     target_sources(nwb_assets_sampler_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"

@@ -1,4 +1,4 @@
-if(NWB_BUILD_RESOURCE_COOKER)
+if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_volume_cook)
     target_sources(nwb_assets_volume_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
@@ -9,8 +9,14 @@ if(NWB_BUILD_RESOURCE_COOKER)
         "${CMAKE_CURRENT_LIST_DIR}/cook_paths.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook_paths.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook_types.h"
-        "${CMAKE_CURRENT_LIST_DIR}/cooker.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/cooker.h"
+        "${CMAKE_CURRENT_LIST_DIR}/build.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/build.h"
+        "${CMAKE_CURRENT_LIST_DIR}/build_inputs.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/build_inputs.h"
+        "${CMAKE_CURRENT_LIST_DIR}/built_asset.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/built_asset.h"
+        "${CMAKE_CURRENT_LIST_DIR}/gather.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/gather.h"
         "${CMAKE_CURRENT_LIST_DIR}/pack_manifest.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/pack_manifest.h"
         "${CMAKE_CURRENT_LIST_DIR}/volume_prepare_registry.cpp"

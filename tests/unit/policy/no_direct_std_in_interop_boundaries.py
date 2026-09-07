@@ -12,7 +12,7 @@ from policy_scan import find_regex_matches, run_policy
 INTEROP_BOUNDARIES = (
     "loader/main.cpp",
     "logger/server/crash_symbolicate_rgd.cpp",
-    "resource_cooker/command_line.cpp",
+    "pipeline/command_line.cpp",
     "utilities/fbx_to_nwb/command_line.cpp",
     "utilities/tex_conv/command_line.cpp",
 )

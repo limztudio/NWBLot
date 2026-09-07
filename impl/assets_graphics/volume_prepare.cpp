@@ -96,7 +96,7 @@ static bool AppendUniqueShaderEntry(
         ToName(shaderEntry.archiveStage.view())
     };
     if(!graphicsMetadata.seenShaderIdentityKeys.insert(shaderIdentityKey).second){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate shader identity '{}' for stage '{}' from meta '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate shader identity '{}' for stage '{}' from meta '{}'")
             , StringConvert(shaderEntry.name)
             , StringConvert(shaderEntry.archiveStage.c_str())
             , PathToString<tchar>(nwbFilePath)
@@ -143,7 +143,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
             const Path sourcePath(context.cookArena, includeEntry.source);
             const Path absSource = AbsolutePath(sourcePath, errorCode).lexically_normal();
             if(errorCode){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to resolve include metadata source '{}' from '{}': {}")
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve include metadata source '{}' from '{}': {}")
                     , StringConvert(includeEntry.source)
                     , PathToString<tchar>(context.discoveredNwbFile.filePath)
                     , StringConvert(errorCode.message())
@@ -155,7 +155,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
             CanonicalizeTextInPlace(key);
             CookString cookKey(key, context.cookArena);
             if(!graphicsMetadata.includeMetadata.emplace(Move(cookKey), Move(includeEntry)).second){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate include metadata for source '{}'")
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate include metadata for source '{}'")
                     , PathToString<tchar>(absSource)
                 );
                 return AssetMetadataParseResult::Error;
@@ -223,7 +223,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
 
     auto& materialEntries = context.parsedMetadata.entryRegistry.entries<MaterialCookEntry>(Material::AssetTypeName());
     if(graphicsMetadata.shaderEntries.empty() && !materialEntries.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: material assets require at least one shader entry"));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: material assets require at least one shader entry"));
         return false;
     }
 
@@ -259,7 +259,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
             resolvedEvalSource,
             context.scratchArena
         )){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: CSG shape '{}' eval '{}' does not resolve against any asset root")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: CSG shape '{}' eval '{}' does not resolve against any asset root")
                 , StringConvert(csgShapeEntry.shapeName.c_str())
                 , StringConvert(csgShapeEntry.evalInclude.c_str())
             );
@@ -301,7 +301,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
             resolvedSource,
             context.scratchArena
         )){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: material '{}' {} '{}' does not resolve against any asset root")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: material '{}' {} '{}' does not resolve against any asset root")
                 , StringConvert(materialName)
                 , StringConvert(label)
                 , StringConvert(virtualSource.c_str())
@@ -424,7 +424,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         pixelShaderEntry.source.assign(AStringView(generatedPixelShader.source));
         if(!pixelShaderEntry.stage.assign(AStringView("ps")) ||
            !pixelShaderEntry.archiveStage.assign(AStringView("ps"))){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to allocate generated pixel shader entry"));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to allocate generated pixel shader entry"));
             return false;
         }
         pixelShaderEntry.targetProfile = "spirv_1_5";
@@ -437,7 +437,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
             ToName(pixelShaderEntry.archiveStage.view())
         };
         if(!graphicsMetadata.seenShaderIdentityKeys.insert(shaderIdentityKey).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate generated pixel shader identity '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate generated pixel shader identity '{}'")
                 , StringConvert(pixelShaderEntry.name)
             );
             return false;

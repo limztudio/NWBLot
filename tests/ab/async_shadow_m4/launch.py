@@ -36,7 +36,7 @@ RUNTIME_DIRECTORY = Path("Testing") / "skinning_culling_benchmark_runtime"
 REQUIRED_DEFINES = {
     "NWB_BUILD_LOADER": "ON",
     "NWB_BUILD_LOGSERVER": "ON",
-    "NWB_BUILD_RESOURCE_COOKER": "ON",
+    "NWB_BUILD_PIPELINE": "ON",
     "NWB_BUILD_TESTS": "ON",
 }
 

@@ -22,7 +22,7 @@ PRODUCTION_DIRECTORIES = (
     "impl",
     "loader",
     "logger",
-    "resource_cooker",
+    "pipeline",
     "utilities",
 )
 FIRST_PARTY_DIRECTORIES = PRODUCTION_DIRECTORIES + ("tests",)
@@ -33,7 +33,7 @@ FIRST_PARTY_CODE_DIRECTORIES = (
     "impl",
     "loader",
     "logger",
-    "resource_cooker",
+    "pipeline",
     "tests",
     "utilities",
 )

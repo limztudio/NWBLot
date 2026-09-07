@@ -1062,7 +1062,7 @@ def make_parser(repo_launchers: Optional[Dict[str, RepoLauncher]] = None) -> arg
 
     run_parser = subparsers.add_parser("run", help="Build and launch a CMake executable target.")
     add_common_options(run_parser)
-    run_parser.add_argument("target", help="CMake executable target, such as testbed or nwb_resource_cooker.")
+    run_parser.add_argument("target", help="CMake executable target, such as testbed or nwb_asset_builder.")
     run_parser.set_defaults(handler=run_target_command)
 
     for launcher in repo_launchers.values():

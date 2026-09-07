@@ -12,7 +12,7 @@ if(TARGET rgd_backend)
     add_subdirectory(rgd_decode)
 endif()
 
-if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Python3_Interpreter_FOUND)
+if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Python3_Interpreter_FOUND)
     # Object-cache paths contain long content hashes. Keep this root compact so Windows
     # builds remain below the legacy MAX_PATH limit.
     set(_nwb_smoke_asset_cache_directory "${PROJECT_SOURCE_DIR}/__build_obj/c/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}")
@@ -128,7 +128,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         )
     endif()
 
-    if(TARGET nwb_loader AND TARGET nwb_resource_cooker)
+    if(TARGET nwb_loader AND TARGET nwb_asset_builder)
         set(_nwb_transparent_multi_runtime_root "${CMAKE_BINARY_DIR}/Testing/smoke_runtime/$<CONFIG>")
 
         nwb_declare_executable(nwb_transparent_multi_smoke)
@@ -162,7 +162,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         add_custom_command(
             OUTPUT "${_nwb_transparent_multi_asset_stamp}"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_transparent_multi_runtime_root}/res"
-            COMMAND "$<TARGET_FILE:nwb_resource_cooker>"
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/cooker.py"
+                --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>"
                 --repo-root "${PROJECT_SOURCE_DIR}"
                 --asset-root "impl/assets"
                 --asset-root "tests/smoke/assets"
@@ -171,7 +172,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
                 --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_transparent_multi_asset_stamp}"
             DEPENDS
-                nwb_resource_cooker
+                nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
+                "${PROJECT_SOURCE_DIR}/pipeline/cooker.py"
                 ${_nwb_transparent_multi_asset_inputs}
             WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
             COMMENT "Cooking NWB transparent smoke assets for $<CONFIG>..."
@@ -376,7 +378,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             add_custom_command(
                 OUTPUT "${_nwb_texture_smoke_asset_stamp}"
                 COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_texture_smoke_runtime_root}/res"
-                COMMAND "$<TARGET_FILE:nwb_resource_cooker>"
+                COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/cooker.py"
+                    --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>"
                     --repo-root "${PROJECT_SOURCE_DIR}"
                     --asset-root "impl/assets"
                     --asset-root "tests/smoke/assets"
@@ -386,7 +389,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
                     --configuration "$<CONFIG>"
                 COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_texture_smoke_asset_stamp}"
                 DEPENDS
-                    nwb_resource_cooker
+                    nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
+                    "${PROJECT_SOURCE_DIR}/pipeline/cooker.py"
                     "${_nwb_texture_smoke_source_nwb}"
                     "${_nwb_texture_smoke_source_tex}"
                     ${_nwb_texture_smoke_asset_inputs}
@@ -447,7 +451,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         add_custom_command(
             OUTPUT "${_nwb_csg_visible_asset_stamp}"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_csg_visible_runtime_root}/res"
-            COMMAND "$<TARGET_FILE:nwb_resource_cooker>"
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/cooker.py"
+                --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>"
                 --repo-root "${PROJECT_SOURCE_DIR}"
                 --asset-root "impl/assets"
                 --asset-root "tests/smoke/assets"
@@ -456,7 +461,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
                 --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_csg_visible_asset_stamp}"
             DEPENDS
-                nwb_resource_cooker
+                nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
+                "${PROJECT_SOURCE_DIR}/pipeline/cooker.py"
                 ${_nwb_csg_visible_asset_inputs}
             WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
             COMMENT "Cooking NWB CSG visible smoke assets for $<CONFIG>..."
@@ -529,7 +535,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         add_custom_command(
             OUTPUT "${_nwb_csg_skinned_visible_asset_stamp}"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_csg_skinned_visible_runtime_root}/res"
-            COMMAND "$<TARGET_FILE:nwb_resource_cooker>"
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/cooker.py"
+                --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>"
                 --repo-root "${PROJECT_SOURCE_DIR}"
                 --asset-root "impl/assets"
                 --asset-root "tests/smoke/assets"
@@ -538,7 +545,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
                 --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_csg_skinned_visible_asset_stamp}"
             DEPENDS
-                nwb_resource_cooker
+                nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
+                "${PROJECT_SOURCE_DIR}/pipeline/cooker.py"
                 ${_nwb_csg_skinned_visible_asset_inputs}
             WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
             COMMENT "Cooking NWB skinned CSG visible smoke assets for $<CONFIG>..."
@@ -687,7 +695,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
 
     set(_nwb_skinning_culling_model_nwb "${PROJECT_SOURCE_DIR}/tests/smoke/assets/characters/body.nwb")
 
-    if(TARGET nwb_loader AND TARGET nwb_resource_cooker AND EXISTS "${_nwb_skinning_culling_model_nwb}")
+    if(TARGET nwb_loader AND TARGET nwb_asset_builder AND EXISTS "${_nwb_skinning_culling_model_nwb}")
         set(_nwb_skinning_culling_runtime_root "${CMAKE_BINARY_DIR}/Testing/skinning_culling_benchmark_runtime/$<CONFIG>")
         if(TARGET nwb_logserver)
             set(_nwb_skinning_culling_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
@@ -717,7 +725,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         add_custom_command(
             OUTPUT "${_nwb_skinning_culling_asset_stamp}"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_skinning_culling_runtime_root}/res"
-            COMMAND "$<TARGET_FILE:nwb_resource_cooker>"
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/cooker.py"
+                --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>"
                 --repo-root "${PROJECT_SOURCE_DIR}"
                 --asset-root "impl/assets"
                 --asset-root "tests/smoke/assets"
@@ -726,7 +735,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
                 --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_skinning_culling_asset_stamp}"
             DEPENDS
-                nwb_resource_cooker
+                nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
+                "${PROJECT_SOURCE_DIR}/pipeline/cooker.py"
                 "${_nwb_skinning_culling_model_nwb}"
                 ${_nwb_skinning_culling_asset_inputs}
             WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"

@@ -40,7 +40,7 @@ if(TARGET nwb_logserver)
     add_dependencies(testbed nwb_logserver)
 endif()
 
-if(TARGET nwb_resource_cooker)
+if(TARGET nwb_asset_builder)
     # Object-cache paths include long content hashes. Keep the root compact so Windows
     # builds remain below the legacy MAX_PATH limit.
     set(_nwb_testbed_asset_cache_directory "${PROJECT_SOURCE_DIR}/__build_obj/c/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}")
@@ -56,7 +56,8 @@ if(TARGET nwb_resource_cooker)
     add_custom_command(
         OUTPUT "${_nwb_testbed_asset_stamp}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${NWB_OUTPUT_ROOT}/res"
-        COMMAND "$<TARGET_FILE:nwb_resource_cooker>"
+        COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/cooker.py"
+            --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>"
             --repo-root "${PROJECT_SOURCE_DIR}"
             --asset-root "impl/assets"
             --asset-root "CoolStuff/Testbed/assets"
@@ -65,7 +66,8 @@ if(TARGET nwb_resource_cooker)
             --configuration "$<CONFIG>"
         COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_testbed_asset_stamp}"
         DEPENDS
-            nwb_resource_cooker
+            nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
+            "${PROJECT_SOURCE_DIR}/pipeline/cooker.py"
             ${_nwb_testbed_asset_inputs}
         WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
         COMMENT "Cooking NWB graphics assets for $<CONFIG>..."

@@ -15,7 +15,7 @@
 #
 # Note on coverage: capture is runtime-driven, so a name is only recorded if the run actually reaches it. GUI targets
 # (testbed / window-capture smokes) need a display; they are driven here through their existing CTest tests so the
-# capture harness launches and tears them down. Headless targets (the resource cooker) are run directly.
+# capture harness launches and tears them down. Headless targets (the asset pipeline) are run directly.
 
 import argparse
 import glob
@@ -131,12 +131,14 @@ def run_workloads(arguments):
             log("WARNING: empty --run spec, skipping")
             continue
 
-        exe = executable_path(arguments.buildmode_bin_dir, parts[0])
+        is_script = parts[0].lower().endswith(".py")
+        exe = os.path.abspath(parts[0]) if is_script else executable_path(arguments.buildmode_bin_dir, parts[0])
         if not os.path.isfile(exe):
             log("WARNING: headless target not found, skipping: {}".format(exe))
             continue
 
-        if run_command([exe] + parts[1:], cwd=arguments.buildmode_bin_dir) != 0:
+        command = [sys.executable, exe] if is_script else [exe]
+        if run_command(command + parts[1:], cwd=arguments.buildmode_bin_dir) != 0:
             log("WARNING: headless run returned nonzero (sidecar still captured if it reached an exit handler): {}".format(parts[0]))
 
     # GUI runs via ctest. IMPORTANT: a window-capture test that HARD-KILLS its app (TerminateProcess) prevents the

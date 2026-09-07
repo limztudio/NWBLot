@@ -5,37 +5,40 @@
 #pragma once
 
 
-#include <global/global.h>
-#include <core/assets/cooker.h>
+#include <core/assets/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CookOptions = NWB::Core::Assets::AssetCookOptions;
+NWB_ASSETS_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace CommandLineParseResult{
-    enum Enum : u8{
-        Success,
-        Help,
-        Error,
-    };
+using AssetGatherMergeFunction = bool (*)(const Name& virtualPath, AssetBytes& existingPayload, const void* incomingPayload, usize incomingSize);
+
+struct AssetGatherOptions{
+    AssetVector<AssetString> inputs;
+    AssetString outputDirectory;
+    ACompactString configuration;
+    AssetGatherMergeFunction mergePayloads = nullptr;
+
+    explicit AssetGatherOptions(AssetArena& arena)
+        : inputs(arena)
+        , outputDirectory(arena)
+    {}
 };
 
 
+[[nodiscard]] bool GatherAssets(const AssetGatherOptions& options);
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CommandLineParseResult::Enum ParseCommandLine(
-    int argc,
-    char** argv,
-    CookOptions& outOptions
-);
-void PrintUsage();
+NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -6,9 +6,11 @@
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_csg/cook.h>
+#include <impl/assets_graphics/gather.h>
 #include <impl/assets_model/asset.h>
 #include <core/assets/bunch/cook.h>
-#include <core/assets/volume/cooker.h>
+#include <core/assets/volume/build.h>
+#include <core/assets/volume/gather.h>
 #include <core/assets/cook_entry_registry.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/binary_payload.h>
@@ -1269,7 +1271,7 @@ static bool PrepareAssetsGraphicsCookCase(
     return true;
 }
 
-static bool CookPreparedGraphicsAssetRoots(
+static bool BuildPreparedGraphicsAssetRoots(
     TestArena& testArena,
     const Path& root,
     const Path& outputDirectory,
@@ -1277,7 +1279,7 @@ static bool CookPreparedGraphicsAssetRoots(
     const u32 workerThreadCount = 0u
 ){
     NWB::Core::Alloc::ThreadPool cookThreadPool(workerThreadCount, CpuAffinity::Any);
-    NWB::Core::Assets::AssetCookOptions options(testArena.arena, cookThreadPool);
+    NWB::Core::Assets::AssetBuildOptions options(testArena.arena, cookThreadPool);
     options.repoRoot = PathToString(testArena.arena, AssetsGraphicsTestRepoRoot(testArena));
     options.assetRoots.reserve(assetRoots.size());
     for(const Path& assetRoot : assetRoots){
@@ -1303,8 +1305,26 @@ static bool CookPreparedGraphicsAssetRoots(
     if(!options.configuration.assign("tests") || !options.assetType.assign("graphics"))
         return false;
 
-    NWB::Core::Assets::AssetVolumeCooker cooker(testArena.arena);
-    return cooker.cook(options);
+    return NWB::Core::Assets::BuildAssets(options);
+}
+
+static bool CookPreparedGraphicsAssetRoots(
+    TestArena& testArena,
+    const Path& root,
+    const Path& outputDirectory,
+    const InitializerList<Path> assetRoots,
+    const u32 workerThreadCount = 0u
+){
+    const Path builtDirectory = root / "built";
+    if(!BuildPreparedGraphicsAssetRoots(testArena, root, builtDirectory, assetRoots, workerThreadCount))
+        return false;
+
+    NWB::Core::Assets::AssetGatherOptions gatherOptions(testArena.arena);
+    gatherOptions.inputs.emplace_back(PathToString(testArena.arena, builtDirectory));
+    gatherOptions.outputDirectory = PathToString(testArena.arena, outputDirectory);
+    gatherOptions.configuration = "tests";
+    gatherOptions.mergePayloads = &NWB::Impl::MergeGatheredGraphicsAsset;
+    return NWB::Core::Assets::GatherAssets(gatherOptions);
 }
 
 static bool CookSingleGraphicsMeta(

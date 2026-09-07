@@ -97,7 +97,7 @@ bool ValidateMaterials(
             ToName(preparedEntry.entry.archiveStage.view())
         };
         if(!preparedShaderLookup.emplace(shaderKey, &preparedEntry).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate prepared shader key '{}' stage '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate prepared shader key '{}' stage '{}'")
                 , StringConvert(preparedEntry.entry.name)
                 , StringConvert(preparedEntry.entry.archiveStage.c_str())
             );

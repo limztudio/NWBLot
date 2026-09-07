@@ -23,7 +23,7 @@ NWB_ASSETS_BEGIN
 
 
 bool ResolveCookPaths(
-    const AssetCookOptions& options,
+    const AssetBuildOptions& options,
     ResolvedCookPaths& outPaths,
     ScratchArena& scratchArena
 ){
@@ -51,7 +51,7 @@ bool ResolveCookPaths(
     }
 
     outPaths.assetRoots.reserve(options.assetRoots.size());
-    for(const AssetCookRoot& assetRoot : options.assetRoots){
+    for(const AssetBuildRoot& assetRoot : options.assetRoots){
         if(assetRoot.virtualRoot.view() != s_EngineVirtualRoot && assetRoot.virtualRoot.view() != s_ProjectVirtualRoot){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset root '{}' uses unsupported virtual root '{}'")
                 , StringConvert(assetRoot.path)
@@ -76,16 +76,6 @@ bool ResolveCookPaths(
                     , StringConvert(assetRoot.path)
                 );
             }
-            outPaths.assetRoots.clear();
-            return false;
-        }
-
-        auto assetRootName = PathToString(scratchArena, resolvedAssetRoot.filename());
-        CanonicalizeTextInPlace(assetRootName);
-        if(assetRootName != s_AssetsDirectoryName){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset root must point to an 'assets' directory: '{}'")
-                , PathToString<tchar>(resolvedAssetRoot)
-            );
             outPaths.assetRoots.clear();
             return false;
         }

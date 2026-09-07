@@ -3,7 +3,7 @@ target_sources(nwb_assets_csg INTERFACE
     "${CMAKE_CURRENT_LIST_DIR}/../assets/csg/shape_id.h"
 )
 
-if(NWB_BUILD_RESOURCE_COOKER)
+if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_csg_cook)
     target_sources(nwb_assets_csg_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"

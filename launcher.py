@@ -15,7 +15,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-import repository_windows_process
+from utilities.python import repository_windows_process
 
 
 CONFIGURATIONS = ("dbg", "opt", "fin")

@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 import launcher
-import repository_windows_process
+from utilities.python import repository_windows_process
 
 
 class FakeWindowsProcessApi:

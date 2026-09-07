@@ -133,9 +133,9 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueKeepsDeferredLighting
     rayEffects->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
     rayEffects->close(&rayEffectsState);
     ASSERT_TRUE(rayEffectsState.valid());
-    ASSERT_TRUE(shadowLightingState.buildTextureSubset(rayEffectsState, shadowVisibility.get()));
-    ASSERT_TRUE(causticLightingState.buildTextureSubset(rayEffectsState, causticIrradiance.get()));
-    ASSERT_TRUE(surfelLightingState.buildTextureSubset(rayEffectsState, surfelIrradiance.get()));
+    ASSERT_TRUE(shadowLightingState.buildTextureSubset(rayEffectsState, shadowVisibility.get(), fanInScratchArena));
+    ASSERT_TRUE(causticLightingState.buildTextureSubset(rayEffectsState, causticIrradiance.get(), fanInScratchArena));
+    ASSERT_TRUE(surfelLightingState.buildTextureSubset(rayEffectsState, surfelIrradiance.get(), fanInScratchArena));
 
     avboit->open(&prefixState);
     avboit->setTextureState(gbuffer.get(), s_AllSubresources, ResourceStates::ShaderResource);
@@ -151,7 +151,8 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueKeepsDeferredLighting
         lightingBaseTextures,
         2u,
         lightingBaseBuffers,
-        1u
+        1u,
+        fanInScratchArena
     ));
     Texture* const avboitLightingTextures[] = { gbuffer.get() };
     ASSERT_TRUE(avboitLightingState.buildResourceSubset(
@@ -159,7 +160,8 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueKeepsDeferredLighting
         avboitLightingTextures,
         1u,
         nullptr,
-        0u
+        0u,
+        fanInScratchArena
     ));
     const CommandListResourceStateHandoff* const lightingBranches[] = {
         &shadowLightingState,
@@ -178,7 +180,7 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueKeepsDeferredLighting
     lighting->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
     lighting->close(&lightingState);
     ASSERT_TRUE(lightingState.valid());
-    ASSERT_TRUE(opaqueCompositeState.buildTextureSubset(lightingState, opaqueColor.get()));
+    ASSERT_TRUE(opaqueCompositeState.buildTextureSubset(lightingState, opaqueColor.get(), fanInScratchArena));
 
     Texture* const compositeBaseTextures[] = { avboitColor.get(), avboitExtinction.get() };
     ASSERT_TRUE(avboitCompositeState.buildResourceSubset(
@@ -186,7 +188,8 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueKeepsDeferredLighting
         compositeBaseTextures,
         2u,
         nullptr,
-        0u
+        0u,
+        fanInScratchArena
     ));
     Buffer* const compositeBaseBuffers[] = { slotsBuffer.get() };
     ASSERT_TRUE(compositeBaseState.buildResourceSubset(
@@ -194,7 +197,8 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueKeepsDeferredLighting
         nullptr,
         0u,
         compositeBaseBuffers,
-        1u
+        1u,
+        fanInScratchArena
     ));
     const CommandListResourceStateHandoff* const compositeBranches[] = {
         &avboitCompositeState,
@@ -213,14 +217,15 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueKeepsDeferredLighting
     composite->close(&compositeState);
     ASSERT_TRUE(compositeState.valid());
 
-    ASSERT_TRUE(compositePresentState.buildTextureSubset(compositeState, compositeColor.get()));
+    ASSERT_TRUE(compositePresentState.buildTextureSubset(compositeState, compositeColor.get(), fanInScratchArena));
     Buffer* const presentBaseBuffers[] = { slotsBuffer.get() };
     ASSERT_TRUE(presentBaseState.buildResourceSubset(
         compositeBaseState,
         nullptr,
         0u,
         presentBaseBuffers,
-        1u
+        1u,
+        fanInScratchArena
     ));
     const CommandListResourceStateHandoff* const presentBranches[] = { &compositePresentState };
     ASSERT_TRUE(presentInputState.buildFanIn(presentBaseState, presentBranches, 1u, fanInScratchArena));
@@ -233,9 +238,9 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueKeepsDeferredLighting
     present->close(&presentState);
     ASSERT_TRUE(presentState.valid());
 
-    ASSERT_TRUE(shadowReturnState.buildTextureSubset(lightingState, shadowVisibility.get()));
-    ASSERT_TRUE(causticReturnState.buildTextureSubset(lightingState, causticIrradiance.get()));
-    ASSERT_TRUE(surfelReturnState.buildTextureSubset(lightingState, surfelIrradiance.get()));
+    ASSERT_TRUE(shadowReturnState.buildTextureSubset(lightingState, shadowVisibility.get(), fanInScratchArena));
+    ASSERT_TRUE(causticReturnState.buildTextureSubset(lightingState, causticIrradiance.get(), fanInScratchArena));
+    ASSERT_TRUE(surfelReturnState.buildTextureSubset(lightingState, surfelIrradiance.get(), fanInScratchArena));
     const CommandListResourceStateHandoff* const computeReuseBranches[] = {
         &shadowReturnState,
         &causticReturnState,
@@ -430,9 +435,9 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueUsesAcceptedLaggedLig
     seedProducer->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
     seedProducer->close(&seedProducerState);
     ASSERT_TRUE(seedProducerState.valid());
-    ASSERT_TRUE(seedShadowSourceState.buildTextureSubset(seedProducerState, shadowVisibility.get()));
-    ASSERT_TRUE(seedCausticSourceState.buildTextureSubset(seedProducerState, causticIrradiance.get()));
-    ASSERT_TRUE(seedSurfelSourceState.buildTextureSubset(seedProducerState, surfelIrradiance.get()));
+    ASSERT_TRUE(seedShadowSourceState.buildTextureSubset(seedProducerState, shadowVisibility.get(), fanInScratchArena));
+    ASSERT_TRUE(seedCausticSourceState.buildTextureSubset(seedProducerState, causticIrradiance.get(), fanInScratchArena));
+    ASSERT_TRUE(seedSurfelSourceState.buildTextureSubset(seedProducerState, surfelIrradiance.get(), fanInScratchArena));
 
     seedFinal->open();
     seedFinal->close();
@@ -465,9 +470,9 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueUsesAcceptedLaggedLig
     seedStash->copyTexture(surfelHistory.get(), slice, surfelIrradiance.get(), slice);
     seedStash->close(&seedStashState);
     ASSERT_TRUE(seedStashState.valid());
-    ASSERT_TRUE(seedShadowReturnState.buildTextureSubset(seedStashState, shadowVisibility.get()));
-    ASSERT_TRUE(seedCausticReturnState.buildTextureSubset(seedStashState, causticIrradiance.get()));
-    ASSERT_TRUE(seedSurfelReturnState.buildTextureSubset(seedStashState, surfelIrradiance.get()));
+    ASSERT_TRUE(seedShadowReturnState.buildTextureSubset(seedStashState, shadowVisibility.get(), fanInScratchArena));
+    ASSERT_TRUE(seedCausticReturnState.buildTextureSubset(seedStashState, causticIrradiance.get(), fanInScratchArena));
+    ASSERT_TRUE(seedSurfelReturnState.buildTextureSubset(seedStashState, surfelIrradiance.get(), fanInScratchArena));
     Texture* const seedHistoryTextures[] = {
         shadowHistory.get(),
         causticHistory.get(),
@@ -478,7 +483,8 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueUsesAcceptedLaggedLig
         seedHistoryTextures,
         LengthOf(seedHistoryTextures),
         nullptr,
-        0u
+        0u,
+        fanInScratchArena
     ));
 
     nextPrefix->open();
@@ -510,9 +516,9 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueUsesAcceptedLaggedLig
     nextProducer->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
     nextProducer->close(&nextProducerState);
     ASSERT_TRUE(nextProducerState.valid());
-    ASSERT_TRUE(nextShadowSourceState.buildTextureSubset(nextProducerState, shadowVisibility.get()));
-    ASSERT_TRUE(nextCausticSourceState.buildTextureSubset(nextProducerState, causticIrradiance.get()));
-    ASSERT_TRUE(nextSurfelSourceState.buildTextureSubset(nextProducerState, surfelIrradiance.get()));
+    ASSERT_TRUE(nextShadowSourceState.buildTextureSubset(nextProducerState, shadowVisibility.get(), fanInScratchArena));
+    ASSERT_TRUE(nextCausticSourceState.buildTextureSubset(nextProducerState, causticIrradiance.get(), fanInScratchArena));
+    ASSERT_TRUE(nextSurfelSourceState.buildTextureSubset(nextProducerState, surfelIrradiance.get(), fanInScratchArena));
 
     Texture* const laggedLightingBaseTextures[] = {
         gbuffer.get(),
@@ -523,7 +529,8 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueUsesAcceptedLaggedLig
         laggedLightingBaseTextures,
         LengthOf(laggedLightingBaseTextures),
         nullptr,
-        0u
+        0u,
+        fanInScratchArena
     ));
     const CommandListResourceStateHandoff* const laggedLightingBranches[] = { &seedHistoryState };
     ASSERT_TRUE(laggedLightingInputState.buildFanIn(
@@ -546,7 +553,7 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueUsesAcceptedLaggedLig
     laggedLighting->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
     laggedLighting->close(&laggedLightingState);
     ASSERT_TRUE(laggedLightingState.valid());
-    ASSERT_TRUE(laggedOpaqueCompositeState.buildTextureSubset(laggedLightingState, opaqueColor.get()));
+    ASSERT_TRUE(laggedOpaqueCompositeState.buildTextureSubset(laggedLightingState, opaqueColor.get(), fanInScratchArena));
 
     laggedComposite->open(&laggedOpaqueCompositeState);
     EXPECT_EQ(laggedComposite->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);
@@ -554,7 +561,7 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueUsesAcceptedLaggedLig
     laggedComposite->setTextureState(compositeColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
     laggedComposite->close(&laggedCompositeState);
     ASSERT_TRUE(laggedCompositeState.valid());
-    ASSERT_TRUE(laggedCompositeFinalState.buildTextureSubset(laggedCompositeState, compositeColor.get()));
+    ASSERT_TRUE(laggedCompositeFinalState.buildTextureSubset(laggedCompositeState, compositeColor.get(), fanInScratchArena));
 
     laggedFinal->open(&laggedCompositeFinalState);
     EXPECT_EQ(laggedFinal->getTextureSubresourceState(compositeColor.get(), 0u, 0u), ResourceStates::Common);

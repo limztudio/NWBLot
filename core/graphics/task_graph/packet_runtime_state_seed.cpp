@@ -136,7 +136,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                     if(!buffer)
                         return false;
                     Buffer* const buffers[] = { buffer };
-                    if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))
+                    if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u, stateFanInScratchArena))
                         return false;
                     break;
                 }
@@ -146,7 +146,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                     if(!backingBuffer)
                         return false;
                     Buffer* const buffers[] = { backingBuffer };
-                    if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))
+                    if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u, stateFanInScratchArena))
                         return false;
                     break;
                 }
@@ -227,7 +227,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             )
                 return false;
             Buffer* const buffers[] = { buffer };
-            if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))
+            if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u, stateFanInScratchArena))
                 return false;
             break;
         }
@@ -244,7 +244,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             )
                 return false;
             Buffer* const buffers[] = { backingBuffer };
-            if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))
+            if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u, stateFanInScratchArena))
                 return false;
             break;
         }
@@ -377,7 +377,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             }
             else if(Buffer* const buffer = declarationAccess.bufferForResource(seed.resource)){
                 Buffer* const buffers[] = { buffer };
-                if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))
+                if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u, stateFanInScratchArena))
                     return false;
             }
             else if(RayTracingAccelStruct* const accelStruct = declarationAccess.accelStructForResource(seed.resource)){
@@ -385,7 +385,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                 if(!backingBuffer)
                     return false;
                 Buffer* const buffers[] = { backingBuffer };
-                if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))
+                if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u, stateFanInScratchArena))
                     return false;
             }
             else

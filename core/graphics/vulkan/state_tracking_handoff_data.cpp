@@ -5,6 +5,7 @@
 #include "backend.h"
 
 #include <core/alloc/scratch.h>
+#include <core/graphics/rhi/resource_state_selection.h>
 #include <global/containers.h>
 
 
@@ -465,7 +466,8 @@ bool CommandListResourceStateHandoff::buildResourceSubset(
     Texture* const* textures,
     const usize textureCount,
     Buffer* const* buffers,
-    const usize bufferCount
+    const usize bufferCount,
+    Alloc::ScratchArena& scratchArena
 ){
     if(
         !source.valid()
@@ -475,43 +477,43 @@ bool CommandListResourceStateHandoff::buildResourceSubset(
     )
         return false;
 
-    const auto containsTexture = [&](Texture* texture){
-        if(!texture)
+    CommandListResourceSelection selection(scratchArena);
+    for(usize index = 0u; index < textureCount; ++index){
+        if(!selection.addTexture(textures[index], index))
             return false;
-        for(usize i = 0u; i < textureCount; ++i){
-            if(textures[i] == texture)
-                return true;
-        }
-        return false;
-    };
-    const auto containsBuffer = [&](Buffer* buffer){
-        if(!buffer)
+    }
+    for(usize index = 0u; index < bufferCount; ++index){
+        if(!selection.addBuffer(buffers[index], index))
             return false;
-        for(usize i = 0u; i < bufferCount; ++i){
-            if(buffers[i] == buffer)
-                return true;
-        }
+    }
+    return buildResourceSubset(source, selection);
+}
+
+bool CommandListResourceStateHandoff::buildResourceSubset(
+    const CommandListResourceStateHandoff& source,
+    const CommandListResourceSelection& selection
+){
+    if(!source.valid() || source.m_deviceGeneration == 0u || !selection.valid())
         return false;
-    };
 
     usize textureStateCount = 0u;
     for(const TextureState& state : source.m_textureStates){
-        if(containsTexture(state.texture))
+        if(selection.containsTexture(state.texture))
             ++textureStateCount;
     }
     usize bufferStateCount = 0u;
     for(const BufferState& state : source.m_bufferStates){
-        if(containsBuffer(state.buffer))
+        if(selection.containsBuffer(state.buffer))
             ++bufferStateCount;
     }
     usize permanentTextureStateCount = 0u;
     for(const PermanentTextureState& state : source.m_permanentTextureStates){
-        if(containsTexture(state.texture))
+        if(selection.containsTexture(state.texture))
             ++permanentTextureStateCount;
     }
     usize permanentBufferStateCount = 0u;
     for(const BufferState& state : source.m_permanentBufferStates){
-        if(containsBuffer(state.buffer))
+        if(selection.containsBuffer(state.buffer))
             ++permanentBufferStateCount;
     }
 
@@ -525,16 +527,16 @@ bool CommandListResourceStateHandoff::buildResourceSubset(
     if(this == &source){
         using namespace __hidden_command_list_state_handoff;
         RetainSelectedStates(m_textureStates, [&](const TextureState& state){
-            return containsTexture(state.texture);
+            return selection.containsTexture(state.texture);
         });
         RetainSelectedStates(m_bufferStates, [&](const BufferState& state){
-            return containsBuffer(state.buffer);
+            return selection.containsBuffer(state.buffer);
         });
         RetainSelectedStates(m_permanentTextureStates, [&](const PermanentTextureState& state){
-            return containsTexture(state.texture);
+            return selection.containsTexture(state.texture);
         });
         RetainSelectedStates(m_permanentBufferStates, [&](const BufferState& state){
-            return containsBuffer(state.buffer);
+            return selection.containsBuffer(state.buffer);
         });
     }
     else{
@@ -543,19 +545,19 @@ bool CommandListResourceStateHandoff::buildResourceSubset(
         m_permanentTextureStates.clear();
         m_permanentBufferStates.clear();
         for(const TextureState& state : source.m_textureStates){
-            if(containsTexture(state.texture))
+            if(selection.containsTexture(state.texture))
                 m_textureStates.push_back(state);
         }
         for(const BufferState& state : source.m_bufferStates){
-            if(containsBuffer(state.buffer))
+            if(selection.containsBuffer(state.buffer))
                 m_bufferStates.push_back(state);
         }
         for(const PermanentTextureState& state : source.m_permanentTextureStates){
-            if(containsTexture(state.texture))
+            if(selection.containsTexture(state.texture))
                 m_permanentTextureStates.push_back(state);
         }
         for(const BufferState& state : source.m_permanentBufferStates){
-            if(containsBuffer(state.buffer))
+            if(selection.containsBuffer(state.buffer))
                 m_permanentBufferStates.push_back(state);
         }
     }
@@ -566,10 +568,11 @@ bool CommandListResourceStateHandoff::buildResourceSubset(
 
 bool CommandListResourceStateHandoff::buildTextureSubset(
     const CommandListResourceStateHandoff& source,
-    Texture* const texture
+    Texture* const texture,
+    Alloc::ScratchArena& scratchArena
 ){
     Texture* const textures[] = { texture };
-    return buildResourceSubset(source, textures, 1u, nullptr, 0u);
+    return buildResourceSubset(source, textures, 1u, nullptr, 0u, scratchArena);
 }
 
 bool CommandListResourceStateHandoff::buildTextureRangeSubset(

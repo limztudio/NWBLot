@@ -203,8 +203,9 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueChainsConcurrentAvboi
     graphicsPre->close(&preState);
     ASSERT_TRUE(preState.valid());
 
+    Alloc::ScratchArena fanInScratchArena(Name("tests/descriptor_buffer/avboit_chain_fan_in"));
     Core::Buffer* const warpBuffers[] = { coverage.get(), depthWarp.get(), control.get() };
-    ASSERT_TRUE(warpInputState.buildResourceSubset(preState, nullptr, 0u, warpBuffers, 3u));
+    ASSERT_TRUE(warpInputState.buildResourceSubset(preState, nullptr, 0u, warpBuffers, 3u, fanInScratchArena));
     computeWarp->open(&warpInputState);
     EXPECT_EQ(computeWarp->getBufferState(coverage.get()), ResourceStates::UnorderedAccess);
     computeWarp->setBufferState(coverage.get(), ResourceStates::ShaderResource);
@@ -214,7 +215,6 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueChainsConcurrentAvboi
     ASSERT_TRUE(warpState.valid());
 
     const CommandListResourceStateHandoff* const extinctionBranches[] = { &warpState };
-    Alloc::ScratchArena fanInScratchArena(Name("tests/descriptor_buffer/avboit_chain_fan_in"));
     ASSERT_TRUE(extinctionInputState.buildFanIn(preState, extinctionBranches, 1u, fanInScratchArena));
     graphicsExtinction->open(&extinctionInputState);
     EXPECT_EQ(graphicsExtinction->getBufferState(depthWarp.get()), ResourceStates::UnorderedAccess);
@@ -233,7 +233,8 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueChainsConcurrentAvboi
         integrationTextures,
         1u,
         integrationBuffers,
-        3u
+        3u,
+        fanInScratchArena
     ));
     computeIntegration->open(&integrationInputState);
     EXPECT_EQ(computeIntegration->getBufferState(extinction.get()), ResourceStates::UnorderedAccess);
@@ -357,6 +358,7 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueLetsGraphicsCausticsF
     ASSERT_NE(activeGraphicsCaustics.get(), nullptr);
     ASSERT_NE(activeStash.get(), nullptr);
 
+    Alloc::ScratchArena fanInScratchArena(Name("tests/descriptor_buffer/caustic_lagged_subset"));
     CommandListResourceStateHandoff causticsState(asyncScope.arena());
     CommandListResourceStateHandoff lightingState(asyncScope.arena());
     CommandListResourceStateHandoff bootstrapCausticReturnState(asyncScope.arena());
@@ -387,7 +389,8 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueLetsGraphicsCausticsF
     ASSERT_TRUE(lightingState.valid());
     ASSERT_TRUE(bootstrapCausticReturnState.buildTextureSubset(
         lightingState,
-        causticIrradiance.get()
+        causticIrradiance.get(),
+        fanInScratchArena
     ));
 
     // Bootstrap consumes the live image in Async lighting, so the stash imports the post-lighting state.

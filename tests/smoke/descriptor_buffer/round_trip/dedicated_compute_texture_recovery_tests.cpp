@@ -97,9 +97,9 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueRecoversCausticSurfel
     compute->releaseTextureOwnership(surfelIrradiance.get(), s_AllSubresources, CommandQueue::Graphics);
     compute->close(&computeState);
     ASSERT_TRUE(computeState.valid());
-    ASSERT_TRUE(shadowGraphicsState.buildTextureSubset(computeState, shadowVisibility.get()));
-    ASSERT_TRUE(causticGraphicsState.buildTextureSubset(computeState, causticIrradiance.get()));
-    ASSERT_TRUE(surfelGraphicsState.buildTextureSubset(computeState, surfelIrradiance.get()));
+    ASSERT_TRUE(shadowGraphicsState.buildTextureSubset(computeState, shadowVisibility.get(), fanInScratchArena));
+    ASSERT_TRUE(causticGraphicsState.buildTextureSubset(computeState, causticIrradiance.get(), fanInScratchArena));
+    ASSERT_TRUE(surfelGraphicsState.buildTextureSubset(computeState, surfelIrradiance.get(), fanInScratchArena));
 
     const CommandListResourceStateHandoff* recoveryBranches[] = { &causticGraphicsState, &surfelGraphicsState };
     ASSERT_TRUE(recoveryInputState.buildFanIn(shadowGraphicsState, recoveryBranches, 2u, fanInScratchArena));

@@ -18,6 +18,11 @@ NWB_CORE_BEGIN
 
 
 class GpuNativePacketRecorder;
+class CommandListResourceSelection;
+
+namespace GraphicsBackend{
+    class VulkanTestDispatchAccess;
+};
 
 
 // Command lists and state handoffs need this queue identity without pulling in device.h (which itself includes
@@ -237,6 +242,7 @@ struct TimerQueryResult{
 class CommandListResourceStateHandoff final : NoCopy{
     friend class GraphicsBackend::CommandList;
     friend class GpuNativePacketRecorder;
+    friend class GraphicsBackend::VulkanTestDispatchAccess;
 
 private:
     struct TextureState{
@@ -318,9 +324,12 @@ public:
         Texture* const* textures,
         usize textureCount,
         Buffer* const* buffers,
-        usize bufferCount
+        usize bufferCount,
+        Alloc::ScratchArena& scratchArena
     );
-    [[nodiscard]] bool buildTextureSubset(const CommandListResourceStateHandoff& source, Texture* texture);
+    // Reuses one completed selection across multiple filtered snapshots without retaining its scratch storage.
+    [[nodiscard]] bool buildResourceSubset(const CommandListResourceStateHandoff& source, const CommandListResourceSelection& selection);
+    [[nodiscard]] bool buildTextureSubset(const CommandListResourceStateHandoff& source, Texture* texture, Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool buildTextureRangeSubset(
         const CommandListResourceStateHandoff& source,
         Texture* texture,

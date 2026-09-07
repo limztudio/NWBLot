@@ -8,6 +8,7 @@
 #include <global/global.h>
 #include <global/sync.h>
 #include <core/graphics/vulkan/backend.h>
+#include <core/graphics/rhi/resource_state_selection.h>
 
 #include <volk/volk.h>
 
@@ -29,6 +30,40 @@ namespace Core::GraphicsBackend{
 
 class VulkanTestDispatchAccess final{
 public:
+    [[nodiscard]] static usize initialResourceSelectionBucketCount()noexcept{
+        return CommandListResourceSelection::s_InlineCapacity * 4u;
+    }
+    [[nodiscard]] static usize initialResourceSelectionBucket(Buffer* buffer)noexcept{
+        return CommandListResourceSelection::hashIdentity(buffer, false) & (initialResourceSelectionBucketCount() - 1u);
+    }
+    static void validateStateHandoff(CommandListResourceStateHandoff& states, const u16 deviceGeneration)noexcept{
+        states.m_deviceGeneration = deviceGeneration;
+        states.m_valid = true;
+    }
+    [[nodiscard]] static auto& stateHandoffTextures(CommandListResourceStateHandoff& states)noexcept{
+        return states.m_textureStates;
+    }
+    [[nodiscard]] static const auto& stateHandoffTextures(const CommandListResourceStateHandoff& states)noexcept{
+        return states.m_textureStates;
+    }
+    [[nodiscard]] static auto& stateHandoffBuffers(CommandListResourceStateHandoff& states)noexcept{
+        return states.m_bufferStates;
+    }
+    [[nodiscard]] static const auto& stateHandoffBuffers(const CommandListResourceStateHandoff& states)noexcept{
+        return states.m_bufferStates;
+    }
+    [[nodiscard]] static auto& stateHandoffPermanentTextures(CommandListResourceStateHandoff& states)noexcept{
+        return states.m_permanentTextureStates;
+    }
+    [[nodiscard]] static const auto& stateHandoffPermanentTextures(const CommandListResourceStateHandoff& states)noexcept{
+        return states.m_permanentTextureStates;
+    }
+    [[nodiscard]] static auto& stateHandoffPermanentBuffers(CommandListResourceStateHandoff& states)noexcept{
+        return states.m_permanentBufferStates;
+    }
+    [[nodiscard]] static const auto& stateHandoffPermanentBuffers(const CommandListResourceStateHandoff& states)noexcept{
+        return states.m_permanentBufferStates;
+    }
     [[nodiscard]] static VkDevice nativeDevice(const Device& device)noexcept{ return device.m_context.device; }
     [[nodiscard]] static const VkAllocationCallbacks* allocationCallbacks(const Device& device)noexcept{
         return device.m_context.allocationCallbacks;

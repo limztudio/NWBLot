@@ -211,3 +211,20 @@ JSON and DOT generation now walk each parsed owner table once as graph nodes adv
 Heap allocation counts and JSON/DOT output byte counts are unchanged in every measured case. The timed public operation includes decoding and both report formats; event construction/encoding and output assertions are excluded. Small-report timing is essentially unchanged.
 
 All 97 telemetry tests pass in dbg, opt, and fin, including three new report regressions for sparse owners, missing coverage, exact empty records, capture/rebuild resets, malformed owner/order tables, and recovery to valid input. The logserver builds in all three configurations. Allocation-owner/source reporting and memory payload version 1 are unchanged.
+
+## Persistent resource-state selection
+
+Whole-resource filtering now builds one operation-owned selection of exact pointer and resource-kind identities. First input ordinals retain the original owning handles. Up to 32 distinct resources use packed inline pointer ranges; larger selections use one compact allocation with ordered entries and bounded open-address lookup. Checked growth uses the caller's scratch arena, and merged construction destroys the selection before fan-in reuses that arena. The incoming and retained snapshots share this selection, removing repeated handle/pointer deduplication and per-state full-selection scans.
+
+| Complete workload | dbg before → after | opt before → after |
+| --- | ---: | ---: |
+| Raw subset, 4,096 unique buffers | 28.7697 → 1.1724 | 3.8188 → 0.2008 |
+| Owning filtered candidate, 4,096 unique buffers | 230.7943 → 1.7181 | 8.1413 → 0.2016 |
+| Merged candidate, 4,096 unique buffers | 463.1095 → 3.2181 | 16.2128 → 0.4168 |
+| One buffer, 1,024 filtered candidates | 5.2305 → 4.1892 | 0.0794 → 0.0657 |
+| 4,096 selections / 32 unique buffers, four candidates | 10.1935 → 0.7286 | 0.1408 → 0.0915 |
+| 32 selected out of 4,096 buffers, eight merges | 4.1861 → 4.5640 | 0.5254 → 0.5422 |
+
+The sparse workload adds about 47 microseconds per merge in dbg and 2 microseconds in opt; it keeps the inline path and avoids scratch allocation for selection. Singleton and repeated 32-resource selections also allocate no selection storage. At 4,096 distinct buffers, raw/filtered selection peaks at 245,760 scratch bytes and reserves 435,200 bytes on a cold arena. Raw filtering adds four cold backing allocations; owning filtered construction drops from 32 to 12 backing allocations in dbg and 24 to six in opt. Merged construction drops from 95 to 25 in dbg and 72 to nine in opt. Its peak scratch remains about 384 KiB, while cold reserved capacity grows to 1,221,680 bytes. Same-arena large/small/repeated tests verify stable used and reserved bytes after warm-up.
+
+Eleven regressions preserve null suppression, first occurrence, collision/growth behavior, separate buffer/texture identity domains, source order, all transient/permanent categories, texture mip/slice records, queue ownership, generation validation, self-filtering, aliased merged candidates, retained handle lifetime, and allocation-free commit. The complete 367 graphics tests, 97 telemetry tests, 182 ECS graphics tests (185 in fin), and selected 26 asset integration tests pass in dbg, opt, and fin. Renderer/frame, pipeline, logserver, and descriptor-buffer smoke targets build in all three. All 48 source-policy checks and self-tests pass, and five focused native persistent-state/handoff tests pass on this host. These benchmark figures measure CPU work; no frame-rate claim is inferred. Allocation-owner telemetry and memory payload version 1 remain unchanged.

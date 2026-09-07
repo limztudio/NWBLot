@@ -24,6 +24,7 @@ target_sources(nwb_graphics_task_graph_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/heap_binding_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/host_readback_sync_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/persistent_state_subset_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/pipeline_cache_validation_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/resource_queue_sharing_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_analysis_tests.cpp"

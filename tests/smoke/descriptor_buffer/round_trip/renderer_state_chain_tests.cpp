@@ -832,7 +832,8 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
         nullptr,
         0u,
         shadowPrepareSelectorBuffers,
-        LengthOf(shadowPrepareSelectorBuffers)
+        LengthOf(shadowPrepareSelectorBuffers),
+        scratchArena
     ));
     ASSERT_FALSE(shadowPrepareSelectorState.empty());
     auto shadowPrepareStateProbe = device.createCommandList();

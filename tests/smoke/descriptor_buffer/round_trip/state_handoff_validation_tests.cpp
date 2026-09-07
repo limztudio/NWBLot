@@ -80,6 +80,7 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffTransfersFinalBuffe
 // Subset publication happens only after the complete candidate exists, so the source may be the destination itself
 // without erasing state before it is selected.
 TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffSubsetBuildersSupportSelfAlias){
+    Alloc::ScratchArena subsetScratchArena(Name("tests/descriptor_buffer/subset_self_alias"));
     auto& device = DescriptorBufferRoundTripTest::device();
     const TextureHandle texture = device.createTexture(
         TextureDesc()
@@ -131,7 +132,8 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffSubsetBuildersSuppo
         selectedTextures,
         LengthOf(selectedTextures),
         selectedBuffers,
-        LengthOf(selectedBuffers)
+        LengthOf(selectedBuffers),
+        subsetScratchArena
     ));
     resourceSubsetProbe->open(&handoff);
     EXPECT_EQ(
@@ -171,6 +173,7 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffSubsetBuildersSuppo
 // Validation failures return before candidate construction and publication. The same boundary also leaves the
 // destination unchanged if candidate allocation throws and unwinds to the application exception boundary.
 TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffSubsetValidationPreservesDestination){
+    Alloc::ScratchArena subsetScratchArena(Name("tests/descriptor_buffer/subset_validation"));
     auto& device = DescriptorBufferRoundTripTest::device();
     const TextureHandle texture = device.createTexture(
         TextureDesc()
@@ -205,11 +208,11 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffSubsetValidationPre
     CommandListResourceStateHandoff invalidSource(DescriptorBufferRoundTripTest::arena());
     ASSERT_FALSE(invalidSource.valid());
 
-    EXPECT_FALSE(destination.buildResourceSubset(invalidSource, nullptr, 0u, nullptr, 0u));
+    EXPECT_FALSE(destination.buildResourceSubset(invalidSource, nullptr, 0u, nullptr, 0u, subsetScratchArena));
     EXPECT_TRUE(destination.equivalentTo(preserved));
-    EXPECT_FALSE(destination.buildResourceSubset(preserved, nullptr, 1u, nullptr, 0u));
+    EXPECT_FALSE(destination.buildResourceSubset(preserved, nullptr, 1u, nullptr, 0u, subsetScratchArena));
     EXPECT_TRUE(destination.equivalentTo(preserved));
-    EXPECT_FALSE(destination.buildResourceSubset(preserved, nullptr, 0u, nullptr, 1u));
+    EXPECT_FALSE(destination.buildResourceSubset(preserved, nullptr, 0u, nullptr, 1u, subsetScratchArena));
     EXPECT_TRUE(destination.equivalentTo(preserved));
     EXPECT_FALSE(destination.buildTextureRangeSubset(preserved, nullptr, TextureSubresourceSet{}));
     EXPECT_TRUE(destination.equivalentTo(preserved));

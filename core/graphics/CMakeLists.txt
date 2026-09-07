@@ -26,6 +26,8 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/module_setup_async.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/module_texture_upload.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/pipeline_helpers.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/rhi/resource_state_selection.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/rhi/resource_state_selection.h"
     "${CMAKE_CURRENT_LIST_DIR}/spirv_entry_point.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiled_graph.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler.cpp"

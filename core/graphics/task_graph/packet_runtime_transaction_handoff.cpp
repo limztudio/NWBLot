@@ -441,7 +441,8 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
                     nullptr,
                     0u,
                     buffers,
-                    LengthOf(buffers)
+                    LengthOf(buffers),
+                    m_externalResourceHandoffBuildScratch
                 ))
                     return false;
                 break;
@@ -455,7 +456,8 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
                     nullptr,
                     0u,
                     buffers,
-                    LengthOf(buffers)
+                    LengthOf(buffers),
+                    m_externalResourceHandoffBuildScratch
                 ))
                     return false;
                 break;
@@ -473,7 +475,7 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
         // and accidentally allowing a later branch to overwrite it.
         if(
             !firstSourceStates
-            || !candidate.stateMerge.buildResourceSubset(*firstSourceStates, nullptr, 0u, nullptr, 0u)
+            || !candidate.stateMerge.buildResourceSubset(*firstSourceStates, nullptr, 0u, nullptr, 0u, m_externalResourceHandoffBuildScratch)
             || !candidate.stateSource.buildFanIn(
                 candidate.stateMerge,
                 candidate.stateBranchPointers.data(),

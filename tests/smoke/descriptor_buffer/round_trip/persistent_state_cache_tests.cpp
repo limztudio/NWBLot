@@ -62,7 +62,7 @@ TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheFiltersAndMergesA
     ASSERT_TRUE(initialStates.valid());
 
     CommandListResourceStateHandoff foreignArenaStates(foreignStateArena);
-    ASSERT_TRUE(foreignArenaStates.buildResourceSubset(initialStates, nullptr, 0u, nullptr, 0u));
+    ASSERT_TRUE(foreignArenaStates.buildResourceSubset(initialStates, nullptr, 0u, nullptr, 0u, fanInScratchArena));
     ASSERT_TRUE(foreignArenaStates.valid());
     ASSERT_TRUE(foreignArenaStates.empty());
     EXPECT_FALSE(initialStates.exchangeSnapshot(foreignArenaStates));
@@ -72,7 +72,12 @@ TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheFiltersAndMergesA
     GpuPersistentResourceStateCache acceptedState(persistentStateArena);
     {
         const BufferHandle initialLiveBuffers[] = { liveBuffer, retiredBuffer };
-        ASSERT_TRUE(acceptedState.replaceBufferSubset(initialStates, initialLiveBuffers, LengthOf(initialLiveBuffers)));
+        ASSERT_TRUE(acceptedState.replaceBufferSubset(
+            initialStates,
+            initialLiveBuffers,
+            LengthOf(initialLiveBuffers),
+            fanInScratchArena
+        ));
     }
     EXPECT_EQ(acceptedState.retainedBufferCount(), 2u);
     GpuPersistentResourceStateCache::Candidate recordingSource(acceptedState);
@@ -82,7 +87,8 @@ TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheFiltersAndMergesA
             recordingSource,
             *acceptedState.source(),
             recordingLiveBuffers,
-            LengthOf(recordingLiveBuffers)
+            LengthOf(recordingLiveBuffers),
+            fanInScratchArena
         ));
     }
     ASSERT_NE(recordingSource.source(), nullptr);
@@ -187,6 +193,7 @@ TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheFiltersAndMergesA
 // Compute scratch can include descriptor-visible images as well as buffers. The accepted cache must hold both typed
 // handles after the caller drops its own references, so the next packet can safely import their native states.
 TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheRetainsAcceptedTextureAndBufferStates){
+    Alloc::ScratchArena fanInScratchArena(Name("tests/descriptor_buffer/persistent_typed_subset"));
     auto& device = DescriptorBufferRoundTripTest::device();
     auto texture = device.createTexture(
         TextureDesc()
@@ -227,7 +234,8 @@ TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheRetainsAcceptedTe
             textures,
             LengthOf(textures),
             buffers,
-            LengthOf(buffers)
+            LengthOf(buffers),
+            fanInScratchArena
         ));
     }
     EXPECT_EQ(cache.retainedTextureCount(), 1u);
@@ -295,17 +303,18 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffSeparatesCurrentInp
     currentPrefix->close(&currentPrefixState);
     ASSERT_TRUE(currentPrefixState.valid());
 
+    Alloc::ScratchArena fanInScratchArena(Name("tests/descriptor_buffer/current_input_fan_in"));
     Core::Buffer* const scratchBuffers[] = { computeScratch.get() };
     ASSERT_TRUE(persistentScratchState.buildResourceSubset(
         previousComputeState,
         nullptr,
         0u,
         scratchBuffers,
-        1u
+        1u,
+        fanInScratchArena
     ));
 
     const CommandListResourceStateHandoff* branches[] = { &persistentScratchState };
-    Alloc::ScratchArena fanInScratchArena(Name("tests/descriptor_buffer/current_input_fan_in"));
     ASSERT_TRUE(nextComputeState.buildFanIn(currentPrefixState, branches, 1u, fanInScratchArena));
 
     nextCompute->open(&nextComputeState);

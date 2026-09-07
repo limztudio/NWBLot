@@ -302,7 +302,7 @@ bool MeshSkinningSystem::replaceAcceptedSkinningState(
 ){
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> liveBuffers(m_arena);
     collectLiveSkinningStateBuffers(liveBuffers, scratchArena);
-    return m_acceptedSkinningState.replaceBufferSubset(state, liveBuffers.data(), liveBuffers.size());
+    return m_acceptedSkinningState.replaceBufferSubset(state, liveBuffers.data(), liveBuffers.size(), scratchArena);
 }
 
 

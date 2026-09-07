@@ -31,11 +31,22 @@ namespace __hidden_telemetry_perf{
     ;
 }
 
+[[nodiscard]] static bool IsValidMemorySource(const u32 source)noexcept{
+    return source == Perf::MemorySource::ExplicitScope
+        || source == Perf::MemorySource::Arena
+        || source == Perf::MemorySource::HeapBacking
+    ;
+}
+
 [[nodiscard]] static bool ValidateHeader(const EncodedPerfMemoryPayloadHeader& header)noexcept{
     constexpr u16 s_KnownFlags = PerfMemoryPayloadFlag::HasDelta;
+    const bool validVersion = header.version == s_PerfMemoryPayloadVersion
+        || (header.version == 1u && header.source == Perf::MemorySource::ExplicitScope)
+    ;
     return header.magic == s_PerfMemoryPayloadMagic
+        && validVersion
         && (header.flags & ~s_KnownFlags) == 0u
-        && header.reserved == 0u
+        && IsValidMemorySource(header.source)
         && !NameDetail::IsZeroHash(header.scopeHash)
     ;
 }
@@ -62,6 +73,7 @@ namespace __hidden_telemetry_perf{
 )noexcept{
     if(
         !scopeName
+        || !IsValidMemorySource(snapshot.source)
         || snapshot.scopeName != scopeName
         || !snapshot.valid()
         || scopeText.empty()
@@ -294,6 +306,7 @@ bool BuildPerfMemoryPayload(
         return false;
 
     EncodedPerfMemoryPayloadHeader header;
+    header.source = snapshot.source;
     header.flags = delta.hasSamples ? PerfMemoryPayloadFlag::HasDelta : PerfMemoryPayloadFlag::None;
     header.scopeHash = scopeName.hash();
     header.frameIndex = snapshot.frameIndex;
@@ -344,6 +357,7 @@ bool ParsePerfMemoryPayload(
     outPayload.scopeName = Name(header.scopeHash);
     outPayload.scopeText.assign(scopeText.data(), scopeText.size());
     outPayload.snapshot.scopeName = outPayload.scopeName;
+    outPayload.snapshot.source = static_cast<Perf::MemorySource::Enum>(header.source);
     outPayload.snapshot.frameIndex = header.frameIndex;
     outPayload.snapshot.reservedBytes = header.reservedBytes;
     outPayload.snapshot.usedBytes = header.usedBytes;

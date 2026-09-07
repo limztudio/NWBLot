@@ -9,6 +9,7 @@
 #include <core/alloc/general.h>
 
 #include <global/algorithm.h>
+#include <global/arena_memory.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -164,6 +165,7 @@ public:
     }
 
     void serialize(SymbolString& outText){
+        recordArenaOwnerSymbols();
         m_symbols.appendFileText(m_arena, outText);
     }
 
@@ -208,7 +210,24 @@ public:
 
 
 private:
+    void recordArenaOwnerSymbols(){
+#if defined(NWB_BUILDMODE)
+        const ArenaMemoryOwnerRecord* owner = FirstArenaMemoryOwnerRecord();
+        while(owner){
+            ArenaMemoryOwnerSnapshot snapshot;
+            owner = ReadArenaMemoryOwnerRecord(*owner, snapshot);
+            const AStringView text(snapshot.ownerName.logText());
+            const NameHash hash = ComputeNameHash(text);
+            // Verify stored text before using it: a binary-only Name contains fallback hex, and long text can truncate.
+            // Insert after the census releases its lock and without callbacks, including exception-path shutdown.
+            if(snapshot.ownerName == Name(hash))
+                (void)insert(hash, text);
+        }
+#endif
+    }
+
     [[nodiscard]] bool writeFile(const ::Path<SymbolArena>& path){
+        recordArenaOwnerSymbols();
         SymbolString fileText(m_arena);
         m_symbols.appendFileText(m_arena, fileText);
         return ::WriteTextFile(path, AStringView(fileText.data(), fileText.size()));

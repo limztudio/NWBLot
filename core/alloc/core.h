@@ -11,23 +11,28 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ArenaMemoryTracker;
+
+
 NWB_ALLOC_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-extern void* CoreAlloc(usize size);
-extern void* CoreRealloc(void* p, usize size);
-extern void* CoreReallocAligned(void* p, usize size, usize align);
-extern void* CoreAllocAligned(usize size, usize align);
+// Optional arena context must use FollowsUsage reservation and accounts direct heap ownership with the
+// same usable-size query as the backing total. Pool backing allocations omit this context.
+extern void* CoreAlloc(usize size, ArenaMemoryTracker* arenaTracker = nullptr);
+extern void* CoreRealloc(void* p, usize size, ArenaMemoryTracker* arenaTracker = nullptr);
+extern void* CoreReallocAligned(void* p, usize size, usize align, ArenaMemoryTracker* arenaTracker = nullptr);
+extern void* CoreAllocAligned(usize size, usize align, ArenaMemoryTracker* arenaTracker = nullptr);
 
 extern usize CoreMsize(void* ptr)noexcept;
 
-extern void CoreFree(void* ptr)noexcept;
-extern void CoreFreeSize(void* ptr, usize size)noexcept;
-extern void CoreFreeAligned(void* ptr)noexcept;
-extern void CoreFreeSizeAligned(void* ptr, usize size)noexcept;
+extern void CoreFree(void* ptr, ArenaMemoryTracker* arenaTracker = nullptr)noexcept;
+extern void CoreFreeSize(void* ptr, usize size, ArenaMemoryTracker* arenaTracker = nullptr)noexcept;
+extern void CoreFreeAligned(void* ptr, ArenaMemoryTracker* arenaTracker = nullptr)noexcept;
+extern void CoreFreeSizeAligned(void* ptr, usize size, ArenaMemoryTracker* arenaTracker = nullptr)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

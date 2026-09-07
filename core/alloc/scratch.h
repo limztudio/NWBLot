@@ -157,6 +157,7 @@ public:
                 cur = next;
             }
         }
+        m_memoryStats.releaseRetainedMemory();
     }
 
 

@@ -35,6 +35,19 @@ void Session::beginFrame(const u64 frameIndex){
 
 void Session::publishFrame(){
     m_cpuTiming.publishFrame(m_frameIndex);
+    if(!captureOptions().memoryActive())
+        return;
+
+    const ArenaMemoryOwnerRecord* owner = FirstArenaMemoryOwnerRecord();
+    while(owner){
+        ArenaMemoryOwnerSnapshot snapshot;
+        owner = ReadArenaMemoryOwnerRecord(*owner, snapshot);
+        const MemorySource::Enum source = snapshot.source == ArenaMemorySource::HeapBacking
+            ? MemorySource::HeapBacking
+            : MemorySource::Arena
+        ;
+        m_memory.recordSnapshot(snapshot.ownerName, snapshot.stats, m_frameIndex, source);
+    }
 }
 
 CaptureOptions Session::captureOptions()const{

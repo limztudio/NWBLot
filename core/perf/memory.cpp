@@ -39,15 +39,25 @@ void MemoryRecorder::clear(){
     m_emptyDelta = MemoryDelta{};
 }
 
-MemoryScopeId MemoryRecorder::registerScope(const Name& scopeName){
-    return ::RegisterNamedScope<MemoryScopeId>(
-        m_scopes,
-        m_scopeMap,
-        m_generation,
-        scopeName,
-        [&](const Name& name){ return MakeGlobalUnique<ScopeRecord>(m_arena, name); },
-        [](ScopeRecord& scope, const MemoryScopeId& scopeId){ scope.generation = scopeId.generation; }
-    );
+MemoryScopeId MemoryRecorder::registerScope(const Name& scopeName, const MemorySource::Enum source){
+    if(!scopeName || source > MemorySource::HeapBacking)
+        return {};
+    const ScopeKey key{ scopeName, source };
+    const auto found = m_scopeMap.find(key);
+    if(found != m_scopeMap.end())
+        return found.value();
+    if(m_scopes.size() >= static_cast<usize>(Limit<u32>::s_Max))
+        return {};
+
+    ScopeRecordPtr record = MakeGlobalUnique<ScopeRecord>(m_arena, scopeName, source);
+    if(!record)
+        return {};
+    const MemoryScopeId scope{ static_cast<u32>(m_scopes.size()), m_generation };
+    record->generation = scope.generation;
+    ContainerDetail::ReserveGrowingCapacity(m_scopes, m_scopes.size() + 1u);
+    m_scopeMap.try_emplace(key, scope);
+    m_scopes.push_back(Move(record));
+    return scope;
 }
 
 void MemoryRecorder::recordSnapshot(
@@ -62,8 +72,9 @@ void MemoryRecorder::recordSnapshot(
     if(!record)
         return;
 
-    const MemorySnapshot snapshot = MakeMemorySnapshot(record->name, frameIndex, stats);
-    record->previousSnapshot = record->lastSnapshot;
+    const MemorySnapshot snapshot = MakeMemorySnapshot(record->name, frameIndex, stats, record->source);
+    if(!record->lastSnapshot.valid() || record->lastSnapshot.frameIndex != frameIndex)
+        record->previousSnapshot = record->lastSnapshot;
     record->lastSnapshot = snapshot;
     record->lastDelta = Difference(record->lastSnapshot, record->previousSnapshot);
 }
@@ -71,16 +82,17 @@ void MemoryRecorder::recordSnapshot(
 void MemoryRecorder::recordSnapshot(
     const Name& scopeName,
     const ::ArenaMemoryStats& stats,
-    const u64 frameIndex
+    const u64 frameIndex,
+    const MemorySource::Enum source
 ){
     if(!m_enabled || !scopeName)
         return;
 
-    recordSnapshot(registerScope(scopeName), stats, frameIndex);
+    recordSnapshot(registerScope(scopeName, source), stats, frameIndex);
 }
 
-const MemorySnapshot& MemoryRecorder::snapshot(const Name& scopeName)const{
-    const auto found = m_scopeMap.find(scopeName);
+const MemorySnapshot& MemoryRecorder::snapshot(const Name& scopeName, const MemorySource::Enum source)const{
+    const auto found = m_scopeMap.find(ScopeKey{ scopeName, source });
     if(found == m_scopeMap.end())
         return m_emptySnapshot;
 
@@ -95,8 +107,8 @@ const MemorySnapshot& MemoryRecorder::snapshot(const MemoryScopeId scope)const{
     return record->lastSnapshot;
 }
 
-const MemoryDelta& MemoryRecorder::delta(const Name& scopeName)const{
-    const auto found = m_scopeMap.find(scopeName);
+const MemoryDelta& MemoryRecorder::delta(const Name& scopeName, const MemorySource::Enum source)const{
+    const auto found = m_scopeMap.find(ScopeKey{ scopeName, source });
     if(found == m_scopeMap.end())
         return m_emptyDelta;
 
@@ -141,9 +153,9 @@ MemoryRecorder::ScopeRecord* MemoryRecorder::findScope(const MemoryScopeId scope
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const MemorySnapshot& MemoryView::snapshot(const Name& scopeName)const{
+const MemorySnapshot& MemoryView::snapshot(const Name& scopeName, const MemorySource::Enum source)const{
     static const MemorySnapshot s_EmptySnapshot;
-    return m_recorder ? m_recorder->snapshot(scopeName) : s_EmptySnapshot;
+    return m_recorder ? m_recorder->snapshot(scopeName, source) : s_EmptySnapshot;
 }
 
 const MemorySnapshot& MemoryView::snapshot(const MemoryScopeId scope)const{
@@ -151,9 +163,9 @@ const MemorySnapshot& MemoryView::snapshot(const MemoryScopeId scope)const{
     return m_recorder ? m_recorder->snapshot(scope) : s_EmptySnapshot;
 }
 
-const MemoryDelta& MemoryView::delta(const Name& scopeName)const{
+const MemoryDelta& MemoryView::delta(const Name& scopeName, const MemorySource::Enum source)const{
     static const MemoryDelta s_EmptyDelta;
-    return m_recorder ? m_recorder->delta(scopeName) : s_EmptyDelta;
+    return m_recorder ? m_recorder->delta(scopeName, source) : s_EmptyDelta;
 }
 
 const MemoryDelta& MemoryView::delta(const MemoryScopeId scope)const{

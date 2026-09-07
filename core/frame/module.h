@@ -131,8 +131,6 @@ private:
     Telemetry::CaptureSession m_telemetrySession;
     Telemetry::FrameGraphRegistry m_frameGraphRegistry;
     Telemetry::TelemetryBytes m_telemetryUploadBytes;
-    Perf::MemoryScopeId m_graphicsObjectArenaMemoryScope;
-    Perf::MemoryScopeId m_projectObjectArenaMemoryScope;
     Alloc::ThreadPool m_projectThreadPool;
     Alloc::JobSystem m_projectJobSystem;
 

@@ -30,6 +30,14 @@ using TelemetryArena = Telemetry::TelemetryArena;
 
 
 inline constexpr usize s_TelemetryReportEventKindCount = static_cast<usize>(Telemetry::EventKind::MemoryFrame) + 1u;
+inline constexpr usize s_TelemetryMemorySourceCount = static_cast<usize>(Core::Perf::MemorySource::HeapBacking) + 1u;
+
+struct TelemetryMemorySummary{
+    u64 eventCount = 0u;
+    u64 maxUsedBytes = 0u;
+    u64 maxPeakUsedBytes = 0u;
+    i64 totalUsedDeltaBytes = 0;
+};
 
 struct TelemetryReportSummary{
     u64 eventCount = 0u;
@@ -51,6 +59,9 @@ struct TelemetryReportSummary{
     f64 maxGpuTimingSeconds = 0.0;
 
     u64 memoryEventCount = 0u;
+    TelemetryMemorySummary memorySources[s_TelemetryMemorySourceCount];
+    // Compatibility counters use named arenas when present, otherwise explicit scopes. The source summaries
+    // remain independent because explicit scopes may alias arenas and heap backing includes their storage.
     u64 maxMemoryUsedBytes = 0u;
     u64 maxMemoryPeakUsedBytes = 0u;
     i64 totalMemoryUsedDeltaBytes = 0;

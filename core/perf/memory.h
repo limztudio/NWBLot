@@ -19,6 +19,15 @@ NWB_PERF_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace MemorySource{
+    enum Enum : u8{
+        ExplicitScope,
+        Arena,
+        HeapBacking,
+    };
+};
+
+
 class MemoryRecorder;
 class MemoryView;
 
@@ -31,6 +40,7 @@ struct MemoryScopeId{
 
 struct MemorySnapshot{
     Name scopeName = NAME_NONE;
+    MemorySource::Enum source = MemorySource::ExplicitScope;
     u64 frameIndex = 0u;
     u64 reservedBytes = 0u;
     u64 usedBytes = 0u;
@@ -59,10 +69,12 @@ struct MemoryDelta{
 [[nodiscard]] inline MemorySnapshot MakeMemorySnapshot(
     const Name& scopeName,
     const u64 frameIndex,
-    const ::ArenaMemoryStats& stats
+    const ::ArenaMemoryStats& stats,
+    const MemorySource::Enum source = MemorySource::ExplicitScope
 ){
     MemorySnapshot snapshot;
     snapshot.scopeName = scopeName;
+    snapshot.source = source;
     snapshot.frameIndex = frameIndex;
     snapshot.reservedBytes = stats.reservedBytes;
     snapshot.usedBytes = stats.usedBytes;
@@ -79,7 +91,7 @@ template<typename Arena>
 }
 
 [[nodiscard]] inline MemoryDelta Difference(const MemorySnapshot& current, const MemorySnapshot& previous){
-    if(!current.valid() || !previous.valid())
+    if(!current.valid() || !previous.valid() || current.scopeName != previous.scopeName || current.source != previous.source)
         return {};
 
     MemoryDelta delta;
@@ -101,37 +113,59 @@ template<typename Arena>
 
 class MemoryRecorder final : NoCopy{
 private:
-    struct ScopeRecord : NoCopy{
-        explicit ScopeRecord(const Name& scopeName)
-            : name(scopeName)
-        {}
-
+    struct ScopeKey{
         Name name = NAME_NONE;
+        MemorySource::Enum source = MemorySource::ExplicitScope;
+    };
+    struct ScopeKeyHash{
+        usize operator()(const ScopeKey& key)const noexcept{
+            return Hasher<Name>{}(key.name) ^ static_cast<usize>(key.source);
+        }
+    };
+    struct ScopeKeyEqual{
+        bool operator()(const ScopeKey& lhs, const ScopeKey& rhs)const noexcept{
+            return lhs.name == rhs.name && lhs.source == rhs.source;
+        }
+    };
+
+    struct ScopeRecord : NoCopy{
+        Name name = NAME_NONE;
+        MemorySource::Enum source = MemorySource::ExplicitScope;
         MemorySnapshot previousSnapshot;
         MemorySnapshot lastSnapshot;
         MemoryDelta lastDelta;
         u32 generation = 0u;
+
+        explicit ScopeRecord(const Name& scopeName, const MemorySource::Enum memorySource)
+            : name(scopeName)
+            , source(memorySource)
+        {}
     };
 
     using ScopeRecordPtr = GlobalUniquePtr<ScopeRecord>;
     using ScopeVector = Vector<ScopeRecordPtr, Alloc::GlobalArena>;
-    using ScopeMap = HashMap<Name, MemoryScopeId, Hasher<Name>, EqualTo<Name>, Alloc::GlobalArena>;
+    using ScopeMap = HashMap<ScopeKey, MemoryScopeId, ScopeKeyHash, ScopeKeyEqual, Alloc::GlobalArena>;
 
 
 public:
     explicit MemoryRecorder(Alloc::GlobalArena& arena)
         : m_arena(arena)
         , m_scopes(arena)
-        , m_scopeMap(0, Hasher<Name>(), EqualTo<Name>(), arena)
+        , m_scopeMap(0, ScopeKeyHash{}, ScopeKeyEqual{}, arena)
     {}
 
 
 public:
     void setEnabled(bool enabled);
     void clear();
-    [[nodiscard]] MemoryScopeId registerScope(const Name& scopeName);
+    [[nodiscard]] MemoryScopeId registerScope(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope);
     void recordSnapshot(MemoryScopeId scope, const ::ArenaMemoryStats& stats, u64 frameIndex);
-    void recordSnapshot(const Name& scopeName, const ::ArenaMemoryStats& stats, u64 frameIndex);
+    void recordSnapshot(
+        const Name& scopeName,
+        const ::ArenaMemoryStats& stats,
+        u64 frameIndex,
+        MemorySource::Enum source = MemorySource::ExplicitScope
+    );
 
     template<typename Arena>
     void recordArenaSnapshot(const MemoryScopeId scope, const Arena& arena, const u64 frameIndex){
@@ -143,9 +177,9 @@ public:
         recordSnapshot(scopeName, arena.memoryStats(), frameIndex);
     }
 
-    [[nodiscard]] const MemorySnapshot& snapshot(const Name& scopeName)const;
+    [[nodiscard]] const MemorySnapshot& snapshot(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const;
     [[nodiscard]] const MemorySnapshot& snapshot(MemoryScopeId scope)const;
-    [[nodiscard]] const MemoryDelta& delta(const Name& scopeName)const;
+    [[nodiscard]] const MemoryDelta& delta(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const;
     [[nodiscard]] const MemoryDelta& delta(MemoryScopeId scope)const;
     [[nodiscard]] usize scopeCount()const{ return m_scopes.size(); }
     [[nodiscard]] MemoryScopeId scopeAt(usize index)const;
@@ -182,9 +216,9 @@ public:
 
 public:
     [[nodiscard]] bool valid()const{ return m_recorder != nullptr; }
-    [[nodiscard]] const MemorySnapshot& snapshot(const Name& scopeName)const;
+    [[nodiscard]] const MemorySnapshot& snapshot(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const;
     [[nodiscard]] const MemorySnapshot& snapshot(MemoryScopeId scope)const;
-    [[nodiscard]] const MemoryDelta& delta(const Name& scopeName)const;
+    [[nodiscard]] const MemoryDelta& delta(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const;
     [[nodiscard]] const MemoryDelta& delta(MemoryScopeId scope)const;
     [[nodiscard]] usize scopeCount()const;
     [[nodiscard]] MemoryScopeId scopeAt(usize index)const;

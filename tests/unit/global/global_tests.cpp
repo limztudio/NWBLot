@@ -707,6 +707,71 @@ TEST(Global, NameSymbolsSerializeRoundTrip){
     EXPECT_STREQ(resolvedText, "roundtrip/symbol");
 }
 
+TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
+    namespace NameSymbols = NWB::Core::Common::NameSymbols;
+    constexpr Name s_LiveOwner("Tests/NameSymbols/Before_Registry_Live");
+    constexpr Name s_RetiredOwner("Tests/NameSymbols/Before_Registry_Retired");
+    constexpr NameHash s_LiveHash = ComputeNameHash("tests/namesymbols/before_registry_live");
+    constexpr NameHash s_RetiredHash = ComputeNameHash("tests/namesymbols/before_registry_retired");
+    constexpr NameHash s_HeapHash = ComputeNameHash("core/alloc/heap_backing");
+    NameSymbols::UninstallRuntimeRegistry();
+    NWB::Core::Alloc::GlobalArena liveOwner(s_LiveOwner);
+    {
+        NWB::Core::Alloc::GlobalArena retiredOwner(s_RetiredOwner);
+    }
+    NameSymbols::InstallRuntimeRegistry();
+    NameSymbols::ClearRuntimeSymbols();
+
+    char resolvedText[128] = {};
+    EXPECT_FALSE(NameSymbols::Resolve(s_LiveHash, resolvedText, sizeof(resolvedText)));
+    EXPECT_FALSE(NameSymbols::Resolve(s_RetiredHash, resolvedText, sizeof(resolvedText)));
+    EXPECT_FALSE(NameSymbols::Resolve(s_HeapHash, resolvedText, sizeof(resolvedText)));
+
+    ::AString<NWB::Core::Alloc::GlobalArena> namesymText(liveOwner);
+    NameSymbols::Serialize(namesymText);
+#if defined(NWB_BUILDMODE)
+    EXPECT_TRUE(NameSymbols::Resolve(s_LiveHash, resolvedText, sizeof(resolvedText)));
+    EXPECT_STREQ(resolvedText, "tests/namesymbols/before_registry_live");
+    EXPECT_TRUE(NameSymbols::Resolve(s_RetiredHash, resolvedText, sizeof(resolvedText)));
+    EXPECT_STREQ(resolvedText, "tests/namesymbols/before_registry_retired");
+    EXPECT_TRUE(NameSymbols::Resolve(s_HeapHash, resolvedText, sizeof(resolvedText)));
+    EXPECT_STREQ(resolvedText, "core/alloc/heap_backing");
+    EXPECT_NE(namesymText.find("tests/namesymbols/before_registry_live"), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find("tests/namesymbols/before_registry_retired"), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find("core/alloc/heap_backing"), decltype(namesymText)::npos);
+#else
+    EXPECT_FALSE(NameSymbols::Resolve(s_LiveHash, resolvedText, sizeof(resolvedText)));
+    EXPECT_FALSE(NameSymbols::Resolve(s_RetiredHash, resolvedText, sizeof(resolvedText)));
+    EXPECT_FALSE(NameSymbols::Resolve(s_HeapHash, resolvedText, sizeof(resolvedText)));
+#endif
+
+    NameSymbols::ClearRuntimeSymbols();
+    NameSymbolTestPath executableDirectory(liveOwner);
+    ASSERT_TRUE(GetExecutableDirectory(executableDirectory));
+    NameSymbolTestPath executableName(liveOwner);
+    ASSERT_TRUE(GetExecutableName(executableName));
+    NameSymbolTestPath namesymPath = executableDirectory / executableName;
+    namesymPath.replace_extension(NWB_TEXT(".namesym"));
+    // The application exception path exports after its scoped runtime callbacks have already detached.
+    NameSymbols::UninstallRuntimeRegistry();
+    ASSERT_TRUE(NameSymbols::WriteDefaultFile());
+    NameSymbols::InstallRuntimeRegistry();
+    namesymText.clear();
+    ASSERT_TRUE(ReadTextFile(namesymPath, namesymText));
+#if defined(NWB_BUILDMODE)
+    EXPECT_NE(namesymText.find("tests/namesymbols/before_registry_live"), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find("tests/namesymbols/before_registry_retired"), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find("core/alloc/heap_backing"), decltype(namesymText)::npos);
+#else
+    EXPECT_EQ(namesymText.find("tests/namesymbols/before_registry_live"), decltype(namesymText)::npos);
+    EXPECT_EQ(namesymText.find("tests/namesymbols/before_registry_retired"), decltype(namesymText)::npos);
+    EXPECT_EQ(namesymText.find("core/alloc/heap_backing"), decltype(namesymText)::npos);
+#endif
+    ErrorCode removeError;
+    if(!RemoveFile(namesymPath, removeError))
+        EXPECT_FALSE(removeError);
+}
+
 TEST(Global, LengthPrefixedStringRoundTrip){
     Vector<u8> binary;
     const AString source("alpha");

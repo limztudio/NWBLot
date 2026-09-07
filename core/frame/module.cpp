@@ -87,8 +87,6 @@ Frame::Frame(void* inst, u16 width, u16 height)
     frameData.height() = height;
     setupPlatform(inst);
     m_graphics.setPointerScaleChangedCallback(&Frame::ApplyPointerScale, this);
-    m_graphicsObjectArenaMemoryScope = m_perfSession.registerMemoryScope(FrameArenaScope::s_GraphicsObjectArena);
-    m_projectObjectArenaMemoryScope = m_perfSession.registerMemoryScope(FrameArenaScope::s_ProjectObjectArena);
 }
 Frame::~Frame()noexcept(false){
     // Telemetry upload and graphics teardown can invoke throwing callbacks. During terminal unwind, quiesce only
@@ -213,8 +211,6 @@ bool Frame::updateFrame(f32 delta){
             NWB_LOGGER_WARNING(NWB_TEXT("Frame: frame graph telemetry record failed"));
     }
 
-    m_perfSession.recordMemorySnapshot(m_graphicsObjectArenaMemoryScope, m_graphicsObjectArena);
-    m_perfSession.recordMemorySnapshot(m_projectObjectArenaMemoryScope, m_projectObjectArena);
     m_perfSession.publishFrame();
     if(m_telemetrySession.captureOptions().perfEnabled()){
         const Telemetry::PerfSessionRecordResult perfRecordResult =

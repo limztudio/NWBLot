@@ -32,7 +32,7 @@ public:
 
 public:
     explicit GlobalArena(const Name& allocationLog)
-        : Base(allocationLog)
+        : Base(allocationLog, ArenaMemoryReservation::FollowsUsage)
     {}
     ~GlobalArena() = default;
 
@@ -41,12 +41,7 @@ public:
     inline void* allocate(usize align, usize size){
         size = Alignment(align, size);
 
-        void* p = (align <= 1) ? CoreAlloc(size) : CoreAllocAligned(size, align);
-        if(p){
-            m_memoryStats.addReservedBytes(size);
-            m_memoryStats.recordAllocation(size);
-        }
-        return p;
+        return (align <= 1) ? CoreAlloc(size, &m_memoryStats) : CoreAllocAligned(size, align, &m_memoryStats);
     }
 
     inline void* reallocate(void* p, usize align, usize size){
@@ -55,44 +50,26 @@ public:
         if(!p && size == 0u)
             return nullptr;
 
-        const u64 oldBytes = p ? static_cast<u64>(CoreMsize(p)) : 0u;
-        void* next = (align <= 1) ? CoreRealloc(p, size) : CoreReallocAligned(p, size, align);
-        if(next || size == 0u){
-            const u64 newBytes = next ? static_cast<u64>(CoreMsize(next)) : 0u;
-            m_memoryStats.recordReallocation(oldBytes, newBytes);
-            if(newBytes >= oldBytes)
-                m_memoryStats.addReservedBytes(newBytes - oldBytes);
-            else
-                m_memoryStats.removeReservedBytes(oldBytes - newBytes);
-        }
-        return next;
+        return (align <= 1) ? CoreRealloc(p, size, &m_memoryStats) : CoreReallocAligned(p, size, align, &m_memoryStats);
     }
 
     inline void deallocate(void* p, usize align, usize size){
-        size = Alignment(align, size);
+        static_cast<void>(size);
 
-        if(p){
-            m_memoryStats.recordDeallocation(size);
-            m_memoryStats.removeReservedBytes(size);
-        }
         if(align <= 1)
-            CoreFree(p);
+            CoreFree(p, &m_memoryStats);
         else
-            CoreFreeAligned(p);
+            CoreFreeAligned(p, &m_memoryStats);
     }
 
     template<typename T>
     inline void deallocateObject(T* const p)noexcept{
         constexpr usize allocationSize = Alignment(alignof(T), sizeof(T));
 
-        if(p){
-            m_memoryStats.recordDeallocation(allocationSize);
-            m_memoryStats.removeReservedBytes(allocationSize);
-        }
         if constexpr(alignof(T) <= 1u)
-            CoreFreeSize(p, allocationSize);
+            CoreFreeSize(p, allocationSize, &m_memoryStats);
         else
-            CoreFreeSizeAligned(p, allocationSize);
+            CoreFreeSizeAligned(p, allocationSize, &m_memoryStats);
     }
 };
 

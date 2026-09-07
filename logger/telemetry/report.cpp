@@ -4,6 +4,8 @@
 
 #include "report.h"
 
+#include "memory_report.h"
+
 #include <global/hash_utils.h>
 #include <global/type_properties.h>
 
@@ -117,16 +119,6 @@ void AddTiming(TelemetryReportSummary& summary, const Telemetry::PerfTimingPaylo
         if(payload.stats.seconds > summary.maxGpuTimingSeconds)
             summary.maxGpuTimingSeconds = payload.stats.seconds;
     }
-}
-
-void AddMemory(TelemetryReportSummary& summary, const Telemetry::PerfMemoryPayload& payload){
-    ++summary.memoryEventCount;
-    if(payload.snapshot.usedBytes > summary.maxMemoryUsedBytes)
-        summary.maxMemoryUsedBytes = payload.snapshot.usedBytes;
-    if(payload.snapshot.peakUsedBytes > summary.maxMemoryPeakUsedBytes)
-        summary.maxMemoryPeakUsedBytes = payload.snapshot.peakUsedBytes;
-    if(payload.delta.hasSamples)
-        summary.totalMemoryUsedDeltaBytes += payload.delta.usedBytes;
 }
 
 void AddFrameGraph(TelemetryReportSummary& summary, const Telemetry::FrameGraphPayload& payload){
@@ -1061,6 +1053,7 @@ void AppendFrameGraphJson(
 void BuildJson(
     const TelemetryReportSummary& summary,
     const FrameGraphReportRecords& graphs,
+    const AStringView memoryRecords,
     AString<TelemetryArena>& out
 ){
     out.clear();
@@ -1093,7 +1086,11 @@ void BuildJson(
     StringAppendFormat(out, "    \"memoryEvents\": {},\n", summary.memoryEventCount);
     StringAppendFormat(out, "    \"maxMemoryUsedBytes\": {},\n", summary.maxMemoryUsedBytes);
     StringAppendFormat(out, "    \"maxMemoryPeakUsedBytes\": {},\n", summary.maxMemoryPeakUsedBytes);
-    StringAppendFormat(out, "    \"totalMemoryUsedDeltaBytes\": {}\n", summary.totalMemoryUsedDeltaBytes);
+    StringAppendFormat(out, "    \"totalMemoryUsedDeltaBytes\": {},\n", summary.totalMemoryUsedDeltaBytes);
+    AppendTelemetryMemorySourcesJson(out, summary);
+    out += "    \"memoryRecords\": [\n";
+    out.append(memoryRecords.data(), memoryRecords.size());
+    out += "\n    ]\n";
     out += "  },\n";
 
     out += "  \"frameGraph\": {\n";
@@ -1161,6 +1158,7 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
         return false;
 
     outReport.summary.eventCount = events.eventCount();
+    AString<TelemetryArena> memoryRecords(arena);
 
     __hidden_telemetry_report::GraphTimingMap timingByFrameAndScope(
         0,
@@ -1222,7 +1220,8 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
                 ++outReport.summary.parseFailureCount;
                 break;
             }
-            __hidden_telemetry_report::AddMemory(outReport.summary, payload);
+            AddTelemetryMemorySummary(outReport.summary, payload);
+            AppendTelemetryMemoryRecordJson(memoryRecords, payload, event->header.streamId);
             break;
         }
         case Telemetry::EventKind::FrameGraphFrame: {
@@ -1241,8 +1240,9 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
         }
     }
 
+    FinalizeTelemetryMemorySummary(outReport.summary);
     __hidden_telemetry_report::BuildTimedGraphsDot(arena, frameGraphs, timingByFrameAndScope, outReport.graph);
-    __hidden_telemetry_report::BuildJson(outReport.summary, frameGraphs, outReport.json);
+    __hidden_telemetry_report::BuildJson(outReport.summary, frameGraphs, memoryRecords, outReport.json);
     return true;
 }
 

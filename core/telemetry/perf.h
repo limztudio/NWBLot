@@ -23,7 +23,7 @@ NWB_TELEMETRY_BEGIN
 
 inline constexpr u16 s_PerfTimingPayloadVersion = 1u;
 inline constexpr u32 s_PerfTimingPayloadMagic = 0x4E575046u; // NWPF
-inline constexpr u16 s_PerfMemoryPayloadVersion = 1u;
+inline constexpr u16 s_PerfMemoryPayloadVersion = 2u;
 inline constexpr u32 s_PerfMemoryPayloadMagic = 0x4E57504Du; // NWPM
 
 namespace PerfTimingSource{
@@ -79,7 +79,7 @@ struct EncodedPerfMemoryPayloadHeader{
     i64 deltaReallocationCount = 0;
     i64 deltaDeallocationCount = 0;
     u32 scopeNameBytes = 0u;
-    u32 reserved = 0u;
+    u32 source = Perf::MemorySource::ExplicitScope;
 };
 #pragma pack(pop)
 static_assert(sizeof(EncodedPerfTimingPayloadHeader) == 136u, "EncodedPerfTimingPayloadHeader wire layout drifted");

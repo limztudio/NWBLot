@@ -56,6 +56,7 @@ public:
 
         CoreFree(m_bucket);
         m_bucket = nullptr;
+        m_memoryStats.releaseRetainedMemory();
     }
 
 

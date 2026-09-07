@@ -212,7 +212,7 @@ bool Device::loadPipelineCacheData(GraphicsBytes& outData){
                 , StringConvert(m_pipelineCacheVolumeName)
             );
         else
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring incompatible pipeline cache data in runtime volume '{}'.")
+            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Discarding incompatible pipeline cache data in runtime volume '{}'; starting empty.")
                 , StringConvert(m_pipelineCacheVolumeName)
             );
         return false;

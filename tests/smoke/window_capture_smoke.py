@@ -1311,7 +1311,9 @@ class LinuxX11Capture:
             raise SmokeFailure(f"window 0x{window:x} has invalid size {attributes.width}x{attributes.height}")
 
         result = self._capture_drawable_region(window, window, 0, 0, attributes.width, attributes.height, output_path)
-        if result.has_pixel_variation and not result.appears_empty_or_white:
+        if result.appears_empty_or_white:
+            return result
+        if result.has_pixel_variation:
             return result
 
         write_status(f"window 0x{window:x}: direct XGetImage capture looked flat or white; retrying from root screen")

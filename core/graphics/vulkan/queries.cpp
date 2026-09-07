@@ -147,6 +147,30 @@ bool TimerQuery::discardUnacceptedRecording(const TimerQueryRecordingToken& toke
     return true;
 }
 
+bool TimerQuery::releaseUnacceptedEndForRecovery(const TimerQueryRecordingToken& token)noexcept{
+    if(!token.valid() || token.query != this || token.queryIncarnation != m_incarnation)
+        return false;
+
+    NothrowScopedLock lock(m_mutex);
+    if(
+        m_cycleGeneration == 0u
+        || m_cycleGeneration != token.generation
+        || m_lastAcceptedRecordingGeneration != token.generation
+        || !m_beginAccepted
+        || !m_recordingActive
+        || m_cycleInvalidated
+        || m_cycleQueue != token.physicalQueue
+        || (
+            m_completedCycleGeneration == token.generation
+            && m_completedCycleSubmission.valid()
+        )
+    )
+        return false;
+
+    m_endRecordingOwner = {};
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

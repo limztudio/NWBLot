@@ -1021,14 +1021,24 @@ TEST(SwapChainPresentation, UploadChunkRetirementIsBoundedAndNoThrowAfterNativeA
     EXPECT_NE(backendHeader.find("m_executeSubmittedOwners"), AStringView::npos);
     EXPECT_EQ(deviceQueue.find("Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CommandListExecuteArena)"), AStringView::npos);
 
-    const usize lookupPrepare = deviceQueue.find("submittedOwners.prepare(expectedCommandLists.size());");
-    const usize nativeSubmission = deviceQueue.find("const u64 submittedID = queue->submit(", lookupPrepare);
-    const usize firstUploadCommit = deviceQueue.find("m_uploadManager.submitChunks(", nativeSubmission);
+    const usize preparationBegin = deviceQueue.find("bool Device::prepareSubmissionCommandListWorkspaceLocked(");
+    const usize finalizationBegin = deviceQueue.find("void Device::finalizeSubmissionCommandListResourcesLocked(");
+    const usize graphSubmissionBegin = deviceQueue.find("QueueSubmissionToken Device::executeGraphCommandLists(", finalizationBegin);
+    ASSERT_NE(preparationBegin, AStringView::npos);
+    ASSERT_NE(finalizationBegin, AStringView::npos);
+    ASSERT_NE(graphSubmissionBegin, AStringView::npos);
+    const AStringView preparation = deviceQueue.substr(preparationBegin, finalizationBegin - preparationBegin);
+    const AStringView finalization = deviceQueue.substr(finalizationBegin, graphSubmissionBegin - finalizationBegin);
+    const usize lookupPrepare = preparation.find("submittedOwners.prepare(expectedCommandLists.size());");
+    const usize acceptedBranch = finalization.find("if(submissionAccepted){");
+    const usize firstUploadCommit = finalization.find("m_uploadManager.submitChunks(", acceptedBranch);
+    const usize firstScratchCommit = finalization.find("m_scratchManager.submitChunks(", firstUploadCommit);
     ASSERT_NE(lookupPrepare, AStringView::npos);
-    ASSERT_NE(nativeSubmission, AStringView::npos);
+    ASSERT_NE(acceptedBranch, AStringView::npos);
     ASSERT_NE(firstUploadCommit, AStringView::npos);
-    EXPECT_LT(lookupPrepare, nativeSubmission);
-    EXPECT_LT(nativeSubmission, firstUploadCommit);
+    ASSERT_NE(firstScratchCommit, AStringView::npos);
+    EXPECT_LT(acceptedBranch, firstUploadCommit);
+    EXPECT_LT(firstUploadCommit, firstScratchCommit);
 
     EXPECT_EQ(
         deviceQueue.find("ScopedLock submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);"),
@@ -1037,25 +1047,37 @@ TEST(SwapChainPresentation, UploadChunkRetirementIsBoundedAndNoThrowAfterNativeA
     const usize firstWorkspaceLock = deviceQueue.find(
         "UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);"
     );
-    const usize firstWorkspaceUnlock = deviceQueue.find("submissionWorkspaceLock.unlock();", firstUploadCommit);
+    const usize firstNativeSubmission = deviceQueue.find("const u64 submittedID = queue->submit(", firstWorkspaceLock);
+    const usize firstFinalization = deviceQueue.find("finalizeSubmissionCommandListResourcesLocked(", firstNativeSubmission);
+    const usize firstWorkspaceUnlock = deviceQueue.find("submissionWorkspaceLock.unlock();", firstFinalization);
     const usize firstDeviceLossCapture = deviceQueue.find("captureDeviceLoss(\"queue submit\");", firstWorkspaceUnlock);
     const usize secondWorkspaceLock = deviceQueue.find(
         "UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);",
-        firstDeviceLossCapture
+        graphSubmissionBegin
     );
-    const usize hookResolution = deviceQueue.find("hookResolution.resolve(submissionToken);", secondWorkspaceLock);
+    const usize secondNativeSubmission = deviceQueue.find("const u64 submittedID = queue->submit(", secondWorkspaceLock);
+    const usize secondFinalization = deviceQueue.find("finalizeSubmissionCommandListResourcesLocked(", secondNativeSubmission);
+    const usize hookResolution = deviceQueue.find("hookResolution.resolve(submissionToken);", secondFinalization);
     const usize secondWorkspaceUnlock = deviceQueue.find("submissionWorkspaceLock.unlock();", hookResolution);
     const usize secondDeviceLossCapture = deviceQueue.find("captureDeviceLoss(\"queue submit\");", secondWorkspaceUnlock);
     ASSERT_NE(firstWorkspaceLock, AStringView::npos);
+    ASSERT_NE(firstNativeSubmission, AStringView::npos);
+    ASSERT_NE(firstFinalization, AStringView::npos);
     ASSERT_NE(firstWorkspaceUnlock, AStringView::npos);
     ASSERT_NE(firstDeviceLossCapture, AStringView::npos);
     ASSERT_NE(secondWorkspaceLock, AStringView::npos);
+    ASSERT_NE(secondNativeSubmission, AStringView::npos);
+    ASSERT_NE(secondFinalization, AStringView::npos);
     ASSERT_NE(hookResolution, AStringView::npos);
     ASSERT_NE(secondWorkspaceUnlock, AStringView::npos);
     ASSERT_NE(secondDeviceLossCapture, AStringView::npos);
-    EXPECT_LT(firstWorkspaceLock, firstWorkspaceUnlock);
+    EXPECT_LT(firstWorkspaceLock, firstNativeSubmission);
+    EXPECT_LT(firstNativeSubmission, firstFinalization);
+    EXPECT_LT(firstFinalization, firstWorkspaceUnlock);
     EXPECT_LT(firstWorkspaceUnlock, firstDeviceLossCapture);
-    EXPECT_LT(secondWorkspaceLock, hookResolution);
+    EXPECT_LT(secondWorkspaceLock, secondNativeSubmission);
+    EXPECT_LT(secondNativeSubmission, secondFinalization);
+    EXPECT_LT(secondFinalization, hookResolution);
     EXPECT_LT(hookResolution, secondWorkspaceUnlock);
     EXPECT_LT(secondWorkspaceUnlock, secondDeviceLossCapture);
 
@@ -1110,20 +1132,6 @@ TEST(SwapChainPresentation, UploadChunkRetirementIsBoundedAndNoThrowAfterNativeA
         upload.substr(abandonBegin).find("retireOwnerChunksLocked(queue, 0u, true, *owner, nativeRecordingID);"),
         AStringView::npos
     );
-
-    const usize firstScratchCommit = deviceQueue.find("m_scratchManager.submitChunks(", firstUploadCommit);
-    const usize secondUploadCommit = deviceQueue.find("m_uploadManager.submitChunks(", firstScratchCommit);
-    const usize secondScratchCommit = deviceQueue.find("m_scratchManager.submitChunks(", secondUploadCommit);
-    const usize resolution = deviceQueue.find("hookResolution.resolve(submissionToken);", secondScratchCommit);
-    ASSERT_NE(firstUploadCommit, AStringView::npos);
-    ASSERT_NE(firstScratchCommit, AStringView::npos);
-    ASSERT_NE(secondUploadCommit, AStringView::npos);
-    ASSERT_NE(secondScratchCommit, AStringView::npos);
-    ASSERT_NE(resolution, AStringView::npos);
-    EXPECT_LT(firstUploadCommit, firstScratchCommit);
-    EXPECT_LT(firstScratchCommit, secondUploadCommit);
-    EXPECT_LT(secondUploadCommit, secondScratchCommit);
-    EXPECT_LT(secondScratchCommit, resolution);
 
     const usize resolutionBegin = frame.find("bool BackendContext::resolveFramePresentationSignal(");
     const usize resolutionEnd = frame.find("bool BackendContext::confirmFramePresentationSignal(", resolutionBegin);

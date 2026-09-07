@@ -886,6 +886,27 @@ class WindowsCaptureOrderingTests(unittest.TestCase):
         )
 
 
+class LinuxCaptureFallbackTests(unittest.TestCase):
+    def test_white_direct_capture_defers_to_render_readiness_without_root_fallback(self):
+        window = 0x4A
+        output_path = Path("capture.bmp")
+        capture = object.__new__(window_capture_smoke.LinuxX11Capture)
+        capture.display = object()
+        capture.root = 0x1
+        capture.x11 = mock.Mock()
+        capture.get_attributes = mock.Mock(return_value=SimpleNamespace(width=1280, height=900))
+        white_capture = SimpleNamespace(has_pixel_variation=False, appears_empty_or_white=True)
+        capture._capture_drawable_region = mock.Mock(return_value=white_capture)
+        capture._window_root_region = mock.Mock()
+
+        with mock.patch.object(window_capture_smoke.time, "sleep"):
+            result = capture.capture_window(window, output_path)
+
+        self.assertIs(result, white_capture)
+        capture._capture_drawable_region.assert_called_once_with(window, window, 0, 0, 1280, 900, output_path)
+        capture._window_root_region.assert_not_called()
+
+
 class CaptureFocusTests(unittest.TestCase):
     def test_linux_focus_window_raises_sets_input_focus_and_flushes(self):
         window = 0x4A

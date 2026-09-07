@@ -3529,6 +3529,9 @@ public:
 
     // The caller owns this unaccepted recording transaction; its command buffers cannot submit concurrently.
     [[nodiscard]] bool discardUnacceptedRecording(const TimerQueryRecordingToken& token)noexcept;
+    // The caller has made its prior endpoint packet permanently non-submittable. Preserve the accepted begin cycle
+    // while relinquishing only the stale end owner so a recovery command buffer can record its replacement endpoint.
+    [[nodiscard]] bool releaseUnacceptedEndForRecovery(const TimerQueryRecordingToken& token)noexcept;
 
 
 private:

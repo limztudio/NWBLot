@@ -64,6 +64,7 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
         ASSERT_TRUE(completion.valid());
         const Core::GpuTaskResourceUse use{
             .resource = resource,
+            .range = {},
             .requiredState = Core::ResourceStates::ShaderResource,
             .access = Core::GpuTaskResourceAccess::Read,
         };

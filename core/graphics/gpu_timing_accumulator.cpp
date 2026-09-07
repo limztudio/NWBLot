@@ -468,7 +468,11 @@ bool GpuTimingAccumulator::prepareQueryForRecovery(const GpuTimingScope& scope){
     QueryRecord& record = m_queries[scope.index];
     if(record.epoch != scope.epoch || record.reservation != scope.reservation)
         return false;
-    if(record.state != QueryState::EndedUnaccepted)
+    if(
+        record.state != QueryState::EndedUnaccepted
+        || !record.query
+        || !record.query->releaseUnacceptedEndForRecovery(scope.timerQueryRecording)
+    )
         return false;
 
     record.state = QueryState::Recording;

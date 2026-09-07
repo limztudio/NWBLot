@@ -221,7 +221,7 @@ private:
             // Verify stored text before using it: a binary-only Name contains fallback hex, and long text can truncate.
             // Insert after the census releases its lock and without callbacks, including exception-path shutdown.
             if(snapshot.ownerName == Name(hash))
-                (void)insert(hash, text);
+                NWB_FATAL_ASSERT(insert(hash, text));
         }
 #endif
     }

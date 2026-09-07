@@ -761,6 +761,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
                 "--expect-log-message" "Telemetry upload processed:"
         )
         set_tests_properties(nwb_skinning_culling_benchmark PROPERTIES
+            ENVIRONMENT "NWB_SKINNING_CULLING_FAST_SMOKE=1"
             RESOURCE_LOCK nwb_display
             SKIP_RETURN_CODE 77
             TIMEOUT ${_nwb_skinning_culling_benchmark_ctest_timeout_seconds}

@@ -38,7 +38,25 @@ public:
         return commandList.m_currentCmdBuf ? commandList.m_currentCmdBuf->m_timerQueryRecordingClaims.size() : 0u;
     }
     [[nodiscard]] static usize currentRetainedResourceCount(const CommandList& commandList)noexcept{
-        return commandList.m_currentCmdBuf ? commandList.m_currentCmdBuf->m_referencedResources.size() : 0u;
+        return commandList.m_currentCmdBuf ? commandList.m_currentCmdBuf->m_resourceReferences.m_resources.size() : 0u;
+    }
+    [[nodiscard]] static const auto& retainedResources(const CommandBufferResourceReferences& references)noexcept{
+        return references.m_resources;
+    }
+    [[nodiscard]] static const auto& retainedBuffers(const CommandBufferResourceReferences& references)noexcept{
+        return references.m_buffers;
+    }
+    [[nodiscard]] static const auto& retainedTextures(const CommandBufferResourceReferences& references)noexcept{
+        return references.m_textures;
+    }
+    [[nodiscard]] static const auto& retainedBufferStateCommits(const CommandBufferResourceReferences& references)noexcept{
+        return references.m_bufferStateCommits;
+    }
+    [[nodiscard]] static bool hasResourceReferenceIndex(const CommandBufferResourceReferences& references)noexcept{
+        return references.m_membership.has_value();
+    }
+    [[nodiscard]] static usize resourceReferenceIndexSize(const CommandBufferResourceReferences& references)noexcept{
+        return references.m_membership ? references.m_membership->size() : 0u;
     }
     [[nodiscard]] static u32 markerDepth(const CommandList& commandList)noexcept{
         return static_cast<u32>(commandList.m_markerStack.size());

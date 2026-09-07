@@ -450,11 +450,11 @@ void CommandList::bindDescriptorBufferHeapNative(
     }
     for(const BufferHandle& retainedBuffer : heap.m_resourceDescriptorBuffers){
         if(retainedBuffer)
-            trackedCommandBuffer.trackRetainedBuffer(*retainedBuffer);
+            trackedCommandBuffer.m_resourceReferences.trackRetainedBuffer(*retainedBuffer);
     }
     for(const TextureHandle& retainedTexture : heap.m_resourceDescriptorTextures){
         if(retainedTexture)
-            trackedCommandBuffer.trackRetainedTexture(*retainedTexture);
+            trackedCommandBuffer.m_resourceReferences.trackRetainedTexture(*retainedTexture);
     }
 
     ensureDescriptorBuffersBound(*manager, managerSnapshot);

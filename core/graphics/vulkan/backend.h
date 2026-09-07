@@ -6,6 +6,7 @@
 
 
 #include "module.h"
+#include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
 #include "native_buffer_provenance.h"
@@ -813,10 +814,6 @@ inline bool UsesConcurrentQueueSharing(
 // Command buffer with resource tracking
 
 
-struct RetainedBufferStateCommit{
-    Buffer* buffer = nullptr;
-};
-
 struct RetainedTextureStateCommit{
     Texture* texture = nullptr;
     MipLevel mipLevel = 0;
@@ -916,7 +913,6 @@ private:
         bool consumesResetAuthorization = false;
     };
 
-    void retainResource(GraphicsResource& resource);
     [[nodiscard]] TimerQueryRecordingClaim& findOrAppendTimerQueryRecordingClaim(TimerQuery& query);
     [[nodiscard]] TimerQueryRecordingClaim* findTimerQueryRecordingClaim(
         TimerQuery& query,
@@ -932,13 +928,7 @@ private:
     )const noexcept;
     void commitTimerQueryRecordingClaims(const QueueSubmissionToken& submissionToken)noexcept;
     void discardTimerQueryRecordingClaims()noexcept;
-    void retainBuffer(Buffer& buffer);
-    void trackRetainedBuffer(Buffer& buffer);
-    void appendRetainedBufferStateCommit(Buffer& buffer);
     void commitRetainedBufferStateCommits()noexcept;
-    void discardRetainedBufferStateCommits()noexcept;
-    void retainTexture(Texture& texture);
-    void trackRetainedTexture(Texture& texture);
     void appendRetainedTextureStateCommit(Texture& texture, MipLevel mipLevel, ArraySlice arraySlice);
     void commitRetainedTextureStateCommits()noexcept;
     void discardRetainedTextureStateCommits()noexcept;
@@ -973,12 +963,9 @@ private:
     bool m_ownsCmdPool = false;
     Futex* m_sharedCommandPoolMutex = nullptr;
 
-    Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_referencedResources;
-    Vector<Buffer*, Alloc::GlobalArena> m_referencedBuffers;
-    Vector<Texture*, Alloc::GlobalArena> m_referencedTextures;
+    CommandBufferResourceReferences m_resourceReferences;
     Vector<BufferHandle, Alloc::GlobalArena> m_referencedStagingBuffers;
     Vector<GpuDescriptorHeap*, Alloc::GlobalArena> m_referencedDescriptorHeaps;
-    Vector<RetainedBufferStateCommit, Alloc::GlobalArena> m_retainedBufferStateCommits;
     Vector<RetainedTextureStateCommit, Alloc::GlobalArena> m_retainedTextureStateCommits;
     Vector<PendingAccelStructBuildCommit, Alloc::GlobalArena> m_pendingAccelStructBuildCommits;
     Vector<PendingOpacityMicromapBuildCommit, Alloc::GlobalArena> m_pendingOpacityMicromapBuildCommits;

@@ -66,3 +66,16 @@ The original direct-assignment regression failed for all three adaptors. Nine pr
 Arena object factories now retain raw storage in a construction guard until construction succeeds. Scalar unique factories share the guarded raw-object entry point; array factories release storage after the language has destroyed successfully constructed array elements during unwind. The original arena, element count, and alignment are preserved without calling an unconstructed object destructor.
 
 Ten regressions pass in dbg, opt, and fin for raw, generic, global, and persistent factories, partial aligned arrays, nested members, successful ownership transfer, and rejected allocations. All 132 global tests pass in each configuration. This closes a construction-failure leak exposed while reviewing recorder slot allocation; successful construction keeps the existing allocation count and no performance claim is made for exception paths.
+
+## Vulkan command-buffer resource references
+
+The tracked command buffer now owns one focused resource-reference component. Small lists retain their linear path; lists beyond 32 entries publish an exact pointer-membership index over the ordered owning references, typed references, and pending buffer-state journal. Indirect descriptor/framebuffer ownership, typed-to-owning upgrades, journal discard, and clear/reuse retain their original lifetimes and order. Index storage uses the graphics owner arena and retains capacity for recycled command buffers.
+
+| Workload | dbg before → after | opt before → after |
+| --- | ---: | ---: |
+| 1,024 buffers + 256 textures, cold recording | 39.3629 → 1.1214 | 0.8796 → 0.1250 |
+| Same resources, eight repeated recordings | 312.4358 → 5.0771 | 7.1945 → 0.3190 |
+| Recycled command buffer, same resources | 38.9381 → 0.7932 | 0.8857 → 0.0495 |
+| Four buffers + one texture, 256 repeated recordings | 0.8782 → 0.9167 | 0.0119 → 0.0146 |
+
+Small-list overhead is about 150 ns per repeated recording in dbg and 11 ns in opt. Large clear time changes from 0.1887 to 0.1403 ms in dbg and 0.0083 to 0.0099 ms in opt. Nine resource-reference regressions pass in dbg, opt, and fin, alongside the full graphics task-graph suite. Tests cover lifetime, promotion, mixed ownership, journal reuse, and allocation-free warmed reuse; these CPU fixtures do not measure GPU execution.

@@ -281,7 +281,7 @@ void CommandList::abortRecordingAttemptWithoutCallbacks()noexcept{
     resetMarkerStateWithoutCallbacks();
     if(m_currentCmdBuf){
         m_currentCmdBuf->discardTimerQueryRecordingClaims();
-        m_currentCmdBuf->discardRetainedBufferStateCommits();
+        m_currentCmdBuf->m_resourceReferences.discardBufferStateCommits();
         m_currentCmdBuf->discardRetainedTextureStateCommits();
         m_currentCmdBuf->abandonPendingAccelStructBuildCommits();
         m_currentCmdBuf->discardPendingOpacityMicromapBuildCommits();
@@ -483,7 +483,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     m_hostReadbackBarrierTracker.clear();
     if(m_currentCmdBuf){
         m_currentCmdBuf->discardTimerQueryRecordingClaims();
-        m_currentCmdBuf->discardRetainedBufferStateCommits();
+        m_currentCmdBuf->m_resourceReferences.discardBufferStateCommits();
         m_currentCmdBuf->discardRetainedTextureStateCommits();
         m_currentCmdBuf->releasePendingAccelStructBuildCommits();
         m_currentCmdBuf->discardPendingOpacityMicromapBuildCommits();
@@ -805,7 +805,7 @@ bool CommandList::isBufferReadyForCommandQueue(
 }
 
 bool CommandList::validateTrackedTexturesReadyForClose(){
-    for(Texture* const texture : m_currentCmdBuf->m_referencedTextures){
+    for(Texture* const texture : m_currentCmdBuf->m_resourceReferences.m_textures){
         if(!isTextureReadyForCommandQueue(texture)){
             rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("referenced texture is not ready for this exact command queue"));
             return false;
@@ -854,7 +854,7 @@ bool CommandList::validateTrackedTexturesReadyForClose(){
 }
 
 bool CommandList::validateTrackedBuffersReadyForClose(){
-    for(Buffer* const buffer : m_currentCmdBuf->m_referencedBuffers){
+    for(Buffer* const buffer : m_currentCmdBuf->m_resourceReferences.m_buffers){
         if(!isBufferReadyForCommandQueue(buffer)){
             rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("referenced buffer is not ready for this exact command queue"));
             return false;
@@ -901,7 +901,7 @@ bool CommandList::validateTrackedResourcesReadyForSubmission()const{
         return false;
     }
 
-    for(Texture* const texture : m_currentCmdBuf->m_referencedTextures){
+    for(Texture* const texture : m_currentCmdBuf->m_resourceReferences.m_textures){
         if(!isTextureReadyForCommandQueue(texture)){
             NWB_LOGGER_CRITICAL_WARNING(
                 NWB_TEXT("Vulkan: Failed to submit command list: referenced texture is not ready for this exact command queue")
@@ -930,7 +930,7 @@ bool CommandList::validateTrackedResourcesReadyForSubmission()const{
             return false;
         }
     }
-    for(Buffer* const buffer : m_currentCmdBuf->m_referencedBuffers){
+    for(Buffer* const buffer : m_currentCmdBuf->m_resourceReferences.m_buffers){
         if(!isBufferReadyForCommandQueue(buffer)){
             NWB_LOGGER_CRITICAL_WARNING(
                 NWB_TEXT("Vulkan: Failed to submit command list: referenced buffer is not ready for this exact command queue")
@@ -993,33 +993,33 @@ void CommandList::registerHostReadbackStagingTexture(StagingTexture& stagingText
 
 void CommandList::retainResource(Buffer* resource){
     if(resource)
-        m_currentCmdBuf->retainBuffer(*resource);
+        m_currentCmdBuf->m_resourceReferences.retainBuffer(*resource);
 }
 
 void CommandList::retainResource(Texture* resource){
     if(resource)
-        m_currentCmdBuf->retainTexture(*resource);
+        m_currentCmdBuf->m_resourceReferences.retainTexture(*resource);
 }
 
 void CommandList::retainResource(Framebuffer* resource){
     if(!resource)
         return;
 
-    m_currentCmdBuf->retainResource(*resource);
+    m_currentCmdBuf->m_resourceReferences.retainResource(*resource);
     for(const TextureHandle& texture : resource->m_resources){
         if(texture)
-            m_currentCmdBuf->trackRetainedTexture(*texture);
+            m_currentCmdBuf->m_resourceReferences.trackRetainedTexture(*texture);
     }
 }
 
 void CommandList::retainResource(GraphicsResource* resource){
     if(resource)
-        m_currentCmdBuf->retainResource(*resource);
+        m_currentCmdBuf->m_resourceReferences.retainResource(*resource);
 }
 
 void CommandList::retainStagingBuffer(Buffer& buffer){
     m_currentCmdBuf->m_referencedStagingBuffers.emplace_back(&buffer, BufferHandle::deleter_type(&m_context.objectArena));
-    m_currentCmdBuf->trackRetainedBuffer(buffer);
+    m_currentCmdBuf->m_resourceReferences.trackRetainedBuffer(buffer);
 }
 
 bool CommandList::validateCommandRecordingScope(const tchar* const operationName){
@@ -1189,7 +1189,7 @@ void CommandList::discardInvalidCommandBuffer(){
     }
 
     m_currentCmdBuf->discardTimerQueryRecordingClaims();
-    m_currentCmdBuf->discardRetainedBufferStateCommits();
+    m_currentCmdBuf->m_resourceReferences.discardBufferStateCommits();
     m_currentCmdBuf->discardRetainedTextureStateCommits();
     m_currentCmdBuf->releasePendingAccelStructBuildCommits();
     m_currentCmdBuf->discardPendingOpacityMicromapBuildCommits();

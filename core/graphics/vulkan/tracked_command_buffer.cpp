@@ -26,12 +26,9 @@ TrackedCommandBuffer::TrackedCommandBuffer(
     , m_cmdPool(commandPool)
     , m_ownsCmdPool(ownsCommandPool)
     , m_sharedCommandPoolMutex(sharedCommandPoolMutex)
-    , m_referencedResources(context.objectArena)
-    , m_referencedBuffers(context.objectArena)
-    , m_referencedTextures(context.objectArena)
+    , m_resourceReferences(context.objectArena)
     , m_referencedStagingBuffers(context.objectArena)
     , m_referencedDescriptorHeaps(context.objectArena)
-    , m_retainedBufferStateCommits(context.objectArena)
     , m_retainedTextureStateCommits(context.objectArena)
     , m_pendingAccelStructBuildCommits(context.objectArena)
     , m_pendingOpacityMicromapBuildCommits(context.objectArena)
@@ -101,22 +98,13 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
     m_queue.unregisterCommandBuffer(*this);
 }
 
-void TrackedCommandBuffer::retainResource(GraphicsResource& resource){
-    for(const Handle<GraphicsResource>& retainedResource : m_referencedResources){
-        if(retainedResource.get() == &resource)
-            return;
-    }
-
-    m_referencedResources.emplace_back(&resource, Handle<GraphicsResource>::deleter_type(&m_context.objectArena));
-}
-
 TrackedCommandBuffer::TimerQueryRecordingClaim& TrackedCommandBuffer::findOrAppendTimerQueryRecordingClaim(TimerQuery& query){
     for(TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
         if(claim.query == &query)
             return claim;
     }
 
-    retainResource(query);
+    m_resourceReferences.retainResource(query);
     m_timerQueryRecordingClaims.emplace_back();
     TimerQueryRecordingClaim& claim = m_timerQueryRecordingClaims.back();
     claim.query = &query;
@@ -409,55 +397,14 @@ void TrackedCommandBuffer::discardTimerQueryRecordingClaims()noexcept{
     m_timerQueryRecordingClaims.clear();
 }
 
-void TrackedCommandBuffer::retainBuffer(Buffer& buffer){
-    retainResource(buffer);
-    trackRetainedBuffer(buffer);
-}
-
-void TrackedCommandBuffer::trackRetainedBuffer(Buffer& buffer){
-    for(Buffer* const retainedBuffer : m_referencedBuffers){
-        if(retainedBuffer == &buffer)
-            return;
-    }
-
-    m_referencedBuffers.push_back(&buffer);
-}
-
-void TrackedCommandBuffer::appendRetainedBufferStateCommit(Buffer& buffer){
-    retainBuffer(buffer);
-    for(const RetainedBufferStateCommit& commit : m_retainedBufferStateCommits){
-        if(commit.buffer == &buffer)
-            return;
-    }
-    m_retainedBufferStateCommits.push_back(RetainedBufferStateCommit{ .buffer = &buffer });
-}
-
 void TrackedCommandBuffer::commitRetainedBufferStateCommits()noexcept{
-    static_assert(noexcept(m_retainedBufferStateCommits.clear()), "accepted buffer-state commit release must be non-throwing");
-    for(const RetainedBufferStateCommit& commit : m_retainedBufferStateCommits){
+    static_assert(noexcept(m_resourceReferences.m_bufferStateCommits.clear()), "accepted buffer-state commit release must be non-throwing");
+    for(const RetainedBufferStateCommit& commit : m_resourceReferences.m_bufferStateCommits){
         if(!commit.buffer)
             TerminateInvariant();
         commit.buffer->setRetainedStateKnown(true);
     }
-    m_retainedBufferStateCommits.clear();
-}
-
-void TrackedCommandBuffer::discardRetainedBufferStateCommits()noexcept{
-    m_retainedBufferStateCommits.clear();
-}
-
-void TrackedCommandBuffer::retainTexture(Texture& texture){
-    retainResource(texture);
-    trackRetainedTexture(texture);
-}
-
-void TrackedCommandBuffer::trackRetainedTexture(Texture& texture){
-    for(Texture* const retainedTexture : m_referencedTextures){
-        if(retainedTexture == &texture)
-            return;
-    }
-
-    m_referencedTextures.push_back(&texture);
+    m_resourceReferences.discardBufferStateCommits();
 }
 
 void TrackedCommandBuffer::appendRetainedTextureStateCommit(
@@ -467,7 +414,7 @@ void TrackedCommandBuffer::appendRetainedTextureStateCommit(
 ){
     // The closing barrier and its deferred state publication outlive CommandList::clearState(). Keep the texture
     // alive with the command buffer until Queue::submit accepts or discards the command buffer.
-    retainTexture(texture);
+    m_resourceReferences.retainTexture(texture);
 
     m_retainedTextureStateCommits.push_back(RetainedTextureStateCommit{
         .texture = &texture,
@@ -514,7 +461,7 @@ bool TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
     if(geometrySignatureCount != 0u)
         preparedRole->geometrySignatures.assign(geometrySignatures, geometrySignatures + geometrySignatureCount);
 
-    retainResource(accelStruct);
+    m_resourceReferences.retainResource(accelStruct);
     m_pendingAccelStructBuildCommits.push_back(PendingAccelStructBuildCommit{
         .accelStruct = &accelStruct,
         .preparedRole = preparedRole.get(),
@@ -599,7 +546,7 @@ void TrackedCommandBuffer::abandonPendingAccelStructBuildCommits()noexcept{
 }
 
 void TrackedCommandBuffer::appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap){
-    retainResource(opacityMicromap);
+    m_resourceReferences.retainResource(opacityMicromap);
     m_pendingOpacityMicromapBuildCommits.push_back(PendingOpacityMicromapBuildCommit{
         .opacityMicromap = &opacityMicromap,
     });
@@ -630,7 +577,7 @@ void TrackedCommandBuffer::discardPendingOpacityMicromapBuildCommits()noexcept{
 
 void TrackedCommandBuffer::clearTrackedReferences()noexcept{
     discardTimerQueryRecordingClaims();
-    discardRetainedBufferStateCommits();
+    m_resourceReferences.discardBufferStateCommits();
     discardRetainedTextureStateCommits();
     abandonPendingAccelStructBuildCommits();
     discardPendingOpacityMicromapBuildCommits();
@@ -643,9 +590,7 @@ void TrackedCommandBuffer::clearTrackedReferences()noexcept{
     m_descriptorBufferManager = nullptr;
     m_descriptorBufferGeneration = 0u;
 
-    m_referencedBuffers.clear();
-    m_referencedTextures.clear();
-    m_referencedResources.clear();
+    m_resourceReferences.clear();
     m_referencedStagingBuffers.clear();
 }
 

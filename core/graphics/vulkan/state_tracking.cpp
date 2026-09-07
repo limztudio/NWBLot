@@ -299,7 +299,7 @@ void StateTracker::appendKeepInitialStateBarriers(
 
         auto* buffer = bufferResource;
         if(currentState == desc.initialState){
-            commandBuffer.appendRetainedBufferStateCommit(*buffer);
+            commandBuffer.m_resourceReferences.appendBufferStateCommit(*buffer);
             continue;
         }
 
@@ -315,7 +315,7 @@ void StateTracker::appendKeepInitialStateBarriers(
         barrier.size = VK_WHOLE_SIZE;
         bufferBarriers.push_back(barrier);
         it.value() = desc.initialState;
-        commandBuffer.appendRetainedBufferStateCommit(*buffer);
+        commandBuffer.m_resourceReferences.appendBufferStateCommit(*buffer);
     }
 }
 

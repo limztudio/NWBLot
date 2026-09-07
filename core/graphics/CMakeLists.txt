@@ -70,6 +70,8 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/buffer.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/buffer_native.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/buffer_memory.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/command_buffer_resource_references.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/command_buffer_resource_references.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/command_validation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/commandlist.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/command_markers.cpp"

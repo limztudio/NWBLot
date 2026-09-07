@@ -1,4 +1,5 @@
 import argparse
+import importlib.util
 import os
 import re
 import sys
@@ -465,21 +466,22 @@ class LauncherPlatformTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             paths = (
-                root / "CoolStuff" / "launch.py",
-                root / "CoolStuff" / "Testbed" / "launch.py",
-                root / "tests" / "launch.py",
-                root / "tests" / "smoke" / "launch.py",
+                root / "pipeline" / "launcher.py",
+                root / "CoolStuff" / "launcher.py",
+                root / "CoolStuff" / "Testbed" / "launcher.py",
+                root / "tests" / "launcher.py",
                 root / "tests" / "smoke" / "launcher.py",
-                root / "tests" / "ab" / "launch.py",
-                root / "tests" / "ab" / "async_shadow_m4" / "launch.py",
-                root / "tests" / "ab" / "command_ir" / "launch.py",
-                root / "tests" / "ab" / "frame_lagged_async_lighting" / "launch.py",
+                root / "tests" / "smoke" / "launch.py",
+                root / "tests" / "ab" / "launcher.py",
+                root / "tests" / "ab" / "async_shadow_m4" / "launcher.py",
+                root / "tests" / "ab" / "command_ir" / "launcher.py",
+                root / "tests" / "ab" / "frame_lagged_async_lighting" / "launcher.py",
                 root / "tests" / "ab" / "frame_lagged_async_lighting" / "run.py",
                 root / "tests" / "ab" / "frame_lagged_async_lighting" / "helper.py",
-                root / "tests" / "ab" / "hybrid_shadow_boundary" / "launch.py",
-                root / "tests" / "ab" / "transfer_queue" / "launch.py",
-                root / "utilities" / "launch.py",
-                root / "utilities" / "tex_conv" / "launch.py",
+                root / "tests" / "ab" / "hybrid_shadow_boundary" / "launcher.py",
+                root / "tests" / "ab" / "transfer_queue" / "launcher.py",
+                root / "utilities" / "launcher.py",
+                root / "utilities" / "tex_conv" / "launcher.py",
             )
             for path in paths:
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -489,27 +491,29 @@ class LauncherPlatformTests(unittest.TestCase):
 
         self.assertEqual(
             {
-                "async-shadow-m4": Path("tests/ab/async_shadow_m4/launch.py"),
-                "command-ir": Path("tests/ab/command_ir/launch.py"),
-                "frame-lagged-async-lighting": Path("tests/ab/frame_lagged_async_lighting/launch.py"),
-                "hybrid-shadow-boundary": Path("tests/ab/hybrid_shadow_boundary/launch.py"),
-                "transfer-queue": Path("tests/ab/transfer_queue/launch.py"),
-                "smoke": Path("tests/smoke/launch.py"),
-                "testbed": Path("CoolStuff/Testbed/launch.py"),
-                "tex-conv": Path("utilities/tex_conv/launch.py"),
+                "async-shadow-m4": Path("tests/ab/async_shadow_m4/launcher.py"),
+                "command-ir": Path("tests/ab/command_ir/launcher.py"),
+                "frame-lagged-async-lighting": Path("tests/ab/frame_lagged_async_lighting/launcher.py"),
+                "hybrid-shadow-boundary": Path("tests/ab/hybrid_shadow_boundary/launcher.py"),
+                "transfer-queue": Path("tests/ab/transfer_queue/launcher.py"),
+                "pipeline": Path("pipeline/launcher.py"),
+                "smoke": Path("tests/smoke/launcher.py"),
+                "testbed": Path("CoolStuff/Testbed/launcher.py"),
+                "tex-conv": Path("utilities/tex_conv/launcher.py"),
             },
             {command: discovered.script for command, discovered in launchers.items()},
         )
         self.assertEqual(
             {
-                "async-shadow-m4": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
-                "command-ir": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
-                "frame-lagged-async-lighting": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
-                "hybrid-shadow-boundary": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
-                "transfer-queue": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
-                "smoke": (Path("tests/launch.py"),),
-                "testbed": (Path("CoolStuff/launch.py"),),
-                "tex-conv": (Path("utilities/launch.py"),),
+                "async-shadow-m4": (Path("tests/launcher.py"), Path("tests/ab/launcher.py")),
+                "command-ir": (Path("tests/launcher.py"), Path("tests/ab/launcher.py")),
+                "frame-lagged-async-lighting": (Path("tests/launcher.py"), Path("tests/ab/launcher.py")),
+                "hybrid-shadow-boundary": (Path("tests/launcher.py"), Path("tests/ab/launcher.py")),
+                "transfer-queue": (Path("tests/launcher.py"), Path("tests/ab/launcher.py")),
+                "pipeline": (),
+                "smoke": (Path("tests/launcher.py"),),
+                "testbed": (Path("CoolStuff/launcher.py"),),
+                "tex-conv": (Path("utilities/launcher.py"),),
             },
             {command: discovered.route for command, discovered in launchers.items()},
         )
@@ -520,10 +524,9 @@ class LauncherPlatformTests(unittest.TestCase):
             root = Path(temp_dir)
             category = root / "tests"
             category.mkdir(parents=True)
-            (category / "launch.py").write_text("", encoding="utf-8")
             directory = root / "tests" / "smoke"
             directory.mkdir(parents=True)
-            (directory / "launcher.py").write_text("", encoding="utf-8")
+            (directory / "launch.py").write_text("", encoding="utf-8")
             (directory / "run.py").write_text("", encoding="utf-8")
 
             launchers = launcher.discover_repo_launchers(root)
@@ -534,14 +537,14 @@ class LauncherPlatformTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             paths = (
-                root / "tests" / "launch.py",
-                root / "tests" / "ab" / "launch.py",
-                root / "tests" / "ab" / "async_shadow_m4" / "launch.py",
-                root / "tests" / "ab" / "command_ir" / "launch.py",
-                root / "tests" / "ab" / "frame_lagged_async_lighting" / "launch.py",
-                root / "tests" / "ab" / "hybrid_shadow_boundary" / "launch.py",
-                root / "tests" / "ab" / "transfer_queue" / "launch.py",
-                root / "tests" / "smoke" / "launch.py",
+                root / "tests" / "launcher.py",
+                root / "tests" / "ab" / "launcher.py",
+                root / "tests" / "ab" / "async_shadow_m4" / "launcher.py",
+                root / "tests" / "ab" / "command_ir" / "launcher.py",
+                root / "tests" / "ab" / "frame_lagged_async_lighting" / "launcher.py",
+                root / "tests" / "ab" / "hybrid_shadow_boundary" / "launcher.py",
+                root / "tests" / "ab" / "transfer_queue" / "launcher.py",
+                root / "tests" / "smoke" / "launcher.py",
             )
             for path in paths:
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -552,19 +555,19 @@ class LauncherPlatformTests(unittest.TestCase):
 
         self.assertEqual(
             {
-                "ab": Path("tests/ab/launch.py"),
-                "smoke": Path("tests/smoke/launch.py"),
+                "ab": Path("tests/ab/launcher.py"),
+                "smoke": Path("tests/smoke/launcher.py"),
             },
             {command: discovered.script for command, discovered in tests_launchers.items()},
         )
         self.assertNotIn("async-shadow-m4", tests_launchers)
         self.assertEqual(
             {
-                "async-shadow-m4": Path("tests/ab/async_shadow_m4/launch.py"),
-                "command-ir": Path("tests/ab/command_ir/launch.py"),
-                "frame-lagged-async-lighting": Path("tests/ab/frame_lagged_async_lighting/launch.py"),
-                "hybrid-shadow-boundary": Path("tests/ab/hybrid_shadow_boundary/launch.py"),
-                "transfer-queue": Path("tests/ab/transfer_queue/launch.py"),
+                "async-shadow-m4": Path("tests/ab/async_shadow_m4/launcher.py"),
+                "command-ir": Path("tests/ab/command_ir/launcher.py"),
+                "frame-lagged-async-lighting": Path("tests/ab/frame_lagged_async_lighting/launcher.py"),
+                "hybrid-shadow-boundary": Path("tests/ab/hybrid_shadow_boundary/launcher.py"),
+                "transfer-queue": Path("tests/ab/transfer_queue/launcher.py"),
             },
             {command: discovered.script for command, discovered in ab_launchers.items()},
         )
@@ -574,10 +577,10 @@ class LauncherPlatformTests(unittest.TestCase):
             root = Path(temp_dir)
             for category in (root / "tests", root / "utilities"):
                 category.mkdir(parents=True)
-                (category / "launch.py").write_text("", encoding="utf-8")
+                (category / "launcher.py").write_text("", encoding="utf-8")
             for path in (
-                root / "tests" / "same_name" / "launch.py",
-                root / "utilities" / "same_name" / "launch.py",
+                root / "tests" / "same_name" / "launcher.py",
+                root / "utilities" / "same_name" / "launcher.py",
             ):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("", encoding="utf-8")
@@ -588,13 +591,13 @@ class LauncherPlatformTests(unittest.TestCase):
     def test_category_with_leaf_launchers_requires_a_router(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            path = root / "utilities" / "tex_conv" / "launch.py"
+            path = root / "utilities" / "tex_conv" / "launcher.py"
             path.parent.mkdir(parents=True)
             path.write_text("", encoding="utf-8")
 
             with self.assertRaisesRegex(
                 SystemExit,
-                r"\A" + re.escape(f"missing category launcher: {Path('utilities') / 'launch.py'}") + r"\Z",
+                r"\A" + re.escape(f"missing category launcher: {Path('utilities') / 'launcher.py'}") + r"\Z",
             ):
                 launcher.discover_repo_launchers(root)
 
@@ -602,15 +605,15 @@ class LauncherPlatformTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             for path in (
-                root / "tests" / "launch.py",
-                root / "tests" / "ab" / "async_shadow_m4" / "launch.py",
+                root / "tests" / "launcher.py",
+                root / "tests" / "ab" / "async_shadow_m4" / "launcher.py",
             ):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("", encoding="utf-8")
 
             with self.assertRaisesRegex(
                 SystemExit,
-                r"\A" + re.escape(f"missing directory launcher: {Path('tests') / 'ab' / 'launch.py'}") + r"\Z",
+                r"\A" + re.escape(f"missing directory launcher: {Path('tests') / 'ab' / 'launcher.py'}") + r"\Z",
             ):
                 launcher.discover_repo_launchers(root)
 
@@ -618,8 +621,8 @@ class LauncherPlatformTests(unittest.TestCase):
         repo_launchers = {
             "async-shadow-m4": launcher.RepoLauncher(
                 "async-shadow-m4",
-                Path("tests/ab/async_shadow_m4/launch.py"),
-                (Path("tests/launch.py"), Path("tests/ab/launch.py")),
+                Path("tests/ab/async_shadow_m4/launcher.py"),
+                (Path("tests/launcher.py"), Path("tests/ab/launcher.py")),
             )
         }
         with (
@@ -628,16 +631,28 @@ class LauncherPlatformTests(unittest.TestCase):
         ):
             self.assertEqual(0, launcher.main(["async-shadow-m4", "--dry-run"]))
         run_repo_script.assert_called_once_with(
-            Path("tests/launch.py"),
+            Path("tests/launcher.py"),
             ["ab", "async-shadow-m4", "--dry-run"],
             echo=True,
         )
+
+    def test_top_level_leaf_forwards_direct_flags_without_a_separator(self):
+        repo_launchers = {
+            "pipeline": launcher.RepoLauncher("pipeline", Path("pipeline/launcher.py")),
+        }
+        forwarded = ["--config", "dbg", "--asset-root", "project assets", "--output-directory", "runtime resources"]
+        with (
+            mock.patch.object(launcher, "discover_repo_launchers", return_value=repo_launchers),
+            mock.patch.object(launcher, "run_repo_script", return_value=0) as run_repo_script,
+        ):
+            self.assertEqual(0, launcher.main(["pipeline", *forwarded]))
+        run_repo_script.assert_called_once_with(Path("pipeline/launcher.py"), forwarded, echo=True)
 
     def test_category_launcher_forwards_to_its_child_router(self):
         repo_launchers = {
             "ab": launcher.RepoLauncher(
                 "ab",
-                Path("tests/ab/launch.py"),
+                Path("tests/ab/launcher.py"),
             )
         }
         with (
@@ -646,7 +661,7 @@ class LauncherPlatformTests(unittest.TestCase):
         ):
             self.assertEqual(0, launcher.run_directory_launcher(Path("tests"), ["ab", "async-shadow-m4", "--dry-run"]))
         run_repo_script.assert_called_once_with(
-            Path("tests/ab/launch.py"),
+            Path("tests/ab/launcher.py"),
             ["async-shadow-m4", "--dry-run"],
             echo=True,
         )
@@ -655,7 +670,7 @@ class LauncherPlatformTests(unittest.TestCase):
         repo_launchers = {
             "async-shadow-m4": launcher.RepoLauncher(
                 "async-shadow-m4",
-                Path("tests/ab/async_shadow_m4/launch.py"),
+                Path("tests/ab/async_shadow_m4/launcher.py"),
             )
         }
         with (
@@ -667,7 +682,7 @@ class LauncherPlatformTests(unittest.TestCase):
                 launcher.run_directory_launcher(Path("tests") / "ab", ["async-shadow-m4", "--dry-run"]),
             )
         run_repo_script.assert_called_once_with(
-            Path("tests/ab/async_shadow_m4/launch.py"),
+            Path("tests/ab/async_shadow_m4/launcher.py"),
             ["--dry-run"],
             echo=True,
         )
@@ -676,8 +691,8 @@ class LauncherPlatformTests(unittest.TestCase):
         repo_launchers = {
             "async-shadow-m4": launcher.RepoLauncher(
                 "async-shadow-m4",
-                Path("tests/ab/async_shadow_m4/launch.py"),
-                (Path("tests/launch.py"), Path("tests/ab/launch.py")),
+                Path("tests/ab/async_shadow_m4/launcher.py"),
+                (Path("tests/launcher.py"), Path("tests/ab/launcher.py")),
             )
         }
         with (
@@ -686,14 +701,20 @@ class LauncherPlatformTests(unittest.TestCase):
         ):
             self.assertEqual(0, launcher.main(["async-shadow-m4", "--", "--measure-seconds", "30"]))
         run_repo_script.assert_called_once_with(
-            Path("tests/launch.py"),
+            Path("tests/launcher.py"),
             ["ab", "async-shadow-m4", "--", "--measure-seconds", "30"],
             echo=True,
         )
 
 
-class CookerLauncherTests(unittest.TestCase):
+class PipelineLauncherTests(unittest.TestCase):
     def setUp(self):
+        specification = importlib.util.spec_from_file_location("nwb_test_pipeline_launcher", ROOT / "pipeline" / "launcher.py")
+        self.assertIsNotNone(specification)
+        self.assertIsNotNone(specification.loader)
+        self.pipeline = importlib.util.module_from_spec(specification)
+        specification.loader.exec_module(self.pipeline)
+        self.assertIs(launcher, self.pipeline.ROOT_LAUNCHER)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
@@ -707,23 +728,32 @@ class CookerLauncherTests(unittest.TestCase):
             build_dir=self.root / "__cmake" / "build" / "windows-clang-arm64",
             cmake=("cmake",),
         )
-        self.environment = {"NWB_TEST_ENVIRONMENT": "cooker"}
-        self.arguments = ["cooker", "--repo-root", str(self.root), "--platform", "windows", "--arch", "arm64", "--config", "opt"]
-        self.command_prefix = [
-            sys.executable, str(self.root / "pipeline" / "cooker.py"),
-            "--repo-root", str(self.root), "--configuration", "opt",
+        self.environment = {"NWB_TEST_ENVIRONMENT": "pipeline"}
+        self.asset_roots = [self.root / "first assets", self.root / "second assets"]
+        for index, asset_root in enumerate(self.asset_roots):
+            asset_root.mkdir()
+            (asset_root / f"asset-{index}.nwb").write_text("", encoding="utf-8")
+        self.cache = self.root / "asset cache"
+        self.output = self.root / "runtime resources"
+        self.arguments = [
+            "--repo-root", str(self.root), "--platform", "windows", "--arch", "arm64", "--config", "opt",
+            "--asset-root", *(str(path) for path in self.asset_roots),
+            "--output-directory", str(self.output), "--cache-directory", str(self.cache),
         ]
         self.tool_paths = {
             "nwb_dependeny_computer": self.root / "custom artifacts" / "dependeny_computer.exe",
             "nwb_asset_builder": self.root / "custom artifacts" / "asset_builder.exe",
             "nwb_asset_gatherer": self.root / "custom artifacts" / "asset_gatherer.exe",
         }
-        self.patch(launcher, "discover_repo_launchers", return_value={})
+        for path in self.tool_paths.values():
+            path.parent.mkdir(exist_ok=True)
+            path.touch()
         self.settings_resolver = self.patch(launcher, "resolve_launch_settings", return_value=self.settings)
-        self.patch(launcher, "refresh_launch_settings", return_value=self.settings)
+        self.refresh = self.patch(launcher, "refresh_launch_settings", return_value=self.settings)
         self.patch(launcher, "build_environment", return_value=self.environment)
         self.patch(launcher, "host_platform_name", return_value="windows")
         self.process = self.patch(launcher.subprocess, "run", return_value=mock.Mock(returncode=0))
+        self.stage = self.patch(self.pipeline, "run_stage")
 
     def patch(self, owner, name, **kwargs):
         patcher = mock.patch.object(owner, name, **kwargs)
@@ -736,22 +766,17 @@ class CookerLauncherTests(unittest.TestCase):
         build = self.patch(launcher, "build_target")
         resolve = self.patch(
             launcher, "resolve_executable_path",
-            side_effect=lambda settings, target, override, base_name, dry_run: self.tool_paths[target],
+            side_effect=lambda settings, target, override, base_name, dry_run: override or self.tool_paths[target],
         )
         return configure, build, resolve
 
-    def test_builds_pipeline_and_forwards_defaults_then_user_overrides(self):
+    def test_builds_pipeline_before_running_stages_with_direct_asset_options(self):
         configure, build, resolve = self.prepare_pipeline_build()
         workflow = mock.Mock()
-        for name, operation in (("configure", configure), ("build", build), ("resolve", resolve), ("process", self.process)):
+        for name, operation in (("configure", configure), ("build", build), ("resolve", resolve), ("stage", self.stage)):
             workflow.attach_mock(operation, name)
-        forwarded = [
-            "--asset-root", "first assets", "second assets", "--output-directory", "runtime resources",
-            "--configuration", "project-cook", "--repo-root", "custom source root",
-            "--asset-builder", "custom builder.exe",
-        ]
 
-        self.assertEqual(0, launcher.main([*self.arguments, "--", *forwarded]))
+        self.assertEqual(0, self.pipeline.main(self.arguments))
 
         configure.assert_called_once_with(mock.ANY, self.settings, {"NWB_BUILD_PIPELINE": "ON"}, self.environment)
         build.assert_called_once_with(mock.ANY, self.settings, "nwb_pipeline", self.environment)
@@ -759,75 +784,119 @@ class CookerLauncherTests(unittest.TestCase):
             [mock.call(self.settings, target, None, None, False) for target in self.tool_paths],
             resolve.call_args_list,
         )
-        expected_command = self.command_prefix + [
-            "--dependency-computer", str(self.tool_paths["nwb_dependeny_computer"]),
-            "--asset-builder", str(self.tool_paths["nwb_asset_builder"]),
-            "--asset-gatherer", str(self.tool_paths["nwb_asset_gatherer"]),
-            *forwarded,
-        ]
-        self.process.assert_called_once_with(expected_command, cwd=self.root, env=self.environment)
-        self.assertEqual(["configure", "build", "resolve", "resolve", "resolve", "process"], [call[0] for call in workflow.mock_calls])
+        self.assertEqual(["configure", "build", "resolve", "resolve", "resolve", "stage", "stage", "stage"],
+                         [call[0] for call in workflow.mock_calls])
+        self.assertEqual(list(self.tool_paths.values()), [call.args[0] for call in self.stage.call_args_list])
+        for call in self.stage.call_args_list:
+            self.assertEqual(self.root, call.args[2])
+        builder_arguments = self.stage.call_args_list[1].args[1]
+        gatherer_arguments = self.stage.call_args_list[2].args[1]
+        self.assertEqual(str(self.root), builder_arguments[builder_arguments.index("--repo-root") + 1])
+        self.assertEqual(str(self.cache), builder_arguments[builder_arguments.index("--cache-directory") + 1])
+        self.assertEqual([str(path) for path in self.asset_roots],
+                         [builder_arguments[index + 1] for index, value in enumerate(builder_arguments) if value == "--asset-root"])
+        self.assertEqual(str(self.output), gatherer_arguments[gatherer_arguments.index("--output-directory") + 1])
+        for arguments in (builder_arguments, gatherer_arguments):
+            self.assertEqual("opt", arguments[arguments.index("--configuration") + 1])
+        self.process.assert_not_called()
+
+    def test_explicit_asset_configuration_overrides_build_configuration(self):
+        self.prepare_pipeline_build()
+
+        self.assertEqual(0, self.pipeline.main([*self.arguments, "--configuration", "project-cook"]))
+
+        for call in self.stage.call_args_list[1:]:
+            arguments = call.args[1]
+            self.assertEqual("project-cook", arguments[arguments.index("--configuration") + 1])
 
     def test_build_failure_propagates_without_resolving_or_launching_tools(self):
         _, build, resolve = self.prepare_pipeline_build()
         build.side_effect = SystemExit(21)
 
         with self.assertRaises(SystemExit) as failure:
-            launcher.main([*self.arguments, "--", "--asset-root", "assets", "--output-directory", "runtime/res"])
+            self.pipeline.main(self.arguments)
 
         self.assertEqual(21, failure.exception.code)
         resolve.assert_not_called()
+        self.stage.assert_not_called()
         self.process.assert_not_called()
+        self.assertFalse(self.cache.exists())
 
-    def test_dry_run_prints_commands_without_subprocesses_or_build_directory_creation(self):
+    def test_skip_build_avoids_configuration_and_build_but_runs_all_stages(self):
+        configure, build, resolve = self.prepare_pipeline_build()
+
+        self.assertEqual(0, self.pipeline.main([*self.arguments, "--skip-build"]))
+
+        configure.assert_not_called()
+        build.assert_not_called()
+        self.refresh.assert_not_called()
+        self.assertEqual(3, resolve.call_count)
+        self.assertEqual(list(self.tool_paths.values()), [call.args[0] for call in self.stage.call_args_list])
+
+    def test_dry_run_prints_commands_without_subprocesses_or_output_creation(self):
         with mock.patch("builtins.print") as output, mock.patch.object(launcher.subprocess, "Popen") as popen:
-            self.assertEqual(
-                0,
-                launcher.main([*self.arguments, "--dry-run", "--", "--asset-root", "assets", "--output-directory", "runtime/res"]),
-            )
+            self.assertEqual(0, self.pipeline.main([*self.arguments, "--dry-run"]))
 
         self.process.assert_not_called()
+        self.stage.assert_not_called()
         popen.assert_not_called()
         self.assertFalse(self.settings.build_dir.exists())
+        self.assertFalse(self.cache.exists())
+        self.assertFalse(self.output.exists())
         printed = "\n".join(str(call.args[0]) for call in output.call_args_list)
         self.assertIn("NWB_BUILD_PIPELINE=ON", printed)
         self.assertIn("--target nwb_pipeline", printed)
-        self.assertIn("cooker.py", printed)
-        self.assertIn("--asset-root assets --output-directory runtime/res", printed)
+        for executable in ("dependeny_computer.exe", "asset_builder.exe", "asset_gatherer.exe"):
+            self.assertIn(executable, printed)
+        self.assertIn("--configuration opt", printed)
 
-    def test_forwarded_help_skips_configuration_build_and_target_resolution(self):
+    def test_help_skips_configuration_build_and_target_resolution(self):
         configure, build, resolve = self.prepare_pipeline_build()
+        with mock.patch("builtins.print"), self.assertRaises(SystemExit) as result:
+            self.pipeline.main(["--help"])
 
-        self.assertEqual(0, launcher.main([*self.arguments, "--", "--help"]))
-
+        self.assertEqual(0, result.exception.code)
         self.settings_resolver.assert_not_called()
         configure.assert_not_called()
         build.assert_not_called()
         resolve.assert_not_called()
-        self.process.assert_called_once_with(
-            [sys.executable, str(self.root / "pipeline" / "cooker.py"), "--help"],
-            cwd=self.root,
-            env=self.environment,
-        )
+        self.stage.assert_not_called()
+        self.process.assert_not_called()
 
-    def test_tool_directory_override_suppresses_automatic_executable_arguments(self):
+    def test_tool_directory_and_individual_override_select_the_requested_executables(self):
         _, _, resolve = self.prepare_pipeline_build()
-        for forwarded in (["--tool-directory", "project tools"], ["--tool-directory=project tools"]):
+        directory = self.root / "project tools"
+        directory.mkdir()
+        expected_tools = [directory / path.name for path in self.tool_paths.values()]
+        for path in expected_tools:
+            path.touch()
+        explicit_builder = self.root / "project builder.exe"
+        explicit_builder.touch()
+        for forwarded in (["--tool-directory", str(directory)], ["--tool-directory=" + str(directory)]):
             with self.subTest(arguments=forwarded):
-                self.process.reset_mock()
-                self.assertEqual(0, launcher.main([*self.arguments, "--", *forwarded]))
-                self.process.assert_called_once_with(self.command_prefix + forwarded, cwd=self.root, env=self.environment)
+                self.stage.reset_mock()
+                self.assertEqual(0, self.pipeline.main([*self.arguments, *forwarded]))
+                self.assertEqual(expected_tools, [call.args[0] for call in self.stage.call_args_list])
         resolve.assert_not_called()
 
-    def test_cooker_nonzero_exit_code_is_propagated(self):
+        self.stage.reset_mock()
+        self.assertEqual(0, self.pipeline.main([
+            *self.arguments, "--tool-directory", str(directory), "--asset-builder", str(explicit_builder),
+        ]))
+
+        resolve.assert_called_once_with(self.settings, "nwb_asset_builder", explicit_builder, None, False)
+        self.assertEqual([expected_tools[0], explicit_builder, expected_tools[2]],
+                         [call.args[0] for call in self.stage.call_args_list])
+
+    def test_stage_failure_reports_failure_and_prevents_later_stages(self):
         self.prepare_pipeline_build()
-        self.process.return_value.returncode = 23
-
-        with self.assertRaises(SystemExit) as failure:
-            launcher.main([*self.arguments, "--", "--asset-root", "assets", "--output-directory", "runtime/res"])
-
-        self.assertEqual(23, failure.exception.code)
-        self.process.assert_called_once()
+        for failed_index, executable in enumerate(self.tool_paths.values()):
+            with self.subTest(stage=executable.name):
+                self.stage.reset_mock()
+                self.stage.side_effect = [None] * failed_index + [launcher.subprocess.CalledProcessError(23, [str(executable)])]
+                with mock.patch("builtins.print"):
+                    self.assertEqual(1, self.pipeline.main(self.arguments))
+                self.assertEqual(failed_index + 1, self.stage.call_count)
 
 
 if __name__ == "__main__":

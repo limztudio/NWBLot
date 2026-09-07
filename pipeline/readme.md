@@ -8,21 +8,14 @@ targets and the asset build libraries.
 Run the complete pipeline through the repository launcher:
 
 ```console
-python launcher.py cooker --config dbg -- --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+python launcher.py pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
 ```
 
-The launcher configures when needed with `NWB_BUILD_PIPELINE=ON`, builds
-`nwb_pipeline`, resolves all three tools from the selected CMake configuration,
-and invokes `cooker.py`. Launcher build options go before `--`; cooker options go
-after it. Use `--skip-build` to reuse built tools, or `--dry-run` to print the
-commands without executing them. `--config` also supplies the cooker's default
-`--configuration`; an explicit cooker option after `--` takes precedence.
-
-`python launcher.py cooker --help` shows launcher options, and
-`python launcher.py cooker -- --help` shows cooker options without configuring or
-building. A forwarded `--tool-directory` or individual tool option can select
-existing executables instead of the automatically resolved ones. Configure,
-build, and cooker failures retain their nonzero exit status at the root launcher.
+The root discovers `pipeline/launcher.py` as a normal runnable directory. Build
+and asset options use one argument list. The pipeline launcher configures when
+needed with `NWB_BUILD_PIPELINE=ON`, builds `nwb_pipeline`, and resolves all three
+tools from the selected CMake configuration. Configure, build, and pipeline
+failures retain their nonzero exit status at the root launcher.
 
 `dependeny_computer` currently returns exactly its inputs, preserving order and
 duplicates. Root asset selection and dependency expansion are not implemented.
@@ -76,22 +69,46 @@ asset_gatherer --input built-a built-b --output-directory runtime/res
 asset_gatherer --input-list built/assets.list --output-directory runtime/res
 ```
 
-`cooker.py` replaces the removed `resource_cooker` executable. It discovers `.nwb`
-files, calls `dependeny_computer`, passes that result to `asset_builder`, then
-passes the builder manifest to `asset_gatherer`. A failed stage stops the pipeline. Source discovery errors also stop cooking
-before the tools run, preserving the published volume.
-Existing `--repo-root`, `--asset-root`, `--output-directory`, `--cache-directory`,
-`--configuration`, and `--asset-type graphics` options remain available.
+`pipeline/launcher.py` replaces the removed `resource_cooker` executable. The root
+launcher discovers it as the `pipeline` command, using the same convention as the
+repository's other runnable directories. It discovers `.nwb` files, configures and
+builds `nwb_pipeline`, calls `dependeny_computer`, passes that result to
+`asset_builder`, then passes the builder manifest to `asset_gatherer`. Discovery
+errors and failed stages stop the pipeline and preserve the published volume.
 
 ```console
-python pipeline/cooker.py --tool-directory __exec/windows/arm64/full/dbg --repo-root . --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res --configuration dbg
+python launcher.py pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
 ```
 
-Use `--dependency-computer`, `--asset-builder`, and `--asset-gatherer` to specify
-individual executable paths. Without explicit paths or `--tool-directory`, tools
-are discovered beside the script or on `PATH`. `--input` limits the selected
-sources. `--build-directory` chooses where to retain intermediate artifacts;
-otherwise they live in an output-specific directory under the asset cache.
+Build and asset options share one argument list. The pipeline launcher can also
+run independently, and either help command returns without building:
+
+```console
+python launcher.py pipeline --help
+python pipeline/launcher.py --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+```
+
+The launcher reuses the repository's `--config`, `--arch`, `--domain`,
+`--configure-preset`, `--build-dir`, `--jobs`, and other build options. The repository
+root defaults to the repository containing the script. Asset arguments
+`--repo-root`, `--asset-root`, `--output-directory`, `--cache-directory`,
+`--configuration`, and `--asset-type graphics` remain available. `--configuration`
+overrides the asset configuration label; otherwise it follows `--config`.
+
+By default, executable paths come from the selected CMake build and configuration.
+Use `--tool-directory`, or `--dependency-computer`, `--asset-builder`, and
+`--asset-gatherer`, to supply already built tools. `--skip-build` skips both CMake
+configuration and compilation; CMake asset commands use it to avoid starting a
+nested build. For example:
+
+```console
+python pipeline/launcher.py --skip-build --tool-directory __exec/windows/arm64/full/dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+```
+
+`--dry-run` prints planned build and pipeline commands without writing manifests,
+artifacts, or volumes, or running tools. `--input` limits selected sources.
+`--build-directory` chooses where to retain intermediate artifacts; otherwise
+they live in an output-specific directory under the asset cache.
 
 The reusable C++ entry points are `Core::Assets::BuildAssets(AssetBuildOptions)`
 in `core/assets/volume/build.h` and `Core::Assets::GatherAssets(AssetGatherOptions)`

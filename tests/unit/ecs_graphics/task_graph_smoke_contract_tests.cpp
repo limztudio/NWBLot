@@ -234,7 +234,7 @@ TEST(EcsGraphics, FeatureSupportAndSmokeRoutesRemainNativeCapabilityAuthoritativ
     ASSERT_TRUE(ReadTextFile(repoRoot / "CoolStuff" / "Testbed" / "runtime.cpp", testbedRuntimeSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "smoke_scene_helpers.h", smokeHelperSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "CMakeLists.txt", smokeCmakeSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "launch.py", smokeLauncherSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "launcher.py", smokeLauncherSource));
 
     static constexpr StringView s_SmokeProjectSourceNames[] = {
         "transparent_multi_project.cpp",

@@ -27,9 +27,9 @@ WINDOWS_NATIVE_MACHINE_NAMES = {
 DEFAULT_CONFIG = "dbg"
 DEFAULT_DOMAIN = "full"
 DEFAULT_BUILD_JOBS = "8"
-LAUNCHER_SEARCH_ROOTS = (Path("CoolStuff"), Path("tests"), Path("utilities"))
-LAUNCHER_SCRIPT_NAME = "launch.py"
-RESERVED_LAUNCH_COMMANDS = frozenset(("profiles", "run", "cooker"))
+LAUNCHER_SEARCH_ROOTS = (Path("CoolStuff"), Path("tests"), Path("utilities"), Path("pipeline"))
+LAUNCHER_SCRIPT_NAME = "launcher.py"
+RESERVED_LAUNCH_COMMANDS = frozenset(("profiles", "run"))
 PROFILE_LOGSERVER_TARGET = "nwb_logserver"
 PROFILE_LOGSERVER_EXECUTABLE = "logserver"
 PROFILE_LOG_ADDRESS = "http://localhost"
@@ -143,7 +143,7 @@ def launcher_route(search_path: Path, leaf_script: Path, root: Path) -> Tuple[Pa
 def discover_leaf_launchers(directory: Path, root: Optional[Path] = None) -> Dict[str, RepoLauncher]:
     """Discover runnable leaves below a category and retain their router routes.
 
-    A ``launch.py`` with descendant launchers is a router.  A leaf has no nested
+    A ``launcher.py`` with descendant launchers is a router.  A leaf has no nested
     launchers, and every directory between it and the category must provide a
     router so nested groupings cannot be bypassed.
     """
@@ -157,8 +157,6 @@ def discover_leaf_launchers(directory: Path, root: Optional[Path] = None) -> Dic
     scripts = sorted(search_path.rglob(LAUNCHER_SCRIPT_NAME), key=lambda path: path.as_posix())
     launchers: Dict[str, RepoLauncher] = {}
     for script in scripts:
-        if script.parent == search_path:
-            continue
         if any(nested_script != script for nested_script in script.parent.rglob(LAUNCHER_SCRIPT_NAME)):
             continue
 
@@ -900,37 +898,6 @@ def run_target_command(args) -> int:
     )
 
 
-def run_cooker_command(args) -> int:
-    cooker_args = normalize_application_args(args.application_args)
-    root = resolve_repo_root(args.repo_root)
-    script = root / "pipeline" / "cooker.py"
-    env = build_environment(args)
-    if is_help_request(cooker_args):
-        run_checked([sys.executable, script, *cooker_args], root, env, args.dry_run)
-        return 0
-
-    settings = resolve_launch_settings(args, DEFAULT_DOMAIN)
-    maybe_configure(args, settings, {"NWB_BUILD_PIPELINE": "ON"}, env)
-    settings = refresh_launch_settings(settings, args.domain)
-    build_target(args, settings, "nwb_pipeline", env)
-
-    command = [
-        sys.executable, str(script), "--repo-root", str(settings.root),
-        "--configuration", settings.config,
-    ]
-    if not any(value == "--tool-directory" or value.startswith("--tool-directory=") for value in cooker_args):
-        for option, target in (
-            ("--dependency-computer", "nwb_dependeny_computer"),
-            ("--asset-builder", "nwb_asset_builder"),
-            ("--asset-gatherer", "nwb_asset_gatherer"),
-        ):
-            executable = resolve_executable_path(settings, target, None, None, args.dry_run)
-            command.extend([option, str(executable)])
-    command.extend(cooker_args)
-    run_checked(command, settings.root, env, args.dry_run)
-    return 0
-
-
 def run_target_launcher(target: str, argv: Sequence[str]) -> int:
     return main(["run", target] + list(argv))
 
@@ -994,7 +961,6 @@ def run_directory_launcher(directory: Path, argv: Sequence[str]) -> int:
 def list_profiles_command(args) -> int:
     print("runnable commands:", flush=True)
     print("  run <cmake-target> [launcher options] [-- application arguments]", flush=True)
-    print("  cooker [build options] -- <cooker arguments>  (pipeline/cooker.py)", flush=True)
     for launcher in args.repo_launchers.values():
         route = " -> ".join(str(script) for script in (*launcher.route, launcher.script))
         print(f"  {launcher.command}  ({route})", flush=True)
@@ -1002,7 +968,7 @@ def list_profiles_command(args) -> int:
 
 
 def add_build_options(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--repo-root", type=Path, help="Repository root. Defaults to the directory containing launcher.py.")
+    parser.add_argument("--repo-root", type=Path, help="Repository root. Defaults to the root launcher directory.")
     parser.add_argument("--platform", default=host_platform_name(), help="Output platform directory, such as windows/linux/darwin.")
     parser.add_argument(
         "--arch",
@@ -1096,15 +1062,6 @@ def make_parser(repo_launchers: Optional[Dict[str, RepoLauncher]] = None) -> arg
     add_common_options(run_parser)
     run_parser.add_argument("target", help="CMake executable target, such as testbed or nwb_asset_builder.")
     run_parser.set_defaults(handler=run_target_command)
-
-    cooker_parser = subparsers.add_parser(
-        "cooker",
-        help="Build the asset pipeline and run pipeline/cooker.py.",
-        description="Build all three pipeline tools, then cook assets. Pass cooker arguments after --.",
-        epilog="Example: python launcher.py cooker --config dbg -- --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res",
-    )
-    add_build_options(cooker_parser)
-    cooker_parser.set_defaults(handler=run_cooker_command)
 
     for launcher in repo_launchers.values():
         route = " -> ".join(str(script) for script in (*launcher.route, launcher.script))

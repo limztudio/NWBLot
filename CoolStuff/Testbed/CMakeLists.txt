@@ -56,7 +56,7 @@ if(TARGET nwb_asset_builder)
     add_custom_command(
         OUTPUT "${_nwb_testbed_asset_stamp}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${NWB_OUTPUT_ROOT}/res"
-        COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/cooker.py"
+        COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launcher.py" --skip-build
             --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>"
             --repo-root "${PROJECT_SOURCE_DIR}"
             --asset-root "impl/assets"
@@ -67,7 +67,7 @@ if(TARGET nwb_asset_builder)
         COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_testbed_asset_stamp}"
         DEPENDS
             nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
-            "${PROJECT_SOURCE_DIR}/pipeline/cooker.py"
+            "${PROJECT_SOURCE_DIR}/pipeline/launcher.py"
             ${_nwb_testbed_asset_inputs}
         WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
         COMMENT "Cooking NWB graphics assets for $<CONFIG>..."

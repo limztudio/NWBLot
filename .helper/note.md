@@ -139,6 +139,6 @@
 6. `render.sw_bvh_sort` measures one mesh-BVH rebuild rather than a per-frame cost; compare only samples in which the scope fires.
 7. Keep `bvhBitonicSort`'s `LOCAL_TILE`, `GLOBAL`, and `GLOBAL_TAIL` mode bodies inlined in `main`: the bundled `slangc` crashes when the groupshared nested-barrier network is in a callee. The modes must use the same strict `(key, payload)` ordering, and `LOCAL_TILE` and `GLOBAL_TAIL` must select ascending order with `(global & sequenceSize)`.
 8. Launch smoke binaries from their `Testing/.../$<CONFIG>` runtime directory so `cwd/res` resolves the matching packed volume; do not launch from an `__exec/.../opt` directory that can select a stale testbed volume.
-9. Editing a `.slangi` source does not recook the packed `.vol` on launch. Invalidate the relevant asset stamp/cache and rerun `pipeline/cooker.py` before comparing a shader change.
+9. Editing a `.slangi` source does not recook the packed `.vol` on launch. Invalidate the relevant asset stamp/cache and rerun `pipeline/launcher.py` before comparing a shader change.
 10. Treat shadow resolve pass-count and trace-resolution changes as visual-quality tradeoffs: capture the intended scene and use unaffected control scopes to distinguish a real timing change from system variance.
 11. Hardware caustic photons use frame-parity 2× checkerboard reuse. Keep the full-grid jitter mapping, per-frame index reset, and shared splat-space EMA so HW and SW preserve the same temporal-reuse invariant.

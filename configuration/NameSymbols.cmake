@@ -60,7 +60,7 @@ function(nwb_add_name_symbol_target)
     # the release asset cache is untouched. This run needs no display, so it is the graceful path on headless hosts.
     set(_namesym_cook_out "${_namesym_build_dir}/namesym_cook/res")
     set(_namesym_cook_cache "${PROJECT_SOURCE_DIR}/__build_obj/c/${_namesym_output_platform}/${NWB_OUTPUT_ARCH}/namesym")
-    set(_namesym_cook_run "${PROJECT_SOURCE_DIR}/pipeline/cooker.py|||--tool-directory|||${_namesym_buildmode_bin_dir}|||--repo-root|||${PROJECT_SOURCE_DIR}|||--asset-root|||impl/assets|||--asset-root|||tests/smoke/assets|||--output-directory|||${_namesym_cook_out}|||--cache-directory|||${_namesym_cook_cache}|||--configuration|||$<CONFIG>")
+    set(_namesym_cook_run "${PROJECT_SOURCE_DIR}/pipeline/launcher.py|||--skip-build|||--tool-directory|||${_namesym_buildmode_bin_dir}|||--repo-root|||${PROJECT_SOURCE_DIR}|||--asset-root|||impl/assets|||--asset-root|||tests/smoke/assets|||--output-directory|||${_namesym_cook_out}|||--cache-directory|||${_namesym_cook_cache}|||--configuration|||$<CONFIG>")
 
     # GUI workloads (need a display): the window-capture harness runs each, captures, then shuts it down GRACEFULLY
     # (posts WM_CLOSE) so the app's NWB_BUILDMODE exit writes its sidecar -- a hard kill would skip it. The testbed

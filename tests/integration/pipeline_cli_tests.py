@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dependency-computer", type=pathlib.Path, required=True)
     parser.add_argument("--asset-builder", type=pathlib.Path, required=True)
     parser.add_argument("--asset-gatherer", type=pathlib.Path, required=True)
-    parser.add_argument("--cooker-script", type=pathlib.Path, required=True)
+    parser.add_argument("--pipeline-launcher", type=pathlib.Path, required=True)
     parser.add_argument("--repo-root", type=pathlib.Path, required=True)
     return parser.parse_args()
 
@@ -119,19 +119,19 @@ def write_sampler(path: pathlib.Path, filtering: str) -> None:
 
 
 def run_discovery_failures(args: argparse.Namespace, root: pathlib.Path, asset_root: pathlib.Path, output: pathlib.Path) -> None:
-    specification = importlib.util.spec_from_file_location("nwb_test_pipeline_cooker", args.cooker_script)
+    specification = importlib.util.spec_from_file_location("nwb_test_pipeline_launcher", args.pipeline_launcher)
     if specification is None or specification.loader is None:
-        raise AssertionError("could not load the cooker for discovery failure regression")
-    cooker = importlib.util.module_from_spec(specification)
-    specification.loader.exec_module(cooker)
-    options = argparse.Namespace(
-        repo_root=args.repo_root, asset_root=[asset_root], output=output,
-        cache_directory=root / "c", build_directory=None, configuration="tests",
-        dependency_computer=args.dependency_computer, asset_builder=args.asset_builder,
-        asset_gatherer=args.asset_gatherer, tool_directory=None, input=None, asset_type="graphics",
-    )
+        raise AssertionError("could not load the pipeline launcher for discovery failure regression")
+    pipeline_launcher = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(pipeline_launcher)
+    options = pipeline_launcher.parse_arguments([
+        "--skip-build", "--repo-root", str(args.repo_root), "--asset-root", str(asset_root),
+        "--output-directory", str(output), "--cache-directory", str(root / "c"), "--configuration", "tests",
+        "--dependency-computer", str(args.dependency_computer), "--asset-builder", str(args.asset_builder),
+        "--asset-gatherer", str(args.asset_gatherer),
+    ])
     previous_volume = read_volume(output)
-    with cooker.os.scandir(asset_root) as entries:
+    with pipeline_launcher.os.scandir(asset_root) as entries:
         readable_entry = next(iter(entries))
     inaccessible_entry = mock.Mock()
     inaccessible_entry.stat.side_effect = PermissionError("test entry cannot be inspected")
@@ -142,13 +142,13 @@ def run_discovery_failures(args: argparse.Namespace, root: pathlib.Path, asset_r
         {"return_value": partial_scan},
     )
     for scan_failure in scan_failures:
-        with mock.patch.object(cooker.os, "scandir", **scan_failure), mock.patch.object(cooker, "run_stage") as stage:
+        with mock.patch.object(pipeline_launcher.os, "scandir", **scan_failure), mock.patch.object(pipeline_launcher, "run_stage") as stage:
             try:
-                cooker.cook(options)
+                pipeline_launcher.cook(options)
             except PermissionError:
                 pass
             else:
-                raise AssertionError("cooker accepted an incomplete asset discovery result")
+                raise AssertionError("pipeline launcher accepted an incomplete asset discovery result")
             stage.assert_not_called()
         if read_volume(output) != previous_volume:
             raise AssertionError("a discovery failure changed an already published volume")
@@ -234,14 +234,14 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
 
     cooked_directory = root / "cooked"
     run_command(
-        [sys.executable, str(args.cooker_script), *build_options,
+        [sys.executable, str(args.pipeline_launcher), "--skip-build", *build_options,
          "--dependency-computer", str(args.dependency_computer),
          "--asset-builder", str(args.asset_builder), "--asset-gatherer", str(args.asset_gatherer),
          "--output-directory", str(cooked_directory)],
         root,
     )
     if read_volume(cooked_directory) != combined_payloads:
-        raise AssertionError("cooker orchestration did not gather all built runtime payloads")
+        raise AssertionError("pipeline orchestration did not gather all built runtime payloads")
 
     first_asset.unlink()
     second_asset.unlink()
@@ -299,7 +299,7 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
         raise AssertionError("a missing gather input changed an already published volume")
 
     run_command(
-        [sys.executable, str(args.cooker_script), *build_options,
+        [sys.executable, str(args.pipeline_launcher), "--skip-build", *build_options,
          "--dependency-computer", str(args.dependency_computer),
          "--asset-builder", str(args.asset_builder), "--asset-gatherer", str(args.asset_gatherer),
          "--output-directory", str(cooked_directory), "--asset-type", ASSET_TYPE_SENTINEL],
@@ -340,7 +340,7 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
 def main() -> int:
     args = parse_args()
     try:
-        for name in ("dependency_computer", "asset_builder", "asset_gatherer", "cooker_script"):
+        for name in ("dependency_computer", "asset_builder", "asset_gatherer", "pipeline_launcher"):
             path = getattr(args, name).resolve()
             if not path.is_file():
                 raise AssertionError(f"pipeline tool does not exist: {path}")

@@ -68,13 +68,13 @@ The repository launcher configures when needed, builds the selected target, and 
 
 ```powershell
 python launcher.py testbed --config dbg
-python launcher.py cooker --help
-python launcher.py cooker --config dbg -- --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+python launcher.py pipeline --help
+python launcher.py pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
 python launcher.py smoke --profiles
 python launcher.py profiles
 ```
 
-The `cooker` launcher builds the three pipeline tools, resolves their executable paths, and runs `pipeline/cooker.py`. Put launcher build options before `--` and cooker options after it; `python launcher.py cooker -- --help` shows the cooker options without building. The script runs `dependeny_computer`, `asset_builder`, and `asset_gatherer` in order. The tools build with `NWB_BUILD_PIPELINE=ON` (the default). See [the pipeline guide](pipeline/readme.md) for direct stage commands and [the filesystem guide](docs/filesystem.md) for project filesystem customization.
+The root launcher discovers the `pipeline` command from `pipeline/launcher.py`, using the same `launcher.py` entry-point convention as projects and utilities. The pipeline launcher accepts build and asset options together, builds the three tools, and runs `dependeny_computer`, `asset_builder`, and `asset_gatherer` in order. Use `--skip-build` with existing tools or `--dry-run` to preview the workflow; `--help` lists all options without building. The tools build with `NWB_BUILD_PIPELINE=ON` (the default). See [the pipeline guide](pipeline/readme.md) for direct stage commands and [the filesystem guide](docs/filesystem.md) for project filesystem customization.
 
 Use `--with-profile` to start the log server with a launched application. Use `--run-seconds <N>` for a bounded profiling run.
 

@@ -4,6 +4,8 @@
 
 #include "mesh_system.h"
 
+#include "runtime_mesh_pruning.h"
+
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
 
@@ -36,6 +38,7 @@ namespace __hidden_mesh{
 
 
 static constexpr usize s_RayTracingReconstructionScratchPaddingBytes = 4096u;
+inline constexpr Name s_RuntimeMeshPruningArena("impl/ecs_render/runtime_mesh_pruning");
 
 void CaptureRayTracingResourceSnapshot(
     const MeshResources& mesh,
@@ -731,21 +734,13 @@ void RendererMeshSystem::pruneRuntimeMeshResources(){
         return;
 
     const auto* meshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
-    for(auto it = m_meshState.m_meshes.begin(); it != m_meshState.m_meshes.end();){
-        const MeshResources& mesh = it.value();
-        if(!mesh.runtimeMesh){
-            ++it;
-            continue;
-        }
-
-        if(meshSystem && meshSystem->containsRuntimeMesh(mesh.meshName, mesh.runtimeMeshVersion)){
-            ++it;
-            continue;
-        }
-
-        releaseMeshGeometryHeapHandles(it.value());
-        it = m_meshState.m_meshes.erase(it);
-    }
+    Core::Alloc::ScratchArena scratchArena(__hidden_mesh::s_RuntimeMeshPruningArena);
+    ECSRenderDetail::PruneRuntimeMeshResources(
+        m_meshState.m_meshes,
+        meshSystem,
+        [this](MeshResources& mesh){ releaseMeshGeometryHeapHandles(mesh); },
+        scratchArena
+    );
 }
 
 void RendererMeshSystem::collectRayTracingResourceSnapshots(

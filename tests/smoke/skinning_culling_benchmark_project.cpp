@@ -273,8 +273,9 @@ public:
         }
     }
 
-    virtual bool containsRuntimeMesh(const Name& meshKey, const u64 version)override{
-        return m_meshSkinningSystem && m_meshSkinningSystem->containsRuntimeMesh(meshKey, version);
+    virtual void markLiveRuntimeMeshes(NWB::Impl::RuntimeMeshRequestSet& requests)override{
+        if(m_meshSkinningSystem)
+            m_meshSkinningSystem->markLiveRuntimeMeshes(requests);
     }
 
 

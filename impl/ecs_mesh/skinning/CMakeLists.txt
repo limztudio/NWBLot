@@ -14,6 +14,8 @@ target_sources(nwb_ecs_mesh_skinning PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/skinning.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_cache.h"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_instance.h"
+    "${CMAKE_CURRENT_LIST_DIR}/runtime_mesh_liveness.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/runtime_mesh_liveness.h"
     "${CMAKE_CURRENT_LIST_DIR}/resource_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/skin_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/submission_state.h"

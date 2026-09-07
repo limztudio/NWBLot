@@ -3,6 +3,8 @@ target_sources(nwb_ecs_mesh PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/system.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime/buffer_upload.h"
     "${CMAKE_CURRENT_LIST_DIR}/runtime/mesh.h"
+    "${CMAKE_CURRENT_LIST_DIR}/runtime/mesh_requests.h"
+    "${CMAKE_CURRENT_LIST_DIR}/runtime/mesh_requests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/components.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/system.h"

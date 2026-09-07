@@ -224,7 +224,7 @@ public:
     virtual void invalidateResources()override;
 
     virtual bool resolveRuntimeMesh(Core::ECS::EntityID entity, RuntimeMeshDesc& outMesh)override;
-    virtual bool containsRuntimeMesh(const Name& meshKey, u64 version)override;
+    virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)override;
 
 private:
     [[nodiscard]] bool ensureSkinningPipeline();

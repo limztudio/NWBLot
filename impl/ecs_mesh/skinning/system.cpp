@@ -8,6 +8,7 @@
 #include "graph_resource_uses.h"
 #include "live_state_buffers.h"
 #include "resource_names.h"
+#include "runtime_mesh_liveness.h"
 #include "skin_payload.h"
 #include "timing_names.h"
 
@@ -412,75 +413,28 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
 }
 
 bool MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, RuntimeMeshDesc& outMesh){
-    outMesh = RuntimeMeshDesc{};
     RuntimeMeshHandle runtimeMesh;
     if(const SkinnedMeshBindingComponent* binding = m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
         runtimeMesh = binding->runtimeMesh;
-    if(!runtimeMesh.valid())
-        return false;
-
-    const MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(runtimeMesh);
-    if(!instance || instance->entity != entity)
-        return false;
-    if((instance->dirtyFlags & (RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)) != 0u)
-        return false;
-    NWB_ASSERT(instance->valid());
-    NWB_ASSERT(instance->meshlets.size() <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(instance->meshletPrimitiveIndices.size() <= static_cast<usize>(Limit<u32>::s_Max));
-
-    outMesh.entity = entity;
-    outMesh.meshKey = DeriveRuntimeResourceName(
-        instance->sourceName,
-        instance->handle.value,
-        instance->editRevision,
-        "skinned_draw"
+    const MeshSkinningRuntimeInstance* const instance = runtimeMesh.valid() ? m_runtimeMeshCache.findInstance(runtimeMesh) : nullptr;
+    return BuildSkinnedRuntimeMeshDesc(
+        entity,
+        runtimeMesh,
+        instance,
+        __hidden_system::s_RuntimeSkinningMeshletFrustumCullingEnabled,
+        __hidden_system::s_RuntimeSkinningMeshletConeCullingEnabled,
+        outMesh
     );
-    outMesh.positionBuffer = instance->skinnedPositionBuffer;
-    outMesh.normalBuffer = instance->skinnedNormalBuffer;
-    outMesh.tangentBuffer = instance->skinnedTangentBuffer;
-    outMesh.uv0Buffer = instance->uv0Buffer;
-    outMesh.colorBuffer = instance->colorBuffer;
-    outMesh.meshletDescBuffer = instance->meshletDescBuffer;
-    outMesh.meshletBoundsBuffer = instance->meshletBoundsBuffer;
-    outMesh.meshletPositionRefDeltaBuffer = instance->meshletPositionRefDeltaBuffer;
-    outMesh.meshletAttributeRefDeltaBuffer = instance->meshletAttributeRefDeltaBuffer;
-    outMesh.meshletLocalVertexRefBuffer = instance->meshletLocalVertexRefBuffer;
-    outMesh.meshletPrimitiveIndexBuffer = instance->meshletPrimitiveIndexBuffer;
-    outMesh.triangleIndexBuffer = instance->triangleIndexBuffer;
-    outMesh.attributeBuffer = instance->attributeBuffer;
-    outMesh.localBounds = instance->localBounds;
-    outMesh.meshletCount = static_cast<u32>(instance->meshlets.size());
-    outMesh.meshletPrimitiveIndexCount = static_cast<u32>(instance->meshletPrimitiveIndices.size());
-    outMesh.version = instance->editRevision;
-    outMesh.dynamicMeshletBoundsFresh = __hidden_system::s_RuntimeSkinningMeshletFrustumCullingEnabled;
-    outMesh.dynamicMeshletConesFresh = __hidden_system::s_RuntimeSkinningMeshletConeCullingEnabled;
-    NWB_ASSERT(outMesh.valid());
-    return true;
 }
 
-bool MeshSkinningSystem::containsRuntimeMesh(const Name& meshKey, const u64 version){
-    if(!meshKey)
-        return false;
-
-    auto testEntity = [&](Core::ECS::EntityID entity, bool& found){
-            if(found)
-                return;
-
-            RuntimeMeshDesc desc;
-            if(!resolveRuntimeMesh(entity, desc))
-                return;
-
-            found = desc.meshKey == meshKey && desc.version == version;
-    };
-
-    bool found = false;
-    m_world.view<SkinnedMeshBindingComponent>().each(
-        [&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component){
-            static_cast<void>(component);
-            testEntity(entity, found);
+void MeshSkinningSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests){
+    MarkLiveSkinnedRuntimeMeshes(
+        m_world, requests,
+        [this](const Core::ECS::EntityID entity, const SkinnedMeshBindingComponent& binding, Name& meshKey, u64& version){
+            const MeshSkinningRuntimeInstance* const instance = binding.runtimeMesh.valid() ? m_runtimeMeshCache.findInstance(binding.runtimeMesh) : nullptr;
+            return ResolveSkinnedRuntimeMeshIdentity(entity, binding.runtimeMesh, instance, meshKey, version);
         }
     );
-    return found;
 }
 
 bool MeshSkinningSystem::submitFrameSkinningGraph(){

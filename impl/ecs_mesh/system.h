@@ -52,7 +52,7 @@ public:
     [[nodiscard]] const MeshComponent* findMesh(Core::ECS::EntityID entity)const;
     [[nodiscard]] bool resolveMesh(Core::ECS::EntityID entity, Core::Assets::AssetRef<Mesh>& outMesh)const;
     [[nodiscard]] bool resolveRenderableMesh(Core::ECS::EntityID entity, RenderableMeshDesc& outMesh)const;
-    [[nodiscard]] bool containsRuntimeMesh(const Name& meshKey, u64 version)const;
+    void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const;
 
 public:
     virtual void registerRuntimeMeshProvider(IRuntimeMeshProvider& provider)override;

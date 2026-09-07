@@ -283,3 +283,18 @@ Five additional regressions exercise ordinary, cache-aligned and default-provide
 Parsed metadata extensions now carry a move-only erased owner with a typed destructor and their original named asset arena. Temporary construction stays owned until insertion succeeds; erase, clear, replacement, map movement, parse rejection and unexpected unwinding all release the concrete payload. Reentrant construction returns the resident extension, and an explicitly moved-out slot can be filled again. Extensions still retire before the entry registry they may borrow. No local exception handler or compatibility owner remains.
 
 Eleven regressions cover alignment, nested values, repeated lookup, growth, cross-arena movement, replacement, construction/insertion/caller unwind, reentrant insertion, destruction order, real graphics-parser rejection and complete public shader/include parsing. All 59 selected asset cases pass in dbg, opt and fin; pipeline, frame and the skinning smoke application build in each configuration. The full selected matrix and 50 source-policy checks also pass. This removes leaked extension payloads; separate complete-parse benchmarks retain the original blanket bucket reservation for the next measured item.
+
+## Runtime mesh cache pruning
+
+Pruning builds one operation-owned set of requested full mesh identities and versions, then lets providers mark current live identities in one traversal. Skinning shares its existing admission logic with descriptor construction but avoids copying thirteen owning buffer handles for membership checks. Provider traversal stops when every requested identity is found. Invisible live bindings remain included, and stale geometry is released before cache erasure in the original iteration order. Up to 32 retained runtime identities use inline storage; static-only caches avoid provider work.
+
+| Complete pruning workload | dbg before to after (ms) | opt before to after (ms) |
+| --- | ---: | ---: |
+| One binding, 2,048 operations | 9.5112 → 7.0538 | 0.3928 → 0.2733 |
+| 1,024 distinct live bindings and retained meshes | 1699.6517 → 2.6400 | 83.1494 → 0.1783 |
+| 32 retained meshes among 4,096 bindings | 217.5250 → 8.4121 | 10.6036 → 0.3972 |
+| 4,096 shared bindings / one retained mesh, eight operations | 0.3832 → 0.0329 | 0.0092 → 0.0022 |
+
+The 1,024-mesh workload eliminates 524,800 full descriptor resolutions. Its requested-identity index peaks at 180,240 scratch bytes in dbg (180,224 in opt), reserving 361,472/360,448 bytes. Singleton, sparse 32 and shared cases allocate no scratch storage. No membership state or owning descriptor survives the operation.
+
+Eight regressions cover exact full identities and versions, recycled entities, changed readiness, invisible bindings, provider union and early completion, all thirteen descriptor ownership roles, and release order. ECS graphics tests, frame and the skinning benchmark application pass/build in dbg, opt and fin; the selected full matrix and all 50 policy checks pass. These are CPU pruning measurements with real ECS bindings, not frame-rate estimates.

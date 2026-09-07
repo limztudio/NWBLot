@@ -4,6 +4,8 @@
 
 #include "system.h"
 
+#include "runtime/mesh_requests.h"
+
 #include <core/ecs/world.h>
 
 
@@ -77,15 +79,13 @@ bool MeshSystem::resolveRenderableMesh(
     return outMesh.valid();
 }
 
-bool MeshSystem::containsRuntimeMesh(const Name& meshKey, const u64 version)const{
-    if(!meshKey)
-        return false;
-
+void MeshSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const{
     for(IRuntimeMeshProvider* provider : m_runtimeMeshProviders){
-        if(provider && provider->containsRuntimeMesh(meshKey, version))
-            return true;
+        if(requests.complete())
+            return;
+        if(provider)
+            provider->markLiveRuntimeMeshes(requests);
     }
-    return false;
 }
 
 void MeshSystem::registerRuntimeMeshProvider(IRuntimeMeshProvider& provider){

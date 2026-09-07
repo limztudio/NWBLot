@@ -23,6 +23,7 @@ NWB_IMPL_BEGIN
 
 
 class Mesh;
+class RuntimeMeshRequestSet;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -139,7 +140,7 @@ public:
 
 public:
     [[nodiscard]] virtual bool resolveRuntimeMesh(Core::ECS::EntityID entity, RuntimeMeshDesc& outMesh) = 0;
-    [[nodiscard]] virtual bool containsRuntimeMesh(const Name& meshKey, u64 version) = 0;
+    virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests) = 0;
 };
 
 

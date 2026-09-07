@@ -1,7 +1,5 @@
 # NWBLot Third-Party Package Policy
 
-Updated: 2026-09-03
-
 Rules for everything that lives under `3rd_parties/`. These are hard requirements: when a vendored package
 violates them, fix the package (re-layout it, rewrite its `CMakeLists.txt`, add the missing metadata) rather
 than working around it elsewhere.

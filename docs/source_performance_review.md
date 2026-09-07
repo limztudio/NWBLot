@@ -104,3 +104,11 @@ The recorder reuses event slots and payload capacity across enabled-capture clea
 Backing allocations in the measured 512-owner workload fall from 245,760 to zero in dbg and 122,880 to zero in opt; the 128-owner workload also reaches zero. Slot and payload capacity is retained at the observed capture high-water mark until capture is disabled or the recorder is destroyed. Event-vector capacity remains reusable. This trades retained memory during capture for less repeated allocation.
 
 All 94 telemetry tests pass in dbg, opt, and fin. Twelve new regressions cover empty payloads, callback reentry, capture changes, exceptions, active-event aliases, same/foreign-arena ownership, explicit allocator replacement, and concurrent builders with clear/disable. Memory payload version remains 1; decoded owner, source, stream, and memory measurements are checked by the benchmark fixture.
+
+## Duplicate asset gathering
+
+Gathering now records each validated identity directly against its manifest entry instead of combining a set lookup with a linear entry scan. Byte-identical duplicates keep the already computed payload identity; a successful merge recomputes size and hash once. Every input is still read and validated, and conflicting input cannot replace the previously published volume.
+
+The end-to-end gather workload contains 128 unique 64 KiB payloads in three input directories. It includes reads, validation, duplicate collapse, and volume publication, while fixture creation/readback are excluded. Median dbg time changed from 684.6835 to 606.8864 ms; opt changed from 523.1486 to 513.5015 ms. Filesystem work dominates this fixture, so the small opt difference should not be treated as a general throughput guarantee.
+
+Three duplicate/merge/publication regressions and the existing independent-shader-gather integration pass in dbg, opt, and fin. The owning asset integration target and pipeline tools build in all three configurations.

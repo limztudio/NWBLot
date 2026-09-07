@@ -62,8 +62,10 @@ struct PathSelectionIndex{
 [[nodiscard]] static bool ContainsPath(const AStringView root, const AStringView file){
     if(root == file)
         return true;
-    return !root.empty() && file.size() > root.size() && file.starts_with(root)
-        && (root.back() == '/' || file[root.size()] == '/');
+    return
+        !root.empty() && file.size() > root.size() && file.starts_with(root)
+        && (root.back() == '/' || file[root.size()] == '/')
+    ;
 }
 
 [[nodiscard]] static bool SelectPathRange(
@@ -71,8 +73,10 @@ struct PathSelectionIndex{
     const AStringView path,
     const bool prefix,
     Vector<u8, Assets::ScratchArena>& selected){
-    auto entry = LowerBound(index.entries.begin(), index.entries.end(), path,
-        [](const IndexedPath& candidate, const AStringView value){ return candidate.text < value; });
+    auto entry = LowerBound(
+        index.entries.begin(), index.entries.end(), path,
+        [](const IndexedPath& candidate, const AStringView value){ return candidate.text < value; }
+    );
     bool matched = false;
     for(; entry != index.entries.end(); ++entry){
         if(prefix ? !entry->text.starts_with(path) : entry->text != path)

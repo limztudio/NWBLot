@@ -107,28 +107,32 @@ bool GatherAssets(const AssetGatherOptions& options){
     if(!Assets::AssetsVolumeCookDetail::ReserveAssetVolumePackManifest(manifest, files.size()))
         return false;
 
-    Assets::CookEntryPathHashSet seenPaths(arena);
-    seenPaths.reserve(files.size());
+    HashMap<Name, usize, Core::Alloc::ScratchArena> entryIndices(scratchArena);
+    entryIndices.reserve(files.size());
     Assets::AssetBytes bytes(arena);
     for(const Assets::AssetString& file : files){
         Name virtualPath;
         usize payloadOffset = 0u;
         if(!Assets::BuiltAssetDetail::ReadBuiltAsset(Path(arena, file), bytes, virtualPath, payloadOffset))
             return false;
-        if(!seenPaths.insert(virtualPath.hash()).second){
-            const auto existing = FindIf(manifest.entries.begin(), manifest.entries.end(), [&virtualPath](const auto& entry){ return entry.virtualPath == virtualPath; });
+        const auto inserted = entryIndices.try_emplace(virtualPath, manifest.entries.size());
+        if(!inserted.second){
+            auto& existing = manifest.entries[inserted.first.value()];
             const usize payloadSize = bytes.size() - payloadOffset;
-            const bool identical = existing != manifest.entries.end()
-                && existing->payloadBytes.size() == payloadSize
-                && NWB_MEMCMP(existing->payloadBytes.data(), bytes.data() + payloadOffset, payloadSize) == 0
+            const bool identical = existing.payloadBytes.size() == payloadSize
+                && NWB_MEMCMP(existing.payloadBytes.data(), bytes.data() + payloadOffset, payloadSize) == 0
             ;
-            if(!identical && (existing == manifest.entries.end() || !options.mergePayloads
-                || !options.mergePayloads(virtualPath, existing->payloadBytes, bytes.data() + payloadOffset, payloadSize))){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: conflicting built asset identity '{}'"), StringConvert(virtualPath.c_str()));
-                return false;
+            if(!identical){
+                if(
+                    !options.mergePayloads
+                    || !options.mergePayloads(virtualPath, existing.payloadBytes, bytes.data() + payloadOffset, payloadSize)
+                ){
+                    NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: conflicting built asset identity '{}'"), StringConvert(virtualPath.c_str()));
+                    return false;
+                }
+                existing.identity.payloadSize = existing.payloadBytes.size();
+                existing.identity.payloadHash = ComputeFnv64Bytes(existing.payloadBytes.data(), existing.payloadBytes.size());
             }
-            existing->identity.payloadSize = existing->payloadBytes.size();
-            existing->identity.payloadHash = ComputeFnv64Bytes(existing->payloadBytes.data(), existing->payloadBytes.size());
             --manifest.plannedFileCount;
             continue;
         }

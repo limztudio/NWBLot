@@ -465,3 +465,31 @@ The graph benchmark deliberately retains all three index capacities after import
 The sampled-texture operation's 1,024-input scratch peak falls from 175,200 to the 16,400-byte output alone in dbg, and from 175,104 to 16,384 in opt. Output-buffer and software BVH lookup likewise require no temporary index beyond their outputs; shadow's actual role/membership storage remains unchanged. This trades graph-owned reusable index capacity for lower repeated lookup work and less caller temporary storage.
 
 Small-path costs are included rather than hidden: singleton pointer lookup adds about 10 ns in dbg, and the sampled 1/8/32-entry opt lookups add at most about 4 ns per query. The eight-build software BVH workload adds about 1.08 microseconds per dbg call while opt is flat; its one-build opt call adds about 18 ns. The two large graph resets take 0.8062 -> 1.1031 ms in dbg because retained tables must be cleared. Large import/reuse savings outweigh these costs in the measured workloads. Resource-set member duplicate validation is still measured separately from the identity-index change.
+
+## Resource-set member validation
+
+New resource-set declarations now detect duplicate members in expected linear time after a bounded inline prefix. Every ID is checked for validity, generation and bounds before its index enters membership storage. Up to 32 members use an inline array; larger inputs construct a checked-capacity hash set in the graph-owned `core/graphics/task_graph/declaration_scratch` arena. Its scope ends before persistent member/marker/set publication. The declaration lock serializes this arena, reset retains reusable backing, and destruction retires it. Compatible same-identity re-imports keep their original ordered comparison path.
+
+Three additional telemetry-backed tests verify no scratch allocation for small and blocked operations; full used-byte reclamation after success, late duplicate and stale/out-of-range rejection; repeated 4,096/33/4,096 workloads across graph resets with no warmed heap churn; and live backing retirement at graph destruction. They query the existing allocation-owner records, so no diagnostic-only graph accessor or separate accounting system was added. The memory payload stays version 1.
+
+Seven alternating process pairs after warmup compare against the committed graph-index implementation immediately before this item. Each context starts with its resource registry prepared and imports exactly one new set; the subsequent 64 re-imports per context cannot be confused with registry growth.
+
+| First-import workload | dbg before / after, ms | opt before / after, ms |
+| --- | ---: | ---: |
+| 64 sets with 1 members each | 0.0925 / 0.0947 | 0.0190 / 0.0224 |
+| 64 sets with 8 members each | 0.0924 / 0.0933 | 0.0133 / 0.0128 |
+| 32 sets with 32 members each | 0.0812 / 0.0785 | 0.0114 / 0.0097 |
+| 4 sets with 1,024 members each | 3.7868 / 0.3942 | 0.5985 / 0.0549 |
+| 2 sets with 4,096 members each | 29.6151 / 0.7962 | 4.5609 / 0.0988 |
+
+Small workloads retain the same heap allocation counts and bytes. The 1,024-member case adds 33,792 bytes of cached backing per graph in dbg and 32,768 in opt. The 4,096-member case adds 132,096 / 131,072 bytes per graph. This storage is reusable backing, not unreclaimed live membership data: owner used bytes return to their prior value after each call and owner reserved bytes return after graph destruction. The first large import adds two heap allocations per graph in dbg and one in opt; warmed repeated scopes need none.
+
+No re-import speedup is claimed. For 128 re-imports of the 4,096-member sets, dbg measures 1.2489 -> 1.1957 ms and opt 0.1935 -> 0.2266 ms; the latter is about 259 ns more per re-import. The first-import improvement is 37x in dbg and 46x in opt for this large workload, while the validated re-import path remains linear in member count.
+
+Final broad validation passes 1,012 tests in dbg and opt and 1,015 in fin, including all 384 task-graph tests and all 247 / 250 renderer tests, plus two CLI integration suites per configuration. Native graphics/descriptor coverage passes 377 tests with 38 capability skips in dbg, 376 with 39 skips in opt, and 365 with 37 skips in fin. All 50 source-policy checks pass. All sixteen broad targets build in each configuration without compiler warning/error lines, and the skinning pipeline gathers its 110 assets successfully.
+
+## Final bounded source audit
+
+The closing review covered scene/model/skeleton updates, graph pipeline imports, meshlet cooking, and shader dependency/define preparation. It found no additional justified change for this pass. Scene light output is bounded, camera selection stops at the valid active camera, and attachment palettes already share parent work. The only production graph pipeline importer uses three fixed pipelines. Shader dependency traversal already deduplicates visited paths; define expansion produces the required output combinations. Caching callback-sensitive world queries or filesystem-dependent includes would change their freshness contract. Meshlet disconnected-candidate scores change with each accepted triangle; its precomputed geometry, adjacency and parallel search cannot be replaced by a cached winner without evaluating the resulting selection and quality.
+
+The closing production scan finds catch clauses only in `core/common/terminal_entry.h`. Expected failures use explicit results; unexpected exceptions end execution through the terminal entry or native thread boundary, with RAII cleanup and no intermediate recovery handlers. Allocation-owner/source telemetry remains enabled and its memory payload remains version 1.

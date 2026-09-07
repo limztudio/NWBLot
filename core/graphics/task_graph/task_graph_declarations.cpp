@@ -39,6 +39,7 @@ u64 GpuTaskGraph::allocateGeneration()noexcept{
 
 GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
     : m_arena(arena)
+    , m_declarationScratch(Name("core/graphics/task_graph/declaration_scratch"))
     , m_tasks(arena)
     , m_dependencies(arena)
     , m_externalDependencies(arena)

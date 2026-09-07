@@ -28,6 +28,7 @@ target_sources(nwb_graphics_task_graph_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/pipeline_cache_validation_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/resource_queue_sharing_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_analysis_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_set_memory_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_set_validation_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_avboit_accumulation_emulation_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_avboit_accumulation_shared_output_tests.cpp"

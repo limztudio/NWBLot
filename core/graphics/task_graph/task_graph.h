@@ -1235,6 +1235,7 @@ private:
 
 private:
     GraphicsArena& m_arena;
+    Alloc::ScratchArena m_declarationScratch;
     mutable RecursiveMutex m_declarationMutex;
     mutable Futex m_lifecycleMutex;
     GraphicsVector<GpuTaskNode> m_tasks;

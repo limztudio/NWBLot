@@ -6,6 +6,7 @@
 
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/rhi/command.h>
+#include <global/allocation_size.h>
 #include <global/scope_exit.h>
 #include <global/termination.h>
 
@@ -623,13 +624,32 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
     )
         return {};
 
-    for(usize memberIndex = 0u; memberIndex < desc.memberCount; ++memberIndex){
-        const GpuGraphResourceId member = desc.members[memberIndex];
-        if(!validResource(member))
-            return {};
-        for(usize previousMemberIndex = 0u; previousMemberIndex < memberIndex; ++previousMemberIndex){
-            if(desc.members[previousMemberIndex] == member)
+    {
+        constexpr usize s_InlineMemberCount = 32u;
+        u32 inlineMembers[s_InlineMemberCount];
+        Optional<HashSet<u32, Alloc::ScratchArena>> indexedMembers;
+        for(usize memberIndex = 0u; memberIndex < desc.memberCount; ++memberIndex){
+            const GpuGraphResourceId member = desc.members[memberIndex];
+            if(!validResource(member))
                 return {};
+
+            // Validity establishes this graph generation before index-only membership is used.
+            if(memberIndex < s_InlineMemberCount){
+                for(usize previousMemberIndex = 0u; previousMemberIndex < memberIndex; ++previousMemberIndex){
+                    if(inlineMembers[previousMemberIndex] == member.index)
+                        return {};
+                }
+                inlineMembers[memberIndex] = member.index;
+            }
+            else{
+                if(!indexedMembers){
+                    // Direct capacity construction avoids an empty-table proxy allocation and later rehash.
+                    indexedMembers.emplace(AddSize(desc.memberCount, desc.memberCount), m_declarationScratch);
+                    indexedMembers->insert(inlineMembers, inlineMembers + s_InlineMemberCount);
+                }
+                if(!indexedMembers->insert(member.index).second)
+                    return {};
+            }
         }
     }
 

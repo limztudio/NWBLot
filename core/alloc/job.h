@@ -193,6 +193,7 @@ private:
         return state == JobState::Waiting || state == JobState::Scheduled || state == JobState::Executing;
     }
 
+
 public:
     inline explicit JobSystem(ThreadPool& pool, usize arenaSize = 0)
         : m_domainIdentity(allocateDomainIdentity())
@@ -700,7 +701,6 @@ inline void FinishBorrowedSchedulerDomain(JobSystem& jobSystem, ThreadPool& thre
     threadPool.finish();
     drainPool.release();
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

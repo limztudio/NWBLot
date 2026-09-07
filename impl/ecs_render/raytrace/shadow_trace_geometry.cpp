@@ -22,6 +22,9 @@ NWB_IMPL_BEGIN
 namespace __hidden_shadow_trace_geometry{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 using MeshSnapshot = ECSRenderDetail::MeshRayTracingResourceSnapshot;
 inline constexpr usize s_MissingIndex = Limit<usize>::s_Max;
 inline constexpr u32 s_PositionMember = 0u;
@@ -104,6 +107,9 @@ private:
     Core::Alloc::ScratchArena& m_scratchArena;
     usize m_maximumBucketCount = 0u;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };

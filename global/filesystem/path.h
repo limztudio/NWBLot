@@ -130,8 +130,8 @@ public:
 
     public:
         [[nodiscard]] Path operator*()const{
-            NWB_ASSERT(m_path != nullptr && !m_atEnd);
-            return Path(m_path->arena(), native_string_view(m_path->m_text.data() + m_begin, m_end - m_begin));
+            const native_string_view component = nativeComponent();
+            return Path(m_path->arena(), component);
         }
 
         Iterator& operator++()noexcept{
@@ -150,6 +150,13 @@ public:
         }
 
         [[nodiscard]] bool operator!=(const Iterator& rhs)const noexcept{ return !(*this == rhs); }
+
+        // Requires a non-end iterator. The view borrows the source path and survives iterator advancement;
+        // mutating or destroying the source path invalidates it.
+        [[nodiscard]] native_string_view nativeComponent()const noexcept{
+            NWB_ASSERT(m_path != nullptr && !m_atEnd);
+            return native_string_view(m_path->m_text.data() + m_begin, m_end - m_begin);
+        }
 
 
     private:

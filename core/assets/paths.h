@@ -10,6 +10,8 @@
 
 #include <core/common/log.h>
 
+#include <global/allocation_size.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,27 +37,77 @@ namespace AssetPathsDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct ConvertedPathByteCounter{
+    usize byteCount = 0u;
+
+    ConvertedPathByteCounter& operator*()noexcept{ return *this; }
+    ConvertedPathByteCounter& operator++(int)noexcept{ return *this; }
+    ConvertedPathByteCounter& operator=(const char){
+        byteCount = AddSize(byteCount, 1u);
+        return *this;
+    }
+};
+
+struct RelativeAssetPathLayout{
+    Path::const_iterator acceptedEnd;
+    usize byteCount = 0u;
+    bool accepted = false;
+};
+
+
+[[nodiscard]] inline RelativeAssetPathLayout MeasureRelativeAssetPathText(const Path& relativePath){
+    RelativeAssetPathLayout layout{ relativePath.end() };
+    ConvertedPathByteCounter counter;
+    for(auto componentIt = relativePath.begin(); componentIt != relativePath.end(); ++componentIt){
+        const auto component = componentIt.nativeComponent();
+        if(component.empty() || GlobalFilesystemPathDetail::IsDot(component))
+            continue;
+        if(
+            GlobalFilesystemPathDetail::IsDotDot(component)
+            || component.find(static_cast<Path::value_type>('/')) != Path::native_string_view::npos
+            || component.find(static_cast<Path::value_type>('\\')) != Path::native_string_view::npos
+        ){
+            layout.acceptedEnd = componentIt;
+            layout.byteCount = counter.byteCount;
+            return layout;
+        }
+
+        if(counter.byteCount != 0u)
+            counter.byteCount = AddSize(counter.byteCount, 1u);
+        BasicStringDetail::WriteConvertedText<char>(counter, component);
+    }
+    layout.byteCount = counter.byteCount;
+    layout.accepted = counter.byteCount != 0u;
+    return layout;
+}
+
+inline void WriteRelativeAssetPathText(
+    const Path& relativePath,
+    const RelativeAssetPathLayout& layout,
+    const NotNull<char*> output){
+    char* cursor = output.get();
+    bool hasComponent = false;
+    for(auto componentIt = relativePath.begin(); componentIt != layout.acceptedEnd; ++componentIt){
+        const auto component = componentIt.nativeComponent();
+        if(component.empty() || GlobalFilesystemPathDetail::IsDot(component))
+            continue;
+        if(hasComponent)
+            *cursor++ = '/';
+        BasicStringDetail::WriteConvertedText<char>(cursor, component);
+        hasComponent = true;
+    }
+    NWB_ASSERT(static_cast<usize>(cursor - output.get()) == layout.byteCount);
+    for(char* character = output.get(); character != cursor; ++character)
+        *character = Canonicalize(*character);
+}
+
 template<typename StringT>
 [[nodiscard]] inline bool BuildRelativeAssetPathText(const Path& relativePath, StringT& outRelativePath){
     outRelativePath.clear();
-    auto& arena = outRelativePath.get_allocator().arena();
-
-    bool hasComponent = false;
-    for(const Path& component : relativePath){
-        auto componentText = PathToString(arena, component);
-        CanonicalizeTextInPlace(componentText);
-        if(componentText.empty() || componentText == ".")
-            continue;
-        if(componentText == ".." || AStringView(componentText).find('/') != AStringView::npos)
-            return false;
-
-        if(hasComponent)
-            outRelativePath += '/';
-        outRelativePath += componentText;
-        hasComponent = true;
-    }
-
-    return hasComponent;
+    const RelativeAssetPathLayout layout = MeasureRelativeAssetPathText(relativePath);
+    outRelativePath.resize(layout.byteCount);
+    WriteRelativeAssetPathText(relativePath, layout, MakeNotNull(outRelativePath.data()));
+    return layout.accepted;
 }
 
 [[nodiscard]] inline bool ExtractAssetVirtualRoot(
@@ -95,8 +147,8 @@ template<typename StringT>
     Path logicalPath = relativePath;
     logicalPath.replace_extension();
 
-    StringT relativePathText{outVirtualPath.get_allocator()};
-    if(!BuildRelativeAssetPathText(logicalPath, relativePathText)){
+    const RelativeAssetPathLayout layout = MeasureRelativeAssetPathText(logicalPath);
+    if(!layout.accepted){
         NWB_LOGGER_ERROR(NWB_TEXT("Assets: asset '{}' is not under asset root '{}'")
             , PathToString<tchar>(sourceOrMetaPath)
             , PathToString<tchar>(assetRoot)
@@ -106,7 +158,7 @@ template<typename StringT>
 
     if(
         virtualRoot.size() > Limit<usize>::s_Max - 1u
-        || relativePathText.size() > Limit<usize>::s_Max - virtualRoot.size() - 1u
+        || layout.byteCount > Limit<usize>::s_Max - virtualRoot.size() - 1u
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Assets: derived asset virtual path size overflows for '{}'")
             , PathToString<tchar>(sourceOrMetaPath)
@@ -114,11 +166,12 @@ template<typename StringT>
         return false;
     }
 
-    const usize virtualPathSize = virtualRoot.size() + 1u + relativePathText.size();
-    outVirtualPath.reserve(virtualPathSize);
-    outVirtualPath.append(virtualRoot.data(), virtualRoot.size());
-    outVirtualPath += '/';
-    outVirtualPath += relativePathText;
+    const usize virtualPathSize = virtualRoot.size() + 1u + layout.byteCount;
+    outVirtualPath.resize(virtualPathSize);
+    if(!virtualRoot.empty())
+        NWB_MEMCPY(outVirtualPath.data(), virtualPathSize, virtualRoot.data(), virtualRoot.size());
+    outVirtualPath[virtualRoot.size()] = '/';
+    WriteRelativeAssetPathText(logicalPath, layout, MakeNotNull(outVirtualPath.data() + virtualRoot.size() + 1u));
     return true;
 }
 

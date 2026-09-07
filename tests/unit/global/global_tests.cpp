@@ -893,6 +893,75 @@ TEST(Global, BasicCompactStringTypes){
     EXPECT_TRUE(rejected.empty());
 }
 
+TEST(Global, PathNativeComponentsMatchOwningIterationAndRemainValidAfterAdvance){
+    NWB::Tests::TestArena<> testArena;
+#if defined(NWB_PLATFORM_WINDOWS)
+    const Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "C:\\Root//./한글/File.TXT/");
+    constexpr TStringView s_Expected[]{ NWB_TEXT("C:\\"), NWB_TEXT("Root"), NWB_TEXT("."), NWB_TEXT("한글"), NWB_TEXT("File.TXT") };
+#else
+    const Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "/Root//./한글/File.TXT/");
+    constexpr TStringView s_Expected[]{ NWB_TEXT("/"), NWB_TEXT("Root"), NWB_TEXT("."), NWB_TEXT("한글"), NWB_TEXT("File.TXT") };
+#endif
+    auto componentIt = path.begin();
+    const TStringView first = componentIt.nativeComponent();
+    usize componentIndex = 0u;
+    while(componentIt != path.end()){
+        ASSERT_LT(componentIndex, LengthOf(s_Expected));
+        const TStringView borrowed = componentIt.nativeComponent();
+        EXPECT_EQ(borrowed, s_Expected[componentIndex]);
+        const auto owned = *componentIt;
+        EXPECT_EQ(owned.native(), borrowed);
+        auto next = componentIt;
+        ++next;
+        EXPECT_EQ(componentIt.nativeComponent(), borrowed);
+        componentIt = next;
+        EXPECT_EQ(borrowed, s_Expected[componentIndex]);
+        EXPECT_EQ(first, s_Expected[0u]);
+        ++componentIndex;
+    }
+    EXPECT_EQ(componentIndex, LengthOf(s_Expected));
+    ++componentIt;
+    EXPECT_EQ(componentIt, path.end());
+
+    const Path<NWB::Core::Alloc::GlobalArena> empty(testArena.arena);
+    EXPECT_EQ(empty.begin(), empty.end());
+}
+
+TEST(Global, PathNativeComponentViewsBorrowSourceStorageWithoutAllocating){
+    NWB::Core::Alloc::GlobalArena arena(Name("tests/path/native_component_views"));
+    const Path<NWB::Core::Alloc::GlobalArena> path(
+        arena,
+        "First_component_long_enough_to_require_owning_storage/Second_component_with_Unicode_한글_😀/Third_component"
+    );
+    const TStringView native = path.native();
+    const ArenaMemoryStats before = arena.memoryStats();
+    TStringView retained;
+    {
+        auto componentIt = path.begin();
+        retained = componentIt.nativeComponent();
+        EXPECT_EQ(retained.data(), native.data());
+        for(usize repetition = 0u; repetition < 32u; ++repetition){
+            usize componentCount = 0u;
+            for(auto it = path.begin(); it != path.end(); ++it){
+                const TStringView component = it.nativeComponent();
+                EXPECT_GE(component.data(), native.data());
+                EXPECT_LE(component.data() + component.size(), native.data() + native.size());
+                ++componentCount;
+            }
+            EXPECT_EQ(componentCount, 3u);
+        }
+        ++componentIt;
+        EXPECT_NE(componentIt.nativeComponent().data(), retained.data());
+    }
+    EXPECT_EQ(retained, TStringView(NWB_TEXT("First_component_long_enough_to_require_owning_storage")));
+    const ArenaMemoryStats after = arena.memoryStats();
+    EXPECT_EQ(after.allocationCount, before.allocationCount);
+    EXPECT_EQ(after.reallocationCount, before.reallocationCount);
+    EXPECT_EQ(after.deallocationCount, before.deallocationCount);
+    EXPECT_EQ(after.usedBytes, before.usedBytes);
+}
+
+
 TEST(Global, TextUtilityHelpers){
     NWB::Tests::TestArena<> testArena;
     const Path<NWB::Core::Alloc::GlobalArena> genericPath(testArena.arena, "alpha\\beta/file.txt");

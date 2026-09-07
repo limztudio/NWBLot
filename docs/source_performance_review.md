@@ -420,3 +420,20 @@ Seven alternating benchmark pairs after warmup measured complete scopes, includi
 The mixed-alignment workload now returns to zero used bytes instead of retaining 2,880 bytes. Peak usage falls from 22,144 to 19,264 bytes; cached backing remains 37,888 bytes with no heap allocations after warmup. Its 24,576 allocation/free pairs measure 1.9007 -> 2.1079 ms in dbg and 0.1900 -> 0.1979 ms in opt. The corrected stack transitions add about 8 ns per pair in dbg. This is a reclamation and reuse correctness fix, with measured costs stated explicitly.
 
 Broad validation passed 974 tests in dbg and opt and 977 in fin across allocation, parsing, crash, task-graph, telemetry, renderer and selected asset suites, plus two CLI integration suites per configuration. Native descriptor/graphics coverage passed 377 tests with 38 capability skips in dbg, 376 with 39 skips in opt, and 365 with 37 skips in fin. All 50 source-policy checks pass. Frame, pipeline, utilities, logserver, loader and skinning benchmark targets build in every configuration; the skinning asset pipeline cooked and gathered 110 assets.
+
+## Direct asset path construction
+
+Path iterators now expose a borrowed native component view; owning dereference delegates to the same component boundary logic. Relative-path construction measures accepted UTF-8 output with the existing converter, sizes the output once, and writes directly. Derived-path construction writes the virtual root and relative tail into its final output, removing the intermediate relative string as well as owning component paths and conversion strings. Root spelling remains unchanged; only the relative tail is canonicalized. Relative rejection retains the same accepted prefix, while the public derived operation retains its original output-clearing and error behavior.
+
+Eight path regressions and two global iterator regressions cover Unicode and supplementary characters, native Windows roots, dot/parent rejection prefixes, checked size overflow, owning/borrowed iteration equivalence, view lifetime, zero allocation during borrowed iteration, and repeated long/small scopes returning to caller storage. Broad validation passes 999 tests in dbg and opt and 1,002 in fin, plus both CLI integration suites per configuration. All 165 global tests and all 69 selected asset tests pass in each build, and frame/pipeline/loader/utility/skinning targets build and recook their assets successfully.
+
+Seven alternating process pairs after warmup measured sixteen complete public path-building calls, including output verification and destruction. Input paths and the caller sentinel are prepared outside timing.
+
+| Workload | dbg before / after, ms | opt before / after, ms |
+| --- | ---: | ---: |
+| Short filename | 0.2409 / 0.2298 | 0.0220 / 0.0135 |
+| 64 ASCII directories | 3.5560 / 2.2917 | 0.1661 / 0.1111 |
+| Eight long ASCII components | 2.4286 / 1.5302 | 0.1571 / 0.1275 |
+| Twelve Unicode components | 2.8995 / 1.5459 | 0.1508 / 0.1062 |
+
+After sixteen calls, used scratch falls from 37,280 bytes for deep paths, 225,808 for long ASCII paths, and 252,992 for Unicode paths to the original 64-byte caller sentinel. It remains at that sentinel after every sampled call count (1, 2, 4, 8 and 16). Unicode peak usage falls from 255,552 -> 2,608 bytes in dbg and 255,520 -> 2,592 in opt. Long/Unicode reserved backing falls from 327,680 -> 131,072 bytes in dbg and 262,144 -> 65,536 in opt. The benchmark deliberately uses 64 KiB initial chunks; these are its observed cached capacities, not a change to the allocator's default chunk size.

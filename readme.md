@@ -68,12 +68,13 @@ The repository launcher configures when needed, builds the selected target, and 
 
 ```powershell
 python launcher.py testbed --config dbg
-python pipeline/cooker.py --help
+python launcher.py cooker --help
+python launcher.py cooker --config dbg -- --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
 python launcher.py smoke --profiles
 python launcher.py profiles
 ```
 
-Asset cooking uses `pipeline/cooker.py`, which runs `dependeny_computer`, `asset_builder`, and `asset_gatherer` in order. The tools build with `NWB_BUILD_PIPELINE=ON` (the default). See [the pipeline guide](pipeline/readme.md) for direct stage commands and [the filesystem guide](docs/filesystem.md) for project filesystem customization.
+The `cooker` launcher builds the three pipeline tools, resolves their executable paths, and runs `pipeline/cooker.py`. Put launcher build options before `--` and cooker options after it; `python launcher.py cooker -- --help` shows the cooker options without building. The script runs `dependeny_computer`, `asset_builder`, and `asset_gatherer` in order. The tools build with `NWB_BUILD_PIPELINE=ON` (the default). See [the pipeline guide](pipeline/readme.md) for direct stage commands and [the filesystem guide](docs/filesystem.md) for project filesystem customization.
 
 Use `--with-profile` to start the log server with a launched application. Use `--run-seconds <N>` for a bounded profiling run.
 

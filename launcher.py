@@ -29,7 +29,7 @@ DEFAULT_DOMAIN = "full"
 DEFAULT_BUILD_JOBS = "8"
 LAUNCHER_SEARCH_ROOTS = (Path("CoolStuff"), Path("tests"), Path("utilities"))
 LAUNCHER_SCRIPT_NAME = "launch.py"
-RESERVED_LAUNCH_COMMANDS = frozenset(("profiles", "run"))
+RESERVED_LAUNCH_COMMANDS = frozenset(("profiles", "run", "cooker"))
 PROFILE_LOGSERVER_TARGET = "nwb_logserver"
 PROFILE_LOGSERVER_EXECUTABLE = "logserver"
 PROFILE_LOG_ADDRESS = "http://localhost"
@@ -900,6 +900,37 @@ def run_target_command(args) -> int:
     )
 
 
+def run_cooker_command(args) -> int:
+    cooker_args = normalize_application_args(args.application_args)
+    root = resolve_repo_root(args.repo_root)
+    script = root / "pipeline" / "cooker.py"
+    env = build_environment(args)
+    if is_help_request(cooker_args):
+        run_checked([sys.executable, script, *cooker_args], root, env, args.dry_run)
+        return 0
+
+    settings = resolve_launch_settings(args, DEFAULT_DOMAIN)
+    maybe_configure(args, settings, {"NWB_BUILD_PIPELINE": "ON"}, env)
+    settings = refresh_launch_settings(settings, args.domain)
+    build_target(args, settings, "nwb_pipeline", env)
+
+    command = [
+        sys.executable, str(script), "--repo-root", str(settings.root),
+        "--configuration", settings.config,
+    ]
+    if not any(value == "--tool-directory" or value.startswith("--tool-directory=") for value in cooker_args):
+        for option, target in (
+            ("--dependency-computer", "nwb_dependeny_computer"),
+            ("--asset-builder", "nwb_asset_builder"),
+            ("--asset-gatherer", "nwb_asset_gatherer"),
+        ):
+            executable = resolve_executable_path(settings, target, None, None, args.dry_run)
+            command.extend([option, str(executable)])
+    command.extend(cooker_args)
+    run_checked(command, settings.root, env, args.dry_run)
+    return 0
+
+
 def run_target_launcher(target: str, argv: Sequence[str]) -> int:
     return main(["run", target] + list(argv))
 
@@ -963,6 +994,7 @@ def run_directory_launcher(directory: Path, argv: Sequence[str]) -> int:
 def list_profiles_command(args) -> int:
     print("runnable commands:", flush=True)
     print("  run <cmake-target> [launcher options] [-- application arguments]", flush=True)
+    print("  cooker [build options] -- <cooker arguments>  (pipeline/cooker.py)", flush=True)
     for launcher in args.repo_launchers.values():
         route = " -> ".join(str(script) for script in (*launcher.route, launcher.script))
         print(f"  {launcher.command}  ({route})", flush=True)
@@ -1064,6 +1096,15 @@ def make_parser(repo_launchers: Optional[Dict[str, RepoLauncher]] = None) -> arg
     add_common_options(run_parser)
     run_parser.add_argument("target", help="CMake executable target, such as testbed or nwb_asset_builder.")
     run_parser.set_defaults(handler=run_target_command)
+
+    cooker_parser = subparsers.add_parser(
+        "cooker",
+        help="Build the asset pipeline and run pipeline/cooker.py.",
+        description="Build all three pipeline tools, then cook assets. Pass cooker arguments after --.",
+        epilog="Example: python launcher.py cooker --config dbg -- --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res",
+    )
+    add_build_options(cooker_parser)
+    cooker_parser.set_defaults(handler=run_cooker_command)
 
     for launcher in repo_launchers.values():
         route = " -> ".join(str(script) for script in (*launcher.route, launcher.script))

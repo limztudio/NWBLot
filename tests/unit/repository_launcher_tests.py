@@ -692,5 +692,143 @@ class LauncherPlatformTests(unittest.TestCase):
         )
 
 
+class CookerLauncherTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.settings = launcher.LaunchSettings(
+            root=self.root,
+            platform_name="windows",
+            arch="arm64",
+            domain="full",
+            config="opt",
+            configure_preset="windows-clang-arm64",
+            build_dir=self.root / "__cmake" / "build" / "windows-clang-arm64",
+            cmake=("cmake",),
+        )
+        self.environment = {"NWB_TEST_ENVIRONMENT": "cooker"}
+        self.arguments = ["cooker", "--repo-root", str(self.root), "--platform", "windows", "--arch", "arm64", "--config", "opt"]
+        self.command_prefix = [
+            sys.executable, str(self.root / "pipeline" / "cooker.py"),
+            "--repo-root", str(self.root), "--configuration", "opt",
+        ]
+        self.tool_paths = {
+            "nwb_dependeny_computer": self.root / "custom artifacts" / "dependeny_computer.exe",
+            "nwb_asset_builder": self.root / "custom artifacts" / "asset_builder.exe",
+            "nwb_asset_gatherer": self.root / "custom artifacts" / "asset_gatherer.exe",
+        }
+        self.patch(launcher, "discover_repo_launchers", return_value={})
+        self.settings_resolver = self.patch(launcher, "resolve_launch_settings", return_value=self.settings)
+        self.patch(launcher, "refresh_launch_settings", return_value=self.settings)
+        self.patch(launcher, "build_environment", return_value=self.environment)
+        self.patch(launcher, "host_platform_name", return_value="windows")
+        self.process = self.patch(launcher.subprocess, "run", return_value=mock.Mock(returncode=0))
+
+    def patch(self, owner, name, **kwargs):
+        patcher = mock.patch.object(owner, name, **kwargs)
+        result = patcher.start()
+        self.addCleanup(patcher.stop)
+        return result
+
+    def prepare_pipeline_build(self):
+        configure = self.patch(launcher, "maybe_configure")
+        build = self.patch(launcher, "build_target")
+        resolve = self.patch(
+            launcher, "resolve_executable_path",
+            side_effect=lambda settings, target, override, base_name, dry_run: self.tool_paths[target],
+        )
+        return configure, build, resolve
+
+    def test_builds_pipeline_and_forwards_defaults_then_user_overrides(self):
+        configure, build, resolve = self.prepare_pipeline_build()
+        workflow = mock.Mock()
+        for name, operation in (("configure", configure), ("build", build), ("resolve", resolve), ("process", self.process)):
+            workflow.attach_mock(operation, name)
+        forwarded = [
+            "--asset-root", "first assets", "second assets", "--output-directory", "runtime resources",
+            "--configuration", "project-cook", "--repo-root", "custom source root",
+            "--asset-builder", "custom builder.exe",
+        ]
+
+        self.assertEqual(0, launcher.main([*self.arguments, "--", *forwarded]))
+
+        configure.assert_called_once_with(mock.ANY, self.settings, {"NWB_BUILD_PIPELINE": "ON"}, self.environment)
+        build.assert_called_once_with(mock.ANY, self.settings, "nwb_pipeline", self.environment)
+        self.assertEqual(
+            [mock.call(self.settings, target, None, None, False) for target in self.tool_paths],
+            resolve.call_args_list,
+        )
+        expected_command = self.command_prefix + [
+            "--dependency-computer", str(self.tool_paths["nwb_dependeny_computer"]),
+            "--asset-builder", str(self.tool_paths["nwb_asset_builder"]),
+            "--asset-gatherer", str(self.tool_paths["nwb_asset_gatherer"]),
+            *forwarded,
+        ]
+        self.process.assert_called_once_with(expected_command, cwd=self.root, env=self.environment)
+        self.assertEqual(["configure", "build", "resolve", "resolve", "resolve", "process"], [call[0] for call in workflow.mock_calls])
+
+    def test_build_failure_propagates_without_resolving_or_launching_tools(self):
+        _, build, resolve = self.prepare_pipeline_build()
+        build.side_effect = SystemExit(21)
+
+        with self.assertRaises(SystemExit) as failure:
+            launcher.main([*self.arguments, "--", "--asset-root", "assets", "--output-directory", "runtime/res"])
+
+        self.assertEqual(21, failure.exception.code)
+        resolve.assert_not_called()
+        self.process.assert_not_called()
+
+    def test_dry_run_prints_commands_without_subprocesses_or_build_directory_creation(self):
+        with mock.patch("builtins.print") as output, mock.patch.object(launcher.subprocess, "Popen") as popen:
+            self.assertEqual(
+                0,
+                launcher.main([*self.arguments, "--dry-run", "--", "--asset-root", "assets", "--output-directory", "runtime/res"]),
+            )
+
+        self.process.assert_not_called()
+        popen.assert_not_called()
+        self.assertFalse(self.settings.build_dir.exists())
+        printed = "\n".join(str(call.args[0]) for call in output.call_args_list)
+        self.assertIn("NWB_BUILD_PIPELINE=ON", printed)
+        self.assertIn("--target nwb_pipeline", printed)
+        self.assertIn("cooker.py", printed)
+        self.assertIn("--asset-root assets --output-directory runtime/res", printed)
+
+    def test_forwarded_help_skips_configuration_build_and_target_resolution(self):
+        configure, build, resolve = self.prepare_pipeline_build()
+
+        self.assertEqual(0, launcher.main([*self.arguments, "--", "--help"]))
+
+        self.settings_resolver.assert_not_called()
+        configure.assert_not_called()
+        build.assert_not_called()
+        resolve.assert_not_called()
+        self.process.assert_called_once_with(
+            [sys.executable, str(self.root / "pipeline" / "cooker.py"), "--help"],
+            cwd=self.root,
+            env=self.environment,
+        )
+
+    def test_tool_directory_override_suppresses_automatic_executable_arguments(self):
+        _, _, resolve = self.prepare_pipeline_build()
+        for forwarded in (["--tool-directory", "project tools"], ["--tool-directory=project tools"]):
+            with self.subTest(arguments=forwarded):
+                self.process.reset_mock()
+                self.assertEqual(0, launcher.main([*self.arguments, "--", *forwarded]))
+                self.process.assert_called_once_with(self.command_prefix + forwarded, cwd=self.root, env=self.environment)
+        resolve.assert_not_called()
+
+    def test_cooker_nonzero_exit_code_is_propagated(self):
+        self.prepare_pipeline_build()
+        self.process.return_value.returncode = 23
+
+        with self.assertRaises(SystemExit) as failure:
+            launcher.main([*self.arguments, "--", "--asset-root", "assets", "--output-directory", "runtime/res"])
+
+        self.assertEqual(23, failure.exception.code)
+        self.process.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

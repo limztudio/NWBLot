@@ -5,6 +5,25 @@ the `nwb_pipeline` CMake target to produce `dependeny_computer`, `asset_builder`
 and `asset_gatherer` (with `.exe` on Windows). `NWB_BUILD_PIPELINE` controls these
 targets and the asset build libraries.
 
+Run the complete pipeline through the repository launcher:
+
+```console
+python launcher.py cooker --config dbg -- --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+```
+
+The launcher configures when needed with `NWB_BUILD_PIPELINE=ON`, builds
+`nwb_pipeline`, resolves all three tools from the selected CMake configuration,
+and invokes `cooker.py`. Launcher build options go before `--`; cooker options go
+after it. Use `--skip-build` to reuse built tools, or `--dry-run` to print the
+commands without executing them. `--config` also supplies the cooker's default
+`--configuration`; an explicit cooker option after `--` takes precedence.
+
+`python launcher.py cooker --help` shows launcher options, and
+`python launcher.py cooker -- --help` shows cooker options without configuring or
+building. A forwarded `--tool-directory` or individual tool option can select
+existing executables instead of the automatically resolved ones. Configure,
+build, and cooker failures retain their nonzero exit status at the root launcher.
+
 `dependeny_computer` currently returns exactly its inputs, preserving order and
 duplicates. Root asset selection and dependency expansion are not implemented.
 It accepts multiple `--input` values, repeated `--input` options, or an

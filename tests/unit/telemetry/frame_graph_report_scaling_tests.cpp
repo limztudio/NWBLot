@@ -60,6 +60,10 @@ struct ReportFixture{
             .name = Name("tests/telemetry/report/task"),
             .label = "Unmeasured task",
             .kind = Telemetry::FrameGraphNodeKind::Pass,
+            .flags = 0u,
+            .queueAssignment = {},
+            .compiledTask = {},
+            .runtimeStatistics = {},
         });
     }
 

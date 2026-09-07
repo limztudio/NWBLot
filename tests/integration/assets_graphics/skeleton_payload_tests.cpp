@@ -104,7 +104,7 @@ TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndClearsPreviousOutput){
 TEST(SkeletonPayload, RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    for(const Name duplicate : { Name("left"), Name("ROOT") }){
+    for(const Name& duplicate : { Name("left"), Name("ROOT") }){
         SkeletonInputs inputs;
         ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
         inputs.entry.joints[3u].name = duplicate;

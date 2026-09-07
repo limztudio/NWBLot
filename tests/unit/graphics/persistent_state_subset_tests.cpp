@@ -93,11 +93,14 @@ struct SubsetContext{
         textureStates.push_back({
             .texture = textures[2u].get(), .mipLevel = 0u, .arraySlice = 0u,
             .state = Core::ResourceStates::CopyDest,
+            .queueSharing = Core::ResourceQueueSharing::Exclusive,
+            .ownerQueue = {}, .releaseDestinationQueue = {},
         });
         textureStates.push_back({
             .texture = textures[0u].get(), .mipLevel = 1u, .arraySlice = 0u,
             .state = Core::ResourceStates::CopySource,
             .queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+            .ownerQueue = {}, .releaseDestinationQueue = {},
         });
         Access::stateHandoffPermanentTextures(source).push_back({
             .texture = textures[1u].get(), .state = Core::ResourceStates::ShaderResource,
@@ -111,10 +114,13 @@ struct SubsetContext{
         });
         Access::stateHandoffBuffers(source).push_back({
             .buffer = buffers[2u].get(), .state = Core::ResourceStates::CopyDest,
+            .queueSharing = Core::ResourceQueueSharing::Exclusive,
+            .ownerQueue = {}, .releaseDestinationQueue = {},
         });
         Access::stateHandoffPermanentBuffers(source).push_back({
             .buffer = buffers[1u].get(), .state = Core::ResourceStates::CopySource,
             .queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+            .ownerQueue = {}, .releaseDestinationQueue = {},
         });
         Access::validateStateHandoff(source, s_DeviceGeneration);
     }
@@ -394,6 +400,7 @@ TEST(PersistentStateSubset, LargeTextureSelectionsRetainEverySubresourceAndPerma
                 .texture = context.textures[index].get(), .mipLevel = 1u, .arraySlice = 0u,
                 .state = Core::ResourceStates::CopySource,
                 .queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+                .ownerQueue = {}, .releaseDestinationQueue = {},
             });
         }
         else{

@@ -2,6 +2,7 @@ nwb_declare_gtest_executable(nwb_assets_graphics_tests)
 target_sources(nwb_assets_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/graphics_asset_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/asset_bunch_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/metadata_extension_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/build_input_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gather_input_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/model_payload_tests.cpp"

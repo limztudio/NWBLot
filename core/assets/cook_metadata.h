@@ -13,6 +13,7 @@
 
 #include "cook_entry_registry.h"
 #include "expanded_metadata.h"
+#include "metadata_extension.h"
 
 #include <core/assets/paths.h>
 
@@ -26,7 +27,7 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ParsedMetadataExtensionMap = CookMap<Name, void*>;
+using ParsedMetadataExtensionMap = CookMap<Name, ParsedMetadataExtension>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,13 +79,13 @@ struct ParsedAssetMetadata{
 template<typename T>
 [[nodiscard]] T* FindParsedMetadataExtension(ParsedAssetMetadata& metadata, const Name& extensionName){
     auto found = metadata.extensions.find(extensionName);
-    return found == metadata.extensions.end() ? nullptr : static_cast<T*>(found.value());
+    return found == metadata.extensions.end() ? nullptr : static_cast<T*>(found.value().get());
 }
 
 template<typename T>
 [[nodiscard]] const T* FindParsedMetadataExtension(const ParsedAssetMetadata& metadata, const Name& extensionName){
     auto found = metadata.extensions.find(extensionName);
-    return found == metadata.extensions.end() ? nullptr : static_cast<const T*>(found.value());
+    return found == metadata.extensions.end() ? nullptr : static_cast<const T*>(found.value().get());
 }
 
 template<typename T, typename... Args>
@@ -92,9 +93,11 @@ template<typename T, typename... Args>
     if(T* existing = FindParsedMetadataExtension<T>(metadata, extensionName))
         return *existing;
 
-    T* created = ::NewArenaObject<T>(metadata.arena, Forward<Args>(args)...);
-    metadata.extensions.emplace(extensionName, created);
-    return *created;
+    ParsedMetadataExtension pending = MakeParsedMetadataExtension<T>(metadata.arena, Forward<Args>(args)...);
+    auto inserted = metadata.extensions.try_emplace(extensionName, Move(pending));
+    if(!inserted.second && !inserted.first.value())
+        inserted.first.value() = Move(pending);
+    return *static_cast<T*>(inserted.first.value().get());
 }
 
 

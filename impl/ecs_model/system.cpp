@@ -125,7 +125,6 @@ ModelSystem::ModelSystem(
     , m_world(world)
     , m_assetManager(assetManager)
     , m_applyRenderer(Move(rendererHooks.apply))
-    , m_scratchEntities(arena)
     , m_scratchJoints(arena)
 {
     readAccess<ModelComponent>();
@@ -151,12 +150,12 @@ void ModelSystem::prepare(Core::ECS::World& world){
 }
 
 void ModelSystem::syncModelRuntimes(){
-    clearInvalidSpawnedObjects();
-    clearRuntimeObjectsWithoutModel();
+    Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_model/sync_runtime"));
+    clearInactiveModelRuntimes(scratchArena);
 
     m_world.view<ModelComponent>().each(
         [&](const Core::ECS::EntityID entity, ModelComponent& component){
-            ensureModelRuntime(entity, component);
+            ensureModelRuntime(entity, component, scratchArena);
         }
     );
 }
@@ -169,38 +168,66 @@ void ModelSystem::update(Core::ECS::World& world, const f32 delta){
     updateStaticMeshAttachments();
 }
 
-void ModelSystem::clearInvalidSpawnedObjects(){
-    m_scratchEntities.clear();
-    m_world.view<ModelObjectComponent>().each(
-        [&](const Core::ECS::EntityID entity, ModelObjectComponent& object){
-            if(!m_world.tryGetComponent<ModelRuntimeComponent>(object.owner))
-                m_scratchEntities.push_back(entity);
+void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchArena){
+    const auto objects = m_world.view<ModelObjectComponent>();
+    const auto runtimes = m_world.view<ModelRuntimeComponent>();
+    const auto objectIsInactive = [&](const ModelObjectComponent& object){
+        return !m_world.tryGetComponent<ModelRuntimeComponent>(object.owner)
+            || !m_world.tryGetComponent<ModelComponent>(object.owner);
+    };
+    usize inactiveObjectCount = 0u;
+    objects.each(
+        [&](const Core::ECS::EntityID entity, const ModelObjectComponent& object){
+            static_cast<void>(entity);
+            if(objectIsInactive(object))
+                ++inactiveObjectCount;
         }
     );
-
-    for(const Core::ECS::EntityID entity : m_scratchEntities)
-        m_world.destroyEntity(entity);
-}
-
-void ModelSystem::clearRuntimeObjectsWithoutModel(){
-    m_scratchEntities.clear();
-    m_world.view<ModelRuntimeComponent>().each(
-        [&](const Core::ECS::EntityID entity, ModelRuntimeComponent& runtime){
+    usize inactiveRuntimeCount = 0u;
+    runtimes.each(
+        [&](const Core::ECS::EntityID entity, const ModelRuntimeComponent& runtime){
             static_cast<void>(runtime);
             if(!m_world.tryGetComponent<ModelComponent>(entity))
-                m_scratchEntities.push_back(entity);
+                ++inactiveRuntimeCount;
         }
     );
+    if(inactiveObjectCount == 0u && inactiveRuntimeCount == 0u)
+        return;
 
-    for(const Core::ECS::EntityID entity : m_scratchEntities){
-        clearModelRuntime(entity);
-        m_world.entity(entity).removeComponent<ModelRuntimeComponent>();
+    Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> inactiveEntities(scratchArena);
+    inactiveEntities.reserve(Max(inactiveObjectCount, inactiveRuntimeCount));
+    if(inactiveObjectCount != 0u){
+        objects.each(
+            [&](const Core::ECS::EntityID entity, const ModelObjectComponent& object){
+                if(objectIsInactive(object))
+                    inactiveEntities.push_back(entity);
+            }
+        );
+        for(const Core::ECS::EntityID entity : inactiveEntities)
+            m_world.destroyEntity(entity);
+    }
+
+    if(inactiveRuntimeCount != 0u){
+        // Destroying objects can also remove runtime components, so take a fresh view after that batch completes.
+        inactiveEntities.clear();
+        m_world.view<ModelRuntimeComponent>().each(
+            [&](const Core::ECS::EntityID entity, const ModelRuntimeComponent& runtime){
+                static_cast<void>(runtime);
+                if(!m_world.tryGetComponent<ModelComponent>(entity))
+                    inactiveEntities.push_back(entity);
+            }
+        );
+        for(const Core::ECS::EntityID entity : inactiveEntities)
+            m_world.entity(entity).removeComponent<ModelRuntimeComponent>();
     }
 }
 
-void ModelSystem::ensureModelRuntime(const Core::ECS::EntityID entity, const ModelComponent& component){
+void ModelSystem::ensureModelRuntime(
+    const Core::ECS::EntityID entity,
+    const ModelComponent& component,
+    Core::Alloc::ScratchArena& scratchArena){
     if(!component.model.valid()){
-        clearModelRuntime(entity);
+        clearModelRuntime(entity, scratchArena);
         m_world.entity(entity).removeComponent<ModelRuntimeComponent>();
         return;
     }
@@ -209,7 +236,7 @@ void ModelSystem::ensureModelRuntime(const Core::ECS::EntityID entity, const Mod
     if(runtime.model == component.model.name())
         return;
 
-    clearModelRuntime(entity);
+    clearModelRuntime(entity, scratchArena);
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     const Name modelName = component.model.name();
@@ -226,20 +253,31 @@ void ModelSystem::ensureModelRuntime(const Core::ECS::EntityID entity, const Mod
 
     const Model& model = *checked_cast<const Model*>(loadedAsset.get());
     if(!expandModel(entity, model, runtime))
-        clearModelRuntime(entity);
+        clearModelRuntime(entity, scratchArena);
 }
 
-void ModelSystem::clearModelRuntime(const Core::ECS::EntityID entity){
-    m_scratchEntities.clear();
-    m_world.view<ModelObjectComponent>().each(
-        [&](const Core::ECS::EntityID objectEntity, ModelObjectComponent& object){
+void ModelSystem::clearModelRuntime(const Core::ECS::EntityID entity, Core::Alloc::ScratchArena& scratchArena){
+    const auto objects = m_world.view<ModelObjectComponent>();
+    usize ownedCount = 0u;
+    objects.each(
+        [&](const Core::ECS::EntityID objectEntity, const ModelObjectComponent& object){
+            static_cast<void>(objectEntity);
             if(object.owner == entity)
-                m_scratchEntities.push_back(objectEntity);
+                ++ownedCount;
         }
     );
-
-    for(const Core::ECS::EntityID objectEntity : m_scratchEntities)
-        m_world.destroyEntity(objectEntity);
+    if(ownedCount != 0u){
+        Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> ownedEntities(scratchArena);
+        ownedEntities.reserve(ownedCount);
+        objects.each(
+            [&](const Core::ECS::EntityID objectEntity, const ModelObjectComponent& object){
+                if(object.owner == entity)
+                    ownedEntities.push_back(objectEntity);
+            }
+        );
+        for(const Core::ECS::EntityID objectEntity : ownedEntities)
+            m_world.destroyEntity(objectEntity);
+    }
 
     if(auto* runtime = m_world.tryGetComponent<ModelRuntimeComponent>(entity))
         *runtime = ModelRuntimeComponent{};

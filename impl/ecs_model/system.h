@@ -102,10 +102,9 @@ public:
 
 
 private:
-    void clearInvalidSpawnedObjects();
-    void clearRuntimeObjectsWithoutModel();
-    void ensureModelRuntime(Core::ECS::EntityID entity, const ModelComponent& component);
-    void clearModelRuntime(Core::ECS::EntityID entity);
+    void clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchArena);
+    void ensureModelRuntime(Core::ECS::EntityID entity, const ModelComponent& component, Core::Alloc::ScratchArena& scratchArena);
+    void clearModelRuntime(Core::ECS::EntityID entity, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool expandModel(Core::ECS::EntityID owner, const Model& model, ModelRuntimeComponent& runtime);
     [[nodiscard]] bool spawnSkeletonObject(Core::ECS::EntityID owner, const ModelSkeletonObject& object);
     [[nodiscard]] bool spawnStaticMeshObject(Core::ECS::EntityID owner, const ModelStaticMeshObject& object);
@@ -120,7 +119,6 @@ private:
     Core::ECS::World& m_world;
     Core::Assets::AssetManager& m_assetManager;
     ModelObjectRendererCallback m_applyRenderer;
-    Vector<Core::ECS::EntityID, Core::Alloc::GlobalArena> m_scratchEntities;
     Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena> m_scratchJoints;
 };
 

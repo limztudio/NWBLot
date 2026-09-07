@@ -23,7 +23,7 @@
 #include <core/assets/manager.h>
 #include <core/assets/auto_registration.h>
 #include <core/graphics/shader_archive.h>
-#include <core/filesystem/volume_session.h>
+#include <core/filesystem/filesystem.h>
 #include <global/filesystem/volume_naming.h>
 
 #include "project_entry.h"
@@ -152,21 +152,21 @@ Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena){
 }
 
 
-class VolumeAssetBinarySource final : public NWB::Core::Assets::IAssetBinarySource{
+class FilesystemAssetBinarySource final : public NWB::Core::Assets::IAssetBinarySource{
 public:
-    explicit VolumeAssetBinarySource(NWB::Core::Filesystem::VolumeSession& volumeSession)
-        : m_volumeSession(volumeSession)
+    explicit FilesystemAssetBinarySource(NWB::Core::Filesystem::IFilesystem& filesystem)
+        : m_filesystem(filesystem)
     {}
 
 
 public:
     virtual bool readAssetBinary(const Name& virtualPath, NWB::Core::Assets::AssetBytes& outBinary)const override{
-        return m_volumeSession.loadData(virtualPath, outBinary);
+        return m_filesystem.readFile(virtualPath, outBinary);
     }
 
 
 private:
-    NWB::Core::Filesystem::VolumeSession& m_volumeSession;
+    NWB::Core::Filesystem::IFilesystem& m_filesystem;
 };
 
 
@@ -330,10 +330,13 @@ static int RunProjectRuntime(
         frame.graphics().setWindowTitle(MakeNotNull(projectWindowTitle));
         const NWB::Path resourceMountDirectory = __hidden_loader::ResolveResourceMountDirectory(arena);
         frame.graphics().setPipelineCacheDirectory(resourceMountDirectory);
-        if(!NWB::ConfigureProjectGraphics(frame.graphics())){
-            NWB_LOGGER_FATAL(NWB_TEXT("Loader: project graphics ABI configuration failed before device initialization"));
+        NWB::ProjectStartupContext startupContext{ frame.graphics(), frame.projectObjectArena(), {} };
+        if(!NWB::ConfigureProjectRuntime(startupContext)){
+            NWB_LOGGER_FATAL(NWB_TEXT("Loader: project runtime configuration failed before device initialization"));
             return -1;
         }
+        if(!frame.graphics().setFilesystemFactory(startupContext.filesystemFactory))
+            return -1;
         if(!__hidden_loader::ApplyGraphicsOptions(frame.graphics(), options))
             return -1;
 
@@ -344,90 +347,103 @@ static int RunProjectRuntime(
         frame.graphics().getWindowDimensions(initializedFrameWidth, initializedFrameHeight);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: frame initialized ({}x{})"), initializedFrameWidth, initializedFrameHeight);
 
-        NWB::Core::Filesystem::VolumeSession graphicsVolume(frame.projectObjectArena());
-        if(!graphicsVolume.load(__hidden_loader::s_GraphicsVolumeName, resourceMountDirectory))
+        NWB::Core::Filesystem::VolumeMountDesc graphicsMount(frame.projectObjectArena());
+        if(!graphicsMount.volumeName.assign(__hidden_loader::s_GraphicsVolumeName))
+            return -1;
+        graphicsMount.mountDirectory = resourceMountDirectory;
+        UniquePtr<NWB::Core::Filesystem::IFilesystem> graphicsFilesystem = NWB::Core::Filesystem::CreateFilesystem(
+            frame.projectObjectArena(), graphicsMount, startupContext.filesystemFactory
+        );
+        if(!graphicsFilesystem)
             return -1;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: mounted graphics volume from '{}'"), PathToString<tchar>(resourceMountDirectory));
 
-        __hidden_loader::VolumeAssetBinarySource assetBinarySource(graphicsVolume);
+        {
+            __hidden_loader::FilesystemAssetBinarySource assetBinarySource(*graphicsFilesystem);
 
-        NWB::Core::Assets::AssetRegistry assetRegistry(frame.projectObjectArena());
-        NWB::Core::Assets::RegisterAutoCollectedAssetCodecs(assetRegistry);
+            NWB::Core::Assets::AssetRegistry assetRegistry(frame.projectObjectArena());
+            NWB::Core::Assets::RegisterAutoCollectedAssetCodecs(assetRegistry);
 
-        NWB::Core::Assets::AssetManager assetManager(frame.projectObjectArena(), assetRegistry, assetBinarySource);
+            NWB::Core::Assets::AssetManager assetManager(frame.projectObjectArena(), assetRegistry, assetBinarySource);
 
-        NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> shaderArchiveRecords{ frame.projectObjectArena() };
-        if(!__hidden_loader::LoadShaderArchiveRecords(assetBinarySource, shaderArchiveRecords)){
-            NWB_LOGGER_FATAL(NWB_TEXT("Failed to load shader archive index '{}'")
-                , StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath)
-            );
-            return -1;
+            NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> shaderArchiveRecords{ frame.projectObjectArena() };
+            if(!__hidden_loader::LoadShaderArchiveRecords(assetBinarySource, shaderArchiveRecords)){
+                NWB_LOGGER_FATAL(NWB_TEXT("Failed to load shader archive index '{}'")
+                    , StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath)
+                );
+                return -1;
+            }
+
+            NWB::ProjectRuntimeContext context = {
+                frame.graphics(),
+                frame.input(),
+                frame.projectObjectArena(),
+                frame.projectThreadPool(),
+                frame.projectJobSystem(),
+                assetManager,
+                *graphicsFilesystem,
+                frame.frameGraphRegistry(),
+                frame.perfSession(),
+                {},
+                {},
+                {},
+                {},
+                {},
+            };
+            context.shaderPathResolver = [&shaderArchiveRecords](const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
+                return NWB::Core::ShaderArchive::findVirtualPath(
+                    shaderArchiveRecords,
+                    shaderName,
+                    variantName,
+                    stageName,
+                    outVirtualPath
+                );
+            };
+            context.telemetryCapture = [&frame](const NWB::Core::Telemetry::CaptureOptions& options){
+                frame.setTelemetryCapture(options);
+            };
+            context.telemetryUploadFlush = [&frame](const bool clearAfterUpload){
+                return frame.flushTelemetryUpload(clearAfterUpload);
+            };
+            context.perfCapture = [&frame](const NWB::Core::Perf::CaptureOptions& options){
+                frame.setPerfCapture(options);
+            };
+            context.requestQuit = [&frame](){
+                frame.requestQuit();
+            };
+
+            auto callbacks = NWB::CreateProjectEntryCallbacks(context);
+            if(!callbacks){
+                NWB_LOGGER_FATAL(NWB_TEXT("CreateProjectEntryCallbacks failed: callback instance is null"));
+                return -1;
+            }
+            __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{
+                *callbacks,
+                frame.projectJobSystem(),
+                frame.projectThreadPool()
+            };
+            __hidden_loader::UpdateCallbackContext updateCallbackContext{ *callbacks };
+
+            callbackShutdownGuard.activate();
+            if(!callbacks->onStartup()){
+                NWB_LOGGER_FATAL(NWB_TEXT("Project startup callback returned false"));
+                return -1;
+            }
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: project startup complete"));
+            frame.setProjectUpdateCallback(&__hidden_loader::ProjectTickCallback, &updateCallbackContext);
+
+            if(!frame.showFrame()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame show failed"));
+                return -1;
+            }
+
+            if(!frame.mainLoop()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame main loop failed"));
+                return -1;
+            }
         }
-
-        NWB::ProjectRuntimeContext context = {
-            frame.graphics(),
-            frame.input(),
-            frame.projectObjectArena(),
-            frame.projectThreadPool(),
-            frame.projectJobSystem(),
-            assetManager,
-            frame.frameGraphRegistry(),
-            frame.perfSession(),
-            {},
-            {},
-            {},
-            {},
-            {},
-        };
-        context.shaderPathResolver = [&shaderArchiveRecords](const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
-            return NWB::Core::ShaderArchive::findVirtualPath(
-                shaderArchiveRecords,
-                shaderName,
-                variantName,
-                stageName,
-                outVirtualPath
-            );
-        };
-        context.telemetryCapture = [&frame](const NWB::Core::Telemetry::CaptureOptions& options){
-            frame.setTelemetryCapture(options);
-        };
-        context.telemetryUploadFlush = [&frame](const bool clearAfterUpload){
-            return frame.flushTelemetryUpload(clearAfterUpload);
-        };
-        context.perfCapture = [&frame](const NWB::Core::Perf::CaptureOptions& options){
-            frame.setPerfCapture(options);
-        };
-        context.requestQuit = [&frame](){
-            frame.requestQuit();
-        };
-
-        auto callbacks = NWB::CreateProjectEntryCallbacks(context);
-        if(!callbacks){
-            NWB_LOGGER_FATAL(NWB_TEXT("CreateProjectEntryCallbacks failed: callback instance is null"));
-            return -1;
-        }
-        __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{
-            *callbacks,
-            frame.projectJobSystem(),
-            frame.projectThreadPool()
-        };
-        __hidden_loader::UpdateCallbackContext updateCallbackContext{ *callbacks };
-
-        callbackShutdownGuard.activate();
-        if(!callbacks->onStartup()){
-            NWB_LOGGER_FATAL(NWB_TEXT("Project startup callback returned false"));
-            return -1;
-        }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: project startup complete"));
-        frame.setProjectUpdateCallback(&__hidden_loader::ProjectTickCallback, &updateCallbackContext);
-
-        if(!frame.showFrame()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame show failed"));
-            return -1;
-        }
-
-        if(!frame.mainLoop()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame main loop failed"));
+        if(!graphicsFilesystem->unmountVolume()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Loader: failed to unmount project filesystem"));
             return -1;
         }
     }

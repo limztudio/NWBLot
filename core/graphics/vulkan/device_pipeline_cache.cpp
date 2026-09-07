@@ -6,7 +6,7 @@
 #include "arena_names.h"
 #include "device_detail.h"
 
-#include <core/filesystem/volume_file_system.h>
+#include <core/filesystem/filesystem.h>
 #include <core/filesystem/volume_staging.h>
 #include <global/filesystem/volume_naming.h>
 #include <core/common/log.h>
@@ -45,7 +45,8 @@ static bool MountPipelineCacheVolume(
     const AStringView volumeName,
     const bool createIfMissing,
     Filesystem::VolumeUsage::Enum usage,
-    Filesystem::VolumeFileSystem& outVolume
+    const Filesystem::FilesystemFactory& factory,
+    UniquePtr<Filesystem::IFilesystem>& outVolume
 ){
     Filesystem::VolumeMountDesc mountDesc(directory.arena());
     if(!mountDesc.volumeName.assign(volumeName))
@@ -58,7 +59,8 @@ static bool MountPipelineCacheVolume(
         mountDesc.metadataSize = s_PipelineCacheVolumeMetadataSize;
     }
 
-    return outVolume.mount(mountDesc);
+    outVolume = Filesystem::CreateFilesystem(directory.arena(), mountDesc, factory);
+    return static_cast<bool>(outVolume);
 }
 
 template<typename CacheDataVector>
@@ -170,16 +172,17 @@ bool Device::loadPipelineCacheData(GraphicsBytes& outData){
     outData.clear();
     if(m_pipelineCacheDirectory.empty() || m_pipelineCacheVolumeName.empty())
         return false;
-    if(!::VolumeSegmentExists(m_pipelineCacheDirectory, m_pipelineCacheVolumeName))
+    if(!m_filesystemFactory && !::VolumeSegmentExists(m_pipelineCacheDirectory, m_pipelineCacheVolumeName))
         return false;
 
-    Filesystem::VolumeFileSystem volume(m_context.objectArena);
+    UniquePtr<Filesystem::IFilesystem> volume;
     if(
         !__hidden_vulkan_device_pipeline_cache::MountPipelineCacheVolume(
             m_pipelineCacheDirectory,
             m_pipelineCacheVolumeName,
             false,
             Filesystem::VolumeUsage::RuntimeReadOnly,
+            m_filesystemFactory,
             volume
         )
     ){
@@ -191,9 +194,9 @@ bool Device::loadPipelineCacheData(GraphicsBytes& outData){
     }
 
     const Name cachePath(VulkanDetail::s_PipelineCacheVirtualPath);
-    if(!volume.fileExists(cachePath))
+    if(!volume->fileExists(cachePath))
         return false;
-    if(!volume.readFile(cachePath, outData)){
+    if(!volume->readFile(cachePath, outData)){
         outData.clear();
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to read pipeline cache data from runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         return false;
@@ -212,6 +215,12 @@ bool Device::loadPipelineCacheData(GraphicsBytes& outData){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring incompatible pipeline cache data in runtime volume '{}'.")
                 , StringConvert(m_pipelineCacheVolumeName)
             );
+        return false;
+    }
+
+    if(!volume->unmountVolume()){
+        outData.clear();
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to unmount pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         return false;
     }
 
@@ -245,13 +254,14 @@ void Device::savePipelineCacheData(){
         return;
     }
 
-    Filesystem::VolumeFileSystem volume(m_context.objectArena);
+    UniquePtr<Filesystem::IFilesystem> volume;
     if(
         !__hidden_vulkan_device_pipeline_cache::MountPipelineCacheVolume(
             m_pipelineCacheDirectory,
             m_pipelineCacheVolumeName,
             true,
             Filesystem::VolumeUsage::RuntimeReadWrite,
+            m_filesystemFactory,
             volume
         )
     ){
@@ -259,6 +269,8 @@ void Device::savePipelineCacheData(){
             , StringConvert(m_pipelineCacheVolumeName)
             , PathToString<tchar>(m_pipelineCacheDirectory)
         );
+        if(m_filesystemFactory)
+            return;
         if(!Filesystem::RemoveVolumeSegments(m_pipelineCacheDirectory, m_pipelineCacheVolumeName)){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to remove unusable pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
             return;
@@ -269,6 +281,7 @@ void Device::savePipelineCacheData(){
                 m_pipelineCacheVolumeName,
                 true,
                 Filesystem::VolumeUsage::RuntimeReadWrite,
+                m_filesystemFactory,
                 volume
             )
         ){
@@ -278,12 +291,18 @@ void Device::savePipelineCacheData(){
     }
 
     const Name cachePath(VulkanDetail::s_PipelineCacheVirtualPath);
-    if(!volume.writeFile(cachePath, cacheData)){
+    if(!volume->writeFile(cachePath, cacheData)){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to write pipeline cache data to runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         return;
     }
-    if(!volume.compact(true))
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to compact pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
+    if(!volume->flush()){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to flush pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
+        return;
+    }
+    if(!volume->unmountVolume()){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to unmount pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
+        return;
+    }
 
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Saved pipeline cache runtime volume '{}' ({} bytes).")
         , StringConvert(m_pipelineCacheVolumeName)

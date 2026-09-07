@@ -1,6 +1,7 @@
 add_subdirectory(csg)
 add_subdirectory(ecs)
 add_subdirectory(ecs_graphics)
+add_subdirectory(filesystem)
 add_subdirectory(global)
 add_subdirectory(graphics)
 add_subdirectory(math)

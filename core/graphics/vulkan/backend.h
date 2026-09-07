@@ -3125,7 +3125,7 @@ public:
     void copyTexture(StagingTexture* dest, const TextureSlice& destSlice, Texture* src, const TextureSlice& srcSlice);
     void copyTexture(Texture* dest, const TextureSlice& destSlice, StagingTexture* src, const TextureSlice& srcSlice);
     // Fallible variants are for graph recorders, which must reject a packet rather than claim an accepted lifecycle
-    // when staging allocation or native preflight fails. The established void methods remain the façade contract.
+    // when staging allocation or native preflight fails. The established void methods remain the faÃ§ade contract.
     [[nodiscard]] bool tryWriteBuffer(Buffer* buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
     void writeBuffer(Buffer* buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
     void clearBufferUInt(Buffer* buffer, u32 clearValue);
@@ -4065,6 +4065,7 @@ private:
     DescriptorBufferManager m_descriptorBufferManager;
     GpuDescriptorHeap m_gpuDescriptorHeap;
     Path m_pipelineCacheDirectory;
+    Filesystem::FilesystemFactory m_filesystemFactory;
     GraphicsString m_pipelineCacheVolumeName;
     GraphicsVector<NativeQueueState*> m_nativeQueueStates;
     GraphicsVector<Queue*> m_physicalQueues;

@@ -11,7 +11,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool NWB::ConfigureProjectGraphics(Core::Graphics& graphics){
+bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context){
+    Core::Graphics& graphics = context.graphics;
     if(!graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()))
         return false;
 

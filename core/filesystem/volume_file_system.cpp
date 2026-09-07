@@ -30,14 +30,17 @@ VolumeFileSystem::VolumeFileSystem(Alloc::GlobalArena& arena)
 {}
 
 VolumeFileSystem::~VolumeFileSystem(){
-    unmount();
+    if(!unmountVolume())
+        NWB_LOGGER_ERROR(NWB_TEXT("Filesystem: failed to flush volume during destruction"));
 }
 
 
-bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
+bool VolumeFileSystem::mountVolume(const VolumeMountDesc& desc){
     ErrorCode errorCode;
 
     ScopedLock lock(m_mutex);
+    if(m_mounted && m_writable && !flushMetadataLocked())
+        return false;
     unmountLocked();
 
     if(!::ValidVolumeName(desc.volumeName.view())){
@@ -218,9 +221,12 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
     return true;
 }
 
-void VolumeFileSystem::unmount(){
+bool VolumeFileSystem::unmountVolume(){
     ScopedLock lock(m_mutex);
+    if(m_mounted && m_writable && !flushMetadataLocked())
+        return false;
     unmountLocked();
+    return true;
 }
 
 bool VolumeFileSystem::mounted()const{
@@ -295,80 +301,6 @@ u64 VolumeFileSystem::wastedBytes()const{
 }
 
 
-bool VolumeFileSystem::writeFileLocked(
-    const Name& virtualPath,
-    const void* data,
-    const usize bytes,
-    const MetadataFlushMode::Enum flushMode
-){
-    if(!m_mounted || !m_writable){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "filesystem is not mounted in writable mode");
-        return false;
-    }
-    if(!virtualPath){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "virtual path is invalid");
-        return false;
-    }
-    if(bytes != 0 && data == nullptr){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "data pointer is null while byte count is non-zero");
-        return false;
-    }
-
-    const auto itrFind = m_files.find(virtualPath);
-    const bool existed = itrFind != m_files.end();
-
-    u64 fileCountAfterWrite = static_cast<u64>(m_files.size());
-    if(!existed){
-        if(fileCountAfterWrite == Limit<u64>::s_Max){
-            FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "file count overflow");
-            return false;
-        }
-        ++fileCountAfterWrite;
-    }
-    if(!canFitMetadataForFileCountLocked(fileCountAfterWrite)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): writeFile failed: metadata area is full for file count {}")
-            , StringConvert(m_volumeName)
-            , fileCountAfterWrite
-        );
-        return false;
-    }
-
-    const u64 byteCount = static_cast<u64>(bytes);
-    u64 newFileEnd = 0;
-    if(!FilesystemVolumeDetail::AddNoOverflow(m_nextFreeOffset, byteCount, newFileEnd)){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "offset overflow while reserving payload bytes");
-        return false;
-    }
-    if(!ensureCapacityLocked(newFileEnd))
-        return false;
-
-    const u64 writeOffset = m_nextFreeOffset;
-    if(byteCount > 0 && !writeBytesLocked(writeOffset, data, byteCount))
-        return false;
-
-    FileRecord previousRecord;
-    if(existed)
-        previousRecord = itrFind.value();
-    const u64 previousNextFreeOffset = m_nextFreeOffset;
-
-    m_files.insert_or_assign(virtualPath, FileRecord{ writeOffset, byteCount });
-    m_nextFreeOffset = newFileEnd;
-
-    if(flushMode == MetadataFlushMode::Deferred)
-        return true;
-
-    if(flushMetadataLocked())
-        return true;
-
-    if(existed)
-        m_files.insert_or_assign(virtualPath, previousRecord);
-    else
-        m_files.erase(virtualPath);
-    m_nextFreeOffset = previousNextFreeOffset;
-    FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "failed to flush metadata after payload write");
-    return false;
-}
-
 bool VolumeFileSystem::writeFile(const Name& virtualPath, const void* data, const usize bytes){
     ScopedLock lock(m_mutex);
     return writeFileLocked(virtualPath, data, bytes, MetadataFlushMode::Immediate);
@@ -379,15 +311,10 @@ bool VolumeFileSystem::writeFileDeferred(const Name& virtualPath, const void* da
     return writeFileLocked(virtualPath, data, bytes, MetadataFlushMode::Deferred);
 }
 
-bool VolumeFileSystem::flushMetadata(){
-    ScopedLock lock(m_mutex);
-    if(!m_mounted || !m_writable){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, "flushMetadata", "filesystem is not mounted in writable mode");
-        return false;
-    }
-
-    return flushMetadataLocked();
+bool VolumeFileSystem::flush(){
+    return compact(true);
 }
+
 
 void VolumeFileSystem::reserveFileCapacity(const usize fileCount){
     ScopedLock lock(m_mutex);
@@ -395,23 +322,60 @@ void VolumeFileSystem::reserveFileCapacity(const usize fileCount){
         m_files.reserve(fileCount);
 }
 
-bool VolumeFileSystem::readFileRecordLocked(const Name& virtualPath, FileRecord& outRecord)const{
-    outRecord = {};
-    if(!m_mounted){
-        FilesystemVolumeDetail::LogFailure(m_volumeName.view(), "readFile", "filesystem is not mounted");
+bool VolumeFileSystem::readFile(
+    const Name& virtualPath,
+    const u64 offset,
+    void* data,
+    const usize bytes,
+    usize& outBytesRead)const{
+    ScopedLock lock(m_mutex);
+    outBytesRead = 0;
+    FileRecord record;
+    if(!readFileRecordLocked(virtualPath, record))
+        return false;
+    if(offset > record.size || (bytes != 0 && data == nullptr)){
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "readFile", "invalid read offset or buffer");
         return false;
     }
-    if(!virtualPath){
-        FilesystemVolumeDetail::LogFailure(m_volumeName.view(), "readFile", "virtual path is invalid");
+    const u64 readSize = Min<u64>(static_cast<u64>(bytes), record.size - offset);
+    if(readSize != 0 && !readBytesLocked(record.offset + offset, data, readSize))
         return false;
-    }
-    const auto itr = m_files.find(virtualPath);
-    if(itr == m_files.end()){
-        FilesystemVolumeDetail::LogFailure(m_volumeName.view(), "readFile", "file was not found");
+    outBytesRead = static_cast<usize>(readSize);
+    return true;
+}
+
+bool VolumeFileSystem::seekFile(FileCursor& cursor, const i64 offset, const FileSeekOrigin::Enum origin)const{
+    ScopedLock lock(m_mutex);
+    if(cursor.filesystem != this)
         return false;
+    FileRecord record;
+    if(!readFileRecordLocked(cursor.virtualPath, record))
+        return false;
+
+    u64 base = 0;
+    switch(origin){
+    case FileSeekOrigin::Begin: break;
+    case FileSeekOrigin::Current: base = cursor.offset; break;
+    case FileSeekOrigin::End: base = record.size; break;
+    default: return false;
     }
 
-    outRecord = itr.value();
+    u64 destination = 0;
+    if(offset < 0){
+        const u64 distance = static_cast<u64>(-(offset + 1)) + 1u;
+        if(distance > base)
+            return false;
+        destination = base - distance;
+    }
+    else{
+        const u64 distance = static_cast<u64>(offset);
+        if(distance > Limit<u64>::s_Max - base)
+            return false;
+        destination = base + distance;
+    }
+    if(destination > record.size)
+        return false;
+    cursor.offset = destination;
     return true;
 }
 
@@ -581,6 +545,80 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
 }
 
 
+bool VolumeFileSystem::writeFileLocked(
+    const Name& virtualPath,
+    const void* data,
+    const usize bytes,
+    const MetadataFlushMode::Enum flushMode
+){
+    if(!m_mounted || !m_writable){
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "filesystem is not mounted in writable mode");
+        return false;
+    }
+    if(!virtualPath){
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "virtual path is invalid");
+        return false;
+    }
+    if(bytes != 0 && data == nullptr){
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "data pointer is null while byte count is non-zero");
+        return false;
+    }
+
+    const auto itrFind = m_files.find(virtualPath);
+    const bool existed = itrFind != m_files.end();
+
+    u64 fileCountAfterWrite = static_cast<u64>(m_files.size());
+    if(!existed){
+        if(fileCountAfterWrite == Limit<u64>::s_Max){
+            FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "file count overflow");
+            return false;
+        }
+        ++fileCountAfterWrite;
+    }
+    if(!canFitMetadataForFileCountLocked(fileCountAfterWrite)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): writeFile failed: metadata area is full for file count {}")
+            , StringConvert(m_volumeName)
+            , fileCountAfterWrite
+        );
+        return false;
+    }
+
+    const u64 byteCount = static_cast<u64>(bytes);
+    u64 newFileEnd = 0;
+    if(!FilesystemVolumeDetail::AddNoOverflow(m_nextFreeOffset, byteCount, newFileEnd)){
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "offset overflow while reserving payload bytes");
+        return false;
+    }
+    if(!ensureCapacityLocked(newFileEnd))
+        return false;
+
+    const u64 writeOffset = m_nextFreeOffset;
+    if(byteCount > 0 && !writeBytesLocked(writeOffset, data, byteCount))
+        return false;
+
+    FileRecord previousRecord;
+    if(existed)
+        previousRecord = itrFind.value();
+    const u64 previousNextFreeOffset = m_nextFreeOffset;
+
+    m_files.insert_or_assign(virtualPath, FileRecord{ writeOffset, byteCount });
+    m_nextFreeOffset = newFileEnd;
+
+    if(flushMode == MetadataFlushMode::Deferred)
+        return true;
+
+    if(flushMetadataLocked())
+        return true;
+
+    if(existed)
+        m_files.insert_or_assign(virtualPath, previousRecord);
+    else
+        m_files.erase(virtualPath);
+    m_nextFreeOffset = previousNextFreeOffset;
+    FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "failed to flush metadata after payload write");
+    return false;
+}
+
 bool VolumeFileSystem::scanSegmentsLocked(){
     ErrorCode errorCode;
 
@@ -610,6 +648,26 @@ bool VolumeFileSystem::scanSegmentsLocked(){
         }
     }
 
+    return true;
+}
+
+bool VolumeFileSystem::readFileRecordLocked(const Name& virtualPath, FileRecord& outRecord)const{
+    outRecord = {};
+    if(!m_mounted){
+        FilesystemVolumeDetail::LogFailure(m_volumeName.view(), "readFile", "filesystem is not mounted");
+        return false;
+    }
+    if(!virtualPath){
+        FilesystemVolumeDetail::LogFailure(m_volumeName.view(), "readFile", "virtual path is invalid");
+        return false;
+    }
+    const auto itr = m_files.find(virtualPath);
+    if(itr == m_files.end()){
+        FilesystemVolumeDetail::LogFailure(m_volumeName.view(), "readFile", "file was not found");
+        return false;
+    }
+
+    outRecord = itr.value();
     return true;
 }
 

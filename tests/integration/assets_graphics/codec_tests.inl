@@ -124,20 +124,23 @@ static void CookAndCheckMinimalTypedAsset(
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
-TEST(AssetsGraphics, VolumeSessionAcceptsScratchBytes){
+TEST(AssetsGraphics, FilesystemAcceptsScratchBytes){
     TestArena testArena;
     const Path root = AssetsGraphicsTestCaseRoot(testArena, "volume_scratch_bytes");
     const bool prepared = PrepareCleanDirectory(root);
     EXPECT_TRUE(prepared);
 
     if(prepared){
-        NWB::Core::Filesystem::VolumeBuildConfig config;
-        config.volumeName = "scratch_test";
-        config.segmentSize = 64ull * 1024ull;
-        config.metadataSize = 4ull * 1024ull;
+        NWB::Core::Filesystem::VolumeMountDesc mountDesc(testArena.arena);
+        mountDesc.volumeName = "scratch_test";
+        mountDesc.segmentSize = 64ull * 1024ull;
+        mountDesc.metadataSize = 4ull * 1024ull;
 
-        NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
-        const bool created = volumeSession.create(root / "volume", config);
+        mountDesc.mountDirectory = root / "volume";
+        mountDesc.createIfMissing = true;
+        mountDesc.usage = NWB::Core::Filesystem::VolumeUsage::CookWrite;
+        UniquePtr<NWB::Core::Filesystem::IFilesystem> filesystem = NWB::Core::Filesystem::CreateFilesystem(testArena.arena, mountDesc);
+        const bool created = static_cast<bool>(filesystem);
         EXPECT_TRUE(created);
         if(created){
             NWB::Core::Alloc::ScratchArena scratchArena(s_CodecScratchArena);
@@ -149,16 +152,16 @@ TEST(AssetsGraphics, VolumeSessionAcceptsScratchBytes){
             payload.push_back(4u);
 
             const Name virtualPath("project/tests/scratch_payload");
-            const bool pushed = volumeSession.pushDataDeferred(virtualPath, payload);
+            const bool pushed = filesystem->writeFileDeferred(virtualPath, payload);
             EXPECT_TRUE(pushed);
             if(pushed){
                 payload[0] = 99u;
 
-                const bool flushed = volumeSession.flush();
+                const bool flushed = filesystem->flush();
                 EXPECT_TRUE(flushed);
                 if(flushed){
                     NWB::Core::Assets::AssetBytes readback = MakeAssetBytes(testArena);
-                    const bool loaded = volumeSession.loadData(virtualPath, readback);
+                    const bool loaded = filesystem->readFile(virtualPath, readback);
                     EXPECT_TRUE(loaded);
                     if(loaded){
                         ASSERT_EQ(readback.size(), 4u);
@@ -169,18 +172,20 @@ TEST(AssetsGraphics, VolumeSessionAcceptsScratchBytes){
                     }
 
                     ErrorCode sizeError;
-                    const Path segmentPath = root / "volume" / MakeVolumeSegmentFileName(config.volumeName.view(), 0u).c_str();
+                    const Path segmentPath = root / "volume" / MakeVolumeSegmentFileName(mountDesc.volumeName.view(), 0u).c_str();
                     const u64 segmentFileSize = FileSize(segmentPath, sizeError);
                     EXPECT_FALSE(sizeError);
-                    EXPECT_EQ(segmentFileSize, config.metadataSize + payload.size());
-                    EXPECT_LT(segmentFileSize, config.segmentSize);
+                    EXPECT_EQ(segmentFileSize, mountDesc.metadataSize + payload.size());
+                    EXPECT_LT(segmentFileSize, mountDesc.segmentSize);
 
-                    NWB::Core::Filesystem::VolumeSession reloadedSession(testArena.arena);
-                    const bool reloaded = reloadedSession.load(config.volumeName.view(), root / "volume");
+                    mountDesc.createIfMissing = false;
+                    mountDesc.usage = NWB::Core::Filesystem::VolumeUsage::RuntimeReadOnly;
+                    UniquePtr<NWB::Core::Filesystem::IFilesystem> reloadedFilesystem = NWB::Core::Filesystem::CreateFilesystem(testArena.arena, mountDesc);
+                    const bool reloaded = static_cast<bool>(reloadedFilesystem);
                     EXPECT_TRUE(reloaded);
                     if(reloaded){
                         NWB::Core::Assets::AssetBytes reloadedReadback = MakeAssetBytes(testArena);
-                        const bool reloadedData = reloadedSession.loadData(virtualPath, reloadedReadback);
+                        const bool reloadedData = reloadedFilesystem->readFile(virtualPath, reloadedReadback);
                         EXPECT_TRUE(reloadedData);
                         if(reloadedData){
                             ASSERT_EQ(reloadedReadback.size(), readback.size());

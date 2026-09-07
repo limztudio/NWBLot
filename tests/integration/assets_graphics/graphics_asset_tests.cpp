@@ -35,7 +35,7 @@
 #include <core/common/module.h>
 #include <core/mesh/classification.h>
 #include <core/metascript/parser.h>
-#include <core/filesystem/volume_session.h>
+#include <core/filesystem/filesystem.h>
 #include <core/graphics/api.h>
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/spirv_entry_point.h>
@@ -1672,17 +1672,20 @@ static bool LoadCookedAsset(
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset,
     const usize expectedVolumeFileCount = 2u
 ){
-    NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
-    const bool loadedVolume = volumeSession.load("graphics", outputDirectory);
+    NWB::Core::Filesystem::VolumeMountDesc mountDesc(testArena.arena);
+    mountDesc.volumeName = "graphics";
+    mountDesc.mountDirectory = outputDirectory;
+    UniquePtr<NWB::Core::Filesystem::IFilesystem> filesystem = NWB::Core::Filesystem::CreateFilesystem(testArena.arena, mountDesc);
+    const bool loadedVolume = static_cast<bool>(filesystem);
     EXPECT_TRUE(loadedVolume);
     if(!loadedVolume)
         return false;
 
     if(expectedVolumeFileCount != 0u)
-        EXPECT_EQ(volumeSession.fileCount(), expectedVolumeFileCount);
+        EXPECT_EQ(filesystem->fileCount(), expectedVolumeFileCount);
 
     NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
-    const bool loadedBinary = volumeSession.loadData(assetName, binary);
+    const bool loadedBinary = filesystem->readFile(assetName, binary);
     EXPECT_TRUE(loadedBinary);
     EXPECT_FALSE(binary.empty());
     if(!loadedBinary || binary.empty())
@@ -1740,14 +1743,17 @@ static bool LoadCookedShaderArchiveRecords(
     const Path& outputDirectory,
     NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& outRecords
 ){
-    NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
-    const bool loadedVolume = volumeSession.load("graphics", outputDirectory);
+    NWB::Core::Filesystem::VolumeMountDesc mountDesc(testArena.arena);
+    mountDesc.volumeName = "graphics";
+    mountDesc.mountDirectory = outputDirectory;
+    UniquePtr<NWB::Core::Filesystem::IFilesystem> filesystem = NWB::Core::Filesystem::CreateFilesystem(testArena.arena, mountDesc);
+    const bool loadedVolume = static_cast<bool>(filesystem);
     EXPECT_TRUE(loadedVolume);
     if(!loadedVolume)
         return false;
 
     NWB::Core::GraphicsBytes indexBinary(testArena.arena);
-    const bool loadedIndex = volumeSession.loadData(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary);
+    const bool loadedIndex = filesystem->readFile(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary);
     EXPECT_TRUE(loadedIndex);
     EXPECT_FALSE(indexBinary.empty());
     if(!loadedIndex || indexBinary.empty())

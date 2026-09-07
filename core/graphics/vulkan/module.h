@@ -128,6 +128,7 @@ struct DeviceDesc{
     GpuDescriptorHeapAbi bindlessHeapAbi;
     GraphicsString vulkanLibraryName;
     Path pipelineCacheDirectory;
+    Filesystem::FilesystemFactory filesystemFactory;
 
 
     explicit DeviceDesc(GraphicsAllocator& allocatorRef, Alloc::ThreadPool& threadPoolRef)

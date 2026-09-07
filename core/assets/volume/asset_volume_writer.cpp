@@ -14,7 +14,7 @@
 #include "cook_paths.h"
 
 #include <core/filesystem/volume_build.h>
-#include <core/filesystem/volume_session.h>
+#include <core/filesystem/volume_file_system.h>
 #include <core/filesystem/volume_staging.h>
 
 #include <core/common/log.h>
@@ -85,7 +85,7 @@ static bool ConfigureVolumeSizing(const u64 plannedFileCount, Core::Filesystem::
 static bool PushManifestObjectFilePayloadToVolume(
     const AssetsVolumeCookDetail::AssetVolumePackEntry& entry,
     Core::Assets::AssetBytes& objectBytes,
-    Core::Filesystem::VolumeSession& volumeSession
+    Core::Filesystem::IFilesystem& filesystem
 ){
     AssetsVolumeCookDetail::CookedObjectPayloadView payload;
     if(!AssetsVolumeCookDetail::ReadCookedObjectPayload(entry.objectPath, entry.virtualPath, objectBytes, payload))
@@ -102,7 +102,7 @@ static bool PushManifestObjectFilePayloadToVolume(
         return false;
     }
 
-    if(volumeSession.pushDataDeferred(entry.virtualPath, payload.data, payload.size))
+    if(filesystem.writeFileDeferred(entry.virtualPath, payload.data, payload.size))
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to push cached asset '{}'"), StringConvert(entry.virtualPath.c_str()));
@@ -112,7 +112,7 @@ static bool PushManifestObjectFilePayloadToVolume(
 static bool PushManifestEntryToVolume(
     const AssetsVolumeCookDetail::AssetVolumePackEntry& entry,
     Core::Assets::AssetBytes& objectBytes,
-    Core::Filesystem::VolumeSession& volumeSession
+    Core::Filesystem::IFilesystem& filesystem
 ){
     switch(entry.source){
     case AssetsVolumeCookDetail::AssetVolumePackEntrySource::PayloadBytes:
@@ -123,13 +123,13 @@ static bool PushManifestEntryToVolume(
             NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: manifest payload identity mismatch '{}'"), StringConvert(entry.virtualPath.c_str()));
             return false;
         }
-        if(volumeSession.pushDataDeferred(entry.virtualPath, entry.payloadBytes))
+        if(filesystem.writeFileDeferred(entry.virtualPath, entry.payloadBytes))
             return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to push manifest payload '{}'"), StringConvert(entry.virtualPath.c_str()));
         return false;
     case AssetsVolumeCookDetail::AssetVolumePackEntrySource::ObjectFilePayload:
-        return PushManifestObjectFilePayloadToVolume(entry, objectBytes, volumeSession);
+        return PushManifestObjectFilePayloadToVolume(entry, objectBytes, filesystem);
     default:
         break;
     }
@@ -141,11 +141,11 @@ static bool PushManifestEntryToVolume(
 static bool PushManifestToVolume(
     Core::Assets::AssetArena& arena,
     const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
-    Core::Filesystem::VolumeSession& volumeSession
+    Core::Filesystem::IFilesystem& filesystem
 ){
     Core::Assets::AssetBytes objectBytes(arena);
     for(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry : manifest.entries){
-        if(!PushManifestEntryToVolume(entry, objectBytes, volumeSession))
+        if(!PushManifestEntryToVolume(entry, objectBytes, filesystem))
             return false;
     }
 
@@ -222,21 +222,31 @@ bool WriteAssetVolume(
     u64 stagedFileCount = 0;
     usize stagedSegmentCount = 0;
     {
-        Core::Filesystem::VolumeSession volumeSession(arena);
-        if(!volumeSession.create(stagedVolumePaths.stageDirectory, volumeConfig)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to create staged volume session"));
+        Core::Filesystem::VolumeFileSystem volumeStorage(arena);
+        Core::Filesystem::IFilesystem& filesystem = volumeStorage;
+        Core::Filesystem::VolumeMountDesc mountDesc(arena);
+        mountDesc.volumeName = volumeConfig.volumeName;
+        mountDesc.mountDirectory = stagedVolumePaths.stageDirectory;
+        mountDesc.segmentSize = volumeConfig.segmentSize;
+        mountDesc.metadataSize = volumeConfig.metadataSize;
+        mountDesc.createIfMissing = true;
+        mountDesc.usage = Core::Filesystem::VolumeUsage::CookWrite;
+        if(!filesystem.mountVolume(mountDesc)){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to mount staged volume filesystem"));
             return false;
         }
 
-        if(!__hidden_asset_volume_writer::PushManifestToVolume(arena, manifest, volumeSession))
+        if(!__hidden_asset_volume_writer::PushManifestToVolume(arena, manifest, filesystem))
             return false;
-        if(!volumeSession.flush()){
+        if(!filesystem.flush()){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to flush staged volume metadata"));
             return false;
         }
 
-        stagedFileCount = volumeSession.fileCount();
-        stagedSegmentCount = volumeSession.segmentCount();
+        stagedFileCount = filesystem.fileCount();
+        stagedSegmentCount = volumeStorage.segmentCount();
+        if(!filesystem.unmountVolume())
+            return false;
     }
 
     if(!Core::Filesystem::PublishStagedVolume(stagedVolumePaths, resolvedPaths.outputDirectory, volumeConfig.volumeName, stagedSegmentCount))

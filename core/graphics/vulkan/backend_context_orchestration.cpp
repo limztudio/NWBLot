@@ -258,6 +258,7 @@ bool BackendContext::createDevice(){
     deviceDesc.bindlessHeapAbi = m_deviceParams.bindlessHeapAbi;
     deviceDesc.vulkanLibraryName = m_deviceParams.backendLibraryName;
     deviceDesc.pipelineCacheDirectory = m_deviceParams.pipelineCacheDirectory;
+    deviceDesc.filesystemFactory = m_deviceParams.filesystemFactory;
 
     m_rhiDevice = CreateDevice(deviceDesc);
     if(!m_rhiDevice){

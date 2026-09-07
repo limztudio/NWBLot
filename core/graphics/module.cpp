@@ -315,6 +315,13 @@ void Graphics::setPipelineCacheDirectory(const Path& directory){
     m_deviceCreationParams.pipelineCacheDirectory = directory;
 }
 
+bool Graphics::setFilesystemFactory(const Filesystem::FilesystemFactory& factory){
+    if(m_backend->getDevice())
+        return false;
+    m_deviceCreationParams.filesystemFactory = factory;
+    return true;
+}
+
 void Graphics::requestDeviceRecreation()const{
     if(m_deviceRecreationRequested)
         return;

@@ -192,6 +192,7 @@ public:
     bool setSwapChainReadbackEnabled(bool enabled);
     bool setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi);
     void setPipelineCacheDirectory(const Path& directory);
+    bool setFilesystemFactory(const Filesystem::FilesystemFactory& factory);
     // Keeps the host update/event loop alive while preventing runFrame from recording, submitting, or presenting a
     // new frame. This is useful when an external capture must sample the last completed temporal frame exactly.
     void setFrameSubmissionSuspended(bool suspended)noexcept{ m_frameSubmissionSuspended = suspended; }

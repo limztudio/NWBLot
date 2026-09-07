@@ -6,6 +6,7 @@
 
 
 #include <core/global.h>
+#include <core/filesystem/filesystem.h>
 #include <core/perf/session.h>
 #include <core/telemetry/event.h>
 
@@ -64,6 +65,14 @@ struct ProjectFrameClientSize{
     u16 height = s_DefaultProjectFrameClientHeight;
 };
 
+struct ProjectStartupContext{
+    Core::Graphics& graphics;
+    Core::Alloc::GlobalArena& objectArena;
+    // The factory is copied into graphics configuration and must own any captured service lifetimes.
+    Core::Filesystem::FilesystemFactory filesystemFactory;
+};
+
+
 struct ProjectRuntimeContext{
     using ShaderPathResolveCallback = Function<bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)>;
     using TelemetryCaptureCallback = Function<void(const Core::Telemetry::CaptureOptions& options)>;
@@ -77,6 +86,7 @@ struct ProjectRuntimeContext{
     Core::Alloc::ThreadPool& threadPool;
     Core::Alloc::JobSystem& jobSystem;
     Core::Assets::AssetManager& assetManager;
+    Core::Filesystem::IFilesystem& filesystem;
     Core::Telemetry::FrameGraphRegistry& frameGraphRegistry;
     // Read-only handle to the captured perf data (per-pass cpu/gpu timing views, memory). Owned by the Frame; bound
     // here so a project can read per-pass GPU times (gpuTimingView()) for a live readout.
@@ -117,7 +127,7 @@ public:
 
 ProjectFrameClientSize QueryProjectFrameClientSize();
 const tchar* QueryProjectWindowTitle();
-bool ConfigureProjectGraphics(Core::Graphics& graphics);
+bool ConfigureProjectRuntime(ProjectStartupContext& context);
 UniquePtr<IProjectEntryCallbacks> CreateProjectEntryCallbacks(ProjectRuntimeContext& context);
 
 bool CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& outWorld);

@@ -29,7 +29,8 @@ const tchar* NWB::QueryProjectWindowTitle(){
     return NWB_TEXT("NWB Testbed");
 }
 
-bool NWB::ConfigureProjectGraphics(Core::Graphics& graphics){
+bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context){
+    Core::Graphics& graphics = context.graphics;
     return
         graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
         && graphics.setHDR10OutputEnabled(true)

@@ -5,11 +5,9 @@
 #pragma once
 
 
-#include "volume_types.h"
-#include "volume_staging.h"
-#include "volume_build.h"
-#include "volume_file_system.h"
-#include "filesystem.h"
+#ifndef interface
+#define interface struct
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

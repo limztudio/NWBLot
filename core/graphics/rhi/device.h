@@ -8,6 +8,8 @@
 #include "coopvec.h"
 #include "gpu_descriptor_heap.h"
 
+#include <core/filesystem/filesystem.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -394,6 +396,7 @@ struct DeviceCreationParameters : public InstanceParameters{
 
     GpuDescriptorHeapAbi bindlessHeapAbi;
     Path pipelineCacheDirectory;
+    Filesystem::FilesystemFactory filesystemFactory;
 
     explicit DeviceCreationParameters(GraphicsArena& arena)
         : InstanceParameters(arena)

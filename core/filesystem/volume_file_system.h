@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "volume_types.h"
+#include "filesystem.h"
 
 #include <core/common/log.h>
 
@@ -19,8 +19,15 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class VolumeFileSystem : NoCopy{
+class VolumeFileSystem final : public IFilesystem, NoCopy{
 private:
+    struct MetadataFlushMode{
+        enum Enum : u8{
+            Deferred = 0u,
+            Immediate = 1u,
+        };
+    };
+
     struct FileRecord{
         u64 offset = 0;
         u64 size = 0;
@@ -33,15 +40,15 @@ private:
 
 public:
     explicit VolumeFileSystem(Alloc::GlobalArena& arena);
-    ~VolumeFileSystem();
+    virtual ~VolumeFileSystem()override;
 
 
 public:
-    bool mount(const VolumeMountDesc& desc);
-    void unmount();
+    virtual bool mountVolume(const VolumeMountDesc& desc)override;
+    virtual bool unmountVolume()override;
 
-    [[nodiscard]] bool mounted()const;
-    [[nodiscard]] bool writable()const;
+    [[nodiscard]] virtual bool mounted()const override;
+    [[nodiscard]] virtual bool writable()const override;
 
     [[nodiscard]] AStringView volumeName()const;
     [[nodiscard]] Path mountDirectory()const;
@@ -49,47 +56,33 @@ public:
     [[nodiscard]] u64 segmentSize()const;
     [[nodiscard]] u64 metadataSize()const;
     [[nodiscard]] usize segmentCount()const;
-    [[nodiscard]] u64 fileCount()const;
+    [[nodiscard]] virtual u64 fileCount()const override;
     [[nodiscard]] u64 usedBytes()const;
     [[nodiscard]] u64 wastedBytes()const;
 
 
 public:
-    bool writeFile(const Name& virtualPath, const void* data, usize bytes);
-    bool writeFileDeferred(const Name& virtualPath, const void* data, usize bytes);
+    using IFilesystem::readFile;
+    using IFilesystem::writeFile;
+    using IFilesystem::writeFileDeferred;
 
-    template<typename ByteContainer>
-    bool writeFile(const Name& virtualPath, const ByteContainer& data){
-        return writeFile(virtualPath, data.empty() ? nullptr : data.data(), data.size());
-    }
 
-    template<typename ByteContainer>
-    bool writeFileDeferred(const Name& virtualPath, const ByteContainer& data){
-        return writeFileDeferred(virtualPath, data.empty() ? nullptr : data.data(), data.size());
-    }
+public:
+    virtual bool writeFile(const Name& virtualPath, const void* data, usize bytes)override;
+    virtual bool writeFileDeferred(const Name& virtualPath, const void* data, usize bytes)override;
+    virtual bool flush()override;
+    virtual void reserveFileCapacity(usize fileCount)override;
 
-    bool flushMetadata();
-    void reserveFileCapacity(usize fileCount);
-
-    template<typename ByteContainer>
-    bool readFile(const Name& virtualPath, ByteContainer& outData)const;
-    bool removeFile(const Name& virtualPath);
-
-    bool fileExists(const Name& virtualPath)const;
-    bool fileSize(const Name& virtualPath, u64& outSize)const;
-
-    Vector<Name, VolumeArena> listFiles()const;
+    virtual bool readFile(const Name& virtualPath, u64 offset, void* data, usize bytes, usize& outBytesRead)const override;
+    virtual bool seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const override;
+    virtual bool removeFile(const Name& virtualPath)override;
+    virtual bool fileExists(const Name& virtualPath)const override;
+    virtual bool fileSize(const Name& virtualPath, u64& outSize)const override;
+    virtual Vector<Name, VolumeArena> listFiles()const override;
     bool compact(bool shrinkSegments = true);
 
 
 private:
-    struct MetadataFlushMode{
-        enum Enum : u8{
-            Deferred = 0u,
-            Immediate = 1u,
-        };
-    };
-
     bool writeFileLocked(const Name& virtualPath, const void* data, usize bytes, MetadataFlushMode::Enum flushMode);
     bool scanSegmentsLocked();
 
@@ -130,36 +123,6 @@ private:
     SegmentPathVector m_segmentPaths;
     FileMap m_files;
 };
-
-
-template<typename ByteContainer>
-bool VolumeFileSystem::readFile(const Name& virtualPath, ByteContainer& outData)const{
-    ScopedLock lock(m_mutex);
-    outData.clear();
-
-    FileRecord record;
-    if(!readFileRecordLocked(virtualPath, record))
-        return false;
-
-    if(record.size > static_cast<u64>(Limit<usize>::s_Max)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): readFile failed: file size {} exceeds runtime buffer limit {}")
-            , StringConvert(m_volumeName.view())
-            , record.size
-            , static_cast<u64>(Limit<usize>::s_Max)
-        );
-        return false;
-    }
-
-    outData.resize(static_cast<usize>(record.size));
-    if(record.size == 0)
-        return true;
-
-    if(readBytesLocked(record.offset, outData.data(), record.size))
-        return true;
-
-    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): readFile failed: payload read failed"), StringConvert(m_volumeName.view()));
-    return false;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

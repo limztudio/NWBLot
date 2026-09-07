@@ -44,6 +44,7 @@ target_sources(nwb_graphics_task_graph_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_command_ir_capture_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_command_ir_reader_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_command_ir_replay_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph_command_ir_scaling_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_command_ir_test_utils.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_command_ir_test_utils.h"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_compiler_telemetry_tests.cpp"

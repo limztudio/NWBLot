@@ -93,7 +93,7 @@ template<typename RecordT>
     )
         return false;
 
-    BinaryDetail::ReserveAppendBytesIfSupported(outBytes, sizeof(RecordT));
+    ContainerDetail::ReserveGrowingCapacity(outBytes, outBytes.size() + sizeof(RecordT));
     AppendPOD(outBytes, record);
     return true;
 }
@@ -184,8 +184,8 @@ static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum
 
 
 void GpuCommandIrCapture::reset()noexcept{
-    static_assert(noexcept(m_records.pop_back()));
-    static_assert(noexcept(m_commandBytes.pop_back()));
+    static_assert(noexcept(m_records.clear()));
+    static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
     NWB_FATAL_ASSERT_MSG(
         m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader),
         "Command IR capture reset requires its reserved stream header storage"
@@ -193,10 +193,9 @@ void GpuCommandIrCapture::reset()noexcept{
     if(m_commandBytes.size() < sizeof(GpuCommandIrStreamHeader))
         TerminateInvariant();
 
-    while(!m_records.empty())
-        m_records.pop_back();
-    while(m_commandBytes.size() > sizeof(GpuCommandIrStreamHeader))
-        m_commandBytes.pop_back();
+    // The validated header size only shrinks the byte vector, retaining its storage without allocation.
+    m_records.clear();
+    m_commandBytes.resize(sizeof(GpuCommandIrStreamHeader));
     m_graphGeneration = 0u;
     m_planGeneration = 0u;
     m_recordingAttemptGeneration = 0u;
@@ -226,12 +225,11 @@ void GpuCommandIrCapture::rollback(const usize recordCount)noexcept{
         return;
     }
 
-    static_assert(noexcept(m_records.pop_back()));
-    static_assert(noexcept(m_commandBytes.pop_back()));
-    while(m_records.size() > recordCount)
-        m_records.pop_back();
-    while(m_commandBytes.size() > byteOffset)
-        m_commandBytes.pop_back();
+    static_assert(IsNothrowDestructible_V<GpuCommandIrBuiltinTaskRecord>);
+    static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
+    // Both validated boundaries only shrink their vectors, so these resizes cannot allocate or construct elements.
+    m_records.resize(recordCount);
+    m_commandBytes.resize(byteOffset);
     m_graphGeneration = m_records.empty() ? 0u : m_records[0u].task.generation;
     m_planGeneration = m_records.empty() ? 0u : m_records[0u].packet.generation;
     if(m_records.empty())
@@ -362,7 +360,7 @@ bool GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
     // Reserve the inspection record before the stream helper reserves and writes its bytes. Once both reservations
     // return, the POD appends cannot allocate, so an allocation exception leaves both logical sequences unchanged
     // and unwinds to the application boundary.
-    m_records.reserve(nextRecordCount);
+    ContainerDetail::ReserveGrowingCapacity(m_records, nextRecordCount);
 
     if(!appendCommandBytes(record))
         return false;

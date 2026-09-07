@@ -123,3 +123,16 @@ Skeleton cooking resolves each parent through the joint-name map already populat
 | One joint, 4,096 builds | 19.8398 → 20.5019 | 0.4921 → 0.5363 |
 
 The singleton workload adds roughly 162 ns per build in dbg and 11 ns in opt; the optimization targets multi-joint parent resolution. Four direct regressions pass in dbg, opt, and fin, including parent-order failures/recovery, canonical duplicate identities, topology rebuilding, and serialized matrix/joint identity.
+
+## Command IR capture growth and truncation
+
+Command capture reserves inspection records before encoded bytes, then publishes both sequences without further allocation. Both buffers now grow geometrically through the existing container helper. Reset and validated rollback shrink in bulk instead of popping each byte. Stream boundaries, rejection behavior, generation changes, and allocation-failure publication order are preserved.
+
+| Workload | dbg before → after | opt before → after |
+| --- | ---: | ---: |
+| Capture 4,096 records from cold capacity | 38.9551 → 1.3559 | 34.7518 → 0.1805 |
+| Capture 16,384 records from cold capacity | 814.9092 → 5.3789 | 776.7808 → 0.5765 |
+| Roll back half of 16,384 records | 3.9745 → 0.0794 | 0.0140 → 0.0157 |
+| Reused capture of 16,384 records | 5.1581 → 5.0046 | 0.2327 → 0.2321 |
+
+The 16,384-record cold capture uses 28 backing allocations instead of 32,768 in both configurations. Warmed reuse still allocates zero times. Debug reset falls from 8.0181 ms to 0.0003 ms; that final value is near timer granularity and is not used for a speedup-ratio claim. Geometric capacity retains spare storage rather than allocating exactly each append. Three new regressions and the complete 356-test graphics suite pass in dbg, opt, and fin, including mixed encoded records, exact prefix rollback/refill, rejection, and capacity reuse.

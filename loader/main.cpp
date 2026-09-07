@@ -23,7 +23,7 @@
 #include <core/assets/manager.h>
 #include <core/assets/auto_registration.h>
 #include <core/graphics/shader_archive.h>
-#include <core/filesystem/filesystem.h>
+#include <core/filesystem/factory.h>
 #include <global/filesystem/volume_naming.h>
 
 #include "project_entry.h"
@@ -442,7 +442,7 @@ static int RunProjectRuntime(
                 return -1;
             }
         }
-        if(!graphicsFilesystem->unmountVolume()){
+        if(!graphicsFilesystem->unmount()){
             NWB_LOGGER_ERROR(NWB_TEXT("Loader: failed to unmount project filesystem"));
             return -1;
         }

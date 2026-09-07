@@ -47,9 +47,9 @@ public:
 
 public:
     // A volume identifies one logical namespace; custom backends may ignore segment/metadata sizing hints.
-    virtual bool mountVolume(const VolumeMountDesc& desc) = 0;
+    virtual bool mount(const VolumeMountDesc& desc) = 0;
     // Writable implementations must persist pending writes before releasing their mount.
-    virtual bool unmountVolume() = 0;
+    virtual bool unmount() = 0;
     [[nodiscard]] virtual bool mounted()const = 0;
     [[nodiscard]] virtual bool writable()const = 0;
 
@@ -90,12 +90,6 @@ public:
         return writeFileDeferred(virtualPath, data.empty() ? nullptr : data.data(), data.size());
     }
 };
-
-
-// Called once per mount, including graphics resources and pipeline caches. A null factory selects the volume backend.
-using FilesystemFactory = Function<UniquePtr<IFilesystem>(Alloc::GlobalArena& arena, const VolumeMountDesc& desc)>;
-
-UniquePtr<IFilesystem> CreateFilesystem(Alloc::GlobalArena& arena, const VolumeMountDesc& desc, const FilesystemFactory& factory = {});
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

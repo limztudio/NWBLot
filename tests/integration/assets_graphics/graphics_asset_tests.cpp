@@ -35,7 +35,7 @@
 #include <core/common/module.h>
 #include <core/mesh/classification.h>
 #include <core/metascript/parser.h>
-#include <core/filesystem/filesystem.h>
+#include <core/filesystem/factory.h>
 #include <core/graphics/api.h>
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/spirv_entry_point.h>

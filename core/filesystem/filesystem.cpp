@@ -3,7 +3,6 @@
 
 
 #include "filesystem.h"
-#include "volume_file_system.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,21 +40,6 @@ bool IFilesystem::readFile(FileCursor& cursor, void* data, const usize bytes, us
 void IFilesystem::closeFile(FileCursor& cursor)const{
     if(cursor.filesystem == this)
         cursor = {};
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-UniquePtr<IFilesystem> CreateFilesystem(Alloc::GlobalArena& arena, const VolumeMountDesc& desc, const FilesystemFactory& factory){
-    UniquePtr<IFilesystem> filesystem = factory ? factory(arena, desc) : MakeUnique<VolumeFileSystem>(arena);
-    if(!filesystem){
-        NWB_LOGGER_ERROR(NWB_TEXT("Filesystem: project factory did not create a filesystem"));
-        return nullptr;
-    }
-    if(!filesystem->mountVolume(desc))
-        return nullptr;
-    return filesystem;
 }
 
 

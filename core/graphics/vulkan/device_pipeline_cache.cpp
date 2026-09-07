@@ -6,7 +6,7 @@
 #include "arena_names.h"
 #include "device_detail.h"
 
-#include <core/filesystem/filesystem.h>
+#include <core/filesystem/factory.h>
 #include <core/filesystem/volume_staging.h>
 #include <global/filesystem/volume_naming.h>
 #include <core/common/log.h>
@@ -218,7 +218,7 @@ bool Device::loadPipelineCacheData(GraphicsBytes& outData){
         return false;
     }
 
-    if(!volume->unmountVolume()){
+    if(!volume->unmount()){
         outData.clear();
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to unmount pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         return false;
@@ -299,7 +299,7 @@ void Device::savePipelineCacheData(){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to flush pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         return;
     }
-    if(!volume->unmountVolume()){
+    if(!volume->unmount()){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to unmount pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         return;
     }

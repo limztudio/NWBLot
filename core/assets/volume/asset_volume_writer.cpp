@@ -231,7 +231,7 @@ bool WriteAssetVolume(
         mountDesc.metadataSize = volumeConfig.metadataSize;
         mountDesc.createIfMissing = true;
         mountDesc.usage = Core::Filesystem::VolumeUsage::CookWrite;
-        if(!filesystem.mountVolume(mountDesc)){
+        if(!filesystem.mount(mountDesc)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to mount staged volume filesystem"));
             return false;
         }
@@ -245,7 +245,7 @@ bool WriteAssetVolume(
 
         stagedFileCount = filesystem.fileCount();
         stagedSegmentCount = volumeStorage.segmentCount();
-        if(!filesystem.unmountVolume())
+        if(!filesystem.unmount())
             return false;
     }
 

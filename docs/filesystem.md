@@ -1,7 +1,9 @@
 # Project filesystems
 
-`core/filesystem/filesystem.h` defines `NWB::Core::Filesystem::IFilesystem`. The default implementation is
-`VolumeFileSystem`, which reads and writes the engine's existing segmented volume format. Asset loading, shader
+`core/filesystem/filesystem.h` defines `NWB::Core::Filesystem::IFilesystem`. Its implementation file contains
+only backend-independent cursor helpers. The separate `core/filesystem/factory.h/.cpp` composition module owns
+`FilesystemFactory` and `CreateFilesystem`, including selection of the default backend. The interface never
+includes or constructs a concrete filesystem. The default implementation is `VolumeFileSystem`, which reads and writes the engine's existing segmented volume format. Asset loading, shader
 archive loading, pipeline cache persistence, and asset gathering use the interface. The retired `VolumeSession`
 wrapper is removed.
 
@@ -51,11 +53,11 @@ empty directory and only publishes it after successful finalization.
 
 `writeFile(path, data, bytes)` replaces the complete file; it does not write at a cursor. Empty files are valid
 and use a null pointer with zero bytes. `writeFileDeferred` has the same payload-copy contract, but can defer
-metadata publication until `flush` or `unmountVolume`. Callers may reuse their buffer immediately after either
+metadata publication until `flush` or `unmount`. Callers may reuse their buffer immediately after either
 write returns. `flush` persists pending writes; the volume backend also compacts and trims its segments.
-`unmountVolume` persists pending metadata before releasing the mount and reports failure. The volume backend
+`unmount` persists pending metadata before releasing the mount and reports failure. The volume backend
 also flushes pending metadata before a remount and attempts to flush in its destructor. Callers that need to
-act on persistence failures must explicitly call `flush` or `unmountVolume` before destroying the object.
+act on persistence failures must explicitly call `flush` or `unmount` before destroying the object.
 
 Paths are canonical engine `Name` keys, including in optimized builds where exact source strings may be absent.
 A remote backend should use its own mapping from these keys to download URLs, preserving the asset identities

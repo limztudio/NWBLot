@@ -30,12 +30,12 @@ VolumeFileSystem::VolumeFileSystem(Alloc::GlobalArena& arena)
 {}
 
 VolumeFileSystem::~VolumeFileSystem(){
-    if(!unmountVolume())
+    if(!unmount())
         NWB_LOGGER_ERROR(NWB_TEXT("Filesystem: failed to flush volume during destruction"));
 }
 
 
-bool VolumeFileSystem::mountVolume(const VolumeMountDesc& desc){
+bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
     ErrorCode errorCode;
 
     ScopedLock lock(m_mutex);
@@ -221,7 +221,7 @@ bool VolumeFileSystem::mountVolume(const VolumeMountDesc& desc){
     return true;
 }
 
-bool VolumeFileSystem::unmountVolume(){
+bool VolumeFileSystem::unmount(){
     ScopedLock lock(m_mutex);
     if(m_mounted && m_writable && !flushMetadataLocked())
         return false;

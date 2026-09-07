@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/filesystem/filesystem.h>
+#include <core/filesystem/factory.h>
 #include <core/filesystem/volume_file_system.h>
 #include <core/filesystem/volume_staging.h>
 #include <tests/common/test_context.h>
@@ -36,12 +36,12 @@ public:
 
 
 public:
-    virtual bool mountVolume(const VolumeMountDesc& desc)override{
+    virtual bool mount(const VolumeMountDesc& desc)override{
         m_mounted = true;
         m_writable = desc.usage != VolumeUsage::RuntimeReadOnly;
         return true;
     }
-    virtual bool unmountVolume()override{ m_mounted = false; return true; }
+    virtual bool unmount()override{ m_mounted = false; return true; }
     virtual bool mounted()const override{ return m_mounted; }
     virtual bool writable()const override{ return m_mounted && m_writable; }
 
@@ -189,7 +189,7 @@ TEST_F(FilesystemVolumeTest, ReadsAcrossSegmentsAndSeeksAtBoundaries){
     EXPECT_EQ(cursor.offset, 10000u);
     filesystem->closeFile(cursor);
     EXPECT_FALSE(filesystem->readFile(cursor, buffer.data(), buffer.size(), bytesRead));
-    ASSERT_TRUE(filesystem->unmountVolume());
+    ASSERT_TRUE(filesystem->unmount());
 }
 
 TEST_F(FilesystemVolumeTest, DeferredWritesSurviveUnmountAndReadOnlyMount){
@@ -198,17 +198,17 @@ TEST_F(FilesystemVolumeTest, DeferredWritesSurviveUnmountAndReadOnlyMount){
     Array<u8, 4> payload{ 1u, 3u, 5u, 7u };
     ASSERT_TRUE(filesystem->writeFileDeferred(s_TestFile, payload));
     payload[0] = 99u;
-    ASSERT_TRUE(filesystem->unmountVolume());
+    ASSERT_TRUE(filesystem->unmount());
     m_desc.createIfMissing = false;
     m_desc.usage = VolumeUsage::RuntimeReadOnly;
-    ASSERT_TRUE(filesystem->mountVolume(m_desc));
+    ASSERT_TRUE(filesystem->mount(m_desc));
     VolumeBytes loaded(m_arena);
     ASSERT_TRUE(filesystem->readFile(s_TestFile, loaded));
     ASSERT_EQ(loaded.size(), 4u);
     EXPECT_EQ(loaded[0], 1u);
     EXPECT_FALSE(filesystem->writeFile(s_TestFile, payload));
     EXPECT_FALSE(filesystem->removeFile(s_TestFile));
-    ASSERT_TRUE(filesystem->unmountVolume());
+    ASSERT_TRUE(filesystem->unmount());
 }
 
 TEST_F(FilesystemVolumeTest, RemountFlushesPendingMetadata){
@@ -218,12 +218,12 @@ TEST_F(FilesystemVolumeTest, RemountFlushesPendingMetadata){
     ASSERT_TRUE(filesystem->writeFileDeferred(s_TestFile, payload));
     m_desc.createIfMissing = false;
     m_desc.usage = VolumeUsage::RuntimeReadOnly;
-    ASSERT_TRUE(filesystem->mountVolume(m_desc));
+    ASSERT_TRUE(filesystem->mount(m_desc));
     VolumeBytes loaded(m_arena);
     ASSERT_TRUE(filesystem->readFile(s_TestFile, loaded));
     ASSERT_EQ(loaded.size(), payload.size());
     EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), loaded.size()), 0);
-    ASSERT_TRUE(filesystem->unmountVolume());
+    ASSERT_TRUE(filesystem->unmount());
 }
 
 TEST_F(FilesystemVolumeTest, ReplacesRemovesAndReadsEmptyFiles){
@@ -245,7 +245,7 @@ TEST_F(FilesystemVolumeTest, ReplacesRemovesAndReadsEmptyFiles){
     EXPECT_EQ(filesystem->fileCount(), 0u);
     EXPECT_FALSE(filesystem->readFile(s_TestFile, loaded));
     EXPECT_TRUE(loaded.empty());
-    ASSERT_TRUE(filesystem->unmountVolume());
+    ASSERT_TRUE(filesystem->unmount());
 }
 
 TEST(FilesystemFactory, UsesCapturedProjectBackendWithoutNativeVolumeFiles){
@@ -278,7 +278,7 @@ TEST(FilesystemFactory, UsesCapturedProjectBackendWithoutNativeVolumeFiles){
     EXPECT_EQ(tail[0], 7u);
     EXPECT_EQ(tail[1], 6u);
     EXPECT_TRUE(filesystem->flush());
-    EXPECT_TRUE(filesystem->unmountVolume());
+    EXPECT_TRUE(filesystem->unmount());
 }
 
 TEST(FilesystemFactory, PropagatesFactoryAndMountFailures){

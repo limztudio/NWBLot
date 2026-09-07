@@ -39,7 +39,7 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
         mountDesc.metadataSize = config.metadataSize;
         mountDesc.createIfMissing = true;
         mountDesc.usage = VolumeUsage::CookWrite;
-        if(!filesystem.mountVolume(mountDesc))
+        if(!filesystem.mount(mountDesc))
             return false;
         filesystem.reserveFileCapacity(files.size());
 
@@ -56,7 +56,7 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
 
         outBuildInfo.fileCount = filesystem.fileCount();
         outBuildInfo.segmentCount = static_cast<u64>(volumeStorage.segmentCount());
-        if(!filesystem.unmountVolume())
+        if(!filesystem.unmount())
             return false;
     }
 

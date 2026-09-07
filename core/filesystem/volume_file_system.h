@@ -44,8 +44,8 @@ public:
 
 
 public:
-    virtual bool mountVolume(const VolumeMountDesc& desc)override;
-    virtual bool unmountVolume()override;
+    virtual bool mount(const VolumeMountDesc& desc)override;
+    virtual bool unmount()override;
 
     [[nodiscard]] virtual bool mounted()const override;
     [[nodiscard]] virtual bool writable()const override;

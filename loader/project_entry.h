@@ -6,7 +6,7 @@
 
 
 #include <core/global.h>
-#include <core/filesystem/filesystem.h>
+#include <core/filesystem/factory.h>
 #include <core/perf/session.h>
 #include <core/telemetry/event.h>
 

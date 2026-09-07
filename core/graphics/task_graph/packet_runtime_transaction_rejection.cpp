@@ -6,6 +6,7 @@
 
 #include "task_graph.h"
 
+#include <global/exception.h>
 #include <global/termination.h>
 
 

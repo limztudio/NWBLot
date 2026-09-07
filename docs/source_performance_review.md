@@ -237,8 +237,23 @@ The intermediate vector can now retain duplicate input handles until the synchro
 
 ## Shared terminal entry and RAII cleanup
 
-All first-party C++ handlers now use `core/common/terminal_entry.h`. Entry functions return its terminal result immediately; CLI parsing and application work share the boundary while the CLI context remains alive for help/error output. Pipeline validation still returns explicit failures. Existing utility CLI codes, pipeline help/error routing, loader/logserver exit codes, NameSymbols publication, and logserver's final typed exception diagnostic are preserved.
+Application entry handlers now use `core/common/terminal_entry.h`. Entry functions return its terminal result immediately; CLI parsing and application work share the boundary while the CLI context remains alive for help/error output. Pipeline validation still returns explicit failures. Existing utility CLI codes, pipeline help/error routing, loader/logserver exit codes, NameSymbols publication, and logserver's final typed exception diagnostic are preserved.
 
 `ScopeExit` directly owns a non-throwing callable without allocation or type erasure. It replaces local catch/rollback/rethrow blocks in timing-history publication, timing subscriptions and policy transitions, live skinning buffer retention, and loader shutdown. Publication explicitly releases the guard; failure unwinding preserves destruction order and caller-owned allocation lifetimes.
 
 Eight scope-guard regressions and four terminal-entry regressions pass in dbg, opt, fin, and the optimized name-symbol configuration. The CLI subprocess tests pass in all three full configurations, covering help, invalid options, exact terminal exit codes, and absence of output publication after rejected arguments. These changes enforce terminal-only handling; no isolated speedup is claimed for the entry or scope-guard utility.
+
+## Terminal scheduler failures
+
+ThreadPool and JobSystem no longer capture, store, compare, or defer worker exceptions. Unexpected native-worker failures terminate at the native thread boundary. Inline failures unwind to terminal application handling. RAII owns prepared task nodes, partial queue publication, parallel chunk completion, active-worker retirement, and dependent-job cancellation. A failed running job publishes cancellation before its capture is destroyed, preventing reentrant destruction from admitting replacement work. Queue capture destruction remains outside scheduler locks, and descriptor storage survives until all claimed callbacks retire. Obsolete exception-pointer helpers are removed; direct users include the remaining unwind-count utility explicitly.
+
+| Public job submission workload | dbg before → after | opt before → after |
+| --- | ---: | ---: |
+| Fan-out: 4,096 distinct dependent jobs | 7.8728 → 7.1415 | 0.8128 → 0.6303 |
+| Fan-in: join 4,096 distinct dependencies | 1.9267 → 1.8931 | 0.2284 → 0.2508 |
+| Fan-out: 1,024 jobs for repeated dependencies | 1.9906 → 1.7426 | 0.1709 → 0.1623 |
+| Fan-in: 4,096 references to 1,024 jobs | 1.0199 → 0.9539 | 0.1354 → 0.1328 |
+
+Values are milliseconds, using one warm-up and seven alternating before/after pairs. Fan-out benefits from removing failed-domain admission bookkeeping. Optimized distinct fan-in adds about 22 microseconds; these figures do not establish a gain for every graph shape. The existing fan-in fixture also checks exact dependency completion and single continuation execution outside the measured submission intervals.
+
+All 148 global tests pass in dbg, opt, fin, and optimized name-symbol builds. Native regressions distinguish deterministic caller unwind from process death on worker failure; expected false-result retries remain separate. The complete descriptor-buffer suite passes with 377 tests and 38 skips in dbg, 376 and 39 in opt, and 365 and 37 in fin. Skips reflect unavailable device/queue capabilities and configuration-specific checks. The new native worker-death, timed caller-unwind, composite unwind, and listener-unwind cases run and pass in every configuration.

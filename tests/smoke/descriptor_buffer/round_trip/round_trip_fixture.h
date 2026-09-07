@@ -64,11 +64,9 @@ namespace HostSync = Core::GraphicsBackend::VulkanDetail;
 class DescriptorBufferRoundTripTest : public ::testing::Test{
 protected:
     static void SetUpTestSuite(){
-#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
-        // The hardening checks intentionally exercise diagnostic rejection paths.  This fixture owns a worker pool,
-        // so use Google Test's re-exec death-test mode rather than forking a live multi-threaded Vulkan process.
+        // Worker failures are terminal in every build mode. Re-exec death tests so each child owns its Vulkan
+        // device and worker pools, including when diagnostic invariant checks are compiled out.
         GTEST_FLAG_SET(death_test_style, "threadsafe");
-#endif
 
         // The device-creation path emits log messages, and every NWB_LOGGER_* macro fatally asserts a logger is
         // installed. Register the capturing logger before bring-up so failures are recorded rather than

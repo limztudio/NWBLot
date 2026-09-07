@@ -14,26 +14,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ExceptionPtr = std::exception_ptr;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] NWB_INLINE ExceptionPtr CaptureCurrentException()noexcept{
-    return std::current_exception();
-}
-
 [[nodiscard]] NWB_INLINE i32 UncaughtExceptionCount()noexcept{
     return std::uncaught_exceptions();
-}
-
-[[nodiscard]] NWB_INLINE bool ExceptionPtrEqual(const ExceptionPtr& lhs, const ExceptionPtr& rhs)noexcept{
-    return lhs == rhs;
-}
-
-[[noreturn]] NWB_INLINE void RethrowException(const ExceptionPtr& exception){
-    std::rethrow_exception(exception);
 }
 
 

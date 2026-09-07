@@ -7,6 +7,8 @@
 #include "round_trip_fixture.h"
 #include "timing_scopes_test_support.h"
 
+#include <global/scope_exit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,30 +29,50 @@ inline constexpr u32 s_ParallelRecordingException = 0xE101u;
 
 
 struct ParallelRecordingExceptionState{
+    Alloc::ThreadPool& workers;
     Latch recordingStarted{ 3u };
     Atomic<u32> discardCount{ 0u };
+    Atomic<u32> activeCallbacks{ 0u };
+    GpuSubmissionPacketId callerPacket;
+    GpuSubmissionPacketId successfulWorkerPacket;
+    GpuSubmissionPacketId failedWorkerPacket;
+    bool throwOnWorker = false;
+
+    explicit ParallelRecordingExceptionState(Alloc::ThreadPool& recordingWorkers, const bool workerThrows = false)noexcept
+        : workers(recordingWorkers)
+        , throwOnWorker(workerThrows)
+    {}
 };
 
 
 struct ParallelRecordingExceptionTask{
     struct Payload{
         ParallelRecordingExceptionState* state = nullptr;
-        bool shouldRecord = false;
-        bool shouldThrow = false;
     };
 
     [[nodiscard]] static bool record(
         const Payload& payload,
         CommandList& commandList,
-        const GpuTaskRecordContext&
+        const GpuTaskRecordContext& context
     ){
         if(!payload.state || !commandList.isRecording())
             return false;
-        payload.state->recordingStarted.count_down();
-        payload.state->recordingStarted.wait();
-        if(payload.shouldThrow)
+        ParallelRecordingExceptionState& state = *payload.state;
+        state.activeCallbacks.fetch_add(1u, MemoryOrder::relaxed);
+        ScopeExit finishCallback([&]()noexcept{ state.activeCallbacks.fetch_sub(1u, MemoryOrder::relaxed); });
+
+        const usize workerIndex = state.workers.currentWorkerIndex();
+        if(workerIndex == 0u)
+            state.callerPacket = context.packet;
+        else if(workerIndex == 1u)
+            state.successfulWorkerPacket = context.packet;
+        else
+            state.failedWorkerPacket = context.packet;
+        state.recordingStarted.count_down();
+        state.recordingStarted.wait();
+        if(workerIndex == (state.throwOnWorker ? 1u : 0u))
             throw s_ParallelRecordingException;
-        return payload.shouldRecord && commandList.isRecording();
+        return workerIndex == 1u && commandList.isRecording();
     }
 
     static void discarded(Payload& payload)noexcept{
@@ -88,9 +110,10 @@ struct NativeAcceptedFrontierWithoutPrefixTask{
 };
 
 
-TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierExceptionDrainsExactClaimsWithoutInvokingDiscardObservers){
+TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierCallerExceptionDrainsTimedClaimsWithoutInvokingDiscardObservers){
     auto& device = DescriptorBufferRoundTripTest::device();
-    ParallelRecordingExceptionState state;
+    Alloc::ThreadPool recordingWorkers(2u, CpuAffinity::Any);
+    ParallelRecordingExceptionState state(recordingWorkers);
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Medium;
@@ -103,44 +126,37 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierExceptionDrainsExactClaimsWit
         false,
         false,
     };
-    const auto addTask = [&](const Name& identity, const AStringView label, const bool shouldRecord, const bool shouldThrow){
+    const auto addTask = [&](const Name& identity, const AStringView label){
         GpuTaskDesc desc;
         desc
             .setIdentity(identity)
             .setMarkerLabel(label)
             .setQueue(queueRequest)
             .setScheduling(scheduling)
+            .setTimingMetadata(GpuTaskTimingMetadata{ .policy = GpuTaskTimingPolicy::PacketOnly })
         ;
         return graph.addTask<ParallelRecordingExceptionTask>(
             desc,
             ParallelRecordingExceptionTask::Payload{
                 .state = &state,
-                .shouldRecord = shouldRecord,
-                .shouldThrow = shouldThrow,
             }
         );
     };
-    const GpuTaskId successfulTask = addTask(
-        Name("tests/descriptor_buffer/parallel_recording_exception_success"),
-        "Parallel Recording Exception Success",
-        true,
-        false
+    const GpuTaskId firstTask = addTask(
+        Name("tests/descriptor_buffer/parallel_recording_exception_first"),
+        "Parallel Recording Exception First"
     );
-    const GpuTaskId failedTask = addTask(
-        Name("tests/descriptor_buffer/parallel_recording_exception_false"),
-        "Parallel Recording Exception False",
-        false,
-        false
+    const GpuTaskId secondTask = addTask(
+        Name("tests/descriptor_buffer/parallel_recording_exception_second"),
+        "Parallel Recording Exception Second"
     );
-    const GpuTaskId throwingTask = addTask(
-        Name("tests/descriptor_buffer/parallel_recording_exception_throw"),
-        "Parallel Recording Exception Throw",
-        false,
-        true
+    const GpuTaskId thirdTask = addTask(
+        Name("tests/descriptor_buffer/parallel_recording_exception_third"),
+        "Parallel Recording Exception Third"
     );
-    ASSERT_TRUE(successfulTask.valid());
-    ASSERT_TRUE(failedTask.valid());
-    ASSERT_TRUE(throwingTask.valid());
+    ASSERT_TRUE(firstTask.valid());
+    ASSERT_TRUE(secondTask.valid());
+    ASSERT_TRUE(thirdTask.valid());
 
     const GpuPhysicalQueueInfo graphicsQueue{
         .id = BackendQueueId(device, CommandQueue::Graphics),
@@ -163,35 +179,38 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierExceptionDrainsExactClaimsWit
         const GpuTaskGraph::DeclarationReadView compilationDeclarations(graph);
         ASSERT_TRUE(compiler.compile(compilationDeclarations, analysis, topology, assignments, compiledGraph, scratchArena));
     }
-    GpuSubmissionPacketId successfulPacket;
+    GpuSubmissionPacketId firstPacket;
     GpuSubmissionPacketId failedPacket;
-    GpuSubmissionPacketId throwingPacket;
+    GpuSubmissionPacketId thirdPacket;
     GpuSubmissionPacketRange packetRange;
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
 
         ASSERT_EQ(views.compiled.packetCount(), 3u);
-        successfulPacket = views.compiled.packetForTask(successfulTask);
-        failedPacket = views.compiled.packetForTask(failedTask);
-        throwingPacket = views.compiled.packetForTask(throwingTask);
-        ASSERT_TRUE(successfulPacket.valid());
+        firstPacket = views.compiled.packetForTask(firstTask);
+        failedPacket = views.compiled.packetForTask(secondTask);
+        thirdPacket = views.compiled.packetForTask(thirdTask);
+        ASSERT_TRUE(firstPacket.valid());
         ASSERT_TRUE(failedPacket.valid());
-        ASSERT_TRUE(throwingPacket.valid());
-        const GpuCompiledPacketView successfulPacketView = views.compiled.packet(successfulPacket);
+        ASSERT_TRUE(thirdPacket.valid());
+        const GpuCompiledPacketView firstPacketView = views.compiled.packet(firstPacket);
         const GpuCompiledPacketView failedPacketView = views.compiled.packet(failedPacket);
-        const GpuCompiledPacketView throwingPacketView = views.compiled.packet(throwingPacket);
-        ASSERT_TRUE(successfulPacketView.valid());
+        const GpuCompiledPacketView thirdPacketView = views.compiled.packet(thirdPacket);
+        ASSERT_TRUE(firstPacketView.valid());
         ASSERT_TRUE(failedPacketView.valid());
-        ASSERT_TRUE(throwingPacketView.valid());
-        ASSERT_EQ(successfulPacketView.plan->recordingFrontier, 0u);
+        ASSERT_TRUE(thirdPacketView.valid());
+        ASSERT_TRUE(firstPacketView.plan->recordsTiming);
+        ASSERT_TRUE(failedPacketView.plan->recordsTiming);
+        ASSERT_TRUE(thirdPacketView.plan->recordsTiming);
+        ASSERT_EQ(firstPacketView.plan->recordingFrontier, 0u);
         ASSERT_EQ(failedPacketView.plan->recordingFrontier, 0u);
-        ASSERT_EQ(throwingPacketView.plan->recordingFrontier, 0u);
+        ASSERT_EQ(thirdPacketView.plan->recordingFrontier, 0u);
         packetRange = views.compiled.allPacketRange();
     }
 
-    Alloc::ThreadPool recordingWorkers(2u, CpuAffinity::Any);
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
-    const GpuNativePacketRecorder recorder(device);
+    s_scope->setGpuTimingEnabled(true);
+    const GpuNativePacketRecorder recorder(device, s_scope->graphics().gpuTiming());
     GpuSubmissionPacketId reportedFailedPacket;
     bool exceptionObserved = false;
     try{
@@ -211,28 +230,28 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierExceptionDrainsExactClaimsWit
     EXPECT_TRUE(exceptionObserved);
     EXPECT_FALSE(reportedFailedPacket.valid());
     EXPECT_EQ(state.discardCount.load(MemoryOrder::relaxed), 0u);
-    EXPECT_TRUE(recordedGraph.packetSnapshot(successfulPacket).has_value());
-    EXPECT_FALSE(recordedGraph.packetSnapshot(failedPacket).has_value());
-    EXPECT_FALSE(recordedGraph.packetSnapshot(throwingPacket).has_value());
-
-    Atomic<u32> reuseIterationCount{ 0u };
-    EXPECT_NO_THROW(recordingWorkers.parallelFor(0u, 64u, [&reuseIterationCount](const usize){
-        reuseIterationCount.fetch_add(1u, MemoryOrder::relaxed);
-    }));
-    EXPECT_EQ(reuseIterationCount.load(MemoryOrder::relaxed), 64u);
+    EXPECT_EQ(state.activeCallbacks.load(MemoryOrder::relaxed), 0u);
+    ASSERT_TRUE(state.callerPacket.valid());
+    ASSERT_TRUE(state.successfulWorkerPacket.valid());
+    ASSERT_TRUE(state.failedWorkerPacket.valid());
+    EXPECT_TRUE(recordedGraph.packetSnapshot(state.successfulWorkerPacket).has_value());
+    EXPECT_FALSE(recordedGraph.packetSnapshot(state.failedWorkerPacket).has_value());
+    EXPECT_FALSE(recordedGraph.packetSnapshot(state.callerPacket).has_value());
 
     EXPECT_FALSE(recordedGraph.tryReset(compiledGraph));
     EXPECT_TRUE(graph.tryReset());
     EXPECT_EQ(state.discardCount.load(MemoryOrder::relaxed), 1u);
     recordedGraph.reset(compiledGraph);
+    s_scope->setGpuTimingEnabled(false);
 }
 
 
-// A composite owns the complete graph attempt, not just the worker claim that happened to throw. Its unwind path
+// A composite owns the complete graph attempt, including the caller claim that throws. Its unwind path
 // must consume successful, false, and throwing packet states without invoking any discard observer.
-TEST_F(DescriptorBufferRoundTripTest, CompositeReadyFrontierExceptionResolvesWholeAttemptWithoutDiscardCallbacks){
+TEST_F(DescriptorBufferRoundTripTest, CompositeReadyFrontierCallerExceptionResolvesWholeAttemptWithoutDiscardCallbacks){
     auto& device = DescriptorBufferRoundTripTest::device();
-    ParallelRecordingExceptionState state;
+    Alloc::ThreadPool recordingWorkers(2u, CpuAffinity::Any);
+    ParallelRecordingExceptionState state(recordingWorkers);
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Medium;
@@ -245,7 +264,7 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeReadyFrontierExceptionResolvesWho
         false,
         false,
     };
-    const auto addTask = [&](const Name& identity, const AStringView label, const bool shouldRecord, const bool shouldThrow){
+    const auto addTask = [&](const Name& identity, const AStringView label){
         return graph.addTask<ParallelRecordingExceptionTask>(
             GpuTaskDesc{}
                 .setIdentity(identity)
@@ -254,32 +273,24 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeReadyFrontierExceptionResolvesWho
                 .setScheduling(scheduling),
             ParallelRecordingExceptionTask::Payload{
                 .state = &state,
-                .shouldRecord = shouldRecord,
-                .shouldThrow = shouldThrow,
             }
         );
     };
-    const GpuTaskId successfulTask = addTask(
-        Name("tests/descriptor_buffer/composite_parallel_exception_success"),
-        "Composite Parallel Exception Success",
-        true,
-        false
+    const GpuTaskId firstTask = addTask(
+        Name("tests/descriptor_buffer/composite_parallel_exception_first"),
+        "Composite Parallel Exception First"
     );
-    const GpuTaskId failedTask = addTask(
-        Name("tests/descriptor_buffer/composite_parallel_exception_false"),
-        "Composite Parallel Exception False",
-        false,
-        false
+    const GpuTaskId secondTask = addTask(
+        Name("tests/descriptor_buffer/composite_parallel_exception_second"),
+        "Composite Parallel Exception Second"
     );
-    const GpuTaskId throwingTask = addTask(
-        Name("tests/descriptor_buffer/composite_parallel_exception_throw"),
-        "Composite Parallel Exception Throw",
-        false,
-        true
+    const GpuTaskId thirdTask = addTask(
+        Name("tests/descriptor_buffer/composite_parallel_exception_third"),
+        "Composite Parallel Exception Third"
     );
-    ASSERT_TRUE(successfulTask.valid());
-    ASSERT_TRUE(failedTask.valid());
-    ASSERT_TRUE(throwingTask.valid());
+    ASSERT_TRUE(firstTask.valid());
+    ASSERT_TRUE(secondTask.valid());
+    ASSERT_TRUE(thirdTask.valid());
 
     const GpuPhysicalQueueInfo graphicsQueue{
         .id = BackendQueueId(device, CommandQueue::Graphics),
@@ -308,7 +319,6 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeReadyFrontierExceptionResolvesWho
         ASSERT_EQ(views.compiled.packetCount(), 3u);
     }
 
-    Alloc::ThreadPool recordingWorkers(2u, CpuAffinity::Any);
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     ASSERT_TRUE(transaction.tryReset(compiledGraph));
@@ -324,8 +334,8 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeReadyFrontierExceptionResolvesWho
             recorder,
             recordedGraph,
             recordingWorkers,
-            successfulTask,
-            throwingTask,
+            firstTask,
+            thirdTask,
             transaction,
             submissionScratch,
             &failedPacket
@@ -338,6 +348,7 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeReadyFrontierExceptionResolvesWho
 
     EXPECT_TRUE(exceptionObserved);
     EXPECT_TRUE(failedPacket.valid());
+    EXPECT_EQ(state.activeCallbacks.load(MemoryOrder::relaxed), 0u);
     EXPECT_EQ(state.discardCount.load(MemoryOrder::relaxed), 0u);
     const GpuTaskGraphSubmissionStatistics statistics = transaction.submissionStatistics();
     EXPECT_EQ(statistics.rejectedPacketCount, 3u);
@@ -353,6 +364,99 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeReadyFrontierExceptionResolvesWho
     recordedGraph.reset(compiledGraph);
     EXPECT_TRUE(graph.tryReset());
     EXPECT_EQ(state.discardCount.load(MemoryOrder::relaxed), 0u);
+}
+
+
+// The child constructs its own graph and recording pool. The three-way barrier makes the throwing callback belong
+// to native worker one, so this proves process termination without relying on caller-side exception forwarding.
+TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierWorkerExceptionIsTerminal){
+    const auto recordWithFailingWorker = [](){
+        auto& device = DescriptorBufferRoundTripTest::device();
+        Alloc::ThreadPool recordingWorkers(2u, CpuAffinity::Any);
+        ParallelRecordingExceptionState state(recordingWorkers, true);
+        GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+        GpuTaskSchedulingHint scheduling;
+        scheduling.cost = GpuTaskCostHint::Medium;
+        scheduling.forceSubmissionBoundary = true;
+        scheduling.allowPacketMerge = false;
+        scheduling.allowParallelRecording = true;
+        const GpuQueueRequest queueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        };
+        const auto addTask = [&](const Name& identity, const AStringView label){
+            return graph.addTask<ParallelRecordingExceptionTask>(
+                GpuTaskDesc{}
+                    .setIdentity(identity)
+                    .setMarkerLabel(label)
+                    .setQueue(queueRequest)
+                    .setScheduling(scheduling),
+                ParallelRecordingExceptionTask::Payload{ .state = &state }
+            );
+        };
+        const GpuTaskId firstTask = addTask(
+            Name("tests/descriptor_buffer/terminal_worker_first"),
+            "Terminal Worker First"
+        );
+        const GpuTaskId secondTask = addTask(
+            Name("tests/descriptor_buffer/terminal_worker_second"),
+            "Terminal Worker Second"
+        );
+        const GpuTaskId thirdTask = addTask(
+            Name("tests/descriptor_buffer/terminal_worker_third"),
+            "Terminal Worker Third"
+        );
+        ASSERT_TRUE(firstTask.valid());
+        ASSERT_TRUE(secondTask.valid());
+        ASSERT_TRUE(thirdTask.valid());
+
+        const GpuPhysicalQueueInfo graphicsQueue{
+            .id = BackendQueueId(device, CommandQueue::Graphics),
+            .queueClass = CommandQueue::Graphics,
+            .capabilities = static_cast<GpuQueueCapability::Mask>(GpuQueueCapability::Graphics),
+            .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+            .queueIndex = 0u,
+            .dedicated = false,
+        };
+        const GpuTaskGraphQueueTopology topology{
+            .queues = &graphicsQueue,
+            .queueCount = 1u,
+        };
+        GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+        GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+        GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+        Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/terminal_worker_scratch"));
+        const GpuTaskGraphCompiler compiler;
+        {
+            const GpuTaskGraph::DeclarationReadView compilationDeclarations(graph);
+            ASSERT_TRUE(compiler.compile(compilationDeclarations, analysis, topology, assignments, compiledGraph, scratchArena));
+        }
+        GpuSubmissionPacketRange packetRange;
+        {
+            const GpuTaskGraphReadViews views(graph, compiledGraph);
+            ASSERT_EQ(views.compiled.packetCount(), 3u);
+            for(usize packetIndex = 0u; packetIndex < views.compiled.packetCount(); ++packetIndex){
+                const GpuCompiledPacketView packet = views.compiled.packet(views.compiled.packetIdAt(packetIndex));
+                ASSERT_TRUE(packet.valid());
+                ASSERT_EQ(packet.plan->recordingFrontier, 0u);
+            }
+            packetRange = views.compiled.allPacketRange();
+        }
+
+        GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+        const GpuNativePacketRecorder recorder(device);
+        const bool recorded = recorder.recordPacketRangeInReadyFrontiers(
+            graph,
+            compiledGraph,
+            packetRange,
+            recordedGraph,
+            recordingWorkers
+        );
+        EXPECT_FALSE(recorded);
+    };
+    EXPECT_DEATH_IF_SUPPORTED(recordWithFailingWorker(), "");
 }
 
 

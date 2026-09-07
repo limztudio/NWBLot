@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <global/exception.h>
+#include <global/scope_exit.h>
 
 #include <core/alloc/job.h>
 
@@ -31,45 +31,6 @@ struct ThrowingCopyTask{
 
 
     void operator()()const noexcept{}
-};
-
-struct ReentrantDestructionProbe{
-    NWB::Core::Alloc::JobSystem* jobSystem = nullptr;
-    NWB::Core::Alloc::JobSystem::JobHandle observedHandle;
-    Atomic<u32>* destructionCount = nullptr;
-    Atomic<u32>* observedCompletion = nullptr;
-
-
-    ReentrantDestructionProbe(
-        NWB::Core::Alloc::JobSystem& owner,
-        NWB::Core::Alloc::JobSystem::JobHandle handle,
-        Atomic<u32>& count,
-        Atomic<u32>& completion
-    )noexcept
-        : jobSystem(&owner)
-        , observedHandle(handle)
-        , destructionCount(&count)
-        , observedCompletion(&completion)
-    {}
-    ReentrantDestructionProbe(const ReentrantDestructionProbe&) = delete;
-    ReentrantDestructionProbe(ReentrantDestructionProbe&& rhs)noexcept
-        : jobSystem(rhs.jobSystem)
-        , observedHandle(rhs.observedHandle)
-        , destructionCount(rhs.destructionCount)
-        , observedCompletion(rhs.observedCompletion)
-    {
-        rhs.jobSystem = nullptr;
-        rhs.destructionCount = nullptr;
-        rhs.observedCompletion = nullptr;
-    }
-    ~ReentrantDestructionProbe()noexcept{
-        if(!jobSystem)
-            return;
-
-        observedCompletion->store(jobSystem->isComplete(observedHandle) ? 1u : 0u, MemoryOrder::release);
-        destructionCount->fetch_add(1u, MemoryOrder::release);
-        destructionCount->notify_all();
-    }
 };
 
 struct BlockingCaptureRetirementTask{
@@ -133,6 +94,36 @@ struct CancellationProbe{
 };
 
 
+struct ReentrantThrowingTask{
+    NWB::Core::Alloc::JobSystem* owner;
+    Atomic<u32>& rejectedAdmissions;
+    Atomic<u32>& invokedTasks;
+
+
+    ReentrantThrowingTask(NWB::Core::Alloc::JobSystem& scheduler, Atomic<u32>& rejected, Atomic<u32>& invoked)noexcept
+        : owner(&scheduler)
+        , rejectedAdmissions(rejected)
+        , invokedTasks(invoked)
+    {}
+    ReentrantThrowingTask(ReentrantThrowingTask&& other)noexcept
+        : owner(other.owner)
+        , rejectedAdmissions(other.rejectedAdmissions)
+        , invokedTasks(other.invokedTasks)
+    {
+        other.owner = nullptr;
+    }
+    ~ReentrantThrowingTask()noexcept{
+        if(!owner)
+            return;
+        const auto job = owner->submit([&invoked = invokedTasks](){ invoked.fetch_add(1u, MemoryOrder::release); });
+        if(!job.valid())
+            rejectedAdmissions.fetch_add(1u, MemoryOrder::release);
+    }
+
+
+    void operator()(){ throw s_TaskException; }
+};
+
 static_assert(IsNothrowDestructible_V<NWB::Core::Alloc::JobSystem>);
 
 
@@ -145,223 +136,72 @@ static_assert(IsNothrowDestructible_V<NWB::Core::Alloc::JobSystem>);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(JobSystemTests, TaskFailureCancelsDependentsAndPreservesTheExactFirstException){
-    NWB::Core::Alloc::ThreadPool threadPool(1u, CpuAffinity::Any);
-    NWB::Core::Alloc::JobSystem jobSystem(threadPool);
-    AtomicFlag throwingTaskEntered;
-    AtomicFlag releaseThrowingTask;
-
-    const NWB::Core::Alloc::JobSystem::JobHandle throwingJob = jobSystem.submit([&throwingTaskEntered, &releaseThrowingTask](){
-        throwingTaskEntered.test_and_set(MemoryOrder::release);
-        throwingTaskEntered.notify_all();
-        while(!releaseThrowingTask.test(MemoryOrder::acquire))
-            releaseThrowingTask.wait(false, MemoryOrder::acquire);
-        throw __hidden_job_system_tests::s_TaskException;
-    });
-    while(!throwingTaskEntered.test(MemoryOrder::acquire))
-        throwingTaskEntered.wait(false, MemoryOrder::acquire);
-
-    Atomic<u32> dependentInvocationCount{ 0u };
-    Atomic<u32> canceledCaptureDestructionCount{ 0u };
-    Atomic<u32> cancellationObservedCompletion{ 0u };
-    const NWB::Core::Alloc::JobSystem::JobHandle dependentJob = jobSystem.submit([
-        lifetimeProbe = __hidden_job_system_tests::ReentrantDestructionProbe(
-            jobSystem,
-            throwingJob,
-            canceledCaptureDestructionCount,
-            cancellationObservedCompletion
-        ),
-        &dependentInvocationCount
-    ]() mutable{
-        if(lifetimeProbe.jobSystem)
-            dependentInvocationCount.fetch_add(1u, MemoryOrder::relaxed);
-    }, throwingJob);
-
-    releaseThrowingTask.test_and_set(MemoryOrder::release);
-    releaseThrowingTask.notify_all();
-
-    bool waitExceptionObserved = false;
-    try{
-        jobSystem.wait(dependentJob);
-    }
-    catch(const u32 exception){
-        waitExceptionObserved = exception == __hidden_job_system_tests::s_TaskException;
-    }
-    EXPECT_TRUE(waitExceptionObserved);
-
-    u32 currentDestructionCount = canceledCaptureDestructionCount.load(MemoryOrder::acquire);
-    while(currentDestructionCount == 0u){
-        canceledCaptureDestructionCount.wait(currentDestructionCount, MemoryOrder::relaxed);
-        currentDestructionCount = canceledCaptureDestructionCount.load(MemoryOrder::acquire);
-    }
-    EXPECT_EQ(dependentInvocationCount.load(MemoryOrder::relaxed), 0u);
-    EXPECT_EQ(currentDestructionCount, 1u);
-    EXPECT_EQ(cancellationObservedCompletion.load(MemoryOrder::acquire), 1u);
-    EXPECT_TRUE(jobSystem.isComplete(throwingJob));
-    EXPECT_TRUE(jobSystem.isComplete(dependentJob));
-
-    Atomic<u32> rejectedTaskInvocationCount{ 0u };
-    bool admissionExceptionObserved = false;
-    try{
-        const NWB::Core::Alloc::JobSystem::JobHandle rejectedJob = jobSystem.submit([&rejectedTaskInvocationCount](){
-            rejectedTaskInvocationCount.fetch_add(1u, MemoryOrder::relaxed);
-        });
-        EXPECT_FALSE(rejectedJob.valid());
-    }
-    catch(const u32 exception){
-        admissionExceptionObserved = exception == __hidden_job_system_tests::s_TaskException;
-    }
-    EXPECT_TRUE(admissionExceptionObserved);
-    EXPECT_EQ(rejectedTaskInvocationCount.load(MemoryOrder::relaxed), 0u);
-
-    bool waitAllExceptionObserved = false;
-    try{
-        jobSystem.waitAll();
-    }
-    catch(const u32 exception){
-        waitAllExceptionObserved = exception == __hidden_job_system_tests::s_TaskException;
-    }
-    EXPECT_TRUE(waitAllExceptionObserved);
-    EXPECT_NO_THROW(threadPool.finish());
+TEST(JobSystemTests, WorkerJobExceptionTerminatesWithoutDeferredDelivery){
+    EXPECT_DEATH({
+        NWB::Core::Alloc::JobSystem jobSystem(1u, CpuAffinity::Any);
+        const auto job = jobSystem.submit([](){ throw __hidden_job_system_tests::s_TaskException; });
+        EXPECT_TRUE(job.valid());
+        jobSystem.drain();
+    }, "");
 }
 
 
-TEST(JobSystemTests, TaskConstructionFailureLeavesTheSchedulerUsable){
-    NWB::Core::Alloc::ThreadPool threadPool(1u, CpuAffinity::Any);
-    NWB::Core::Alloc::JobSystem jobSystem(threadPool);
-    __hidden_job_system_tests::ThrowingCopyTask throwingTask;
-
+TEST(JobSystemTests, TaskConstructionUnwindPublishesNoJob){
     bool constructionExceptionObserved = false;
     try{
-        const NWB::Core::Alloc::JobSystem::JobHandle rejectedJob = jobSystem.submit(throwingTask);
+        NWB::Core::Alloc::JobSystem jobSystem(1u, CpuAffinity::Any);
+        __hidden_job_system_tests::ThrowingCopyTask throwingTask;
+        const auto rejectedJob = jobSystem.submit(throwingTask);
         EXPECT_FALSE(rejectedJob.valid());
     }
     catch(const u32 exception){
         constructionExceptionObserved = exception == __hidden_job_system_tests::s_TaskConstructionException;
     }
     EXPECT_TRUE(constructionExceptionObserved);
-
-    Atomic<u32> invocationCount{ 0u };
-    const NWB::Core::Alloc::JobSystem::JobHandle successfulJob = jobSystem.submit([&invocationCount](){
-        invocationCount.fetch_add(1u, MemoryOrder::relaxed);
-    });
-    EXPECT_NO_THROW(jobSystem.wait(successfulJob));
-    EXPECT_NO_THROW(jobSystem.waitAll());
-    EXPECT_EQ(invocationCount.load(MemoryOrder::relaxed), 1u);
 }
 
 
-TEST(JobSystemTests, ThreadPoolPublicationFailureTerminalizesTheCommittedJob){
-    NWB::Core::Alloc::ThreadPool threadPool(1u, CpuAffinity::Any);
-    NWB::Core::Alloc::JobSystem jobSystem(threadPool);
-
-    threadPool.enqueue([](){ throw __hidden_job_system_tests::s_PoolException; });
-    bool poolExceptionObserved = false;
+TEST(JobSystemTests, NestedInlineFailureCancelsBothExecutingJobsAndRetiresTheirCaptures){
+    Atomic<u32> retiredCaptures{ 0u };
+    u32 invokedTasks = 0u;
+    bool exceptionObserved = false;
     try{
-        threadPool.wait();
-    }
-    catch(const u32 exception){
-        poolExceptionObserved = exception == __hidden_job_system_tests::s_PoolException;
-    }
-    EXPECT_TRUE(poolExceptionObserved);
-
-    Atomic<u32> invocationCount{ 0u };
-    bool submissionExceptionObserved = false;
-    try{
-        const NWB::Core::Alloc::JobSystem::JobHandle rejectedJob = jobSystem.submit([&invocationCount](){
-            invocationCount.fetch_add(1u, MemoryOrder::relaxed);
+        NWB::Core::Alloc::JobSystem jobSystem(0u, CpuAffinity::Any);
+        const auto outer = jobSystem.submit([
+            &jobSystem,
+            &invokedTasks,
+            &retiredCaptures,
+            lifetime = __hidden_job_system_tests::CancellationProbe(retiredCaptures)
+        ](){
+            ++invokedTasks;
+            const auto inner = jobSystem.submit([
+                &invokedTasks,
+                lifetime = __hidden_job_system_tests::CancellationProbe(retiredCaptures)
+            ](){
+                ++invokedTasks;
+                throw __hidden_job_system_tests::s_TaskException;
+            });
+            EXPECT_FALSE(inner.valid());
+            ++invokedTasks;
         });
-        EXPECT_FALSE(rejectedJob.valid());
+        EXPECT_FALSE(outer.valid());
     }
     catch(const u32 exception){
-        submissionExceptionObserved = exception == __hidden_job_system_tests::s_PoolException;
+        exceptionObserved = exception == __hidden_job_system_tests::s_TaskException;
     }
-    EXPECT_TRUE(submissionExceptionObserved);
-    EXPECT_EQ(invocationCount.load(MemoryOrder::relaxed), 0u);
-
-    bool waitExceptionObserved = false;
-    try{
-        jobSystem.waitAll();
-    }
-    catch(const u32 exception){
-        waitExceptionObserved = exception == __hidden_job_system_tests::s_PoolException;
-    }
-    EXPECT_TRUE(waitExceptionObserved);
+    EXPECT_TRUE(exceptionObserved);
+    EXPECT_EQ(invokedTasks, 2u);
+    EXPECT_EQ(retiredCaptures.load(MemoryOrder::acquire), 2u);
 }
 
 
-TEST(JobSystemTests, DistinctJobAndSharedPoolFailuresRemainIndependentlyObservable){
-    NWB::Core::Alloc::ThreadPool threadPool(2u, CpuAffinity::Any);
-    NWB::Core::Alloc::JobSystem jobSystem(threadPool);
-    AtomicFlag throwingJobEntered;
-    AtomicFlag releaseThrowingJob;
-
-    const NWB::Core::Alloc::JobSystem::JobHandle throwingJob = jobSystem.submit([&](){
-        throwingJobEntered.test_and_set(MemoryOrder::release);
-        throwingJobEntered.notify_all();
-        while(!releaseThrowingJob.test(MemoryOrder::acquire))
-            releaseThrowingJob.wait(false, MemoryOrder::acquire);
-        throw __hidden_job_system_tests::s_TaskException;
-    });
-    EXPECT_TRUE(throwingJob.valid());
-    while(!throwingJobEntered.test(MemoryOrder::acquire))
-        throwingJobEntered.wait(false, MemoryOrder::acquire);
-
-    AtomicFlag dependentInvoked;
-    AtomicFlag canceledCaptureDestructionEntered;
-    AtomicFlag releaseCanceledCaptureDestruction;
-    const NWB::Core::Alloc::JobSystem::JobHandle dependentJob = jobSystem.submit(
-        __hidden_job_system_tests::BlockingCaptureRetirementTask(
-            dependentInvoked,
-            canceledCaptureDestructionEntered,
-            releaseCanceledCaptureDestruction
-        ),
-        throwingJob
-    );
-    EXPECT_TRUE(dependentJob.valid());
-
-    threadPool.enqueue([&canceledCaptureDestructionEntered](){
-        while(!canceledCaptureDestructionEntered.test(MemoryOrder::acquire))
-            canceledCaptureDestructionEntered.wait(false, MemoryOrder::acquire);
-        throw __hidden_job_system_tests::s_PoolException;
-    });
-    Atomic<u32> canceledPoolCaptureCount{ 0u };
-    threadPool.enqueue([
-        cancellationProbe = __hidden_job_system_tests::CancellationProbe(canceledPoolCaptureCount)
-    ]() mutable{});
-
-    releaseThrowingJob.test_and_set(MemoryOrder::release);
-    releaseThrowingJob.notify_all();
-    while(!canceledCaptureDestructionEntered.test(MemoryOrder::acquire))
-        canceledCaptureDestructionEntered.wait(false, MemoryOrder::acquire);
-    u32 currentCanceledPoolCaptureCount = canceledPoolCaptureCount.load(MemoryOrder::acquire);
-    while(currentCanceledPoolCaptureCount == 0u){
-        canceledPoolCaptureCount.wait(currentCanceledPoolCaptureCount, MemoryOrder::relaxed);
-        currentCanceledPoolCaptureCount = canceledPoolCaptureCount.load(MemoryOrder::acquire);
-    }
-
-    releaseCanceledCaptureDestruction.test_and_set(MemoryOrder::release);
-    releaseCanceledCaptureDestruction.notify_all();
-
-    bool jobExceptionObserved = false;
-    try{
-        jobSystem.finish();
-    }
-    catch(const u32 exception){
-        jobExceptionObserved = exception == __hidden_job_system_tests::s_TaskException;
-    }
-    EXPECT_TRUE(jobExceptionObserved);
-
-    bool poolExceptionObserved = false;
-    try{
-        threadPool.finish();
-    }
-    catch(const u32 exception){
-        poolExceptionObserved = exception == __hidden_job_system_tests::s_PoolException;
-    }
-    EXPECT_TRUE(poolExceptionObserved);
-    EXPECT_FALSE(dependentInvoked.test(MemoryOrder::acquire));
-    EXPECT_EQ(currentCanceledPoolCaptureCount, 1u);
+TEST(JobSystemTests, BorrowedPoolWorkerExceptionIsTerminalForTheProcess){
+    EXPECT_DEATH({
+        NWB::Core::Alloc::ThreadPool threadPool(1u, CpuAffinity::Any);
+        NWB::Core::Alloc::JobSystem jobSystem(threadPool);
+        threadPool.enqueue([](){ throw __hidden_job_system_tests::s_PoolException; });
+        NWB::Core::Alloc::FinishBorrowedSchedulerDomain(jobSystem, threadPool);
+    }, "");
 }
 
 
@@ -494,21 +334,21 @@ TEST(JobSystemTests, DestructorWaitsForExecutionWrapperCaptureRetirement){
 }
 
 
-TEST(JobSystemTests, FinishPropagatesTheExactTaskException){
-    NWB::Core::Alloc::JobSystem jobSystem(1u, CpuAffinity::Any);
-    const NWB::Core::Alloc::JobSystem::JobHandle job = jobSystem.submit([](){
-        throw __hidden_job_system_tests::s_TaskException;
-    });
-    EXPECT_TRUE(job.valid());
-
+TEST(JobSystemTests, InlineCallbackExceptionReleasesItsCaptureBeforeLeavingTheOwningScope){
+    Atomic<u32> retiredCaptures{ 0u };
     bool exceptionObserved = false;
     try{
-        jobSystem.finish();
+        NWB::Core::Alloc::JobSystem jobSystem(0u, CpuAffinity::Any);
+        const auto job = jobSystem.submit([lifetime = __hidden_job_system_tests::CancellationProbe(retiredCaptures)](){
+            throw __hidden_job_system_tests::s_TaskException;
+        });
+        EXPECT_FALSE(job.valid());
     }
     catch(const u32 exception){
         exceptionObserved = exception == __hidden_job_system_tests::s_TaskException;
     }
     EXPECT_TRUE(exceptionObserved);
+    EXPECT_EQ(retiredCaptures.load(MemoryOrder::acquire), 1u);
 }
 
 
@@ -588,12 +428,22 @@ TEST(JobSystemTests, BorrowedFinishRejectsCallerParallelExecutionWhileJobProgres
 }
 
 
-TEST(JobSystemTests, TaskExceptionDoesNotReplaceActiveUnwind){
+TEST(JobSystemTests, CallerUnwindDrainsNonthrowingJobsAndTheirCaptures){
+    AtomicFlag releaseJob;
+    Atomic<u32> retiredCaptures{ 0u };
     bool exceptionObserved = false;
     try{
         NWB::Core::Alloc::JobSystem jobSystem(1u, CpuAffinity::Any);
-        const NWB::Core::Alloc::JobSystem::JobHandle job = jobSystem.submit([](){
-            throw __hidden_job_system_tests::s_TaskException;
+        ScopeExit releaseWork([&]()noexcept{
+            releaseJob.test_and_set(MemoryOrder::release);
+            releaseJob.notify_all();
+        });
+        const auto job = jobSystem.submit([
+            &releaseJob,
+            lifetime = __hidden_job_system_tests::CancellationProbe(retiredCaptures)
+        ](){
+            while(!releaseJob.test(MemoryOrder::acquire))
+                releaseJob.wait(false, MemoryOrder::acquire);
         });
         EXPECT_TRUE(job.valid());
         throw __hidden_job_system_tests::s_UnrelatedUnwindException;
@@ -602,86 +452,65 @@ TEST(JobSystemTests, TaskExceptionDoesNotReplaceActiveUnwind){
         exceptionObserved = exception == __hidden_job_system_tests::s_UnrelatedUnwindException;
     }
     EXPECT_TRUE(exceptionObserved);
+    EXPECT_EQ(retiredCaptures.load(MemoryOrder::acquire), 1u);
 }
 
 
-TEST(JobSystemTests, ExecutingJobCannotWaitForItself){
-    NWB::Core::Alloc::JobSystem::JobHandle self;
-    AtomicFlag handlePublished;
-    NWB::Core::Alloc::JobSystem jobSystem(1u, CpuAffinity::Any);
-
-    self = jobSystem.submit([&jobSystem, &self, &handlePublished](){
-        while(!handlePublished.test(MemoryOrder::acquire))
-            handlePublished.wait(false, MemoryOrder::acquire);
-        jobSystem.wait(self);
-    });
-    EXPECT_TRUE(self.valid());
-    handlePublished.test_and_set(MemoryOrder::release);
-    handlePublished.notify_all();
-
-    bool exceptionObserved = false;
-    try{
-        jobSystem.waitAll();
-    }
-    catch(const RuntimeException&){
-        exceptionObserved = true;
-    }
-    EXPECT_TRUE(exceptionObserved);
+TEST(JobSystemTests, ExecutingJobSelfWaitTerminatesWithoutDeadlocking){
+    EXPECT_DEATH({
+        NWB::Core::Alloc::JobSystem::JobHandle self;
+        AtomicFlag handlePublished;
+        NWB::Core::Alloc::JobSystem jobSystem(1u, CpuAffinity::Any);
+        self = jobSystem.submit([&](){
+            while(!handlePublished.test(MemoryOrder::acquire))
+                handlePublished.wait(false, MemoryOrder::acquire);
+            jobSystem.wait(self);
+        });
+        EXPECT_TRUE(self.valid());
+        handlePublished.test_and_set(MemoryOrder::release);
+        handlePublished.notify_all();
+        jobSystem.drain();
+    }, "");
 }
 
 
-TEST(JobSystemTests, ExecutingJobCannotWaitForAnotherPendingJobInItsOwnDomain){
-    NWB::Core::Alloc::JobSystem::JobHandle target;
-    AtomicFlag targetPublished;
-    NWB::Core::Alloc::JobSystem jobSystem(1u, CpuAffinity::Any);
-
-    const NWB::Core::Alloc::JobSystem::JobHandle waiter = jobSystem.submit([&](){
-        while(!targetPublished.test(MemoryOrder::acquire))
-            targetPublished.wait(false, MemoryOrder::acquire);
-        jobSystem.wait(target);
-    });
-    target = jobSystem.submit([]()noexcept{});
-    EXPECT_TRUE(waiter.valid());
-    EXPECT_TRUE(target.valid());
-    targetPublished.test_and_set(MemoryOrder::release);
-    targetPublished.notify_all();
-
-    bool exceptionObserved = false;
-    try{
-        jobSystem.waitAll();
-    }
-    catch(const RuntimeException&){
-        exceptionObserved = true;
-    }
-    EXPECT_TRUE(exceptionObserved);
+TEST(JobSystemTests, ExecutingJobPendingWaitTerminatesWithoutDeadlocking){
+    EXPECT_DEATH({
+        NWB::Core::Alloc::JobSystem::JobHandle target;
+        AtomicFlag targetPublished;
+        NWB::Core::Alloc::JobSystem jobSystem(1u, CpuAffinity::Any);
+        const auto waiter = jobSystem.submit([&](){
+            while(!targetPublished.test(MemoryOrder::acquire))
+                targetPublished.wait(false, MemoryOrder::acquire);
+            jobSystem.wait(target);
+        });
+        target = jobSystem.submit([]()noexcept{});
+        EXPECT_TRUE(waiter.valid());
+        EXPECT_TRUE(target.valid());
+        targetPublished.test_and_set(MemoryOrder::release);
+        targetPublished.notify_all();
+        jobSystem.drain();
+    }, "");
 }
 
 
-TEST(JobSystemTests, BackingPoolTaskCannotWaitForPendingJobHandle){
-    NWB::Core::Alloc::JobSystem::JobHandle target;
-    AtomicFlag targetPublished;
-    NWB::Core::Alloc::ThreadPool threadPool(1u, CpuAffinity::Any);
-    NWB::Core::Alloc::JobSystem jobSystem(threadPool);
-
-    threadPool.enqueue([&](){
-        while(!targetPublished.test(MemoryOrder::acquire))
-            targetPublished.wait(false, MemoryOrder::acquire);
-        jobSystem.wait(target);
-    });
-    target = jobSystem.submit([]()noexcept{});
-    EXPECT_TRUE(target.valid());
-    targetPublished.test_and_set(MemoryOrder::release);
-    targetPublished.notify_all();
-
-    bool exceptionObserved = false;
-    try{
-        jobSystem.finish();
-    }
-    catch(const RuntimeException&){
-        exceptionObserved = true;
-    }
-    EXPECT_TRUE(exceptionObserved);
-    EXPECT_NO_THROW(threadPool.finish());
+TEST(JobSystemTests, BackingPoolPendingJobWaitTerminatesWithoutDeadlocking){
+    EXPECT_DEATH({
+        NWB::Core::Alloc::JobSystem::JobHandle target;
+        AtomicFlag targetPublished;
+        NWB::Core::Alloc::ThreadPool threadPool(1u, CpuAffinity::Any);
+        NWB::Core::Alloc::JobSystem jobSystem(threadPool);
+        threadPool.enqueue([&](){
+            while(!targetPublished.test(MemoryOrder::acquire))
+                targetPublished.wait(false, MemoryOrder::acquire);
+            jobSystem.wait(target);
+        });
+        target = jobSystem.submit([]()noexcept{});
+        EXPECT_TRUE(target.valid());
+        targetPublished.test_and_set(MemoryOrder::release);
+        targetPublished.notify_all();
+        NWB::Core::Alloc::FinishBorrowedSchedulerDomain(jobSystem, threadPool);
+    }, "");
 }
 
 
@@ -708,19 +537,13 @@ TEST(JobSystemTests, ExecutingJobCanWaitForCompletedAndForeignHandles){
 }
 
 
-TEST(JobSystemTests, ExecutingJobCannotWaitForItsOwnDomain){
-    NWB::Core::Alloc::JobSystem jobSystem(1u, CpuAffinity::Any);
-    const NWB::Core::Alloc::JobSystem::JobHandle job = jobSystem.submit([&jobSystem](){ jobSystem.waitAll(); });
-    EXPECT_TRUE(job.valid());
-
-    bool exceptionObserved = false;
-    try{
-        jobSystem.waitAll();
-    }
-    catch(const RuntimeException&){
-        exceptionObserved = true;
-    }
-    EXPECT_TRUE(exceptionObserved);
+TEST(JobSystemTests, ExecutingJobDomainWaitTerminatesWithoutDeadlocking){
+    EXPECT_DEATH({
+        NWB::Core::Alloc::JobSystem jobSystem(1u, CpuAffinity::Any);
+        const auto job = jobSystem.submit([&](){ jobSystem.waitAll(); });
+        EXPECT_TRUE(job.valid());
+        jobSystem.drain();
+    }, "");
 }
 
 
@@ -743,58 +566,61 @@ TEST(JobSystemTests, ExecutingJobCanSubmitNestedWork){
 }
 
 
-TEST(JobSystemTests, SameSystemWorkerAdmissionDoesNotObserveTheDomainFailure){
-    Latch workersReady(2u);
-    AtomicFlag releaseThrowingTask;
-    AtomicFlag unexpectedAdmission;
-    Atomic<u32> canceledCaptureCount{ 0u };
-
+TEST(JobSystemTests, InlineUnwindKeepsAnAlreadyRunningBorrowedPoolTaskAliveUntilDrain){
+    AtomicFlag releaseTask;
+    Atomic<u32> retiredCaptures{ 0u };
     bool exceptionObserved = false;
     try{
-        NWB::Core::Alloc::JobSystem jobSystem(2u, CpuAffinity::Any);
-        const NWB::Core::Alloc::JobSystem::JobHandle throwingJob = jobSystem.submit([&](){
-            workersReady.count_down();
-            workersReady.wait();
-            while(!releaseThrowingTask.test(MemoryOrder::acquire))
-                releaseThrowingTask.wait(false, MemoryOrder::acquire);
-            throw __hidden_job_system_tests::s_TaskException;
+        NWB::Core::Alloc::ThreadPool threadPool(1u, CpuAffinity::Any);
+        NWB::Core::Alloc::JobSystem jobSystem(threadPool);
+        ScopeExit drainDomain([&]()noexcept{
+            releaseTask.test_and_set(MemoryOrder::release);
+            releaseTask.notify_all();
+            jobSystem.drain();
+            threadPool.drain();
         });
-        const NWB::Core::Alloc::JobSystem::JobHandle admittingJob = jobSystem.submit([&](){
-            workersReady.count_down();
-            workersReady.wait();
-
-            u32 currentCaptureCount = canceledCaptureCount.load(MemoryOrder::acquire);
-            while(currentCaptureCount == 0u){
-                canceledCaptureCount.wait(currentCaptureCount, MemoryOrder::relaxed);
-                currentCaptureCount = canceledCaptureCount.load(MemoryOrder::acquire);
-            }
-
-            const NWB::Core::Alloc::JobSystem::JobHandle unexpectedJob = jobSystem.submit([]()noexcept{});
-            if(unexpectedJob.valid()){
-                unexpectedAdmission.test_and_set(MemoryOrder::release);
-                unexpectedAdmission.notify_all();
-            }
+        threadPool.enqueue([
+            &releaseTask,
+            lifetime = __hidden_job_system_tests::CancellationProbe(retiredCaptures)
+        ](){
+            while(!releaseTask.test(MemoryOrder::acquire))
+                releaseTask.wait(false, MemoryOrder::acquire);
         });
-        EXPECT_TRUE(throwingJob.valid());
-        EXPECT_TRUE(admittingJob.valid());
-        workersReady.wait();
+        throw __hidden_job_system_tests::s_UnrelatedUnwindException;
+    }
+    catch(const u32 exception){
+        exceptionObserved = exception == __hidden_job_system_tests::s_UnrelatedUnwindException;
+    }
+    EXPECT_TRUE(exceptionObserved);
+    EXPECT_EQ(retiredCaptures.load(MemoryOrder::acquire), 1u);
+}
 
-        const NWB::Core::Alloc::JobSystem::JobHandle canceledJob = jobSystem.submit([
-            cancellationProbe = __hidden_job_system_tests::CancellationProbe(canceledCaptureCount)
-        ]() mutable{});
-        EXPECT_TRUE(canceledJob.valid());
-        releaseThrowingTask.test_and_set(MemoryOrder::release);
-        releaseThrowingTask.notify_all();
-        jobSystem.finish();
+
+TEST(JobSystemTests, InlineFailurePublishesCancellationBeforeDestroyingTheRunningCapture){
+    Atomic<u32> rejectedAdmissions{ 0u };
+    Atomic<u32> invokedTasks{ 0u };
+    bool exceptionObserved = false;
+    try{
+        NWB::Core::Alloc::JobSystem jobSystem(0u, CpuAffinity::Any);
+        const auto job = jobSystem.submit(__hidden_job_system_tests::ReentrantThrowingTask(jobSystem, rejectedAdmissions, invokedTasks));
+        EXPECT_FALSE(job.valid());
     }
     catch(const u32 exception){
         exceptionObserved = exception == __hidden_job_system_tests::s_TaskException;
     }
     EXPECT_TRUE(exceptionObserved);
-    EXPECT_FALSE(unexpectedAdmission.test(MemoryOrder::acquire));
-    EXPECT_EQ(canceledCaptureCount.load(MemoryOrder::acquire), 1u);
+    EXPECT_EQ(rejectedAdmissions.load(MemoryOrder::acquire), 1u);
+    EXPECT_EQ(invokedTasks.load(MemoryOrder::acquire), 0u);
 }
 
+
+TEST(JobSystemTests, InlineSelfDrainIsTerminalInEveryConfiguration){
+    EXPECT_DEATH({
+        NWB::Core::Alloc::JobSystem jobSystem(0u, CpuAffinity::Any);
+        const auto job = jobSystem.submit([&](){ jobSystem.drain(); });
+        EXPECT_FALSE(job.valid());
+    }, "");
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

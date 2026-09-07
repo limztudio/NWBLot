@@ -10,7 +10,8 @@
 #include "thread.h"
 
 #include <global/arena_object.h>
-#include <global/exception.h>
+#include <global/scope_exit.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -96,7 +97,7 @@ private:
 
 
     public:
-        inline explicit JobNode(PersistentArena& arena)noexcept
+        inline explicit JobNode(PersistentArena& arena)
             : dependents(DependencyList::allocator_type(arena))
         {}
     };
@@ -143,44 +144,17 @@ private:
         }
         inline ExecutionLease(ExecutionLease&& rhs)noexcept
             : m_owner(rhs.m_owner)
-            , m_executed(rhs.m_executed)
         {
             rhs.m_owner = nullptr;
-            rhs.m_executed = false;
         }
         inline ~ExecutionLease()noexcept{
             if(m_owner)
-                m_owner->retireExecutionWrapper(m_executed);
+                m_owner->retireExecutionWrapper();
         }
-
-
-    public:
-        inline void markExecuted()noexcept{ m_executed = true; }
 
 
     private:
         JobSystem* m_owner;
-        bool m_executed = false;
-    };
-
-    class ScopedExecutionIdentity final : NoCopy{
-    public:
-        inline ScopedExecutionIdentity(JobSystem& owner, JobHandle handle)noexcept
-            : m_previousSystem(s_CurrentExecutionSystem)
-            , m_previousHandle(s_CurrentExecutionHandle)
-        {
-            s_CurrentExecutionSystem = &owner;
-            s_CurrentExecutionHandle = handle;
-        }
-        inline ~ScopedExecutionIdentity()noexcept{
-            s_CurrentExecutionSystem = m_previousSystem;
-            s_CurrentExecutionHandle = m_previousHandle;
-        }
-
-
-    private:
-        JobSystem* m_previousSystem;
-        JobHandle m_previousHandle;
     };
 
 
@@ -240,54 +214,29 @@ public:
         , m_arena(ArenaScope::s_JobSystem, resolveArenaSize(threadCount, arenaSize))
         , m_nodes(JobNodeList::allocator_type(m_arena))
     {}
-
     inline ~JobSystem()noexcept{
-        NWB_FATAL_ASSERT_MSG(
-            !m_pool.isExecutingOnCurrentThread(),
-            NWB_TEXT("JobSystem cannot be destroyed from an execution on its backing ThreadPool")
-        );
-
-        waitForPendingJobs();
-        waitForExecutionWrappers();
-
-        ExceptionPtr exception;
-        bool exceptionObserved = false;
-        {
-            ScopedLock lock(m_mutex);
-            exception = m_domainException;
-            exceptionObserved = m_domainExceptionObserved;
-        }
-        if(exception && exceptionObserved)
-            observeMatchingThreadPoolFailure(exception);
-        NWB_FATAL_ASSERT_MSG(
-            !exception || exceptionObserved || UncaughtExceptionCount() > 0,
-            NWB_TEXT("JobSystem destruction encountered an unobserved task failure; call finish() at the owning boundary")
-        );
+        drain();
     }
 
 
 public:
     template<typename Func>
     inline JobHandle submit(Func&& task){
-        throwIfDomainFailed();
         return submitWithDependencies(JobFunction(Forward<Func>(task)), nullptr, 0);
     }
 
     template<typename Func>
     inline JobHandle submit(Func&& task, JobHandle dependency){
-        throwIfDomainFailed();
         return submitWithDependencies(JobFunction(Forward<Func>(task)), &dependency, 1);
     }
 
     template<typename Func>
     inline JobHandle submit(Func&& task, InitializerList<JobHandle> dependencies){
-        throwIfDomainFailed();
         return submitWithDependencies(JobFunction(Forward<Func>(task)), dependencies.begin(), dependencies.size());
     }
 
     template<typename Func>
     inline JobHandle submit(Func&& task, const JobHandle* dependencies, usize dependencyCount){
-        throwIfDomainFailed();
         return submitWithDependencies(JobFunction(Forward<Func>(task)), dependencies, dependencyCount);
     }
 
@@ -298,11 +247,10 @@ public:
 
 public:
     inline void drain()noexcept{
-        NWB_FATAL_ASSERT_MSG(
-            !m_pool.isExecutingOnCurrentThread(),
-            NWB_TEXT("JobSystem cannot drain from an execution on its backing ThreadPool")
-        );
-
+        if(m_pool.isExecutingOnCurrentThread()){
+            NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("JobSystem cannot drain or destroy from its backing ThreadPool execution"));
+            TerminateInvariant();
+        }
         waitForPendingJobs();
         waitForExecutionWrappers();
         if(m_ownedPool)
@@ -312,21 +260,8 @@ public:
     inline void finish(){
         if(m_pool.isExecutingOnCurrentThread())
             throw RuntimeException("JobSystem cannot finish from an execution on its backing ThreadPool");
-
         waitForPendingJobs();
         waitForExecutionWrappers();
-
-        ExceptionPtr exception;
-        {
-            ScopedLock lock(m_mutex);
-            exception = observeDomainExceptionLocked();
-        }
-        if(exception){
-            observeMatchingThreadPoolFailure(exception);
-            if(m_ownedPool)
-                m_ownedPool->drain();
-            RethrowException(exception);
-        }
         if(m_ownedPool)
             m_ownedPool->finish();
     }
@@ -336,40 +271,24 @@ public:
             return;
 
         for(;;){
-            JobSignal* completionSignal = nullptr;
-            u32 completedGeneration = 0u;
-            ExceptionPtr exception;
-            bool rejectBackingPoolWait = false;
-
+            JobSignal* completionSignal;
+            u32 completedGeneration;
+            bool rejectBackingPoolWait;
             {
                 ScopedLock lock(m_mutex);
-
-                exception = domainExceptionForCallerLocked();
-                if(exception){
-                    completionSignal = nullptr;
-                }
-                else if(handle.domainIdentity != m_domainIdentity || handle.index >= m_nodes.size()){
+                if(handle.domainIdentity != m_domainIdentity || handle.index >= m_nodes.size())
                     return;
-                }
-                else{
-                    JobNode& node = m_nodes[handle.index];
-                    if(node.generation != handle.generation || !isPendingState(node.state))
-                        return;
-
-                    completionSignal = &node.completionSignal;
-                    completedGeneration = completionSignal->completedGeneration.load(MemoryOrder::acquire);
-                    if(completedGeneration == handle.generation)
-                        return;
-                    rejectBackingPoolWait = m_pool.isExecutingOnCurrentThread();
-                }
+                JobNode& node = m_nodes[handle.index];
+                if(node.generation != handle.generation || !isPendingState(node.state))
+                    return;
+                completionSignal = &node.completionSignal;
+                completedGeneration = completionSignal->completedGeneration.load(MemoryOrder::acquire);
+                if(completedGeneration == handle.generation)
+                    return;
+                rejectBackingPoolWait = m_pool.isExecutingOnCurrentThread();
             }
-
-            if(exception)
-                rethrowObservedDomainFailure(exception);
             if(rejectBackingPoolWait)
                 throw RuntimeException("JobSystem backing-pool execution cannot wait for a pending local job");
-
-            NWB_ASSERT_MSG(completionSignal != nullptr, NWB_TEXT("JobSystem encountered a null completion signal"));
             completionSignal->completedGeneration.wait(completedGeneration, MemoryOrder::relaxed);
         }
     }
@@ -382,16 +301,7 @@ public:
     inline void waitAll(){
         if(m_pool.isExecutingOnCurrentThread())
             throw RuntimeException("JobSystem cannot wait for its domain from an execution on its backing ThreadPool");
-
         waitForPendingJobs();
-
-        ExceptionPtr exception;
-        {
-            ScopedLock lock(m_mutex);
-            exception = observeDomainExceptionLocked();
-        }
-        if(exception)
-            rethrowObservedDomainFailure(exception);
     }
 
     inline bool isComplete(JobHandle handle)const{
@@ -410,9 +320,6 @@ private:
         if(!dependencies && dependencyCount > 0u)
             return JobHandle{};
 
-        ScratchArena scratchArena(ArenaScope::s_JobReadyBatch);
-        DependencyNodeBatch resolvedDependencies{ DependencyNodeBatch::allocator_type(scratchArena) };
-        resolvedDependencies.reserve(dependencyCount);
 
         JobNode* preparedNode = nullptr;
         const JobHandle output = reserveNode(preparedNode);
@@ -423,85 +330,65 @@ private:
         NodeReservation reservation(*this, output, *preparedNode);
         preparedNode->func = Move(task);
 
+        ScratchArena scratchArena(ArenaScope::s_JobReadyBatch);
+        DependencyNodeBatch resolvedDependencies{ DependencyNodeBatch::allocator_type(scratchArena) };
+        resolvedDependencies.reserve(dependencyCount);
         bool shouldSchedule = false;
-        ExceptionPtr exception;
 
         {
             ScopedLock lock(m_mutex);
 
-            exception = domainExceptionForCallerLocked();
-            if(!exception){
-                NWB_ASSERT_MSG(
-                    preparedNode->generation == output.generation,
-                    NWB_TEXT("JobSystem job reservation generation changed")
-                );
-                NWB_ASSERT_MSG(preparedNode->state == JobState::Preparing, NWB_TEXT("JobSystem job reservation changed state"));
+            if(m_canceled)
+                return JobHandle{};
 
-                for(usize i = 0u; i < dependencyCount; ++i){
-                    JobNode* dependencyNode = tryResolveNodeLocked(dependencies[i]);
-                    if(dependencyNode)
-                        resolvedDependencies.push_back(dependencyNode);
-                }
+            NWB_ASSERT_MSG(
+                preparedNode->generation == output.generation,
+                NWB_TEXT("JobSystem job reservation generation changed")
+            );
+            NWB_ASSERT_MSG(preparedNode->state == JobState::Preparing, NWB_TEXT("JobSystem job reservation changed state"));
 
-                if(resolvedDependencies.size() > 1u)
-                    Sort(resolvedDependencies.begin(), resolvedDependencies.end(), LessThan<JobNode*>{});
-
-                // Retain each duplicate notification, and finish every potentially throwing reserve before publishing any.
-                for(usize groupBegin = 0u; groupBegin < resolvedDependencies.size();){
-                    JobNode* const dependencyNode = resolvedDependencies[groupBegin];
-                    usize groupEnd = groupBegin + 1u;
-                    while(groupEnd < resolvedDependencies.size() && resolvedDependencies[groupEnd] == dependencyNode)
-                        ++groupEnd;
-
-                    const usize requiredCapacity = AddSize(dependencyNode->dependents.size(), groupEnd - groupBegin);
-                    ContainerDetail::ReserveGrowingCapacity(dependencyNode->dependents, requiredCapacity);
-                    groupBegin = groupEnd;
-                }
-
-                for(JobNode* dependencyNode : resolvedDependencies)
-                    dependencyNode->dependents.push_back(output);
-
-                preparedNode->remainingDependencies = resolvedDependencies.size();
-                preparedNode->state = resolvedDependencies.empty() ? JobState::Scheduled : JobState::Waiting;
-                m_pendingJobCount.fetch_add(1u, MemoryOrder::release);
-                shouldSchedule = resolvedDependencies.empty();
+            for(usize i = 0u; i < dependencyCount; ++i){
+                JobNode* dependencyNode = tryResolveNodeLocked(dependencies[i]);
+                if(dependencyNode)
+                    resolvedDependencies.push_back(dependencyNode);
             }
-        }
 
-        if(exception)
-            rethrowObservedDomainFailure(exception);
+            if(resolvedDependencies.size() > 1u)
+                Sort(resolvedDependencies.begin(), resolvedDependencies.end(), LessThan<JobNode*>{});
+
+            // Retain each duplicate notification, and finish every potentially throwing reserve before publishing any.
+            for(usize groupBegin = 0u; groupBegin < resolvedDependencies.size();){
+                JobNode* const dependencyNode = resolvedDependencies[groupBegin];
+                usize groupEnd = groupBegin + 1u;
+                while(groupEnd < resolvedDependencies.size() && resolvedDependencies[groupEnd] == dependencyNode)
+                    ++groupEnd;
+
+                const usize requiredCapacity = AddSize(dependencyNode->dependents.size(), groupEnd - groupBegin);
+                ContainerDetail::ReserveGrowingCapacity(dependencyNode->dependents, requiredCapacity);
+                groupBegin = groupEnd;
+            }
+
+            for(JobNode* dependencyNode : resolvedDependencies)
+                dependencyNode->dependents.push_back(output);
+
+            preparedNode->remainingDependencies = resolvedDependencies.size();
+            preparedNode->state = resolvedDependencies.empty() ? JobState::Scheduled : JobState::Waiting;
+            m_pendingJobCount.fetch_add(1u, MemoryOrder::release);
+            shouldSchedule = resolvedDependencies.empty();
+        }
 
         reservation.commit();
-
-        if(shouldSchedule){
-            try{
-                enqueueExecution(output);
-            }
-            catch(...){
-                const ExceptionPtr exception = CaptureCurrentException();
-                failDomain(exception);
-                rethrowObservedDomainFailure(exception);
-            }
-        }
-
+        ScopeExit cancelUnpublished([&]()noexcept{ cancelDomain(); });
+        if(shouldSchedule)
+            enqueueExecution(output);
+        cancelUnpublished.release();
         return output;
     }
 
     inline JobHandle reserveNode(JobNode*& outNode){
         outNode = nullptr;
-
-        ExceptionPtr exception;
-        JobHandle output;
-        {
-            ScopedLock lock(m_mutex);
-            exception = domainExceptionForCallerLocked();
-            if(!exception)
-                output = acquireNodeLocked(outNode);
-        }
-        if(exception)
-            rethrowObservedDomainFailure(exception);
-
-        return output;
+        ScopedLock lock(m_mutex);
+        return m_canceled ? JobHandle{} : acquireNodeLocked(outNode);
     }
 
     inline JobHandle acquireNodeLocked(JobNode*& outNode){
@@ -601,7 +488,6 @@ private:
     inline void enqueueExecution(JobHandle handle){
         ExecutionLease lease(*this);
         m_pool.enqueue([this, handle, executionLease = Move(lease)]() mutable{
-            executionLease.markExecuted();
             execute(handle);
         });
     }
@@ -614,24 +500,12 @@ private:
             const JobHandle handle = handles[i];
             ExecutionLease lease(*this);
             return [this, handle, executionLease = Move(lease)]() mutable{
-                executionLease.markExecuted();
                 execute(handle);
             };
         });
     }
 
-    inline void execute(JobHandle handle)noexcept{
-        ScopedExecutionIdentity executionIdentity(*this, handle);
-
-        try{
-            executeJobs(handle);
-        }
-        catch(...){
-            failDomain(CaptureCurrentException());
-        }
-    }
-
-    inline void executeJobs(JobHandle handle){
+    inline void execute(JobHandle handle){
         JobHandle current = handle;
         u32 workFirstDepth = 0;
 
@@ -649,12 +523,15 @@ private:
                 executingNode = node;
             }
 
+            // Publish cancellation before a throwing job's capture can reenter the scheduler during destruction.
+            ScopeExit cancelIncomplete([&]()noexcept{ cancelDomain(); });
             task = Move(executingNode->func);
             NWB_ASSERT_MSG(static_cast<bool>(task), NWB_TEXT("JobSystem scheduled a job without a task"));
             task();
 
             const bool allowInline = workFirstDepth < s_WorkFirstDepthLimit;
             const JobHandle inlineContinuation = complete(current, allowInline);
+            cancelIncomplete.release();
             if(!inlineContinuation.valid())
                 return;
 
@@ -721,38 +598,14 @@ private:
         return inlineContinuation;
     }
 
-    [[nodiscard]] inline ExceptionPtr observeDomainExceptionLocked(){
-        if(m_domainException)
-            m_domainExceptionObserved = true;
-        return m_domainException;
-    }
-
-    [[nodiscard]] inline ExceptionPtr domainExceptionForCallerLocked(){
-        if(m_domainException && s_CurrentExecutionSystem != this)
-            m_domainExceptionObserved = true;
-        return m_domainException;
-    }
-
-    inline void throwIfDomainFailed(){
-        ExceptionPtr exception;
-        {
-            ScopedLock lock(m_mutex);
-            exception = domainExceptionForCallerLocked();
-        }
-        if(exception)
-            rethrowObservedDomainFailure(exception);
-    }
-
-    inline void failDomain(const ExceptionPtr& exception)noexcept{
-        NWB_ASSERT_MSG(static_cast<bool>(exception), NWB_TEXT("JobSystem cannot fail without an exception"));
-
-        bool establishedFailure = false;
+    inline void cancelDomain()noexcept{
+        bool establishedCancellation = false;
         usize nodeCount = 0u;
         {
             ScopedLock lock(m_mutex);
-            if(!m_domainException){
-                m_domainException = exception;
-                establishedFailure = true;
+            if(!m_canceled){
+                m_canceled = true;
+                establishedCancellation = true;
                 nodeCount = m_nodes.size();
 
                 for(JobNode& node : m_nodes){
@@ -765,7 +618,7 @@ private:
                 m_pendingJobCount.store(0u, MemoryOrder::release);
             }
         }
-        if(!establishedFailure)
+        if(!establishedCancellation)
             return;
 
         for(usize nodeIndex = 0u; nodeIndex < nodeCount; ++nodeIndex)
@@ -798,41 +651,7 @@ private:
         }
     }
 
-    [[nodiscard]] inline ExceptionPtr captureThreadPoolException()noexcept{
-        ScopedLock lock(m_pool.m_taskMutex);
-        return m_pool.m_taskException;
-    }
-
-    inline void observeMatchingThreadPoolFailure(const ExceptionPtr& domainException)noexcept{
-        ScopedLock lock(m_pool.m_taskMutex);
-        if(ExceptionPtrEqual(m_pool.m_taskException, domainException))
-            m_pool.m_taskExceptionObserved = true;
-    }
-
-    [[noreturn]] inline void rethrowObservedDomainFailure(const ExceptionPtr& exception){
-        if(s_CurrentExecutionSystem != this)
-            observeMatchingThreadPoolFailure(exception);
-        RethrowException(exception);
-    }
-
-    inline void retireExecutionWrapper(bool executed)noexcept{
-        ScopedExecutionIdentity executionIdentity(*this, JobHandle{});
-
-        if(!executed){
-            const ExceptionPtr exception = captureThreadPoolException();
-            if(exception)
-                failDomain(exception);
-        }
-
-        ExceptionPtr observedDomainException;
-        {
-            ScopedLock lock(m_mutex);
-            if(m_domainExceptionObserved)
-                observedDomainException = m_domainException;
-        }
-        if(observedDomainException)
-            observeMatchingThreadPoolFailure(observedDomainException);
-
+    inline void retireExecutionWrapper()noexcept{
         const usize previousCount = m_outstandingWrapperCount.fetch_sub(1u, MemoryOrder::acq_rel);
         NWB_ASSERT_MSG(previousCount > 0u, NWB_TEXT("JobSystem execution wrapper counter underflow"));
         if(previousCount == 1u)
@@ -857,9 +676,6 @@ private:
 
 
 private:
-    inline static thread_local JobSystem* s_CurrentExecutionSystem = nullptr;
-    inline static thread_local JobHandle s_CurrentExecutionHandle{};
-
     u64 m_domainIdentity;
     UniquePtr<ThreadPool> m_ownedPool;
     ThreadPool& m_pool;
@@ -871,8 +687,7 @@ private:
     mutable Futex m_mutex;
     Atomic<usize> m_pendingJobCount{ 0 };
     Atomic<usize> m_outstandingWrapperCount{ 0 };
-    ExceptionPtr m_domainException;
-    bool m_domainExceptionObserved = false;
+    bool m_canceled = false;
 };
 
 
@@ -880,17 +695,12 @@ private:
 
 
 inline void FinishBorrowedSchedulerDomain(JobSystem& jobSystem, ThreadPool& threadPool){
-    try{
-        jobSystem.finish();
-    }
-    catch(...){
-        const ExceptionPtr exception = CaptureCurrentException();
-        threadPool.drain();
-        RethrowException(exception);
-    }
-
+    ScopeExit drainPool([&]()noexcept{ threadPool.drain(); });
+    jobSystem.finish();
     threadPool.finish();
+    drainPool.release();
 }
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

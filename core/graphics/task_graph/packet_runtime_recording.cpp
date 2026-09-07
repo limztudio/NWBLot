@@ -10,6 +10,7 @@
 #include <core/graphics/capture/command_ir.h>
 #include <core/graphics/gpu_timing.h>
 
+#include <global/exception.h>
 #include <global/termination.h>
 #include <global/timer.h>
 

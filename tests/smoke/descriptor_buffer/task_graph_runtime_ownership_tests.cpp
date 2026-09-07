@@ -217,7 +217,6 @@ struct RecordableTask{
         bool* recorded = nullptr;
         u32* discardedCount = nullptr;
         const bool* shouldRecord = nullptr;
-        const bool* shouldThrow = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -226,8 +225,6 @@ struct RecordableTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(payload.shouldThrow && *payload.shouldThrow)
-            throw TimedRecordSentinel{};
         const bool recorded = commandList.isRecording() && (!payload.shouldRecord || *payload.shouldRecord);
         if(payload.recorded)
             *payload.recorded = recorded;
@@ -1962,9 +1959,9 @@ TEST(TaskGraphRuntimeOwnershipTest, ConcurrentPlanReadersRejectWritersWithoutPoi
 }
 
 
-// Two independent timed packets share one ready frontier. False and throwing peers must relinquish their timing
-// reservations without revoking the successfully published peer, and both cached slots must remain reusable.
-TEST(TaskGraphRuntimeOwnershipTest, TimedReadyFrontierFailurePreservesPeerAndReusesTicketReservations){
+// Two independent timed packets share one ready frontier. An explicit false result must relinquish its timing
+// reservation without revoking the successfully published peer, and both cached slots must remain reusable.
+TEST(TaskGraphRuntimeOwnershipTest, TimedReadyFrontierFalseResultPreservesPeerAndReusesTicketReservations){
     CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger);
     HeadlessGraphicsScope graphicsScope;
@@ -1974,7 +1971,6 @@ TEST(TaskGraphRuntimeOwnershipTest, TimedReadyFrontierFailurePreservesPeerAndReu
     GraphicsBackend::Device& device = graphicsScope.graphics().getDevice();
     graphicsScope.setGpuTimingEnabled(true);
     bool failedPeerShouldRecord = false;
-    bool failedPeerShouldThrow = false;
     u32 successfulPeerDiscardedCount = 0u;
     u32 failedPeerDiscardedCount = 0u;
     GpuTaskSchedulingHint scheduling;
@@ -2009,7 +2005,6 @@ TEST(TaskGraphRuntimeOwnershipTest, TimedReadyFrontierFailurePreservesPeerAndReu
         RecordableTask::Payload{
             .discardedCount = &failedPeerDiscardedCount,
             .shouldRecord = &failedPeerShouldRecord,
-            .shouldThrow = &failedPeerShouldThrow,
         }
     );
     ASSERT_TRUE(successfulTask.valid());
@@ -2092,44 +2087,6 @@ TEST(TaskGraphRuntimeOwnershipTest, TimedReadyFrontierFailurePreservesPeerAndReu
     ASSERT_TRUE(recordedGraph.tryReset(compiledGraph));
 
     failedPeerShouldRecord = true;
-    failedPeerShouldThrow = true;
-    failedPacket = {};
-    EXPECT_THROW({
-        const bool recorded = recorder.recordPacketRangeInReadyFrontiers(
-            graph,
-            compiledGraph,
-            allPackets,
-            recordedGraph,
-            recordingWorkers,
-            &failedPacket
-        );
-        EXPECT_FALSE(recorded);
-    }, TimedRecordSentinel);
-    EXPECT_FALSE(failedPacket.valid());
-    EXPECT_TRUE(recordedGraph.packetSnapshot(successfulPacket).has_value());
-    EXPECT_FALSE(recordedGraph.packetSnapshot(failedPacketExpected).has_value());
-    {
-        const GpuTaskGraphReadViews views(graph, compiledGraph);
-        ASSERT_TRUE(views.valid());
-        const GpuTaskGraphRecordingStatistics throwingStatistics = recordedGraph.recordingStatistics(
-            compiledGraph,
-            views.compiled
-        );
-        ASSERT_TRUE(throwingStatistics.valid());
-        EXPECT_EQ(throwingStatistics.packetCount, 1u);
-    }
-
-    ASSERT_TRUE(transaction.discardUnaccepted(
-        graph,
-        compiledGraph,
-        recordedGraph.recordingAttemptGeneration()
-    ));
-    EXPECT_EQ(successfulPeerDiscardedCount, 2u);
-    EXPECT_EQ(failedPeerDiscardedCount, 1u);
-    ASSERT_TRUE(transaction.tryReset(compiledGraph));
-    ASSERT_TRUE(recordedGraph.tryReset(compiledGraph));
-
-    failedPeerShouldThrow = false;
     failedPacket = {};
     EXPECT_TRUE(recorder.recordPacketRangeInReadyFrontiers(
         graph,
@@ -2159,7 +2116,7 @@ TEST(TaskGraphRuntimeOwnershipTest, TimedReadyFrontierFailurePreservesPeerAndReu
         compiledGraph,
         recordedGraph.recordingAttemptGeneration()
     ));
-    EXPECT_EQ(successfulPeerDiscardedCount, 3u);
+    EXPECT_EQ(successfulPeerDiscardedCount, 2u);
     EXPECT_EQ(failedPeerDiscardedCount, 2u);
     EXPECT_TRUE(transaction.tryReset(compiledGraph));
     EXPECT_TRUE(recordedGraph.tryReset(compiledGraph));

@@ -11,7 +11,8 @@
 #include "arena_names.h"
 
 #include <global/cpu_topology.h>
-#include <global/exception.h>
+#include <global/scope_exit.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -64,9 +65,7 @@ private:
         usize chunkSize;
         usize remainder;
         Latch* done;
-        Atomic<bool> exceptionCaptured{ false };
-        ExceptionPtr exception;
-        Futex exceptionMutex;
+        Atomic<bool> cancelRequested{ false };
     };
 
     using WorkerList = Vector<JoiningThread, PersistentArena>;
@@ -158,11 +157,25 @@ private:
         }
     }
 
+    static inline void processParallelFor(ParallelForDesc* pf){
+        ScopedParallelForExecution executionScope(pf->owner, pf->parentExecution);
+        for(;;){
+            const usize c = pf->nextChunk.fetch_add(1, MemoryOrder::relaxed);
+            if(c >= pf->numChunks)
+                break;
+
+            ScopeExit completeChunk([&]()noexcept{ pf->done->count_down(); });
+            const usize cb = pf->begin + c * pf->chunkSize + ((c < pf->remainder) ? c : pf->remainder);
+            const usize ce = cb + pf->chunkSize + ((c < pf->remainder) ? 1 : 0);
+            if(!pf->cancelRequested.load(MemoryOrder::acquire))
+                pf->invoke(pf->functor, cb, ce);
+        }
+    }
+
     [[nodiscard]] inline bool mustRunParallelForSerially()const noexcept{
         u64 greatestAncestorDomainIdentity = 0u;
         for(const ScopedParallelForExecution* execution = s_CurrentParallelForExecution; execution; execution = execution->ancestor)
             greatestAncestorDomainIdentity = Max(greatestAncestorDomainIdentity, execution->owner->m_domainIdentity);
-
         return greatestAncestorDomainIdentity != 0u && m_domainIdentity <= greatestAncestorDomainIdentity;
     }
 
@@ -184,73 +197,41 @@ private:
             runSerialRange(begin, end, func);
             return;
         }
-
         const usize chunkSize = count / numChunks;
         const usize remainder = count % numChunks;
         dispatchParallelFor(begin, end, func, numChunks, chunkSize, remainder);
     }
 
-    [[nodiscard]] inline ExceptionPtr taskExceptionForAdmissionLocked(){
-        if(m_taskException && s_CurrentWorkerPool != this)
-            m_taskExceptionObserved = true;
-        return m_taskException;
-    }
-
-    inline void throwIfTaskDomainFailed(){
-        ExceptionPtr exception;
-        {
-            ScopedLock lock(m_taskMutex);
-            exception = taskExceptionForAdmissionLocked();
-        }
-        if(exception)
-            RethrowException(exception);
-    }
-
     [[nodiscard]] inline TaskItem* createTaskNode(TaskFunction&& function){
-        ExceptionPtr exception;
-        TaskItem* task = nullptr;
+        static_assert(IsNothrowMoveConstructible_V<TaskFunction>);
+        TaskItem* task;
         {
             ScopedLock lock(m_taskMutex);
-            exception = taskExceptionForAdmissionLocked();
-            if(!exception){
-                TaskNodeAllocator allocator(m_arena);
-                task = allocator.allocate(1u);
-            }
+            TaskNodeAllocator allocator(m_arena);
+            task = allocator.allocate(1u);
         }
-        if(exception)
-            RethrowException(exception);
-
         new(task) TaskItem{ Move(function) };
         return task;
     }
 
     inline void createTaskNodes(TaskBatch& functions, TaskNodeBatch& tasks){
-        ExceptionPtr exception;
+        static_assert(IsNothrowMoveConstructible_V<TaskFunction>);
+        ScopeExit releaseStorage([&]()noexcept{
+            ScopedLock lock(m_taskMutex);
+            TaskNodeAllocator allocator(m_arena);
+            for(TaskItem* task : tasks)
+                allocator.deallocate(task, 1u);
+            tasks.clear();
+        });
         {
             ScopedLock lock(m_taskMutex);
-            exception = taskExceptionForAdmissionLocked();
-            if(!exception){
-                TaskNodeAllocator allocator(m_arena);
-                try{
-                    for(usize i = 0u; i < functions.size(); ++i)
-                        tasks.push_back(allocator.allocate(1u));
-                }
-                catch(...){
-                    exception = CaptureCurrentException();
-                }
-
-                if(exception){
-                    for(TaskItem* task : tasks)
-                        allocator.deallocate(task, 1u);
-                    tasks.clear();
-                }
-            }
+            TaskNodeAllocator allocator(m_arena);
+            for(usize i = 0u; i < functions.size(); ++i)
+                tasks.push_back(allocator.allocate(1u));
         }
-        if(exception)
-            RethrowException(exception);
-
         for(usize i = 0u; i < functions.size(); ++i)
             new(tasks[i]) TaskItem{ Move(functions[i]) };
+        releaseStorage.release();
     }
 
     inline void deallocateTaskNodesLocked(TaskItem* task)noexcept{
@@ -265,22 +246,13 @@ private:
 
     inline void releaseTaskNodes(TaskItem* task)noexcept{
         resetTaskCaptures(task);
-
         ScopedLock lock(m_taskMutex);
         deallocateTaskNodesLocked(task);
     }
 
-    [[nodiscard]] inline ExceptionPtr waitTaskDomain(bool observeException){
+    inline void waitTaskDomain()noexcept{
         UniqueLock taskLock(m_taskMutex);
         m_taskStateChanged.wait(taskLock, [this](){ return m_pendingCount == 0u && m_activeTaskWorkers == 0u; });
-
-        if(!observeException)
-            return m_taskException;
-        if(!m_taskException || m_taskExceptionObserved)
-            return ExceptionPtr{};
-
-        m_taskExceptionObserved = true;
-        return m_taskException;
     }
 
 
@@ -302,26 +274,14 @@ public:
     inline explicit ThreadPool(u32 threadCount, CpuAffinity::Enum affinity, usize arenaSize = 0)
         : ThreadPool(threadCount, QueryCpuAffinityMask(affinity), arenaSize)
     {}
-
     inline ~ThreadPool()noexcept{
-        NWB_FATAL_ASSERT_MSG(
-            !isExecutingOnCurrentThread(),
-            NWB_TEXT("ThreadPool cannot be destroyed from one of its own task executions")
-        );
-
-        const ExceptionPtr exception = waitTaskDomain(false);
-        NWB_FATAL_ASSERT_MSG(
-            !exception || m_taskExceptionObserved || UncaughtExceptionCount() > 0,
-            NWB_TEXT("ThreadPool destruction encountered an unobserved task failure; call finish() at the owning boundary")
-        );
+        drain();
     }
 
 
 public:
     template<typename Func>
     inline void enqueue(Func&& task){
-        throwIfTaskDomainFailed();
-
         TaskFunction function(Forward<Func>(task));
         if(m_threadCount == 0){
             ScopedWorkerExecution workerExecution(this, 0u);
@@ -330,26 +290,15 @@ public:
             return;
         }
 
-        TaskItem* item = createTaskNode(Move(function));
-        ExceptionPtr publicationException;
+        TaskItem* const item = createTaskNode(Move(function));
+        ScopeExit releaseNode([&]()noexcept{ releaseTaskNodes(item); });
         {
             ScopedLock lock(m_taskMutex);
-            publicationException = taskExceptionForAdmissionLocked();
-            if(!publicationException){
-                try{
-                    m_tasks.push_back(item);
-                }
-                catch(...){
-                    publicationException = CaptureCurrentException();
-                }
-                if(!publicationException)
-                    ++m_pendingCount;
-            }
+            const usize pendingCount = AddSize(m_pendingCount, 1u);
+            m_tasks.push_back(item);
+            m_pendingCount = pendingCount;
         }
-        if(publicationException){
-            releaseTaskNodes(item);
-            RethrowException(publicationException);
-        }
+        releaseNode.release();
         m_taskAvailable.notify_one();
     }
 
@@ -357,8 +306,6 @@ public:
     inline void enqueueBatch(usize taskCount, const TaskBuilder& taskBuilder){
         if(taskCount == 0)
             return;
-
-        throwIfTaskDomainFailed();
 
         ScratchArena scratchArena(ArenaScope::s_ThreadPoolBatch);
         TaskBatch preparedTasks{ TaskBatch::allocator_type(scratchArena) };
@@ -376,46 +323,38 @@ public:
         TaskNodeBatch preparedNodes{ TaskNodeBatch::allocator_type(scratchArena) };
         preparedNodes.reserve(taskCount);
         createTaskNodes(preparedTasks, preparedNodes);
-
-        ExceptionPtr publicationException;
-        usize publishedCount = 0u;
-        {
-            ScopedLock lock(m_taskMutex);
-            publicationException = taskExceptionForAdmissionLocked();
-            if(!publicationException){
-                try{
-                    for(TaskItem* task : preparedNodes){
-                        m_tasks.push_back(task);
-                        ++publishedCount;
-                    }
-                }
-                catch(...){
-                    publicationException = CaptureCurrentException();
-                }
-            }
-            if(publicationException){
-                while(publishedCount > 0u){
-                    m_tasks.pop_back();
-                    --publishedCount;
-                }
-            }
-            else
-                m_pendingCount = AddSize(m_pendingCount, taskCount);
-        }
-        if(publicationException){
+        ScopeExit releaseNodes([&]()noexcept{
             TaskItem* taskList = nullptr;
             for(TaskItem* task : preparedNodes){
                 task->next = taskList;
                 taskList = task;
             }
             releaseTaskNodes(taskList);
-            RethrowException(publicationException);
+        });
+        {
+            ScopedLock lock(m_taskMutex);
+            const usize pendingCount = AddSize(m_pendingCount, taskCount);
+            usize publishedCount = 0u;
+            ScopeExit undoPublication([&]()noexcept{
+                while(publishedCount > 0u){
+                    m_tasks.pop_back();
+                    --publishedCount;
+                }
+            });
+            for(TaskItem* task : preparedNodes){
+                m_tasks.push_back(task);
+                ++publishedCount;
+            }
+            m_pendingCount = pendingCount;
+            undoPublication.release();
         }
+        releaseNodes.release();
 
         const usize wakeCount = Min(taskCount, static_cast<usize>(m_threadCount));
         for(usize i = 0u; i < wakeCount; ++i)
             m_taskAvailable.notify_one();
     }
+
 
     template<typename Func, typename Callback>
     inline void enqueue(Func&& task, Callback&& onComplete){
@@ -464,31 +403,23 @@ public:
 
 public:
     inline void drain()noexcept{
-        NWB_FATAL_ASSERT_MSG(
-            !isExecutingOnCurrentThread(),
-            NWB_TEXT("ThreadPool task execution cannot drain its own task domain")
-        );
-
-        UniqueLock taskLock(m_taskMutex);
-        m_taskStateChanged.wait(taskLock, [this](){ return m_pendingCount == 0u && m_activeTaskWorkers == 0u; });
+        if(isExecutingOnCurrentThread()){
+            NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("ThreadPool task execution cannot drain or destroy its own task domain"));
+            TerminateInvariant();
+        }
+        waitTaskDomain();
     }
 
     inline void finish(){
         if(isExecutingOnCurrentThread())
             throw RuntimeException("ThreadPool task execution cannot finish its own task domain");
-
-        const ExceptionPtr exception = waitTaskDomain(true);
-        if(exception)
-            RethrowException(exception);
+        waitTaskDomain();
     }
 
     inline void wait(){
         if(isExecutingOnCurrentThread())
             throw RuntimeException("ThreadPool task execution cannot wait for its own task domain");
-
-        const ExceptionPtr exception = waitTaskDomain(true);
-        if(exception)
-            RethrowException(exception);
+        waitTaskDomain();
     }
 
 public:
@@ -506,35 +437,6 @@ private:
     inline bool hasParallelWork()const{
         ParallelForDesc* pf = m_pfWork.load(MemoryOrder::acquire);
         return pf && pf->nextChunk.load(MemoryOrder::relaxed) < pf->numChunks;
-    }
-
-    static inline void processParallelFor(ParallelForDesc* pf){
-        ScopedParallelForExecution executionScope(pf->owner, pf->parentExecution);
-
-        for(;;){
-            const usize c = pf->nextChunk.fetch_add(1, MemoryOrder::relaxed);
-            if(c >= pf->numChunks)
-                break;
-
-            const usize cb = pf->begin + c * pf->chunkSize + ((c < pf->remainder) ? c : pf->remainder);
-            const usize ce = cb + pf->chunkSize + ((c < pf->remainder) ? 1 : 0);
-
-            if(!pf->exceptionCaptured.load(MemoryOrder::acquire)){
-                try{
-                    pf->invoke(pf->functor, cb, ce);
-                }
-                catch(...){
-                    const ExceptionPtr exception = CaptureCurrentException();
-                    {
-                        ScopedLock lock(pf->exceptionMutex);
-                        if(!pf->exception)
-                            pf->exception = exception;
-                    }
-                    pf->exceptionCaptured.store(true, MemoryOrder::release);
-                }
-            }
-            pf->done->count_down();
-        }
     }
 
     template<typename Func>
@@ -557,31 +459,35 @@ private:
         desc.chunkSize = chunkSize;
         desc.remainder = remainder;
         desc.done = &done;
-        desc.exceptionCaptured.store(false, MemoryOrder::relaxed);
 
         {
             ScopedLock taskLock(m_taskMutex);
             NWB_ASSERT(m_activeParallelWorkers.load(MemoryOrder::relaxed) == 0);
             m_pfWork.store(&desc, MemoryOrder::release);
         }
+        bool completed = false;
+        ScopeExit retireDispatch([&]()noexcept{
+            if(!completed){
+                desc.cancelRequested.store(true, MemoryOrder::release);
+                const usize firstUnclaimed = desc.nextChunk.exchange(desc.numChunks, MemoryOrder::acq_rel);
+                if(firstUnclaimed < desc.numChunks)
+                    done.count_down(static_cast<isize>(desc.numChunks - firstUnclaimed));
+            }
+            done.wait();
+            {
+                ScopedLock taskLock(m_taskMutex);
+                m_pfWork.store(nullptr, MemoryOrder::release);
+            }
+            usize activeWorkers = m_activeParallelWorkers.load(MemoryOrder::acquire);
+            while(activeWorkers > 0u){
+                m_activeParallelWorkers.wait(activeWorkers, MemoryOrder::relaxed);
+                activeWorkers = m_activeParallelWorkers.load(MemoryOrder::acquire);
+            }
+        });
         m_taskAvailable.notify_all();
-
         processParallelFor(&desc);
-
         done.wait();
-
-        {
-            ScopedLock taskLock(m_taskMutex);
-            m_pfWork.store(nullptr, MemoryOrder::release);
-        }
-
-        usize activeWorkers = m_activeParallelWorkers.load(MemoryOrder::acquire);
-        while(activeWorkers > 0){
-            m_activeParallelWorkers.wait(activeWorkers, MemoryOrder::relaxed);
-            activeWorkers = m_activeParallelWorkers.load(MemoryOrder::acquire);
-        }
-        if(desc.exception)
-            RethrowException(desc.exception);
+        completed = true;
     }
 
     inline void workerLoop(const StopToken& stopToken, u64 affinityMask, const usize workerIndex){
@@ -614,55 +520,39 @@ private:
             }
 
             if(item){
-                ExceptionPtr taskException;
-                try{
-                    item->func();
-                }
-                catch(...){
-                    taskException = CaptureCurrentException();
-                }
-
-                usize resolvedTaskCount = 1u;
-                TaskItem* retiredTasks = item;
-                if(taskException){
-                    ScopedLock taskLock(m_taskMutex);
-                    if(!m_taskException){
-                        m_taskException = taskException;
-                        while(!m_tasks.empty()){
-                            TaskItem* canceledTask = m_tasks.front();
-                            m_tasks.pop_front();
-                            canceledTask->next = retiredTasks;
-                            retiredTasks = canceledTask;
-                            ++resolvedTaskCount;
-                        }
+                ScopeExit retireTask([&]()noexcept{
+                    resetTaskCaptures(item);
+                    bool taskDomainQuiesced;
+                    {
+                        ScopedLock taskLock(m_taskMutex);
+                        deallocateTaskNodesLocked(item);
+                        NWB_ASSERT(m_pendingCount > 0u);
+                        NWB_ASSERT(m_activeTaskWorkers > 0u);
+                        --m_pendingCount;
+                        --m_activeTaskWorkers;
+                        taskDomainQuiesced = m_pendingCount == 0u && m_activeTaskWorkers == 0u;
                     }
-                }
-
-                resetTaskCaptures(retiredTasks);
-
-                bool taskDomainQuiesced = false;
-                {
-                    ScopedLock taskLock(m_taskMutex);
-                    deallocateTaskNodesLocked(retiredTasks);
-                    NWB_ASSERT(m_pendingCount >= resolvedTaskCount);
-                    NWB_ASSERT(m_activeTaskWorkers > 0u);
-                    m_pendingCount -= resolvedTaskCount;
-                    --m_activeTaskWorkers;
-                    taskDomainQuiesced = m_pendingCount == 0u && m_activeTaskWorkers == 0u;
-                }
-                if(taskDomainQuiesced)
-                    m_taskStateChanged.notify_all();
+                    if(taskDomainQuiesced)
+                        m_taskStateChanged.notify_all();
+                });
+                item->func();
             }
             else if(pf){
+                ScopeExit retireWorker([&]()noexcept{
+                    if(m_activeParallelWorkers.fetch_sub(1u, MemoryOrder::acq_rel) == 1u)
+                        m_activeParallelWorkers.notify_all();
+                });
                 processParallelFor(pf);
-                if(m_activeParallelWorkers.fetch_sub(1u, MemoryOrder::acq_rel) == 1u)
-                    m_activeParallelWorkers.notify_all();
             }
         }
     }
 
 
 private:
+    inline static thread_local const ScopedParallelForExecution* s_CurrentParallelForExecution = nullptr;
+    inline static thread_local ThreadPool* s_CurrentWorkerPool = nullptr;
+    inline static thread_local usize s_CurrentWorkerIndex = 0u;
+
     u64 m_domainIdentity;
     Atomic<ParallelForDesc*> m_pfWork{ nullptr };
     PersistentArena m_arena;
@@ -671,17 +561,11 @@ private:
     Futex m_pfMutex;
     ConditionVariableAny m_taskAvailable;
     ConditionVariableAny m_taskStateChanged;
-    ExceptionPtr m_taskException;
     usize m_pendingCount = 0u;
     usize m_activeTaskWorkers = 0u;
-    bool m_taskExceptionObserved = false;
     Atomic<usize> m_activeParallelWorkers{ 0 };
     u32 m_threadCount;
     WorkerList m_workers;
-
-    inline static thread_local const ScopedParallelForExecution* s_CurrentParallelForExecution = nullptr;
-    inline static thread_local ThreadPool* s_CurrentWorkerPool = nullptr;
-    inline static thread_local usize s_CurrentWorkerIndex = 0u;
 };
 
 

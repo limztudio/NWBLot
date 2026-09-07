@@ -7,7 +7,7 @@
 
 #include "volume_types.h"
 
-#include <global/interface.h>
+#include <global/compile.h>
 #include <global/limit.h>
 #include <core/common/log.h>
 

@@ -54,3 +54,9 @@ The small opt workload adds about 66 ns per freeze; larger workloads show substa
 Runtime synchronization collects inactive objects and owners into operation-owned scratch batches before changing ECS storage. This removes nested reuse of a shared entity list, which could invalidate the outer cleanup loop, and avoids scanning every object separately for each removed owner. Runtime views are refreshed after entity destruction. Full entity generations keep reused IDs isolated. Empty and steady-state cleanup constructs no temporary vector and performs no backing allocations.
 
 Five regressions pass in dbg, opt, and fin: mixed owner sizes, removed/invalid bindings, entity-generation reuse, failed-load recovery, and allocation-free steady state. This item fixes cleanup correctness and removes repeated scans; no timing speedup is claimed.
+
+## Allocator propagation and memory ownership
+
+The three arena allocator adaptors now implement their advertised move-propagation contract: assignment transfers the arena pointer with the container storage. A targeted oneTBB segment-table correction releases an unequal destination allocation before propagating the incoming allocator. Same-arena and nonpropagating vendor paths retain their existing behavior. This prevents deallocation from being charged to the wrong owner and is a prerequisite for reliable recorder payload reuse.
+
+The original direct-assignment regression failed for all three adaptors. Nine propagation regressions now pass, covering vectors, small and heap-backed strings, ordered maps, default-provider rebinding, cache-aligned concurrent vectors, supported hash-map operations, source reuse, destruction, and allocation balance. All 132 global tests pass in dbg, opt, and fin. Cross-arena hash-map assignment still follows the vendor swap contract; no unsupported allocator traits were added. This is a correctness fix, with no timing speedup claim.

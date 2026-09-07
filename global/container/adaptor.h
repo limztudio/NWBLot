@@ -108,7 +108,7 @@ public:
     {}
 
     constexpr ~ArenaAllocator() = default;
-    constexpr ArenaAllocator& operator=(const ArenaAllocator&)noexcept{ return *this; }
+    constexpr ArenaAllocator& operator=(const ArenaAllocator&)noexcept = default;
 
 
 public:
@@ -204,7 +204,7 @@ public:
     {}
 
     constexpr ~DefaultArenaAllocator() = default;
-    constexpr DefaultArenaAllocator& operator=(const DefaultArenaAllocator&)noexcept{ return *this; }
+    constexpr DefaultArenaAllocator& operator=(const DefaultArenaAllocator&)noexcept = default;
 };
 
 
@@ -261,7 +261,7 @@ public:
     {}
 
     constexpr ~ArenaCacheAlignedAllocator() = default;
-    constexpr ArenaCacheAlignedAllocator& operator=(const ArenaCacheAlignedAllocator&)noexcept{ return *this; }
+    constexpr ArenaCacheAlignedAllocator& operator=(const ArenaCacheAlignedAllocator&)noexcept = default;
 
 
 public:

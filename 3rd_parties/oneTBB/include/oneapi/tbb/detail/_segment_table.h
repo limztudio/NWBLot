@@ -132,6 +132,10 @@ public:
         using is_equal_type = typename segment_table_allocator_traits::is_always_equal;
 
         if (this != &other) {
+            // NWB: release destination segments through their original allocator before propagation.
+            if (pocma_type::value && my_segment_table_allocator != other.my_segment_table_allocator) {
+                clear();
+            }
             move_assign_allocators(my_segment_table_allocator, other.my_segment_table_allocator);
             internal_move_assign(std::move(other), tbb::detail::disjunction<is_equal_type, pocma_type>());
         }

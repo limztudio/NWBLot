@@ -4,6 +4,7 @@ target_sources(nwb_global_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/allocator_contention_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/allocator_owner_concurrency_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/allocator_owner_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/allocator_propagation_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/global_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/job_system_fanin_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/job_system_tests.cpp"

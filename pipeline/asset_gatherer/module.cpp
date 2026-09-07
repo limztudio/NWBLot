@@ -4,7 +4,7 @@
 
 #include "../command_line.h"
 
-#include <core/assets/volume/gather.h>
+#include "gather.h"
 #include <impl/assets_graphics/gather.h>
 
 
@@ -18,12 +18,12 @@ int RunPipelineTool(const int argc, char** argv){
     if(result != CommandLineParseResult::Success)
         return result == CommandLineParseResult::Help ? 0 : 1;
 
-    NWB::Core::Assets::AssetGatherOptions options(arena);
+    NWB::Pipeline::AssetGatherer::AssetGatherOptions options(arena);
     options.inputs = Move(parsed.inputs);
     options.outputDirectory = Move(parsed.outputDirectory);
     options.configuration = parsed.configuration;
     options.mergePayloads = &NWB::Impl::MergeGatheredGraphicsAsset;
-    return NWB::Core::Assets::GatherAssets(options) ? 0 : 1;
+    return NWB::Pipeline::AssetGatherer::GatherAssets(options) ? 0 : 1;
 }
 
 

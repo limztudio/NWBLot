@@ -5,40 +5,25 @@
 #pragma once
 
 
-#include <core/assets/module.h>
+#include "build_options.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSETS_BEGIN
+NWB_ASSET_BUILDER_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using AssetGatherMergeFunction = bool (*)(const Name& virtualPath, AssetBytes& existingPayload, const void* incomingPayload, usize incomingSize);
-
-struct AssetGatherOptions{
-    AssetVector<AssetString> inputs;
-    AssetString outputDirectory;
-    ACompactString configuration;
-    AssetGatherMergeFunction mergePayloads = nullptr;
-
-    explicit AssetGatherOptions(AssetArena& arena)
-        : inputs(arena)
-        , outputDirectory(arena)
-    {}
-};
-
-
-[[nodiscard]] bool GatherAssets(const AssetGatherOptions& options);
+[[nodiscard]] bool BuildAssets(const AssetBuildOptions& options);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSETS_END
+NWB_ASSET_BUILDER_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

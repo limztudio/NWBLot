@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Reject direct project/implementation C++ dependencies from core sources."""
+"""Reject direct project, implementation, or pipeline dependencies from core sources."""
 
 from __future__ import annotations
 
 import re
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from policy_scan import REPOSITORY_ROOT, SOURCE_SUFFIXES, blank_non_code, line_number
 INCLUDE_DIRECTIVE = re.compile(r"^\s*#\s*include\b", re.MULTILINE)
-FORBIDDEN_INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]\s*(?:impl|CoolStuff|tests|utilities)(?:/|[">])')
+FORBIDDEN_INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]\s*(?:impl|CoolStuff|tests|utilities|pipeline)(?:/|[">])')
 IMPLEMENTATION_TARGET_DECLARATION = re.compile(r"\bnwb_declare_(?:static|interface)_library\s*\(\s*(nwb_[A-Za-z0-9_]+)")
 
 
@@ -34,9 +35,10 @@ def find_forbidden_includes(source: str) -> list[int]:
 
 def implementation_targets(source_root: Path) -> frozenset[str]:
     targets: set[str] = set()
-    for path in (source_root / "impl").rglob("CMakeLists.txt"):
-        source = blank_cmake_comments(path.read_text(encoding="utf-8", errors="replace"))
-        targets.update(match.group(1) for match in IMPLEMENTATION_TARGET_DECLARATION.finditer(source))
+    for directory in ("impl", "pipeline"):
+        for path in (source_root / directory).rglob("CMakeLists.txt"):
+            source = blank_cmake_comments(path.read_text(encoding="utf-8", errors="replace"))
+            targets.update(match.group(1) for match in IMPLEMENTATION_TARGET_DECLARATION.finditer(source))
     return frozenset(targets)
 
 
@@ -62,6 +64,8 @@ def run_self_test() -> int:
         ("implementation angle include", "#include <impl/ecs_scene/components.h>", (1,)),
         ("project quoted include", '# include "CoolStuff/Testbed/runtime.h"', (1,)),
         ("test angle include", "#include <tests/common/test_context.h>", (1,)),
+        ("pipeline angle include", "#include <pipeline/asset_builder/build.h>", (1,)),
+        ("pipeline quoted include", '#include "pipeline/asset_gatherer/gather.h"', (1,)),
         ("core include", "#include <core/graphics/api.h>", ()),
         ("global include", '#include "global/global.h"', ()),
         ("line comment", "// #include <impl/ecs_scene/components.h>", ()),
@@ -70,10 +74,12 @@ def run_self_test() -> int:
     )
     target_cases = (
         ("implementation target", "target_link_libraries(nwb_core PRIVATE nwb_ecs_scene)", ("nwb_ecs_scene",)),
+        ("pipeline target", "target_link_libraries(nwb_core PRIVATE nwb_pipeline_asset_builder)", ("nwb_pipeline_asset_builder",)),
         ("comment", "# target_link_libraries(nwb_core PRIVATE nwb_ecs_scene)", ()),
+        ("pipeline target comment", "# target_link_libraries(nwb_core PRIVATE nwb_pipeline_asset_builder)", ()),
         ("core target", "target_link_libraries(nwb_core PRIVATE nwb_graphics)", ()),
     )
-    targets = frozenset(("nwb_ecs_scene", "nwb_assets_material"))
+    targets = frozenset(("nwb_ecs_scene", "nwb_assets_material", "nwb_pipeline_asset_builder"))
     failed = False
     for name, source, expected in cases:
         actual = tuple(find_forbidden_includes(source))
@@ -85,6 +91,23 @@ def run_self_test() -> int:
         if actual != expected:
             print(f"{name}: expected {expected}, got {actual}", file=sys.stderr)
             failed = True
+    with TemporaryDirectory(prefix="nwb-core-dependency-policy-") as temporary_directory:
+        root = Path(temporary_directory)
+        declarations = (
+            ("impl/example/CMakeLists.txt", "nwb_declare_static_library(nwb_assets_material)\n"),
+            ("pipeline/asset_builder/CMakeLists.txt", "nwb_declare_static_library(nwb_pipeline_asset_builder)\n"),
+            ("pipeline/CMakeLists.txt", "nwb_declare_interface_library(nwb_pipeline_shared)\n# nwb_declare_static_library(nwb_commented)\n"),
+            ("core/example/CMakeLists.txt", "nwb_declare_static_library(nwb_core_example)\n"),
+        )
+        for relative_path, source in declarations:
+            path = root / relative_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(source, encoding="utf-8")
+        expected = frozenset(("nwb_assets_material", "nwb_pipeline_asset_builder", "nwb_pipeline_shared"))
+        actual = implementation_targets(root)
+        if actual != expected:
+            print(f"target discovery: expected {sorted(expected)}, got {sorted(actual)}", file=sys.stderr)
+            failed = True
     return 1 if failed else 0
 
 
@@ -95,21 +118,21 @@ def main() -> int:
     source_root = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else REPOSITORY_ROOT
     targets = implementation_targets(source_root)
     if not targets:
-        print("Failed to discover implementation CMake targets.", file=sys.stderr)
+        print("Failed to discover implementation or pipeline CMake targets.", file=sys.stderr)
         return 1
 
     violations: list[str] = []
     for path in source_files(source_root):
         source = path.read_text(encoding="utf-8", errors="replace")
         for line in find_forbidden_includes(source):
-            violations.append(f"{path.relative_to(source_root)}:{line}: direct project/implementation include")
+            violations.append(f"{path.relative_to(source_root)}:{line}: direct project/implementation/pipeline include")
     for path in cmake_files(source_root):
         source = path.read_text(encoding="utf-8", errors="replace")
         for target in find_forbidden_target_references(source, targets):
-            violations.append(f"{path.relative_to(source_root)}: direct implementation target reference '{target}'")
+            violations.append(f"{path.relative_to(source_root)}: direct implementation/pipeline target reference '{target}'")
 
     if violations:
-        print("Core source must not directly include or link implementation/project code.", file=sys.stderr)
+        print("Core source must not directly include or link implementation/project/pipeline code.", file=sys.stderr)
         print("Project-owned material and shader assets remain outside this source-level dependency policy.", file=sys.stderr)
         print("\n".join(violations), file=sys.stderr)
         return 1

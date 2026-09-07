@@ -3,20 +3,24 @@
 
 
 #include "gather.h"
-#include "built_asset.h"
-#include "asset_volume_writer.h"
 
 #include <core/assets/input_list.h>
+#include <core/assets/volume/asset_volume_writer.h>
+#include <core/assets/volume/built_asset.h>
+
 #include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSETS_BEGIN
+NWB_ASSET_GATHERER_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Assets = Core::Assets;
 
 
 namespace __hidden_gather{
@@ -25,9 +29,9 @@ namespace __hidden_gather{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool CollectBuiltFiles(const AssetGatherOptions& options, AssetVector<AssetString>& files){
-    AssetArena& arena = files.get_allocator().arena();
-    for(const AssetString& input : options.inputs){
+static bool CollectBuiltFiles(const AssetGatherOptions& options, Assets::AssetVector<Assets::AssetString>& files){
+    Assets::AssetArena& arena = files.get_allocator().arena();
+    for(const Assets::AssetString& input : options.inputs){
         ErrorCode error;
         const Path path = AbsolutePath(Path(arena, input), error).lexically_normal();
         if(error){
@@ -44,9 +48,9 @@ static bool CollectBuiltFiles(const AssetGatherOptions& options, AssetVector<Ass
             continue;
         }
 
-        const Path manifest = path / BuiltAssetDetail::s_ManifestFilename;
+        const Path manifest = path / Assets::BuiltAssetDetail::s_ManifestFilename;
         if(FileExists(manifest, error)){
-            if(!ReadAssetInputList(manifest, files, true))
+            if(!Assets::ReadAssetInputList(manifest, files, true))
                 return false;
             continue;
         }
@@ -59,7 +63,7 @@ static bool CollectBuiltFiles(const AssetGatherOptions& options, AssetVector<Ass
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to scan input '{}'"), StringConvert(input));
                 return false;
             }
-            if(entry.is_regular_file(error) && PathToString(arena, entry.path().extension()) == BuiltAssetDetail::s_Extension)
+            if(entry.is_regular_file(error) && PathToString(arena, entry.path().extension()) == Assets::BuiltAssetDetail::s_Extension)
                 files.emplace_back(PathToString(arena, entry.path()));
             if(error){
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to inspect input entry '{}'"), PathToString<tchar>(entry.path()));
@@ -86,27 +90,27 @@ static bool CollectBuiltFiles(const AssetGatherOptions& options, AssetVector<Ass
 
 
 bool GatherAssets(const AssetGatherOptions& options){
-    AssetArena& arena = options.inputs.get_allocator().arena();
-    Alloc::ScratchArena scratchArena(Name("assets/gather"));
+    Assets::AssetArena& arena = options.inputs.get_allocator().arena();
+    Core::Alloc::ScratchArena scratchArena(Name("assets/gather"));
     if(options.outputDirectory.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: output directory is empty"));
         return false;
     }
 
-    AssetVector<AssetString> files(arena);
+    Assets::AssetVector<Assets::AssetString> files(arena);
     if(!__hidden_gather::CollectBuiltFiles(options, files))
         return false;
-    AssetsVolumeCookDetail::AssetVolumePackManifest manifest(arena);
-    if(!AssetsVolumeCookDetail::ReserveAssetVolumePackManifest(manifest, files.size()))
+    Assets::AssetsVolumeCookDetail::AssetVolumePackManifest manifest(arena);
+    if(!Assets::AssetsVolumeCookDetail::ReserveAssetVolumePackManifest(manifest, files.size()))
         return false;
 
-    CookEntryPathHashSet seenPaths(arena);
+    Assets::CookEntryPathHashSet seenPaths(arena);
     seenPaths.reserve(files.size());
-    AssetBytes bytes(arena);
-    for(const AssetString& file : files){
+    Assets::AssetBytes bytes(arena);
+    for(const Assets::AssetString& file : files){
         Name virtualPath;
         usize payloadOffset = 0u;
-        if(!BuiltAssetDetail::ReadBuiltAsset(Path(arena, file), bytes, virtualPath, payloadOffset))
+        if(!Assets::BuiltAssetDetail::ReadBuiltAsset(Path(arena, file), bytes, virtualPath, payloadOffset))
             return false;
         if(!seenPaths.insert(virtualPath.hash()).second){
             const auto existing = FindIf(manifest.entries.begin(), manifest.entries.end(), [&virtualPath](const auto& entry){ return entry.virtualPath == virtualPath; });
@@ -125,23 +129,23 @@ bool GatherAssets(const AssetGatherOptions& options){
             --manifest.plannedFileCount;
             continue;
         }
-        if(!AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, virtualPath, static_cast<const void*>(bytes.data() + payloadOffset), bytes.size() - payloadOffset, 0u))
+        if(!Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, virtualPath, static_cast<const void*>(bytes.data() + payloadOffset), bytes.size() - payloadOffset, 0u))
             return false;
     }
 
-    ResolvedCookPaths paths(arena);
+    Assets::ResolvedCookPaths paths(arena);
     ErrorCode error;
     paths.outputDirectory = AbsolutePath(Path(arena, options.outputDirectory), error).lexically_normal();
     if(error){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to resolve output '{}'"), StringConvert(options.outputDirectory));
         return false;
     }
-    CookString configuration = BuildCanonicalSafeCacheName(arena, options.configuration.view());
+    Assets::CookString configuration = BuildCanonicalSafeCacheName(arena, options.configuration.view());
     if(configuration.empty())
         configuration = "default";
 
-    AssetsVolumeCookDetail::AssetVolumeWriteResult result;
-    if(!AssetsVolumeCookDetail::WriteAssetVolume(arena, paths, configuration, manifest, result, scratchArena))
+    Assets::AssetsVolumeCookDetail::AssetVolumeWriteResult result;
+    if(!Assets::AssetsVolumeCookDetail::WriteAssetVolume(arena, paths, configuration, manifest, result, scratchArena))
         return false;
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AssetGatherer: gathered {} assets into '{}'"), result.fileCount, StringConvert(options.outputDirectory));
     return true;
@@ -151,7 +155,7 @@ bool GatherAssets(const AssetGatherOptions& options){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSETS_END
+NWB_ASSET_GATHERER_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

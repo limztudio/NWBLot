@@ -110,14 +110,20 @@ artifacts, or volumes, or running tools. `--input` limits selected sources.
 `--build-directory` chooses where to retain intermediate artifacts; otherwise
 they live in an output-specific directory under the asset cache.
 
-The reusable C++ entry points are `Core::Assets::BuildAssets(AssetBuildOptions)`
-in `core/assets/volume/build.h` and `Core::Assets::GatherAssets(AssetGatherOptions)`
-in `core/assets/volume/gather.h`. Asset codecs, metadata parsers, and build
-registrations remain in their owning asset modules. The retired cooker interface,
-registry, combined volume cooker, and executable are removed.
+The C++ build entry point is `NWB::Pipeline::AssetBuilder::BuildAssets`, declared
+in `pipeline/asset_builder/build.h`, with `AssetBuildOptions` in the same namespace.
+Link `nwb_pipeline_asset_builder` to call it. The gather entry point is
+`NWB::Pipeline::AssetGatherer::GatherAssets`, declared with `AssetGatherOptions` in
+`pipeline/asset_gatherer/gather.h`; link `nwb_pipeline_asset_gatherer` to call it.
+Each tool owns its orchestration API and implementation. Shared artifact, cache,
+manifest, and volume-writing support remains in `core/assets/volume`; asset codecs,
+metadata parsers, and build registrations remain in their owning asset modules.
+The retired cooker interface, registry, combined volume cooker, and executable
+are removed.
 
 Library callers gathering independently built graphics assets set
-`AssetGatherOptions::mergePayloads` to `Impl::MergeGatheredGraphicsAsset`, declared
+`NWB::Pipeline::AssetGatherer::AssetGatherOptions::mergePayloads` to
+`NWB::Impl::MergeGatheredGraphicsAsset`, declared
 in `impl/assets_graphics/gather.h` and linked through `nwb_assets_graphics_gather`.
 The generic gather API also accepts a project callback for other metadata merge
 contracts. A callback receives the duplicate virtual identity, an existing payload

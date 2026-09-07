@@ -9,8 +9,8 @@
 #include <impl/assets_graphics/gather.h>
 #include <impl/assets_model/asset.h>
 #include <core/assets/bunch/cook.h>
-#include <core/assets/volume/build.h>
-#include <core/assets/volume/gather.h>
+#include <pipeline/asset_builder/build.h>
+#include <pipeline/asset_gatherer/gather.h>
 #include <core/assets/cook_entry_registry.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/binary_payload.h>
@@ -1279,7 +1279,7 @@ static bool BuildPreparedGraphicsAssetRoots(
     const u32 workerThreadCount = 0u
 ){
     NWB::Core::Alloc::ThreadPool cookThreadPool(workerThreadCount, CpuAffinity::Any);
-    NWB::Core::Assets::AssetBuildOptions options(testArena.arena, cookThreadPool);
+    NWB::Pipeline::AssetBuilder::AssetBuildOptions options(testArena.arena, cookThreadPool);
     options.repoRoot = PathToString(testArena.arena, AssetsGraphicsTestRepoRoot(testArena));
     options.assetRoots.reserve(assetRoots.size());
     for(const Path& assetRoot : assetRoots){
@@ -1305,7 +1305,7 @@ static bool BuildPreparedGraphicsAssetRoots(
     if(!options.configuration.assign("tests") || !options.assetType.assign("graphics"))
         return false;
 
-    return NWB::Core::Assets::BuildAssets(options);
+    return NWB::Pipeline::AssetBuilder::BuildAssets(options);
 }
 
 static bool CookPreparedGraphicsAssetRoots(
@@ -1319,12 +1319,12 @@ static bool CookPreparedGraphicsAssetRoots(
     if(!BuildPreparedGraphicsAssetRoots(testArena, root, builtDirectory, assetRoots, workerThreadCount))
         return false;
 
-    NWB::Core::Assets::AssetGatherOptions gatherOptions(testArena.arena);
+    NWB::Pipeline::AssetGatherer::AssetGatherOptions gatherOptions(testArena.arena);
     gatherOptions.inputs.emplace_back(PathToString(testArena.arena, builtDirectory));
     gatherOptions.outputDirectory = PathToString(testArena.arena, outputDirectory);
     gatherOptions.configuration = "tests";
     gatherOptions.mergePayloads = &NWB::Impl::MergeGatheredGraphicsAsset;
-    return NWB::Core::Assets::GatherAssets(gatherOptions);
+    return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions);
 }
 
 static bool CookSingleGraphicsMeta(

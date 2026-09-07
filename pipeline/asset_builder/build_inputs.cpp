@@ -10,7 +10,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSETS_BEGIN
+NWB_ASSET_BUILDER_BEGIN
+
+
+namespace Assets = Core::Assets;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,9 +25,9 @@ namespace __hidden_build_inputs{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ContainsPath(const Path& root, const Path& file, ScratchArena& scratchArena){
-    ScratchString rootText = PathToString(scratchArena, root.lexically_normal());
-    ScratchString fileText = PathToString(scratchArena, file.lexically_normal());
+static bool ContainsPath(const Path& root, const Path& file, Assets::ScratchArena& scratchArena){
+    Assets::ScratchString rootText = PathToString(scratchArena, root.lexically_normal());
+    Assets::ScratchString fileText = PathToString(scratchArena, file.lexically_normal());
 #if defined(NWB_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(rootText);
     CanonicalizeTextInPlace(fileText);
@@ -50,14 +53,14 @@ static bool ContainsPath(const Path& root, const Path& file, ScratchArena& scrat
 
 bool SelectBuildInputs(
     const AssetBuildOptions& options,
-    const ResolvedCookPaths& paths,
-    DiscoveredNwbFileVector& files,
-    ScratchArena& scratchArena){
-    Vector<u8, ScratchArena> selected(files.size(), u8(0), scratchArena);
-    for(const AssetString& input : options.inputs){
+    const Assets::ResolvedCookPaths& paths,
+    Assets::DiscoveredNwbFileVector& files,
+    Assets::ScratchArena& scratchArena){
+    Vector<u8, Assets::ScratchArena> selected(files.size(), u8(0), scratchArena);
+    for(const Assets::AssetString& input : options.inputs){
         ErrorCode error;
         Path path(paths.repoRoot.arena());
-        const ScratchString inputText(input, scratchArena);
+        const Assets::ScratchString inputText(input, scratchArena);
         if(!ResolveAbsolutePath(paths.repoRoot, inputText, path, error)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve input '{}'"), StringConvert(input));
             return false;
@@ -71,7 +74,7 @@ bool SelectBuildInputs(
 
         bool matched = false;
         if(isDirectory){
-            for(const ResolvedAssetRoot& root : paths.assetRoots){
+            for(const Assets::ResolvedAssetRoot& root : paths.assetRoots){
                 if(__hidden_build_inputs::ContainsPath(root.path, path, scratchArena)){
                     matched = true;
                     break;
@@ -83,7 +86,7 @@ bool SelectBuildInputs(
             }
         }
 
-        ScratchString normalized = PathToString(scratchArena, path.lexically_normal());
+        Assets::ScratchString normalized = PathToString(scratchArena, path.lexically_normal());
         CanonicalizeTextInPlace(normalized);
         for(usize i = 0; i < files.size(); ++i){
             if(isDirectory ? __hidden_build_inputs::ContainsPath(path, files[i].filePath, scratchArena) : AStringView(files[i].normalizedPathText) == AStringView(normalized)){
@@ -113,7 +116,7 @@ bool SelectBuildInputs(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSETS_END
+NWB_ASSET_BUILDER_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

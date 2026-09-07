@@ -7,50 +7,52 @@
 
 #include "global.h"
 
+#include <core/assets/global.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSETS_BEGIN
+NWB_ASSET_BUILDER_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct AssetBuildServices{
-    Alloc::ThreadPool& threadPool;
+    Core::Alloc::ThreadPool& threadPool;
 
-    explicit AssetBuildServices(Alloc::ThreadPool& threadPool)
+    explicit AssetBuildServices(Core::Alloc::ThreadPool& threadPool)
         : threadPool(threadPool)
     {}
 };
 
 struct AssetBuildRoot{
-    AssetString path;
+    Core::Assets::AssetString path;
     ACompactString virtualRoot;
 
-    explicit AssetBuildRoot(AssetArena& arena)
+    explicit AssetBuildRoot(Core::Assets::AssetArena& arena)
         : path(arena)
     {}
 
-    AssetBuildRoot(AssetArena& arena, AStringView inPath, const ACompactString& inVirtualRoot)
+    AssetBuildRoot(Core::Assets::AssetArena& arena, AStringView inPath, const ACompactString& inVirtualRoot)
         : path(inPath, arena)
         , virtualRoot(inVirtualRoot)
     {}
 };
 
 struct AssetBuildOptions{
-    AssetString repoRoot;
-    AssetVector<AssetBuildRoot> assetRoots;
-    AssetString outputDirectory;
-    AssetString cacheDirectory;
+    Core::Assets::AssetString repoRoot;
+    Core::Assets::AssetVector<AssetBuildRoot> assetRoots;
+    Core::Assets::AssetString outputDirectory;
+    Core::Assets::AssetString cacheDirectory;
     ACompactString configuration;
     ACompactString assetType;
     AssetBuildServices services;
-    AssetVector<AssetString> inputs;
+    Core::Assets::AssetVector<Core::Assets::AssetString> inputs;
     bool useExplicitInputs = false;
 
-    explicit AssetBuildOptions(AssetArena& arena, Alloc::ThreadPool& threadPool)
+    explicit AssetBuildOptions(Core::Assets::AssetArena& arena, Core::Alloc::ThreadPool& threadPool)
         : repoRoot(arena)
         , assetRoots(arena)
         , outputDirectory(arena)
@@ -64,7 +66,7 @@ struct AssetBuildOptions{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSETS_END
+NWB_ASSET_BUILDER_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

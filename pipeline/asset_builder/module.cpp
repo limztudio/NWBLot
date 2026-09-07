@@ -2,9 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "build.h"
+
 #include "../command_line.h"
 
-#include <core/assets/volume/build.h>
 #include <core/assets/paths.h>
 #include <core/alloc/thread.h>
 #include <core/common/log.h>
@@ -20,7 +21,7 @@ namespace __hidden_asset_builder{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool AddRoot(const NWB::Path& path, NWB::Core::Assets::AssetBuildOptions& options){
+static bool AddRoot(const NWB::Path& path, NWB::Pipeline::AssetBuilder::AssetBuildOptions& options){
     auto& arena = options.assetRoots.get_allocator().arena();
     auto text = PathToString(arena, path.lexically_normal());
     for(const auto& root : options.assetRoots){
@@ -34,7 +35,7 @@ static bool AddRoot(const NWB::Path& path, NWB::Core::Assets::AssetBuildOptions&
     return true;
 }
 
-static bool ResolveRoots(const PipelineOptions& parsed, NWB::Core::Assets::AssetBuildOptions& options){
+static bool ResolveRoots(const PipelineOptions& parsed, NWB::Pipeline::AssetBuilder::AssetBuildOptions& options){
     auto& arena = options.assetRoots.get_allocator().arena();
     ErrorCode error;
     const Path repoRoot = AbsolutePath(Path(arena, options.repoRoot.empty() ? AStringView(".") : AStringView(options.repoRoot)), error);
@@ -99,7 +100,7 @@ int RunPipelineTool(const int argc, char** argv){
 
     const u32 cores = QueryCpuCoreCount(CpuAffinity::Any);
     NWB::Core::Alloc::ThreadPool threadPool(cores > 1u ? cores - 1u : 0u, CpuAffinity::Any);
-    NWB::Core::Assets::AssetBuildOptions options(arena, threadPool);
+    NWB::Pipeline::AssetBuilder::AssetBuildOptions options(arena, threadPool);
     options.repoRoot = parsed.repoRoot;
     options.outputDirectory = parsed.outputDirectory;
     options.cacheDirectory = parsed.cacheDirectory;
@@ -109,7 +110,7 @@ int RunPipelineTool(const int argc, char** argv){
     options.useExplicitInputs = true;
     if(!__hidden_asset_builder::ResolveRoots(parsed, options))
         return 1;
-    const bool built = NWB::Core::Assets::BuildAssets(options);
+    const bool built = NWB::Pipeline::AssetBuilder::BuildAssets(options);
     threadPool.finish();
     return built ? 0 : 1;
 }

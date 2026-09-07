@@ -10,16 +10,16 @@
 
 #include "build.h"
 
-#include "arena_names.h"
-#include "built_asset.h"
 #include "build_inputs.h"
 #include "cook_paths.h"
-#include "cooked_object_cache.h"
-#include "pack_manifest.h"
-#include "volume_prepare_registry.h"
+
+#include <core/assets/volume/arena_names.h>
+#include <core/assets/volume/built_asset.h>
+#include <core/assets/volume/cooked_object_cache.h>
+#include <core/assets/volume/pack_manifest.h>
+#include <core/assets/volume/volume_prepare_registry.h>
 
 #include <core/assets/cook_metadata.h>
-#include <core/assets/cook_paths.h>
 #include <core/assets/paths.h>
 
 #include <core/common/log.h>
@@ -28,29 +28,32 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSETS_BEGIN
+NWB_ASSET_BUILDER_BEGIN
+
+
+namespace Assets = Core::Assets;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool BuildAssets(const AssetBuildOptions& options){
-    AssetArena& arena = options.assetRoots.get_allocator().arena();
+    Assets::AssetArena& arena = options.assetRoots.get_allocator().arena();
     if(!options.assetType.empty() && options.assetType.view() != "graphics"){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: unsupported --asset-type '{}'. Available types: graphics"), StringConvert(options.assetType.c_str()));
         return false;
     }
 
-    Core::Alloc::ScratchArena scratchArena(AssetsVolumeArenaScope::s_CookArena);
+    Core::Alloc::ScratchArena scratchArena(Assets::AssetsVolumeArenaScope::s_CookArena);
 
-    Core::Assets::ResolvedCookPaths resolvedPaths(arena);
-    if(!Core::Assets::ResolveCookPaths(options, resolvedPaths, scratchArena))
+    Assets::ResolvedCookPaths resolvedPaths(arena);
+    if(!ResolveCookPaths(options, resolvedPaths, scratchArena))
         return false;
 
-    Core::Assets::DiscoveredNwbFileVector nwbFiles{ arena };
-    if(!Core::Assets::DiscoverFilesWithExtension(
+    Assets::DiscoveredNwbFileVector nwbFiles{ arena };
+    if(!Assets::DiscoverFilesWithExtension(
         resolvedPaths.assetRoots,
-        Core::Assets::s_NwbExtension,
+        Assets::s_NwbExtension,
         nwbFiles,
         scratchArena
     ))
@@ -59,10 +62,10 @@ bool BuildAssets(const AssetBuildOptions& options){
     if((options.useExplicitInputs || !options.inputs.empty()) && !SelectBuildInputs(options, resolvedPaths, nwbFiles, scratchArena))
         return false;
 
-    Core::Assets::ParsedAssetMetadata parsedMetadata(arena);
-    if(!Core::Assets::RegisterAutoCollectedCookEntryTypes(parsedMetadata.entryRegistry))
+    Assets::ParsedAssetMetadata parsedMetadata(arena);
+    if(!Assets::RegisterAutoCollectedCookEntryTypes(parsedMetadata.entryRegistry))
         return false;
-    if(!Core::Assets::ParseAssetMetadata(
+    if(!Assets::ParseAssetMetadata(
         arena,
         nwbFiles,
         parsedMetadata,
@@ -71,13 +74,13 @@ bool BuildAssets(const AssetBuildOptions& options){
     ))
         return false;
 
-    Core::Assets::CookString configurationSafeName = BuildCanonicalSafeCacheName(arena, options.configuration.view());
+    Assets::CookString configurationSafeName = BuildCanonicalSafeCacheName(arena, options.configuration.view());
     if(configurationSafeName.empty())
         configurationSafeName = "default";
 
     u64 plannedFileCount = 0u;
-    AssetsVolumeCookDetail::AssetVolumeManifestCookerVector manifestCookers(arena);
-    AssetsVolumeCookDetail::AssetVolumePrepareContext prepareContext{
+    Assets::AssetsVolumeCookDetail::AssetVolumeManifestCookerVector manifestCookers(arena);
+    Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext prepareContext{
         arena,
         resolvedPaths,
         configurationSafeName,
@@ -86,24 +89,24 @@ bool BuildAssets(const AssetBuildOptions& options){
         manifestCookers,
         scratchArena
     };
-    if(!AssetsVolumeCookDetail::RegisterAutoCollectedAssetVolumePreparers(prepareContext))
+    if(!Assets::AssetsVolumeCookDetail::RegisterAutoCollectedAssetVolumePreparers(prepareContext))
         return false;
-    if(!Core::Assets::AddPlannedFileCount(parsedMetadata.entryRegistry.entryCount(), plannedFileCount))
-        return false;
-
-    AssetsVolumeCookDetail::AssetVolumePackManifest manifest(arena);
-    if(!AssetsVolumeCookDetail::ReserveAssetVolumePackManifest(manifest, plannedFileCount))
+    if(!Assets::AddPlannedFileCount(parsedMetadata.entryRegistry.entryCount(), plannedFileCount))
         return false;
 
-    AssetsVolumeCookDetail::VirtualPathHashSet seenVirtualPathHashes{arena};
+    Assets::AssetsVolumeCookDetail::AssetVolumePackManifest manifest(arena);
+    if(!Assets::AssetsVolumeCookDetail::ReserveAssetVolumePackManifest(manifest, plannedFileCount))
+        return false;
+
+    Assets::AssetsVolumeCookDetail::VirtualPathHashSet seenVirtualPathHashes{arena};
     if(plannedFileCount <= static_cast<u64>(Limit<usize>::s_Max))
         seenVirtualPathHashes.reserve(static_cast<usize>(plannedFileCount));
 
-    for(const AssetsVolumeCookDetail::AssetVolumeManifestCooker& manifestCooker : manifestCookers){
+    for(const Assets::AssetsVolumeCookDetail::AssetVolumeManifestCooker& manifestCooker : manifestCookers){
         if(!manifestCooker(manifest, seenVirtualPathHashes, scratchArena))
             return false;
     }
-    if(!AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(
+    if(!Assets::AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(
         arena,
         options.services.threadPool,
         resolvedPaths,
@@ -114,7 +117,7 @@ bool BuildAssets(const AssetBuildOptions& options){
     ))
         return false;
 
-    if(!BuiltAssetDetail::WriteBuiltAssets(resolvedPaths.outputDirectory, manifest))
+    if(!Assets::BuiltAssetDetail::WriteBuiltAssets(resolvedPaths.outputDirectory, manifest))
         return false;
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AssetBuilder: built {} assets into '{}'"), manifest.entries.size(), StringConvert(options.outputDirectory));
@@ -125,7 +128,7 @@ bool BuildAssets(const AssetBuildOptions& options){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSETS_END
+NWB_ASSET_BUILDER_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

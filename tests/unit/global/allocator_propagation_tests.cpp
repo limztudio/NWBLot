@@ -33,6 +33,7 @@ using DefaultAllocator = ContainerDetail::DefaultArenaAllocator<T, GlobalArena, 
 template<typename AllocatorT>
 void VerifyAllocatorAssignment(){
     static_assert(AllocatorT::propagate_on_container_move_assignment::value);
+    static_assert(AllocatorT::propagate_on_container_swap::value);
     GlobalArena sourceArena(Name("tests/allocator_propagation/direct_source"));
     GlobalArena targetArena(Name("tests/allocator_propagation/direct_target"));
     AllocatorT source(sourceArena);
@@ -116,6 +117,83 @@ void VerifyStringMove(const bool foreignArena, const bool shortSource){
     EXPECT_EQ(targetArena.memoryStats().usedBytes, 0u);
     EXPECT_EQ(sourceArena.memoryStats().allocationCount, sourceArena.memoryStats().deallocationCount);
     EXPECT_EQ(targetArena.memoryStats().allocationCount, targetArena.memoryStats().deallocationCount);
+}
+
+
+template<typename VectorT>
+void VerifyVectorSwap(const bool foreignArena){
+    GlobalArena firstArena(Name("tests/allocator_propagation/vector_swap_first"));
+    GlobalArena secondArena(Name("tests/allocator_propagation/vector_swap_second"));
+    GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
+    {
+        VectorT first{ typename VectorT::allocator_type(firstArena) };
+        VectorT second{ typename VectorT::allocator_type(secondOwner) };
+        for(u32 index = 0u; index < 64u; ++index)
+            first.push_back(index);
+        for(u32 index = 0u; index < 96u; ++index)
+            second.push_back(index + 100u);
+        const u32* const firstStorage = &first[0u];
+        const u32* const secondStorage = &second[0u];
+        first.swap(second);
+        EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwner);
+        EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
+        ASSERT_EQ(first.size(), 96u);
+        ASSERT_EQ(second.size(), 64u);
+        EXPECT_EQ(&first[0u], secondStorage);
+        EXPECT_EQ(&second[0u], firstStorage);
+        for(u32 index = 0u; index < 96u; ++index)
+            EXPECT_EQ(first[index], index + 100u);
+        for(u32 index = 0u; index < 64u; ++index)
+            EXPECT_EQ(second[index], index);
+        first.push_back(777u);
+        second.push_back(888u);
+        Swap(first, second);
+        EXPECT_EQ(first.get_allocator().arenaPtr(), &firstArena);
+        EXPECT_EQ(second.get_allocator().arenaPtr(), &secondOwner);
+        EXPECT_EQ(first.back(), 888u);
+        EXPECT_EQ(second.back(), 777u);
+    }
+    EXPECT_EQ(firstArena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(secondArena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(firstArena.memoryStats().reservedBytes, 0u);
+    EXPECT_EQ(secondArena.memoryStats().reservedBytes, 0u);
+    EXPECT_EQ(firstArena.memoryStats().allocationCount, firstArena.memoryStats().deallocationCount);
+    EXPECT_EQ(secondArena.memoryStats().allocationCount, secondArena.memoryStats().deallocationCount);
+}
+
+template<typename StringT>
+void VerifyStringSwap(const bool foreignArena, const bool shortFirst){
+    GlobalArena firstArena(Name("tests/allocator_propagation/string_swap_first"));
+    GlobalArena secondArena(Name("tests/allocator_propagation/string_swap_second"));
+    GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
+    {
+        StringT first{ typename StringT::allocator_type(firstArena) };
+        StringT second{ typename StringT::allocator_type(secondOwner) };
+        first.assign(shortFirst ? 3u : 96u, 'a');
+        second.assign(64u, 'b');
+        const char* const firstStorage = first.data();
+        const char* const secondStorage = second.data();
+        first.swap(second);
+        EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwner);
+        EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
+        EXPECT_EQ(first.data(), secondStorage);
+        if(!shortFirst)
+            EXPECT_EQ(second.data(), firstStorage);
+        ASSERT_EQ(first.size(), 64u);
+        ASSERT_EQ(second.size(), shortFirst ? 3u : 96u);
+        for(const char character : first)
+            EXPECT_EQ(character, 'b');
+        for(const char character : second)
+            EXPECT_EQ(character, 'a');
+        first.append(128u, 'c');
+        second.append(128u, 'd');
+        EXPECT_EQ(first.back(), 'c');
+        EXPECT_EQ(second.back(), 'd');
+    }
+    EXPECT_EQ(firstArena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(secondArena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(firstArena.memoryStats().allocationCount, firstArena.memoryStats().deallocationCount);
+    EXPECT_EQ(secondArena.memoryStats().allocationCount, secondArena.memoryStats().deallocationCount);
 }
 
 
@@ -221,6 +299,142 @@ TEST(AllocatorPropagation, OrderedMapMoveTransfersNodesAndTheirDeallocationOwner
         EXPECT_EQ(targetArena.memoryStats().usedBytes, 0u);
         EXPECT_EQ(sourceArena.memoryStats().allocationCount, sourceArena.memoryStats().deallocationCount);
         EXPECT_EQ(targetArena.memoryStats().allocationCount, targetArena.memoryStats().deallocationCount);
+    }
+}
+
+TEST(AllocatorPropagation, VectorSwapsTransferStorageAndItsArenaForEveryAllocator){
+    for(const bool foreignArena : { false, true }){
+        VerifyVectorSwap<Vector<u32, GlobalArena>>(foreignArena);
+        VerifyVectorSwap<ParallelVector<u32, GlobalArena>>(foreignArena);
+        VerifyVectorSwap<DefaultVector<u32, GlobalArena, DefaultOwner>>(foreignArena);
+    }
+}
+
+TEST(AllocatorPropagation, StringSwapsTransferArenaForHeapAndSmallStringStorage){
+    for(const bool foreignArena : { false, true }){
+        for(const bool shortFirst : { false, true }){
+            VerifyStringSwap<AString<GlobalArena>>(foreignArena, shortFirst);
+            VerifyStringSwap<DefaultAString<GlobalArena, DefaultOwner>>(foreignArena, shortFirst);
+        }
+    }
+}
+
+TEST(AllocatorPropagation, OrderedMapSwapsTransferNodesAndTheirArena){
+    for(const bool foreignArena : { false, true }){
+        GlobalArena firstArena(Name("tests/allocator_propagation/ordered_swap_first"));
+        GlobalArena secondArena(Name("tests/allocator_propagation/ordered_swap_second"));
+        GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
+        {
+            Map<u32, u32, GlobalArena> first{ firstArena };
+            Map<u32, u32, GlobalArena> second{ secondOwner };
+            for(u32 key = 0u; key < 16u; ++key)
+                ASSERT_TRUE(first.emplace(key, key * 3u).second);
+            for(u32 key = 100u; key < 132u; ++key)
+                ASSERT_TRUE(second.emplace(key, key * 5u).second);
+            const u32* const firstNode = &first.find(0u)->second;
+            const u32* const secondNode = &second.find(100u)->second;
+            first.swap(second);
+            EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwner);
+            EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
+            ASSERT_EQ(first.size(), 32u);
+            ASSERT_EQ(second.size(), 16u);
+            EXPECT_EQ(&first.find(100u)->second, secondNode);
+            EXPECT_EQ(&second.find(0u)->second, firstNode);
+            for(u32 key = 100u; key < 132u; ++key)
+                EXPECT_EQ(first.at(key), key * 5u);
+            for(u32 key = 0u; key < 16u; ++key)
+                EXPECT_EQ(second.at(key), key * 3u);
+            ASSERT_TRUE(first.emplace(999u, 7u).second);
+            ASSERT_TRUE(second.emplace(888u, 9u).second);
+        }
+        EXPECT_EQ(firstArena.memoryStats().usedBytes, 0u);
+        EXPECT_EQ(secondArena.memoryStats().usedBytes, 0u);
+        EXPECT_EQ(firstArena.memoryStats().allocationCount, firstArena.memoryStats().deallocationCount);
+        EXPECT_EQ(secondArena.memoryStats().allocationCount, secondArena.memoryStats().deallocationCount);
+    }
+}
+
+TEST(AllocatorPropagation, HashMapSwapsAndMovesPreserveArenaAndSourceReuse){
+    for(const bool foreignArena : { false, true }){
+        GlobalArena firstArena(Name("tests/allocator_propagation/hash_map_first"));
+        GlobalArena secondArena(Name("tests/allocator_propagation/hash_map_second"));
+        GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
+        {
+            HashMap<u32, u32, GlobalArena> first{ firstArena };
+            HashMap<u32, u32, GlobalArena> second{ secondOwner };
+            for(u32 key = 0u; key < 64u; ++key)
+                ASSERT_TRUE(first.emplace(key, key * 3u).second);
+            for(u32 key = 100u; key < 132u; ++key)
+                ASSERT_TRUE(second.emplace(key, key * 5u).second);
+            const u32* const firstStorage = &first.at(0u);
+            const u32* const secondStorage = &second.at(100u);
+            first.swap(second);
+            EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwner);
+            EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
+            ASSERT_EQ(first.size(), 32u);
+            ASSERT_EQ(second.size(), 64u);
+            EXPECT_EQ(&first.at(100u), secondStorage);
+            EXPECT_EQ(&second.at(0u), firstStorage);
+            first = Move(second);
+            EXPECT_EQ(first.get_allocator().arenaPtr(), &firstArena);
+            ASSERT_EQ(first.size(), 64u);
+            EXPECT_EQ(&first.at(0u), firstStorage);
+            EXPECT_TRUE(second.empty());
+            for(u32 key = 0u; key < 64u; ++key)
+                EXPECT_EQ(first.at(key), key * 3u);
+            first.reserve(256u);
+            ASSERT_TRUE(first.emplace(999u, 7u).second);
+            second.reserve(64u);
+            ASSERT_TRUE(second.emplace(888u, 9u).second);
+            EXPECT_EQ(second.at(888u), 9u);
+            EXPECT_EQ(first.at(999u), 7u);
+        }
+        EXPECT_EQ(firstArena.memoryStats().usedBytes, 0u);
+        EXPECT_EQ(secondArena.memoryStats().usedBytes, 0u);
+        EXPECT_EQ(firstArena.memoryStats().allocationCount, firstArena.memoryStats().deallocationCount);
+        EXPECT_EQ(secondArena.memoryStats().allocationCount, secondArena.memoryStats().deallocationCount);
+    }
+}
+
+TEST(AllocatorPropagation, HashSetSwapsAndMovesPreserveArenaAndSourceReuse){
+    for(const bool foreignArena : { false, true }){
+        GlobalArena firstArena(Name("tests/allocator_propagation/hash_set_first"));
+        GlobalArena secondArena(Name("tests/allocator_propagation/hash_set_second"));
+        GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
+        {
+            HashSet<u32, GlobalArena> first{ firstArena };
+            HashSet<u32, GlobalArena> second{ secondOwner };
+            for(u32 key = 0u; key < 64u; ++key)
+                ASSERT_TRUE(first.insert(key).second);
+            for(u32 key = 100u; key < 132u; ++key)
+                ASSERT_TRUE(second.insert(key).second);
+            const u32* const firstStorage = &*first.find(0u);
+            const u32* const secondStorage = &*second.find(100u);
+            first.swap(second);
+            EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwner);
+            EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
+            ASSERT_EQ(first.size(), 32u);
+            ASSERT_EQ(second.size(), 64u);
+            EXPECT_EQ(&*first.find(100u), secondStorage);
+            EXPECT_EQ(&*second.find(0u), firstStorage);
+            first = Move(second);
+            EXPECT_EQ(first.get_allocator().arenaPtr(), &firstArena);
+            ASSERT_EQ(first.size(), 64u);
+            EXPECT_EQ(&*first.find(0u), firstStorage);
+            EXPECT_TRUE(second.empty());
+            for(u32 key = 0u; key < 64u; ++key)
+                EXPECT_EQ(first.count(key), 1u);
+            first.reserve(256u);
+            ASSERT_TRUE(first.insert(999u).second);
+            second.reserve(64u);
+            ASSERT_TRUE(second.insert(888u).second);
+            EXPECT_EQ(second.count(888u), 1u);
+            EXPECT_EQ(first.count(999u), 1u);
+        }
+        EXPECT_EQ(firstArena.memoryStats().usedBytes, 0u);
+        EXPECT_EQ(secondArena.memoryStats().usedBytes, 0u);
+        EXPECT_EQ(firstArena.memoryStats().allocationCount, firstArena.memoryStats().deallocationCount);
+        EXPECT_EQ(secondArena.memoryStats().allocationCount, secondArena.memoryStats().deallocationCount);
     }
 }
 

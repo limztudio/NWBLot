@@ -1524,15 +1524,18 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // retain the serial default, while graph-owned upload packets later in the frame may opt into worker recording.
     const Core::GpuNativePacketRecorder deferredRecorder(device, m_graphics.gpuTiming());
     Core::Alloc::ScratchArena shadowPrepareStateScratchArena(RendererArenaScope::s_TaskGraphArena);
+    ECSRenderDetail::MeshRetainedAccelerationStateBufferVector meshAccelerationStateBuffers{ shadowPrepareStateScratchArena };
+    m_meshSystem.collectRetainedAccelerationStateBuffers(meshAccelerationStateBuffers);
+    const auto& acceptedTraceGeometry = m_raytracingSystem.acceptedShadowTraceGeometryBuffers();
+    const auto& preparedTraceGeometry = m_raytracingSystem.preparedShadowTraceGeometryBuffers();
     Vector<Core::BufferHandle, Core::Alloc::ScratchArena> shadowPrepareLiveStateBuffers{ shadowPrepareStateScratchArena };
+    shadowPrepareLiveStateBuffers.reserve(AddSize(
+        AddSize(acceptedTraceGeometry.size(), preparedTraceGeometry.size()),
+        AddSize(meshAccelerationStateBuffers.size(), 4u)
+    ));
     const auto appendShadowPrepareStateBuffer = [&](const Core::BufferHandle& buffer){
-        if(!buffer)
-            return;
-        for(const Core::BufferHandle& existing : shadowPrepareLiveStateBuffers){
-            if(existing.get() == buffer.get())
-                return;
-        }
-        shadowPrepareLiveStateBuffers.push_back(buffer);
+        if(buffer)
+            shadowPrepareLiveStateBuffers.push_back(buffer);
     };
     if(rayTracingShadowResources.sceneTlasBackingBuffer)
         appendShadowPrepareStateBuffer(rayTracingShadowResources.sceneTlasBackingBuffer);
@@ -1544,19 +1547,14 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // BufferDesc starts at Common. Keep that accepted graph state with the preparation handoff; otherwise the
     // following Prefix packet has a compiler state seed with no native producer entry to import. Include retained
     // invisible streams too: preflight deliberately keeps their accepted normalization until the mesh is removed.
-    for(const Core::BufferHandle& acceptedBuffer : m_raytracingSystem.acceptedShadowTraceGeometryBuffers()){
+    for(const Core::BufferHandle& acceptedBuffer : acceptedTraceGeometry){
         appendShadowPrepareStateBuffer(acceptedBuffer);
         shadowPrepareStateCandidateRequired = true;
     }
-    const PreparedShadowTraceGeometryBufferVector& preparedTraceGeometry =
-        m_raytracingSystem.preparedShadowTraceGeometryBuffers()
-    ;
     for(const PreparedShadowTraceGeometryBuffer& preparedBuffer : preparedTraceGeometry){
         appendShadowPrepareStateBuffer(preparedBuffer.buffer);
         shadowPrepareStateCandidateRequired = true;
     }
-    ECSRenderDetail::MeshRetainedAccelerationStateBufferVector meshAccelerationStateBuffers{ shadowPrepareStateScratchArena };
-    m_meshSystem.collectRetainedAccelerationStateBuffers(meshAccelerationStateBuffers);
     for(const Core::BufferHandle& buffer : meshAccelerationStateBuffers){
         if(buffer)
             shadowPrepareStateCandidateRequired = true;

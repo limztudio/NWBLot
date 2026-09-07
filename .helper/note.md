@@ -1,7 +1,5 @@
 # NWBLot Notes
 
-Updated: 2026-07-28
-
 ## Important Rules
 
 1. `Graphics` owns a required `GraphicsBackend::Device` while its renderer runtime is live. Express that invariant in graphics/rendering APIs and local bindings with `Device&` (or `const Device&`), not a non-null `Device*`; reserve pointers for documented lifecycle or genuinely optional-device boundaries.

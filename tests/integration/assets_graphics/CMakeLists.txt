@@ -4,6 +4,7 @@ target_sources(nwb_assets_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/build_input_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gather_input_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/model_payload_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/skeleton_payload_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gi_material_surface_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/acceptance_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/caustic_refract_tests.inl"

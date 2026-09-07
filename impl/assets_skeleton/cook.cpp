@@ -138,6 +138,7 @@ static constexpr AStringView s_SkeletonJointMetaKind = "Skeleton joint meta";
 
 [[nodiscard]] bool ResolveParentIndex(
     const SkeletonCookEntry& skeletonEntry,
+    const Skeleton::JointIndexMap& earlierJointIndices,
     const usize jointIndex,
     const Name& parent,
     u32& outParentIndex
@@ -146,11 +147,9 @@ static constexpr AStringView s_SkeletonJointMetaKind = "Skeleton joint meta";
     if(!parent)
         return true;
 
-    for(usize candidateIndex = 0u; candidateIndex < jointIndex; ++candidateIndex){
-        if(skeletonEntry.joints[candidateIndex].name != parent)
-            continue;
-
-        outParentIndex = static_cast<u32>(candidateIndex);
+    const auto foundParent = earlierJointIndices.find(parent);
+    if(foundParent != earlierJointIndices.end()){
+        outParentIndex = foundParent.value();
         return true;
     }
 
@@ -170,13 +169,14 @@ static constexpr AStringView s_SkeletonJointMetaKind = "Skeleton joint meta";
     outJoints.clear();
     outJointIndices.clear();
     outJoints.reserve(skeletonEntry.joints.size());
+    outJointIndices.reserve(skeletonEntry.joints.size());
 
     for(usize jointIndex = 0u; jointIndex < skeletonEntry.joints.size(); ++jointIndex){
         const SkeletonCookJoint& cookJoint = skeletonEntry.joints[jointIndex];
 
         SkeletonJoint joint;
         joint.localBindPose = cookJoint.localBindPose;
-        if(!ResolveParentIndex(skeletonEntry, jointIndex, cookJoint.parent, joint.parentIndex)){
+        if(!ResolveParentIndex(skeletonEntry, outJointIndices, jointIndex, cookJoint.parent, joint.parentIndex)){
             outJoints.clear();
             outJointIndices.clear();
             return false;

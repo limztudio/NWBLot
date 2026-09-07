@@ -112,3 +112,14 @@ Gathering now records each validated identity directly against its manifest entr
 The end-to-end gather workload contains 128 unique 64 KiB payloads in three input directories. It includes reads, validation, duplicate collapse, and volume publication, while fixture creation/readback are excluded. Median dbg time changed from 684.6835 to 606.8864 ms; opt changed from 523.1486 to 513.5015 ms. Filesystem work dominates this fixture, so the small opt difference should not be treated as a general throughput guarantee.
 
 Three duplicate/merge/publication regressions and the existing independent-shader-gather integration pass in dbg, opt, and fin. The owning asset integration target and pipeline tools build in all three configurations.
+
+## Skeleton cook parent resolution
+
+Skeleton cooking resolves each parent through the joint-name map already populated by earlier joints and reserves the map once for the expected count. It removes a growing prefix scan without adding a second index. Root handling, earlier-only parent rules, canonical duplicate detection, failure output clearing, and serialized joint/child order are preserved.
+
+| Complete skeleton build workload | dbg before → after | opt before → after |
+| --- | ---: | ---: |
+| 4,096-joint chain, four builds | 168.6239 → 5.4500 | 16.9149 → 0.5206 |
+| One joint, 4,096 builds | 19.8398 → 20.5019 | 0.4921 → 0.5363 |
+
+The singleton workload adds roughly 162 ns per build in dbg and 11 ns in opt; the optimization targets multi-joint parent resolution. Four direct regressions pass in dbg, opt, and fin, including parent-order failures/recovery, canonical duplicate identities, topology rebuilding, and serialized matrix/joint identity.

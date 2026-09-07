@@ -42,7 +42,9 @@ static const char* GpuCrashAvailabilityText(const bool available){
 
 };
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void Device::captureDeviceLoss(const AStringView context){
     // Device-loss state must not depend on optional crash diagnostics.

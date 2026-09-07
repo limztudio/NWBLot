@@ -25,6 +25,7 @@ namespace VulkanTextureDetail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 inline constexpr u32 s_TextureClearColorComponentCount = 3u;
 inline constexpr u32 s_TextureClearRGComponentCount = 2u;
 inline constexpr u32 s_TextureClearRGBAComponentCount = 4u;

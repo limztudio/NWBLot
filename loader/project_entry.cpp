@@ -15,6 +15,7 @@ NWB_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 void ProjectRuntimeContext::setTelemetryCapture(const Core::Telemetry::CaptureOptions& options){
     if(telemetryCapture)
         telemetryCapture(options);

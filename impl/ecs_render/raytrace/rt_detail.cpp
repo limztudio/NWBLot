@@ -353,6 +353,7 @@ void RendererRayTracingSystem::transitionSwShadowTraversalResources(Core::Comman
     commandList.setBufferState(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

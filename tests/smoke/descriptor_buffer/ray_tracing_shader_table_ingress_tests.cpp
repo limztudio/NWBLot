@@ -777,6 +777,7 @@ TEST_F(RayTracingShaderTableIngressTest, ImmutableGroupMetadataSurvivesDescripti
     ExpectShaderTableRecordRejection([&](){ return callableTable->addCallableShader("mutated_callable"); });
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

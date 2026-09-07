@@ -17,6 +17,9 @@
 namespace TelemetryTestDetail{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 using TestArena = NWB::Tests::TestArena<struct TelemetryTestsTag>;
 namespace Telemetry = NWB::Core::Telemetry;
 namespace Log = NWB::Log;

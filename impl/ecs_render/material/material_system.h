@@ -77,6 +77,8 @@ struct MaterialInstanceOverrideField{
 };
 
 class CsgShapeRegistry;
+template<typename OutputArena>
+class MaterialSampledTextureCollector;
 class RendererMaterialState;
 class RendererShaderSystem;
 class RendererMeshSystem;
@@ -246,12 +248,13 @@ public:
     // can retain their existing compatibility route.
     [[nodiscard]] bool appendPreparedMaterialSurfaceSampledTextures(
         const MaterialSurfaceInfo& materialInfo,
-        Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& inOutTextures
+        MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector
     );
     [[nodiscard]] bool gatherPreparedMaterialPassSampledTextures(
         const MaterialPassDrawItems* const* drawItemSets,
         usize drawItemSetCount,
-        Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& outTextures
+        Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& outTextures,
+        Core::Alloc::ScratchArena& scratchArena
     );
     [[nodiscard]] bool prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems);
     [[nodiscard]] bool prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);

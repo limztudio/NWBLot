@@ -359,3 +359,23 @@ In the 512-file shader/include fixture, retained metadata falls from 3,385,120 t
 Three 512-file parses measure 316.9893 to 323.0502ms in dbg and 137.0782 to 132.8714ms in opt. Thirty-two pair parses measure 13.3915 to 13.3419ms in dbg and 5.3886 to 6.3689ms in opt. These filesystem-inclusive results do not establish a uniform latency improvement; eliminating unused allocation capacity is the demonstrated gain.
 
 A new real 65-sampler regression crosses vector-growth boundaries, preserves permuted input order and payloads, checks the allocation arena and an unused Model bucket, and verifies late duplicate rejection retains the valid prefix. It and all 60 selected asset tests pass in dbg, opt and fin; pipeline and the skinning benchmark application build in each. The benchmark baseline includes the earlier extension-ownership correction.
+
+## Material sampled-texture collection
+
+A collection owns exact pointer membership for its current output, with 32 inline identities and a lazy index for larger unique sets. Existing prefixes are seeded once, first owning-handle order is preserved, and duplicate prefixes remain intact. Shadow preparation reuses one pending owning vector/index per hardware or software operation. Every reference still checks the current asset cache and descriptor; complete material validation precedes publication, while later missing creation names retain the earlier named prefix. RAII clears pending ownership on success, expected rejection and terminal unwinding.
+
+| Complete collection workload | dbg before to after (ms) | opt before to after (ms) |
+| --- | ---: | ---: |
+| Pass: one texture, 2,048 collections | 5.2143 → 5.1345 | 0.1931 → 0.2095 |
+| Pass: eight textures, 256 collections | 2.4408 → 1.8423 | 0.0764 → 0.0784 |
+| Pass: 1,024 unique textures | 15.8412 → 1.5838 | 0.3493 → 0.1222 |
+| Pass: 4,096 draws sharing eight textures, two collections | 6.1227 → 3.7623 | 0.1947 → 0.1986 |
+| Shadow: one texture, 2,048 collections | 5.2932 → 5.4143 | 0.2009 → 0.2172 |
+| Shadow: eight textures, 256 collections | 2.9682 → 2.0610 | 0.0862 → 0.0807 |
+| Shadow: 1,024 unique textures | 8.8645 → 1.3758 | 0.1915 → 0.0907 |
+| Shadow: 4,096 instances sharing eight textures, two collections | 9.3775 → 5.4280 | 0.2558 → 0.2112 |
+| Hardware/software: 128 unique textures, four paired collections | 2.0322 → 0.9819 | 0.0659 → 0.0609 |
+
+Singleton opt overhead is about 8ns per operation; shadow debug singleton adds about 59ns. Unique pass peak scratch grows from 51,264 to 114,832 bytes in dbg (51,248 to 114,736 in opt), reserving 166,912 bytes. Unique shadow peak becomes 63,600/63,504 bytes, reserving 128,000/107,520. Small and shared workloads retain their original scratch usage. Repeated large-small-large operations verify stable warmed backing and preserved caller-owned storage; the pending vector releases handles after every material.
+
+Twelve regressions cover fresh validation, first ownership/order, aliases, promotion, seeded prefixes, pass and shadow failure differences, current resource replacement, stable reuse and unwind cleanup. All 229 ECS graphics cases pass in dbg/opt and 232 in fin; frame, descriptor-buffer and skinning smoke targets build in all three. Benchmark timers cover the real gather or shadow resolve/merge operation and scratch teardown; inputs and assertions are outside.

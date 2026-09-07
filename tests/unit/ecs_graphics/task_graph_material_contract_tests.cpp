@@ -27,6 +27,7 @@ TEST(EcsGraphics, MaterialDrawSnapshotsRetainExactGraphResourceGenerations){
     AString drawTypesSource;
     AString materialPassSource;
     AString materialSurfaceSource;
+    AString sampledTextureCollectionSource;
     AString resourceSetsSource;
     AString planSources;
     AString taskHeaderSources;
@@ -35,6 +36,7 @@ TEST(EcsGraphics, MaterialDrawSnapshotsRetainExactGraphResourceGenerations){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "renderer_draw_types.h", drawTypesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass.cpp", materialPassSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_surface.cpp", materialSurfaceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "sampled_texture_collection.cpp", sampledTextureCollectionSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "task_graph_resource_sets.h", resourceSetsSource));
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
@@ -79,6 +81,7 @@ TEST(EcsGraphics, MaterialDrawSnapshotsRetainExactGraphResourceGenerations){
     const AStringView drawTypes(drawTypesSource.data(), drawTypesSource.size());
     const AStringView materialPass(materialPassSource.data(), materialPassSource.size());
     const AStringView materialSurface(materialSurfaceSource.data(), materialSurfaceSource.size());
+    const AStringView sampledTextureCollection(sampledTextureCollectionSource.data(), sampledTextureCollectionSource.size());
     const AStringView resourceSets(resourceSetsSource.data(), resourceSetsSource.size());
     const AStringView plans(planSources.data(), planSources.size());
     const AStringView taskHeaders(taskHeaderSources.data(), taskHeaderSources.size());
@@ -90,7 +93,8 @@ TEST(EcsGraphics, MaterialDrawSnapshotsRetainExactGraphResourceGenerations){
     EXPECT_FALSE(ContainsText(drawTypes, "NWB_MESH_BINDING_MATERIAL_TYPED"));
     EXPECT_TRUE(ContainsText(drawTypes, "Name meshKey = NAME_NONE;"));
     EXPECT_TRUE(ContainsText(drawTypes, "MaterialPipelineKey pipelineKey;"));
-    EXPECT_TRUE(ContainsText(materialSurface, "m_materialState.m_surfaceInfos.find(drawItem.pipelineKey.material)"));
+    EXPECT_TRUE(ContainsText(materialSurface, "m_materialState.m_surfaceInfos, m_materialState.m_resourceState"));
+    EXPECT_TRUE(ContainsText(sampledTextureCollection, "materials.find(drawItem.pipelineKey.material)"));
     EXPECT_TRUE(ContainsText(materialPass, "csgReceiverSurfaceDrawItem.pipelineResources ="));
 
     EXPECT_TRUE(ContainsText(resourceSets, "const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;"));
@@ -466,12 +470,14 @@ TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
 
     AString materialAssetHeaderSource;
     AString materialSurfaceSource;
+    AString sampledTextureCollectionSource;
     AString taskGraphSource;
     AString uiHeaderSource;
     AString uiSource;
     AString uiTextureSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets_material" / "asset.h", materialAssetHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_surface.cpp", materialSurfaceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "sampled_texture_collection.cpp", sampledTextureCollectionSource));
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
@@ -492,6 +498,7 @@ TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
 
     const AStringView materialAssetHeader(materialAssetHeaderSource.data(), materialAssetHeaderSource.size());
     const AStringView materialSurface(materialSurfaceSource.data(), materialSurfaceSource.size());
+    const AStringView sampledTextureCollection(sampledTextureCollectionSource.data(), sampledTextureCollectionSource.size());
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
     const AStringView uiHeader(uiHeaderSource.data(), uiHeaderSource.size());
     const AStringView ui(uiSource.data(), uiSource.size());
@@ -503,8 +510,8 @@ TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
     EXPECT_TRUE(ContainsText(materialAssetHeader, "Sampler = 2"));
     EXPECT_TRUE(ContainsText(materialAssetHeader, "return resourceKind == MaterialResourceKind::SampledImage2D || resourceKind == MaterialResourceKind::Sampler"));
     EXPECT_TRUE(ContainsText(materialSurface, "appendPreparedMaterialSurfaceSampledTextures"));
-    EXPECT_TRUE(ContainsText(materialSurface, "inOutTextures.push_back(textureResource.texture)"));
-    EXPECT_TRUE(ContainsText(materialSurface, "default:\n            return false;"));
+    EXPECT_TRUE(ContainsText(sampledTextureCollection, "collector.append(textureResource.texture)"));
+    EXPECT_TRUE(ContainsText(sampledTextureCollection, "default:\n            return false;"));
 
     // Raster and trace consumers share the frozen material collection. The named sets make a future dynamic
     // bindless consumer visible to the audit rather than allowing it to hide behind the descriptor heap.

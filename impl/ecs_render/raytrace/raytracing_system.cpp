@@ -4,6 +4,8 @@
 
 #include "raytracing_system.h"
 
+#include <impl/ecs_render/material/sampled_texture_collection.h>
+
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 
@@ -1575,27 +1577,13 @@ RendererRayTracingSystem::preparedShadowTraceMaterialSampledTextures()const noex
 
 bool RendererRayTracingSystem::appendPreparedShadowTraceMaterialSampledTextures(
     const MaterialSurfaceInfo& materialInfo,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    Vector<Core::TextureHandle, Core::Alloc::ScratchArena> sampledTextures{ scratchArena };
-    if(!m_materialSystem.appendPreparedMaterialSurfaceSampledTextures(materialInfo, sampledTextures))
-        return false;
-
-    for(const Core::TextureHandle& texture : sampledTextures){
-        if(!texture || !texture->getCreationDescription().name)
-            return false;
-
-        bool alreadyCollected = false;
-        for(const Core::TextureHandle& existing : m_preparedShadowTraceMaterialSampledTextures){
-            if(existing.get() == texture.get()){
-                alreadyCollected = true;
-                break;
-            }
+    ShadowMaterialSampledTextureCollector& collector){
+    return collector.collect(
+        materialInfo,
+        [this](const MaterialSurfaceInfo& material, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& pending){
+            return m_materialSystem.appendPreparedMaterialSurfaceSampledTextures(material, pending);
         }
-        if(!alreadyCollected)
-            m_preparedShadowTraceMaterialSampledTextures.push_back(texture);
-    }
-    return true;
+    );
 }
 
 void RendererRayTracingSystem::clearPreparedShadowTraceMaterialSampledTextures()noexcept{

@@ -44,6 +44,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ShadowMaterialSampledTextureCollector;
 class RendererShaderSystem;
 class RendererMeshSystem;
 class RendererMaterialSystem;
@@ -1083,7 +1084,7 @@ private:
     void clearPreparedShadowMaterialContext()noexcept;
     [[nodiscard]] bool appendPreparedShadowTraceMaterialSampledTextures(
         const MaterialSurfaceInfo& materialInfo,
-        Core::Alloc::ScratchArena& scratchArena
+        ShadowMaterialSampledTextureCollector& collector
     );
     void clearPreparedShadowTraceMaterialSampledTextures()noexcept;
     // A healthy hybrid preflight gathers the HW context before the final SW context replaces it. Retain that exact

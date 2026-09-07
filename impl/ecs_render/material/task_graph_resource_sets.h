@@ -252,7 +252,8 @@ namespace RendererTaskGraphDetail{
     if(!materialSystem.gatherPreparedMaterialPassSampledTextures(
         drawItemSets,
         drawItemSetCount,
-        sampledTextures
+        sampledTextures,
+        scratchArena
     ))
         return false;
 

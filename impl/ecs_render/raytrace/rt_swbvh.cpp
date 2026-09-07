@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/raytrace/rt_private.h>
+#include <impl/ecs_render/material/sampled_texture_collection.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
 #include <global/algorithm.h>
@@ -1082,6 +1083,10 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     m_rayTracingState.m_sceneHasTransparentOccluder = false;
     bool staticScene = true;
 
+    Optional<ShadowMaterialSampledTextureCollector> sampledTextureCollector;
+    if(!commandList)
+        sampledTextureCollector.emplace(m_preparedShadowTraceMaterialSampledTextures, scratchArena);
+
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible)
             continue;
@@ -1166,7 +1171,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             if(
                 !commandList
                 && materialInfo->shadowTransmittanceModelId != Limit<u32>::s_Max
-                && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, scratchArena)
+                && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, *sampledTextureCollector)
             )
                 return false;
             u32 materialConstantByteOffset = 0u;
@@ -1642,6 +1647,10 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     m_rayTracingState.m_swShadowMeshCount = 0u;
     bool staticScene = true;
 
+    Optional<ShadowMaterialSampledTextureCollector> sampledTextureCollector;
+    if(!commandList)
+        sampledTextureCollector.emplace(m_preparedShadowTraceMaterialSampledTextures, scratchArena);
+
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible)
             continue;
@@ -1781,7 +1790,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             if(
                 !commandList
                 && materialInfo->shadowTransmittanceModelId != Limit<u32>::s_Max
-                && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, scratchArena)
+                && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, *sampledTextureCollector)
             )
                 return false;
             u32 materialConstantByteOffset = 0u;

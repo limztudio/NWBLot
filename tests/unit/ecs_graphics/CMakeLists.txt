@@ -5,6 +5,7 @@ target_sources(nwb_ecs_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/ray_tracing_shader_table_renderer_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_subsystem_boundary_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material_geometry_uses_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/material_sampled_texture_collection_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material_texture_import_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_mesh_pruning_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/skinning_payload_tests.cpp"

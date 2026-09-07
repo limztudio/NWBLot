@@ -3,6 +3,7 @@
 
 
 #include "material_system.h"
+#include "sampled_texture_collection.h"
 
 #include <impl/ecs_render/material/renderer_material_state.h>
 
@@ -442,82 +443,18 @@ bool RendererMaterialSystem::findMaterialSurfaceInfo(const Core::Assets::AssetRe
 
 bool RendererMaterialSystem::appendPreparedMaterialSurfaceSampledTextures(
     const MaterialSurfaceInfo& materialInfo,
-    Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& inOutTextures
-){
-    if(!materialInfo.resourceReferencesResolved)
-        return false;
-    RendererMaterialResourceState& resources = m_materialState.m_resourceState;
-    for(const MaterialResourceReference& resourceReference : materialInfo.resourceReferences){
-        switch(resourceReference.resourceKind){
-        case MaterialResourceKind::SampledImage2D:{
-            if(
-                resourceReference.resourceSource != MaterialResourceSource::Asset
-                || !resourceReference.textureAsset.valid()
-            )
-                return false;
-
-            const auto foundTexture = resources.textureAssetCache.find(resourceReference.textureAsset.name());
-            if(foundTexture == resources.textureAssetCache.end() || !foundTexture.value())
-                return false;
-
-            const TextureGpuResource& textureResource = *foundTexture.value();
-            if(
-                !textureResource.valid()
-                || textureResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage
-                || !textureResource.texture
-            )
-                return false;
-
-            bool alreadyCollected = false;
-            for(const Core::TextureHandle& existing : inOutTextures){
-                if(existing.get() == textureResource.texture.get()){
-                    alreadyCollected = true;
-                    break;
-                }
-            }
-            if(!alreadyCollected)
-                inOutTextures.push_back(textureResource.texture);
-            break;
-        }
-        case MaterialResourceKind::Sampler:
-            break;
-        default:
-            return false;
-        }
-    }
-    return true;
+    MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector){
+    return AppendPreparedMaterialSurfaceSampledTextures(materialInfo, m_materialState.m_resourceState, collector);
 }
 
 bool RendererMaterialSystem::gatherPreparedMaterialPassSampledTextures(
     const MaterialPassDrawItems* const* const drawItemSets,
     const usize drawItemSetCount,
-    Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& outTextures
-){
-    outTextures.clear();
-    if(drawItemSetCount != 0u && !drawItemSets)
-        return false;
-
-    const auto appendDrawItem = [&](const MaterialPassDrawItem& drawItem){
-        const auto foundMaterial = m_materialState.m_surfaceInfos.find(drawItem.pipelineKey.material);
-        return foundMaterial != m_materialState.m_surfaceInfos.end()
-            && appendPreparedMaterialSurfaceSampledTextures(foundMaterial.value(), outTextures)
-        ;
-    };
-
-    for(usize drawItemSetIndex = 0u; drawItemSetIndex < drawItemSetCount; ++drawItemSetIndex){
-        const MaterialPassDrawItems* const drawItems = drawItemSets[drawItemSetIndex];
-        if(!drawItems)
-            return false;
-        for(const MaterialPassDrawItem& drawItem : drawItems->meshDrawItems){
-            if(!appendDrawItem(drawItem))
-                return false;
-        }
-        for(const MaterialPassDrawItem& drawItem : drawItems->computeDrawItems){
-            if(!appendDrawItem(drawItem))
-                return false;
-        }
-    }
-    return true;
+    Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& outTextures,
+    Core::Alloc::ScratchArena& scratchArena){
+    return GatherPreparedMaterialPassSampledTextures(
+        m_materialState.m_surfaceInfos, m_materialState.m_resourceState, drawItemSets, drawItemSetCount, outTextures, scratchArena
+    );
 }
 
 bool RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){

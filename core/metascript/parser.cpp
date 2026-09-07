@@ -85,19 +85,9 @@ public:
 
 public:
     bool parseInto(MString& outAssetType, MString& outAssetVariable){
-        try{
-            if(!parseStatements())
-                return false;
-            return finalizeExplicitDeclaration(outAssetType, outAssetVariable);
-        }
-        catch(const GeneralException& e){
-            error(
-                m_current.line,
-                m_current.column,
-                MStringView(e.what(), MString::traits_type::length(e.what()))
-            );
+        if(!parseStatements())
             return false;
-        }
+        return finalizeExplicitDeclaration(outAssetType, outAssetVariable);
     }
 
     bool parseWithImplicitAsset(
@@ -106,19 +96,9 @@ public:
         const MStringView assetType,
         const MStringView assetVariable
     ){
-        try{
-            if(!declareImplicitAsset(outAssetType, outAssetVariable, assetType, assetVariable))
-                return false;
-            return parseStatements();
-        }
-        catch(const GeneralException& e){
-            error(
-                m_current.line,
-                m_current.column,
-                MStringView(e.what(), MString::traits_type::length(e.what()))
-            );
+        if(!declareImplicitAsset(outAssetType, outAssetVariable, assetType, assetVariable))
             return false;
-        }
+        return parseStatements();
     }
 
 
@@ -1225,36 +1205,30 @@ bool Document::parse(IMetaReader& reader){
     m_variables.clear();
     m_declarations.clear();
 
-    try{
-        Alloc::ScratchArena scratchArena(
-            MetascriptArenaScope::s_DocumentReaderScratch,
-            __hidden_metascript_parser::s_DocumentReaderChunkBytes
-        );
-        BasicString<MChar, Alloc::ScratchArena> buffer{scratchArena};
-        buffer.reserve(__hidden_metascript_parser::s_DocumentReaderChunkBytes);
-        MChar chunk[__hidden_metascript_parser::s_DocumentReaderChunkBytes];
+    Alloc::ScratchArena scratchArena(
+        MetascriptArenaScope::s_DocumentReaderScratch,
+        __hidden_metascript_parser::s_DocumentReaderChunkBytes
+    );
+    BasicString<MChar, Alloc::ScratchArena> buffer{scratchArena};
+    buffer.reserve(__hidden_metascript_parser::s_DocumentReaderChunkBytes);
+    MChar chunk[__hidden_metascript_parser::s_DocumentReaderChunkBytes];
 
-        for(;;){
-            const isize bytesRead = reader.read(chunk, __hidden_metascript_parser::s_DocumentReaderChunkBytes);
-            if(bytesRead < 0){
-                m_errors.push_back(ParseError{0, 0, MString("read error", m_arena)});
-                return false;
-            }
-            if(bytesRead == 0)
-                break;
-            if(static_cast<usize>(bytesRead) > __hidden_metascript_parser::s_DocumentReaderChunkBytes){
-                m_errors.push_back(ParseError{0, 0, MString("reader returned more bytes than requested", m_arena)});
-                return false;
-            }
-            buffer.append(chunk, static_cast<usize>(bytesRead));
+    for(;;){
+        const isize bytesRead = reader.read(chunk, __hidden_metascript_parser::s_DocumentReaderChunkBytes);
+        if(bytesRead < 0){
+            m_errors.push_back(ParseError{0, 0, MString("read error", m_arena)});
+            return false;
         }
+        if(bytesRead == 0)
+            break;
+        if(static_cast<usize>(bytesRead) > __hidden_metascript_parser::s_DocumentReaderChunkBytes){
+            m_errors.push_back(ParseError{0, 0, MString("reader returned more bytes than requested", m_arena)});
+            return false;
+        }
+        buffer.append(chunk, static_cast<usize>(bytesRead));
+    }
 
-        return parse(MStringView(buffer.data(), buffer.size()));
-    }
-    catch(const GeneralException& e){
-        m_errors.push_back(ParseError{0, 0, MString(e.what(), m_arena)});
-        return false;
-    }
+    return parse(MStringView(buffer.data(), buffer.size()));
 }
 
 const Value& Document::asset()const{

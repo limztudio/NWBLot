@@ -155,25 +155,21 @@ NWB_NOINLINE static CrashDumpResult __hidden_capture_crash_dump(const Detail::Cr
 }
 
 NWB_NOINLINE static void __hidden_capture_diagnostic_crash(const DiagnosticEventRecord& record)noexcept{
-    try{
-        Detail::CrashDumpRequestOptions options;
-        const char* const diagnosticEventName = DiagnosticEventNameFromRecord(record);
-        options.event = diagnosticEventName ? AStringView(diagnosticEventName) : AStringView();
-        options.triggerCategory = record.category ? AStringView(record.category) : AStringView();
-        options.triggerExpression = record.expression ? AStringView(record.expression) : AStringView();
-        options.triggerMessage = record.message ? AStringView(record.message) : AStringView();
-        options.triggerFile = record.file ? AStringView(record.file) : AStringView();
-        options.triggerInstructionPointer = record.instructionPointer;
-        options.triggerLine = record.line;
-        options.callstackFramesToSkip = s_DiagnosticCaptureCallstackFramesToSkip;
-        if(!__hidden_reserve_diagnostic_capture(record, options.event, options.triggerCategory))
-            return;
-        const CrashDumpResult result = __hidden_capture_crash_dump(Detail::CrashReasonKind::ManualDump, options.triggerCategory, options.triggerMessage, options);
-        if(record.terminatesProcess && __hidden_diagnostic_result_can_suppress_duplicate_platform_crash(result))
-            Detail::SuppressNextPlatformCrashCapture();
-    }
-    catch(...){
-    }
+    Detail::CrashDumpRequestOptions options;
+    const char* const diagnosticEventName = DiagnosticEventNameFromRecord(record);
+    options.event = diagnosticEventName ? AStringView(diagnosticEventName) : AStringView();
+    options.triggerCategory = record.category ? AStringView(record.category) : AStringView();
+    options.triggerExpression = record.expression ? AStringView(record.expression) : AStringView();
+    options.triggerMessage = record.message ? AStringView(record.message) : AStringView();
+    options.triggerFile = record.file ? AStringView(record.file) : AStringView();
+    options.triggerInstructionPointer = record.instructionPointer;
+    options.triggerLine = record.line;
+    options.callstackFramesToSkip = s_DiagnosticCaptureCallstackFramesToSkip;
+    if(!__hidden_reserve_diagnostic_capture(record, options.event, options.triggerCategory))
+        return;
+    const CrashDumpResult result = __hidden_capture_crash_dump(Detail::CrashReasonKind::ManualDump, options.triggerCategory, options.triggerMessage, options);
+    if(record.terminatesProcess && __hidden_diagnostic_result_can_suppress_duplicate_platform_crash(result))
+        Detail::SuppressNextPlatformCrashCapture();
 }
 
 

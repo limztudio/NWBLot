@@ -57,11 +57,8 @@ static void CaptureCallback(const DiagnosticEventRecord& record)noexcept{
     if(!guard)
         return;
 
-    try{
-        if(!guard->capture(record))
-            NWB_LOGGER_WARNING(NWB_TEXT("Telemetry: diagnostic event record dropped"));
-    }
-    catch(...){}
+    if(!guard->capture(record))
+        NWB_LOGGER_WARNING(NWB_TEXT("Telemetry: diagnostic event record dropped"));
 }
 
 

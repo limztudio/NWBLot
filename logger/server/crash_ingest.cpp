@@ -419,20 +419,11 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
         return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, AStringView(error.data(), error.size()));
     }
 
-    CrashReportText symbolicationReport(arena);
-    try{
-        symbolicationReport = BuildCrashSymbolicationReport(arena, packageDirectory, summary, config.symbolication);
-        // Failing to persist the report on disk is an infrastructure error, not a malformed crash: keep the valid,
-        // already-decoded package instead of quarantining it as invalid, and still return the in-memory report.
-        if(!WriteTextFile(packageDirectory / s_ServerSymbolicationFileName, AStringView(symbolicationReport.data(), symbolicationReport.size())))
-            NWB_LOGGER_WARNING(NWB_TEXT("Failed to persist server crash symbolication report; retaining the package and returning the in-memory report"));
-    }
-    catch(const GeneralException& e){
-        return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, AStringView(e.what()));
-    }
-    catch(...){
-        return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, AStringView("unknown ingest exception"));
-    }
+    CrashReportText symbolicationReport = BuildCrashSymbolicationReport(arena, packageDirectory, summary, config.symbolication);
+    // Failing to persist the report on disk is an infrastructure error, not a malformed crash: keep the valid,
+    // already-decoded package instead of quarantining it as invalid, and still return the in-memory report.
+    if(!WriteTextFile(packageDirectory / s_ServerSymbolicationFileName, AStringView(symbolicationReport.data(), symbolicationReport.size())))
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to persist server crash symbolication report; retaining the package and returning the in-memory report"));
 
     Path rawPath(arena);
     const bool rawArchived = ::MovePathToDirectory(archivePath, CrashRawDirectory(arena, config.storageDirectory), rawPath);

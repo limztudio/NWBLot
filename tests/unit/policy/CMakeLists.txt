@@ -1,5 +1,6 @@
 set(_nwb_policy_python_tests
     return_value_handling
+    no_local_exception_handlers
     no_direct_std_in_tests
     no_direct_std_in_interop_boundaries
     no_core_implementation_dependencies

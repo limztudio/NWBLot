@@ -245,8 +245,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         }
 
         if(!releaseDestinationQueue.valid()){
-            // See the texture path above: one family may contain several physical queues, so a timeline wait is
-            // sufficient for this state handoff and no queue-family ownership transfer is required.
+            // A timeline wait is sufficient within one queue family.
             if(ownerQueue.valid() && sourceQueueFamily != destinationQueueFamily){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff changes queue family without a release/acquire transfer"));
                 return false;

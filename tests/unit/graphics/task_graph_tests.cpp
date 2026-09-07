@@ -19893,9 +19893,6 @@ TEST(GpuTaskGraph, MergesSharedOpaqueComputeEmulationDispatchRasterQuintuplesInt
 // graph owns both the CSG CopyDest->UAV preparation and the generated-vertex UAV->VertexBuffer handoff in one
 // primary-Graphics packet; the receiver-event image itself remains a G-buffer raster output.
 
-// Receiver-surface CSG generation must happen after its CSG setup but before G-buffer's later raster consumer. The
-// graph owns both the CSG CopyDest->UAV preparation and the generated-vertex UAV->VertexBuffer handoff in one
-// primary-Graphics packet; the receiver-event image itself remains a G-buffer raster output.
 TEST(GpuTaskGraph, MergesOpaqueCsgReceiverComputeProducerIntoGbufferPacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -22828,10 +22825,6 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitAccumulationSharedOutputComputeEmulationQui
 // Graphics|Compute producer writes every target as UAV, then the immediate Occupancy raster reads them as vertex
 // buffers in the same FrontierSafe packet.
 
-// AVBOIT Occupancy can prepare several transparent compute-emulated materials before its raster stage only when
-// each generated-vertex target is distinct. Keep that alias-free producer/consumer handoff graph-owned: the
-// Graphics|Compute producer writes every target as UAV, then the immediate Occupancy raster reads them as vertex
-// buffers in the same FrontierSafe packet.
 TEST(GpuTaskGraph, MergesAliasFreeAvboitOccupancyGeneratedVertexHandoffWithRaster){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

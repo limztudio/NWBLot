@@ -700,7 +700,6 @@ QueueSubmissionToken Device::executeCommandListsInternal(
             if(token.matchesPhysicalQueue(executionQueue.index, executionQueue.deviceGeneration))
                 continue;
 
-            // Collapse same-semaphore waits to their largest timeline value.
             bool merged = false;
             for(Queue::SubmissionWait& wait : localWaits){
                 if(wait.semaphore != producerQueue->m_trackingSemaphore)

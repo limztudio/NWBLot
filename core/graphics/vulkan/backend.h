@@ -1153,7 +1153,7 @@ private:
     // Serializes reusable Device::executeCommandLists workspace through accepted post-submit publication.
     // Acquire before m_mutex when both are required.
     Futex m_submissionWorkspaceMutex;
-    // Protects scheduler semantics. Always acquire before m_nativeQueue.hostMutex when both are required.
+    // Always acquire before m_nativeQueue.hostMutex when both are required.
     Futex m_mutex;
     Futex m_workerCommandArenasMutex;
     Vector<VkSemaphore, Alloc::GlobalArena> m_waitSemaphores;
@@ -4043,7 +4043,6 @@ private:
 
 
 private:
-    // First: queues unregister command lists during destruction.
     bool m_gpuCrashDiagnosticsEnabled = false;
     bool m_queueRegistryReady = false;
     u16 m_deviceGeneration = 0u;

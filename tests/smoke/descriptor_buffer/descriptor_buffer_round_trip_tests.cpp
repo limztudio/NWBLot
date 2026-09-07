@@ -30984,9 +30984,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationQuad
 // raster output and the generated vertex-buffer handoff. This records all three callbacks in one real primary
 // Graphics packet without either callback performing a native state transition.
 
-// CSG receiver-surface compute generation consumes graph-owned clip data, then G-buffer owns the receiver-event
-// raster output and the generated vertex-buffer handoff. This records all three callbacks in one real primary
-// Graphics packet without either callback performing a native state transition.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverComputeHandoffMergesWithGbuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto receiverEvent = device.createBuffer(
@@ -34319,10 +34316,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
 }
 
 
-// A bounded regular Occupancy pair may reuse one retained generated-vertex buffer only by immediately consuming
-// each dispatch before the next one. Keep the whole packet-local path explicit: Pre -> stream -> clear ->
-// D(A) -> R(A) -> D(B) -> R(B) -> Depth Warp. The callbacks remain getter-only; graph prologues own every
-// output and Coverage state handoff while the single Pre ticket owns the shared timing lifetime.
+// AVBOIT Accumulation reuses one generated-vertex buffer across four immediately consumed dispatches.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedOutputComputeEmulationQuadruplesStayInPrePacket){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();

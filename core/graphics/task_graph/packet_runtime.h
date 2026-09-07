@@ -55,8 +55,8 @@ struct GpuRecordedPacket{
     u64 recordingBeginNanoseconds = 0u;
     u64 recordingEndNanoseconds = 0u;
     f64 recordingSeconds = 0.0;
-    // Worker zero is serial/default recording. Ready-frontier workers retain both their process-unique ThreadPool
-    // domain and pool-local index for transactional diagnostics and native arena-affinity smoke coverage.
+    // Worker zero is serial/default recording; ready-frontier workers retain a process-unique ThreadPool domain
+    // and pool-local index.
     u64 recordingWorkerDomain = 0u;
     u32 recordingWorkerIndex = 0u;
 };
@@ -76,16 +76,14 @@ struct GpuTaskGraphRecordingStatistics{
     usize taskCount = 0u;
     usize commandListCount = 0u;
     usize barrierCount = 0u;
-    // Worker-routed packets used a non-default ready-frontier command-arena shard. A one-packet worker batch is
-    // still routed but is not parallel; parallelPacketCount instead requires strict overlap of packet intervals.
+    // workerRoutedPacketCount includes one-packet worker batches; parallelPacketCount requires overlapping intervals.
     usize workerRoutedPacketCount = 0u;
     usize parallelPacketCount = 0u;
     f64 commandListAcquisitionSeconds = 0.0;
     f64 graphBarrierRecordingSeconds = 0.0;
     f64 taskRecordSeconds = 0.0;
     f64 recordingSeconds = 0.0;
-    // Sum of successful outer recorder-operation wall spans. Multiple incremental range calls accumulate without
-    // including unrelated caller work between them.
+    // Sum of successful recorder-operation wall spans; separate range calls exclude intervening caller work.
     f64 recordingElapsedSeconds = 0.0;
     f64 readyFrontierElapsedSeconds = 0.0;
     // Busy is summed packet-span occupancy across logical recording slots, not operating-system CPU time. Capacity
@@ -623,14 +621,11 @@ struct GpuTaskGraphSubmissionStatistics{
     u64 planGeneration = 0u;
     u64 recordingAttemptGeneration = 0u;
     u16 deviceGeneration = 0u;
-    // Counts packets whose submitter-owned native submission reached Accepted.
     usize acceptedPacketCount = 0u;
-    // Includes every declared task in an accepted native packet.
     usize acceptedTaskCount = 0u;
     // Counts each packet when this transaction reaches its terminal Rejected state. Repeated cleanup against an
     // already terminal packet does not contribute another sample.
     usize rejectedPacketCount = 0u;
-    // Includes every declared task in a packet when that packet reaches terminal Rejected state.
     usize rejectedTaskCount = 0u;
     usize nativeSubmissionCount = 0u;
     // The narrower native-submit failure subset of rejectedPacketCount. This can occur before the backend sees a
@@ -1333,7 +1328,6 @@ public:
 
 
 private:
-    // A non-null pool opts native recording into Vulkan ready-frontier parallelism.
     [[nodiscard]] bool recordPacketRange(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -1344,7 +1338,6 @@ private:
         GpuCommandIrCapture* commandIrCapture,
         GpuSubmissionPacketId* outFailedPacket
     )const;
-    // A non-null pool changes only native recording; submission and recovery-tail ownership stay shared.
     [[nodiscard]] bool recordAndSubmitTaskRange(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

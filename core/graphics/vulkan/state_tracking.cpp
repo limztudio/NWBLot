@@ -392,7 +392,6 @@ void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarr
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Command List Tracking Accessors
 
 
 void CommandList::setEnableUavBarriersForTexture(Texture* texture, bool enableBarriers){

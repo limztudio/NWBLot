@@ -21,10 +21,11 @@ NWB_CORE_BEGIN
 
 namespace __hidden_gpu_task_graph_compiler_analysis{
 
-using namespace GpuTaskGraphCompilerDetail;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace GpuTaskGraphCompilerDetail;
 
 
 struct TrackedResourceAccess{

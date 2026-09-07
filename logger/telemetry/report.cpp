@@ -59,6 +59,30 @@ struct FrameGraphReportRecord{
 
 using FrameGraphReportRecords = Vector<FrameGraphReportRecord, TelemetryArena>;
 
+struct FrameGraphOwnerStatisticsRange{
+    usize physicalQueueBegin = 0u;
+    usize physicalQueueEnd = 0u;
+    usize packetSubmissionBegin = 0u;
+    usize packetSubmissionEnd = 0u;
+
+    // Parsed report graphs have strictly owner-sorted tables. Visit their nodes in ascending order once per output.
+    void advance(const Telemetry::FrameGraphPayload& graph, const u32 ownerNodeIndex)noexcept{
+        physicalQueueBegin = physicalQueueEnd;
+        while(
+            physicalQueueEnd < graph.physicalQueueRuntimeStatistics.size()
+            && graph.physicalQueueRuntimeStatistics[physicalQueueEnd].ownerNodeIndex == ownerNodeIndex
+        )
+            ++physicalQueueEnd;
+
+        packetSubmissionBegin = packetSubmissionEnd;
+        while(
+            packetSubmissionEnd < graph.packetSubmissionStatistics.size()
+            && graph.packetSubmissionStatistics[packetSubmissionEnd].ownerNodeIndex == ownerNodeIndex
+        )
+            ++packetSubmissionEnd;
+    }
+};
+
 [[nodiscard]] usize EventKindBucket(const Telemetry::EventKind::Enum kind)noexcept{
     const usize index = static_cast<usize>(kind);
     return index < s_TelemetryReportEventKindCount ? index : static_cast<usize>(Telemetry::EventKind::Unknown);
@@ -709,7 +733,7 @@ void AppendFrameGraphRuntimeStatisticsJson(
     const Telemetry::FrameGraphRuntimeStatistics& statistics,
     const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
     const Telemetry::FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
-    const u32 ownerNodeIndex,
+    const FrameGraphOwnerStatisticsRange& ownerRange,
     const bool physicalQueueRuntimeStatisticsPresent,
     const bool packetSubmissionStatisticsPresent,
     const bool recoverySubmissionCountPresent,
@@ -739,14 +763,11 @@ void AppendFrameGraphRuntimeStatisticsJson(
         out += "null";
     else{
         out += '[';
-        bool firstPhysicalQueue = true;
-        for(const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord& record : physicalQueueRuntimeStatistics){
-            if(record.ownerNodeIndex != ownerNodeIndex)
-                continue;
-            if(!firstPhysicalQueue)
+        for(usize index = ownerRange.physicalQueueBegin; index < ownerRange.physicalQueueEnd; ++index){
+            if(index != ownerRange.physicalQueueBegin)
                 out += ", ";
+            const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord& record = physicalQueueRuntimeStatistics[index];
             AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(out, record.statistics, recoverySubmissionCountPresent);
-            firstPhysicalQueue = false;
         }
         out += ']';
     }
@@ -756,42 +777,14 @@ void AppendFrameGraphRuntimeStatisticsJson(
         out += "null";
     else{
         out += '[';
-        bool firstPacketSubmission = true;
-        for(const Telemetry::FrameGraphPacketSubmissionStatisticsRecord& record : packetSubmissionStatistics){
-            if(record.ownerNodeIndex != ownerNodeIndex)
-                continue;
-            if(!firstPacketSubmission)
+        for(usize index = ownerRange.packetSubmissionBegin; index < ownerRange.packetSubmissionEnd; ++index){
+            if(index != ownerRange.packetSubmissionBegin)
                 out += ", ";
-            AppendFrameGraphPacketSubmissionStatisticsJson(out, record);
-            firstPacketSubmission = false;
+            AppendFrameGraphPacketSubmissionStatisticsJson(out, packetSubmissionStatistics[index]);
         }
         out += ']';
     }
     out += '}';
-}
-
-[[nodiscard]] usize FrameGraphPhysicalQueueRuntimeStatisticsCount(
-    const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    const u32 ownerNodeIndex
-)noexcept{
-    usize count = 0u;
-    for(const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord& record : physicalQueueRuntimeStatistics){
-        if(record.ownerNodeIndex == ownerNodeIndex)
-            ++count;
-    }
-    return count;
-}
-
-[[nodiscard]] usize FrameGraphPacketSubmissionStatisticsCount(
-    const Telemetry::FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
-    const u32 ownerNodeIndex
-)noexcept{
-    usize count = 0u;
-    for(const Telemetry::FrameGraphPacketSubmissionStatisticsRecord& record : packetSubmissionStatistics){
-        if(record.ownerNodeIndex == ownerNodeIndex)
-            ++count;
-    }
-    return count;
 }
 
 void AppendFrameGraphPhysicalQueueDot(
@@ -913,6 +906,7 @@ void AppendTimedGraphDot(
     out += "  node [shape=box, fontname=\"monospace\"];\n";
 
     AString<TelemetryArena> timedLabel(arena);
+    FrameGraphOwnerStatisticsRange ownerRange;
     for(usize i = 0u; i < graph.nodes.size(); ++i){
         const Telemetry::FrameGraphNodePayload& node = graph.nodes[i];
         char identityText[NameDetail::s_DebugHashTextLength + 1u] = {};
@@ -940,14 +934,9 @@ void AppendTimedGraphDot(
         StringAppendFormat(out, ", flags={}", static_cast<u32>(node.flags));
         AppendFrameGraphQueueAssignmentDot(out, node.queueAssignment);
         AppendFrameGraphCompiledTaskDot(out, node.compiledTask);
-        const usize physicalQueueRuntimeStatisticsCount = FrameGraphPhysicalQueueRuntimeStatisticsCount(
-            graph.physicalQueueRuntimeStatistics,
-            static_cast<u32>(i)
-        );
-        const usize packetSubmissionStatisticsCount = FrameGraphPacketSubmissionStatisticsCount(
-            graph.packetSubmissionStatistics,
-            static_cast<u32>(i)
-        );
+        ownerRange.advance(graph, static_cast<u32>(i));
+        const usize physicalQueueRuntimeStatisticsCount = ownerRange.physicalQueueEnd - ownerRange.physicalQueueBegin;
+        const usize packetSubmissionStatisticsCount = ownerRange.packetSubmissionEnd - ownerRange.packetSubmissionBegin;
         AppendFrameGraphRuntimeStatisticsDot(
             out,
             node.runtimeStatistics,
@@ -995,6 +984,7 @@ void AppendFrameGraphJson(
     StringAppendFormat(out, "        \"frameIndex\": {},\n", graph.frameIndex);
     StringAppendFormat(out, "        \"streamId\": {},\n", record.streamId);
     out += "        \"nodes\": [\n";
+    FrameGraphOwnerStatisticsRange ownerRange;
     for(usize nodeIndex = 0u; nodeIndex < graph.nodes.size(); ++nodeIndex){
         const Telemetry::FrameGraphNodePayload& node = graph.nodes[nodeIndex];
         char identityText[NameDetail::s_DebugHashTextLength + 1u] = {};
@@ -1011,16 +1001,14 @@ void AppendFrameGraphJson(
         out += ", \"compiledTask\": ";
         AppendFrameGraphCompiledTaskJson(out, node.compiledTask);
         out += ", \"runtimeStatistics\": ";
-        const usize physicalQueueRuntimeStatisticsCount = FrameGraphPhysicalQueueRuntimeStatisticsCount(
-            graph.physicalQueueRuntimeStatistics,
-            static_cast<u32>(nodeIndex)
-        );
+        ownerRange.advance(graph, static_cast<u32>(nodeIndex));
+        const usize physicalQueueRuntimeStatisticsCount = ownerRange.physicalQueueEnd - ownerRange.physicalQueueBegin;
         AppendFrameGraphRuntimeStatisticsJson(
             out,
             node.runtimeStatistics,
             graph.physicalQueueRuntimeStatistics,
             graph.packetSubmissionStatistics,
-            static_cast<u32>(nodeIndex),
+            ownerRange,
             graph.physicalQueueRuntimeStatisticsPresent && physicalQueueRuntimeStatisticsCount != 0u,
             graph.packetSubmissionStatisticsPresent,
             graph.wireVersion >= Telemetry::s_FrameGraphRecoverySubmissionCountPayloadVersion,

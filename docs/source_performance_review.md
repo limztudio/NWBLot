@@ -196,3 +196,18 @@ Live-buffer collection retains the first owning handle for each buffer while tra
 The shared opt workload adds about 18 ns per instance; opt singleton overhead is about 37 ns per collection. Singleton/shared collections allocate no scratch storage. The unique workload adds about 2 MiB peak scratch and reserves about 3 MiB in dbg or 2.66 MiB in opt, released with the owning scratch arena. Inline and indexed publication retain consistency if an owning-handle allocation fails.
 
 Six collector regressions and all 182 ECS graphics tests pass in dbg/opt, with 185 passing in fin. Renderer/frame builds pass in all three. Coverage includes buffer lifetime, first-occurrence order, missing/invalid instances, optional roles and revision changes, promotion, allocation-free duplicate replay, and large/small collection reuse after resource replacement. Benchmarks use real metadata-only buffer objects and measure CPU collection, including collection storage teardown.
+
+## Frame-graph report owner traversal
+
+JSON and DOT generation now walk each parsed owner table once as graph nodes advance. Decoder validation guarantees contiguous ordered owner records, so small stack cursors replace repeated full-table counts and filters without adding an index or allocation. Fresh cursors belong to each captured graph and each output pass. Record order, output formatting, and absent-versus-empty statistics remain unchanged.
+
+| Complete report workload | dbg before → after | opt before → after |
+| --- | ---: | ---: |
+| 1,024 tasks/packets, one owner, three reports | 71.1961 → 41.6651 | 5.3210 → 4.7567 |
+| 4,096 tasks/packets, one owner, three reports | 601.5895 → 163.7616 | 41.0792 → 19.4573 |
+| 4,096 tasks/packets, 64 owners, three reports | 655.6413 → 181.5269 | 43.5201 → 21.1879 |
+| One packet and one task, 128 reports | 13.6692 → 13.5457 | 1.4792 → 1.4735 |
+
+Heap allocation counts and JSON/DOT output byte counts are unchanged in every measured case. The timed public operation includes decoding and both report formats; event construction/encoding and output assertions are excluded. Small-report timing is essentially unchanged.
+
+All 97 telemetry tests pass in dbg, opt, and fin, including three new report regressions for sparse owners, missing coverage, exact empty records, capture/rebuild resets, malformed owner/order tables, and recovery to valid input. The logserver builds in all three configurations. Allocation-owner/source reporting and memory payload version 1 are unchanged.

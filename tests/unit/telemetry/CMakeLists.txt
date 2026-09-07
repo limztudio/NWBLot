@@ -6,6 +6,7 @@ target_sources(nwb_telemetry_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_packet_submission_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_physical_queue_statistics_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_registry_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/frame_graph_report_scaling_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_runtime_statistics_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_statistics_scaling_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_test_helpers.cpp"

@@ -4,7 +4,6 @@
 
 #include "system.h"
 
-#include "arena_names.h"
 #include "runtime_cache.h"
 #include "skin_payload.h"
 #include "timing_names.h"
@@ -32,22 +31,13 @@ NWB_IMPL_BEGIN
 bool MeshSkinningSystem::prepareRuntimeMeshResources(
     MeshSkinningRuntimeInstance& instance,
     const SkeletonJointPaletteComponent* jointPalette,
-    const SkeletonPoseComponent* skeletonPose
-){
-    Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_PrepareRuntimeArena);
+    const SkeletonPoseComponent* skeletonPose,
+    Core::Alloc::ScratchArena& scratchArena){
     RuntimeSkinPayloadScratch payload{ scratchArena };
     if(!MeshSkinningPayload::BuildRuntimeSkinPayload(instance, jointPalette, skeletonPose, payload))
         return false;
 
     const bool hasActiveSkin = payload.hasActiveSkin();
-    RuntimePayloadViews payloadViews;
-    if(hasActiveSkin){
-        payloadViews.skinInfluences = payload.skinInfluences.data();
-        payloadViews.jointPalette = payload.jointMatrices.data();
-        payloadViews.skinInfluenceCount = payload.skinInfluences.size();
-        payloadViews.jointPaletteCount = payload.jointMatrices.size();
-    }
-
     const bool skinnedMeshInputDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::SkinningInputDirty) != 0u;
     const bool meshletBoundsDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::MeshletBoundsDirty) != 0u;
     const auto foundRuntimeResources = m_runtimeResources.find(instance.handle.value);
@@ -70,7 +60,8 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
     bool resourcesRebuilt = false;
     if(!ensureRuntimeResources(
         instance,
-        payloadViews,
+        payload,
+        scratchArena,
         resources,
         resourcesRebuilt
     ))

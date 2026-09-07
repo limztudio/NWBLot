@@ -384,6 +384,7 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
     m_runtimeMeshCache.prepareResources(m_world);
     pruneRuntimeResources();
 
+    Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_PrepareRuntimeArena);
     bool ready = true;
     bool hasRenderWork = false;
     m_world.view<SkinnedMeshBindingComponent>().each(
@@ -401,7 +402,7 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
             const SkeletonJointPaletteComponent* jointPalette = nullptr;
             const SkeletonPoseComponent* skeletonPose = nullptr;
             __hidden_system::ResolveSkeletonComponents(m_world, entity, binding.skeletonEntity, jointPalette, skeletonPose);
-            ready = prepareRuntimeMeshResources(*instance, jointPalette, skeletonPose);
+            ready = prepareRuntimeMeshResources(*instance, jointPalette, skeletonPose, scratchArena);
             const auto foundResources = m_runtimeResources.find(instance->handle.value);
             const bool hasSkinningResources = foundResources != m_runtimeResources.end() && foundResources.value().usesSkinning();
             hasRenderWork =
@@ -597,7 +598,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             plan.updatesMeshletBounds = updatesMeshletBounds;
             plan.repacksNormals = (hasActiveSkin || copiesRestStreams) && instance->attributeBuffer != nullptr;
             plan.meshletCount = static_cast<u32>(instance->meshlets.size());
-            plan.skinCount = static_cast<u32>(payload.skinInfluences.size());
+            plan.skinCount = static_cast<u32>(payload.skinInfluenceCount);
             plan.jointCount = static_cast<u32>(payload.jointMatrices.size());
             plan.skinningMode = payload.resolvedSkinningMode;
             plan.attributeCount = instance->meshletAttributeRefCount;

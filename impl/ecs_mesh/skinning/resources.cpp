@@ -222,27 +222,26 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
 
 bool MeshSkinningSystem::ensureRuntimeResources(
     MeshSkinningRuntimeInstance& instance,
-    const RuntimePayloadViews& payloadViews,
+    const RuntimeSkinPayloadScratch& payload,
+    Core::Alloc::ScratchArena& scratchArena,
     RuntimeResources*& outResources,
-    bool& outResourcesRebuilt
-){
+    bool& outResourcesRebuilt){
     outResources = nullptr;
     outResourcesRebuilt = false;
-    NWB_ASSERT((payloadViews.skinInfluenceCount == 0u) == (payloadViews.jointPaletteCount == 0u));
+    NWB_ASSERT((payload.skinInfluenceCount == 0u) == payload.jointMatrices.empty());
 
-    const bool hasActiveSkin = payloadViews.hasActiveSkin();
-    NWB_ASSERT(!hasActiveSkin || payloadViews.skinInfluences);
-    NWB_ASSERT(!hasActiveSkin || payloadViews.jointPalette);
-    NWB_ASSERT(payloadViews.skinInfluenceCount <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(payloadViews.jointPaletteCount <= static_cast<usize>(Limit<u32>::s_Max));
+    const bool hasActiveSkin = payload.hasActiveSkin();
+    NWB_ASSERT(!hasActiveSkin || payload.skinInfluenceCount == instance.skin.size());
+    NWB_ASSERT(payload.skinInfluenceCount <= static_cast<usize>(Limit<u32>::s_Max));
+    NWB_ASSERT(payload.jointMatrices.size() <= static_cast<usize>(Limit<u32>::s_Max));
 
     auto [it, inserted] = m_runtimeResources.try_emplace(instance.handle.value);
     RuntimeResources& resources = it.value();
     const u32 positionCount = instance.meshletPositionRefCount;
     const u32 attributeCount = instance.meshletAttributeRefCount;
     const u32 meshletCount = static_cast<u32>(instance.meshlets.size());
-    const u32 skinCount = static_cast<u32>(payloadViews.skinInfluenceCount);
-    const u32 jointCount = static_cast<u32>(payloadViews.jointPaletteCount);
+    const u32 skinCount = static_cast<u32>(payload.skinInfluenceCount);
+    const u32 jointCount = static_cast<u32>(payload.jointMatrices.size());
     const bool rebuild =
         inserted
         || resources.editRevision != instance.editRevision
@@ -275,6 +274,10 @@ bool MeshSkinningSystem::ensureRuntimeResources(
     };
 
     if(hasActiveSkin){
+        Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena> skinInfluences(scratchArena);
+        if(!MeshSkinningPayload::BuildSkinInfluences(instance, skinInfluences))
+            return failRebuild();
+
         const Name skinBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_skin");
         const Name jointPaletteBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_joints");
         if(!skinBufferName || !jointPaletteBufferName){
@@ -285,8 +288,8 @@ bool MeshSkinningSystem::ensureRuntimeResources(
         rebuilt.skinBuffer = __hidden_resources::SetupStructuredBuffer(
             m_graphics,
             skinBufferName,
-            payloadViews.skinInfluences,
-            payloadViews.skinInfluenceCount,
+            skinInfluences.data(),
+            skinInfluences.size(),
             NWB_TEXT("skin influence")
         );
         if(!rebuilt.skinBuffer){
@@ -297,8 +300,8 @@ bool MeshSkinningSystem::ensureRuntimeResources(
         rebuilt.jointPaletteBuffer = __hidden_resources::SetupStructuredBuffer(
             m_graphics,
             jointPaletteBufferName,
-            payloadViews.jointPalette,
-            payloadViews.jointPaletteCount,
+            payload.jointMatrices.data(),
+            payload.jointMatrices.size(),
             NWB_TEXT("joint palette")
         );
         if(!rebuilt.jointPaletteBuffer){

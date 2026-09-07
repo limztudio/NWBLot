@@ -8,6 +8,7 @@
 #include "runtime_cache.h"
 #include "submission_state.h"
 
+#include <core/alloc/scratch.h>
 #include <core/ecs/system.h>
 #include <core/graphics/render_pass.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
@@ -66,7 +67,7 @@ NWB_IMPL_BEGIN
 
 class Shader;
 struct MeshSkinningRuntimeInstance;
-struct MeshSkinningInfluenceGpu;
+struct RuntimeSkinPayloadScratch;
 
 static_assert(
     SkeletonSkinningMode::LinearBlend == NWB_SKINNED_MESH_SKINNING_MODE_LINEAR_BLEND && SkeletonSkinningMode::DualQuaternion == NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION
@@ -218,15 +219,6 @@ private:
         }
     };
 
-    struct RuntimePayloadViews{
-        const MeshSkinningInfluenceGpu* skinInfluences = nullptr;
-        const SkeletonJointMatrix* jointPalette = nullptr;
-        usize skinInfluenceCount = 0;
-        usize jointPaletteCount = 0;
-
-        [[nodiscard]] bool hasActiveSkin()const{ return skinInfluenceCount != 0u && jointPaletteCount != 0u; }
-    };
-
     // The graph tasks retain only immutable per-mesh dispatch inputs. They resolve imported buffers and pipelines
     // from graph-owned IDs while recording, then publish the dirty-state and selector-residency commit only after
     // the containing primary-Graphics packet is accepted.
@@ -314,7 +306,8 @@ private:
     [[nodiscard]] bool prepareRuntimeMeshResources(
         MeshSkinningRuntimeInstance& instance,
         const SkeletonJointPaletteComponent* jointPalette,
-        const SkeletonPoseComponent* skeletonPose
+        const SkeletonPoseComponent* skeletonPose,
+        Core::Alloc::ScratchArena& scratchArena
     );
     [[nodiscard]] bool recordGraphOwnedSkinningDeformation(
         const GraphOwnedSkinningDispatchPlan& plan,
@@ -337,7 +330,8 @@ private:
     [[nodiscard]] bool replaceAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state);
     [[nodiscard]] bool ensureRuntimeResources(
         MeshSkinningRuntimeInstance& instance,
-        const RuntimePayloadViews& payloadViews,
+        const RuntimeSkinPayloadScratch& payload,
+        Core::Alloc::ScratchArena& scratchArena,
         RuntimeResources*& outResources,
         bool& outResourcesRebuilt
     );

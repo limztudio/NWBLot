@@ -36,22 +36,21 @@ static_assert(
     "MeshSkinning influence GPU layout must stay SIMD-aligned"
 );
 
-// Resource preparation and graph upload declaration must derive the exact same pose payload.  The graph copies
-// jointMatrices into an immutable blob before this scratch storage is released.
+// Resource preparation and graph upload declaration resolve the current pose independently. Static influences
+// stay in the persistent skin buffer; the graph copies only jointMatrices before releasing this scratch storage.
 struct RuntimeSkinPayloadScratch final{
-    Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena> skinInfluences;
-    Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> jointMatrices;
     Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> poseJoints;
+    Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> jointMatrices;
+    usize skinInfluenceCount = 0u;
     u32 resolvedSkinningMode = SkeletonSkinningMode::LinearBlend;
 
     explicit RuntimeSkinPayloadScratch(Core::Alloc::ScratchArena& scratchArena)
-        : skinInfluences(scratchArena)
+        : poseJoints(scratchArena)
         , jointMatrices(scratchArena)
-        , poseJoints(scratchArena)
     {}
 
     [[nodiscard]] bool hasActiveSkin()const{
-        return !skinInfluences.empty() && !jointMatrices.empty();
+        return skinInfluenceCount != 0u && !jointMatrices.empty();
     }
 };
 
@@ -65,14 +64,53 @@ namespace MeshSkinningPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename SourceJointVector, typename SkinInfluenceVector, typename JointPaletteVector>
-[[nodiscard]] bool BuildSkinPayloadFromJointMatrices(
+// Encode and validate mesh-owned data only when creating its GPU buffer, including after an edit revision changes.
+template<typename SkinInfluenceVector>
+[[nodiscard]] bool BuildSkinInfluences(const MeshSkinningRuntimeInstance& instance, SkinInfluenceVector& outSkinInfluences){
+    outSkinInfluences.clear();
+    if(instance.skin.empty())
+        return true;
+    if(
+        instance.skeletonJointCount == 0u
+        || instance.skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u
+        || instance.skin.size() > static_cast<usize>(Limit<u32>::s_Max)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skin influence counts are invalid"), instance.handle.value);
+        return false;
+    }
+
+    outSkinInfluences.reserve(instance.skin.size());
+    for(usize vertexIndex = 0u; vertexIndex < instance.skin.size(); ++vertexIndex){
+        const SkinInfluence4& sourceSkin = instance.skin[vertexIndex];
+        const SIMDVector weights = LoadFloat(sourceSkin.weight);
+        u32 failedSkeletonJoint = 0u;
+        if(
+            !SkinValidation::ValidSkinInfluenceWeights(weights)
+            || !SkinValidation::SkinInfluenceFitsSkeleton(sourceSkin, instance.skeletonJointCount, failedSkeletonJoint)
+        ){
+            outSkinInfluences.clear();
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skin influence {} is invalid")
+                , instance.handle.value
+                , vertexIndex
+            );
+            return false;
+        }
+
+        MeshSkinningInfluenceGpu gpuSkin;
+        for(u32 influenceIndex = 0u; influenceIndex < s_SkinInfluenceJointCount; ++influenceIndex)
+            gpuSkin.joint[influenceIndex] = static_cast<u32>(sourceSkin.joint[influenceIndex]);
+        StoreFloat(weights, &gpuSkin.weight);
+        outSkinInfluences.push_back(gpuSkin);
+    }
+    return true;
+}
+
+template<typename SourceJointVector, typename JointPaletteVector>
+[[nodiscard]] bool BuildSkinJointPalette(
     const MeshSkinningRuntimeInstance& instance,
     const SourceJointVector& sourceJoints,
     const u32 skinningMode,
-    SkinInfluenceVector& outSkinInfluences,
     JointPaletteVector& outJointPalette){
-    outSkinInfluences.clear();
     outJointPalette.clear();
 
     if(instance.skin.empty() || sourceJoints.empty())
@@ -84,11 +122,19 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         );
         return false;
     }
-    NWB_ASSERT(instance.skeletonJointCount != 0u);
-    NWB_ASSERT(instance.skeletonJointCount <= static_cast<u32>(Limit<u16>::s_Max) + 1u);
-    NWB_ASSERT(SkinValidation::ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount));
-    NWB_ASSERT(instance.skin.size() <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(sourceJoints.size() <= static_cast<usize>(Limit<u32>::s_Max));
+    if(
+        instance.skeletonJointCount == 0u
+        || instance.skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u
+        || instance.skin.size() > static_cast<usize>(Limit<u32>::s_Max)
+        || sourceJoints.size() > static_cast<usize>(Limit<u32>::s_Max)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint payload counts are invalid"), instance.handle.value);
+        return false;
+    }
+    if(!SkinValidation::ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' inverse bind matrix count is invalid"), instance.handle.value);
+        return false;
+    }
     if(sourceJoints.size() < static_cast<usize>(instance.skeletonJointCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette count {} is smaller than skeleton joint count {}")
             , instance.handle.value
@@ -98,34 +144,34 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         return false;
     }
 
-    const usize skinCount = instance.skin.size();
     const usize jointCount = sourceJoints.size();
     const bool useDualQuaternionPayload = skinningMode == SkeletonSkinningMode::DualQuaternion;
     const bool hasInverseBindMatrices = !instance.inverseBindMatrices.empty();
+    if(hasInverseBindMatrices && jointCount != instance.inverseBindMatrices.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette count {} differs from inverse bind matrix count {}")
+            , instance.handle.value
+            , jointCount
+            , instance.inverseBindMatrices.size()
+        );
+        return false;
+    }
     outJointPalette.reserve(jointCount);
 
     for(usize jointIndex = 0; jointIndex < jointCount; ++jointIndex){
-        NWB_ASSERT(!hasInverseBindMatrices || jointIndex < instance.inverseBindMatrices.size());
-
-        const SkeletonJointMatrix* inverseBind = hasInverseBindMatrices
-            ? &instance.inverseBindMatrices[jointIndex]
-            : nullptr
+        const SIMDMatrix inverseBindMatrix = hasInverseBindMatrices
+            ? LoadFloat(instance.inverseBindMatrices[jointIndex])
+            : SIMDMatrix{}
         ;
-        const bool hasInverseBind = inverseBind != nullptr;
-        const SIMDMatrix inverseBindMatrix = hasInverseBind ? LoadFloat(*inverseBind) : SIMDMatrix{};
-        NWB_ASSERT(!hasInverseBind || MatrixIsInvertibleAffine(
-            inverseBindMatrix,
-            SkinValidation::s_Epsilon,
-            SkinValidation::s_Epsilon
-        ));
 
         SIMDMatrix jointMatrix{};
         if(!SkeletonRuntime::ResolveSkinningJointMatrix(
             LoadFloat(sourceJoints[jointIndex]),
-            hasInverseBind,
+            hasInverseBindMatrices,
             inverseBindMatrix,
+            SkinValidation::s_Epsilon,
             jointMatrix
         )){
+            outJointPalette.clear();
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix")
                 , instance.handle.value
                 , jointIndex
@@ -151,6 +197,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
                 StoreFloat(dual, &storedJointMatrix.rows[1]);
             }
             else{
+                outJointPalette.clear();
                 NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} failed dual-quaternion payload build")
                     , instance.handle.value
                     , jointIndex
@@ -161,86 +208,49 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         outJointPalette.push_back(storedJointMatrix);
     }
 
-    outSkinInfluences.reserve(skinCount);
-    for(usize vertexIndex = 0; vertexIndex < skinCount; ++vertexIndex){
-        const SkinInfluence4& sourceSkin = instance.skin[vertexIndex];
-        const SIMDVector weights = LoadFloat(sourceSkin.weight);
-        NWB_ASSERT(SkinValidation::ValidSkinInfluenceWeights(weights));
-        u32 failedSkeletonJoint = 0u;
-        NWB_ASSERT(SkinValidation::SkinInfluenceFitsSkeleton(
-            sourceSkin,
-            instance.skeletonJointCount,
-            failedSkeletonJoint
-        ));
-        static_cast<void>(failedSkeletonJoint);
-
-        MeshSkinningInfluenceGpu gpuSkin;
-        for(u32 influenceIndex = 0; influenceIndex < s_SkinInfluenceJointCount; ++influenceIndex){
-            const u32 joint = static_cast<u32>(sourceSkin.joint[influenceIndex]);
-            gpuSkin.joint[influenceIndex] = joint;
-        }
-        StoreFloat(weights, &gpuSkin.weight);
-        outSkinInfluences.push_back(gpuSkin);
-    }
-
     return true;
-}
-
-template<typename SkinInfluenceVector, typename JointPaletteVector>
-[[nodiscard]] bool BuildSkinPayload(
-    const MeshSkinningRuntimeInstance& instance,
-    const SkeletonJointPaletteComponent* jointPalette,
-    SkinInfluenceVector& outSkinInfluences,
-    JointPaletteVector& outJointPalette){
-    outSkinInfluences.clear();
-    outJointPalette.clear();
-
-    if(!jointPalette)
-        return true;
-
-    return BuildSkinPayloadFromJointMatrices(
-        instance,
-        jointPalette->joints,
-        jointPalette->skinningMode,
-        outSkinInfluences,
-        outJointPalette
-    );
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The render pass uses this shared helper twice: first while declaring graph-owned joint-palette upload blobs and
-// again while recording the legacy compute work that consumes them.  Keeping pose resolution here prevents those
-// two phases from drifting apart.
 [[nodiscard]] inline bool BuildRuntimeSkinPayload(
-    MeshSkinningRuntimeInstance& instance,
+    const MeshSkinningRuntimeInstance& instance,
     const SkeletonJointPaletteComponent* jointPalette,
     const SkeletonPoseComponent* skeletonPose,
-    RuntimeSkinPayloadScratch& payload
-){
+    RuntimeSkinPayloadScratch& payload){
+    payload.skinInfluenceCount = 0u;
+    payload.jointMatrices.clear();
+    payload.poseJoints.clear();
     payload.resolvedSkinningMode = jointPalette ? jointPalette->skinningMode : SkeletonSkinningMode::LinearBlend;
     if(SkeletonRuntime::HasSkeletonPose(skeletonPose)){
         if(!SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*skeletonPose, payload.poseJoints, payload.resolvedSkinningMode)){
+            payload.poseJoints.clear();
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
             return false;
         }
-        return BuildSkinPayloadFromJointMatrices(
+        if(!BuildSkinJointPalette(
             instance,
             payload.poseJoints,
             payload.resolvedSkinningMode,
-            payload.skinInfluences,
             payload.jointMatrices
-        );
+        )){
+            payload.poseJoints.clear();
+            return false;
+        }
     }
-
-    return BuildSkinPayload(
+    else if(jointPalette && !BuildSkinJointPalette(
         instance,
-        jointPalette,
-        payload.skinInfluences,
+        jointPalette->joints,
+        payload.resolvedSkinningMode,
         payload.jointMatrices
-    );
+    ))
+        return false;
+
+    if(!payload.jointMatrices.empty())
+        payload.skinInfluenceCount = instance.skin.size();
+    return true;
 }
 
 

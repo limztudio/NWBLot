@@ -755,7 +755,8 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
 
     Vector<NWB::Impl::MeshSkinningInfluenceGpu> skinInfluences;
     Vector<NWB::Impl::SkeletonJointMatrix> jointMatrices;
-    EXPECT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinPayload(instance, &joints, skinInfluences, jointMatrices));
+    ASSERT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, skinInfluences));
+    ASSERT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(instance, joints.joints, joints.skinningMode, jointMatrices));
     EXPECT_EQ(skinInfluences.size(), instance.skin.size());
     EXPECT_EQ(jointMatrices.size(), 1u);
     EXPECT_EQ(skinInfluences[0u].joint[0u], 0u);
@@ -763,7 +764,7 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
 
     instance.inverseBindMatrices.push_back(MakeTranslationJointMatrix(-0.25f, 0.0f, 0.0f));
     joints.joints[0u] = MakeTranslationJointMatrix(1.0f, 0.0f, 0.0f);
-    EXPECT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinPayload(instance, &joints, skinInfluences, jointMatrices));
+    ASSERT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(instance, joints.joints, joints.skinningMode, jointMatrices));
     EXPECT_EQ(jointMatrices.size(), 1u);
     EXPECT_TRUE(NearlyEqual(jointMatrices[0u].rows[0].w, 0.75f));
     joints.joints[0u] = MakeIdentityJointMatrix();
@@ -773,7 +774,12 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     dualQuaternionInstance.handle.value = instance.handle.value;
     joints.skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
     joints.joints[0u] = MakeTranslationJointMatrix(2.0f, 4.0f, 6.0f);
-    EXPECT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinPayload(dualQuaternionInstance, &joints, skinInfluences, jointMatrices));
+    ASSERT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(
+        dualQuaternionInstance,
+        joints.joints,
+        joints.skinningMode,
+        jointMatrices
+    ));
     EXPECT_EQ(jointMatrices.size(), 1u);
     EXPECT_TRUE(NearlyEqual(jointMatrices[0u].rows[0].x, 0.0f));
     EXPECT_TRUE(NearlyEqual(jointMatrices[0u].rows[0].y, 0.0f));
@@ -795,23 +801,23 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     outsidePalette.skeletonJointCount = 2u;
     outsidePalette.inverseBindMatrices.clear();
     joints.joints.resize(1u, ::Float34Identity());
-    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinPayload(outsidePalette, &joints, skinInfluences, jointMatrices));
+    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(outsidePalette, joints.joints, joints.skinningMode, jointMatrices));
 
     NWB::Impl::MeshSkinningRuntimeInstance nonAffineJoint = instance;
     joints.joints[0u] = MakeIdentityJointMatrix();
     joints.joints[0u].rows[0] = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinPayload(nonAffineJoint, &joints, skinInfluences, jointMatrices));
+    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(nonAffineJoint, joints.joints, joints.skinningMode, jointMatrices));
 
     NWB::Impl::MeshSkinningRuntimeInstance scaledDualQuaternionJoint = instance;
     scaledDualQuaternionJoint.inverseBindMatrices.clear();
     joints.skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
     joints.joints[0u] = MakeNonUniformScaleJointMatrix();
-    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinPayload(
-            scaledDualQuaternionJoint,
-            &joints,
-            skinInfluences,
-            jointMatrices
-        ));
+    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(
+        scaledDualQuaternionJoint,
+        joints.joints,
+        joints.skinningMode,
+        jointMatrices
+    ));
 
     EXPECT_EQ(runtimeValidationLogger.errorCount(), 3u);
     EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(NWB_TEXT("joint palette count")));

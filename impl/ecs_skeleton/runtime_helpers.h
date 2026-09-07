@@ -39,13 +39,14 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     const SIMDMatrix& poseJoint,
     const bool hasInverseBind,
     const SIMDMatrix& inverseBind,
+    const f32 inverseBindDeterminantEpsilon,
     SIMDMatrix& outMatrix){
     outMatrix = poseJoint;
     if(!MatrixIsInvertibleAffine(outMatrix, s_AffineEpsilon, s_JointDeterminantEpsilon))
         return false;
     if(!hasInverseBind)
         return true;
-    if(!MatrixIsInvertibleAffine(inverseBind, s_AffineEpsilon, s_JointDeterminantEpsilon))
+    if(!MatrixIsInvertibleAffine(inverseBind, s_AffineEpsilon, inverseBindDeterminantEpsilon))
         return false;
 
     outMatrix = MatrixMultiply(outMatrix, inverseBind);

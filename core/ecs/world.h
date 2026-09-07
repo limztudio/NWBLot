@@ -37,13 +37,6 @@ private:
 
     using ComponentPoolPtr = GlobalUniquePtr<IComponentPool>;
     using SystemPtr = GlobalUniquePtr<ISystem>;
-    using PoolMap = HashMap<
-        ComponentTypeId,
-        ComponentPoolPtr,
-        Hasher<ComponentTypeId>,
-        EqualTo<ComponentTypeId>,
-        Alloc::GlobalArena
-    >;
 
     struct SystemEntry{
         SystemTypeId typeId;
@@ -207,32 +200,29 @@ private:
     template<typename T>
     ComponentPool<T>* getPool(){
         const auto typeId = ComponentType<T>();
-        auto itr = m_pools.find(typeId);
-        if(itr == m_pools.end())
+        if(typeId >= m_pools.size())
             return nullptr;
-        return checked_cast<ComponentPool<T>*>(itr.value().get());
+        return checked_cast<ComponentPool<T>*>(m_pools[typeId].get());
     }
 
     template<typename T>
     const ComponentPool<T>* getPool()const{
         const auto typeId = ComponentType<T>();
-        auto itr = m_pools.find(typeId);
-        if(itr == m_pools.end())
+        if(typeId >= m_pools.size())
             return nullptr;
-        return checked_cast<const ComponentPool<T>*>(itr.value().get());
+        return checked_cast<const ComponentPool<T>*>(m_pools[typeId].get());
     }
 
     template<typename T>
     ComponentPool<T>* assurePool(){
         const auto typeId = ComponentType<T>();
-        auto itr = m_pools.find(typeId);
-        if(itr != m_pools.end())
-            return checked_cast<ComponentPool<T>*>(itr.value().get());
+        if(typeId >= m_pools.size())
+            m_pools.resize(typeId + 1u);
 
-        auto pool = MakeGlobalUnique<ComponentPool<T>>(m_arena, m_arena);
-        auto* raw = pool.get();
-        m_pools.emplace(typeId, Move(pool));
-        return raw;
+        auto& pool = m_pools[typeId];
+        if(!pool)
+            pool = MakeGlobalUnique<ComponentPool<T>>(m_arena, m_arena);
+        return checked_cast<ComponentPool<T>*>(pool.get());
     }
     template<typename T>
     ComponentPool<T>& requirePool(){
@@ -263,7 +253,7 @@ private:
     Vector<u32, Alloc::GlobalArena> m_entityComponentHeads;
     Vector<EntityComponentNode, Alloc::GlobalArena> m_entityComponentNodes;
     u32 m_freeEntityComponentNode;
-    PoolMap m_pools;
+    Vector<ComponentPoolPtr, Alloc::GlobalArena> m_pools;
     Vector<SystemEntry, Alloc::GlobalArena> m_systems;
     SystemScheduler m_scheduler;
     MessageBus m_messageBus;

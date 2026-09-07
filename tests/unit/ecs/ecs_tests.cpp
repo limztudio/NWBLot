@@ -10,6 +10,7 @@
 
 #include <global/atomic.h>
 #include <global/compile.h>
+#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,6 +43,16 @@ struct VelocityComponent{
 struct alignas(32) OverAlignedComponent{
     u8 value[32] = {};
 };
+
+template<usize I>
+struct PoolSlotComponent{
+    usize value = I;
+};
+
+template<usize... Is>
+Array<usize, sizeof...(Is)> RegisterPoolSlotTypes(IndexSequence<Is...>){
+    return { NWB::Core::ECS::ComponentType<PoolSlotComponent<Is>>()... };
+}
 
 struct TickMessage{
     u32 value = 0;
@@ -162,6 +173,7 @@ TEST(Ecs, EntityFacadeRehydratesEntityId){
 
 TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
     TestWorld testWorld;
+    const auto initialMemory = testWorld.arena.memoryStats();
 
     usize singleViewCount = 0;
     usize multiViewCount = 0;
@@ -191,6 +203,11 @@ TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
 
     EXPECT_EQ(singleViewCount, 0u);
     EXPECT_EQ(multiViewCount, 0u);
+
+    const auto finalMemory = testWorld.arena.memoryStats();
+    EXPECT_EQ(finalMemory.allocationCount, initialMemory.allocationCount);
+    EXPECT_EQ(finalMemory.reallocationCount, initialMemory.reallocationCount);
+    EXPECT_EQ(finalMemory.usedBytes, initialMemory.usedBytes);
 }
 
 TEST(Ecs, ComponentLifetime){
@@ -251,6 +268,120 @@ TEST(Ecs, ComponentMutationVersion){
 
     entity.destroy();
     EXPECT_EQ(testWorld.world.componentMutationVersion<PositionComponent>(), 2u);
+}
+
+TEST(Ecs, ComponentPoolsPreserveSparseTypeLookupAndWorldIsolation){
+    const auto typeIds = RegisterPoolSlotTypes(IndexSequence<
+        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u,
+        16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u,
+        32u, 33u, 34u, 35u, 36u, 37u, 38u, 39u, 40u, 41u, 42u, 43u, 44u, 45u, 46u, 47u,
+        48u, 49u, 50u, 51u, 52u, 53u, 54u, 55u, 56u, 57u, 58u, 59u, 60u, 61u, 62u, 63u
+    >{});
+    EXPECT_NE(typeIds.front(), typeIds.back());
+
+    TestWorld firstWorld;
+    TestWorld secondWorld;
+    auto firstEntity = firstWorld.world.createEntity();
+    auto secondEntity = secondWorld.world.createEntity();
+    auto& firstComponent = firstEntity.addComponent<PoolSlotComponent<0u>>();
+    firstComponent.value = 17u;
+    const auto firstView = firstWorld.world.view<PoolSlotComponent<0u>>();
+
+    secondEntity.addComponent<PoolSlotComponent<31u>>().value = 29u;
+    firstEntity.addComponent<PoolSlotComponent<64u>>().value = 41u;
+
+    EXPECT_EQ(firstWorld.world.tryGetComponent<PoolSlotComponent<0u>>(firstEntity.id()), &firstComponent);
+    EXPECT_EQ(firstWorld.world.tryGetComponent<PoolSlotComponent<31u>>(firstEntity.id()), nullptr);
+    EXPECT_EQ(secondWorld.world.tryGetComponent<PoolSlotComponent<0u>>(secondEntity.id()), nullptr);
+    EXPECT_EQ(secondWorld.world.tryGetComponent<PoolSlotComponent<64u>>(secondEntity.id()), nullptr);
+    EXPECT_EQ(firstWorld.world.componentMutationVersion<PoolSlotComponent<31u>>(), 0u);
+
+    const NWB::Core::ECS::World& constFirstWorld = firstWorld.world;
+    EXPECT_EQ(constFirstWorld.tryGetComponent<PoolSlotComponent<0u>>(firstEntity.id()), &firstComponent);
+    EXPECT_EQ(constFirstWorld.tryGetComponent<PoolSlotComponent<31u>>(firstEntity.id()), nullptr);
+    EXPECT_EQ(constFirstWorld.tryGetComponent<VelocityComponent>(firstEntity.id()), nullptr);
+
+    usize visits = 0u;
+    firstView.each([&](NWB::Core::ECS::EntityID entityId, PoolSlotComponent<0u>& component){
+        EXPECT_EQ(entityId, firstEntity.id());
+        EXPECT_EQ(&component, &firstComponent);
+        EXPECT_EQ(component.value, 17u);
+        ++visits;
+    });
+    EXPECT_EQ(visits, 1u);
+
+    firstEntity.addComponent<PoolSlotComponent<31u>>().value = 53u;
+    EXPECT_EQ(firstEntity.getComponent<PoolSlotComponent<31u>>().value, 53u);
+    EXPECT_EQ(secondEntity.getComponent<PoolSlotComponent<31u>>().value, 29u);
+}
+
+TEST(Ecs, ComponentPoolsCanBeRecreatedAfterWorldClear){
+    TestWorld testWorld;
+    auto entity = testWorld.world.createEntity();
+    entity.addComponent<PoolSlotComponent<63u>>().value = 19u;
+    entity.addComponent<PositionComponent>().x = 23;
+
+    testWorld.world.clear();
+    EXPECT_EQ(testWorld.world.entityCount(), 0u);
+    EXPECT_EQ(testWorld.world.componentMutationVersion<PositionComponent>(), 0u);
+    EXPECT_EQ(testWorld.world.componentMutationVersion<PoolSlotComponent<63u>>(), 0u);
+    EXPECT_EQ(testWorld.world.tryGetComponent<PoolSlotComponent<63u>>(entity.id()), nullptr);
+    EXPECT_EQ(testWorld.world.view<PositionComponent>().candidateCount(), 0u);
+
+    auto recreated = testWorld.world.createEntity();
+    recreated.addComponent<PoolSlotComponent<63u>>().value = 37u;
+    EXPECT_EQ(recreated.getComponent<PoolSlotComponent<63u>>().value, 37u);
+    EXPECT_EQ(testWorld.world.componentMutationVersion<PoolSlotComponent<63u>>(), 1u);
+    EXPECT_FALSE(recreated.hasComponent<PositionComponent>());
+    EXPECT_EQ(testWorld.world.view<PoolSlotComponent<63u>>().candidateCount(), 1u);
+}
+
+TEST(Ecs, RepeatedComponentLookupWorkload){
+    TestWorld testWorld;
+    static constexpr usize s_EntityCount = 4096u;
+    static constexpr usize s_RoundCount = 64u;
+    Array<NWB::Core::ECS::EntityID, s_EntityCount> entities;
+    u64 expectedPositionSum = 0u;
+    u64 expectedVelocitySum = 0u;
+    for(usize i = 0u; i < s_EntityCount; ++i){
+        auto entity = testWorld.world.createEntity();
+        entities[i] = entity.id();
+        entity.addComponent<PositionComponent>().x = static_cast<i32>(i + 1u);
+        expectedPositionSum += i + 1u;
+        if((i & 1u) == 0u){
+            entity.addComponent<VelocityComponent>().x = static_cast<i32>(i + 3u);
+            expectedVelocitySum += i + 3u;
+        }
+    }
+
+    u64 positionSum = 0u;
+    u64 velocitySum = 0u;
+    usize absentComponents = 0u;
+    const NWB::Core::ECS::World& constWorld = testWorld.world;
+    const Timer lookupBegin = TimerNow();
+    for(usize round = 0u; round < s_RoundCount; ++round){
+        for(usize i = 0u; i < s_EntityCount; ++i){
+            const auto entityId = entities[(i * 2053u + round * 17u) & (s_EntityCount - 1u)];
+            if(auto* position = testWorld.world.tryGetComponent<PositionComponent>(entityId)){
+                positionSum += static_cast<u64>(position->x);
+                ++position->y;
+            }
+            if(const auto* velocity = constWorld.tryGetComponent<VelocityComponent>(entityId))
+                velocitySum += static_cast<u64>(velocity->x);
+            if(!constWorld.tryGetComponent<OverAlignedComponent>(entityId))
+                ++absentComponents;
+        }
+    }
+    const u64 lookupNanoseconds = DurationInNS<u64>(TimerNow(), lookupBegin);
+    char durationText[32u] = {};
+    RecordProperty("lookup_ns", FormatDecimal(lookupNanoseconds, durationText).data());
+
+    EXPECT_EQ(positionSum, expectedPositionSum * s_RoundCount);
+    EXPECT_EQ(velocitySum, expectedVelocitySum * s_RoundCount);
+    EXPECT_EQ(absentComponents, s_EntityCount * s_RoundCount);
+    testWorld.world.view<PositionComponent>().each([](NWB::Core::ECS::EntityID, PositionComponent& position){
+        EXPECT_EQ(position.y, static_cast<i32>(s_RoundCount));
+    });
 }
 
 TEST(Ecs, MessageBus){

@@ -4,6 +4,9 @@
 
 #include <core/metascript/parser.h>
 
+#include <global/text_utils.h>
+#include <global/timer.h>
+
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
@@ -229,6 +232,109 @@ TEST(Metascript, ListAppendExistingElementCopiesBeforeReallocation){
     ASSERT_EQ(list.asList().size(), 2u);
     CheckStringListElement(list.asList()[0u], text);
     CheckStringListElement(list.asList()[1u], text);
+}
+
+TEST(Metascript, AppendsFirstMiddleAndLastElementsAcrossReallocation){
+    constexpr usize s_InitialCount = 8u;
+    const usize sourceIndices[] = { 0u, 3u, 7u };
+    for(const usize sourceIndex : sourceIndices){
+        for(const bool moveSource : { false, true }){
+            DestinationArena arena;
+            Value list(arena.arena);
+            list.makeList();
+            list.asList().reserve(s_InitialCount);
+            const usize originalCount = list.asList().capacity();
+            for(usize index = 0u; index < originalCount; ++index)
+                list.append(Value(static_cast<i64>(index), arena.arena));
+
+            if(moveSource)
+                list.append(Move(list.asList()[sourceIndex]));
+            else
+                list += list.asList()[sourceIndex];
+
+            ASSERT_EQ(list.asList().size(), originalCount + 1u);
+            EXPECT_EQ(list.asList().back().asInteger(), static_cast<i64>(sourceIndex));
+            for(usize index = 0u; index < originalCount; ++index){
+                if(moveSource && index == sourceIndex)
+                    EXPECT_TRUE(list.asList()[index].isNull());
+                else
+                    EXPECT_EQ(list.asList()[index].asInteger(), static_cast<i64>(index));
+            }
+        }
+    }
+}
+
+TEST(Metascript, ConcatenatesNestedListElementsAcrossReallocation){
+    constexpr usize s_InitialCount = 8u;
+    const usize sourceIndices[] = { 0u, 3u, 7u };
+    const AString text(128u, 'n');
+    for(const usize sourceIndex : sourceIndices){
+        DestinationArena arena;
+        Value list(arena.arena);
+        list.makeList();
+        list.asList().reserve(s_InitialCount);
+        const usize originalCount = list.asList().capacity();
+        for(usize index = 0u; index < originalCount; ++index)
+            list.append(Value(static_cast<i64>(index), arena.arena));
+        MakeSingleStringList(list.asList()[sourceIndex], arena, text);
+
+        list += list.asList()[sourceIndex];
+
+        ASSERT_EQ(list.asList().size(), originalCount + 1u);
+        EXPECT_GT(list.asList().capacity(), originalCount);
+        CheckStringListElement(list.asList().back(), text);
+        for(usize index = 0u; index < originalCount; ++index){
+            if(index == sourceIndex)
+                CheckSingleStringListValue(list.asList()[index], text);
+            else
+                EXPECT_EQ(list.asList()[index].asInteger(), static_cast<i64>(index));
+        }
+    }
+}
+
+TEST(Metascript, LargeListAppendPreservesValues){
+    constexpr usize s_ValueCount = 8192u;
+    DestinationArena arena;
+    Value list(arena.arena);
+    list.makeList();
+    const Timer appendBegin = TimerNow();
+    for(usize index = 0u; index < s_ValueCount; ++index){
+        Value value(static_cast<i64>(index), arena.arena);
+        if((index & 1u) == 0u)
+            list.append(Move(value));
+        else
+            list += value;
+    }
+    const u64 appendNanoseconds = DurationInNS<u64>(TimerNow(), appendBegin);
+    char durationText[32u] = {};
+    RecordProperty("list_append_ns", FormatDecimal(appendNanoseconds, durationText).data());
+    ASSERT_EQ(list.asList().size(), s_ValueCount);
+    for(usize index = 0u; index < s_ValueCount; ++index)
+        EXPECT_EQ(list.asList()[index].asInteger(), static_cast<i64>(index));
+}
+
+TEST(Metascript, ParsesLargeNumericList){
+    constexpr usize s_ValueCount = 8192u;
+    DestinationArena arena;
+    AString source("number asset; asset.values = [");
+    source.reserve(source.size() + s_ValueCount * 2u + 2u);
+    for(usize index = 0u; index < s_ValueCount; ++index)
+        source += "1,";
+    source += "];";
+
+    Document document(arena.arena);
+    const Timer parseBegin = TimerNow();
+    const bool parsed = document.parse(ViewOf(source));
+    const u64 parseNanoseconds = DurationInNS<u64>(TimerNow(), parseBegin);
+    char durationText[32u] = {};
+    RecordProperty("list_parse_ns", FormatDecimal(parseNanoseconds, durationText).data());
+    ASSERT_TRUE(parsed);
+    const Value* const values = document.asset().findField(LiteralView("values"));
+    ASSERT_NE(values, nullptr);
+    ASSERT_TRUE(values->isList());
+    ASSERT_EQ(values->asList().size(), s_ValueCount);
+    for(const Value& value : values->asList())
+        EXPECT_EQ(value.asInteger(), 1);
 }
 
 TEST(Metascript, ExponentDoubleLiterals){

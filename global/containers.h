@@ -277,14 +277,17 @@ namespace ContainerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename DestinationVector, typename SourceVector>
-[[nodiscard]] inline bool SourceAliasesDestination(const DestinationVector& destination, const SourceVector& source, usize& outSourceOffset){
+template<typename DestinationVector, typename SourceValue>
+[[nodiscard]] inline bool SourceAliasesDestination(
+    const DestinationVector& destination,
+    const SourceValue* sourceData,
+    const usize sourceSize,
+    usize& outSourceOffset){
     outSourceOffset = 0u;
-    if(destination.empty() || source.empty())
+    if(destination.empty() || sourceSize == 0u)
         return false;
 
     const auto* const destinationData = destination.data();
-    const auto* const sourceData = source.data();
     if(destinationData == nullptr || sourceData == nullptr)
         return false;
 
@@ -304,6 +307,11 @@ template<typename DestinationVector, typename SourceVector>
 
     outSourceOffset = sourceOffset;
     return true;
+}
+
+template<typename DestinationVector, typename SourceVector>
+[[nodiscard]] inline bool SourceAliasesDestination(const DestinationVector& destination, const SourceVector& source, usize& outSourceOffset){
+    return SourceAliasesDestination(destination, source.data(), source.size(), outSourceOffset);
 }
 
 template<typename Container>

@@ -215,14 +215,16 @@ Value& Value::operator+=(const Value& rhs){
 
     if(m_type == ValueType::List){
         if(rhs.m_type == ValueType::List){
-            if(m_data.m_list->size() > Limit<usize>::s_Max - rhs.m_data.m_list->size()){
+            // The separately owned list survives relocation when rhs is an element of this list.
+            const ListType& sourceList = *rhs.m_data.m_list;
+            if(m_data.m_list->size() > Limit<usize>::s_Max - sourceList.size()){
                 NWB_ASSERT_MSG(false, NWB_TEXT("list append size overflow"));
                 return *this;
             }
-            const usize appendCount = rhs.m_data.m_list->size();
+            const usize appendCount = sourceList.size();
             const usize requiredListCapacity = m_data.m_list->size() + appendCount;
             ::ContainerDetail::ReserveGrowingCapacity(*m_data.m_list, requiredListCapacity);
-            appendListCopies(*rhs.m_data.m_list, appendCount);
+            appendListCopies(sourceList, appendCount);
         }
         else{
             if(m_data.m_list->size() == Limit<usize>::s_Max){
@@ -230,8 +232,8 @@ Value& Value::operator+=(const Value& rhs){
                 return *this;
             }
             const usize listSize = m_data.m_list->size();
-            const usize rhsIndex = valueIndexInList(rhs);
-            const bool rhsInList = rhsIndex != listSize;
+            usize rhsIndex = 0u;
+            const bool rhsInList = ::ContainerDetail::SourceAliasesDestination(*m_data.m_list, &rhs, 1u, rhsIndex);
             const usize requiredListCapacity = listSize + 1u;
             ::ContainerDetail::ReserveGrowingCapacity(*m_data.m_list, requiredListCapacity);
             appendListCopy(rhsInList ? (*m_data.m_list)[rhsIndex] : rhs);
@@ -403,19 +405,6 @@ void Value::makeMap(){
     m_data.m_map = allocMap();
 }
 
-usize Value::valueIndexInList(const Value& val)const{
-    NWB_ASSERT(m_type == ValueType::List);
-
-    const usize listSize = m_data.m_list->size();
-    const Value* const values = m_data.m_list->data();
-    for(usize i = 0u; i < listSize; ++i){
-        if(&values[i] == &val)
-            return i;
-    }
-    return listSize;
-}
-
-
 Value& Value::field(MStringView name){
     if(m_type == ValueType::Null)
         makeMap();
@@ -460,8 +449,8 @@ void Value::append(Value&& val){
         return;
     }
 
-    const usize valIndex = valueIndexInList(val);
-    const bool valInList = valIndex != listSize;
+    usize valIndex = 0u;
+    const bool valInList = ::ContainerDetail::SourceAliasesDestination(*m_data.m_list, &val, 1u, valIndex);
     if(valInList){
         const usize requiredListCapacity = listSize + 1u;
         ::ContainerDetail::ReserveGrowingCapacity(*m_data.m_list, requiredListCapacity);

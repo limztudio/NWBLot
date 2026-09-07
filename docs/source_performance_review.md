@@ -136,3 +136,19 @@ Command capture reserves inspection records before encoded bytes, then publishes
 | Reused capture of 16,384 records | 5.1581 → 5.0046 | 0.2327 → 0.2321 |
 
 The 16,384-record cold capture uses 28 backing allocations instead of 32,768 in both configurations. Warmed reuse still allocates zero times. Debug reset falls from 8.0181 ms to 0.0003 ms; that final value is near timer granularity and is not used for a speedup-ratio claim. Geometric capacity retains spare storage rather than allocating exactly each append. Three new regressions and the complete 356-test graphics suite pass in dbg, opt, and fin, including mixed encoded records, exact prefix rollback/refill, rejection, and capacity reuse.
+
+## Timing history lookup
+
+History stores and immutable snapshots now use exact indexes for collections larger than 16 entries. Route keys include the full binary name identity, variant, resolution, queue class, physical queue, and device generation. Assignment keys preserve the separate semantic switch timeline. Ordered records retain diagnostic names; compact index keys use a callback-free binary identity accessor. Small collections retain linear lookup and unchanged storage.
+
+| Workload, 4,096 histories | dbg before → after | opt before → after |
+| --- | ---: | ---: |
+| Initial recording | 399.6537 → 10.6616 | 18.1095 → 0.9715 |
+| Four updates | 1564.5755 → 10.1868 | 72.6829 → 0.8271 |
+| Four store lookup passes | 1524.4964 → 5.5621 | 71.6248 → 0.6120 |
+| Four snapshot lookup passes | 1552.0006 → 5.8751 | 67.0107 → 0.6267 |
+| Four snapshot copies | 1.0128 → 2.3049 | 0.0837 → 0.3864 |
+
+Indexes trade storage and snapshot-copy time for much cheaper recording and lookup. At 4,096 histories they add about 1.44 MiB to each store and snapshot: dbg store usage changes from 4,383,160 to 5,890,520 bytes and snapshot usage from 3,014,688 to 4,522,048 bytes. Opt adds the same index capacity. The eight-history fixture keeps its original storage; its opt snapshot lookup changes from 0.0214 to 0.0318 ms across 256 passes, about 41 ns per pass. No small-list speedup is claimed.
+
+Six timing regressions and all 356 graphics tests pass in dbg, opt, and fin, covering full identities, promotion, independent snapshot arenas, reset/device replacement, assignment timelines, and warm reuse. All 133 global tests also pass in these configurations and in the opt name-symbol build, including positive symbol-callback probes and callback-free identity access.

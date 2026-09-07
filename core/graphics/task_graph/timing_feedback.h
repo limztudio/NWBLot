@@ -83,6 +83,74 @@ inline constexpr bool operator!=(const GpuTaskTimingKey& lhs, const GpuTaskTimin
 }
 
 
+namespace GpuTaskTimingHistoryDetail{
+
+struct RouteKey{
+    NameHash task;
+    u32 variant;
+    u32 resolutionClass;
+    CommandQueue::Enum queue;
+    GpuPhysicalQueueId physicalQueue;
+
+    [[nodiscard]] constexpr bool operator==(const RouteKey&)const = default;
+};
+
+struct AssignmentKey{
+    NameHash task;
+    u32 variant;
+    u32 resolutionClass;
+
+    [[nodiscard]] constexpr bool operator==(const AssignmentKey&)const = default;
+};
+
+struct RouteLookup{
+    const GpuTaskTimingKey& key;
+    const GpuPhysicalQueueId& physicalQueue;
+};
+
+struct RouteHash{
+    [[nodiscard]] usize operator()(const RouteKey& value)const noexcept;
+    [[nodiscard]] usize operator()(const RouteLookup& value)const noexcept;
+};
+
+struct RouteEqual{
+    using is_transparent = void;
+
+    [[nodiscard]] bool operator()(const RouteKey& lhs, const RouteKey& rhs)const noexcept{
+        return lhs == rhs;
+    }
+    [[nodiscard]] bool operator()(const RouteKey& lhs, const RouteLookup& rhs)const noexcept{
+        return lhs.task == rhs.key.task.identityHash()
+            && lhs.variant == rhs.key.variant
+            && lhs.resolutionClass == rhs.key.resolutionClass
+            && lhs.queue == rhs.key.queue
+            && lhs.physicalQueue == rhs.physicalQueue
+        ;
+    }
+};
+
+struct AssignmentHash{
+    [[nodiscard]] usize operator()(const AssignmentKey& value)const noexcept;
+    [[nodiscard]] usize operator()(const GpuTaskTimingAssignmentKey& value)const noexcept;
+};
+
+struct AssignmentEqual{
+    using is_transparent = void;
+
+    [[nodiscard]] bool operator()(const AssignmentKey& lhs, const AssignmentKey& rhs)const noexcept{
+        return lhs == rhs;
+    }
+    [[nodiscard]] bool operator()(const AssignmentKey& lhs, const GpuTaskTimingAssignmentKey& rhs)const noexcept{
+        return lhs.task == rhs.task.identityHash() && lhs.variant == rhs.variant && lhs.resolutionClass == rhs.resolutionClass;
+    }
+};
+
+using RouteIndex = HashMap<RouteKey, usize, RouteHash, RouteEqual, GraphicsArena>;
+using AssignmentIndex = HashMap<AssignmentKey, usize, AssignmentHash, AssignmentEqual, GraphicsArena>;
+
+};
+
+
 struct GpuTaskTimingHistory{
     f64 averageSeconds = 0.0;
     f64 minimumSeconds = 0.0;
@@ -228,6 +296,8 @@ private:
 private:
     GraphicsVector<GpuTaskTimingHistoryEntry> m_histories;
     GraphicsVector<GpuTaskTimingAssignmentState> m_assignments;
+    Optional<GpuTaskTimingHistoryDetail::RouteIndex> m_historyIndex;
+    Optional<GpuTaskTimingHistoryDetail::AssignmentIndex> m_assignmentIndex;
     u16 m_deviceGeneration = 0u;
     bool m_valid = false;
 };
@@ -310,12 +380,16 @@ private:
         const GpuTaskTimingAssignmentKey& key
     )const noexcept;
     void rebuildHistory(HistoryRecord& record)noexcept;
+    void promoteHistoryIndex();
+    void promoteAssignmentIndex();
 
 
 private:
     GraphicsArena& m_arena;
     GraphicsVector<HistoryRecord> m_histories;
     GraphicsVector<GpuTaskTimingAssignmentState> m_assignments;
+    Optional<GpuTaskTimingHistoryDetail::RouteIndex> m_historyIndex;
+    Optional<GpuTaskTimingHistoryDetail::AssignmentIndex> m_assignmentIndex;
     u32 m_maximumSamplesPerHistory = 1u;
     u16 m_deviceGeneration = 0u;
 };

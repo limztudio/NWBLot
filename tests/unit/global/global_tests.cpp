@@ -65,6 +65,27 @@ using NameSymbolTestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
 template<typename T>
 using Vector = NWB::Tests::TestVector<T>;
 
+struct NameSymbolCallbackProbe{
+    NameDetail::NameSymbolRecorderState previousRecorder = NameDetail::SymbolRecorderState();
+    NameDetail::NameSymbolResolverState previousResolver = NameDetail::SymbolResolverState();
+    u32 recordCount = 0u;
+    u32 resolveCount = 0u;
+
+    NameSymbolCallbackProbe(){
+        SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context){
+            ++static_cast<NameSymbolCallbackProbe*>(context)->recordCount;
+        }, this);
+        SetNameSymbolResolveCallback([](const NameHash&, char*, usize, void* context){
+            ++static_cast<NameSymbolCallbackProbe*>(context)->resolveCount;
+            return false;
+        }, this);
+    }
+    ~NameSymbolCallbackProbe(){
+        SetNameSymbolRecordCallback(previousRecorder.callback, previousRecorder.userData);
+        SetNameSymbolResolveCallback(previousResolver.callback, previousResolver.userData);
+    }
+};
+
 struct ArenaObjectProbe{
     bool& m_destroyed;
 
@@ -593,6 +614,8 @@ TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
     static_assert(noexcept(first != second));
     static_assert(noexcept(first < second));
     static_assert(noexcept(Hasher<Name>{}(first)));
+    static_assert(noexcept(first.identityHash()));
+    static_assert(first.identityHash() == ComputeNameHash("identity/first"));
 
     NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
     NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
@@ -603,11 +626,41 @@ TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
     EXPECT_NE(first, second);
     EXPECT_TRUE(first < second || second < first);
     EXPECT_EQ(Hasher<Name>{}(first), Hasher<NameHash>{}(ComputeNameHash("identity/first")));
+    EXPECT_EQ(first.identityHash(), ComputeNameHash("identity/first"));
+    for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
+        NameHash changed = first.identityHash();
+        changed.qwords[lane] ^= 1u;
+        const Name binary(changed);
+        EXPECT_EQ(binary.identityHash(), changed);
+        EXPECT_NE(binary.identityHash(), first.identityHash());
+    }
     EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 0u);
 
 #if defined(NWB_BUILDMODE)
     EXPECT_EQ(first.hash(), ComputeNameHash("identity/first"));
     EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 1u);
+#endif
+}
+
+TEST(Global, NameBinaryIdentityNeverInvokesInstalledSymbolCallbacks){
+    constexpr Name literal("identity/callback_probe");
+    const Name binary(ComputeNameHash("identity/binary_probe"));
+    NameSymbolCallbackProbe probe;
+    EXPECT_EQ(literal.identityHash(), ComputeNameHash("identity/callback_probe"));
+    EXPECT_EQ(binary.identityHash(), ComputeNameHash("identity/binary_probe"));
+    EXPECT_EQ(NAME_NONE.identityHash(), NameHash{});
+    EXPECT_EQ(probe.recordCount, 0u);
+    EXPECT_EQ(probe.resolveCount, 0u);
+
+    const Name recorded(AStringView("identity/recorded_probe"));
+    EXPECT_EQ(probe.recordCount, 1u);
+    char resolved[32u] = {};
+    EXPECT_FALSE(NameDetail::ResolveNameSymbolText(recorded.identityHash(), resolved, LengthOf(resolved)));
+    EXPECT_EQ(probe.recordCount, 1u);
+    EXPECT_EQ(probe.resolveCount, 1u);
+#if defined(NWB_BUILDMODE)
+    EXPECT_EQ(literal.hash(), literal.identityHash());
+    EXPECT_EQ(probe.recordCount, 2u);
 #endif
 }
 

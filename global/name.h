@@ -562,6 +562,9 @@ public:
     [[nodiscard]] constexpr explicit operator bool()const noexcept{
         return !NameDetail::IsZeroHash(m_hash);
     }
+    // Binary identity access never records or resolves symbol text, including cooker builds.
+    [[nodiscard]] constexpr const NameHash& identityHash()const noexcept{ return m_hash; }
+
     [[nodiscard]] constexpr const NameHash& hash()const{
 #if defined(NWB_BUILDMODE)
         recordBuildModeSymbolText();

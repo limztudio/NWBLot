@@ -20,6 +20,34 @@ namespace __hidden_gpu_task_timing_feedback{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr usize s_LinearHistoryCount = 16u;
+
+template<typename NameT>
+[[nodiscard]] static usize HashTimingIdentity(const NameT& task, const u32 variant, const u32 resolutionClass)noexcept{
+    usize hash = Hasher<NameT>{}(task);
+    HashCombine(hash, variant);
+    HashCombine(hash, resolutionClass);
+    return hash;
+}
+
+[[nodiscard]] static usize HashTimingRoute(usize hash, const CommandQueue::Enum queue, const GpuPhysicalQueueId& physicalQueue)noexcept{
+    HashCombine(hash, static_cast<u8>(queue));
+    HashCombine(hash, physicalQueue.index);
+    HashCombine(hash, physicalQueue.deviceGeneration);
+    return hash;
+}
+
+[[nodiscard]] static GpuTaskTimingHistoryDetail::RouteKey StoredRouteKey(
+    const GpuTaskTimingKey& key,
+    const GpuPhysicalQueueId& physicalQueue
+){
+    return { key.task.identityHash(), key.variant, key.resolutionClass, key.queue, physicalQueue };
+}
+
+[[nodiscard]] static GpuTaskTimingHistoryDetail::AssignmentKey StoredAssignmentKey(const GpuTaskTimingAssignmentKey& key){
+    return { key.task.identityHash(), key.variant, key.resolutionClass };
+}
+
 [[nodiscard]] static bool IsFinitePositiveDuration(const f64 value)noexcept{
     return value > 0.0 && value < Limit<f64>::s_Max;
 }
@@ -33,6 +61,28 @@ namespace __hidden_gpu_task_timing_feedback{
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize GpuTaskTimingHistoryDetail::RouteHash::operator()(const RouteKey& value)const noexcept{
+    using namespace __hidden_gpu_task_timing_feedback;
+    return HashTimingRoute(HashTimingIdentity(value.task, value.variant, value.resolutionClass), value.queue, value.physicalQueue);
+}
+
+usize GpuTaskTimingHistoryDetail::RouteHash::operator()(const RouteLookup& value)const noexcept{
+    using namespace __hidden_gpu_task_timing_feedback;
+    return HashTimingRoute(HashTimingIdentity(value.key.task, value.key.variant, value.key.resolutionClass), value.key.queue, value.physicalQueue);
+}
+
+usize GpuTaskTimingHistoryDetail::AssignmentHash::operator()(const AssignmentKey& value)const noexcept{
+    return __hidden_gpu_task_timing_feedback::HashTimingIdentity(value.task, value.variant, value.resolutionClass);
+}
+
+usize GpuTaskTimingHistoryDetail::AssignmentHash::operator()(const GpuTaskTimingAssignmentKey& value)const noexcept{
+    return __hidden_gpu_task_timing_feedback::HashTimingIdentity(value.task, value.variant, value.resolutionClass);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -192,6 +242,10 @@ bool GpuTaskTimingFeedbackCanSwitch(
 
 
 void GpuTaskTimingHistorySnapshot::reset()noexcept{
+    if(m_historyIndex)
+        m_historyIndex->clear();
+    if(m_assignmentIndex)
+        m_assignmentIndex->clear();
     m_histories.clear();
     m_assignments.clear();
     m_deviceGeneration = 0u;
@@ -211,6 +265,10 @@ const GpuTaskTimingHistory* GpuTaskTimingHistorySnapshot::find(
     )
         return nullptr;
 
+    if(m_historyIndex){
+        const auto found = m_historyIndex->find(GpuTaskTimingHistoryDetail::RouteLookup{ key, physicalQueue });
+        return found == m_historyIndex->end() ? nullptr : &m_histories[found->second].history;
+    }
     for(const GpuTaskTimingHistoryEntry& entry : m_histories){
         if(entry.key == key && entry.physicalQueue == physicalQueue)
             return &entry.history;
@@ -225,6 +283,10 @@ const GpuTaskTimingAssignmentState* GpuTaskTimingHistorySnapshot::findAssignment
     if(!m_valid || !key.valid())
         return nullptr;
 
+    if(m_assignmentIndex){
+        const auto found = m_assignmentIndex->find(key);
+        return found == m_assignmentIndex->end() ? nullptr : &m_assignments[found->second];
+    }
     for(const GpuTaskTimingAssignmentState& assignment : m_assignments){
         if(assignment.key == key)
             return &assignment;
@@ -250,6 +312,10 @@ GpuTaskTimingHistoryStore::GpuTaskTimingHistoryStore(
 
 
 void GpuTaskTimingHistoryStore::reset()noexcept{
+    if(m_historyIndex)
+        m_historyIndex->clear();
+    if(m_assignmentIndex)
+        m_assignmentIndex->clear();
     m_histories.clear();
     m_assignments.clear();
     m_deviceGeneration = 0u;
@@ -307,10 +373,20 @@ bool GpuTaskTimingHistoryStore::recordNonCommittingSample(
 
     HistoryRecord* record = findHistoryRecord(key, physicalQueue);
     if(!record){
+        if(!m_historyIndex && m_histories.size() == s_LinearHistoryCount)
+            promoteHistoryIndex();
         record = &m_histories.emplace_back(m_arena);
         record->entry.key = key;
         record->entry.physicalQueue = physicalQueue;
-        record->samples.reserve(m_maximumSamplesPerHistory);
+        try{
+            record->samples.reserve(m_maximumSamplesPerHistory);
+            if(m_historyIndex)
+                m_historyIndex->emplace(StoredRouteKey(key, physicalQueue), m_histories.size() - 1u);
+        }
+        catch(...){
+            m_histories.pop_back();
+            throw;
+        }
     }
     if(record->samples.size() == m_maximumSamplesPerHistory)
         record->samples.erase(record->samples.begin());
@@ -325,6 +401,8 @@ bool GpuTaskTimingHistoryStore::noteAcceptedAssignment(
     const GpuPhysicalQueueId& physicalQueue,
     const u64 sourceFrameIndex
 ){
+    using namespace __hidden_gpu_task_timing_feedback;
+
     if(!key.valid() || !physicalQueue.valid())
         return false;
     if(m_deviceGeneration == 0u)
@@ -335,12 +413,22 @@ bool GpuTaskTimingHistoryStore::noteAcceptedAssignment(
     const GpuTaskTimingAssignmentKey assignmentKey = GpuTaskTimingAssignmentKeyFromHistoryKey(key);
     GpuTaskTimingAssignmentState* assignment = findAssignmentState(assignmentKey);
     if(!assignment){
+        if(!m_assignmentIndex && m_assignments.size() == s_LinearHistoryCount)
+            promoteAssignmentIndex();
         assignment = &m_assignments.emplace_back();
         assignment->key = assignmentKey;
         assignment->lastAcceptedQueue = physicalQueue;
         assignment->lastAcceptedFrameIndex = sourceFrameIndex;
         assignment->lastSwitchFrameIndex = sourceFrameIndex;
         assignment->hasAcceptedAssignment = true;
+        try{
+            if(m_assignmentIndex)
+                m_assignmentIndex->emplace(StoredAssignmentKey(assignmentKey), m_assignments.size() - 1u);
+        }
+        catch(...){
+            m_assignments.pop_back();
+            throw;
+        }
         return true;
     }
     if(sourceFrameIndex < assignment->lastAcceptedFrameIndex)
@@ -366,13 +454,31 @@ void GpuTaskTimingHistoryStore::snapshot(GpuTaskTimingHistorySnapshot& outSnapsh
     if(m_deviceGeneration == 0u)
         return;
 
-    outSnapshot.m_histories.reserve(m_histories.size());
-    for(const HistoryRecord& record : m_histories)
-        outSnapshot.m_histories.push_back(record.entry);
+    try{
+        outSnapshot.m_histories.reserve(m_histories.size());
+        for(const HistoryRecord& record : m_histories)
+            outSnapshot.m_histories.push_back(record.entry);
 
-    outSnapshot.m_assignments.reserve(m_assignments.size());
-    for(const GpuTaskTimingAssignmentState& assignment : m_assignments)
-        outSnapshot.m_assignments.push_back(assignment);
+        outSnapshot.m_assignments.assign(m_assignments.begin(), m_assignments.end());
+        if(m_historyIndex){
+            if(!outSnapshot.m_historyIndex)
+                outSnapshot.m_historyIndex.emplace(outSnapshot.m_histories.get_allocator().arena());
+            *outSnapshot.m_historyIndex = *m_historyIndex;
+        }else
+            outSnapshot.m_historyIndex.reset();
+        if(m_assignmentIndex){
+            if(!outSnapshot.m_assignmentIndex)
+                outSnapshot.m_assignmentIndex.emplace(outSnapshot.m_assignments.get_allocator().arena());
+            *outSnapshot.m_assignmentIndex = *m_assignmentIndex;
+        }else
+            outSnapshot.m_assignmentIndex.reset();
+    }
+    catch(...){
+        outSnapshot.m_historyIndex.reset();
+        outSnapshot.m_assignmentIndex.reset();
+        outSnapshot.reset();
+        throw;
+    }
 
     outSnapshot.m_deviceGeneration = m_deviceGeneration;
     outSnapshot.m_valid = true;
@@ -399,11 +505,8 @@ GpuTaskTimingHistoryStore::HistoryRecord* GpuTaskTimingHistoryStore::findHistory
     const GpuTaskTimingKey& key,
     const GpuPhysicalQueueId& physicalQueue
 )noexcept{
-    for(HistoryRecord& record : m_histories){
-        if(record.entry.key == key && record.entry.physicalQueue == physicalQueue)
-            return &record;
-    }
-    return nullptr;
+    const GpuTaskTimingHistoryStore& store = *this;
+    return const_cast<HistoryRecord*>(store.findHistoryRecord(key, physicalQueue));
 }
 
 
@@ -411,6 +514,10 @@ const GpuTaskTimingHistoryStore::HistoryRecord* GpuTaskTimingHistoryStore::findH
     const GpuTaskTimingKey& key,
     const GpuPhysicalQueueId& physicalQueue
 )const noexcept{
+    if(m_historyIndex){
+        const auto found = m_historyIndex->find(GpuTaskTimingHistoryDetail::RouteLookup{ key, physicalQueue });
+        return found == m_historyIndex->end() ? nullptr : &m_histories[found->second];
+    }
     for(const HistoryRecord& record : m_histories){
         if(record.entry.key == key && record.entry.physicalQueue == physicalQueue)
             return &record;
@@ -422,17 +529,18 @@ const GpuTaskTimingHistoryStore::HistoryRecord* GpuTaskTimingHistoryStore::findH
 GpuTaskTimingAssignmentState* GpuTaskTimingHistoryStore::findAssignmentState(
     const GpuTaskTimingAssignmentKey& key
 )noexcept{
-    for(GpuTaskTimingAssignmentState& assignment : m_assignments){
-        if(assignment.key == key)
-            return &assignment;
-    }
-    return nullptr;
+    const GpuTaskTimingHistoryStore& store = *this;
+    return const_cast<GpuTaskTimingAssignmentState*>(store.findAssignmentState(key));
 }
 
 
 const GpuTaskTimingAssignmentState* GpuTaskTimingHistoryStore::findAssignmentState(
     const GpuTaskTimingAssignmentKey& key
 )const noexcept{
+    if(m_assignmentIndex){
+        const auto found = m_assignmentIndex->find(key);
+        return found == m_assignmentIndex->end() ? nullptr : &m_assignments[found->second];
+    }
     for(const GpuTaskTimingAssignmentState& assignment : m_assignments){
         if(assignment.key == key)
             return &assignment;
@@ -465,6 +573,36 @@ void GpuTaskTimingHistoryStore::rebuildHistory(HistoryRecord& record)noexcept{
     record.entry.history.maximumSeconds = maximumSeconds;
     record.entry.history.sampleCount = sampleCount;
 }
+
+
+void GpuTaskTimingHistoryStore::promoteHistoryIndex(){
+    using namespace __hidden_gpu_task_timing_feedback;
+    using namespace GpuTaskTimingHistoryDetail;
+
+    NWB_ASSERT(!m_historyIndex && m_histories.size() == s_LinearHistoryCount);
+    RouteIndex index(s_LinearHistoryCount * 4u, m_arena);
+    for(usize recordIndex = 0u; recordIndex < m_histories.size(); ++recordIndex){
+        const GpuTaskTimingHistoryEntry& entry = m_histories[recordIndex].entry;
+        index.emplace(StoredRouteKey(entry.key, entry.physicalQueue), recordIndex);
+    }
+    static_assert(IsNothrowMoveConstructible_V<RouteIndex>);
+    m_historyIndex.emplace(Move(index));
+}
+
+void GpuTaskTimingHistoryStore::promoteAssignmentIndex(){
+    using namespace __hidden_gpu_task_timing_feedback;
+    using namespace GpuTaskTimingHistoryDetail;
+
+    NWB_ASSERT(!m_assignmentIndex && m_assignments.size() == s_LinearHistoryCount);
+    AssignmentIndex index(s_LinearHistoryCount * 4u, m_arena);
+    for(usize assignmentIndex = 0u; assignmentIndex < m_assignments.size(); ++assignmentIndex)
+        index.emplace(StoredAssignmentKey(m_assignments[assignmentIndex].key), assignmentIndex);
+    static_assert(IsNothrowMoveConstructible_V<AssignmentIndex>);
+    m_assignmentIndex.emplace(Move(index));
+}
+
+
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

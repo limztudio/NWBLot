@@ -86,6 +86,7 @@ target_sources(nwb_graphics_task_graph_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_surfel_gi_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_test_utils.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_test_utils.h"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph_timing_history_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_timing_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_vulkan_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/texture_clear_task_graph_tests.cpp"

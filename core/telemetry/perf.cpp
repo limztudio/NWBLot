@@ -40,11 +40,8 @@ namespace __hidden_telemetry_perf{
 
 [[nodiscard]] static bool ValidateHeader(const EncodedPerfMemoryPayloadHeader& header)noexcept{
     constexpr u16 s_KnownFlags = PerfMemoryPayloadFlag::HasDelta;
-    const bool validVersion = header.version == s_PerfMemoryPayloadVersion
-        || (header.version == 1u && header.source == Perf::MemorySource::ExplicitScope)
-    ;
     return header.magic == s_PerfMemoryPayloadMagic
-        && validVersion
+        && header.version == s_PerfMemoryPayloadVersion
         && (header.flags & ~s_KnownFlags) == 0u
         && IsValidMemorySource(header.source)
         && !NameDetail::IsZeroHash(header.scopeHash)

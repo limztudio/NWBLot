@@ -21,7 +21,6 @@ NWB_LOG_BEGIN
 struct TelemetryReportSummary;
 
 void AddTelemetryMemorySummary(TelemetryReportSummary& summary, const Core::Telemetry::PerfMemoryPayload& payload);
-void FinalizeTelemetryMemorySummary(TelemetryReportSummary& summary);
 void AppendTelemetryMemorySourcesJson(
     AString<Core::Telemetry::TelemetryArena>& out,
     const TelemetryReportSummary& summary

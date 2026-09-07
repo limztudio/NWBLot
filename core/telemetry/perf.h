@@ -23,7 +23,7 @@ NWB_TELEMETRY_BEGIN
 
 inline constexpr u16 s_PerfTimingPayloadVersion = 1u;
 inline constexpr u32 s_PerfTimingPayloadMagic = 0x4E575046u; // NWPF
-inline constexpr u16 s_PerfMemoryPayloadVersion = 2u;
+inline constexpr u16 s_PerfMemoryPayloadVersion = 1u;
 inline constexpr u32 s_PerfMemoryPayloadMagic = 0x4E57504Du; // NWPM
 
 namespace PerfTimingSource{

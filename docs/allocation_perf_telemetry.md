@@ -22,7 +22,7 @@ Each memory record contains:
 
 GlobalArena and heap backing byte counters use the allocator's usable allocation size consistently, including reallocations. ScratchArena records its aligned suballocations, and PersistentArena records TLSF block sizes. These are allocation-accounting figures, not process resident-memory measurements.
 
-`heapBacking` is the inclusive CoreAlloc backing total, including arena pool/chunk allocations and global new/delete. Its counters are collected per thread and combined when sampled. `peakBasis: sampledHeap` is the largest aggregate usage observed by those samples; transient peaks between samples can be higher. Heap backing must not be added to arena usage. `explicitScope` preserves manually recorded snapshots, which may alias an automatically collected arena. The JSON `perf.memorySources` summaries keep all three domains separate. Legacy generic memory summary fields select the arena domain when it is present, otherwise the explicit domain.
+`heapBacking` is the inclusive CoreAlloc backing total, including arena pool/chunk allocations and global new/delete. Its counters are collected per thread and combined when sampled. `peakBasis: sampledHeap` is the largest aggregate usage observed by those samples; transient peaks between samples can be higher. Heap backing must not be added to arena usage. `explicitScope` preserves manually recorded snapshots, which may alias an automatically collected arena. The JSON `perf.memorySources` summaries keep all three domains separate; memory summaries are reported only within their source domain.
 
 For in-process inspection, enable `Perf::CaptureOptions::memory`, publish the frame, and use the source-aware view:
 
@@ -41,6 +41,6 @@ cmake --build --preset windows-clang-arm64-opt --target nwb_namesym
 
 That target runs the project's established symbol-collection workloads and bundles sidecars beside the matching logserver. Start or restart the logserver after generating those sidecars so it loads them before producing reports. Build-mode symbol export now includes retained arena owner names, including arenas created before symbol callbacks were installed or destroyed before export. This collection does not require perf capture to be enabled. The logger resolves a raw hash display name against its loaded symbols using the full binary identity; explicitly supplied display labels are preserved. Without a matching symbol entry, the stable hash remains available for correlation.
 
-This collection identifies named allocation owners and their lifetime totals. It does not capture individual allocation addresses or call stacks. Name-symbol resolution stays outside allocator paths. The memory payload is version 2 with an unchanged 192-byte header; readers also accept version 1 explicit-scope records.
+This collection identifies named allocation owners and their lifetime totals. It does not capture individual allocation addresses or call stacks. Name-symbol resolution stays outside allocator paths. The current memory payload uses version 1 with a 192-byte header. Readers accept only this version.
 
-The allocator and telemetry regression suites exercise reallocation/failure accounting, bulk arena retirement, concurrent owners, source identity isolation, capture toggles, binary compatibility, and JSON export.
+The allocator and telemetry regression suites exercise reallocation/failure accounting, bulk arena retirement, concurrent owners, source identity isolation, capture toggles, payload validation, and JSON export.

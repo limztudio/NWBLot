@@ -165,7 +165,7 @@ static void ExpectJsonNumber(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(AllocationOwnerTelemetry, VersionTwoRoundTripsAllSourcesBinaryIdentityAndDeltas){
+TEST(AllocationOwnerTelemetry, VersionOneRoundTripsAllSourcesBinaryIdentityAndDeltas){
     TestArena testArena;
     NameHash binaryHash{};
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane)
@@ -184,7 +184,7 @@ TEST(AllocationOwnerTelemetry, VersionTwoRoundTripsAllSourcesBinaryIdentityAndDe
             ASSERT_EQ(bytes.size(), sizeof(Telemetry::EncodedPerfMemoryPayloadHeader) + s_DisplayName.size());
             Telemetry::EncodedPerfMemoryPayloadHeader header;
             NWB_MEMCPY(&header, sizeof(header), bytes.data(), sizeof(header));
-            EXPECT_EQ(header.version, 2u);
+            EXPECT_EQ(header.version, 1u);
             EXPECT_EQ(header.source, static_cast<u32>(source));
             EXPECT_EQ(header.scopeHash, binaryHash);
             Telemetry::PerfMemoryPayload parsed(testArena.arena);
@@ -197,23 +197,19 @@ TEST(AllocationOwnerTelemetry, VersionTwoRoundTripsAllSourcesBinaryIdentityAndDe
     }
 }
 
-TEST(AllocationOwnerTelemetry, ReadsVersionOneAndResetsOutputForMalformedMemoryPayloads){
+TEST(AllocationOwnerTelemetry, ResetsOutputForMalformedMemoryPayloads){
     TestArena testArena;
-    const Name owner("tests/telemetry/legacy_owner");
-    const Perf::MemorySnapshot snapshot = MakeSnapshot(owner, Perf::MemorySource::ExplicitScope);
+    const Name owner("tests/telemetry/payload_validation_owner");
+    const Perf::MemorySnapshot snapshot = MakeSnapshot(owner, Perf::MemorySource::Arena);
     const Perf::MemoryDelta delta = MakeDelta();
     Telemetry::TelemetryBytes bytes(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, owner, "Legacy Owner", snapshot, delta, bytes));
+    ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, owner, "Payload Validation Owner", snapshot, delta, bytes));
     Telemetry::EncodedPerfMemoryPayloadHeader validHeader;
     NWB_MEMCPY(&validHeader, sizeof(validHeader), bytes.data(), sizeof(validHeader));
-    Telemetry::EncodedPerfMemoryPayloadHeader legacyHeader = validHeader;
-    legacyHeader.version = 1u;
-    legacyHeader.source = 0u;
-    NWB_MEMCPY(bytes.data(), bytes.size(), &legacyHeader, sizeof(legacyHeader));
     Telemetry::PerfMemoryPayload parsed(testArena.arena);
     ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size(), parsed));
     EXPECT_EQ(parsed.scopeName, owner);
-    EXPECT_EQ(parsed.scopeText, "Legacy Owner");
+    EXPECT_EQ(parsed.scopeText, "Payload Validation Owner");
     ExpectSnapshot(parsed.snapshot, snapshot);
     ExpectDelta(parsed.delta, delta);
 
@@ -223,8 +219,8 @@ TEST(AllocationOwnerTelemetry, ReadsVersionOneAndResetsOutputForMalformedMemoryP
         Telemetry::EncodedPerfMemoryPayloadHeader malformed = validHeader;
         switch(invalidCase){
         case 0u: malformed.version = 0u; break;
-        case 1u: malformed.version = 3u; break;
-        case 2u: malformed.version = 1u; malformed.source = Perf::MemorySource::Arena; break;
+        case 1u: malformed.version = 2u; break;
+        case 2u: malformed.version = Limit<u16>::s_Max; break;
         case 3u: malformed.source = 3u; break;
         case 4u: malformed.source = Limit<u32>::s_Max; break;
         case 5u: malformed.flags = 0x8000u; break;
@@ -535,9 +531,6 @@ TEST(AllocationOwnerTelemetry, KeepsHeapBackingRecordsWithoutCountingTheirUsageA
     ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
     EXPECT_EQ(report.summary.memoryEventCount, 3u);
-    EXPECT_EQ(report.summary.maxMemoryUsedBytes, 100u);
-    EXPECT_EQ(report.summary.maxMemoryPeakUsedBytes, 1000u);
-    EXPECT_EQ(report.summary.totalMemoryUsedDeltaBytes, 10);
     for(const Perf::MemorySource::Enum source : sources){
         const Log::TelemetryMemorySummary& summary = report.summary.memorySources[source];
         EXPECT_EQ(summary.eventCount, 1u);
@@ -547,6 +540,9 @@ TEST(AllocationOwnerTelemetry, KeepsHeapBackingRecordsWithoutCountingTheirUsageA
     }
     const AStringView json(report.json.data(), report.json.size());
     EXPECT_NE(json.find("\"memorySources\": {"), AStringView::npos);
+    EXPECT_EQ(json.find("\"maxMemoryUsedBytes\":"), AStringView::npos);
+    EXPECT_EQ(json.find("\"maxMemoryPeakUsedBytes\":"), AStringView::npos);
+    EXPECT_EQ(json.find("\"totalMemoryUsedDeltaBytes\":"), AStringView::npos);
     EXPECT_FALSE(FindOwnerJsonRecord(json, owner, "\"source\": \"explicitScope\"").empty());
     EXPECT_FALSE(FindOwnerJsonRecord(json, owner, "\"source\": \"arena\"").empty());
     const AStringView heapRecord = FindOwnerJsonRecord(json, owner, "\"source\": \"heapBacking\"");
@@ -662,9 +658,6 @@ TEST(AllocationOwnerTelemetry, ReportsRawOnlyHeapBackingInItsOwnSummaryDomain){
     ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
     EXPECT_EQ(report.summary.memoryEventCount, 1u);
-    EXPECT_EQ(report.summary.maxMemoryUsedBytes, 0u);
-    EXPECT_EQ(report.summary.maxMemoryPeakUsedBytes, 0u);
-    EXPECT_EQ(report.summary.totalMemoryUsedDeltaBytes, 0);
     EXPECT_EQ(report.summary.memorySources[Perf::MemorySource::ExplicitScope].eventCount, 0u);
     EXPECT_EQ(report.summary.memorySources[Perf::MemorySource::Arena].eventCount, 0u);
     const Log::TelemetryMemorySummary& heap = report.summary.memorySources[Perf::MemorySource::HeapBacking];
@@ -673,6 +666,9 @@ TEST(AllocationOwnerTelemetry, ReportsRawOnlyHeapBackingInItsOwnSummaryDomain){
     EXPECT_EQ(heap.maxPeakUsedBytes, snapshot.peakUsedBytes);
     EXPECT_EQ(heap.totalUsedDeltaBytes, delta.usedBytes);
     const AStringView json(report.json.data(), report.json.size());
+    EXPECT_EQ(json.find("\"maxMemoryUsedBytes\":"), AStringView::npos);
+    EXPECT_EQ(json.find("\"maxMemoryPeakUsedBytes\":"), AStringView::npos);
+    EXPECT_EQ(json.find("\"totalMemoryUsedDeltaBytes\":"), AStringView::npos);
     const usize summaryBegin = json.find("\"heapBacking\": {");
     ASSERT_NE(summaryBegin, AStringView::npos);
     const usize summaryEnd = json.find('}', summaryBegin);

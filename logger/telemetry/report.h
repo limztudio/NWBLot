@@ -60,11 +60,6 @@ struct TelemetryReportSummary{
 
     u64 memoryEventCount = 0u;
     TelemetryMemorySummary memorySources[s_TelemetryMemorySourceCount];
-    // Compatibility counters use named arenas when present, otherwise explicit scopes. The source summaries
-    // remain independent because explicit scopes may alias arenas and heap backing includes their storage.
-    u64 maxMemoryUsedBytes = 0u;
-    u64 maxMemoryPeakUsedBytes = 0u;
-    i64 totalMemoryUsedDeltaBytes = 0;
 
     u64 frameGraphFrameCount = 0u;
     u64 frameGraphNodeCount = 0u;

@@ -1084,9 +1084,6 @@ void BuildJson(
     StringAppendFormat(out, "    \"gpuTimingSeconds\": {:.9},\n", summary.gpuTimingSeconds);
     StringAppendFormat(out, "    \"maxGpuTimingSeconds\": {:.9},\n", summary.maxGpuTimingSeconds);
     StringAppendFormat(out, "    \"memoryEvents\": {},\n", summary.memoryEventCount);
-    StringAppendFormat(out, "    \"maxMemoryUsedBytes\": {},\n", summary.maxMemoryUsedBytes);
-    StringAppendFormat(out, "    \"maxMemoryPeakUsedBytes\": {},\n", summary.maxMemoryPeakUsedBytes);
-    StringAppendFormat(out, "    \"totalMemoryUsedDeltaBytes\": {},\n", summary.totalMemoryUsedDeltaBytes);
     AppendTelemetryMemorySourcesJson(out, summary);
     out += "    \"memoryRecords\": [\n";
     out.append(memoryRecords.data(), memoryRecords.size());
@@ -1240,7 +1237,6 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
         }
     }
 
-    FinalizeTelemetryMemorySummary(outReport.summary);
     __hidden_telemetry_report::BuildTimedGraphsDot(arena, frameGraphs, timingByFrameAndScope, outReport.graph);
     __hidden_telemetry_report::BuildJson(outReport.summary, frameGraphs, memoryRecords, outReport.json);
     return true;

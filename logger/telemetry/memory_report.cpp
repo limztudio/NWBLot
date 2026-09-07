@@ -76,17 +76,6 @@ void AddTelemetryMemorySummary(TelemetryReportSummary& summary, const Core::Tele
         source.totalUsedDeltaBytes += payload.delta.usedBytes;
 }
 
-void FinalizeTelemetryMemorySummary(TelemetryReportSummary& summary){
-    const TelemetryMemorySummary& arenas = summary.memorySources[Core::Perf::MemorySource::Arena];
-    const TelemetryMemorySummary& source = arenas.eventCount != 0u
-        ? arenas
-        : summary.memorySources[Core::Perf::MemorySource::ExplicitScope]
-    ;
-    summary.maxMemoryUsedBytes = source.maxUsedBytes;
-    summary.maxMemoryPeakUsedBytes = source.maxPeakUsedBytes;
-    summary.totalMemoryUsedDeltaBytes = source.totalUsedDeltaBytes;
-}
-
 void AppendTelemetryMemorySourcesJson(
     AString<Core::Telemetry::TelemetryArena>& out,
     const TelemetryReportSummary& summary){

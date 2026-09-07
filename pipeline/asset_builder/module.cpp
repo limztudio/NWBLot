@@ -16,6 +16,10 @@
 
 namespace __hidden_asset_builder{
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static bool AddRoot(const NWB::Path& path, NWB::Core::Assets::AssetBuildOptions& options){
     auto& arena = options.assetRoots.get_allocator().arena();
     auto text = PathToString(arena, path.lexically_normal());
@@ -75,6 +79,10 @@ static bool ResolveRoots(const PipelineOptions& parsed, NWB::Core::Assets::Asset
     }
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 };
 

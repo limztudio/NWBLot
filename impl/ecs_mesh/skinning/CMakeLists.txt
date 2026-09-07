@@ -7,6 +7,8 @@ target_sources(nwb_ecs_mesh_skinning PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/graph_resource_uses.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/graph_resource_uses.h"
     "${CMAKE_CURRENT_LIST_DIR}/graph_dispatch_plan.h"
+    "${CMAKE_CURRENT_LIST_DIR}/live_state_buffers.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/live_state_buffers.h"
     "${CMAKE_CURRENT_LIST_DIR}/pipeline.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/skinning.cpp"

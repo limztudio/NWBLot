@@ -182,3 +182,17 @@ Model parsing builds one caller-scratch index of complete binary name identities
 The singleton debug difference is about one microsecond per complete parse; no singleton gain is claimed. Heap allocation counts are unchanged because metadata copying and validation remain part of the public parse operation. At 4,096 objects, retained scratch capacity changes from 11,011,072 to 13,894,656 bytes in dbg and 2,621,440 to 2,883,584 bytes in opt. Debug LIFO scratch retains 32 bytes after warm-up versus 16 before; used and reserved bytes remain stable across repeated parsing. Opt retains zero used bytes.
 
 All six normalization regressions and the selected 26-case asset integration suite pass in dbg, opt, and fin; pipeline builds also pass. Benchmark assertions verify the normalized typed references, unchanged source metadata, and stable warmed scratch. The baseline and optimized fixtures use the same corrected warm-capacity check rather than assuming debug scratch returns every byte immediately.
+
+## Live skinning buffer collection
+
+Live-buffer collection retains the first owning handle for each buffer while tracking exact pointer membership. Up to 32 distinct resources use an inline pointer array, avoiding debug iterator overhead; larger collections promote to a caller-scratch index. Every call rechecks current instance validity, all 17 runtime buffer roles, and three matching-revision supplemental roles. Collection includes invisible live bindings and retains no index between calls.
+
+| Workload | dbg before → after | opt before → after |
+| --- | ---: | ---: |
+| 1,024 unique instances / 20,480 buffers | 2692.7559 → 13.4981 | 51.3764 → 2.3368 |
+| 1,024 instances sharing 20 buffers, eight collections | 37.7502 → 3.3405 | 0.4906 → 0.6359 |
+| One instance, 1,024 collections | 12.4396 → 7.8707 | 0.3630 → 0.4009 |
+
+The shared opt workload adds about 18 ns per instance; opt singleton overhead is about 37 ns per collection. Singleton/shared collections allocate no scratch storage. The unique workload adds about 2 MiB peak scratch and reserves about 3 MiB in dbg or 2.66 MiB in opt, released with the owning scratch arena. Inline and indexed publication retain consistency if an owning-handle allocation fails.
+
+Six collector regressions and all 182 ECS graphics tests pass in dbg/opt, with 185 passing in fin. Renderer/frame builds pass in all three. Coverage includes buffer lifetime, first-occurrence order, missing/invalid instances, optional roles and revision changes, promotion, allocation-free duplicate replay, and large/small collection reuse after resource replacement. Benchmarks use real metadata-only buffer objects and measure CPU collection, including collection storage teardown.

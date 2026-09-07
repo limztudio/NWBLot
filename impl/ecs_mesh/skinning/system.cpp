@@ -6,6 +6,7 @@
 
 #include "arena_names.h"
 #include "graph_resource_uses.h"
+#include "live_state_buffers.h"
 #include "resource_names.h"
 #include "skin_payload.h"
 #include "timing_names.h"
@@ -267,61 +268,40 @@ bool MeshSkinningSystem::resolveRestToSkinnedCopyByteCounts(
 }
 
 void MeshSkinningSystem::collectLiveSkinningStateBuffers(
-    Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers
+    Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers,
+    Core::Alloc::ScratchArena& scratchArena
 )const{
-    outBuffers.clear();
-    const auto retainBuffer = [&](const Core::BufferHandle& buffer){
-        if(!buffer)
-            return;
-        for(const Core::BufferHandle& existing : outBuffers){
-            if(existing.get() == buffer.get())
-                return;
-        }
-        outBuffers.push_back(buffer);
-    };
+    MeshSkinningStateBufferCollector collector(scratchArena, outBuffers);
     m_world.view<SkinnedMeshBindingComponent>().each(
         [&](Core::ECS::EntityID, const SkinnedMeshBindingComponent& binding){
             if(!binding.runtimeMesh.valid())
                 return;
 
             const MeshSkinningRuntimeInstance* const instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
-            if(!instance || !instance->valid())
+            if(!instance)
                 return;
 
-            retainBuffer(instance->restPositionBuffer);
-            retainBuffer(instance->restNormalBuffer);
-            retainBuffer(instance->restTangentBuffer);
-            retainBuffer(instance->skinnedPositionBuffer);
-            retainBuffer(instance->skinnedNormalBuffer);
-            retainBuffer(instance->skinnedTangentBuffer);
-            retainBuffer(instance->uv0Buffer);
-            retainBuffer(instance->colorBuffer);
-            retainBuffer(instance->meshletDescBuffer);
-            retainBuffer(instance->meshletBoundsBuffer);
-            retainBuffer(instance->meshletPositionRefDeltaBuffer);
-            retainBuffer(instance->meshletAttributeRefDeltaBuffer);
-            retainBuffer(instance->meshletLocalVertexRefBuffer);
-            retainBuffer(instance->meshletPrimitiveIndexBuffer);
-            retainBuffer(instance->attributeSkinBuffer);
-            retainBuffer(instance->triangleIndexBuffer);
-            retainBuffer(instance->attributeBuffer);
-
+            MeshSkinningStateBufferResources resources;
             const auto foundResources = m_runtimeResources.find(instance->handle.value);
-            if(
-                foundResources != m_runtimeResources.end()
-                && foundResources.value().editRevision == instance->editRevision
-            ){
-                retainBuffer(foundResources.value().skinBuffer);
-                retainBuffer(foundResources.value().jointPaletteBuffer);
-                retainBuffer(foundResources.value().bindlessResourceSlotsBuffer);
+            if(foundResources != m_runtimeResources.end()){
+                resources = {
+                    .editRevision = foundResources.value().editRevision,
+                    .skinBuffer = &foundResources.value().skinBuffer,
+                    .jointPaletteBuffer = &foundResources.value().jointPaletteBuffer,
+                    .bindlessResourceSlotsBuffer = &foundResources.value().bindlessResourceSlotsBuffer,
+                };
             }
+            collector.collect(instance, resources);
         }
     );
 }
 
-bool MeshSkinningSystem::replaceAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state){
+bool MeshSkinningSystem::replaceAcceptedSkinningState(
+    const Core::CommandListResourceStateHandoff& state,
+    Core::Alloc::ScratchArena& scratchArena
+){
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> liveBuffers(m_arena);
-    collectLiveSkinningStateBuffers(liveBuffers);
+    collectLiveSkinningStateBuffers(liveBuffers, scratchArena);
     return m_acceptedSkinningState.replaceBufferSubset(state, liveBuffers.data(), liveBuffers.size());
 }
 
@@ -419,7 +399,7 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
     // otherwise-pruned runtime mesh indefinitely.
     if(
         m_acceptedSkinningState.valid()
-        && !replaceAcceptedSkinningState(*m_acceptedSkinningState.source())
+        && !replaceAcceptedSkinningState(*m_acceptedSkinningState.source(), scratchArena)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to prune the accepted skinning state handoff"));
         return false;
@@ -1040,7 +1020,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
 
     transaction.reset(compiledGraph);
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> liveBuffers(m_arena);
-    collectLiveSkinningStateBuffers(liveBuffers);
+    collectLiveSkinningStateBuffers(liveBuffers, scratchArena);
     Core::GpuPersistentResourceStateCache::Candidate acceptedStateCandidate(m_acceptedSkinningState);
     struct SkinningStateContext{
         Core::GpuPersistentResourceStateCache* cache = nullptr;

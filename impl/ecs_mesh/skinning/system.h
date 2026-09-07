@@ -257,8 +257,14 @@ private:
         usize& outNormalBytes,
         usize& outTangentBytes
     );
-    void collectLiveSkinningStateBuffers(Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers)const;
-    [[nodiscard]] bool replaceAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state);
+    void collectLiveSkinningStateBuffers(
+        Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers,
+        Core::Alloc::ScratchArena& scratchArena
+    )const;
+    [[nodiscard]] bool replaceAcceptedSkinningState(
+        const Core::CommandListResourceStateHandoff& state,
+        Core::Alloc::ScratchArena& scratchArena
+    );
     [[nodiscard]] bool ensureRuntimeResources(
         MeshSkinningRuntimeInstance& instance,
         const RuntimeSkinPayloadScratch& payload,

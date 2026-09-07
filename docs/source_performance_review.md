@@ -379,3 +379,22 @@ A collection owns exact pointer membership for its current output, with 32 inlin
 Singleton opt overhead is about 8ns per operation; shadow debug singleton adds about 59ns. Unique pass peak scratch grows from 51,264 to 114,832 bytes in dbg (51,248 to 114,736 in opt), reserving 166,912 bytes. Unique shadow peak becomes 63,600/63,504 bytes, reserving 128,000/107,520. Small and shared workloads retain their original scratch usage. Repeated large-small-large operations verify stable warmed backing and preserved caller-owned storage; the pending vector releases handles after every material.
 
 Twelve regressions cover fresh validation, first ownership/order, aliases, promotion, seeded prefixes, pass and shadow failure differences, current resource replacement, stable reuse and unwind cleanup. All 229 ECS graphics cases pass in dbg/opt and 232 in fin; frame, descriptor-buffer and skinning smoke targets build in all three. Benchmark timers cover the real gather or shadow resolve/merge operation and scratch teardown; inputs and assertions are outside.
+
+## Compute emulation output alias validation
+
+Material, AVBOIT, interval CSG, and receiver CSG capture now share an exact output-identity index. Each operation borrows scratch from its owning caller, uses an inline set for up to 32 identities, and builds a scratch hash set only when needed. Buffer pointers and descriptor heap slots retain separate identity domains. Receiver matching rebuilds its lookup from the currently validated public rows, so later row mutations still receive the original cross-stream intersection check. The change removes two duplicate linear-scan helpers without retaining pointers or scratch across frames.
+
+Eight functional regressions cover duplicate pointers and slots, regular/receiver intersections, mirrored-row mutation, the inline-to-index transition, failure behavior, and repeated use. All 229 ECS tests pass in dbg and opt, and all 232 pass in fin; the frame, pipeline, descriptor test, and skinning benchmark targets also build in every configuration.
+
+The following medians use seven alternating before/after process pairs after warmup on Windows ARM64. Each large workload captures 1,024 draws twice, except the mutated intersection workload, which performs four checks. Values are total CPU milliseconds for that workload, not frame times.
+
+| Operation | dbg before / after | opt before / after |
+| --- | ---: | ---: |
+| Regular capture | 12.8552 / 1.5696 | 0.3575 / 0.1354 |
+| AVBOIT capture | 9.8777 / 1.8631 | 0.3651 / 0.1426 |
+| Interval capture | 10.2332 / 2.0916 | 0.4138 / 0.1728 |
+| Receiver capture, 1,024 regular and 1,024 receiver draws | 42.8948 / 3.0175 | 1.0997 / 0.2858 |
+| Receiver matching | 23.7322 / 0.5563 | 0.4909 / 0.0707 |
+| Mutated receiver intersection checks | 47.3787 / 1.1051 | 0.9813 / 0.1182 |
+
+Persistent plan peak storage is unchanged. The large regular index uses 63,568 scratch bytes in dbg and 63,488 in opt; AVBOIT and interval use 95,392 / 95,232 bytes, and receiver capture uses 129,120 / 129,024 bytes. Up to 32 total indexed identities require no scratch allocation. Singleton opt capture costs increase by at most about 5 ns per call. At 32 draws per stream, receiver capture indexes 64 identities and adds about 573 ns per opt capture; receiver matching adds about 188 ns per check. These small-input costs accompany substantial dbg and large-input improvements. Unchanged non-receiver matching routines are not credited with a speedup.

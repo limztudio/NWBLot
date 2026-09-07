@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/material/renderer_draw_types.h>
+#include <impl/ecs_render/material/compute_emulation_output_index.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,7 +47,7 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
         captured = false;
     }
 
-    [[nodiscard]] bool capture(const MaterialPassDrawItems& sourceDrawItems){
+    [[nodiscard]] bool capture(const MaterialPassDrawItems& sourceDrawItems, Core::Alloc::ScratchArena& scratchArena){
         reset();
         if(sourceDrawItems.computeDrawItems.empty())
             return false;
@@ -54,6 +55,8 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
         drawItems.reserve(sourceDrawItems.computeDrawItems.size());
         outputBuffers.reserve(sourceDrawItems.computeDrawItems.size());
         outputHeapSlots.reserve(sourceDrawItems.computeDrawItems.size());
+        MaterialPassEmulationOutputIndex<Core::Buffer*> outputs(scratchArena);
+        MaterialPassEmulationOutputIndex<u32> slots(scratchArena);
         for(const MaterialPassDrawItem& drawItem : sourceDrawItems.computeDrawItems){
             if(drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None){
                 reset();
@@ -67,12 +70,7 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
                 reset();
                 return false;
             }
-            if(MaterialPassEmulationOutputCaptured(
-                outputBuffers,
-                outputHeapSlots,
-                mesh.emulationVertexBuffer,
-                mesh.emulationVertexHeapHandle.slot()
-            )){
+            if(!outputs.insert(mesh.emulationVertexBuffer.get()) || !slots.insert(mesh.emulationVertexHeapHandle.slot())){
                 reset();
                 return false;
             }

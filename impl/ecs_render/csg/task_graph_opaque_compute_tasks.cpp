@@ -65,7 +65,7 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
     CsgFrameGpuData csgFrameData{ scratchArena };
     payload.plan.materialize(drawItems, csgFrameData);
     // The output set imported by the graph is immutable. Reject a corrupted retained plan before recording.
-    if(!payload.plan.matches())
+    if(!payload.plan.matches(scratchArena))
         return false;
 
     const bool deferredResourcesReady =

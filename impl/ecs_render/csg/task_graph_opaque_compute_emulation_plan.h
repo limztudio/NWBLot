@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/material/renderer_draw_types.h>
+#include <impl/ecs_render/material/compute_emulation_output_index.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,7 +66,8 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
     [[nodiscard]] bool capture(
         const MaterialPassDrawItems& receiverSurfaceDrawItems,
         const MaterialPassDrawItems& sourceRegularDrawItems,
-        const CsgFrameGpuData& csgFrameData
+        const CsgFrameGpuData& csgFrameData,
+        Core::Alloc::ScratchArena& scratchArena
     ){
         reset();
         if(receiverSurfaceDrawItems.computeDrawItems.empty() || !csgFrameData.hasWork())
@@ -82,6 +84,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
         drawItems.reserve(receiverSurfaceDrawItems.computeDrawItems.size());
         outputBuffers.reserve(receiverSurfaceDrawItems.computeDrawItems.size());
         regularOutputBuffers.reserve(regularDrawItems.size());
+        MaterialPassEmulationOutputIndex<Core::Buffer*> outputs(scratchArena);
         for(const MaterialPassDrawItem& regularDrawItem : regularDrawItems){
             const MaterialPassMeshResourceSnapshot& regularMesh = regularDrawItem.meshResources;
             if(
@@ -92,6 +95,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
                 return false;
             }
             regularOutputBuffers.push_back(regularMesh.emulationVertexBuffer);
+            outputs.include(regularMesh.emulationVertexBuffer.get());
         }
         for(const MaterialPassDrawItem& drawItem : receiverSurfaceDrawItems.computeDrawItems){
             if(drawItem.pipelineKey.csgMode == MaterialPipelineCsgMode::None){
@@ -106,19 +110,10 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
                 reset();
                 return false;
             }
-            for(const Core::BufferHandle& existing : outputBuffers){
-                if(existing.get() == mesh.emulationVertexBuffer.get()){
-                    reset();
-                    return false;
-                }
-            }
-            // G-buffer renders regular opaque work after this producer but before receiver-surface rasterization.
-            // A regular compute item that writes this output would replace the generated receiver vertices first.
-            for(const Core::BufferHandle& regularOutput : regularOutputBuffers){
-                if(regularOutput.get() == mesh.emulationVertexBuffer.get()){
-                    reset();
-                    return false;
-                }
+            // Earlier regular output ownership and preceding receiver outputs both exclude this receiver.
+            if(!outputs.insert(mesh.emulationVertexBuffer.get())){
+                reset();
+                return false;
             }
             drawItems.push_back(drawItem);
             outputBuffers.push_back(mesh.emulationVertexBuffer);
@@ -130,13 +125,14 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
         return captured;
     }
 
-    [[nodiscard]] bool matches()const{
+    [[nodiscard]] bool matches(Core::Alloc::ScratchArena& scratchArena)const{
         if(
             !captured
             || outputBuffers.size() != drawItems.size()
             || regularOutputBuffers.size() != regularDrawItems.size()
         )
             return false;
+        MaterialPassEmulationOutputIndex<Core::Buffer*> receiverOutputs(scratchArena);
         for(usize drawIndex = 0u; drawIndex < drawItems.size(); ++drawIndex){
             const MaterialPassMeshResourceSnapshot& mesh = drawItems[drawIndex].meshResources;
             if(
@@ -145,6 +141,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
                 || mesh.emulationVertexBuffer.get() != outputBuffers[drawIndex].get()
             )
                 return false;
+            receiverOutputs.include(mesh.emulationVertexBuffer.get());
         }
         for(usize drawIndex = 0u; drawIndex < regularDrawItems.size(); ++drawIndex){
             const MaterialPassMeshResourceSnapshot& mesh = regularDrawItems[drawIndex].meshResources;
@@ -154,10 +151,8 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
                 || mesh.emulationVertexBuffer.get() != regularOutputBuffers[drawIndex].get()
             )
                 return false;
-            for(const Core::BufferHandle& receiverOutput : outputBuffers){
-                if(mesh.emulationVertexBuffer.get() == receiverOutput.get())
-                    return false;
-            }
+            if(receiverOutputs.contains(mesh.emulationVertexBuffer.get()))
+                return false;
         }
         return true;
     }
@@ -210,7 +205,8 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
 
     [[nodiscard]] bool capture(
         const MaterialPassDrawItems& sourceDrawItems,
-        const CsgFrameGpuData& csgFrameData
+        const CsgFrameGpuData& csgFrameData,
+        Core::Alloc::ScratchArena& scratchArena
     ){
         reset();
         if(sourceDrawItems.computeDrawItems.empty() || !csgFrameData.hasWork())
@@ -220,6 +216,8 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
         drawItems.reserve(sourceDrawItems.computeDrawItems.size());
         outputBuffers.reserve(sourceDrawItems.computeDrawItems.size());
         outputHeapSlots.reserve(sourceDrawItems.computeDrawItems.size());
+        MaterialPassEmulationOutputIndex<Core::Buffer*> outputs(scratchArena);
+        MaterialPassEmulationOutputIndex<u32> slots(scratchArena);
         for(const MaterialPassDrawItem& drawItem : sourceDrawItems.computeDrawItems){
             if(drawItem.pipelineKey.csgMode == MaterialPipelineCsgMode::None){
                 reset();
@@ -233,12 +231,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
                 reset();
                 return false;
             }
-            if(MaterialPassEmulationOutputCaptured(
-                outputBuffers,
-                outputHeapSlots,
-                mesh.emulationVertexBuffer,
-                mesh.emulationVertexHeapHandle.slot()
-            )){
+            if(!outputs.insert(mesh.emulationVertexBuffer.get()) || !slots.insert(mesh.emulationVertexHeapHandle.slot())){
                 reset();
                 return false;
             }

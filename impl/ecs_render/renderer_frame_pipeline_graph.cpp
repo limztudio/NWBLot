@@ -3049,7 +3049,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             occupancyRegularComputeEmulationPlanCaptured = occupancyDrawItems.csg.computeDrawItems.empty()
                 && avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
                 && occupancyMaterialSampledTexturesCollected
-                && avboitOccupancyComputeEmulationPayload.plan.capture(occupancyDrawItems.regular)
+                && avboitOccupancyComputeEmulationPayload.plan.capture(occupancyDrawItems.regular, occupancyUploadScratch)
             ;
             occupancyCsgComputeEmulationPlanCaptured = occupancyDrawItems.regular.computeDrawItems.empty()
                 && occupancyCsgStreamsUploaded
@@ -3058,7 +3058,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 && occupancyMaterialSampledTexturesCollected
                 && avboitOccupancyComputeEmulationPayload.csgPlan.capture(
                     occupancyDrawItems.csg,
-                    occupancyCsgFrameData
+                    occupancyCsgFrameData,
+                    occupancyUploadScratch
                 )
             ;
             // The all-compute two-through-five-draw case can preserve one shared generated output only
@@ -4150,7 +4151,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             extinctionRegularComputeEmulationPlanCaptured = extinctionDrawItems.csg.computeDrawItems.empty()
                 && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
                 && extinctionMaterialSampledTexturesCollected
-                && avboitExtinctionComputeEmulationPayload.plan.capture(extinctionDrawItems.regular)
+                && avboitExtinctionComputeEmulationPayload.plan.capture(extinctionDrawItems.regular, extinctionUploadScratch)
             ;
             extinctionCsgComputeEmulationPlanCaptured = extinctionDrawItems.regular.computeDrawItems.empty()
                 && extinctionCsgStreamsUploaded
@@ -4159,7 +4160,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 && extinctionMaterialSampledTexturesCollected
                 && avboitExtinctionComputeEmulationPayload.csgPlan.capture(
                     extinctionDrawItems.csg,
-                    extinctionCsgFrameData
+                    extinctionCsgFrameData,
+                    extinctionUploadScratch
                 )
             ;
             extinctionSharedComputeEmulationPlanCaptured = !extinctionRegularComputeEmulationPlanCaptured
@@ -5060,7 +5062,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             accumulationRegularComputeEmulationPlanCaptured = accumulationDrawItems.csg.computeDrawItems.empty()
                 && avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
                 && accumulationMaterialSampledTexturesCollected
-                && avboitAccumulationComputeEmulationPayload.plan.capture(accumulationDrawItems.regular)
+                && avboitAccumulationComputeEmulationPayload.plan.capture(accumulationDrawItems.regular, accumulationUploadScratch)
             ;
             accumulationCsgComputeEmulationPlanCaptured = accumulationDrawItems.regular.computeDrawItems.empty()
                 && accumulationCsgStreamsUploaded
@@ -5069,7 +5071,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 && accumulationMaterialSampledTexturesCollected
                 && avboitAccumulationComputeEmulationPayload.csgPlan.capture(
                     accumulationDrawItems.csg,
-                    accumulationCsgFrameData
+                    accumulationCsgFrameData,
+                    accumulationUploadScratch
                 )
             ;
             // The all-compute two-through-five-draw case can preserve one shared generated output only

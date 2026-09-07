@@ -975,7 +975,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const bool opaqueComputeEmulationPlanCaptured = gbufferPayload.materialFrameStatesGraphOwned
         && gbufferPayload.materialGeometryStatesGraphOwned
         && gbufferMaterialSampledTexturesCollected
-        && opaqueComputeEmulationPayload.plan.capture(opaqueDrawItems.regular)
+        && opaqueComputeEmulationPayload.plan.capture(opaqueDrawItems.regular, gbufferResourceScratch)
     ;
     const bool opaqueComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationPlanCaptured
         && GatherImportedOutputBufferResourceSet(
@@ -1046,7 +1046,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         && opaqueCsgReceiverComputeEmulationPayload.plan.capture(
             opaqueDrawItems.csgReceiverSurface,
             opaqueDrawItems.regular,
-            csgFrameData
+            csgFrameData,
+            gbufferResourceScratch
         )
     ;
     const bool opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned =
@@ -1722,7 +1723,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             && csgIntervalSampleMaterialSampledTexturesCollected
             && opaqueCsgIntervalSampleComputeEmulationPayload.plan.capture(
                 opaqueDrawItems.csg,
-                csgFrameData
+                csgFrameData,
+                csgIntervalSampleResourceScratch
             )
         ;
         const bool opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned =

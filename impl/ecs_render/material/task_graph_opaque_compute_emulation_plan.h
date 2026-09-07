@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/material/renderer_draw_types.h>
+#include <impl/ecs_render/material/compute_emulation_output_index.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,7 +46,7 @@ struct OpaqueRegularComputeEmulationGraphPlan{
         captured = false;
     }
 
-    [[nodiscard]] bool capture(const MaterialPassDrawItems& sourceDrawItems){
+    [[nodiscard]] bool capture(const MaterialPassDrawItems& sourceDrawItems, Core::Alloc::ScratchArena& scratchArena){
         reset();
         if(sourceDrawItems.computeDrawItems.empty())
             return false;
@@ -53,6 +54,7 @@ struct OpaqueRegularComputeEmulationGraphPlan{
         meshDrawItems.assign(sourceDrawItems.meshDrawItems.begin(), sourceDrawItems.meshDrawItems.end());
         drawItems.reserve(sourceDrawItems.computeDrawItems.size());
         outputBuffers.reserve(sourceDrawItems.computeDrawItems.size());
+        MaterialPassEmulationOutputIndex<Core::Buffer*> outputs(scratchArena);
         for(const MaterialPassDrawItem& drawItem : sourceDrawItems.computeDrawItems){
             // This first split is deliberately regular opaque-only. A CSG binding may need clip/image state and
             // maintains a different producer/raster ordering contract, so it remains on the combined callback.
@@ -71,7 +73,7 @@ struct OpaqueRegularComputeEmulationGraphPlan{
             // The original callback interleaves dispatch and raster specifically because a second instance can
             // overwrite this whole persistent buffer.  This first graph-owned slice deliberately declines that
             // case rather than moving either draw across a potentially aliasing producer.
-            if(MaterialPassEmulationOutputBufferCaptured(outputBuffers, mesh.emulationVertexBuffer)){
+            if(!outputs.insert(mesh.emulationVertexBuffer.get())){
                 reset();
                 return false;
             }

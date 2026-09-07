@@ -81,6 +81,15 @@ static void VerifyOwnedOutput(const ExpandedAssetMetadataVector& output, const M
     EXPECT_EQ(sourceLocal->asReference(), "local");
 }
 
+[[nodiscard]] static bool ParseLookupFixture(BunchFixture& fixture, const AStringView metadata, const usize unusedDeclarations){
+    AString<Alloc::ScratchArena> source(fixture.scratchArena);
+    source.reserve(unusedDeclarations * 32u + metadata.size());
+    for(usize index = 0u; index < unusedDeclarations; ++index)
+        source += StringFormat(fixture.scratchArena, "metadata unused_{};\n", index);
+    source.append(metadata.data(), metadata.size());
+    return fixture.document.parse(AStringView(source));
+}
+
 static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
@@ -365,6 +374,171 @@ TEST(AssetBunchOwnership, NullValueReachesTheTypeParserAndKeepsItsRejectionContr
     }
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("asset is not a map")));
+}
+
+TEST(AssetBunchLookup, ExactCaseReferencesPreserveExportAndRepeatedLocalValueOrder){
+    for(const usize unusedDeclarations : { 0u, 11u, 12u, 32u }){
+        BunchFixture fixture;
+        ASSERT_TRUE(ParseLookupFixture(fixture, R"(
+metadata Local = { "id": 11 };
+metadata local = { "id": 22 };
+probe first = { "values": [Local, local, Local] };
+probe second = { "values": [local] };
+ASSET_BUNCH bunch = [second, first];
+)", unusedDeclarations));
+        const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
+        ExpandedAssetMetadataVector output(fixture.scratchArena);
+        ASSERT_TRUE(AssetsBunchCook::ExpandAssetBunch(
+            fixture.assetRoot, "project", fixture.filePath, fixture.document, output, fixture.scratchArena
+        ));
+        ASSERT_EQ(output.size(), 2u);
+        EXPECT_EQ(output[0u].virtualPath, Name("project/fixtures/bundle/second"));
+        EXPECT_EQ(output[1u].virtualPath, Name("project/fixtures/bundle/first"));
+        const Value* const firstValues = output[1u].value.findField("values");
+        ASSERT_NE(firstValues, nullptr);
+        ASSERT_TRUE(firstValues->isList());
+        ASSERT_EQ(firstValues->asList().size(), 3u);
+        const i64 expectedIds[] = { 11, 22, 11 };
+        for(usize index = 0u; index < LengthOf(expectedIds); ++index){
+            const Value* const id = firstValues->asList()[index].findField("id");
+            ASSERT_NE(id, nullptr);
+            EXPECT_EQ(id->asInteger(), expectedIds[index]);
+        }
+        const Value* const secondValues = output[0u].value.findField("values");
+        ASSERT_NE(secondValues, nullptr);
+        ASSERT_TRUE(secondValues->isList());
+        ASSERT_EQ(secondValues->asList().size(), 1u);
+        const Value* const secondId = secondValues->asList()[0u].findField("id");
+        ASSERT_NE(secondId, nullptr);
+        EXPECT_EQ(secondId->asInteger(), 22);
+        output.clear();
+        EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
+    }
+}
+
+TEST(AssetBunchLookup, CanonicalDuplicateExportsAreRejectedBeforeNestedResolution){
+    for(const usize unusedDeclarations : { 0u, 32u }){
+        Tests::CapturingLogger logger;
+        Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
+        BunchFixture fixture;
+        ASSERT_TRUE(ParseLookupFixture(fixture, R"(
+metadata known;
+probe Asset = { "missing": known.missing };
+probe asset;
+asset_bunch bunch = [Asset, asset];
+)", unusedDeclarations));
+        ExpandedAssetMetadataVector output(fixture.scratchArena);
+        EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(
+            fixture.assetRoot, "project", fixture.filePath, fixture.document, output, fixture.scratchArena
+        ));
+        EXPECT_TRUE(output.empty());
+        EXPECT_EQ(logger.errorCount(), 1u);
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("variable 'asset' is listed more than once")));
+        EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("does not target a declared asset")));
+    }
+}
+
+TEST(AssetBunchLookup, LocalCycleDetectionKeepsCanonicalVariableIdentity){
+    for(const usize unusedDeclarations : { 0u, 32u }){
+        Tests::CapturingLogger logger;
+        Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
+        BunchFixture fixture;
+        ASSERT_TRUE(ParseLookupFixture(fixture, R"(
+metadata Local;
+metadata local = { "id": 5 };
+Local.next = local;
+probe asset = { "nested": Local };
+asset_bunch bunch = [asset];
+)", unusedDeclarations));
+        const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
+        ExpandedAssetMetadataVector output(fixture.scratchArena);
+        EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(
+            fixture.assetRoot, "project", fixture.filePath, fixture.document, output, fixture.scratchArena
+        ));
+        EXPECT_TRUE(output.empty());
+        EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
+        EXPECT_EQ(logger.errorCount(), 1u);
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("cyclic local metadata reference 'local'")));
+    }
+}
+
+TEST(AssetBunchLookup, BunchDeclarationsAreExcludedFromExportAndNestedReferenceLookup){
+    const AStringView metadataCases[] = {
+        "asset_bunch bunch; bunch = [bunch];",
+        "probe asset; ASSET_BUNCH bunch; asset.items = [bunch]; bunch = [asset];",
+    };
+    for(const usize unusedDeclarations : { 0u, 32u }){
+        for(usize caseIndex = 0u; caseIndex < LengthOf(metadataCases); ++caseIndex){
+            Tests::CapturingLogger logger;
+            Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
+            BunchFixture fixture;
+            ASSERT_TRUE(ParseLookupFixture(fixture, metadataCases[caseIndex], unusedDeclarations));
+            const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
+            ExpandedAssetMetadataVector output(fixture.scratchArena);
+            EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(
+                fixture.assetRoot, "project", fixture.filePath, fixture.document, output, fixture.scratchArena
+            ));
+            EXPECT_TRUE(output.empty());
+            EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
+            EXPECT_EQ(logger.errorCount(), 1u);
+            EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u
+                ? TStringView(NWB_TEXT("item 0 references undeclared asset variable 'bunch'"))
+                : TStringView(NWB_TEXT("reference 'bunch' does not target a declared asset"))
+            ));
+        }
+    }
+}
+
+TEST(AssetBunchLookup, ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems){
+    const AStringView metadataCases[] = {
+        "metadata known; probe asset; asset_bunch bunch = [known.missing, asset];",
+        "probe asset; asset_bunch bunch = [\"asset\", asset];",
+    };
+    for(const usize unusedDeclarations : { 0u, 32u }){
+        for(usize caseIndex = 0u; caseIndex < LengthOf(metadataCases); ++caseIndex){
+            Tests::CapturingLogger logger;
+            Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
+            BunchFixture fixture;
+            ASSERT_TRUE(ParseLookupFixture(fixture, metadataCases[caseIndex], unusedDeclarations));
+            ExpandedAssetMetadataVector output(fixture.scratchArena);
+            EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(
+                fixture.assetRoot, "project", fixture.filePath, fixture.document, output, fixture.scratchArena
+            ));
+            EXPECT_TRUE(output.empty());
+            EXPECT_EQ(logger.errorCount(), 1u);
+            EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u
+                ? TStringView(NWB_TEXT("item 0 references undeclared asset variable 'known.missing'"))
+                : TStringView(NWB_TEXT("item 0 must be a declared asset reference"))
+            ));
+        }
+    }
+}
+
+TEST(AssetBunchLookup, NestedListFailureFollowsSourceTraversalOrder){
+    const AStringView metadataCases[] = {
+        "metadata known; metadata cycle; cycle.next = cycle; "
+        "probe asset = [known.missing, cycle]; asset_bunch bunch = [asset];",
+        "metadata known; metadata cycle; cycle.next = cycle; "
+        "probe asset = [cycle, known.missing]; asset_bunch bunch = [asset];",
+    };
+    for(const usize unusedDeclarations : { 0u, 32u }){
+        for(usize caseIndex = 0u; caseIndex < LengthOf(metadataCases); ++caseIndex){
+            Tests::CapturingLogger logger;
+            Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
+            BunchFixture fixture;
+            ASSERT_TRUE(ParseLookupFixture(fixture, metadataCases[caseIndex], unusedDeclarations));
+            const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
+            ExpandedAssetMetadataVector output(fixture.scratchArena);
+            EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(
+                fixture.assetRoot, "project", fixture.filePath, fixture.document, output, fixture.scratchArena
+            ));
+            EXPECT_TRUE(output.empty());
+            EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
+            EXPECT_EQ(logger.errorCount(), 1u);
+            EXPECT_EQ(logger.sawErrorContaining(NWB_TEXT("does not target a declared asset")), caseIndex == 0u);
+            EXPECT_EQ(logger.sawErrorContaining(NWB_TEXT("cyclic local metadata reference")), caseIndex == 1u);
+        }
+    }
 }
 
 TEST(AssetBunchBenchmark, DISABLED_FourAssetsAndFourLocalDeclarations){

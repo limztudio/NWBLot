@@ -298,3 +298,17 @@ Pruning builds one operation-owned set of requested full mesh identities and ver
 The 1,024-mesh workload eliminates 524,800 full descriptor resolutions. Its requested-identity index peaks at 180,240 scratch bytes in dbg (180,224 in opt), reserving 361,472/360,448 bytes. Singleton, sparse 32 and shared cases allocate no scratch storage. No membership state or owning descriptor survives the operation.
 
 Eight regressions cover exact full identities and versions, recycled entities, changed readiness, invisible bindings, provider union and early completion, all thirteen descriptor ownership roles, and release order. ECS graphics tests, frame and the skinning benchmark application pass/build in dbg, opt and fin; the selected full matrix and all 50 policy checks pass. These are CPU pruning measurements with real ECS bindings, not frame-rate estimates.
+
+## Asset-bunch declaration lookup
+
+Expansion filters bunch declarations once and shares one exact-text lookup across exports and nested references. Up to 16 declarations use a bounded pointer prefix; larger documents use one caller-scratch table. First exact matching declarations, case-sensitive references, canonical duplicate/cycle checks, source traversal and diagnostic ordering are unchanged. Repeated type classification no longer constructs temporary names for every declaration scan.
+
+| Public expansion workload | dbg before to after (ms) | opt before to after (ms) |
+| --- | ---: | ---: |
+| Four exports/four locals, 256 expansions | 57.0341 → 35.6654 | 2.3558 → 1.4097 |
+| 256 exports/256 locals, three expansions | 1056.7290 → 22.6687 | 46.8214 → 0.9917 |
+| 1,024 exports/1,024 locals, three expansions | 16584.1314 → 95.7938 | 737.2510 → 4.2838 |
+
+The large debug workload reduces backing allocations from 33,201,075 to 175,548; opt changes from 11,073,386 to 64,877. The small workload also allocates less and retains its original scratch capacity. The final scratch reservation after the large fixture's repetitions grows from 3,351,552 to 6,071,296 bytes in dbg and 2,105,344 to 2,400,256 in opt. These values include existing transient-string and cross-chunk scratch retention until arena destruction; they do not establish stable warm reuse. Resolved metadata ownership remains balanced.
+
+Six lookup regressions cover inline/indexed thresholds, full reference text, case and duplicate policies, excluded bunch declarations, local cycles and ordered nested failures. All 59 selected asset cases pass in dbg, opt and fin, including the eight prior ownership regressions; pipeline and frame targets build in all three. The baseline already owns resolved metadata values, so these measurements isolate lookup work from the earlier leak correction.

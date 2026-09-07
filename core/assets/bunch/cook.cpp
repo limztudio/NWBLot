@@ -64,9 +64,58 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
     return false;
 }
 
+// Tiny documents keep bounded lookups inline; larger documents share one exact-text index for every reference.
+class DeclarationLookup final : NoCopy{
+private:
+    using Declaration = Metascript::Document::Declaration;
+    using LookupTable = HashMap<AStringView, const Declaration*, ScratchArena>;
+
+
+private:
+    static constexpr usize s_InlineCapacity = 16u;
+
+
+public:
+    DeclarationLookup(const Metascript::Document& doc, ScratchArena& scratchArena){
+        if(doc.declarations().size() > s_InlineCapacity){
+            m_table.emplace(0u, Hasher<AStringView>(), EqualTo<AStringView>(), scratchArena);
+            m_table->reserve(doc.declarations().size());
+        }
+        for(const Declaration& declaration : doc.declarations()){
+            if(IsAssetBunchType(DeclarationType(declaration)))
+                continue;
+            if(m_table)
+                m_table->try_emplace(DeclarationVariable(declaration), &declaration);
+            else
+                m_inline[m_inlineCount++] = &declaration;
+        }
+    }
+
+
+public:
+    [[nodiscard]] const Declaration* find(const AStringView reference)const{
+        if(m_table){
+            const auto found = m_table->find(reference);
+            return found == m_table->end() ? nullptr : found.value();
+        }
+        for(usize index = 0u; index < m_inlineCount; ++index){
+            if(DeclarationVariable(*m_inline[index]) == reference)
+                return m_inline[index];
+        }
+        return nullptr;
+    }
+
+
+private:
+    Array<const Declaration*, s_InlineCapacity> m_inline;
+    usize m_inlineCount = 0u;
+    Optional<LookupTable> m_table;
+};
+
+
 [[nodiscard]] static const Metascript::Document::Declaration* FindBunchItemDeclaration(
     const Path& nwbFilePath,
-    const Metascript::Document& doc,
+    const DeclarationLookup& declarations,
     const Metascript::Value& item,
     const usize itemIndex
 ){
@@ -79,12 +128,8 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
     }
 
     const AStringView itemReference(item.asReference().data(), item.asReference().size());
-    for(const Metascript::Document::Declaration& declaration : doc.declarations()){
-        if(IsAssetBunchType(DeclarationType(declaration)))
-            continue;
-        if(DeclarationVariable(declaration) == itemReference)
-            return &declaration;
-    }
+    if(const Metascript::Document::Declaration* declaration = declarations.find(itemReference))
+        return declaration;
 
     NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': item {} references undeclared asset variable '{}'")
         , PathToString<tchar>(nwbFilePath)
@@ -116,22 +161,10 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
     return ComputeNameHash(DeclarationVariable(declaration));
 }
 
-[[nodiscard]] static const Metascript::Document::Declaration* FindDeclarationByReference(
-    const Metascript::Document& doc,
-    const Metascript::MStringView reference
-){
-    for(const Metascript::Document::Declaration& declaration : doc.declarations()){
-        if(IsAssetBunchType(DeclarationType(declaration)))
-            continue;
-        if(DeclarationVariable(declaration) == AStringView(reference.data(), reference.size()))
-            return &declaration;
-    }
-    return nullptr;
-}
-
 [[nodiscard]] static bool ResolveAssetReferenceValue(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
+    const DeclarationLookup& declarations,
     const AStringView baseVirtualPath,
     const ScratchNameHashSet& assetVariableHashes,
     ScratchNameHashSet& resolvingVariableHashes,
@@ -143,6 +176,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
 [[nodiscard]] static bool ResolveAssetReferenceList(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
+    const DeclarationLookup& declarations,
     const AStringView baseVirtualPath,
     const ScratchNameHashSet& assetVariableHashes,
     ScratchNameHashSet& resolvingVariableHashes,
@@ -156,6 +190,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
         if(!ResolveAssetReferenceValue(
             nwbFilePath,
             doc,
+            declarations,
             baseVirtualPath,
             assetVariableHashes,
             resolvingVariableHashes,
@@ -172,6 +207,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
 [[nodiscard]] static bool ResolveAssetReferenceMap(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
+    const DeclarationLookup& declarations,
     const AStringView baseVirtualPath,
     const ScratchNameHashSet& assetVariableHashes,
     ScratchNameHashSet& resolvingVariableHashes,
@@ -184,6 +220,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
         if(!ResolveAssetReferenceValue(
             nwbFilePath,
             doc,
+            declarations,
             baseVirtualPath,
             assetVariableHashes,
             resolvingVariableHashes,
@@ -199,6 +236,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
 [[nodiscard]] static bool ResolveAssetReference(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
+    const DeclarationLookup& declarations,
     const AStringView baseVirtualPath,
     const ScratchNameHashSet& assetVariableHashes,
     ScratchNameHashSet& resolvingVariableHashes,
@@ -207,7 +245,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
     ScratchArena& scratchArena
 ){
     const Metascript::MStringView reference = source.asReference();
-    const Metascript::Document::Declaration* declaration = FindDeclarationByReference(doc, reference);
+    const Metascript::Document::Declaration* declaration = declarations.find(reference);
     if(!declaration){
         NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': reference '{}' does not target a declared asset")
             , PathToString<tchar>(nwbFilePath)
@@ -238,6 +276,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
         const bool resolved = ResolveAssetReferenceValue(
             nwbFilePath,
             doc,
+            declarations,
             baseVirtualPath,
             assetVariableHashes,
             resolvingVariableHashes,
@@ -266,6 +305,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
 [[nodiscard]] static bool ResolveAssetReferenceValue(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
+    const DeclarationLookup& declarations,
     const AStringView baseVirtualPath,
     const ScratchNameHashSet& assetVariableHashes,
     ScratchNameHashSet& resolvingVariableHashes,
@@ -277,6 +317,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
         return ResolveAssetReference(
             nwbFilePath,
             doc,
+            declarations,
             baseVirtualPath,
             assetVariableHashes,
             resolvingVariableHashes,
@@ -288,6 +329,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
         return ResolveAssetReferenceList(
             nwbFilePath,
             doc,
+            declarations,
             baseVirtualPath,
             assetVariableHashes,
             resolvingVariableHashes,
@@ -299,6 +341,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
         return ResolveAssetReferenceMap(
             nwbFilePath,
             doc,
+            declarations,
             baseVirtualPath,
             assetVariableHashes,
             resolvingVariableHashes,
@@ -410,10 +453,13 @@ bool ExpandAssetBunch(
     usedVariables.reserve(list.size());
     outAssets.reserve(list.size());
 
+    const DeclarationLookup declarations(doc, scratchArena);
     Vector<const Metascript::Document::Declaration*, ScratchArena> itemDeclarations(scratchArena);
     itemDeclarations.reserve(list.size());
     for(usize itemIndex = 0u; itemIndex < list.size(); ++itemIndex){
-        const Metascript::Document::Declaration* itemDeclaration = FindBunchItemDeclaration(nwbFilePath, doc, list[itemIndex], itemIndex);
+        const Metascript::Document::Declaration* itemDeclaration = FindBunchItemDeclaration(
+            nwbFilePath, declarations, list[itemIndex], itemIndex
+        );
         if(!itemDeclaration)
             return false;
 
@@ -447,6 +493,7 @@ bool ExpandAssetBunch(
         if(!ResolveAssetReferenceValue(
             nwbFilePath,
             doc,
+            declarations,
             AStringView(baseVirtualPathText.data(), baseVirtualPathText.size()),
             usedVariables,
             resolvingVariableHashes,

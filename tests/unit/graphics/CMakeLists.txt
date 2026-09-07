@@ -19,6 +19,7 @@ target_sources(nwb_graphics_task_graph_tests PRIVATE
     "${CMAKE_SOURCE_DIR}/tests/common/gpu_task_graph_read_views.h"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_crash_marker_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_metric_correlator_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_metrics_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/heap_binding_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/host_readback_sync_tests.cpp"

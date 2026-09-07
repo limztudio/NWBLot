@@ -130,6 +130,9 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
             ++it;
     }
 
+    // The validated index moves into the pending frame, keeping lookup and duplicate checks on the same identity.
+    PendingPacketEnvelopeMetric candidate(m_arena);
+    candidate.scopeIndices.reserve(scopeCount);
     const u16 deviceGeneration = scopes[0u].physicalQueue.deviceGeneration;
     for(usize scopeIndex = 0u; scopeIndex < scopeCount; ++scopeIndex){
         const GpuPacketEnvelopeMetricScope& scope = scopes[scopeIndex];
@@ -140,10 +143,8 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
             || scope.scopeName == queueOverlapScope
         )
             return false;
-        for(usize previousScopeIndex = 0u; previousScopeIndex < scopeIndex; ++previousScopeIndex){
-            if(scopes[previousScopeIndex].scopeName == scope.scopeName)
-                return false;
-        }
+        if(!candidate.scopeIndices.try_emplace(scope.scopeName, scopeIndex).second)
+            return false;
         for(const PacketEnvelopeMetricOutputRoleRecord& outputRole : m_packetEnvelopeMetricOutputRoles){
             if(scope.scopeName == outputRole.scopeName)
                 return false;
@@ -274,15 +275,14 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
         return false;
     rememberMetricOutput(queueOverlapScope, {}, false);
 
-    m_pendingPacketEnvelopeMetrics.emplace_back(m_arena);
-    PendingPacketEnvelopeMetric& pending = m_pendingPacketEnvelopeMetrics.back();
-    pending.sourceFrameIndex = sourceFrameIndex;
-    pending.queueOverlapScopeName = queueOverlapScope;
-    pending.queueOverlapScope = overlapOutput;
-    pending.scopes.reserve(scopeCount);
-    pending.queueOutputs.reserve(queueOutputCount);
+    candidate.sourceFrameIndex = sourceFrameIndex;
+    candidate.queueOverlapScopeName = queueOverlapScope;
+    candidate.queueOverlapScope = overlapOutput;
+    candidate.scopes.reserve(scopeCount);
+    candidate.queueOutputs.reserve(queueOutputCount);
+    candidate.remainingScopeCount = scopeCount;
     for(usize scopeIndex = 0u; scopeIndex < scopeCount; ++scopeIndex){
-        pending.scopes.push_back(PacketEnvelopeMetricScopeRecord{
+        candidate.scopes.push_back(PacketEnvelopeMetricScopeRecord{
             .scopeName = scopes[scopeIndex].scopeName,
             .physicalQueue = scopes[scopeIndex].physicalQueue,
             .range = {},
@@ -292,18 +292,18 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
     for(usize outputIndex = 0u; outputIndex < queueOutputCount; ++outputIndex){
         const GpuPacketEnvelopeMetricQueueOutput& output = queueOutputs[outputIndex];
         const Perf::TimingScopeId idleOutput = m_timing.registerScope(output.internalIdleScopeName);
-        if(!idleOutput.valid()){
-            m_pendingPacketEnvelopeMetrics.pop_back();
+        if(!idleOutput.valid())
             return false;
-        }
         rememberMetricOutput(output.internalIdleScopeName, output.physicalQueue, true);
-        pending.queueOutputs.push_back(PacketEnvelopeMetricQueueOutputRecord{
+        candidate.queueOutputs.push_back(PacketEnvelopeMetricQueueOutputRecord{
             .physicalQueue = output.physicalQueue,
             .internalIdleScopeName = output.internalIdleScopeName,
             .internalIdleScope = idleOutput,
         });
     }
 
+    // Publish only a complete frame; candidate cleanup preserves output roles already recorded above.
+    m_pendingPacketEnvelopeMetrics.push_back(Move(candidate));
     return true;
 }
 
@@ -385,18 +385,20 @@ void GpuTimingMetricCorrelator::recordTimestampRange(
             continue;
         }
 
-        for(PacketEnvelopeMetricScopeRecord& scope : it->scopes){
-            if(scope.scopeName != scopeName || scope.physicalQueue != range.physicalQueue)
-                continue;
-            scope.range = range;
-            scope.received = true;
-            break;
+        const auto scopeIndex = it->scopeIndices.find(scopeName);
+        if(scopeIndex != it->scopeIndices.end()){
+            PacketEnvelopeMetricScopeRecord& scope = it->scopes[scopeIndex.value()];
+            if(scope.physicalQueue == range.physicalQueue){
+                scope.range = range;
+                if(!scope.received){
+                    NWB_ASSERT(it->remainingScopeCount > 0u);
+                    scope.received = true;
+                    --it->remainingScopeCount;
+                }
+            }
         }
 
-        bool complete = true;
-        for(const PacketEnvelopeMetricScopeRecord& scope : it->scopes)
-            complete = complete && scope.received;
-        if(!complete){
+        if(it->remainingScopeCount != 0u){
             ++it;
             continue;
         }

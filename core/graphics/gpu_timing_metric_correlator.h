@@ -45,6 +45,10 @@ using GpuTimingSinkSampleVector = Vector<GpuTimingSinkSample, Alloc::ScratchAren
 // Callers serialize access so query-pool synchronization remains with the recorder that feeds completed ranges.
 class GpuTimingMetricCorrelator final : NoCopy{
 private:
+    using PacketEnvelopeScopeIndex = HashMap<Name, usize, Hasher<Name>, EqualTo<Name>, Alloc::GlobalArena>;
+
+
+private:
     struct PendingOverlapFrame{
         u64 frameIndex = 0u;
         GpuComparableTimestampRange first;
@@ -89,10 +93,13 @@ private:
         Name queueOverlapScopeName = NAME_NONE;
         Perf::TimingScopeId queueOverlapScope;
         Vector<PacketEnvelopeMetricScopeRecord, Alloc::GlobalArena> scopes;
+        PacketEnvelopeScopeIndex scopeIndices;
         Vector<PacketEnvelopeMetricQueueOutputRecord, Alloc::GlobalArena> queueOutputs;
+        usize remainingScopeCount = 0u;
 
         explicit PendingPacketEnvelopeMetric(Alloc::GlobalArena& arena)
             : scopes(arena)
+            , scopeIndices(arena)
             , queueOutputs(arena)
         {}
     };

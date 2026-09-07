@@ -263,6 +263,70 @@ const GpuTaskQueueAssignment* FindQueueAssignment(
 }
 
 
+GpuTaskQueueScoringData::GpuTaskQueueScoringData(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    Alloc::ScratchArena& scratchArena)
+    : taskCosts(graph.taskCount(), scratchArena)
+    , ownershipEdgeOffsets(graph.taskCount() + 1u, 0u, scratchArena)
+    , ownershipEdges(scratchArena)
+{
+    for(usize taskIndex = 0u; taskIndex < taskCosts.size(); ++taskIndex)
+        taskCosts[taskIndex] = QueueCostWeight(graph.taskAt(taskIndex).scheduling.cost);
+
+    // Hazard kinds and ranges remain available in analysis for diagnostics. Queue ownership scoring counts each
+    // producer/consumer/resource only once, so build that immutable index once for all candidate evaluations.
+    Vector<const GpuTaskDependencyEdge*, Alloc::ScratchArena> uniqueEdges(scratchArena);
+    uniqueEdges.reserve(analysis.inferredEdges().size());
+    for(const GpuTaskDependencyEdge& edge : analysis.inferredEdges()){
+        if(
+            edge.hazard == GpuTaskHazardType::VersionDependency
+            || edge.hazard == GpuTaskHazardType::VersionLifetime
+            || !edge.resource.valid()
+        )
+            continue;
+        uniqueEdges.push_back(&edge);
+    }
+    Sort(uniqueEdges.begin(), uniqueEdges.end(), [](const GpuTaskDependencyEdge* lhs, const GpuTaskDependencyEdge* rhs){
+        if(lhs->producer.index != rhs->producer.index)
+            return lhs->producer.index < rhs->producer.index;
+        if(lhs->consumer.index != rhs->consumer.index)
+            return lhs->consumer.index < rhs->consumer.index;
+        return lhs->resource.index < rhs->resource.index;
+    });
+
+    usize uniqueEdgeCount = 0u;
+    for(const GpuTaskDependencyEdge* const edge : uniqueEdges){
+        if(uniqueEdgeCount != 0u){
+            const GpuTaskDependencyEdge& previous = *uniqueEdges[uniqueEdgeCount - 1u];
+            if(previous.producer == edge->producer && previous.consumer == edge->consumer && previous.resource == edge->resource)
+                continue;
+        }
+        uniqueEdges[uniqueEdgeCount] = edge;
+        ++uniqueEdgeCount;
+        ++ownershipEdgeOffsets[edge->producer.index + 1u];
+        ++ownershipEdgeOffsets[edge->consumer.index + 1u];
+    }
+    uniqueEdges.resize(uniqueEdgeCount);
+    for(usize taskIndex = 1u; taskIndex < ownershipEdgeOffsets.size(); ++taskIndex)
+        ownershipEdgeOffsets[taskIndex] += ownershipEdgeOffsets[taskIndex - 1u];
+
+    ownershipEdges.resize(ownershipEdgeOffsets.back());
+    Vector<usize, Alloc::ScratchArena> writeOffsets(graph.taskCount(), scratchArena);
+    for(usize taskIndex = 0u; taskIndex < writeOffsets.size(); ++taskIndex)
+        writeOffsets[taskIndex] = ownershipEdgeOffsets[taskIndex];
+    for(const GpuTaskDependencyEdge* const edge : uniqueEdges){
+        ownershipEdges[writeOffsets[edge->producer.index]] = edge;
+        ownershipEdges[writeOffsets[edge->consumer.index]] = edge;
+        ++writeOffsets[edge->producer.index];
+        ++writeOffsets[edge->consumer.index];
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
@@ -270,6 +334,7 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const GraphicsVector<u32>& assignmentIndicesByTask,
     const GpuTaskGraphQueueTopology& topology,
     const GpuTaskSchedulingReachability& schedulingReachability,
+    const GpuTaskQueueScoringData& scoringData,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& candidate
 )noexcept{
@@ -282,7 +347,7 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
         if(assignment.task == task.id)
             continue;
 
-        const u64 cost = QueueCostWeight(graph.taskAt(assignment.task.index).scheduling.cost);
+        const u64 cost = scoringData.taskCosts[assignment.task.index];
         if(assignment.queue == candidate.id)
             queueLoad = queueLoad > Limit<u64>::s_Max - cost ? Limit<u64>::s_Max : queueLoad + cost;
         if(
@@ -324,35 +389,12 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     score.outgoingCrossings = SaturateQueueScoreTerm(outgoingCrossings);
 
     u64 ownershipTransfers = 0u;
-    for(usize edgeIndex = 0u; edgeIndex < analysis.inferredEdges().size(); ++edgeIndex){
-        const GpuTaskDependencyEdge& edge = analysis.inferredEdges()[edgeIndex];
-        if(
-            (
-                edge.hazard == GpuTaskHazardType::VersionDependency
-                || edge.hazard == GpuTaskHazardType::VersionLifetime
-            )
-            || (edge.producer != task.id && edge.consumer != task.id)
-            || !edge.resource.valid()
-        )
-            continue;
-
-        bool alreadyCounted = false;
-        for(usize previousIndex = 0u; previousIndex < edgeIndex; ++previousIndex){
-            const GpuTaskDependencyEdge& previous = analysis.inferredEdges()[previousIndex];
-            if(
-                previous.hazard != GpuTaskHazardType::VersionDependency
-                && previous.hazard != GpuTaskHazardType::VersionLifetime
-                && previous.producer == edge.producer
-                && previous.consumer == edge.consumer
-                && previous.resource == edge.resource
-            ){
-                alreadyCounted = true;
-                break;
-            }
-        }
-        if(alreadyCounted)
-            continue;
-
+    for(
+        usize edgeIndex = scoringData.ownershipEdgeOffsets[task.id.index];
+        edgeIndex < scoringData.ownershipEdgeOffsets[task.id.index + 1u];
+        ++edgeIndex
+    ){
+        const GpuTaskDependencyEdge& edge = *scoringData.ownershipEdges[edgeIndex];
         const GpuTaskQueueAssignment* const producerAssignment = FindQueueAssignment(
             assignments,
             assignmentIndicesByTask,

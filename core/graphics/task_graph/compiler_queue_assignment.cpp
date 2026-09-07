@@ -26,6 +26,7 @@ namespace GpuTaskGraphCompilerDetail{
 [[nodiscard]] static const GpuPhysicalQueueInfo* FindLeastLoadedSameClassQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GpuTaskQueueScoringData& scoringData,
     const GpuTaskGraphQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& baseQueue,
@@ -49,7 +50,7 @@ namespace GpuTaskGraphCompilerDetail{
             const GpuTaskQueueAssignment& assignment = assignments[assignmentIndex];
             if(assignment.queue != candidate.id)
                 continue;
-            const u64 cost = QueueCostWeight(graph.taskAt(assignment.task.index).scheduling.cost);
+            const u64 cost = scoringData.taskCosts[assignment.task.index];
             load = load > Limit<u64>::s_Max - cost ? Limit<u64>::s_Max : load + cost;
         }
         const bool candidateIsNonPrimary = candidate.id != baseQueue.id;
@@ -206,6 +207,7 @@ namespace GpuTaskGraphCompilerDetail{
     const GraphicsVector<u32>& assignmentIndicesByTask,
     const GpuTaskGraphQueueTopology& topology,
     const GpuTaskSchedulingReachability& schedulingReachability,
+    const GpuTaskQueueScoringData& scoringData,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& incumbent,
     const GpuTaskTimingAssignmentKey& key,
@@ -266,6 +268,7 @@ namespace GpuTaskGraphCompilerDetail{
             assignmentIndicesByTask,
             topology,
             schedulingReachability,
+            scoringData,
             task,
             candidate
         );
@@ -453,6 +456,7 @@ bool GpuTaskGraphCompiler::assignQueues(
     GpuTaskSchedulingReachability schedulingReachability(scratchArena);
     if(!BuildGpuTaskSchedulingReachability(graph, analysis, schedulingReachability))
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis);
+    const GpuTaskQueueScoringData scoringData(graph, analysis, scratchArena);
 
     // Establish a legal route for every task before scoring. Outgoing crossings and ownership costs must see a
     // complete provisional plan instead of treating later consumers as if they did not exist.
@@ -628,6 +632,7 @@ bool GpuTaskGraphCompiler::assignQueues(
                     outAssignments.m_assignmentIndicesByTask,
                     topology,
                     schedulingReachability,
+                    scoringData,
                     task,
                     *candidate
                 );
@@ -688,6 +693,7 @@ bool GpuTaskGraphCompiler::assignQueues(
             outAssignments.m_assignmentIndicesByTask,
             topology,
             schedulingReachability,
+            scoringData,
             task,
             *dedicatedComputeQueue
         );
@@ -698,6 +704,7 @@ bool GpuTaskGraphCompiler::assignQueues(
             outAssignments.m_assignmentIndicesByTask,
             topology,
             schedulingReachability,
+            scoringData,
             task,
             *graphicsQueue
         );
@@ -751,6 +758,7 @@ bool GpuTaskGraphCompiler::assignQueues(
             else if(const GpuPhysicalQueueInfo* const balancedQueue = FindLeastLoadedSameClassQueue(
                 graph,
                 outAssignments.m_assignments,
+                scoringData,
                 topology,
                 task,
                 *selectedQueue,
@@ -837,6 +845,7 @@ bool GpuTaskGraphCompiler::assignQueues(
                 outAssignments.m_assignmentIndicesByTask,
                 topology,
                 schedulingReachability,
+                scoringData,
                 task,
                 *timingIncumbent,
                 timingAssignmentKey,
@@ -869,6 +878,7 @@ bool GpuTaskGraphCompiler::assignQueues(
             outAssignments.m_assignmentIndicesByTask,
             topology,
             schedulingReachability,
+            scoringData,
             task,
             *selectedQueue
         );

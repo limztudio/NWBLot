@@ -10720,6 +10720,12 @@ TEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossin
         "Ownership Score Texture"
     );
     ASSERT_TRUE(texture.valid());
+    const Graphics::GpuGraphResourceId secondTexture = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/ownership_score_second_texture"),
+        "Ownership Score Second Texture"
+    );
+    ASSERT_TRUE(secondTexture.valid());
 
     const Graphics::GpuTaskResourceUse producerUse{
         .resource = texture,
@@ -10733,6 +10739,13 @@ TEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossin
         .requiredState = Graphics::ResourceStates::UnorderedAccess,
         .access = Graphics::GpuTaskResourceAccess::ReadWrite,
     };
+    Graphics::GpuTaskResourceUse producerUses[] = { producerUse, producerUse };
+    producerUses[1u].resource = secondTexture;
+    Graphics::GpuTaskResourceUse consumerUses[] = { consumerUse, consumerUse };
+    consumerUses[1u].resource = secondTexture;
+    Graphics::GpuTaskResourceUse finalUses[] = { consumerUses[0u], consumerUses[1u] };
+    for(Graphics::GpuTaskResourceUse& use : finalUses)
+        use.access = Graphics::GpuTaskResourceAccess::Read;
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
         Graphics::GpuQueuePreference::Graphics,
@@ -10750,7 +10763,7 @@ TEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossin
         .setIdentity(Name("tests/task_graph/ownership_score_producer"))
         .setMarkerLabel("Ownership Score Producer")
         .setQueue(graphicsRequest)
-        .setResourceUses(&producerUse, 1u)
+        .setResourceUses(producerUses, LengthOf(producerUses))
     ;
     const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
     Graphics::GpuTaskDesc consumerDesc;
@@ -10758,16 +10771,25 @@ TEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossin
         .setIdentity(Name("tests/task_graph/ownership_score_consumer"))
         .setMarkerLabel("Ownership Score Consumer")
         .setQueue(computeRequest)
-        .setResourceUses(&consumerUse, 1u)
+        .setResourceUses(consumerUses, LengthOf(consumerUses))
     ;
     const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
     ASSERT_TRUE(producer.valid());
     ASSERT_TRUE(consumer.valid());
+    Graphics::GpuTaskDesc finalDesc;
+    finalDesc
+        .setIdentity(Name("tests/task_graph/ownership_score_final_consumer"))
+        .setMarkerLabel("Ownership Score Final Consumer")
+        .setQueue(graphicsRequest)
+        .setResourceUses(finalUses, LengthOf(finalUses))
+    ;
+    const Graphics::GpuTaskId finalConsumer = graph.addTask(finalDesc);
+    ASSERT_TRUE(finalConsumer.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
-    ASSERT_EQ(analysis.inferredEdges().size(), 2u);
-    ASSERT_EQ(analysis.schedulingEdges().size(), 1u);
+    ASSERT_EQ(analysis.inferredEdges().size(), 6u);
+    ASSERT_EQ(analysis.schedulingEdges().size(), 2u);
 
     const Graphics::GpuPhysicalQueueInfo separateFamilyQueues[] = {
         GraphicsQueue(),
@@ -10782,7 +10804,14 @@ TEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossin
     const Graphics::GpuTaskQueueAssignment* const separateFamilyAssignment = separateFamilyAssignments.find(consumer);
     ASSERT_NE(separateFamilyAssignment, nullptr);
     EXPECT_EQ(separateFamilyAssignment->score.incomingCrossings, 1);
-    EXPECT_EQ(separateFamilyAssignment->score.ownershipTransfers, 1);
+    EXPECT_EQ(separateFamilyAssignment->score.outgoingCrossings, 1);
+    EXPECT_EQ(separateFamilyAssignment->score.ownershipTransfers, 4);
+    const Graphics::GpuTaskQueueAssignment* const producerAssignment = separateFamilyAssignments.find(producer);
+    const Graphics::GpuTaskQueueAssignment* const finalAssignment = separateFamilyAssignments.find(finalConsumer);
+    ASSERT_NE(producerAssignment, nullptr);
+    ASSERT_NE(finalAssignment, nullptr);
+    EXPECT_EQ(producerAssignment->score.ownershipTransfers, 2);
+    EXPECT_EQ(finalAssignment->score.ownershipTransfers, 2);
 
     Graphics::GpuPhysicalQueueInfo sameFamilyCompute = DedicatedComputeQueue();
     sameFamilyCompute.familyIndex = GraphicsQueue().familyIndex;
@@ -10801,6 +10830,12 @@ TEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossin
     ASSERT_NE(sameFamilyAssignment, nullptr);
     EXPECT_EQ(sameFamilyAssignment->score.incomingCrossings, 1);
     EXPECT_EQ(sameFamilyAssignment->score.ownershipTransfers, 0);
+    const Graphics::GpuTaskQueueAssignment* const sameFamilyProducer = sameFamilyAssignments.find(producer);
+    const Graphics::GpuTaskQueueAssignment* const sameFamilyFinal = sameFamilyAssignments.find(finalConsumer);
+    ASSERT_NE(sameFamilyProducer, nullptr);
+    ASSERT_NE(sameFamilyFinal, nullptr);
+    EXPECT_EQ(sameFamilyProducer->score.ownershipTransfers, 0);
+    EXPECT_EQ(sameFamilyFinal->score.ownershipTransfers, 0);
 }
 
 

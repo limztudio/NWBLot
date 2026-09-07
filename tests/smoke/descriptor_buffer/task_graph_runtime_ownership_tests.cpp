@@ -1294,6 +1294,126 @@ TEST(TaskGraphRuntimeOwnershipTest, TimedArtifactResetAndRecorderChangesPreserve
 }
 
 
+TEST(TaskGraphRuntimeOwnershipTest, TimedDuplicateAndAliasedScopesReserveAllOccurrencesAcrossDisjointRanges){
+    CapturingLogger logger;
+    Common::LoggerRegistrationGuard loggerGuard(logger);
+    HeadlessGraphicsScope graphicsScope;
+    if(!graphicsScope.initialize())
+        GTEST_SKIP() << "Timing scope occurrences: no usable headless Vulkan device on this host.";
+
+    GraphicsBackend::Device& device = graphicsScope.graphics().getDevice();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueInfo* const graphicsQueueInfo = device.getPhysicalQueueInfo(graphicsQueue);
+    ASSERT_NE(graphicsQueueInfo, nullptr);
+    if(graphicsQueueInfo->timestampValidBits == 0u)
+        GTEST_SKIP() << "Timing scope occurrences: the graphics queue does not support timestamps.";
+
+    Perf::TimingRecorder timingSink(graphicsScope.arena());
+    timingSink.setEnabled(true);
+    GpuTimingRecorder timing(graphicsScope.arena(), timingSink);
+    timing.setQueryCollectionEnabled(true);
+    GpuTaskGraph graph(graphicsScope.arena());
+    const Name sharedIdentity("tests/task_graph/shared_timing_occurrence");
+    const Name packetIdentity = GpuTaskPacketTimingScopeName(sharedIdentity);
+    const Name taskIdentities[]{
+        sharedIdentity, sharedIdentity, packetIdentity, packetIdentity,
+        sharedIdentity, sharedIdentity, sharedIdentity,
+    };
+    const GpuTaskTimingPolicy::Enum timingPolicies[]{
+        GpuTaskTimingPolicy::Task, GpuTaskTimingPolicy::Task,
+        GpuTaskTimingPolicy::Task, GpuTaskTimingPolicy::Task,
+        GpuTaskTimingPolicy::PacketOnly, GpuTaskTimingPolicy::None, GpuTaskTimingPolicy::None,
+    };
+    GpuTaskId tasks[7]{};
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Tiny;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    const GpuQueueRequest queue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
+        GpuTaskDesc desc;
+        desc
+            .setIdentity(taskIdentities[taskIndex])
+            .setMarkerLabel("Shared Timing Occurrence")
+            .setQueue(queue)
+            .setScheduling(scheduling)
+            .setTimingMetadata(GpuTaskTimingMetadata{ .policy = timingPolicies[taskIndex] })
+        ;
+        if(taskIndex != 0u)
+            desc.setDependencies(&tasks[taskIndex - 1u], 1u);
+        tasks[taskIndex] = graph.addTask<RecordableTask>(desc, RecordableTask::Payload{});
+        ASSERT_TRUE(tasks[taskIndex].valid());
+    }
+
+    GpuTaskGraphAnalysis analysis(graphicsScope.arena());
+    GpuTaskGraphQueueAssignments assignments(graphicsScope.arena());
+    GpuCompiledGraph compiledGraph(graphicsScope.arena());
+    Alloc::ScratchArena compileScratch(Name("tests/task_graph/shared_timing_occurrences_compile"));
+    const GpuTaskGraphCompiler compiler;
+    GpuTaskGraphCompileOptions options;
+    options.packetTimingEnvelope.firstTask = tasks[4u];
+    options.packetTimingEnvelope.lastTask = tasks[5u];
+    {
+        const GpuTaskGraph::DeclarationReadView declarations(graph);
+        ASSERT_TRUE(compiler.compile(
+            declarations,
+            analysis,
+            device.getPhysicalQueueTopology(),
+            assignments,
+            compiledGraph,
+            compileScratch,
+            options
+        ));
+    }
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        ASSERT_TRUE(views.valid());
+        ASSERT_EQ(views.compiled.packetCount(), LengthOf(tasks));
+    }
+
+    GpuRecordedGraph recordedGraph(graphicsScope.arena());
+    const GpuNativePacketRecorder recorder(device, timing);
+    ASSERT_TRUE(recorder.recordTaskRangeInCompileOrder(graph, compiledGraph, tasks[0u], tasks[0u], recordedGraph));
+    const u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();
+    ASSERT_NE(recordingAttemptGeneration, 0u);
+    const GpuTimingRecorderStatistics prefixStatistics = timing.statistics(device);
+    // Four task scopes and six packet scopes share three identities. Preparation must include the still-unrecorded
+    // suffix, the packet-only policy, and the envelope-only packet, while excluding the final untimed packet.
+    EXPECT_EQ(prefixStatistics.preparedScopeCount, 3u);
+    ASSERT_EQ(timingSink.scopeCount(), 3u);
+    EXPECT_EQ(timingSink.scopeNameAt(0u), packetIdentity);
+    EXPECT_EQ(timingSink.scopeNameAt(1u), sharedIdentity);
+    EXPECT_EQ(timingSink.scopeNameAt(2u), GpuTaskPacketTimingScopeName(packetIdentity));
+    EXPECT_EQ(prefixStatistics.requestedQueryCount, 10u * s_MaxFramesInFlight);
+    EXPECT_EQ(prefixStatistics.materializedQueryCount, prefixStatistics.requestedQueryCount);
+    EXPECT_EQ(prefixStatistics.recordedScopeCount, 2u);
+    ASSERT_TRUE(recorder.recordTaskRangeInCompileOrder(graph, compiledGraph, tasks[1u], tasks[6u], recordedGraph));
+    EXPECT_EQ(recordedGraph.recordingAttemptGeneration(), recordingAttemptGeneration);
+    const GpuTimingRecorderStatistics recordedStatistics = timing.statistics(device);
+    EXPECT_EQ(recordedStatistics.preparedScopeCount, prefixStatistics.preparedScopeCount);
+    EXPECT_EQ(recordedStatistics.requestedQueryCount, prefixStatistics.requestedQueryCount);
+    EXPECT_EQ(recordedStatistics.materializedQueryCount, prefixStatistics.materializedQueryCount);
+    EXPECT_EQ(recordedStatistics.queryMaterializationFailureCount, 0u);
+    EXPECT_EQ(recordedStatistics.scopeAttemptCount, 10u);
+    EXPECT_EQ(recordedStatistics.recordedScopeCount, 10u);
+    EXPECT_EQ(recordedStatistics.beginFailureCount, 0u);
+
+    GpuGraphSubmissionTransaction transaction(graphicsScope.arena());
+    ASSERT_TRUE(transaction.tryReset(compiledGraph));
+    ASSERT_TRUE(transaction.discardUnaccepted(graph, compiledGraph, recordingAttemptGeneration));
+    EXPECT_TRUE(transaction.tryReset(compiledGraph));
+    EXPECT_TRUE(recordedGraph.tryReset(compiledGraph));
+    EXPECT_EQ(timing.statistics(device).discardedScopeCount, 10u);
+    EXPECT_TRUE(graph.tryReset());
+    EXPECT_TRUE(device.waitForIdle());
+    timing.setQueryCollectionEnabled(false);
+}
+
 // An untimed plan has no timing-recorder identity. Independent recorder facades may therefore complete disjoint
 // ranges of the same attempt without a meaningless pointer mismatch.
 TEST(TaskGraphRuntimeOwnershipTest, UntimedDisjointRangesShareOneAttemptAcrossRecorderFacades){

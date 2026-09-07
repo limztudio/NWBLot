@@ -30,6 +30,8 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiled_graph.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_analysis.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_analysis_internal.h"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_analysis_topology.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_finalization.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_packetization.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_queue_assignment.cpp"

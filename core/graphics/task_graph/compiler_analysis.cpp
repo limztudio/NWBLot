@@ -2,8 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "compiler_analysis_internal.h"
+
 #include "compiler_internal.h"
 
+#include <global/hash_utils.h>
 #include <global/timer.h>
 
 
@@ -16,7 +19,9 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace GpuTaskGraphCompilerDetail{
+namespace __hidden_gpu_task_graph_compiler_analysis{
+
+using namespace GpuTaskGraphCompilerDetail;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,291 +34,16 @@ struct TrackedResourceAccess{
     bool active = true;
 };
 
-struct TaskDependencyAdjacency{
-    Vector<usize, Alloc::ScratchArena> offsets;
-    Vector<usize, Alloc::ScratchArena> edgeIndices;
-
-
-    explicit TaskDependencyAdjacency(Alloc::ScratchArena& scratchArena)
-        : offsets(scratchArena)
-        , edgeIndices(scratchArena)
-    {}
-};
-
-struct TaskCycleTraversalFrame{
-    usize nextAdjacencyIndex = 0u;
-    u32 taskIndex = 0u;
+struct DependencyPairHasher{
+    [[nodiscard]] usize operator()(const u64 pairKey)const noexcept{
+        usize hash = Hasher<u32>{}(static_cast<u32>(pairKey >> 32u));
+        HashCombine(hash, static_cast<u32>(pairKey));
+        return hash;
+    }
 };
 
 [[nodiscard]] static bool IsResourceVersionHazard(const GpuTaskHazardType::Enum hazard)noexcept{
     return hazard == GpuTaskHazardType::VersionDependency || hazard == GpuTaskHazardType::VersionLifetime;
-}
-
-[[nodiscard]] static bool IncludesEdge(
-    const GpuTaskDependencyEdge& edge,
-    const bool semanticOnly
-)noexcept{
-    return !semanticOnly
-        || edge.hazard == GpuTaskHazardType::Explicit
-        || IsResourceVersionHazard(edge.hazard)
-    ;
-}
-
-static void BuildTaskDependencyAdjacency(
-    const GraphicsVector<GpuTaskDependencyEdge>& edges,
-    const usize taskCount,
-    const bool semanticOnly,
-    TaskDependencyAdjacency& outAdjacency,
-    Alloc::ScratchArena& scratchArena
-){
-    outAdjacency.offsets.clear();
-    outAdjacency.offsets.resize(taskCount + 1u, 0u);
-    for(const GpuTaskDependencyEdge& edge : edges){
-        if(IncludesEdge(edge, semanticOnly))
-            ++outAdjacency.offsets[edge.producer.index + 1u];
-    }
-    for(usize taskIndex = 1u; taskIndex <= taskCount; ++taskIndex)
-        outAdjacency.offsets[taskIndex] += outAdjacency.offsets[taskIndex - 1u];
-
-    outAdjacency.edgeIndices.clear();
-    outAdjacency.edgeIndices.resize(outAdjacency.offsets[taskCount]);
-    Vector<usize, Alloc::ScratchArena> writeOffsets(taskCount, scratchArena);
-    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
-        writeOffsets[taskIndex] = outAdjacency.offsets[taskIndex];
-
-    for(usize edgeIndex = 0u; edgeIndex < edges.size(); ++edgeIndex){
-        const GpuTaskDependencyEdge& edge = edges[edgeIndex];
-        if(IncludesEdge(edge, semanticOnly))
-            outAdjacency.edgeIndices[writeOffsets[edge.producer.index]++] = edgeIndex;
-    }
-}
-
-static bool BuildTopologicalOrder(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GraphicsVector<GpuTaskDependencyEdge>& edges,
-    const TaskDependencyAdjacency& adjacency,
-    GraphicsVector<GpuTaskId>& outOrder,
-    GraphicsVector<GpuTaskId>& outCyclePath,
-    GraphicsVector<GpuTaskDependencyEdge>& outCycleEdges,
-    Alloc::ScratchArena& scratchArena
-){
-    const usize taskCount = graph.taskCount();
-    Vector<u32, Alloc::ScratchArena> indegrees(taskCount, scratchArena);
-    Vector<u8, Alloc::ScratchArena> scheduled(taskCount, scratchArena);
-    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
-        indegrees[taskIndex] = 0u;
-        scheduled[taskIndex] = 0u;
-    }
-    for(const usize edgeIndex : adjacency.edgeIndices)
-        ++indegrees[edges[edgeIndex].consumer.index];
-
-    outOrder.clear();
-    outCyclePath.clear();
-    outCycleEdges.clear();
-    outOrder.reserve(taskCount);
-    for(usize emittedCount = 0u; emittedCount < taskCount; ++emittedCount){
-        usize nextTask = taskCount;
-        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
-            if(!scheduled[taskIndex] && indegrees[taskIndex] == 0u){
-                nextTask = taskIndex;
-                break;
-            }
-        }
-        if(nextTask == taskCount)
-            break;
-
-        scheduled[nextTask] = 1u;
-        outOrder.push_back(graph.taskAt(nextTask).id);
-        for(
-            usize adjacencyIndex = adjacency.offsets[nextTask];
-            adjacencyIndex < adjacency.offsets[nextTask + 1u];
-            ++adjacencyIndex
-        ){
-            const GpuTaskDependencyEdge& edge = edges[adjacency.edgeIndices[adjacencyIndex]];
-            NWB_ASSERT(indegrees[edge.consumer.index] > 0u);
-            --indegrees[edge.consumer.index];
-        }
-    }
-    if(outOrder.size() == taskCount)
-        return true;
-
-    Vector<u8, Alloc::ScratchArena> visitState(taskCount, scratchArena);
-    Vector<TaskCycleTraversalFrame, Alloc::ScratchArena> visitStack(scratchArena);
-    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
-        visitState[taskIndex] = 0u;
-    visitStack.reserve(taskCount);
-
-    const auto appendCycleEdge = [&](const u32 producerIndex, const u32 consumerIndex){
-        for(
-            usize adjacencyIndex = adjacency.offsets[producerIndex];
-            adjacencyIndex < adjacency.offsets[producerIndex + 1u];
-            ++adjacencyIndex
-        ){
-            const GpuTaskDependencyEdge& edge = edges[adjacency.edgeIndices[adjacencyIndex]];
-            if(edge.consumer.index == consumerIndex){
-                outCycleEdges.push_back(edge);
-                return;
-            }
-        }
-        NWB_ASSERT(false);
-    };
-    bool foundCycle = false;
-    for(u32 taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
-        if(visitState[taskIndex] != 0u)
-            continue;
-
-        visitState[taskIndex] = 1u;
-        visitStack.push_back(TaskCycleTraversalFrame{
-            .nextAdjacencyIndex = adjacency.offsets[taskIndex],
-            .taskIndex = taskIndex,
-        });
-        while(!visitStack.empty()){
-            TaskCycleTraversalFrame& frame = visitStack.back();
-            if(frame.nextAdjacencyIndex >= adjacency.offsets[frame.taskIndex + 1u]){
-                visitState[frame.taskIndex] = 2u;
-                visitStack.pop_back();
-                continue;
-            }
-
-            const u32 producerIndex = frame.taskIndex;
-            const GpuTaskDependencyEdge& edge = edges[adjacency.edgeIndices[frame.nextAdjacencyIndex]];
-            ++frame.nextAdjacencyIndex;
-            const u32 consumerIndex = edge.consumer.index;
-            if(visitState[consumerIndex] == 1u){
-                usize cycleStart = 0u;
-                while(visitStack[cycleStart].taskIndex != consumerIndex)
-                    ++cycleStart;
-                for(usize cycleIndex = cycleStart; cycleIndex < visitStack.size(); ++cycleIndex){
-                    outCyclePath.push_back(graph.taskAt(visitStack[cycleIndex].taskIndex).id);
-                    if(cycleIndex + 1u < visitStack.size()){
-                        appendCycleEdge(
-                            visitStack[cycleIndex].taskIndex,
-                            visitStack[cycleIndex + 1u].taskIndex
-                        );
-                    }
-                }
-                outCyclePath.push_back(graph.taskAt(consumerIndex).id);
-                appendCycleEdge(producerIndex, consumerIndex);
-                foundCycle = true;
-                break;
-            }
-            if(visitState[consumerIndex] == 0u){
-                visitState[consumerIndex] = 1u;
-                visitStack.push_back(TaskCycleTraversalFrame{
-                    .nextAdjacencyIndex = adjacency.offsets[consumerIndex],
-                    .taskIndex = consumerIndex,
-                });
-            }
-        }
-        if(foundCycle)
-            break;
-    }
-    outOrder.clear();
-    return false;
-}
-
-
-static void BuildSchedulingEdges(
-    const GraphicsVector<GpuTaskDependencyEdge>& rawEdges,
-    const TaskDependencyAdjacency& adjacency,
-    const usize taskCount,
-    GraphicsVector<GpuTaskDependencyEdge>& outSchedulingEdges,
-    Alloc::ScratchArena& scratchArena
-){
-    Vector<u8, Alloc::ScratchArena> reached(taskCount, scratchArena);
-    Vector<u32, Alloc::ScratchArena> pending(scratchArena);
-    pending.reserve(taskCount);
-    outSchedulingEdges.clear();
-    outSchedulingEdges.reserve(rawEdges.size());
-
-    // Raw edges contain one stable record per task pair. Keep a pair only when removing that candidate eliminates
-    // all producer-to-consumer paths; iterating raw order makes the reduced DAG deterministic for diagnostics.
-    for(const GpuTaskDependencyEdge& candidate : rawEdges){
-        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
-            reached[taskIndex] = 0u;
-        pending.clear();
-        reached[candidate.producer.index] = 1u;
-        pending.push_back(candidate.producer.index);
-
-        bool hasAlternatePath = false;
-        for(usize pendingIndex = 0u; pendingIndex < pending.size() && !hasAlternatePath; ++pendingIndex){
-            const u32 producerIndex = pending[pendingIndex];
-            for(
-                usize adjacencyIndex = adjacency.offsets[producerIndex];
-                adjacencyIndex < adjacency.offsets[producerIndex + 1u];
-                ++adjacencyIndex
-            ){
-                const GpuTaskDependencyEdge& edge = rawEdges[adjacency.edgeIndices[adjacencyIndex]];
-                if(
-                    (
-                        edge.producer == candidate.producer
-                        && edge.consumer == candidate.consumer
-                    )
-                    || reached[edge.consumer.index]
-                )
-                    continue;
-
-                reached[edge.consumer.index] = 1u;
-                if(edge.consumer == candidate.consumer){
-                    hasAlternatePath = true;
-                    break;
-                }
-                pending.push_back(edge.consumer.index);
-            }
-        }
-        if(!hasAlternatePath)
-            outSchedulingEdges.push_back(candidate);
-    }
-}
-
-[[nodiscard]] static bool BuildSchedulingTaskAdjacency(
-    const GraphicsVector<GpuTaskDependencyEdge>& schedulingEdges,
-    const usize taskCount,
-    const u64 graphGeneration,
-    GraphicsVector<usize>& outOutgoingOffsets,
-    GraphicsVector<u32>& outOutgoingConsumers,
-    GraphicsVector<usize>& outIncomingOffsets,
-    GraphicsVector<u32>& outIncomingProducers,
-    Alloc::ScratchArena& scratchArena
-){
-    outOutgoingOffsets.clear();
-    outOutgoingConsumers.clear();
-    outIncomingOffsets.clear();
-    outIncomingProducers.clear();
-    outOutgoingOffsets.resize(taskCount + 1u, 0u);
-    outIncomingOffsets.resize(taskCount + 1u, 0u);
-    for(const GpuTaskDependencyEdge& edge : schedulingEdges){
-        if(
-            !edge.producer.valid()
-            || !edge.consumer.valid()
-            || edge.producer.generation != graphGeneration
-            || edge.consumer.generation != graphGeneration
-            || edge.producer.index >= taskCount
-            || edge.consumer.index >= taskCount
-            || edge.producer == edge.consumer
-        )
-            return false;
-        ++outOutgoingOffsets[edge.producer.index + 1u];
-        ++outIncomingOffsets[edge.consumer.index + 1u];
-    }
-    for(usize taskIndex = 1u; taskIndex <= taskCount; ++taskIndex){
-        outOutgoingOffsets[taskIndex] += outOutgoingOffsets[taskIndex - 1u];
-        outIncomingOffsets[taskIndex] += outIncomingOffsets[taskIndex - 1u];
-    }
-
-    outOutgoingConsumers.resize(schedulingEdges.size());
-    outIncomingProducers.resize(schedulingEdges.size());
-    Vector<usize, Alloc::ScratchArena> writeOffsets(taskCount, scratchArena);
-    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
-        writeOffsets[taskIndex] = outOutgoingOffsets[taskIndex];
-    for(const GpuTaskDependencyEdge& edge : schedulingEdges)
-        outOutgoingConsumers[writeOffsets[edge.producer.index]++] = edge.consumer.index;
-
-    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
-        writeOffsets[taskIndex] = outIncomingOffsets[taskIndex];
-    for(const GpuTaskDependencyEdge& edge : schedulingEdges)
-        outIncomingProducers[writeOffsets[edge.consumer.index]++] = edge.producer.index;
-    return true;
 }
 
 [[nodiscard]] static const GpuTaskDependencyEdge* FindCycleDiagnosticEdge(
@@ -453,6 +183,7 @@ bool GpuTaskGraphCompiler::analyze(
     Alloc::ScratchArena& scratchArena
 )const{
     using namespace GpuTaskGraphCompilerDetail;
+    using namespace __hidden_gpu_task_graph_compiler_analysis;
 
     if(!graph.valid())
         return false;
@@ -562,31 +293,47 @@ bool GpuTaskGraphCompiler::analyze(
         outAnalysis.m_diagnostic = resourceVersionDiagnostic;
         return false;
     }
-    const auto appendRawEdge = [&](const GpuTaskDependencyEdge& edge){
-        for(GpuTaskDependencyEdge& existing : outAnalysis.m_edges){
-            if(existing.producer != edge.producer || existing.consumer != edge.consumer)
-                continue;
-            if(
-                edge.hazard == GpuTaskHazardType::Explicit
-                && existing.hazard != GpuTaskHazardType::Explicit
-            ){
+    struct DependencyPairIndices{
+        usize rawEdge = 0u;
+        usize firstInferredEdge = Limit<usize>::s_Max;
+    };
+    HashMap<u64, DependencyPairIndices, DependencyPairHasher, EqualTo<u64>, Alloc::ScratchArena> dependencyPairs(
+        0, DependencyPairHasher(), EqualTo<u64>(), scratchArena
+    );
+    Vector<usize, Alloc::ScratchArena> nextInferredEdges(scratchArena);
+    usize expectedEdgeCount = resourceVersionDependencyEdges.size();
+    for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
+        const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
+        expectedEdgeCount += task.dependencyCount + task.resourceUseCount;
+    }
+    dependencyPairs.reserve(expectedEdgeCount);
+    nextInferredEdges.reserve(expectedEdgeCount);
+    outAnalysis.m_edges.reserve(expectedEdgeCount);
+    outAnalysis.m_inferredEdges.reserve(expectedEdgeCount);
+
+    const auto appendRawEdge = [&](const GpuTaskDependencyEdge& edge) -> DependencyPairIndices&{
+        const u64 pairKey = (static_cast<u64>(edge.producer.index) << 32u) | edge.consumer.index;
+        auto [pair, inserted] = dependencyPairs.try_emplace(pairKey, DependencyPairIndices{ outAnalysis.m_edges.size() });
+        if(inserted){
+            outAnalysis.m_edges.push_back(edge);
+            if(edge.hazard == GpuTaskHazardType::Explicit)
+                ++outAnalysis.m_explicitEdgeCount;
+        }
+        else{
+            GpuTaskDependencyEdge& existing = outAnalysis.m_edges[pair->second.rawEdge];
+            if(edge.hazard == GpuTaskHazardType::Explicit && existing.hazard != GpuTaskHazardType::Explicit){
                 existing = edge;
                 ++outAnalysis.m_explicitEdgeCount;
             }
-            return;
         }
-        outAnalysis.m_edges.push_back(edge);
-        if(edge.hazard == GpuTaskHazardType::Explicit)
-            ++outAnalysis.m_explicitEdgeCount;
+        return pair.value();
     };
     const auto appendInferredEdge = [&](const GpuTaskDependencyEdge& edge){
         NWB_ASSERT(edge.hazard != GpuTaskHazardType::Explicit);
 
-        bool hasTaskPair = false;
-        for(const GpuTaskDependencyEdge& existing : outAnalysis.m_inferredEdges){
-            if(existing.producer != edge.producer || existing.consumer != edge.consumer)
-                continue;
-            hasTaskPair = true;
+        DependencyPairIndices& pair = appendRawEdge(edge);
+        for(usize edgeIndex = pair.firstInferredEdge; edgeIndex != Limit<usize>::s_Max; edgeIndex = nextInferredEdges[edgeIndex]){
+            const GpuTaskDependencyEdge& existing = outAnalysis.m_inferredEdges[edgeIndex];
             if(
                 existing.resource == edge.resource
                 && existing.resourceVersion == edge.resourceVersion
@@ -594,12 +341,13 @@ bool GpuTaskGraphCompiler::analyze(
             )
                 return;
         }
-        outAnalysis.m_inferredEdges.push_back(edge);
-        if(!hasTaskPair)
+        if(pair.firstInferredEdge == Limit<usize>::s_Max)
             ++outAnalysis.m_inferredEdgeCount;
+        nextInferredEdges.push_back(pair.firstInferredEdge);
+        pair.firstInferredEdge = outAnalysis.m_inferredEdges.size();
+        outAnalysis.m_inferredEdges.push_back(edge);
         if(IsResourceVersionHazard(edge.hazard))
             ++outAnalysis.m_resourceVersionEdgeCount;
-        appendRawEdge(edge);
     };
     Vector<u32, Alloc::ScratchArena> externalDependencyConsumerMarkers(graph.externalCompletionCount(), scratchArena);
     for(usize completionIndex = 0u; completionIndex < graph.externalCompletionCount(); ++completionIndex)
@@ -632,19 +380,18 @@ bool GpuTaskGraphCompiler::analyze(
     const f64 dependencyAnalysisSeconds = DurationInSeconds<f64>(TimerNow(), dependencyAnalysisBegin);
 
     const Timer semanticTopologyBegin = TimerNow();
+    TaskDependencyAdjacency dependencyAdjacency(scratchArena);
     {
-        TaskDependencyAdjacency semanticAdjacency(scratchArena);
         BuildTaskDependencyAdjacency(
             outAnalysis.m_edges,
             graph.taskCount(),
-            true,
-            semanticAdjacency,
+            dependencyAdjacency,
             scratchArena
         );
         if(!BuildTopologicalOrder(
             graph,
             outAnalysis.m_edges,
-            semanticAdjacency,
+            dependencyAdjacency,
             outAnalysis.m_topologicalOrder,
             outAnalysis.m_cyclePath,
             outAnalysis.m_cycleEdges,
@@ -771,36 +518,20 @@ bool GpuTaskGraphCompiler::analyze(
 
     const Timer finalTopologyBegin = TimerNow();
     {
-        TaskDependencyAdjacency dependencyAdjacency(scratchArena);
-        BuildTaskDependencyAdjacency(
-            outAnalysis.m_edges,
-            graph.taskCount(),
-            false,
-            dependencyAdjacency,
-            scratchArena
-        );
-        if(!BuildTopologicalOrder(
-            graph,
-            outAnalysis.m_edges,
-            dependencyAdjacency,
-            outAnalysis.m_topologicalOrder,
-            outAnalysis.m_cyclePath,
-            outAnalysis.m_cycleEdges,
-            scratchArena
-        )){
-            const GpuTaskDependencyEdge* const cycleEdge = FindCycleDiagnosticEdge(outAnalysis.m_cycleEdges);
-            return fail(
-                GpuTaskGraphAnalysisStatus::Cycle,
-                cycleEdge ? cycleEdge->consumer : GpuTaskId{},
-                cycleEdge ? cycleEdge->producer : GpuTaskId{},
-                cycleEdge ? cycleEdge->resource : GpuGraphResourceId{},
-                cycleEdge ? cycleEdge->resourceVersion : GpuGraphResourceVersionId{}
+        if(dependencyAdjacency.edgeIndices.size() != outAnalysis.m_edges.size()){
+            BuildTaskDependencyAdjacency(
+                outAnalysis.m_edges,
+                graph.taskCount(),
+                dependencyAdjacency,
+                scratchArena
             );
         }
+        // Physical hazards only connect earlier semantic-order accesses to the current task. Those forward edges
+        // preserve the already smallest stable topological order and cannot introduce a cycle.
         BuildSchedulingEdges(
             outAnalysis.m_edges,
             dependencyAdjacency,
-            graph.taskCount(),
+            outAnalysis.m_topologicalOrder,
             outAnalysis.m_schedulingEdges,
             scratchArena
         );

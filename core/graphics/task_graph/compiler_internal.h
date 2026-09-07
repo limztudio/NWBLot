@@ -195,6 +195,19 @@ private:
     const GpuTaskId& task
 )noexcept;
 
+struct GpuTaskQueueScoringData{
+    Vector<u64, Alloc::ScratchArena> taskCosts;
+    Vector<usize, Alloc::ScratchArena> ownershipEdgeOffsets;
+    Vector<const GpuTaskDependencyEdge*, Alloc::ScratchArena> ownershipEdges;
+
+
+    GpuTaskQueueScoringData(
+        const GpuTaskGraph::DeclarationReadView& graph,
+        const GpuTaskGraphAnalysis& analysis,
+        Alloc::ScratchArena& scratchArena
+    );
+};
+
 [[nodiscard]] GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
@@ -202,6 +215,7 @@ private:
     const GraphicsVector<u32>& assignmentIndicesByTask,
     const GpuTaskGraphQueueTopology& topology,
     const GpuTaskSchedulingReachability& schedulingReachability,
+    const GpuTaskQueueScoringData& scoringData,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& candidate
 )noexcept;

@@ -283,7 +283,6 @@ GpuUploadBlobId GpuTaskGraph::copyUploadData(
     if(blob.bytes.size() != byteSize)
         return {};
 
-    m_uploadBlobs.reserve(m_uploadBlobs.size() + 1u);
     const u32 index = static_cast<u32>(m_uploadBlobs.size());
     m_uploadBlobs.push_back(Move(blob));
     m_declarationRevision = allocateGeneration();

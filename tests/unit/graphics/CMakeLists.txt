@@ -30,6 +30,7 @@ target_sources(nwb_graphics_task_graph_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_version_dependency_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_version_lifetime_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_version_range_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph_storage_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_timing_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/texture_clear_task_graph_tests.cpp"

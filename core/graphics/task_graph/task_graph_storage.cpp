@@ -172,28 +172,40 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
 
     // Task declarations capture every valid native handoff when the graph accepts the declaration. Invalid sources
     // cannot become valid after this immutable copy, so reject them at the declaration boundary.
-    GraphicsVector<GlobalUniquePtr<CommandListResourceStateHandoff>> externalStateSnapshots(m_arena);
-    externalStateSnapshots.reserve(desc.externalStateSourceCount);
-    for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
-        const CommandListResourceStateHandoff* const source = desc.externalStateSources[sourceIndex].states;
-        GlobalUniquePtr<CommandListResourceStateHandoff> snapshot =
-            MakeGlobalUnique<CommandListResourceStateHandoff>(m_arena, m_arena)
-        ;
-        if(!snapshot)
-            return {};
-        if(!snapshot->copyFrom(*source))
-            return {};
-        externalStateSnapshots.push_back(Move(snapshot));
+    Optional<GraphicsVector<GlobalUniquePtr<CommandListResourceStateHandoff>>> externalStateSnapshots;
+    if(desc.externalStateSourceCount != 0u){
+        auto& snapshots = externalStateSnapshots.emplace(m_arena);
+        snapshots.reserve(desc.externalStateSourceCount);
+        for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
+            const CommandListResourceStateHandoff* const source = desc.externalStateSources[sourceIndex].states;
+            GlobalUniquePtr<CommandListResourceStateHandoff> snapshot =
+                MakeGlobalUnique<CommandListResourceStateHandoff>(m_arena, m_arena)
+            ;
+            if(!snapshot)
+                return {};
+            if(!snapshot->copyFrom(*source))
+                return {};
+            snapshots.push_back(Move(snapshot));
+        }
     }
 
-    m_markerText.reserve(m_markerText.size() + desc.markerLabel.size());
-    m_dependencies.reserve(m_dependencies.size() + desc.dependencyCount);
-    m_externalDependencies.reserve(m_externalDependencies.size() + desc.externalDependencyCount);
-    m_externalStateSources.reserve(m_externalStateSources.size() + desc.externalStateSourceCount);
-    m_externalStateSnapshots.reserve(m_externalStateSnapshots.size() + desc.externalStateSourceCount);
-    m_resourceUses.reserve(m_resourceUses.size() + expandedResourceUseCount);
-    m_resourceVersionUses.reserve(m_resourceVersionUses.size() + desc.resourceVersionUseCount);
-    m_tasks.reserve(m_tasks.size() + 1u);
+    ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
+    ContainerDetail::ReserveGrowingCapacity(m_dependencies, m_dependencies.size() + desc.dependencyCount);
+    ContainerDetail::ReserveGrowingCapacity(
+        m_externalDependencies,
+        m_externalDependencies.size() + desc.externalDependencyCount
+    );
+    ContainerDetail::ReserveGrowingCapacity(
+        m_externalStateSources,
+        m_externalStateSources.size() + desc.externalStateSourceCount
+    );
+    ContainerDetail::ReserveGrowingCapacity(
+        m_externalStateSnapshots,
+        m_externalStateSnapshots.size() + desc.externalStateSourceCount
+    );
+    ContainerDetail::ReserveGrowingCapacity(m_resourceUses, m_resourceUses.size() + expandedResourceUseCount);
+    ContainerDetail::ReserveGrowingCapacity(m_resourceVersionUses, m_resourceVersionUses.size() + desc.resourceVersionUseCount);
+    ContainerDetail::ReserveGrowingCapacity(m_tasks, m_tasks.size() + 1u);
 
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope markerRollback(m_markerText);
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope dependencyRollback(m_dependencies);
@@ -242,12 +254,12 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
     for(usize dependencyIndex = 0u; dependencyIndex < desc.externalDependencyCount; ++dependencyIndex)
         m_externalDependencies.push_back(desc.externalDependencies[dependencyIndex]);
     for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
-        const CommandListResourceStateHandoff* const snapshot = externalStateSnapshots[sourceIndex].get();
+        const CommandListResourceStateHandoff* const snapshot = (*externalStateSnapshots)[sourceIndex].get();
         m_externalStateSources.push_back(GpuTaskExternalStateSource{
             .states = snapshot,
             .applicableConsumerQueueClass = desc.externalStateSources[sourceIndex].applicableConsumerQueueClass,
         });
-        m_externalStateSnapshots.push_back(externalStateSnapshots[sourceIndex].get());
+        m_externalStateSnapshots.push_back((*externalStateSnapshots)[sourceIndex].get());
     }
     for(usize useIndex = 0u; useIndex < desc.resourceUseCount; ++useIndex)
         m_resourceUses.push_back(desc.resourceUses[useIndex]);
@@ -269,8 +281,10 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
 
     const u32 index = static_cast<u32>(m_tasks.size());
     m_tasks.push_back(Move(task));
-    for(GlobalUniquePtr<CommandListResourceStateHandoff>& snapshot : externalStateSnapshots)
-        snapshot.release();
+    if(externalStateSnapshots){
+        for(GlobalUniquePtr<CommandListResourceStateHandoff>& snapshot : *externalStateSnapshots)
+            snapshot.release();
+    }
     markerRollback.commit();
     dependencyRollback.commit();
     externalDependencyRollback.commit();
@@ -446,9 +460,10 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
     }
 
     const usize initialOwnerHandoffSourceOffset = m_initialOwnerHandoffSources.size();
-    GraphicsVector<GlobalUniquePtr<CommandListResourceStateHandoff>> initialOwnerHandoffStateSnapshots(m_arena);
-    initialOwnerHandoffStateSnapshots.reserve(desc.initialOwnerHandoffSourceCount);
+    Optional<GraphicsVector<GlobalUniquePtr<CommandListResourceStateHandoff>>> initialOwnerHandoffStateSnapshots;
     if(hasMultiInitialOwnerHandoff){
+        auto& snapshots = initialOwnerHandoffStateSnapshots.emplace(m_arena);
+        snapshots.reserve(desc.initialOwnerHandoffSourceCount);
         for(usize sourceIndex = 0u; sourceIndex < desc.initialOwnerHandoffSourceCount; ++sourceIndex){
             const GpuGraphInitialOwnerHandoffSourceDesc& source = desc.initialOwnerHandoffSources[sourceIndex];
             GlobalUniquePtr<CommandListResourceStateHandoff> stateSnapshot =
@@ -458,16 +473,17 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
                 return {};
             if(!stateSnapshot->copyFrom(*source.stateSource))
                 return {};
-            initialOwnerHandoffStateSnapshots.push_back(Move(stateSnapshot));
+            snapshots.push_back(Move(stateSnapshot));
         }
     }
 
-    m_initialOwnerHandoffSources.reserve(
+    ContainerDetail::ReserveGrowingCapacity(
+        m_initialOwnerHandoffSources,
         m_initialOwnerHandoffSources.size() + desc.initialOwnerHandoffSourceCount
     );
-    m_queueFamilyIndices.reserve(m_queueFamilyIndices.size() + queueFamilyIndexCount);
-    m_markerText.reserve(m_markerText.size() + desc.markerLabel.size());
-    m_resources.reserve(m_resources.size() + 1u);
+    ContainerDetail::ReserveGrowingCapacity(m_queueFamilyIndices, m_queueFamilyIndices.size() + queueFamilyIndexCount);
+    ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
+    ContainerDetail::ReserveGrowingCapacity(m_resources, m_resources.size() + 1u);
 
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope initialOwnerSourceRollback(
         m_initialOwnerHandoffSources
@@ -489,7 +505,7 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
             .destinationQueue = source.destinationQueue,
             .completion = source.completion,
             .minimumCompletionToken = source.minimumCompletionToken,
-            .stateSource = initialOwnerHandoffStateSnapshots[sourceIndex].get(),
+            .stateSource = (*initialOwnerHandoffStateSnapshots)[sourceIndex].get(),
         });
     }
 
@@ -522,8 +538,10 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
     const u32 index = static_cast<u32>(m_resources.size());
     m_resources.push_back(Move(resource));
     initialOwnerStateSnapshot.release();
-    for(GlobalUniquePtr<CommandListResourceStateHandoff>& snapshot : initialOwnerHandoffStateSnapshots)
-        snapshot.release();
+    if(initialOwnerHandoffStateSnapshots){
+        for(GlobalUniquePtr<CommandListResourceStateHandoff>& snapshot : *initialOwnerHandoffStateSnapshots)
+            snapshot.release();
+    }
     initialOwnerSourceRollback.commit();
     queueFamilyRollback.commit();
     markerRollback.commit();
@@ -577,9 +595,9 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
         }
     }
 
-    m_markerText.reserve(m_markerText.size() + desc.markerLabel.size());
-    m_resourceSetMembers.reserve(m_resourceSetMembers.size() + desc.memberCount);
-    m_resourceSets.reserve(m_resourceSets.size() + 1u);
+    ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
+    ContainerDetail::ReserveGrowingCapacity(m_resourceSetMembers, m_resourceSetMembers.size() + desc.memberCount);
+    ContainerDetail::ReserveGrowingCapacity(m_resourceSets, m_resourceSets.size() + 1u);
 
     u32 markerLabelOffset = 0u;
     u32 markerLabelSize = 0u;
@@ -616,8 +634,8 @@ GpuGraphPipelineId GpuTaskGraph::appendPipeline(const GpuGraphPipelineDesc& desc
     )
         return {};
 
-    m_markerText.reserve(m_markerText.size() + desc.markerLabel.size());
-    m_pipelines.reserve(m_pipelines.size() + 1u);
+    ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
+    ContainerDetail::ReserveGrowingCapacity(m_pipelines, m_pipelines.size() + 1u);
 
     u32 markerLabelOffset = 0u;
     u32 markerLabelSize = 0u;
@@ -650,8 +668,8 @@ GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternal
     )
         return {};
 
-    m_markerText.reserve(m_markerText.size() + desc.markerLabel.size());
-    m_externalCompletions.reserve(m_externalCompletions.size() + 1u);
+    ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
+    ContainerDetail::ReserveGrowingCapacity(m_externalCompletions, m_externalCompletions.size() + 1u);
 
     u32 markerLabelOffset = 0u;
     u32 markerLabelSize = 0u;

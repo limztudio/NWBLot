@@ -131,9 +131,10 @@ TEST(GpuTimingPacketEnvelopeMetrics, CorrelatesLargeOutOfOrderFrame){
             completedEarly = completedEarly || !samples.empty();
     }
     const u64 recordNanoseconds = DurationInNS<u64>(TimerNow(), recordBegin);
-    char durationText[32u] = {};
-    RecordProperty("correlator_prepare_ns", FormatDecimal(prepareNanoseconds, durationText).data());
-    RecordProperty("correlator_record_ns", FormatDecimal(recordNanoseconds, durationText).data());
+    char prepareText[32u] = {};
+    char recordText[32u] = {};
+    RecordProperty("correlator_prepare_ns", FormatDecimal(prepareNanoseconds, prepareText).data());
+    RecordProperty("correlator_record_ns", FormatDecimal(recordNanoseconds, recordText).data());
 
     EXPECT_FALSE(completedEarly);
     ASSERT_EQ(samples.size(), 1u + LengthOf(outputs));

@@ -4410,7 +4410,7 @@ TEST(EcsGraphics, MaterialDrawSnapshotsRetainExactGraphResourceGenerations){
     EXPECT_TRUE(ContainsText(materialPass, "csgReceiverSurfaceDrawItem.pipelineResources ="));
 
     EXPECT_TRUE(ContainsText(resourceSets, "const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;"));
-    EXPECT_TRUE(ContainsText(resourceSets, "ForEachMaterialPassMeshSourceBuffer(mesh,"));
+    EXPECT_TRUE(ContainsText(resourceSets, "ForEachMaterialPassMeshSourceBuffer("));
     EXPECT_FALSE(ContainsText(resourceSets, "RendererMeshSystem& meshSystem"));
     EXPECT_FALSE(ContainsText(resourceSets, "findMeshResources("));
 

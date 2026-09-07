@@ -9,6 +9,8 @@
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 
+#include <global/hash_utils.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,53 +38,123 @@ namespace RendererTaskGraphDetail{
     if(drawItemSetCount != 0u && !drawItemSets)
         return false;
 
-    Vector<Core::BufferHandle, Core::Alloc::ScratchArena> sourceBuffers{ scratchArena };
-    const auto appendDrawItem = [&](const MaterialPassDrawItem& drawItem){
-        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-        if(!mesh.valid())
-            return false;
-
-        bool buffersReady = true;
-        ForEachMaterialPassMeshSourceBuffer(mesh, [&](const Core::BufferHandle& buffer){
-            if(!buffersReady)
-                return;
-            if(!buffer){
-                buffersReady = false;
-                return;
-            }
-            for(const Core::BufferHandle& existing : sourceBuffers){
-                if(existing.get() == buffer.get())
-                    return;
-            }
-            sourceBuffers.push_back(buffer);
-        });
-        return buffersReady;
-    };
+    constexpr usize s_MaxDrawItemCount = Limit<usize>::s_Max / NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT;
+    usize drawItemCount = 0u;
     for(usize drawItemSetIndex = 0u; drawItemSetIndex < drawItemSetCount; ++drawItemSetIndex){
         const MaterialPassDrawItems* const drawItems = drawItemSets[drawItemSetIndex];
         if(!drawItems)
             return false;
-        for(const MaterialPassDrawItem& drawItem : drawItems->meshDrawItems){
-            if(!appendDrawItem(drawItem))
+        for(const usize count : { drawItems->meshDrawItems.size(), drawItems->computeDrawItems.size() }){
+            if(count > s_MaxDrawItemCount - drawItemCount)
                 return false;
+            drawItemCount += count;
         }
-        for(const MaterialPassDrawItem& drawItem : drawItems->computeDrawItems){
-            if(!appendDrawItem(drawItem))
+    }
+    if(drawItemCount == 0u)
+        return true;
+
+    using MeshSourceRef = NotNull<const MaterialPassMeshResourceSnapshot*>;
+    Vector<MeshSourceRef, Core::Alloc::ScratchArena> uniqueMeshes{ scratchArena };
+    uniqueMeshes.reserve(drawItemCount);
+    {
+        // Draw snapshots own these buffers for the whole call. Identify a complete source tuple before reserving
+        // per-buffer storage, so repeated instances cost one pointer each instead of a full buffer-table entry.
+        const auto hashSources = [](const MeshSourceRef& mesh){
+            usize hash = 0u;
+            ForEachMaterialPassMeshSourceBuffer(*mesh, [&](const Core::BufferHandle& buffer){
+                HashCombine(hash, buffer.get());
+            });
+            return hash;
+        };
+        const auto equalSources = [](const MeshSourceRef& lhs, const MeshSourceRef& rhs){
+            if(lhs.get() == rhs.get())
+                return true;
+
+            Core::Buffer* rhsBuffers[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
+            usize sourceIndex = 0u;
+            ForEachMaterialPassMeshSourceBuffer(*rhs, [&](const Core::BufferHandle& buffer){
+                rhsBuffers[sourceIndex++] = buffer.get();
+            });
+            sourceIndex = 0u;
+            bool equal = true;
+            ForEachMaterialPassMeshSourceBuffer(*lhs, [&](const Core::BufferHandle& buffer){
+                equal = (buffer.get() == rhsBuffers[sourceIndex++]) && equal;
+            });
+            return equal;
+        };
+        using MeshSourceSet = HashSet<MeshSourceRef, RemoveConst_T<decltype(hashSources)>, RemoveConst_T<decltype(equalSources)>, Core::Alloc::ScratchArena>;
+        Optional<MeshSourceSet> meshSources;
+        if(drawItemCount > 1u){
+            meshSources.emplace(0u, hashSources, equalSources, scratchArena);
+            meshSources->reserve(drawItemCount);
+        }
+        const auto appendDrawItem = [&](const MaterialPassDrawItem& drawItem){
+            const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+            // Descriptors and counts belong to each draw and must also be valid on a repeated source tuple.
+            if(!mesh.valid())
                 return false;
+            if(!meshSources || meshSources->insert(MeshSourceRef(&mesh)).second)
+                uniqueMeshes.push_back(MeshSourceRef(&mesh));
+            return true;
+        };
+        for(usize drawItemSetIndex = 0u; drawItemSetIndex < drawItemSetCount; ++drawItemSetIndex){
+            const MaterialPassDrawItems* const drawItems = drawItemSets[drawItemSetIndex];
+            for(const MaterialPassDrawItem& drawItem : drawItems->meshDrawItems){
+                if(!appendDrawItem(drawItem))
+                    return false;
+            }
+            for(const MaterialPassDrawItem& drawItem : drawItems->computeDrawItems){
+                if(!appendDrawItem(drawItem))
+                    return false;
+            }
         }
     }
 
-    outResourceUses.reserve(sourceBuffers.size());
-    for(const Core::BufferHandle& buffer : sourceBuffers){
-        Core::GpuGraphResourceId resource;
-        {
-            const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-            if(!declarations.valid()){
-                outResourceUses.clear();
-                return false;
-            }
-            resource = declarations.findImportedBuffer(buffer);
+    const usize sourceBufferCapacity = uniqueMeshes.size() * NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT;
+    outResourceUses.reserve(sourceBufferCapacity);
+    Vector<Core::BufferHandle, Core::Alloc::ScratchArena> sourceBuffers{ scratchArena };
+    HashMap<Core::Buffer*, usize, Hasher<Core::Buffer*>, EqualTo<Core::Buffer*>, Core::Alloc::ScratchArena> sourceBufferIndices(
+        0u, Hasher<Core::Buffer*>(), EqualTo<Core::Buffer*>(), scratchArena
+    );
+    sourceBuffers.reserve(sourceBufferCapacity);
+    sourceBufferIndices.reserve(sourceBufferCapacity);
+    for(const MeshSourceRef& mesh : uniqueMeshes){
+        ForEachMaterialPassMeshSourceBuffer(*mesh, [&](const Core::BufferHandle& buffer){
+            if(sourceBufferIndices.try_emplace(buffer.get(), sourceBuffers.size()).second)
+                sourceBuffers.push_back(buffer);
+        });
+    }
+
+    outResourceUses.resize(sourceBuffers.size());
+    {
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+        if(!declarations.valid()){
+            outResourceUses.clear();
+            return false;
         }
+        const u64 graphGeneration = declarations.generation();
+        const usize resourceCount = declarations.resourceCount();
+        usize unresolvedBufferCount = sourceBuffers.size();
+        // Resolve every requested import in one pass, keeping the first matching resource just as findImportedBuffer
+        // does. Once all requested buffers are found, unrelated resources at the end of the graph need no scan.
+        for(usize resourceIndex = 0u; resourceIndex < resourceCount && unresolvedBufferCount != 0u; ++resourceIndex){
+            const Core::GpuGraphResourceId resource{ static_cast<u32>(resourceIndex), graphGeneration };
+            Core::Buffer* const buffer = declarations.bufferForResource(resource);
+            if(!buffer)
+                continue;
+            const auto found = sourceBufferIndices.find(buffer);
+            if(found == sourceBufferIndices.end())
+                continue;
+            Core::GpuGraphResourceId& importedResource = outResourceUses[found->second].resource;
+            if(!importedResource.valid()){
+                importedResource = resource;
+                --unresolvedBufferCount;
+            }
+        }
+    }
+    for(usize bufferIndex = 0u; bufferIndex < sourceBuffers.size(); ++bufferIndex){
+        const Core::BufferHandle& buffer = sourceBuffers[bufferIndex];
+        Core::GpuGraphResourceId resource = outResourceUses[bufferIndex].resource;
         if(!resource.valid()){
             const Name identity = buffer->getCreationDescription().debugName;
             if(!identity){
@@ -95,7 +167,7 @@ namespace RendererTaskGraphDetail{
             outResourceUses.clear();
             return false;
         }
-        outResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+        outResourceUses[bufferIndex] = ReadUse(resource, Core::ResourceStates::ShaderResource);
     }
     return true;
 }

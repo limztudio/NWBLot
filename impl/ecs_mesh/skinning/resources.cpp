@@ -123,7 +123,7 @@ void MeshSkinningSystem::releaseRuntimeResourceBindlessHeapHandles(RuntimeResour
         release(resources.bindlessHeapHandles.meshletBounds);
     }
     resources.bindlessHeapHandles = RuntimeBindlessHeapHandles{};
-    resources.bindlessResourceSlots = RuntimeBindlessResourceSlots{};
+    resources.bindlessResourceSlots = MeshSkinningBindlessResourceSlots{};
     resources.bindlessResourceSlotsUploaded = false;
 }
 
@@ -197,7 +197,7 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
     ))
         return fail();
 
-    RuntimeBindlessResourceSlots& slots = resources.bindlessResourceSlots;
+    MeshSkinningBindlessResourceSlots& slots = resources.bindlessResourceSlots;
     slots.restPosition = resources.bindlessHeapHandles.restPosition.slot();
     slots.skinnedPosition = resources.bindlessHeapHandles.skinnedPosition.slot();
     slots.restNormal = resources.bindlessHeapHandles.restNormal.slot();
@@ -322,7 +322,7 @@ bool MeshSkinningSystem::ensureRuntimeResources(
     }
     Core::BufferDesc bindlessSlotsBufferDesc;
     bindlessSlotsBufferDesc
-        .setByteSize(sizeof(RuntimeBindlessResourceSlots))
+        .setByteSize(sizeof(MeshSkinningBindlessResourceSlots))
         .setIsConstantBuffer(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(bindlessSlotsBufferName)

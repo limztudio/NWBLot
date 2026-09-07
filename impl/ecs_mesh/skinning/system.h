@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "graph_dispatch_plan.h"
 #include "runtime_cache.h"
 #include "submission_state.h"
 
@@ -90,7 +91,7 @@ private:
         u32 jointCount = 0;
         u32 skinningMode = SkeletonSkinningMode::LinearBlend;
         u32 attributeCount = 0;
-        // UniformBuffer heap slot for RuntimeBindlessResourceSlots.
+        // UniformBuffer heap slot for MeshSkinningBindlessResourceSlots.
         u32 bindlessResourceSlots = 0;
         u32 padding2 = 0;
         u32 padding3 = 0;
@@ -105,7 +106,7 @@ private:
 
     struct MeshletBoundsPushConstants{
         u32 meshletCount = 0;
-        // UniformBuffer heap slot for RuntimeBindlessResourceSlots.
+        // UniformBuffer heap slot for MeshSkinningBindlessResourceSlots.
         u32 bindlessResourceSlots = 0;
         u32 padding1 = 0;
         u32 padding2 = 0;
@@ -116,7 +117,7 @@ private:
 
     struct MeshletRepackPushConstants{
         u32 meshletCount = 0;
-        // UniformBuffer heap slot for RuntimeBindlessResourceSlots.
+        // UniformBuffer heap slot for MeshSkinningBindlessResourceSlots.
         u32 bindlessResourceSlots = 0;
         u32 padding1 = 0;
         u32 padding2 = 0;
@@ -124,33 +125,6 @@ private:
     static_assert(sizeof(MeshletRepackPushConstants) == NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning repack push constants layout must match the shader ABI");
     static_assert(offsetof(MeshletRepackPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_MESHLET_COUNT, "MeshSkinning repack meshlet-count push offset drifted");
     static_assert(offsetof(MeshletRepackPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_BINDLESS_RESOURCES_SLOT, "MeshSkinning repack bindless-resource slot push offset drifted");
-
-    // Mirrors NwbSkinnedMeshBindlessResources exactly: four std140 uint4 lanes. Every handle below is a persistent
-    // StorageBuffer-heap registration. The selector payload itself is a UniformBuffer heap entry.
-    struct RuntimeBindlessResourceSlots{
-        u32 restPosition = 0u;
-        u32 skinnedPosition = 0u;
-        u32 restNormal = 0u;
-        u32 skinnedNormal = 0u;
-
-        u32 restTangent = 0u;
-        u32 skinnedTangent = 0u;
-        u32 meshletDesc = 0u;
-        u32 positionRefDeltas = 0u;
-
-        u32 attributeRefDeltas = 0u;
-        u32 attributeSkins = 0u;
-        u32 skinInfluences = 0u;
-        u32 jointPalette = 0u;
-
-        u32 localVertexRefs = 0u;
-        u32 primitiveIndices = 0u;
-        u32 meshletBounds = 0u;
-        u32 attributeBuffer = 0u;
-
-        [[nodiscard]] constexpr bool operator==(const RuntimeBindlessResourceSlots&)const = default;
-    };
-    static_assert(sizeof(RuntimeBindlessResourceSlots) == sizeof(u32) * 16u, "MeshSkinning bindless resource slots must stay four uint4 lanes");
 
     struct RuntimeBindlessHeapHandles{
         Core::GpuDescriptorHandle resourceSlots = Core::GpuDescriptorHandle::invalid();
@@ -183,7 +157,7 @@ private:
         Core::BufferHandle skinBuffer;
         Core::BufferHandle jointPaletteBuffer;
         Core::BufferHandle bindlessResourceSlotsBuffer;
-        RuntimeBindlessResourceSlots bindlessResourceSlots;
+        MeshSkinningBindlessResourceSlots bindlessResourceSlots;
         RuntimeBindlessHeapHandles bindlessHeapHandles;
         bool bindlessResourceSlotsUploaded = false;
 
@@ -218,49 +192,6 @@ private:
             ;
         }
     };
-
-    // The graph tasks retain only immutable per-mesh dispatch inputs. They resolve imported buffers and pipelines
-    // from graph-owned IDs while recording, then publish the dirty-state and selector-residency commit only after
-    // the containing primary-Graphics packet is accepted.
-    struct GraphOwnedSkinningDispatchPlan{
-        RuntimeMeshHandle handle;
-        Core::BufferHandle bindlessResourceSlotsBuffer;
-        Core::GpuGraphResourceId bindlessResourceSlotsResource;
-        Core::GpuGraphResourceId restPositionResource;
-        Core::GpuGraphResourceId restNormalResource;
-        Core::GpuGraphResourceId restTangentResource;
-        Core::GpuGraphResourceId skinnedPositionResource;
-        Core::GpuGraphResourceId skinnedNormalResource;
-        Core::GpuGraphResourceId skinnedTangentResource;
-        Core::GpuGraphResourceId meshletDescResource;
-        Core::GpuGraphResourceId meshletBoundsResource;
-        Core::GpuGraphResourceId meshletPositionRefDeltaResource;
-        Core::GpuGraphResourceId meshletAttributeRefDeltaResource;
-        Core::GpuGraphResourceId meshletLocalVertexRefResource;
-        Core::GpuGraphResourceId meshletPrimitiveIndexResource;
-        Core::GpuGraphResourceId attributeSkinResource;
-        Core::GpuGraphResourceId skinResource;
-        Core::GpuGraphResourceId jointPaletteResource;
-        Core::GpuGraphResourceId attributeResource;
-        Core::GpuGraphPipelineId skinningPipeline;
-        Core::GpuGraphPipelineId boundsPipeline;
-        Core::GpuGraphPipelineId repackPipeline;
-        u32 meshletCount = 0u;
-        u32 skinCount = 0u;
-        u32 jointCount = 0u;
-        u32 skinningMode = SkeletonSkinningMode::LinearBlend;
-        u32 attributeCount = 0u;
-        u32 bindlessResourceSlots = 0u;
-        Core::GpuDescriptorHandle bindlessResourceSlotsDescriptor = Core::GpuDescriptorHandle::invalid();
-        MeshSkinningSubmissionCommit submissionCommit;
-        // Acceptance validates this exact selector generation before setting its residency bit.
-        RuntimeBindlessResourceSlots bindlessResourceSlotsPayload;
-        bool hasActiveSkin = false;
-        bool copiedRestStreams = false;
-        bool updatesMeshletBounds = false;
-        bool repacksNormals = false;
-    };
-    static_assert(sizeof(GraphOwnedSkinningDispatchPlan) == 448u, "Graph-owned skinning plans should stay compact");
 
     struct TaskGraphSkinningDeformationTask;
     struct TaskGraphSkinningPostDispatchTask;
@@ -310,16 +241,16 @@ private:
         Core::Alloc::ScratchArena& scratchArena
     );
     [[nodiscard]] bool recordGraphOwnedSkinningDeformation(
-        const GraphOwnedSkinningDispatchPlan& plan,
+        const MeshSkinningGraphDispatchPlan& plan,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
     [[nodiscard]] bool recordGraphOwnedSkinningPostDispatch(
-        const GraphOwnedSkinningDispatchPlan& plan,
+        const MeshSkinningGraphDispatchPlan& plan,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
-    void confirmGraphOwnedSkinningDispatch(const GraphOwnedSkinningDispatchPlan& plan)noexcept;
+    void confirmGraphOwnedSkinningDispatch(const MeshSkinningGraphDispatchPlan& plan)noexcept;
     [[nodiscard]] static bool resolveRestToSkinnedCopyByteCounts(
         const MeshSkinningRuntimeInstance& instance,
         usize& outPositionBytes,

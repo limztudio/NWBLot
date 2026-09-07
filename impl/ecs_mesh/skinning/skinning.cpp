@@ -78,7 +78,7 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
 }
 
 bool MeshSkinningSystem::recordGraphOwnedSkinningDeformation(
-    const GraphOwnedSkinningDispatchPlan& plan,
+    const MeshSkinningGraphDispatchPlan& plan,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
 ){
@@ -152,7 +152,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningDeformation(
 
 
 bool MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(
-    const GraphOwnedSkinningDispatchPlan& plan,
+    const MeshSkinningGraphDispatchPlan& plan,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
 ){
@@ -232,7 +232,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(
     return true;
 }
 
-void MeshSkinningSystem::confirmGraphOwnedSkinningDispatch(const GraphOwnedSkinningDispatchPlan& plan)noexcept{
+void MeshSkinningSystem::confirmGraphOwnedSkinningDispatch(const MeshSkinningGraphDispatchPlan& plan)noexcept{
     MeshSkinningRuntimeInstance* const instance = m_runtimeMeshCache.findInstance(plan.handle);
     if(!instance || instance->editRevision != plan.submissionCommit.editRevision)
         return;

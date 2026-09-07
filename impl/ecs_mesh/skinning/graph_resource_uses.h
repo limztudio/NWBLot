@@ -1,0 +1,50 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "graph_dispatch_plan.h"
+
+#include <core/alloc/scratch.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct MeshSkinningGraphResourceUses{
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> deformation;
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> postDispatch;
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> finalizer;
+
+    explicit MeshSkinningGraphResourceUses(Core::Alloc::ScratchArena& scratchArena)
+        : deformation(scratchArena)
+        , postDispatch(scratchArena)
+        , finalizer(scratchArena)
+    {}
+};
+
+// Each call rebuilds ordered uses from immutable frame dispatch plans. Rejected declarations leave all outputs empty.
+[[nodiscard]] bool BuildMeshSkinningGraphResourceUses(
+    const MeshSkinningGraphDispatchPlan* plans,
+    usize planCount,
+    Core::Alloc::ScratchArena& scratchArena,
+    MeshSkinningGraphResourceUses& outUses
+);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

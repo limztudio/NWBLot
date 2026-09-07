@@ -152,3 +152,17 @@ History stores and immutable snapshots now use exact indexes for collections lar
 Indexes trade storage and snapshot-copy time for much cheaper recording and lookup. At 4,096 histories they add about 1.44 MiB to each store and snapshot: dbg store usage changes from 4,383,160 to 5,890,520 bytes and snapshot usage from 3,014,688 to 4,522,048 bytes. Opt adds the same index capacity. The eight-history fixture keeps its original storage; its opt snapshot lookup changes from 0.0214 to 0.0318 ms across 256 passes, about 41 ns per pass. No small-list speedup is claimed.
 
 Six timing regressions and all 356 graphics tests pass in dbg, opt, and fin, covering full identities, promotion, independent snapshot arenas, reset/device replacement, assignment timelines, and warm reuse. All 133 global tests also pass in these configurations and in the opt name-symbol build, including positive symbol-callback probes and callback-free identity access.
+
+## Skinning graph resource declarations
+
+A focused collector replaces three growing-vector duplicate scans. It records exact resource index/generation identities independently for deformation, post-dispatch, and finalization, merging access only when required states agree. First-occurrence ordinals preserve declaration order. Inline capacity covers every role in one plan; larger collections index actual unique resources in caller-owned scratch. Output allocation follows index growth, and ordinary rejection leaves every output empty.
+
+| Workload | dbg before → after | opt before → after |
+| --- | ---: | ---: |
+| 1,024 plans with unique resources | 1797.7141 → 8.6149 | 46.5298 → 1.5819 |
+| One plan, 4,096 collections | 46.3508 → 14.2233 | 2.0935 → 1.2228 |
+| 1,024 shared-resource plans, eight collections | 37.1011 → 3.4282 | 0.5034 → 0.7214 |
+
+The shared opt workload adds about 27 ns per plan; the debug improvement and unique-resource scaling are the main gains. One/shared-plan scratch peaks drop from 5,200 to 1,616 bytes in dbg and from 5,152 to 1,568 bytes in opt. For the unique workload, indexing raises peak scratch from about 5.73 to 7.78 MiB. Repeated identical plans use exactly the same scratch capacity as one plan; storage grows with actual unique resources.
+
+Six collector regressions and all 176 ECS graphics tests pass in dbg/opt, with 179 tests in fin because of configuration-specific coverage. Renderer/frame and pipeline builds pass in all three. Coverage includes full generations, role order, shared resources, every phase's conflict/missing-resource rejection, and recovery after promoted-table failure. Fixtures exercise production CPU collection using immutable dispatch inputs; no GPU timing claim is made.

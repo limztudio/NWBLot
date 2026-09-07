@@ -5,6 +5,7 @@
 #include "system.h"
 
 #include "arena_names.h"
+#include "graph_resource_uses.h"
 #include "resource_names.h"
 #include "skin_payload.h"
 #include "timing_names.h"
@@ -131,7 +132,7 @@ struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
 
         MeshSkinningSystem* system = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        Vector<GraphOwnedSkinningDispatchPlan, Core::Alloc::GlobalArena> plans;
+        Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
     };
 
     [[nodiscard]] static bool record(
@@ -143,7 +144,7 @@ struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        for(const GraphOwnedSkinningDispatchPlan& plan : payload.plans){
+        for(const MeshSkinningGraphDispatchPlan& plan : payload.plans){
             if(!payload.system->recordGraphOwnedSkinningDeformation(plan, commandList, context))
                 return false;
         }
@@ -162,7 +163,7 @@ struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
 
         MeshSkinningSystem* system = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        Vector<GraphOwnedSkinningDispatchPlan, Core::Alloc::GlobalArena> plans;
+        Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
     };
 
     [[nodiscard]] static bool record(
@@ -174,7 +175,7 @@ struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        for(const GraphOwnedSkinningDispatchPlan& plan : payload.plans){
+        for(const MeshSkinningGraphDispatchPlan& plan : payload.plans){
             if(!payload.system->recordGraphOwnedSkinningPostDispatch(plan, commandList, context))
                 return false;
         }
@@ -185,7 +186,7 @@ struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
         if(!payload.system || !token.valid())
             return;
 
-        for(const GraphOwnedSkinningDispatchPlan& plan : payload.plans)
+        for(const MeshSkinningGraphDispatchPlan& plan : payload.plans)
             payload.system->confirmGraphOwnedSkinningDispatch(plan);
     }
 };
@@ -199,7 +200,7 @@ struct MeshSkinningSystem::TaskGraphSkinningFinalizerTask{
             : plans(arena)
         {}
 
-        Vector<GraphOwnedSkinningDispatchPlan, Core::Alloc::GlobalArena> plans;
+        Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
     };
 
     [[nodiscard]] static bool record(
@@ -210,7 +211,7 @@ struct MeshSkinningSystem::TaskGraphSkinningFinalizerTask{
         if(payload.plans.empty())
             return false;
 
-        for(const GraphOwnedSkinningDispatchPlan& plan : payload.plans){
+        for(const MeshSkinningGraphDispatchPlan& plan : payload.plans){
             if(plan.hasActiveSkin || plan.copiedRestStreams){
                 Core::Buffer* const skinnedPosition = context.declarations.bufferForResource(plan.skinnedPositionResource);
                 Core::Buffer* const skinnedNormal = context.declarations.bufferForResource(plan.skinnedNormalResource);
@@ -513,7 +514,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     Core::GpuTaskGraph graph(m_arena);
     Core::GpuTaskId terminalTask;
     Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_FrameUploadArena);
-    Vector<GraphOwnedSkinningDispatchPlan, Core::Alloc::GlobalArena> dispatchPlans(m_arena);
+    Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> dispatchPlans(m_arena);
     auto skinningBindings = m_world.view<SkinnedMeshBindingComponent>();
     dispatchPlans.reserve(skinningBindings.candidateCount());
     bool declarationFailed = false;
@@ -586,7 +587,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                 return;
             }
 
-            GraphOwnedSkinningDispatchPlan plan;
+            MeshSkinningGraphDispatchPlan plan;
             plan.handle = instance->handle;
             plan.submissionCommit.editRevision = instance->editRevision;
             plan.submissionCommit.handledDirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
@@ -739,7 +740,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                 const Core::GpuUploadBlobId selectorSource = graph.copyUploadData(
                     &resources.bindlessResourceSlots,
                     sizeof(resources.bindlessResourceSlots),
-                    alignof(RuntimeBindlessResourceSlots)
+                    alignof(MeshSkinningBindlessResourceSlots)
                 );
                 if(!uploadIdentity || !selectorSource.valid()){
                     NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain graph-owned bindless slots for runtime mesh '{}'"), instance->handle.value);
@@ -908,121 +909,9 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     if(dispatchPlans.empty())
         return true;
 
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> deformationResourceUses(scratchArena);
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> postDispatchResourceUses(scratchArena);
-    const auto addResourceUse = [](
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses,
-        const Core::GpuGraphResourceId resource,
-        const Core::ResourceStates::Mask state,
-        const Core::GpuTaskResourceAccess::Enum access
-    ){
-        if(!resource.valid())
-            return false;
-        for(Core::GpuTaskResourceUse& existing : resourceUses){
-            if(existing.resource != resource)
-                continue;
-            if(existing.requiredState != state)
-                return false;
-            if(existing.access != access)
-                existing.access = Core::GpuTaskResourceAccess::ReadWrite;
-            return true;
-        }
-        resourceUses.push_back(Core::GpuTaskResourceUse{
-            .resource = resource,
-            .range = {},
-            .requiredState = state,
-            .access = access,
-        });
-        return true;
-    };
-    for(const GraphOwnedSkinningDispatchPlan& plan : dispatchPlans){
-        if(!plan.hasActiveSkin)
-            continue;
-        if(
-            !addResourceUse(
-                deformationResourceUses,
-                plan.bindlessResourceSlotsResource,
-                Core::ResourceStates::ConstantBuffer,
-                Core::GpuTaskResourceAccess::Read
-            )
-            || !addResourceUse(deformationResourceUses, plan.restPositionResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !addResourceUse(deformationResourceUses, plan.restNormalResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !addResourceUse(deformationResourceUses, plan.restTangentResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !addResourceUse(deformationResourceUses, plan.skinnedPositionResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
-            || !addResourceUse(deformationResourceUses, plan.skinnedNormalResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
-            || !addResourceUse(deformationResourceUses, plan.skinnedTangentResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
-            || !addResourceUse(deformationResourceUses, plan.meshletDescResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !addResourceUse(deformationResourceUses, plan.meshletPositionRefDeltaResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !addResourceUse(deformationResourceUses, plan.meshletAttributeRefDeltaResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !addResourceUse(deformationResourceUses, plan.attributeSkinResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !addResourceUse(deformationResourceUses, plan.skinResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !addResourceUse(deformationResourceUses, plan.jointPaletteResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph resource uses for skinning deformation"));
-            return false;
-        }
-    }
-
-    for(const GraphOwnedSkinningDispatchPlan& plan : dispatchPlans){
-        if(
-            !addResourceUse(
-                postDispatchResourceUses,
-                plan.bindlessResourceSlotsResource,
-                Core::ResourceStates::ConstantBuffer,
-                Core::GpuTaskResourceAccess::Read
-            )
-            || !addResourceUse(postDispatchResourceUses, plan.skinnedPositionResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !addResourceUse(postDispatchResourceUses, plan.meshletDescResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !addResourceUse(postDispatchResourceUses, plan.meshletPositionRefDeltaResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !addResourceUse(postDispatchResourceUses, plan.meshletLocalVertexRefResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !addResourceUse(postDispatchResourceUses, plan.meshletPrimitiveIndexResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !addResourceUse(postDispatchResourceUses, plan.meshletBoundsResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
-            || (plan.repacksNormals && (
-                !addResourceUse(postDispatchResourceUses, plan.skinnedNormalResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-                || !addResourceUse(postDispatchResourceUses, plan.meshletAttributeRefDeltaResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-                || !addResourceUse(postDispatchResourceUses, plan.attributeResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
-            ))
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph resource uses for skinning bounds/repack"));
-            return false;
-        }
-    }
-
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> finalizerResourceUses(scratchArena);
-    const auto addFinalizerUse = [&](const Core::GpuGraphResourceId resource){
-        if(!resource.valid())
-            return false;
-        for(const Core::GpuTaskResourceUse& existing : finalizerResourceUses){
-            if(existing.resource != resource)
-                continue;
-            return existing.requiredState == Core::ResourceStates::ShaderResource;
-        }
-        finalizerResourceUses.push_back(Core::GpuTaskResourceUse{
-            .resource = resource,
-            .range = {},
-            .requiredState = Core::ResourceStates::ShaderResource,
-            .access = Core::GpuTaskResourceAccess::Read,
-        });
-        return true;
-    };
-    for(const GraphOwnedSkinningDispatchPlan& plan : dispatchPlans){
-        if(
-            ((plan.hasActiveSkin || plan.copiedRestStreams) && (
-                !addFinalizerUse(plan.skinnedPositionResource)
-                || !addFinalizerUse(plan.skinnedNormalResource)
-                || !addFinalizerUse(plan.skinnedTangentResource)
-            ))
-            || (plan.updatesMeshletBounds && !addFinalizerUse(plan.meshletBoundsResource))
-            || (plan.repacksNormals && !addFinalizerUse(plan.attributeResource))
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning final states"));
-            return false;
-        }
-    }
-    if(finalizerResourceUses.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning dispatch has no final state"));
+    MeshSkinningGraphResourceUses resourceUses(scratchArena);
+    if(!BuildMeshSkinningGraphResourceUses(dispatchPlans.data(), dispatchPlans.size(), scratchArena, resourceUses))
         return false;
-    }
 
     // Retain the accepted prior-frame state with the graph task that consumes it, rather than selecting a native
     // packet-record override after compilation.  The source stays serial by contract, while all current-frame
@@ -1039,14 +928,14 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
 
     Core::GpuTimingSubmissionTicket timingTicket(m_graphics.gpuTiming());
     TaskGraphSkinningFinalizerTask::Payload finalizerPayload(m_arena);
-    for(const GraphOwnedSkinningDispatchPlan& plan : dispatchPlans)
+    for(const MeshSkinningGraphDispatchPlan& plan : dispatchPlans)
         finalizerPayload.plans.push_back(plan);
     Core::GpuTaskId postDispatchDependency = terminalTask;
-    if(!deformationResourceUses.empty()){
+    if(!resourceUses.deformation.empty()){
         TaskGraphSkinningDeformationTask::Payload deformationPayload(m_arena);
         deformationPayload.system = this;
         deformationPayload.timingTicket = &timingTicket;
-        for(const GraphOwnedSkinningDispatchPlan& plan : dispatchPlans){
+        for(const MeshSkinningGraphDispatchPlan& plan : dispatchPlans){
             if(plan.hasActiveSkin)
                 deformationPayload.plans.push_back(plan);
         }
@@ -1057,7 +946,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             .setMarkerLabel("Runtime Skinning Deformation")
             .setQueue(__hidden_system::SkinningDispatchQueueRequest())
             .setScheduling(__hidden_system::SkinningDispatchScheduling())
-            .setResourceUses(deformationResourceUses.data(), deformationResourceUses.size())
+            .setResourceUses(resourceUses.deformation.data(), resourceUses.deformation.size())
         ;
         if(previousFrameStateSourceCount != 0u)
             deformationDesc.setExternalStateSources(previousFrameStateSources, previousFrameStateSourceCount);
@@ -1084,7 +973,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         .setMarkerLabel("Runtime Skinning Bounds and Repack")
         .setQueue(__hidden_system::SkinningDispatchQueueRequest())
         .setScheduling(__hidden_system::SkinningDispatchScheduling())
-        .setResourceUses(postDispatchResourceUses.data(), postDispatchResourceUses.size())
+        .setResourceUses(resourceUses.postDispatch.data(), resourceUses.postDispatch.size())
     ;
     if(previousFrameStateSourceCount != 0u)
         postDispatchDesc.setExternalStateSources(previousFrameStateSources, previousFrameStateSourceCount);
@@ -1105,7 +994,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         .setQueue(__hidden_system::SkinningDispatchQueueRequest())
         .setScheduling(__hidden_system::SkinningDispatchScheduling())
         .setDependencies(&postDispatchTask, 1u)
-        .setResourceUses(finalizerResourceUses.data(), finalizerResourceUses.size())
+        .setResourceUses(resourceUses.finalizer.data(), resourceUses.finalizer.size())
     ;
     const Core::GpuTaskId finalizerTask = graph.addTask<TaskGraphSkinningFinalizerTask>(
         finalizerDesc,

@@ -26,8 +26,10 @@ TEST(EcsGraphics, ShadowTraceGeometryAcceptancePreflightsUnionCapacityAndPublish
 
     AString rayTracingHeaderSource;
     AString rayTracingSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
+    AString freezeSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "shadow_trace_geometry.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "shadow_trace_geometry.cpp", freezeSource));
 
     const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
     const AStringView rayTracing(rayTracingSource.data(), rayTracingSource.size());
@@ -48,12 +50,13 @@ TEST(EcsGraphics, ShadowTraceGeometryAcceptancePreflightsUnionCapacityAndPublish
     ASSERT_NE(confirmOffset, AStringView::npos);
     ASSERT_NE(invalidateOffset, AStringView::npos);
 
-    const AStringView freeze = rayTracing.substr(freezeOffset, confirmOffset - freezeOffset);
-    EXPECT_TRUE(ContainsText(freeze, "const bool normalizedByAcceptedPacket = wasNormalizedByAcceptedPacket(buffer.get());"));
+    const AStringView freeze(freezeSource.data(), freezeSource.size());
+    EXPECT_TRUE(ContainsText(rayTracing.substr(freezeOffset, confirmOffset - freezeOffset), "return FreezePreparedShadowTraceGeometryBuffers("));
+    EXPECT_TRUE(ContainsText(freeze, "const bool normalizedByAcceptedPacket = record->accepted;"));
     EXPECT_TRUE(ContainsText(freeze, ".normalizationPending = !normalizedByAcceptedPacket,"));
-    EXPECT_TRUE(ContainsText(freeze, "AddOverflows<usize>(m_acceptedShadowTraceGeometryBuffers.size(), m_preparedShadowTraceGeometryBuffers.size())"));
-    EXPECT_TRUE(ContainsText(freeze, "const usize acceptedCapacity = m_acceptedShadowTraceGeometryBuffers.size() + m_preparedShadowTraceGeometryBuffers.size();"));
-    EXPECT_TRUE(ContainsText(freeze, "m_acceptedShadowTraceGeometryBuffers.reserve(acceptedCapacity);"));
+    EXPECT_TRUE(ContainsText(freeze, "AddOverflows<usize>(acceptedBuffers.size(), outPrepared.size())"));
+    EXPECT_TRUE(ContainsText(freeze, "const usize acceptedCapacity = acceptedBuffers.size() + outPrepared.size();"));
+    EXPECT_TRUE(ContainsText(freeze, "acceptedBuffers.reserve(acceptedCapacity);"));
 
     const AStringView confirm = rayTracing.substr(confirmOffset, invalidateOffset - confirmOffset);
     EXPECT_TRUE(ContainsText(confirm, "if(resource.buffer && resource.normalizationPending)"));

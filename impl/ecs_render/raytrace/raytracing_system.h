@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/raytrace/shadow_trace_geometry.h>
 
 #include <core/alloc/scratch.h>
 #include <core/graphics/gpu_timing.h>
@@ -69,29 +70,6 @@ namespace SoftShadowUpsampleFold{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace PreparedShadowTraceGeometryRole{
-    inline constexpr u8 HardwarePosition = 1u << 0u;
-    inline constexpr u8 HardwareIndex = 1u << 1u;
-    inline constexpr u8 HardwareAttribute = 1u << 2u;
-    inline constexpr u8 SoftwareNode = 1u << 3u;
-    inline constexpr u8 SoftwarePosition = 1u << 4u;
-    inline constexpr u8 SoftwareIndex = 1u << 5u;
-    inline constexpr u8 SoftwareAttribute = 1u << 6u;
-};
-
-struct PreparedShadowTraceGeometryBuffer{
-    Core::BufferHandle buffer;
-    Name identity;
-    Core::ResourceStates::Mask initialState = Core::ResourceStates::Common;
-    u8 roles = 0u;
-    bool normalizationPending = false;
-};
-
-using PreparedShadowTraceGeometryBufferVector = Vector<
-    PreparedShadowTraceGeometryBuffer,
-    Core::Alloc::GlobalArena
->;
 
 // Material surface hooks in the shadow, caustic, and GI trace paths select texture assets through typed bindless
 // slots. Keep the exact preflight-resolved handles beside the trace geometry so graph declaration never has to

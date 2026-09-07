@@ -62,7 +62,7 @@ TEST(MaterialTextureImport, PreservesRequestedOrderDuplicatesAndExistingMetadata
     const Array<Core::TextureHandle, 5u> requested = { second, first, second, third, first };
     Core::Alloc::ScratchArena scratch(Name("tests/texture_import/scratch"));
     ResourceVector resources(scratch);
-    ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, requested.data(), requested.size(), "New Material Texture", resources, scratch), SampledTextureImportResult::Success);
+    ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, requested.data(), requested.size(), "New Material Texture", resources), SampledTextureImportResult::Success);
     ASSERT_EQ(resources.size(), 5u);
     EXPECT_EQ(resources[0u], existing);
     EXPECT_EQ(resources[0u], resources[2u]);
@@ -85,9 +85,9 @@ TEST(MaterialTextureImport, EmptyInputLeavesOutputAndUnnamedExistingTextureIntac
     Core::Alloc::ScratchArena scratch(Name("tests/texture_import/scratch"));
     ResourceVector resources(scratch);
     resources.push_back(existing);
-    EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, nullptr, 0u, "Unused", resources, scratch), SampledTextureImportResult::Success);
+    EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, nullptr, 0u, "Unused", resources), SampledTextureImportResult::Success);
     ASSERT_EQ(resources.size(), 1u);
-    EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, &unnamed, 1u, "New Label", resources, scratch), SampledTextureImportResult::Success);
+    EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, &unnamed, 1u, "New Label", resources), SampledTextureImportResult::Success);
     ASSERT_EQ(resources.size(), 2u);
     EXPECT_EQ(resources[1u], existing);
 }
@@ -120,7 +120,7 @@ TEST(MaterialTextureImport, SingletonFailuresPreserveExistingOutputAndUseTheComp
             : SampledTextureImportResult::ImportFailed
         ;
         EXPECT_EQ(ImportMaterialSampledTextureResources(
-            context.graph, &texture, 1u, "Material Texture", resources, scratch
+            context.graph, &texture, 1u, "Material Texture", resources
         ), expected);
         ASSERT_EQ(resources.size(), 1u);
         EXPECT_EQ(resources.front(), prefix);
@@ -146,7 +146,7 @@ TEST(MaterialTextureImport, MissingIdentityKeepsTheImportedPrefixAndDoesNotProce
         };
         Core::Alloc::ScratchArena scratch(Name("tests/texture_import/scratch"));
         ResourceVector resources(scratch);
-        EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, requested.data(), requested.size(), "Material Texture", resources, scratch), SampledTextureImportResult::MissingIdentity);
+        EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, requested.data(), requested.size(), "Material Texture", resources), SampledTextureImportResult::MissingIdentity);
         ASSERT_EQ(resources.size(), 1u);
         const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
         ASSERT_TRUE(view.valid());
@@ -167,7 +167,7 @@ TEST(MaterialTextureImport, IdentityConflictIsAnImportFailureAfterTheValidPrefix
     };
     Core::Alloc::ScratchArena scratch(Name("tests/texture_import/scratch"));
     ResourceVector resources(scratch);
-    EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, requested.data(), requested.size(), "Material Texture", resources, scratch), SampledTextureImportResult::ImportFailed);
+    EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, requested.data(), requested.size(), "Material Texture", resources), SampledTextureImportResult::ImportFailed);
     ASSERT_EQ(resources.size(), 1u);
     const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
     ASSERT_TRUE(view.valid());
@@ -182,12 +182,12 @@ TEST(MaterialTextureImport, NewCallAfterResetUsesCurrentGenerationAndReplacement
     Core::TextureHandle texture = context.makeTexture(identity);
     Core::Alloc::ScratchArena scratch(Name("tests/texture_import/scratch"));
     ResourceVector resources(scratch);
-    ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, &texture, 1u, "Material Texture", resources, scratch), SampledTextureImportResult::Success);
+    ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, &texture, 1u, "Material Texture", resources), SampledTextureImportResult::Success);
     const auto oldResource = resources[0u];
     context.graph.reset();
     texture = context.makeTexture(identity);
     resources.clear();
-    ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, &texture, 1u, "Material Texture", resources, scratch), SampledTextureImportResult::Success);
+    ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, &texture, 1u, "Material Texture", resources), SampledTextureImportResult::Success);
     ASSERT_EQ(resources.size(), 1u);
     EXPECT_NE(resources[0u].generation, oldResource.generation);
     const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
@@ -196,7 +196,7 @@ TEST(MaterialTextureImport, NewCallAfterResetUsesCurrentGenerationAndReplacement
     EXPECT_EQ(view.textureForResource(resources[0u]), texture.get());
 }
 
-TEST(MaterialTextureImport, PromotedRequestsPreserveAliasesOrderAndOwnershipWhileImportingMissingTextures){
+TEST(MaterialTextureImport, LargeRequestsPreserveAliasesOrderAndOwnershipWhileImportingMissingTextures){
     TextureContext context;
     constexpr usize s_TextureCount = 40u;
     Array<Core::GpuGraphResourceId, s_TextureCount> existing;
@@ -233,7 +233,7 @@ TEST(MaterialTextureImport, PromotedRequestsPreserveAliasesOrderAndOwnershipWhil
     ResourceVector resources(scratch);
     resources.push_back(existing[0u]);
     ASSERT_EQ(ImportMaterialSampledTextureResources(
-        context.graph, requests.data(), requests.size(), "New Material Texture", resources, scratch
+        context.graph, requests.data(), requests.size(), "New Material Texture", resources
     ), SampledTextureImportResult::Success);
     ASSERT_EQ(resources.size(), requests.size() + 1u);
     EXPECT_EQ(resources[0u], existing[0u]);
@@ -293,7 +293,7 @@ TEST(MaterialTextureImport, PromotedFailuresKeepOnlyTheAcceptedPrefixAndDoNotSki
             : SampledTextureImportResult::ImportFailed
         ;
         EXPECT_EQ(ImportMaterialSampledTextureResources(
-            context.graph, context.textures.data(), context.textures.size(), "Material Texture", resources, scratch
+            context.graph, context.textures.data(), context.textures.size(), "Material Texture", resources
         ), expected);
         ASSERT_EQ(resources.size(), s_FailureIndex);
         const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
@@ -323,7 +323,7 @@ TEST(MaterialTextureImport, PromotedCallsRebuildAfterResetAndLeaveTextureOwnersh
     Core::Alloc::ScratchArena scratch(Name("tests/texture_import/retained_scratch"));
     ResourceVector resources(scratch);
     ASSERT_EQ(ImportMaterialSampledTextureResources(
-        context.graph, context.textures.data(), context.textures.size(), "Material Texture", resources, scratch
+        context.graph, context.textures.data(), context.textures.size(), "Material Texture", resources
     ), SampledTextureImportResult::Success);
     ASSERT_EQ(resources.size(), s_TextureCount);
     const auto oldResource = resources[7u];
@@ -335,7 +335,7 @@ TEST(MaterialTextureImport, PromotedCallsRebuildAfterResetAndLeaveTextureOwnersh
     resources.clear();
     EXPECT_EQ(retired->getReferenceCount(), 1u);
     ASSERT_EQ(ImportMaterialSampledTextureResources(
-        context.graph, context.textures.data(), context.textures.size(), "Replacement Material Texture", resources, scratch
+        context.graph, context.textures.data(), context.textures.size(), "Replacement Material Texture", resources
     ), SampledTextureImportResult::Success);
     ASSERT_EQ(resources.size(), s_TextureCount);
     Array<Core::Texture*, s_TextureCount> retained;
@@ -355,7 +355,7 @@ TEST(MaterialTextureImport, PromotedCallsRebuildAfterResetAndLeaveTextureOwnersh
     }
 }
 
-TEST(MaterialTextureImport, LookupScratchTracksUniqueTexturesInsteadOfRequestsOrGraphSize){
+TEST(MaterialTextureImport, ExistingTexturesRequireNoStorageBeyondReservedOrderedOutput){
     struct Workload{
         usize uniqueTextures;
         usize requests;
@@ -370,7 +370,6 @@ TEST(MaterialTextureImport, LookupScratchTracksUniqueTexturesInsteadOfRequestsOr
         { 40u, 4096u, 512u },
         { 40u, 40u, 512u },
     };
-    u64 peaks[LengthOf(workloads)] = {};
     for(usize workloadIndex = 0u; workloadIndex < LengthOf(workloads); ++workloadIndex){
         const Workload& workload = workloads[workloadIndex];
         TextureContext context;
@@ -387,27 +386,21 @@ TEST(MaterialTextureImport, LookupScratchTracksUniqueTexturesInsteadOfRequestsOr
         Core::Alloc::ScratchArena outputScratch(Name("tests/texture_import/output_scratch"));
         ResourceVector resources(outputScratch);
         resources.reserve(requests.size());
-        Core::Alloc::ScratchArena lookupScratch(Name("tests/texture_import/lookup_scratch"));
-        const ArenaMemoryStats before = lookupScratch.memoryStats();
+        const ArenaMemoryStats before = outputScratch.memoryStats();
         ASSERT_EQ(ImportMaterialSampledTextureResources(
-            context.graph, requests.data(), requests.size(), "Material Texture", resources, lookupScratch
+            context.graph, requests.data(), requests.size(), "Material Texture", resources
         ), SampledTextureImportResult::Success);
         EXPECT_EQ(resources.size(), requests.size());
-        const ArenaMemoryStats after = lookupScratch.memoryStats();
-        peaks[workloadIndex] = after.peakUsedBytes;
-        if(workload.uniqueTextures <= 32u){
-            EXPECT_EQ(after.allocationCount, before.allocationCount);
-            EXPECT_EQ(after.usedBytes, before.usedBytes);
-            EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-            EXPECT_EQ(after.peakUsedBytes, before.peakUsedBytes);
-        }
-        else
-            EXPECT_GT(after.allocationCount, before.allocationCount);
+        const ArenaMemoryStats after = outputScratch.memoryStats();
+        EXPECT_EQ(after.allocationCount, before.allocationCount);
+        EXPECT_EQ(after.usedBytes, before.usedBytes);
+        EXPECT_EQ(after.reservedBytes, before.reservedBytes);
+        EXPECT_EQ(after.peakUsedBytes, before.peakUsedBytes);
+        const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
+        ASSERT_TRUE(view.valid());
+        for(usize index = 0u; index < requests.size(); ++index)
+            EXPECT_EQ(view.textureForResource(resources[index]), requests[index].get());
     }
-    EXPECT_EQ(peaks[1u], peaks[0u]);
-    EXPECT_EQ(peaks[3u], peaks[2u]);
-    EXPECT_EQ(peaks[5u], peaks[4u]);
-    EXPECT_EQ(peaks[6u], peaks[4u]);
 }
 
 static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
@@ -454,7 +447,7 @@ static void BenchmarkTextureImports(
         {
             ResourceVector resources(scratch);
             resources.reserve(requests.size());
-            if(ImportMaterialSampledTextureResources(context.graph, requests.data(), requests.size(), "Material Texture", resources, scratch) == SampledTextureImportResult::Success)
+            if(ImportMaterialSampledTextureResources(context.graph, requests.data(), requests.size(), "Material Texture", resources) == SampledTextureImportResult::Success)
                 ++successes;
             resolved += resources.size();
         }
@@ -466,7 +459,7 @@ static void BenchmarkTextureImports(
     EXPECT_EQ(resolved, requestCount * iterations);
     Core::Alloc::ScratchArena scratch(Name("tests/texture_import/assertion_scratch"));
     ResourceVector resources(scratch);
-    ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, requests.data(), requests.size(), "Material Texture", resources, scratch), SampledTextureImportResult::Success);
+    ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, requests.data(), requests.size(), "Material Texture", resources), SampledTextureImportResult::Success);
     const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
     ASSERT_TRUE(view.valid());
     EXPECT_EQ(view.resourceCount(), uniqueCount + unrelatedCount);

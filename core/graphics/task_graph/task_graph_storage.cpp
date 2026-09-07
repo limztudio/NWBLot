@@ -6,6 +6,7 @@
 
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/rhi/command.h>
+#include <global/scope_exit.h>
 #include <global/termination.h>
 
 
@@ -313,6 +314,7 @@ void GpuTaskGraph::discardAndDestroyUnappendedPayload(
 GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
     const GpuGraphResourceDesc& desc,
     const ResourceQueueAdmissionSnapshot* const queueAdmission,
+    const ResourceBinding& binding,
     const DeclarationMutationScope& mutationAccess
 ){
     if(!mutationAccess.validFor(*this))
@@ -477,6 +479,15 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
         }
     }
 
+    ResourcePointerKey pointerKey{ nullptr, desc.type };
+    if(binding.texture)
+        pointerKey.pointer = binding.texture->get();
+    else if(binding.buffer)
+        pointerKey.pointer = binding.buffer->get();
+    else if(binding.accelStruct)
+        pointerKey.pointer = binding.accelStruct->get();
+    prepareResourceIndexes(pointerKey);
+
     ContainerDetail::ReserveGrowingCapacity(
         m_initialOwnerHandoffSources,
         m_initialOwnerHandoffSources.size() + desc.initialOwnerHandoffSourceCount
@@ -511,6 +522,13 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
 
     GpuGraphResourceNode resource;
     resource.identity = desc.identity;
+    if(binding.texture)
+        resource.texture = *binding.texture;
+    else if(binding.buffer)
+        resource.buffer = *binding.buffer;
+    else if(binding.accelStruct)
+        resource.accelStruct = *binding.accelStruct;
+    resource.deviceGeneration = binding.deviceGeneration;
     resource.type = desc.type;
     resource.initialState = desc.initialState;
     resource.externalFinalState = desc.externalFinalState;
@@ -535,8 +553,27 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
             m_queueFamilyIndices.push_back(queueAdmission->queueFamilyIndices[queueFamilyIndex]);
     }
 
+    const NameHash& identityKey = desc.identity.identityHash();
+    bool identityInserted = false;
+    bool pointerInserted = false;
+    ScopeExit indexRollback([&]()noexcept{
+        if(pointerInserted)
+            m_resourcePointerIndex->erase(pointerKey);
+        if(identityInserted)
+            m_resourceIdentityIndex->erase(identityKey);
+    });
     const u32 index = static_cast<u32>(m_resources.size());
     m_resources.push_back(Move(resource));
+    if(m_resourceIdentityIndex){
+        identityInserted = m_resourceIdentityIndex->emplace(identityKey, index).second;
+        if(!identityInserted)
+            return {};
+        if(pointerKey.pointer){
+            pointerInserted = m_resourcePointerIndex->emplace(pointerKey, index).second;
+            if(!pointerInserted)
+                return {};
+        }
+    }
     initialOwnerStateSnapshot.release();
     if(initialOwnerHandoffStateSnapshots){
         for(GlobalUniquePtr<CommandListResourceStateHandoff>& snapshot : *initialOwnerHandoffStateSnapshots)
@@ -546,6 +583,7 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
     queueFamilyRollback.commit();
     markerRollback.commit();
     resourceRollback.commit();
+    indexRollback.release();
     m_declarationRevision = allocateGeneration();
     return GpuGraphResourceId{ index, m_generation };
 }
@@ -598,6 +636,11 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
     ContainerDetail::ReserveGrowingCapacity(m_resourceSetMembers, m_resourceSetMembers.size() + desc.memberCount);
     ContainerDetail::ReserveGrowingCapacity(m_resourceSets, m_resourceSets.size() + 1u);
+    prepareResourceSetIndex();
+
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope markerRollback(m_markerText);
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope memberRollback(m_resourceSetMembers);
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope setRollback(m_resourceSets);
 
     u32 markerLabelOffset = 0u;
     u32 markerLabelSize = 0u;
@@ -613,8 +656,23 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
     for(usize memberIndex = 0u; memberIndex < desc.memberCount; ++memberIndex)
         m_resourceSetMembers.push_back(desc.members[memberIndex]);
 
+    const NameHash& identityKey = desc.identity.identityHash();
+    bool identityInserted = false;
+    ScopeExit indexRollback([&]()noexcept{
+        if(identityInserted)
+            m_resourceSetIdentityIndex->erase(identityKey);
+    });
     const u32 index = static_cast<u32>(m_resourceSets.size());
     m_resourceSets.push_back(Move(resourceSet));
+    if(m_resourceSetIdentityIndex){
+        identityInserted = m_resourceSetIdentityIndex->emplace(identityKey, index).second;
+        if(!identityInserted)
+            return {};
+    }
+    markerRollback.commit();
+    memberRollback.commit();
+    setRollback.commit();
+    indexRollback.release();
     m_declarationRevision = allocateGeneration();
     return GpuGraphResourceSetId{ index, m_generation };
 }

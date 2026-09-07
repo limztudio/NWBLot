@@ -176,10 +176,16 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
         m_externalStateSources.clear();
         m_resourceUses.clear();
         m_resourceVersionUses.clear();
+        if(m_resourceIdentityIndex)
+            m_resourceIdentityIndex->clear();
+        if(m_resourcePointerIndex)
+            m_resourcePointerIndex->clear();
         m_resources.clear();
         m_resourceVersions.clear();
         m_initialOwnerHandoffSources.clear();
         m_queueFamilyIndices.clear();
+        if(m_resourceSetIdentityIndex)
+            m_resourceSetIdentityIndex->clear();
         m_resourceSets.clear();
         m_resourceSetMembers.clear();
         m_pipelines.clear();

@@ -10,6 +10,7 @@
 #include <impl/ecs_render/material/sampled_texture_graph_resources.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 
+#include <global/allocation_size.h>
 #include <global/hash_utils.h>
 
 
@@ -85,10 +86,8 @@ namespace RendererTaskGraphDetail{
         };
         using MeshSourceSet = HashSet<MeshSourceRef, RemoveConst_T<decltype(hashSources)>, RemoveConst_T<decltype(equalSources)>, Core::Alloc::ScratchArena>;
         Optional<MeshSourceSet> meshSources;
-        if(drawItemCount > 1u){
-            meshSources.emplace(0u, hashSources, equalSources, scratchArena);
-            meshSources->reserve(drawItemCount);
-        }
+        if(drawItemCount > 1u)
+            meshSources.emplace(AddSize(drawItemCount, drawItemCount), hashSources, equalSources, scratchArena);
         const auto appendDrawItem = [&](const MaterialPassDrawItem& drawItem){
             const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
             // Descriptors and counts belong to each draw and must also be valid on a repeated source tuple.
@@ -114,16 +113,17 @@ namespace RendererTaskGraphDetail{
     const usize sourceBufferCapacity = uniqueMeshes.size() * NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT;
     outResourceUses.reserve(sourceBufferCapacity);
     Vector<Core::BufferHandle, Core::Alloc::ScratchArena> sourceBuffers{ scratchArena };
-    HashMap<Core::Buffer*, usize, Hasher<Core::Buffer*>, EqualTo<Core::Buffer*>, Core::Alloc::ScratchArena> sourceBufferIndices(
-        0u, Hasher<Core::Buffer*>(), EqualTo<Core::Buffer*>(), scratchArena
-    );
     sourceBuffers.reserve(sourceBufferCapacity);
-    sourceBufferIndices.reserve(sourceBufferCapacity);
-    for(const MeshSourceRef& mesh : uniqueMeshes){
-        ForEachMaterialPassMeshSourceBuffer(*mesh, [&](const Core::BufferHandle& buffer){
-            if(sourceBufferIndices.try_emplace(buffer.get(), sourceBuffers.size()).second)
-                sourceBuffers.push_back(buffer);
-        });
+    {
+        HashSet<Core::Buffer*, Hasher<Core::Buffer*>, EqualTo<Core::Buffer*>, Core::Alloc::ScratchArena> sourceBufferIdentities(
+            AddSize(sourceBufferCapacity, sourceBufferCapacity), Hasher<Core::Buffer*>(), EqualTo<Core::Buffer*>(), scratchArena
+        );
+        for(const MeshSourceRef& mesh : uniqueMeshes){
+            ForEachMaterialPassMeshSourceBuffer(*mesh, [&](const Core::BufferHandle& buffer){
+                if(sourceBufferIdentities.insert(buffer.get()).second)
+                    sourceBuffers.push_back(buffer);
+            });
+        }
     }
 
     outResourceUses.resize(sourceBuffers.size());
@@ -133,25 +133,8 @@ namespace RendererTaskGraphDetail{
             outResourceUses.clear();
             return false;
         }
-        const u64 graphGeneration = declarations.generation();
-        const usize resourceCount = declarations.resourceCount();
-        usize unresolvedBufferCount = sourceBuffers.size();
-        // Resolve every requested import in one pass, keeping the first matching resource just as findImportedBuffer
-        // does. Once all requested buffers are found, unrelated resources at the end of the graph need no scan.
-        for(usize resourceIndex = 0u; resourceIndex < resourceCount && unresolvedBufferCount != 0u; ++resourceIndex){
-            const Core::GpuGraphResourceId resource{ static_cast<u32>(resourceIndex), graphGeneration };
-            Core::Buffer* const buffer = declarations.bufferForResource(resource);
-            if(!buffer)
-                continue;
-            const auto found = sourceBufferIndices.find(buffer);
-            if(found == sourceBufferIndices.end())
-                continue;
-            Core::GpuGraphResourceId& importedResource = outResourceUses[found->second].resource;
-            if(!importedResource.valid()){
-                importedResource = resource;
-                --unresolvedBufferCount;
-            }
-        }
+        for(usize bufferIndex = 0u; bufferIndex < sourceBuffers.size(); ++bufferIndex)
+            outResourceUses[bufferIndex].resource = declarations.findImportedBuffer(sourceBuffers[bufferIndex]);
     }
     for(usize bufferIndex = 0u; bufferIndex < sourceBuffers.size(); ++bufferIndex){
         const Core::BufferHandle& buffer = sourceBuffers[bufferIndex];
@@ -260,7 +243,7 @@ namespace RendererTaskGraphDetail{
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> members{ scratchArena };
     members.reserve(sampledTextures.size());
     if(ImportMaterialSampledTextureResources(
-        graph, sampledTextures.data(), sampledTextures.size(), "Prepared Material Sampled Texture", members, scratchArena
+        graph, sampledTextures.data(), sampledTextures.size(), "Prepared Material Sampled Texture", members
     ) != SampledTextureImportResult::Success)
         return false;
     if(members.empty())

@@ -373,7 +373,7 @@ TEST(MaterialGeometryUses, ResolvesImportsAcrossUnrelatedResourcesAndMetadataOnl
             unrelated, Impl::RendererTaskGraphDetail::BufferResourceDesc(unrelated->getCreationDescription().debugName, "Unrelated")
         );
         ASSERT_TRUE(unrelatedImport.valid());
-        // Leave the final requested buffer absent so the first gather must finish the scan and then import it.
+        // Leave the final requested buffer absent so the first gather must resolve the other inputs and then import it.
         if(bufferIndex + 1u < s_SourceBufferCount){
             const Core::BufferHandle& requested = buffers[bufferIndex];
             const Core::GpuGraphResourceId requestedImport = context.graph.importBuffer(
@@ -399,6 +399,32 @@ TEST(MaterialGeometryUses, ResolvesImportsAcrossUnrelatedResourcesAndMetadataOnl
     const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
     ASSERT_TRUE(declarations.valid());
     EXPECT_EQ(declarations.resourceCount(), buffers.size() + 2u);
+}
+
+TEST(MaterialGeometryUses, ReservedOutputReleasesTupleAndBufferMembershipStorage){
+    constexpr usize s_DrawCounts[]{ 1u, 64u };
+    for(const usize drawCount : s_DrawCounts){
+        GeometryContext context;
+        BufferVector buffers{ context.scratchArena };
+        ASSERT_TRUE(CreateBuffers(context, drawCount * s_SourceBufferCount, buffers));
+        Impl::MaterialPassDrawItems drawItems(context.scratchArena);
+        drawItems.meshDrawItems.reserve(drawCount);
+        for(usize index = 0u; index < drawCount; ++index)
+            drawItems.meshDrawItems.push_back(MakeDrawItem(buffers, index * s_SourceBufferCount));
+        const Impl::MaterialPassDrawItems* const drawItemSets[] = { &drawItems };
+        Core::Alloc::ScratchArena gatherScratch(Name("tests/material_geometry_uses/membership_storage"));
+        ResourceUseVector uses{ gatherScratch };
+        uses.reserve(drawCount * NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT);
+        const ArenaMemoryStats before = gatherScratch.memoryStats();
+        for(usize pass = 0u; pass < 2u; ++pass){
+            ASSERT_TRUE(Impl::RendererTaskGraphDetail::GatherPreparedMaterialGeometryUses(
+                context.graph, drawItemSets, LengthOf(drawItemSets), gatherScratch, uses
+            ));
+            EXPECT_EQ(uses.size(), buffers.size());
+            EXPECT_EQ(gatherScratch.memoryStats().usedBytes, before.usedBytes);
+            ASSERT_NO_FATAL_FAILURE(ExpectUses(context.graph, uses, buffers));
+        }
+    }
 }
 
 TEST(MaterialGeometryUses, TracksEveryChangedSourceInRepeatedMeshTuples){

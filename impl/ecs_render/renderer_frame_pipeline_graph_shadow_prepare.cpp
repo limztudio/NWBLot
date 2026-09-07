@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
+#include <impl/ecs_render/raytrace/prepared_software_bvh_graph_resources.h>
 #include <impl/ecs_render/raytrace/shadow_prepare_geometry_resources.h>
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_finalize_task.h>
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_tasks.h>
@@ -603,16 +604,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     ;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-    struct PreparedMeshSwBvhGraphResources{
-        PreparedMeshSwBvhBuild build;
-        Core::GpuGraphResourceId position;
-        Core::GpuGraphResourceId triangleIndex;
-        Core::GpuGraphResourceId node;
-        Core::GpuGraphResourceId parent;
-        Core::GpuGraphResourceId sortKeys;
-        Core::GpuGraphResourceId sortPayload;
-        Core::GpuGraphResourceId visitCounter;
-    };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceSetUse, Core::Alloc::ScratchArena> resourceSetUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accelStructFinalizeResourceUses{ scratchArena };
@@ -628,9 +619,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     const auto& hybridSoftwareTailInputResources = geometryResources.m_softwareTailInputs;
     const auto& shadowPrepareTraceGeometryResources = geometryResources.m_remainingTraceGeometry;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hybridSoftwareTailResourceUses{ scratchArena };
-    Vector<PreparedMeshSwBvhGraphResources, Core::Alloc::ScratchArena> pureSoftwareMeshSwBvhGraphResources{
-        scratchArena
-    };
+    PreparedMeshSwBvhGraphResourceVector pureSoftwareMeshSwBvhGraphResources{ scratchArena };
     ECSRenderDetail::MeshBlasGraphStateVector liveMeshBlasGraphStates{ scratchArena };
     m_meshSystem.collectBlasGraphStates(liveMeshBlasGraphStates);
     resourceUses.reserve(
@@ -882,50 +871,13 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     }
 
     bool pureSoftwareMeshSwBvhBuildsGraphOwned = pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate;
-    if(pureSoftwareMeshSwBvhBuildsGraphOwned){
-        for(const PreparedMeshSwBvhBuild& build : preparedMeshSwBvhBuilds){
-            const PreparedMeshSwBvhGraphResources resources = [&](){
-                const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
-                if(!declarations.valid())
-                    return PreparedMeshSwBvhGraphResources{
-                        .build = build,
-                        .position = {},
-                        .triangleIndex = {},
-                        .node = {},
-                        .parent = {},
-                        .sortKeys = {},
-                        .sortPayload = {},
-                        .visitCounter = {},
-                    };
-                return PreparedMeshSwBvhGraphResources{
-                    .build = build,
-                    .position = declarations.findImportedBuffer(build.positionBuffer),
-                    .triangleIndex = declarations.findImportedBuffer(build.triangleIndexBuffer),
-                    .node = declarations.findImportedBuffer(build.nodeBuffer),
-                    .parent = declarations.findImportedBuffer(build.parentBuffer),
-                    .sortKeys = declarations.findImportedBuffer(build.sortKeysBuffer),
-                    .sortPayload = declarations.findImportedBuffer(build.sortPayloadBuffer),
-                    .visitCounter = declarations.findImportedBuffer(build.visitCounterBuffer),
-                };
-            }();
-            if(
-                !resources.position.valid()
-                || !resources.triangleIndex.valid()
-                || !resources.node.valid()
-                || !resources.parent.valid()
-                || !resources.sortKeys.valid()
-                || !resources.sortPayload.valid()
-                || !resources.visitCounter.valid()
-            ){
-                // Keep the established aggregate direct path if a future preflight leaves any frozen operation
-                // without an exact graph identity. Never mix a partial typed-clear chain with native sentinels.
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: pure software BVH build is missing graph resources; retaining aggregate compatibility recorder"));
-                pureSoftwareMeshSwBvhBuildsGraphOwned = false;
-                pureSoftwareMeshSwBvhGraphResources.clear();
-                break;
-            }
-            pureSoftwareMeshSwBvhGraphResources.push_back(resources);
-        }
+    if(pureSoftwareMeshSwBvhBuildsGraphOwned && !ResolvePreparedSoftwareBvhGraphResources(
+        m_deferredLightingTaskGraph, preparedMeshSwBvhBuilds, pureSoftwareMeshSwBvhGraphResources
+    )){
+        // Keep the established aggregate direct path if a future preflight leaves any frozen operation
+        // without an exact graph identity. Never mix a partial typed-clear chain with native sentinels.
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: pure software BVH build is missing graph resources; retaining aggregate compatibility recorder"));
+        pureSoftwareMeshSwBvhBuildsGraphOwned = false;
     }
 
     if(pureSoftwareMeshSwBvhBuildsGraphOwned){

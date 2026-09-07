@@ -437,3 +437,31 @@ Seven alternating process pairs after warmup measured sixteen complete public pa
 | Twelve Unicode components | 2.8995 / 1.5459 | 0.1508 / 0.1062 |
 
 After sixteen calls, used scratch falls from 37,280 bytes for deep paths, 225,808 for long ASCII paths, and 252,992 for Unicode paths to the original 64-byte caller sentinel. It remains at that sentinel after every sampled call count (1, 2, 4, 8 and 16). Unicode peak usage falls from 255,552 -> 2,608 bytes in dbg and 255,520 -> 2,592 in opt. Long/Unicode reserved backing falls from 327,680 -> 131,072 bytes in dbg and 262,144 -> 65,536 in opt. The benchmark deliberately uses 64 KiB initial chunks; these are its observed cached capacities, not a change to the allocator's default chunk size.
+
+## Graph-owned import indexes
+
+GpuTaskGraph now owns exact resource-name, typed-pointer, and resource-set-name indexes beside its authoritative declaration vectors. Up to 32 declarations use bounded scans without index allocation or repeated Name/resource-view copies. Promotion uses the complete eight-lane NameHash and exact resource-type/pointer keys. Index construction publishes only complete tables; typed handles join the pending resource before publication, and RAII rolls back inserted keys, resource/set rows, members, labels, queue data and snapshots if construction unwinds. Reset clears keys before releasing resources and retains index capacity. Pointer-only reads share one matcher with typed imports, skipping identity work and accessing small typed rows directly.
+
+Renderer consumers now use these graph-owned lookups directly. The temporary buffer-request resolver and the sampled-texture request index are removed, as are graph-wide joins in material and shadow preparation. Material tuple/buffer deduplication and shadow role/trace/name membership still serve their distinct output contracts. Software BVH lookup resolves all seven roles through one declaration view while retaining its owning build snapshots and complete failure clearing. Helpers no longer accept unused scratch parameters. Material temporary tables construct checked final bucket capacities directly and retire before their borrowed input storage.
+
+Nine public graph-import regressions and five resource-set validation regressions cover full hash identity, typed/generic precedence, pointer aliases, ordered sets, current descriptor validation, ownership, rejected appends and corrected retries at 32/33 entries, read claims, and large reset/refill. Renderer regressions cover output-set duplicate/failure behavior, seven-role software BVH completeness, aliases, caller-reserved output, and temporary storage retirement. All 1,009 tests pass in dbg and opt and all 1,012 in fin across the broad allocation/parser/crash/graph/telemetry/renderer/asset matrix, plus two CLI integration suites per configuration. All 50 source-policy checks pass; frame, pipeline, utilities, loader, logserver, descriptor and skinning targets build in every configuration.
+
+Seven alternating process pairs after warmup measured unchanged workloads on Windows ARM64. Input construction is outside timing. These are CPU operation times, not frame-rate measurements. Each 4,096-resource graph row below is one pass; its pointer-lookup row performs 4,096 queries. Renderer texture and shadow rows use the immediately preceding committed implementations, including their previous request/membership indexes. Output-set and software BVH rows compare against their original scan implementations; the temporary uncommitted resolver is not used as their baseline.
+
+| Operation | dbg before / after, ms | opt before / after, ms |
+| --- | ---: | ---: |
+| Import 4,096 generic resources | 261.7202 / 3.1098 | 38.3499 / 0.5017 |
+| Re-import those generic resources | 260.9846 / 1.0352 | 38.0482 / 0.1719 |
+| Import 4,096 alternating buffers/textures | 58.5466 / 4.9244 | 7.4359 / 0.6955 |
+| Look up 4,096 imported pointers | 38.4076 / 0.4634 | 5.5751 / 0.0837 |
+| Import 4,096 single-member sets | 173.2434 / 2.6208 | 19.3672 / 0.4103 |
+| Output set: 1,024 outputs and 1,024 unrelated imports, repeated workload | 29.5186 / 0.7186 | 3.8063 / 0.0780 |
+| Software BVH: 1,024 builds and 1,024 unrelated imports | 95.7497 / 1.4921 | 13.1437 / 0.0981 |
+| Sampled textures: 1,024 unique inputs, repeated workload | 1.6496 / 0.6703 | 0.1946 / 0.0801 |
+| Shadow membership: sparse request among 4,096 unrelated imports | 1.6820 / 0.0871 | 0.2217 / 0.0102 |
+
+The graph benchmark deliberately retains all three index capacities after importing large resource and set registries and then resetting/refilling. At 4,096 entries, graph-arena used/reserved bytes rise from 3,703,056 to 5,275,968 in dbg and from 1,605,632 to 3,178,496 in opt. At 1,024 entries the added storage is 393,264 / 393,216 bytes. Small 1/8/32-entry graphs use exactly the same arena bytes as before. These persistent index allocations remain attributed to the graph's owning arena through performance telemetry.
+
+The sampled-texture operation's 1,024-input scratch peak falls from 175,200 to the 16,400-byte output alone in dbg, and from 175,104 to 16,384 in opt. Output-buffer and software BVH lookup likewise require no temporary index beyond their outputs; shadow's actual role/membership storage remains unchanged. This trades graph-owned reusable index capacity for lower repeated lookup work and less caller temporary storage.
+
+Small-path costs are included rather than hidden: singleton pointer lookup adds about 10 ns in dbg, and the sampled 1/8/32-entry opt lookups add at most about 4 ns per query. The eight-build software BVH workload adds about 1.08 microseconds per dbg call while opt is flat; its one-build opt call adds about 18 ns. The two large graph resets take 0.8062 -> 1.1031 ms in dbg because retained tables must be cleared. Large import/reuse savings outweigh these costs in the measured workloads. Resource-set member duplicate validation is still measured separately from the identity-index change.

@@ -700,6 +700,34 @@ private:
         bool hasQueueAdmission = false;
     };
 
+    struct ResourcePointerKey{
+        const void* pointer = nullptr;
+        GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
+    };
+
+    struct ResourcePointerEqual{
+        [[nodiscard]] bool operator()(const ResourcePointerKey& left, const ResourcePointerKey& right)const noexcept{
+            return left.pointer == right.pointer && left.type == right.type;
+        }
+    };
+
+    struct ResourceImportMatch{
+        u32 index = Limit<u32>::s_Max;
+        bool samePointer = false;
+    };
+
+    struct ResourcePointerHasher{
+        [[nodiscard]] usize operator()(const ResourcePointerKey& key)const noexcept;
+    };
+
+    // The binding borrows an import argument only until its pending resource node takes ownership.
+    struct ResourceBinding{
+        const TextureHandle* texture = nullptr;
+        const BufferHandle* buffer = nullptr;
+        const RayTracingAccelStructHandle* accelStruct = nullptr;
+        u16 deviceGeneration = 0u;
+    };
+
     struct GpuGraphResourceVersionNode{
         GpuGraphResourceId resource;
         GpuTaskResourceRange range;
@@ -744,7 +772,18 @@ private:
 
 
 private:
+    using ResourceIdentityIndex = HashMap<NameHash, u32, GraphicsArena>;
+    using ResourcePointerIndex = HashMap<
+        ResourcePointerKey, u32, ResourcePointerHasher, ResourcePointerEqual, GraphicsArena
+    >;
+
+
+private:
+    static constexpr usize s_InlineImportIndexCount = 32u;
+    static constexpr u32 s_InvalidImportIndex = Limit<u32>::s_Max;
+
     [[nodiscard]] static u64 allocateGeneration()noexcept;
+    [[nodiscard]] static ResourcePointerKey resourcePointerKey(const GpuGraphResourceNode& resource)noexcept;
 
 
 public:
@@ -1163,9 +1202,19 @@ private:
         GpuTaskDiscardedThunk discardPayload,
         GpuTaskPayloadDestroyThunk destroyPayload
     );
+    [[nodiscard]] u32 findResourceIdentity(const Name& identity)const noexcept;
+    // A null identity requests only the first matching typed pointer, without import metadata validation.
+    [[nodiscard]] ResourceImportMatch findResourceImportMatch(
+        const NameHash* identity,
+        const ResourcePointerKey& pointer
+    )const noexcept;
+    [[nodiscard]] u32 findResourceSetIdentity(const Name& identity)const noexcept;
+    void prepareResourceIndexes(const ResourcePointerKey& pendingPointer);
+    void prepareResourceSetIndex();
     [[nodiscard]] GpuGraphResourceId appendResourceWithinMutation(
         const GpuGraphResourceDesc& desc,
         const ResourceQueueAdmissionSnapshot* queueAdmission,
+        const ResourceBinding& binding,
         const DeclarationMutationScope& mutationAccess
     );
     [[nodiscard]] GpuGraphResourceVersionId appendResourceVersion(const GpuGraphResourceVersionDesc& desc);
@@ -1196,10 +1245,15 @@ private:
     GraphicsVector<GpuTaskResourceUse> m_resourceUses;
     GraphicsVector<GpuTaskResourceVersionUse> m_resourceVersionUses;
     GraphicsVector<GpuGraphResourceNode> m_resources;
+    // Ordinals refer to immutable declarations in the current generation. Small graphs use their bounded existing
+    // node prefix; promoted indexes retain capacity across reset without retaining extra resource handles or Names.
+    Optional<ResourceIdentityIndex> m_resourceIdentityIndex;
+    Optional<ResourcePointerIndex> m_resourcePointerIndex;
     GraphicsVector<GpuGraphResourceVersionNode> m_resourceVersions;
     GraphicsVector<GpuTaskGraphInitialOwnerHandoffSourceView> m_initialOwnerHandoffSources;
     GraphicsVector<u32> m_queueFamilyIndices;
     GraphicsVector<GpuGraphResourceSetNode> m_resourceSets;
+    Optional<ResourceIdentityIndex> m_resourceSetIdentityIndex;
     GraphicsVector<GpuGraphResourceId> m_resourceSetMembers;
     GraphicsVector<GpuGraphPipelineNode> m_pipelines;
     GraphicsVector<GpuExternalCompletionNode> m_externalCompletions;

@@ -420,8 +420,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         preparedTraceMaterialSampledTextures.data(),
         preparedTraceMaterialSampledTextures.size(),
         "Prepared Trace Material Sampled Texture",
-        traceMaterialSampledTextureResources,
-        traceGeometryScratchArena
+        traceMaterialSampledTextureResources
     )){
     case SampledTextureImportResult::Success:
         break;

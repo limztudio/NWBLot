@@ -35,8 +35,7 @@ enum Enum : u8{
     const Core::TextureHandle* textures,
     usize textureCount,
     AStringView markerLabel,
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& outResources,
-    Core::Alloc::ScratchArena& scratchArena
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& outResources
 );
 
 

@@ -188,22 +188,10 @@ bool ShadowPrepareGeometryResources::resolveRequests(const Core::GpuTaskGraph& g
             return false;
         m_graphGeneration = declarations.generation();
         if(m_requests){
-            usize unresolvedCount = requestCount;
-            const usize resourceCount = declarations.resourceCount();
-            for(usize index = 0u; index < resourceCount && unresolvedCount != 0u; ++index){
-                const Core::GpuGraphResourceId resource{ static_cast<u32>(index), m_graphGeneration };
-                Core::Buffer* const buffer = declarations.bufferForResource(resource);
-                if(!buffer)
-                    continue;
-                BufferRequest* const request = findRequest(buffer);
-                if(request && !request->resource.valid()){
-                    request->resource = resource;
-                    --unresolvedCount;
-                }
-            }
+            for(auto request = m_requests->begin(); request != m_requests->end(); ++request)
+                request.value().resource = declarations.findImportedBuffer(*request.value().source);
         }
         else{
-            // Small and shared selections avoid indexing the graph, and resolve each distinct buffer just once.
             for(usize index = 0u; index < m_inlineRequestCount; ++index){
                 BufferRequest& request = m_inlineRequests[index].request;
                 request.resource = declarations.findImportedBuffer(*request.source);

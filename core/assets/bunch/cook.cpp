@@ -14,6 +14,8 @@
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 
+#include <global/allocation_size.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -78,8 +80,10 @@ private:
 public:
     DeclarationLookup(const Metascript::Document& doc, ScratchArena& scratchArena){
         if(doc.declarations().size() > s_InlineCapacity){
-            m_table.emplace(0u, Hasher<AStringView>(), EqualTo<AStringView>(), scratchArena);
-            m_table->reserve(doc.declarations().size());
+            m_table.emplace(
+                AddSize(doc.declarations().size(), doc.declarations().size()),
+                Hasher<AStringView>(), EqualTo<AStringView>(), scratchArena
+            );
         }
         for(const Declaration& declaration : doc.declarations()){
             if(IsAssetBunchType(DeclarationType(declaration)))
@@ -148,6 +152,7 @@ private:
 ){
     outVirtualPath = NAME_NONE;
     outVirtualPathText.clear();
+    outVirtualPathText.reserve(AddSize(AddSize(baseVirtualPath.size(), 1u), variableName.size()));
 
     outVirtualPathText.append(baseVirtualPath.data(), baseVirtualPath.size());
     outVirtualPathText += '/';
@@ -445,12 +450,11 @@ bool ExpandAssetBunch(
         return false;
 
     ScratchNameHashSet usedVariables(
-        0,
+        AddSize(list.size(), list.size()),
         Hasher<NameHash>(),
         EqualTo<NameHash>(),
         scratchArena
     );
-    usedVariables.reserve(list.size());
     outAssets.reserve(list.size());
 
     const DeclarationLookup declarations(doc, scratchArena);
@@ -475,8 +479,10 @@ bool ExpandAssetBunch(
         itemDeclarations.push_back(itemDeclaration);
     }
 
-    ScratchNameHashSet resolvingVariableHashes(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
-    resolvingVariableHashes.reserve(doc.declarations().size());
+    ScratchNameHashSet resolvingVariableHashes(
+        AddSize(doc.declarations().size(), doc.declarations().size()),
+        Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena
+    );
 
     for(const Metascript::Document::Declaration* itemDeclaration : itemDeclarations){
         const AStringView variableName = DeclarationVariable(*itemDeclaration);

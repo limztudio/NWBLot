@@ -225,6 +225,75 @@ TEST(AssetBunchOwnership, OutputMoveAndGrowthPreserveValuesUntilTheirFinalOwnerD
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
 }
 
+TEST(AssetBunchOwnership, LongExportAndReferencePathsReuseCallerScratchWithoutRetainingGrowthBuffers){
+    for(const usize unusedDeclarations : { 0u, 17u }){
+        BunchFixture fixture;
+        AString<Metascript::MetaArena> firstVariable("first_", fixture.metadataArena);
+        firstVariable.append(192u, 'a');
+        AString<Metascript::MetaArena> secondVariable("second_", fixture.metadataArena);
+        secondVariable.append(224u, 'b');
+        AString<Metascript::MetaArena> virtualRoot(256u, 'r', fixture.metadataArena);
+        AString<Metascript::MetaArena> source = StringFormat(fixture.metadataArena,
+            "probe {};\r\nprobe {};\r\n{}.target = {};\r\n{}.nested = [{{ \"target\": {} }}];\r\nasset_bunch bunch = [{}, {}];\r\n",
+            firstVariable, secondVariable, firstVariable, secondVariable, secondVariable, firstVariable,
+            secondVariable, firstVariable
+        );
+        for(usize index = 0u; index < unusedDeclarations; ++index)
+            source += StringFormat(fixture.metadataArena, "metadata unused_{};\r\n", index);
+        ASSERT_TRUE(fixture.document.parse(source));
+        const NWB::Path filePath = fixture.assetRoot / "bundle.nwb";
+        const auto firstPath = StringFormat(fixture.metadataArena, "{}/bundle/{}", virtualRoot, firstVariable);
+        const auto secondPath = StringFormat(fixture.metadataArena, "{}/bundle/{}", virtualRoot, secondVariable);
+        const Name firstIdentity{ AStringView(firstPath) };
+        const Name secondIdentity{ AStringView(secondPath) };
+        const ArenaMemoryStats retainedMetadata = fixture.metadataArena.memoryStats();
+
+        // Keep this regression within one chunk per alignment so it isolates string growth from chunk-stack reuse.
+        Alloc::ScratchArena scratch(Name("tests/asset_bunch/long_path_scratch"), 65536u);
+        auto* const sentinel = static_cast<u8*>(scratch.allocate(1u, 32u));
+        ASSERT_NE(sentinel, nullptr);
+        for(usize index = 0u; index < 32u; ++index)
+            sentinel[index] = static_cast<u8>(index + 73u);
+        {
+            ExpandedAssetMetadataVector output(scratch);
+            output.reserve(2u);
+            ArenaMemoryStats warm;
+            for(usize iteration = 0u; iteration < 16u; ++iteration){
+                ASSERT_TRUE(AssetsBunchCook::ExpandAssetBunch(
+                    fixture.assetRoot, AStringView(virtualRoot), filePath, fixture.document, output, scratch
+                ));
+                ASSERT_EQ(output.size(), 2u);
+                EXPECT_EQ(output[0u].virtualPath, secondIdentity);
+                EXPECT_EQ(output[1u].virtualPath, firstIdentity);
+                const Value* const nested = output[0u].value.findField("nested");
+                ASSERT_NE(nested, nullptr);
+                ASSERT_TRUE(nested->isList());
+                ASSERT_EQ(nested->asList().size(), 1u);
+                const Value* const nestedTarget = nested->asList()[0u].findField("target");
+                ASSERT_NE(nestedTarget, nullptr);
+                ASSERT_TRUE(nestedTarget->isString());
+                EXPECT_EQ(nestedTarget->asString(), AStringView(firstPath));
+                const Value* const target = output[1u].value.findField("target");
+                ASSERT_NE(target, nullptr);
+                ASSERT_TRUE(target->isString());
+                EXPECT_EQ(target->asString(), AStringView(secondPath));
+                output.clear();
+                EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, retainedMetadata.usedBytes);
+                for(usize index = 0u; index < 32u; ++index)
+                    EXPECT_EQ(sentinel[index], static_cast<u8>(index + 73u));
+                const ArenaMemoryStats current = scratch.memoryStats();
+                if(iteration == 0u)
+                    warm = current;
+                else{
+                    EXPECT_EQ(current.usedBytes, warm.usedBytes);
+                    EXPECT_EQ(current.reservedBytes, warm.reservedBytes);
+                }
+            }
+        }
+        scratch.deallocate(sentinel, 1u, 32u);
+    }
+}
+
 TEST(AssetBunchOwnership, ValuesOutliveTheirSourceDocumentWhileItsArenaRemainsAlive){
     BunchFixture fixture;
     const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();

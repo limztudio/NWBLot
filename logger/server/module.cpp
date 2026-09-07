@@ -66,7 +66,7 @@ struct ConnectionInfo{
     ~ConnectionInfo(){
         if(!closeCrashUploadStream())
             NWB_LOGGER_WARNING(NWB_TEXT("Failed to close crash upload stream"));
-        Core::Alloc::CoreFree(buffer, "ConnectionInfo buffer freed at Server::requestCallback");
+        Core::Alloc::CoreFree(buffer);
     }
 
     [[nodiscard]] bool append(NotNull<const char*> uploadData, const usize appendSize){
@@ -113,11 +113,7 @@ struct ConnectionInfo{
 
         const usize newCapacity = ::NextGrowingCapacity(capacity, requiredSize, s_ConnectionInitialBufferCapacity);
 
-        auto* newBuffer = reinterpret_cast<u8*>(Core::Alloc::CoreRealloc(
-            buffer,
-            newCapacity,
-            "ConnectionInfo buffer reallocated at Server::requestCallback"
-        ));
+        auto* newBuffer = reinterpret_cast<u8*>(Core::Alloc::CoreRealloc(buffer, newCapacity));
         if(!newBuffer)
             return false;
 
@@ -257,7 +253,7 @@ static void DiscardStoredCrashUpload(Server& server, ConnectionInfo& info){
 
 
 [[nodiscard]] static ConnectionInfo* CreateConnectionInfo(Server& server, const ConnectionUploadKind::Enum uploadKind){
-    void* memory = Core::Alloc::CoreAlloc(sizeof(ConnectionInfo), "ConnectionInfo allocated at Server::requestCallback");
+    void* memory = Core::Alloc::CoreAlloc(sizeof(ConnectionInfo));
     if(!memory)
         return nullptr;
 
@@ -265,7 +261,7 @@ static void DiscardStoredCrashUpload(Server& server, ConnectionInfo& info){
     info->uploadKind = uploadKind;
     if(uploadKind == ConnectionUploadKind::Crash && !OpenCrashUploadStream(server, *info)){
         info->~ConnectionInfo();
-        Core::Alloc::CoreFree(info, "ConnectionInfo freed after crash upload stream init failure");
+        Core::Alloc::CoreFree(info);
         return nullptr;
     }
     return info;
@@ -274,7 +270,7 @@ static void DiscardStoredCrashUpload(Server& server, ConnectionInfo& info){
 static void DestroyConnectionInfo(ConnectionInfo*& info, void*& conCls)noexcept{
     if(info){
         info->~ConnectionInfo();
-        Core::Alloc::CoreFree(info, "ConnectionInfo freed at Server::requestCallback");
+        Core::Alloc::CoreFree(info);
     }
 
     info = nullptr;

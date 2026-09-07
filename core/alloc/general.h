@@ -41,7 +41,7 @@ public:
     inline void* allocate(usize align, usize size){
         size = Alignment(align, size);
 
-        void* p = (align <= 1) ? CoreAlloc(size, log()) : CoreAllocAligned(size, align, log());
+        void* p = (align <= 1) ? CoreAlloc(size) : CoreAllocAligned(size, align);
         if(p){
             m_memoryStats.addReservedBytes(size);
             m_memoryStats.recordAllocation(size);
@@ -56,7 +56,7 @@ public:
             return nullptr;
 
         const u64 oldBytes = p ? static_cast<u64>(CoreMsize(p)) : 0u;
-        void* next = (align <= 1) ? CoreRealloc(p, size, log()) : CoreReallocAligned(p, size, align, log());
+        void* next = (align <= 1) ? CoreRealloc(p, size) : CoreReallocAligned(p, size, align);
         if(next || size == 0u){
             const u64 newBytes = next ? static_cast<u64>(CoreMsize(next)) : 0u;
             m_memoryStats.recordReallocation(oldBytes, newBytes);
@@ -76,9 +76,9 @@ public:
             m_memoryStats.removeReservedBytes(size);
         }
         if(align <= 1)
-            CoreFree(p, log());
+            CoreFree(p);
         else
-            CoreFreeAligned(p, log());
+            CoreFreeAligned(p);
     }
 
     template<typename T>
@@ -90,9 +90,9 @@ public:
             m_memoryStats.removeReservedBytes(allocationSize);
         }
         if constexpr(alignof(T) <= 1u)
-            CoreFreeSize(p, allocationSize, "GlobalArena::deallocateObject");
+            CoreFreeSize(p, allocationSize);
         else
-            CoreFreeSizeAligned(p, allocationSize, "GlobalArena::deallocateObject");
+            CoreFreeSizeAligned(p, allocationSize);
     }
 };
 

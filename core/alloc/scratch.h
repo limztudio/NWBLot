@@ -38,26 +38,26 @@ private:
 
 
     public:
-        [[nodiscard]] static inline Chunk* create(usize align, usize size, const char* log){
-            auto* chunk = new(std::nothrow) Chunk(align, size, log);
+        [[nodiscard]] static inline Chunk* create(usize align, usize size){
+            auto* chunk = new(std::nothrow) Chunk(align, size);
             if(!chunk || !chunk->m_buffer){
                 delete chunk;
                 return nullptr;
             }
             return chunk;
         }
-        static inline void destroy(Chunk* chunk, const char* log){
-            CoreFreeAligned(chunk->m_buffer, log);
+        static inline void destroy(Chunk* chunk){
+            CoreFreeAligned(chunk->m_buffer);
             delete chunk;
         }
 
 
     public:
-        inline Chunk(usize align, usize size, const char* log)
+        inline Chunk(usize align, usize size)
             : m_size(Alignment(align, size))
             , m_remaining(m_size)
             , m_next(nullptr)
-            , m_buffer(CoreAllocAligned(m_size, align, log))
+            , m_buffer(CoreAllocAligned(m_size, align))
             , m_available(m_buffer)
         {}
     private:
@@ -150,11 +150,10 @@ public:
         }
     }
     ~ScratchArena(){
-        const char* allocationLog = Base::log();
         for(auto& bucket : m_bucket){
             for(auto* cur = bucket.head; cur;){
                 auto* next = cur->m_next;
-                Chunk::destroy(cur, allocationLog);
+                Chunk::destroy(cur);
                 cur = next;
             }
         }
@@ -181,7 +180,7 @@ public:
             chunkSize = (size > (static_cast<usize>(-1) >> 1)) ? size : (size << 1);
 
         if(!bucket.head){
-            auto* chunk = Chunk::create(align, chunkSize, Base::log());
+            auto* chunk = Chunk::create(align, chunkSize);
             if(!chunk)
                 return nullptr;
 
@@ -191,7 +190,7 @@ public:
             m_memoryStats.addReservedBytes(static_cast<u64>(chunk->m_size));
         }
         else if(size > bucket.last->m_remaining){
-            auto* chunk = Chunk::create(align, chunkSize, Base::log());
+            auto* chunk = Chunk::create(align, chunkSize);
             if(!chunk)
                 return nullptr;
 

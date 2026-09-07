@@ -142,9 +142,6 @@ public:
 
 protected:
     [[nodiscard]] inline const Name& name()const{ return m_name; }
-    // Non-resolving: the allocator must NOT run the symbol resolver (it allocates from a GlobalArena whose allocate()
-    // logs its own name -> re-entrancy / the opt stack overflow). c_str() resolves; logText() never does.
-    [[nodiscard]] inline const char* log()const{ return m_name.logText(); }
 
 
 private:

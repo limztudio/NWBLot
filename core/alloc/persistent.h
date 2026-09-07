@@ -43,7 +43,7 @@ public:
 public:
     PersistentArena(const Name& allocationLog, usize maxSize)
         : Base(allocationLog)
-        , m_bucket(CoreAlloc(maxSize, log()))
+        , m_bucket(CoreAlloc(maxSize))
         , m_maxSize(maxSize)
         , m_handle(tlsf_create_with_pool(m_bucket, m_maxSize))
     {
@@ -54,7 +54,7 @@ public:
         tlsf_destroy(m_handle);
         m_handle = nullptr;
 
-        CoreFree(m_bucket, log());
+        CoreFree(m_bucket);
         m_bucket = nullptr;
     }
 

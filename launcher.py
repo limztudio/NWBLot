@@ -28,7 +28,7 @@ DEFAULT_CONFIG = "dbg"
 DEFAULT_DOMAIN = "full"
 DEFAULT_BUILD_JOBS = "8"
 LAUNCHER_SEARCH_ROOTS = (Path("CoolStuff"), Path("tests"), Path("utilities"), Path("pipeline"))
-LAUNCHER_SCRIPT_NAME = "launcher.py"
+LAUNCHER_SCRIPT_NAME = "launch.py"
 RESERVED_LAUNCH_COMMANDS = frozenset(("profiles", "run"))
 PROFILE_LOGSERVER_TARGET = "nwb_logserver"
 PROFILE_LOGSERVER_EXECUTABLE = "logserver"
@@ -143,7 +143,7 @@ def launcher_route(search_path: Path, leaf_script: Path, root: Path) -> Tuple[Pa
 def discover_leaf_launchers(directory: Path, root: Optional[Path] = None) -> Dict[str, RepoLauncher]:
     """Discover runnable leaves below a category and retain their router routes.
 
-    A ``launcher.py`` with descendant launchers is a router.  A leaf has no nested
+    A ``launch.py`` with descendant launchers is a router.  A leaf has no nested
     launchers, and every directory between it and the category must provide a
     router so nested groupings cannot be bypassed.
     """

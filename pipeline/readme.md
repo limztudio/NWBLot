@@ -11,7 +11,7 @@ Run the complete pipeline through the repository launcher:
 python launcher.py pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
 ```
 
-The root discovers `pipeline/launcher.py` as a normal runnable directory. Build
+The root discovers `pipeline/launch.py` as a normal runnable directory. Build
 and asset options use one argument list. The pipeline launcher configures when
 needed with `NWB_BUILD_PIPELINE=ON`, builds `nwb_pipeline`, and resolves all three
 tools from the selected CMake configuration. Configure, build, and pipeline
@@ -69,7 +69,7 @@ asset_gatherer --input built-a built-b --output-directory runtime/res
 asset_gatherer --input-list built/assets.list --output-directory runtime/res
 ```
 
-`pipeline/launcher.py` replaces the removed `resource_cooker` executable. The root
+`pipeline/launch.py` replaces the removed `resource_cooker` executable. The root
 launcher discovers it as the `pipeline` command, using the same convention as the
 repository's other runnable directories. It discovers `.nwb` files, configures and
 builds `nwb_pipeline`, calls `dependeny_computer`, passes that result to
@@ -85,7 +85,7 @@ run independently, and either help command returns without building:
 
 ```console
 python launcher.py pipeline --help
-python pipeline/launcher.py --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+python pipeline/launch.py --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
 ```
 
 The launcher reuses the repository's `--config`, `--arch`, `--domain`,
@@ -102,7 +102,7 @@ configuration and compilation; CMake asset commands use it to avoid starting a
 nested build. For example:
 
 ```console
-python pipeline/launcher.py --skip-build --tool-directory __exec/windows/arm64/full/dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+python pipeline/launch.py --skip-build --tool-directory __exec/windows/arm64/full/dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
 ```
 
 `--dry-run` prints planned build and pipeline commands without writing manifests,

@@ -41,7 +41,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             NAME nwb_${_nwb_ab_harness}_launcher_unit
             COMMAND
                 "${Python3_EXECUTABLE}"
-                "${CMAKE_SOURCE_DIR}/tests/ab/${_nwb_ab_harness}/launcher.py"
+                "${CMAKE_SOURCE_DIR}/tests/ab/${_nwb_ab_harness}/launch.py"
                 "--self-test"
         )
     endforeach()

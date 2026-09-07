@@ -162,7 +162,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         add_custom_command(
             OUTPUT "${_nwb_transparent_multi_asset_stamp}"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_transparent_multi_runtime_root}/res"
-            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launcher.py" --skip-build
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
                 --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>"
                 --repo-root "${PROJECT_SOURCE_DIR}"
                 --asset-root "impl/assets"
@@ -173,7 +173,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_transparent_multi_asset_stamp}"
             DEPENDS
                 nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
-                "${PROJECT_SOURCE_DIR}/pipeline/launcher.py"
+                "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
                 ${_nwb_transparent_multi_asset_inputs}
             WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
             COMMENT "Cooking NWB transparent smoke assets for $<CONFIG>..."
@@ -378,7 +378,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             add_custom_command(
                 OUTPUT "${_nwb_texture_smoke_asset_stamp}"
                 COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_texture_smoke_runtime_root}/res"
-                COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launcher.py" --skip-build
+                COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
                     --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>"
                     --repo-root "${PROJECT_SOURCE_DIR}"
                     --asset-root "impl/assets"
@@ -390,7 +390,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
                 COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_texture_smoke_asset_stamp}"
                 DEPENDS
                     nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
-                    "${PROJECT_SOURCE_DIR}/pipeline/launcher.py"
+                    "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
                     "${_nwb_texture_smoke_source_nwb}"
                     "${_nwb_texture_smoke_source_tex}"
                     ${_nwb_texture_smoke_asset_inputs}
@@ -451,7 +451,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         add_custom_command(
             OUTPUT "${_nwb_csg_visible_asset_stamp}"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_csg_visible_runtime_root}/res"
-            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launcher.py" --skip-build
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
                 --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>"
                 --repo-root "${PROJECT_SOURCE_DIR}"
                 --asset-root "impl/assets"
@@ -462,7 +462,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_csg_visible_asset_stamp}"
             DEPENDS
                 nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
-                "${PROJECT_SOURCE_DIR}/pipeline/launcher.py"
+                "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
                 ${_nwb_csg_visible_asset_inputs}
             WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
             COMMENT "Cooking NWB CSG visible smoke assets for $<CONFIG>..."
@@ -535,7 +535,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         add_custom_command(
             OUTPUT "${_nwb_csg_skinned_visible_asset_stamp}"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_csg_skinned_visible_runtime_root}/res"
-            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launcher.py" --skip-build
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
                 --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>"
                 --repo-root "${PROJECT_SOURCE_DIR}"
                 --asset-root "impl/assets"
@@ -546,7 +546,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_csg_skinned_visible_asset_stamp}"
             DEPENDS
                 nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
-                "${PROJECT_SOURCE_DIR}/pipeline/launcher.py"
+                "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
                 ${_nwb_csg_skinned_visible_asset_inputs}
             WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
             COMMENT "Cooking NWB skinned CSG visible smoke assets for $<CONFIG>..."
@@ -725,7 +725,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         add_custom_command(
             OUTPUT "${_nwb_skinning_culling_asset_stamp}"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_skinning_culling_runtime_root}/res"
-            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launcher.py" --skip-build
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
                 --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>"
                 --repo-root "${PROJECT_SOURCE_DIR}"
                 --asset-root "impl/assets"
@@ -736,7 +736,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_skinning_culling_asset_stamp}"
             DEPENDS
                 nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
-                "${PROJECT_SOURCE_DIR}/pipeline/launcher.py"
+                "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
                 "${_nwb_skinning_culling_model_nwb}"
                 ${_nwb_skinning_culling_asset_inputs}
             WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"

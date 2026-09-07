@@ -35,7 +35,7 @@ if(TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             --dependency-computer "$<TARGET_FILE:nwb_dependeny_computer>"
             --asset-builder "$<TARGET_FILE:nwb_asset_builder>"
             --asset-gatherer "$<TARGET_FILE:nwb_asset_gatherer>"
-            --pipeline-launcher "${PROJECT_SOURCE_DIR}/pipeline/launcher.py"
+            --pipeline-launcher "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
             --repo-root "${PROJECT_SOURCE_DIR}"
     )
     set_tests_properties(nwb_pipeline_cli_integration PROPERTIES TIMEOUT 120)

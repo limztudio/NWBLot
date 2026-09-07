@@ -74,7 +74,7 @@ python launcher.py smoke --profiles
 python launcher.py profiles
 ```
 
-The root launcher discovers the `pipeline` command from `pipeline/launcher.py`, using the same `launcher.py` entry-point convention as projects and utilities. The pipeline launcher accepts build and asset options together, builds the three tools, and runs `dependeny_computer`, `asset_builder`, and `asset_gatherer` in order. Use `--skip-build` with existing tools or `--dry-run` to preview the workflow; `--help` lists all options without building. The tools build with `NWB_BUILD_PIPELINE=ON` (the default). See [the pipeline guide](pipeline/readme.md) for direct stage commands and [the filesystem guide](docs/filesystem.md) for project filesystem customization.
+The root launcher discovers the `pipeline` command from `pipeline/launch.py`, using the same `launch.py` entry-point convention as projects and utilities. The pipeline launcher accepts build and asset options together, builds the three tools, and runs `dependeny_computer`, `asset_builder`, and `asset_gatherer` in order. Use `--skip-build` with existing tools or `--dry-run` to preview the workflow; `--help` lists all options without building. The tools build with `NWB_BUILD_PIPELINE=ON` (the default). See [the pipeline guide](pipeline/readme.md) for direct stage commands and [the filesystem guide](docs/filesystem.md) for project filesystem customization.
 
 Use `--with-profile` to start the log server with a launched application. Use `--run-seconds <N>` for a bounded profiling run.
 

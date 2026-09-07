@@ -113,10 +113,6 @@ private:
             return true;
         }
 
-        inline void add(Chunk* next){
-            m_next = next;
-        }
-
 
     private:
         const usize m_size;
@@ -127,8 +123,8 @@ private:
         void* m_available;
     };
     struct ChunkWrapper{
-        Chunk* head;
-        Chunk* last;
+        Chunk* active;
+        Chunk* cached;
         usize size;
     };
 
@@ -144,17 +140,19 @@ public:
     {
         for(usize i = 0; i < LengthOf(m_bucket); ++i){
             auto& bucket = m_bucket[i];
-            bucket.head = nullptr;
-            bucket.last = nullptr;
+            bucket.active = nullptr;
+            bucket.cached = nullptr;
             bucket.size = Alignment(static_cast<usize>(1) << i, initSize);
         }
     }
     ~ScratchArena(){
         for(auto& bucket : m_bucket){
-            for(auto* cur = bucket.head; cur;){
-                auto* next = cur->m_next;
-                Chunk::destroy(cur);
-                cur = next;
+            for(auto* chunk : { bucket.active, bucket.cached }){
+                while(chunk){
+                    auto* previous = chunk->m_next;
+                    Chunk::destroy(chunk);
+                    chunk = previous;
+                }
             }
         }
         m_memoryStats.releaseRetainedMemory();
@@ -176,32 +174,13 @@ public:
         auto& bucket = m_bucket[bucketIndex];
 
         size = Alignment(align, size);
-        usize chunkSize = bucket.size;
-        if(size > chunkSize)
-            chunkSize = (size > (static_cast<usize>(-1) >> 1)) ? size : (size << 1);
-
-        if(!bucket.head){
-            auto* chunk = Chunk::create(align, chunkSize);
-            if(!chunk)
+        if(!bucket.active || size > bucket.active->m_remaining){
+            if(!acquireChunk(bucket, align, size))
                 return nullptr;
-
-            bucket.head = chunk;
-            bucket.last = chunk;
-            bucket.size = chunkSize;
-            m_memoryStats.addReservedBytes(static_cast<u64>(chunk->m_size));
-        }
-        else if(size > bucket.last->m_remaining){
-            auto* chunk = Chunk::create(align, chunkSize);
-            if(!chunk)
-                return nullptr;
-
-            bucket.last->add(chunk);
-            bucket.last = chunk;
-            bucket.size = chunkSize;
-            m_memoryStats.addReservedBytes(static_cast<u64>(chunk->m_size));
         }
 
-        void* p = bucket.last->allocate(size);
+        // A raw zero-byte allocation may leave one empty active chunk; it owns no tracked bytes.
+        void* p = bucket.active->allocate(size);
         if(p)
             m_memoryStats.recordAllocation(size);
         return p;
@@ -223,13 +202,13 @@ public:
             return nullptr;
 
         auto& bucket = m_bucket[bucketIndex];
-        NWB_ASSERT_MSG(bucket.last != nullptr, NWB_TEXT("Attempted to reallocate before allocating"));
-        if(!bucket.last)
+        NWB_ASSERT_MSG(bucket.active != nullptr, NWB_TEXT("Attempted to reallocate before allocating"));
+        if(!bucket.active)
             return nullptr;
 
         size = Alignment(align, size);
 
-        Chunk* chunk = bucket.last;
+        Chunk* chunk = bucket.active;
         const usize oldSize = chunk->lifoTopSpan(p);
         NWB_ASSERT_MSG(oldSize != 0, NWB_TEXT("ScratchArena can only reallocate its most-recent allocation"));
         if(oldSize == 0)
@@ -237,6 +216,8 @@ public:
 
         if(chunk->tryResizeLifoTop(p, size)){
             m_memoryStats.recordReallocation(oldSize, size);
+            if(chunk->m_remaining == chunk->m_size)
+                cacheEmptyChunk(bucket, *chunk, nullptr);
             return p;
         }
 
@@ -245,17 +226,20 @@ public:
             return nullptr;
 
         NWB_MEMCPY(next, size, p, oldSize);
-        if(chunk->tryPopLifo(p, oldSize))
+        if(chunk->tryPopLifo(p, oldSize)){
             m_memoryStats.recordDeallocation(oldSize);
+            if(chunk->m_remaining == chunk->m_size)
+                cacheEmptyChunk(bucket, *chunk, bucket.active);
+        }
         return next;
     }
 
-    // LIFO reclaim only: returns space when p is the bucket's most-recent allocation;
+    // LIFO reclaim spans chunks: empty chunks are cached and expose the previous live allocation;
     // any out-of-order free is a no-op and is reclaimed in bulk when the arena is destroyed.
     inline void deallocate(void* p, usize align, usize size){
         NWB_ASSERT_MSG(align != 0, NWB_TEXT("ScratchArena alignment must be non-zero"));
         NWB_ASSERT_MSG(align <= s_MaxAlignSize, NWB_TEXT("ScratchArena alignment exceeds s_MaxAlignSize"));
-        if(align == 0 || align > s_MaxAlignSize)
+        if(align == 0 || align > s_MaxAlignSize || size == 0u)
             return;
 
         const usize bucketIndex = FloorLog2(align);
@@ -264,13 +248,68 @@ public:
             return;
 
         auto& bucket = m_bucket[bucketIndex];
-        NWB_ASSERT_MSG(bucket.last != nullptr, NWB_TEXT("Attempted to deallocate before allocating"));
-        if(!bucket.last)
+        NWB_ASSERT_MSG(bucket.active != nullptr, NWB_TEXT("Attempted to deallocate before allocating"));
+        if(!bucket.active)
             return;
 
         size = Alignment(align, size);
-        if(bucket.last->tryPopLifo(p, size))
+        Chunk* chunk = bucket.active;
+        if(chunk->tryPopLifo(p, size)){
             m_memoryStats.recordDeallocation(size);
+            if(chunk->m_remaining == chunk->m_size)
+                cacheEmptyChunk(bucket, *chunk, nullptr);
+        }
+    }
+
+
+private:
+    [[nodiscard]] Chunk* acquireChunk(ChunkWrapper& bucket, const usize align, const usize size){
+        Chunk* chunk = bucket.cached;
+        while(chunk && chunk->m_size < size)
+            chunk = chunk->m_next;
+
+        const bool created = !chunk;
+        if(created){
+            usize chunkSize = bucket.size;
+            if(size > chunkSize)
+                chunkSize = size > (static_cast<usize>(-1) >> 1) ? size : (size << 1);
+            chunk = Chunk::create(align, chunkSize);
+            if(!chunk)
+                return nullptr;
+        }
+
+        // Secure the replacement before changing ownership. Each undersized cached chunk is retired once;
+        // future new chunks keep the high-water size so alternating workloads do not recreate small chunks.
+        while(bucket.cached && bucket.cached != chunk){
+            Chunk* discarded = bucket.cached;
+            bucket.cached = discarded->m_next;
+            m_memoryStats.removeReservedBytes(static_cast<u64>(discarded->m_size));
+            Chunk::destroy(discarded);
+        }
+        if(created){
+            bucket.size = Max(bucket.size, chunk->m_size);
+            m_memoryStats.addReservedBytes(static_cast<u64>(chunk->m_size));
+        }
+        else
+            bucket.cached = chunk->m_next;
+
+        chunk->m_next = bucket.active;
+        bucket.active = chunk;
+        return chunk;
+    }
+
+    void cacheEmptyChunk(ChunkWrapper& bucket, Chunk& chunk, Chunk* newer)noexcept{
+        NWB_ASSERT(chunk.m_remaining == chunk.m_size);
+        if(newer){
+            NWB_ASSERT(newer->m_next == &chunk);
+            newer->m_next = chunk.m_next;
+        }
+        else{
+            NWB_ASSERT(bucket.active == &chunk);
+            bucket.active = chunk.m_next;
+        }
+        chunk.m_next = bucket.cached;
+        bucket.cached = &chunk;
     }
 
 

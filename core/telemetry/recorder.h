@@ -67,8 +67,32 @@ class Recorder final : NoCopy{
     friend EventView;
 
 private:
-    using EventRecordPtr = GlobalUniquePtr<EventRecord>;
-    using EventVector = Vector<EventRecordPtr, TelemetryArena>;
+    struct EventSlot{
+        EventRecord record;
+        EventSlot* nextAvailable = nullptr;
+
+        explicit EventSlot(TelemetryArena& arena)
+            : record(arena)
+        {}
+    };
+
+    using EventSlotPtr = GlobalUniquePtr<EventSlot>;
+    using EventVector = Vector<EventSlotPtr, TelemetryArena>;
+
+
+private:
+    class EventSlotLease final : NoCopy{
+        friend Recorder;
+
+    public:
+        explicit EventSlotLease(Recorder& recorder);
+        ~EventSlotLease();
+
+    private:
+        Recorder& m_recorder;
+        UniqueLock<Futex> m_lock;
+        EventSlotPtr m_slot;
+    };
 
 
 public:
@@ -76,10 +100,12 @@ public:
         : m_arena(arena)
         , m_events(arena)
     {}
+    ~Recorder();
 
 
 public:
     void setCaptureOptions(const CaptureOptions& options);
+    // Enabled capture retains slots and payload capacity for the next frame. Disabling capture releases them.
     void clear();
     [[nodiscard]] TelemetryArena& arena(){ return m_arena; }
     [[nodiscard]] const TelemetryArena& arena()const{ return m_arena; }
@@ -102,6 +128,26 @@ public:
         TelemetryBytes&& payload,
         u32 streamId = 0u
     );
+    template<typename BuildPayloadT>
+    [[nodiscard]] bool recordBuiltPayload(
+        const EventKind::Enum kind,
+        const u64 frameIndex,
+        const u32 streamId,
+        BuildPayloadT buildPayload
+    ){
+        EventSlotLease lease(*this);
+        if(!enabledUnlocked(kind))
+            return false;
+        lease.m_slot = acquireSlotUnlocked();
+        if(!lease.m_slot)
+            return false;
+
+        // Callbacks may reenter the recorder or change capture options. Their slot remains exclusively leased.
+        lease.m_lock.unlock();
+        if(!buildPayload(m_arena, lease.m_slot->record.payload))
+            return false;
+        return publishBuiltSlot(lease, kind, frameIndex, streamId);
+    }
     [[nodiscard]] bool append(const EventHeader& header, const void* payload, usize payloadBytes);
     [[nodiscard]] bool append(const EventHeader& header, TelemetryBytes&& payload);
 
@@ -109,50 +155,22 @@ public:
 private:
     [[nodiscard]] bool enabledUnlocked()const{ return m_capture.enabled(); }
     [[nodiscard]] bool enabledUnlocked(EventKind::Enum kind)const{ return CaptureAllowsEventKind(m_capture, kind); }
-    [[nodiscard]] bool appendUnlocked(const EventHeader& header, const void* payload, usize payloadBytes);
-    [[nodiscard]] bool appendPayloadUnlocked(const EventHeader& header, TelemetryBytes&& payload);
+    [[nodiscard]] bool appendUnlocked(EventSlotLease& lease, const EventHeader& header, const void* payload, usize payloadBytes);
+    [[nodiscard]] bool appendPayloadUnlocked(EventSlotLease& lease, const EventHeader& header, TelemetryBytes&& payload);
+    [[nodiscard]] EventSlotPtr acquireSlotUnlocked();
+    void recycleSlotUnlocked(EventSlotPtr&& slot)noexcept;
+    void releaseAvailableSlotsUnlocked()noexcept;
+    void publishSlotUnlocked(EventSlotLease& lease, const EventHeader& header);
+    [[nodiscard]] bool publishBuiltSlot(EventSlotLease& lease, EventKind::Enum kind, u64 frameIndex, u32 streamId);
     [[nodiscard]] const EventRecord* eventAt(usize index)const;
 
 
 private:
     TelemetryArena& m_arena;
     EventVector m_events;
+    EventSlot* m_availableSlots = nullptr;
     CaptureOptions m_capture;
     mutable Futex m_mutex;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Detail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename BuildPayloadT>
-[[nodiscard]] bool RecordBuiltPayload(
-    Recorder& recorder,
-    const EventKind::Enum kind,
-    const u64 frameIndex,
-    const u32 streamId,
-    BuildPayloadT buildPayload
-){
-    if(!recorder.enabled(kind))
-        return false;
-
-    TelemetryBytes payload(recorder.arena());
-    if(!buildPayload(recorder.arena(), payload))
-        return false;
-
-    return recorder.recordPayload(kind, frameIndex, Move(payload), streamId);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 

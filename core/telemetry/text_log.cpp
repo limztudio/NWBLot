@@ -129,8 +129,7 @@ bool RecordTextLog(
     const u64 frameIndex,
     const u32 streamId
 ){
-    return Detail::RecordBuiltPayload(
-        recorder,
+    return recorder.recordBuiltPayload(
         EventKind::TextLog,
         frameIndex,
         streamId,

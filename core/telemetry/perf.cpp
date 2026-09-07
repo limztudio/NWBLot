@@ -268,8 +268,7 @@ bool RecordPerfTiming(
     const Perf::TimingStats& stats,
     const u32 streamId
 ){
-    return Detail::RecordBuiltPayload(
-        recorder,
+    return recorder.recordBuiltPayload(
         EventKind::PerfFrame,
         stats.publishFrameIndex,
         streamId,
@@ -386,8 +385,7 @@ bool RecordPerfMemory(
     const Perf::MemoryDelta& delta,
     const u32 streamId
 ){
-    return Detail::RecordBuiltPayload(
-        recorder,
+    return recorder.recordBuiltPayload(
         EventKind::MemoryFrame,
         snapshot.frameIndex,
         streamId,

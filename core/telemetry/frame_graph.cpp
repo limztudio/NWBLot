@@ -2635,8 +2635,7 @@ bool RecordFrameGraph(
     const FrameGraphEdgeDescs& edges,
     const u32 streamId
 ){
-    return Detail::RecordBuiltPayload(
-        recorder,
+    return recorder.recordBuiltPayload(
         EventKind::FrameGraphFrame,
         frameIndex,
         streamId,
@@ -2654,8 +2653,7 @@ bool RecordFrameGraph(
     const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
     const u32 streamId
 ){
-    return Detail::RecordBuiltPayload(
-        recorder,
+    return recorder.recordBuiltPayload(
         EventKind::FrameGraphFrame,
         frameIndex,
         streamId,
@@ -2684,8 +2682,7 @@ bool RecordFrameGraph(
     const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
     const u32 streamId
 ){
-    return Detail::RecordBuiltPayload(
-        recorder,
+    return recorder.recordBuiltPayload(
         EventKind::FrameGraphFrame,
         frameIndex,
         streamId,

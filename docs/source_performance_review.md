@@ -91,3 +91,16 @@ An attachment update groups joint queries by full parent entity identity, builds
 | One attachment on a 16-joint parent, 256 updates | 7.4193 → 7.5338 | 0.0651 → 0.0648 |
 
 The gain comes from shared-parent reuse; distinct-parent and singleton timings are essentially unchanged. Grouping requires operation-local scratch storage for multi-query updates. All seven attachment regressions and five runtime-cleanup regressions pass in dbg, opt, and fin, including generation replacement, pose changes, bounds recovery, transform-write ordering, and singleton allocation reuse.
+
+## Telemetry recorder slot and payload reuse
+
+The recorder reuses event slots and payload capacity across enabled-capture clears. Producers build directly into an exclusively leased slot, so callbacks can reenter the recorder, clear events, change capture options, or unwind without exposing partially built data. Publication rechecks capture eligibility. Prebuilt payloads preserve arena ownership, and foreign-backed payloads are copied into the recorder arena before publication.
+
+| Warmed workload, 120 record/clear frames | dbg before → after | opt before → after |
+| --- | ---: | ---: |
+| 128 memory-owner events per frame | 29.0277 → 12.5719 | 1.3535 → 0.7607 |
+| 512 memory-owner events per frame | 117.5175 → 49.2883 | 5.4368 → 3.0462 |
+
+Backing allocations in the measured 512-owner workload fall from 245,760 to zero in dbg and 122,880 to zero in opt; the 128-owner workload also reaches zero. Slot and payload capacity is retained at the observed capture high-water mark until capture is disabled or the recorder is destroyed. Event-vector capacity remains reusable. This trades retained memory during capture for less repeated allocation.
+
+All 94 telemetry tests pass in dbg, opt, and fin. Twelve new regressions cover empty payloads, callback reentry, capture changes, exceptions, active-event aliases, same/foreign-arena ownership, explicit allocator replacement, and concurrent builders with clear/disable. Memory payload version remains 1; decoded owner, source, stream, and memory measurements are checked by the benchmark fixture.

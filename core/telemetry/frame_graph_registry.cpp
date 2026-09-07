@@ -88,16 +88,16 @@ bool FrameGraphRegistry::record(CaptureSession& session){
     FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics(arena);
     FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics(arena);
 
+    FrameGraphBuilder builder(
+        nodes,
+        edges,
+        pendingNameEdges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics,
+        session.frameIndex()
+    );
     bool hasGraph = false;
     for(auto* contributor : m_contributors){
-        FrameGraphBuilder builder(
-            nodes,
-            edges,
-            pendingNameEdges,
-            physicalQueueRuntimeStatistics,
-            packetSubmissionStatistics,
-            session.frameIndex()
-        );
         if(contributor->appendFrameGraph(builder))
             hasGraph = true;
     }

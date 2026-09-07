@@ -4,6 +4,7 @@
 
 #include "frame_graph.h"
 
+#include <core/alloc/scratch.h>
 #include <global/algorithm.h>
 #include <global/binary.h>
 
@@ -1152,10 +1153,11 @@ template<typename SubmissionStatistics>
 
 template<typename NodeContainer>
 [[nodiscard]] static bool ValidatePacketSubmissionStatisticsTable(
+    Alloc::ScratchArena& scratchArena,
     const NodeContainer& nodes,
     const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
     const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics
-)noexcept{
+){
     for(usize statisticsIndex = 0u; statisticsIndex < packetSubmissionStatistics.size(); ++statisticsIndex){
         const FrameGraphPacketSubmissionStatisticsRecord& statistics = packetSubmissionStatistics[statisticsIndex];
         if(
@@ -1176,19 +1178,48 @@ template<typename NodeContainer>
             return false;
     }
 
+    Vector<FrameGraphPacketSubmissionStatisticsAccumulator, Alloc::ScratchArena> queueTotals(scratchArena);
+    queueTotals.resize(physicalQueueRuntimeStatistics.size());
     usize statisticsIndex = 0u;
+    usize queueBegin = 0u;
     for(usize nodeIndex = 0u; nodeIndex < nodes.size(); ++nodeIndex){
+        usize queueEnd = queueBegin;
+        while(
+            queueEnd < physicalQueueRuntimeStatistics.size()
+            && physicalQueueRuntimeStatistics[queueEnd].ownerNodeIndex == nodeIndex
+        )
+            ++queueEnd;
+
         FrameGraphPacketSubmissionStatisticsAccumulator total;
         while(
             statisticsIndex < packetSubmissionStatistics.size()
             && packetSubmissionStatistics[statisticsIndex].ownerNodeIndex == nodeIndex
         ){
-            if(!AccumulatePacketSubmissionStatistics(
-                packetSubmissionStatistics[statisticsIndex],
-                nodes[nodeIndex].runtimeStatistics.submission,
-                total
-            ))
+            const auto& statistics = packetSubmissionStatistics[statisticsIndex];
+            const auto& ownerSubmission = nodes[nodeIndex].runtimeStatistics.submission;
+            if(!AccumulatePacketSubmissionStatistics(statistics, ownerSubmission, total))
                 return false;
+
+            usize first = queueBegin;
+            usize last = queueEnd;
+            while(first < last){
+                const usize middle = first + (last - first) / 2u;
+                const auto queue = physicalQueueRuntimeStatistics[middle].statistics.queue;
+                if(
+                    queue.index < statistics.queue.index
+                    || (queue.index == statistics.queue.index && queue.deviceGeneration < statistics.queue.deviceGeneration)
+                )
+                    first = middle + 1u;
+                else
+                    last = middle;
+            }
+            if(first < queueEnd && physicalQueueRuntimeStatistics[first].statistics.queue == statistics.queue){
+                if(
+                    physicalQueueRuntimeStatistics[first].statistics.queueClass != statistics.queueClass
+                    || !AccumulatePacketSubmissionStatistics(statistics, ownerSubmission, queueTotals[first])
+                )
+                    return false;
+            }
             ++statisticsIndex;
         }
         if(
@@ -1199,29 +1230,16 @@ template<typename NodeContainer>
             )
         )
             return false;
+        queueBegin = queueEnd;
     }
     if(statisticsIndex != packetSubmissionStatistics.size())
         return false;
 
-    for(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& queueStatistics : physicalQueueRuntimeStatistics){
-        FrameGraphPacketSubmissionStatisticsAccumulator total;
-        for(const FrameGraphPacketSubmissionStatisticsRecord& statistics : packetSubmissionStatistics){
-            if(
-                statistics.ownerNodeIndex != queueStatistics.ownerNodeIndex
-                || statistics.queue != queueStatistics.statistics.queue
-            )
-                continue;
-            if(
-                statistics.queueClass != queueStatistics.statistics.queueClass
-                || !AccumulatePacketSubmissionStatistics(
-                    statistics,
-                    nodes[statistics.ownerNodeIndex].runtimeStatistics.submission,
-                    total
-                )
-            )
-                return false;
-        }
-        if(!PacketSubmissionStatisticsAccumulatorMatches(total, queueStatistics.statistics.submission))
+    for(usize queueIndex = 0u; queueIndex < physicalQueueRuntimeStatistics.size(); ++queueIndex){
+        if(!PacketSubmissionStatisticsAccumulatorMatches(
+            queueTotals[queueIndex],
+            physicalQueueRuntimeStatistics[queueIndex].statistics.submission
+        ))
             return false;
     }
     return true;
@@ -1942,15 +1960,16 @@ bool BuildFrameGraphPayloadImpl(
     }
 
     const bool hasPacketSubmissionStatistics = packetSubmissionStatistics != nullptr;
-    if(
-        hasPacketSubmissionStatistics
-        && !__hidden_telemetry_frame_graph::ValidatePacketSubmissionStatisticsTable(
+    if(hasPacketSubmissionStatistics){
+        Alloc::ScratchArena scratchArena(Name("Telemetry/PacketStatisticsValidation"));
+        if(!__hidden_telemetry_frame_graph::ValidatePacketSubmissionStatisticsTable(
+            scratchArena,
             nodes,
             orderedPhysicalQueueRuntimeStatistics,
             orderedPacketSubmissionStatistics
-        )
-    )
-        return false;
+        ))
+            return false;
+    }
 
     const bool hasQueueAssignments = queueAssignmentCount != 0u;
     const bool hasCompiledTasks = compiledTaskCount != 0u;
@@ -2595,15 +2614,16 @@ bool ParseFrameGraphPayload(
             return false;
         outPayload.packetSubmissionStatistics.push_back(statistics);
     }
-    if(
-        outPayload.packetSubmissionStatisticsPresent
-        && !__hidden_telemetry_frame_graph::ValidatePacketSubmissionStatisticsTable(
+    if(outPayload.packetSubmissionStatisticsPresent){
+        Alloc::ScratchArena scratchArena(Name("Telemetry/PacketStatisticsValidation"));
+        if(!__hidden_telemetry_frame_graph::ValidatePacketSubmissionStatisticsTable(
+            scratchArena,
             outPayload.nodes,
             outPayload.physicalQueueRuntimeStatistics,
             outPayload.packetSubmissionStatistics
-        )
-    )
-        return false;
+        ))
+            return false;
+    }
 
     return cursor == stringTableOffset;
 }

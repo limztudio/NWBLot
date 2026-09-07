@@ -14,6 +14,83 @@ NWB_TELEMETRY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_frame_graph_contributor{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static u64 PhysicalQueueIdentity(const u32 ownerNodeIndex, const FrameGraphPhysicalQueueId queue)noexcept{
+    return (static_cast<u64>(ownerNodeIndex) << 32u) | (static_cast<u64>(queue.index) << 16u) | queue.deviceGeneration;
+}
+
+[[nodiscard]] static u64 PacketIdentity(const u32 ownerNodeIndex, const u32 packetIndex)noexcept{
+    return (static_cast<u64>(ownerNodeIndex) << 32u) | packetIndex;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+FrameGraphBuilder::FrameGraphBuilder(
+    FrameGraphNodeDescs& nodes,
+    FrameGraphEdgeDescs& edges,
+    FrameGraphPendingNameEdges& pendingNameEdges,
+    const u64 frameIndex
+)
+    : m_nodes(nodes)
+    , m_edges(edges)
+    , m_pendingNameEdges(pendingNameEdges)
+    , m_physicalQueueIdentities(nodes.get_allocator().arena())
+    , m_packetIdentities(nodes.get_allocator().arena())
+    , m_frameIndex(frameIndex)
+{}
+
+FrameGraphBuilder::FrameGraphBuilder(
+    FrameGraphNodeDescs& nodes,
+    FrameGraphEdgeDescs& edges,
+    FrameGraphPendingNameEdges& pendingNameEdges,
+    FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    const u64 frameIndex
+)
+    : FrameGraphBuilder(nodes, edges, pendingNameEdges, frameIndex)
+{
+    m_physicalQueueRuntimeStatistics = &physicalQueueRuntimeStatistics;
+    m_physicalQueueIdentities.reserve(physicalQueueRuntimeStatistics.size());
+    // Coalesce seeded identities without changing malformed source rows; the payload codec still validates those rows.
+    for(const auto& record : physicalQueueRuntimeStatistics){
+        m_physicalQueueIdentities.insert({
+            __hidden_frame_graph_contributor::PhysicalQueueIdentity(record.ownerNodeIndex, record.statistics.queue)
+        });
+    }
+}
+
+FrameGraphBuilder::FrameGraphBuilder(
+    FrameGraphNodeDescs& nodes,
+    FrameGraphEdgeDescs& edges,
+    FrameGraphPendingNameEdges& pendingNameEdges,
+    FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
+    const u64 frameIndex
+)
+    : FrameGraphBuilder(nodes, edges, pendingNameEdges, physicalQueueRuntimeStatistics, frameIndex)
+{
+    m_packetSubmissionStatistics = &packetSubmissionStatistics;
+    m_packetIdentities.reserve(packetSubmissionStatistics.size());
+    for(const auto& record : packetSubmissionStatistics){
+        m_packetIdentities.insert({
+            __hidden_frame_graph_contributor::PacketIdentity(record.ownerNodeIndex, record.packetIndex)
+        });
+    }
+}
+
+
 bool FrameGraphBuilder::addPhysicalQueueRuntimeStatistics(
     const FrameGraphNodeHandle owner,
     const FrameGraphPhysicalQueueRuntimeStatistics& statistics
@@ -30,15 +107,20 @@ bool FrameGraphBuilder::addPhysicalQueueRuntimeStatistics(
     )
         return false;
 
-    for(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record : *m_physicalQueueRuntimeStatistics){
-        if(record.ownerNodeIndex == owner.index && record.statistics.queue == statistics.queue)
-            return false;
-    }
+    const u64 identity = __hidden_frame_graph_contributor::PhysicalQueueIdentity(owner.index, statistics.queue);
+    if(m_physicalQueueIdentities.contains(identity))
+        return false;
+    if(m_physicalQueueRuntimeStatistics->size() == m_physicalQueueRuntimeStatistics->max_size())
+        return false;
 
-    m_physicalQueueRuntimeStatistics->push_back(FrameGraphPhysicalQueueRuntimeStatisticsRecord{
+    const FrameGraphPhysicalQueueRuntimeStatisticsRecord record{
         .ownerNodeIndex = owner.index,
         .statistics = statistics,
-    });
+    };
+    ContainerDetail::ReserveGrowingCapacity(*m_physicalQueueRuntimeStatistics, m_physicalQueueRuntimeStatistics->size() + 1u);
+    if(!m_physicalQueueIdentities.insert(identity).second)
+        return false;
+    m_physicalQueueRuntimeStatistics->push_back(record);
     return true;
 }
 
@@ -77,12 +159,17 @@ bool FrameGraphBuilder::addPacketSubmissionStatistics(
     )
         return false;
 
-    for(const FrameGraphPacketSubmissionStatisticsRecord& record : *m_packetSubmissionStatistics){
-        if(record.ownerNodeIndex == owner.index && record.packetIndex == statistics.packetIndex)
-            return false;
-    }
+    const u64 identity = __hidden_frame_graph_contributor::PacketIdentity(owner.index, statistics.packetIndex);
+    if(m_packetIdentities.contains(identity))
+        return false;
+    if(m_packetSubmissionStatistics->size() == m_packetSubmissionStatistics->max_size())
+        return false;
 
-    m_packetSubmissionStatistics->push_back(statistics);
+    const FrameGraphPacketSubmissionStatisticsRecord record = statistics;
+    ContainerDetail::ReserveGrowingCapacity(*m_packetSubmissionStatistics, m_packetSubmissionStatistics->size() + 1u);
+    if(!m_packetIdentities.insert(identity).second)
+        return false;
+    m_packetSubmissionStatistics->push_back(record);
     return true;
 }
 

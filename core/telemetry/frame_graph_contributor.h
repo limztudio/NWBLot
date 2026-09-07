@@ -46,30 +46,20 @@ struct FrameGraphPassMetadata{
 
 class FrameGraphBuilder final : NoCopy{
 public:
+    // Statistics tables may be prepopulated, but must only be changed through this builder during its lifetime.
     FrameGraphBuilder(
         FrameGraphNodeDescs& nodes,
         FrameGraphEdgeDescs& edges,
         FrameGraphPendingNameEdges& pendingNameEdges,
         const u64 frameIndex = 0u
-    )
-        : m_nodes(nodes)
-        , m_edges(edges)
-        , m_pendingNameEdges(pendingNameEdges)
-        , m_frameIndex(frameIndex)
-    {}
+    );
     FrameGraphBuilder(
         FrameGraphNodeDescs& nodes,
         FrameGraphEdgeDescs& edges,
         FrameGraphPendingNameEdges& pendingNameEdges,
         FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
         const u64 frameIndex = 0u
-    )
-        : m_nodes(nodes)
-        , m_edges(edges)
-        , m_pendingNameEdges(pendingNameEdges)
-        , m_physicalQueueRuntimeStatistics(&physicalQueueRuntimeStatistics)
-        , m_frameIndex(frameIndex)
-    {}
+    );
     FrameGraphBuilder(
         FrameGraphNodeDescs& nodes,
         FrameGraphEdgeDescs& edges,
@@ -77,14 +67,7 @@ public:
         FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
         FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
         const u64 frameIndex = 0u
-    )
-        : m_nodes(nodes)
-        , m_edges(edges)
-        , m_pendingNameEdges(pendingNameEdges)
-        , m_physicalQueueRuntimeStatistics(&physicalQueueRuntimeStatistics)
-        , m_packetSubmissionStatistics(&packetSubmissionStatistics)
-        , m_frameIndex(frameIndex)
-    {}
+    );
 
 
 public:
@@ -148,6 +131,8 @@ private:
     FrameGraphPendingNameEdges& m_pendingNameEdges;
     FrameGraphPhysicalQueueRuntimeStatisticsRecords* m_physicalQueueRuntimeStatistics = nullptr;
     FrameGraphPacketSubmissionStatisticsRecords* m_packetSubmissionStatistics = nullptr;
+    HashSet<u64, TelemetryArena> m_physicalQueueIdentities;
+    HashSet<u64, TelemetryArena> m_packetIdentities;
     u64 m_frameIndex = 0u;
 };
 

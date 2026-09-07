@@ -12,11 +12,11 @@
 
 
 namespace PipelineTool{
-enum Enum : u8{
-    DependencyComputer,
-    AssetBuilder,
-    AssetGatherer,
-};
+    enum Enum : u8{
+        DependencyComputer,
+        AssetBuilder,
+        AssetGatherer,
+    };
 };
 
 struct PipelineOptions{
@@ -38,11 +38,11 @@ struct PipelineOptions{
 };
 
 namespace CommandLineParseResult{
-enum Enum : u8{
-    Success,
-    Help,
-    Error,
-};
+    enum Enum : u8{
+        Success,
+        Help,
+        Error,
+    };
 };
 
 CommandLineParseResult::Enum ParseCommandLine(int argc, char** argv, PipelineTool::Enum tool, PipelineOptions& options);

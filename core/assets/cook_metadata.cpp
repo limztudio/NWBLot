@@ -350,7 +350,6 @@ bool ParseAssetMetadata(
     Core::Alloc::ThreadPool& threadPool,
     ScratchArena& scratchArena
 ){
-    outMetadata.entryRegistry.reserveEntries(nwbFiles.size());
     CookEntryPathHashSet seenPropertyAssetPathHashes(
         0,
         Hasher<NameHash>(),

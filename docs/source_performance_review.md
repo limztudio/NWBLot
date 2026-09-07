@@ -349,3 +349,13 @@ Material and trace consumers share one import helper. A single texture uses a di
 Singleton and sparse timings are effectively unchanged. The small opt 8/32-texture cases add about 32/78ns per operation; no universal small-list speedup is claimed. Unique 1,024 peak scratch grows from 16,400 to 175,200 bytes in dbg (16,384 to 175,104 in opt), including output storage; cold reservation is 230,400/229,376 bytes. Small and repeated-pointer workloads retain their original scratch usage. The requested index never scales with unrelated graph declarations or duplicate requests.
 
 Ten functional regressions cover inline/promotion paths, existing aliases, complete import validation, all rejection classes, sequential prefixes, graph generations and resets, resource lifetime and scratch bounds. They and all 229 ECS graphics tests pass in dbg/opt, with 232 in fin; frame and descriptor-buffer targets build in all three. Benchmark setup and assertions are outside the timer; output allocation and helper teardown are included.
+
+## Typed metadata bucket reservation
+
+Public metadata parsing no longer reserves every registered entry bucket using the total input-file count. Shader/include metadata uses extension-owned registries, and bunch files can expand into many entries, so that estimate neither described typed demand nor bounded exported entries. Unused buckets now retain zero capacity; used typed vectors grow normally as actual entries are parsed. The unused registry and virtual reserve APIs are removed.
+
+In the 512-file shader/include fixture, retained metadata falls from 3,385,120 to 1,025,824 bytes in dbg and 1,698,384 to 666,192 in opt. Peak usage falls from 3,692,248 to 1,332,952 bytes in dbg and 1,986,168 to 953,976 in opt. Every parse returns to zero metadata bytes after destruction. Even one shader/include pair drops from 22,256 to 11,888 retained bytes in dbg and 10,144 to 5,600 in opt.
+
+Three 512-file parses measure 316.9893 to 323.0502ms in dbg and 137.0782 to 132.8714ms in opt. Thirty-two pair parses measure 13.3915 to 13.3419ms in dbg and 5.3886 to 6.3689ms in opt. These filesystem-inclusive results do not establish a uniform latency improvement; eliminating unused allocation capacity is the demonstrated gain.
+
+A new real 65-sampler regression crosses vector-growth boundaries, preserves permuted input order and payloads, checks the allocation arena and an unused Model bucket, and verifies late duplicate rejection retains the valid prefix. It and all 60 selected asset tests pass in dbg, opt and fin; pipeline and the skinning benchmark application build in each. The benchmark baseline includes the earlier extension-ownership correction.

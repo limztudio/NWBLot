@@ -91,7 +91,6 @@ public:
     [[nodiscard]] virtual usize size()const noexcept = 0;
 
 public:
-    virtual void reserve(usize entryCount) = 0;
     virtual bool parseDocument(
         const Path& assetRoot,
         AStringView virtualRoot,
@@ -239,10 +238,6 @@ public:
     [[nodiscard]] virtual const CookVector<EntryT>& entries()const noexcept override{ return m_entries; }
 
 public:
-    virtual void reserve(const usize entryCount)override{
-        m_entries.reserve(entryCount);
-    }
-
     virtual bool parseDocument(
         const Path& assetRoot,
         const AStringView virtualRoot,
@@ -417,11 +412,6 @@ public:
         ICookEntryBucket* bucket = find(assetType);
         NWB_ASSERT(bucket != nullptr);
         return static_cast<CookEntryBucketTyped<EntryT>*>(bucket)->entries();
-    }
-
-    void reserveEntries(const usize entryCount){
-        for(BucketPtr& bucket : m_buckets)
-            bucket->reserve(entryCount);
     }
 
     [[nodiscard]] bool parseDocument(

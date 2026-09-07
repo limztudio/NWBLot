@@ -5,6 +5,9 @@
 #include <core/assets/cook_metadata.h>
 #include <core/alloc/thread.h>
 
+#include <impl/assets_model/cook.h>
+#include <impl/assets_sampler/cook.h>
+
 #include <tests/common/capturing_logger.h>
 
 #include <global/text_utils.h>
@@ -471,6 +474,74 @@ TEST(MetadataExtensionOwnership, GraphicsParserFailureReleasesItsActualExtension
 
 TEST(MetadataExtensionOwnership, PublicShaderAndIncludeParsingRetiresAllMetadata){
     BenchmarkMetadataParsing(1u, 2u);
+}
+
+TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnusedBuckets){
+    AssetArena fixtureArena(Name("tests/metadata_registry/fixture"));
+    AssetArena parseArena(Name("tests/metadata_registry/output"));
+    Alloc::ThreadPool threadPool(0u);
+    Tests::CapturingLogger logger;
+    Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
+    const NWB::Path root = NWB::Path(fixtureArena, __FILE__).parent_path().parent_path().parent_path().parent_path()
+        / "__build_obj" / "metadata_registry_storage";
+    ErrorCode error;
+    ASSERT_TRUE(EnsureDirectories(root, error));
+    DiscoveredNwbFileVector files(fixtureArena);
+    constexpr usize s_SamplerCount = 65u;
+    files.reserve(s_SamplerCount + 1u);
+    constexpr AStringView s_SamplerFields =
+        "sampler asset;\r\n"
+        "asset.min_filter = \"linear\";\r\n"
+        "asset.mag_filter = \"linear\";\r\n"
+        "asset.mip_filter = \"linear\";\r\n"
+        "asset.address_u = \"wrap\";\r\n"
+        "asset.address_v = \"wrap\";\r\n"
+        "asset.address_w = \"wrap\";\r\n"
+        "asset.reduction = \"standard\";\r\n"
+        "asset.max_anisotropy = 1.0;\r\n"
+        "asset.border_color = [0.0, 0.0, 0.0, 0.0];\r\n";
+    for(usize index = 0u; index < s_SamplerCount; ++index){
+        const usize identity = (index * 37u) % s_SamplerCount;
+        const AssetString filename = StringFormat(fixtureArena, "sampler_{:03}.nwb", identity);
+        const NWB::Path path = root / filename;
+        AssetString source(s_SamplerFields, fixtureArena);
+        source += StringFormat(fixtureArena, "asset.mip_bias = {};\r\n", identity);
+        ASSERT_TRUE(WriteFixtureFile(path, source));
+        const AssetString normalized = PathToString(fixtureArena, path.lexically_normal());
+        files.emplace_back(fixtureArena, root, path, normalized, ACompactString("project"));
+    }
+    for(const bool rejectDuplicate : { false, true }){
+        if(rejectDuplicate)
+            files.push_back(files.front());
+        {
+            Alloc::ScratchArena scratchArena(Name("tests/metadata_registry/scratch"));
+            ParsedAssetMetadata metadata(parseArena);
+            ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry));
+            auto& samplers = metadata.entryRegistry.entries<Impl::SamplerCookEntry>(Impl::Sampler::AssetTypeName());
+            auto& models = metadata.entryRegistry.entries<Impl::ModelCookEntry>(Impl::Model::AssetTypeName());
+            ASSERT_EQ(samplers.capacity(), 0u);
+            ASSERT_EQ(models.capacity(), 0u);
+            EXPECT_EQ(ParseAssetMetadata(parseArena, files, metadata, threadPool, scratchArena), !rejectDuplicate);
+            ASSERT_EQ(samplers.size(), s_SamplerCount);
+            EXPECT_GE(samplers.capacity(), s_SamplerCount);
+            EXPECT_TRUE(models.empty());
+            EXPECT_EQ(models.capacity(), 0u);
+            EXPECT_TRUE(metadata.extensions.empty());
+            EXPECT_EQ(metadata.entryRegistry.entryCount(), s_SamplerCount);
+            for(usize index = 0u; index < s_SamplerCount; ++index){
+                const usize identity = (index * 37u) % s_SamplerCount;
+                const AssetString virtualPath = StringFormat(fixtureArena, "project/sampler_{:03}", identity);
+                EXPECT_EQ(samplers[index].virtualPath, ToName(virtualPath));
+                EXPECT_EQ(samplers[index].arena, &parseArena);
+                EXPECT_FLOAT_EQ(samplers[index].description.mipBias, static_cast<f32>(identity));
+            }
+        }
+        EXPECT_EQ(parseArena.memoryStats().usedBytes, 0u);
+        if(rejectDuplicate)
+            EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate property asset virtual path")));
+        else
+            EXPECT_EQ(logger.errorCount(), 0u);
+    }
 }
 
 TEST(MetadataExtensionBenchmark, DISABLED_ParseShaderAndIncludePair){

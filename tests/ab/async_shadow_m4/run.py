@@ -53,6 +53,7 @@ from window_capture_smoke import (  # noqa: E402
     SmokeSkip,
     WindowsCapture,
     build_launch_environment,
+    make_runtime_launch_args,
     collect_log_delta,
     create_capture_backend,
     ensure_process_running,
@@ -350,18 +351,6 @@ def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def make_launch_args(args: argparse.Namespace) -> SimpleNamespace:
-    return SimpleNamespace(
-        no_logserver=args.no_logserver,
-        logserver_executable=args.logserver_executable,
-        log_port=0,
-        working_directory=args.runtime_dir,
-        timeout=args.startup_timeout,
-        application_arg=["--gpudbg"] if args.gpu_validation else [],
-        software_vulkan="off",
-    )
-
-
 def wait_while_running(process, seconds: float, stage: str) -> None:
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
@@ -414,7 +403,7 @@ def run_frame_locked_capture(
         if path.exists():
             path.unlink()
 
-    launch_args = make_launch_args(args)
+    launch_args = make_runtime_launch_args(args)
     environment = build_launch_environment(launch_args)
     environment["NWB_RENDER_UNFOCUSED"] = "1"
     environment["NWB_STRESS_TEST_SPIN_ANGLE"] = args.frozen_yaw
@@ -511,7 +500,7 @@ def run_single_mode(
         if path.exists():
             path.unlink()
 
-    launch_args = make_launch_args(args)
+    launch_args = make_runtime_launch_args(args)
     environment = build_launch_environment(launch_args)
     environment["NWB_RENDER_UNFOCUSED"] = "1"
     environment["NWB_GPU_TIMING_FILE"] = str(timing_path)

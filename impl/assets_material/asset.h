@@ -108,10 +108,6 @@ namespace MaterialResourceSource{
     };
 };
 
-[[nodiscard]] inline bool IsValidMaterialResourceSource(const MaterialResourceSource::Enum resourceSource){
-    return resourceSource == MaterialResourceSource::Asset;
-}
-
 [[nodiscard]] inline bool IsMaterialAssetReference(const AStringView resourceName){
     const usize rootEnd = resourceName.find('/');
     if(
@@ -240,16 +236,6 @@ static_assert(
     case MaterialLayoutFieldType::SampledImage2D: return MaterialResourceKind::SampledImage2D;
     case MaterialLayoutFieldType::Sampler: return MaterialResourceKind::Sampler;
     default: return MaterialResourceKind::None;
-    }
-}
-
-[[nodiscard]] inline MaterialLayoutFieldType::Enum MaterialLayoutFieldTypeFromResourceKind(
-    const MaterialResourceKind::Enum resourceKind
-){
-    switch(resourceKind){
-    case MaterialResourceKind::SampledImage2D: return MaterialLayoutFieldType::SampledImage2D;
-    case MaterialResourceKind::Sampler: return MaterialLayoutFieldType::Sampler;
-    default: return MaterialLayoutFieldType::None;
     }
 }
 

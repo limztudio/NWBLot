@@ -507,8 +507,6 @@ void Value::copyFrom(const Value& other){
         m_data.m_double = other.m_data.m_double;
         break;
     case ValueType::String:
-        m_data.m_string = NewArenaObject<StringType>(m_arena, other.m_data.m_string->data(), other.m_data.m_string->size(), m_arena);
-        break;
     case ValueType::Reference:
         m_data.m_string = NewArenaObject<StringType>(m_arena, other.m_data.m_string->data(), other.m_data.m_string->size(), m_arena);
         break;
@@ -560,24 +558,12 @@ void Value::appendListCopies(const ListType& values, const usize count){
         appendListCopy(values[i]);
 }
 
-Value::StringType Value::makeArenaString(MStringView sv)const{
-    return StringType(sv.data(), sv.size(), m_arena);
-}
-
 Value::ListType* Value::allocList()const{
     return NewArenaObject<ListType>(m_arena, m_arena);
 }
 
 Value::MapType* Value::allocMap()const{
     return NewArenaObject<MapType>(m_arena, 0, MStringHash(), MStringEqual(), m_arena);
-}
-
-void Value::freeList(ListType* p){
-    DestroyArenaObject(m_arena, p);
-}
-
-void Value::freeMap(MapType* p){
-    DestroyArenaObject(m_arena, p);
 }
 
 

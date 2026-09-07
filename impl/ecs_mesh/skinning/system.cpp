@@ -368,7 +368,6 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
 
     Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_PrepareRuntimeArena);
     bool ready = true;
-    bool hasRenderWork = false;
     m_world.view<SkinnedMeshBindingComponent>().each(
         [&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
             if(!ready)
@@ -385,13 +384,6 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
             const SkeletonPoseComponent* skeletonPose = nullptr;
             __hidden_system::ResolveSkeletonComponents(m_world, entity, binding.skeletonEntity, jointPalette, skeletonPose);
             ready = prepareRuntimeMeshResources(*instance, jointPalette, skeletonPose, scratchArena);
-            const auto foundResources = m_runtimeResources.find(instance->handle.value);
-            const bool hasSkinningResources = foundResources != m_runtimeResources.end() && foundResources.value().usesSkinning();
-            hasRenderWork =
-                hasRenderWork
-                || hasSkinningResources
-                || __hidden_system::HasPotentialSkinningWork(*instance, jointPalette, skeletonPose)
-            ;
         }
     );
 
@@ -406,10 +398,7 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
         return false;
     }
 
-    if(!ready || !hasRenderWork)
-        return ready;
-
-    return true;
+    return ready;
 }
 
 bool MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, RuntimeMeshDesc& outMesh){

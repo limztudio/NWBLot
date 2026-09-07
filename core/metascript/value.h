@@ -159,11 +159,8 @@ private:
     Value& appendListCopy(const Value& val);
     void appendListCopies(const ListType& values, usize count);
 
-    [[nodiscard]] StringType makeArenaString(MStringView sv)const;
     [[nodiscard]] ListType* allocList()const;
     [[nodiscard]] MapType* allocMap()const;
-    void freeList(ListType* p);
-    void freeMap(MapType* p);
 
 
 private:

@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from policy_scan import REPOSITORY_ROOT, blank_non_code, line_number, production_source_files
+from policy_scan import REPOSITORY_ROOT, blank_non_code, delimited_body_ranges, is_body_top_level, line_number, production_source_files
 RETIRED_IDENTIFIER = re.compile(
     r"\b(?:GpuExternalPacketStateSource|GpuTaskPacketStateBinding|recordOverrides|recordOverrideCount|"
     r"taskStateBindings|taskStateBindingCount)\b"
@@ -18,51 +18,15 @@ NATIVE_PACKET_RECORD_DESC_OPEN = re.compile(
 RETIRED_NATIVE_PACKET_RECORD_FIELD = re.compile(r"\b(?:externalStateSources|externalStateSourceCount)\b")
 
 
-def native_packet_record_desc_body_ranges(code: str) -> list[tuple[int, int]]:
-    ranges: list[tuple[int, int]] = []
-    for match in NATIVE_PACKET_RECORD_DESC_OPEN.finditer(code):
-        open_offset = match.end() - 1
-        depth = 0
-        for offset in range(open_offset, len(code)):
-            if code[offset] == "{":
-                depth += 1
-            elif code[offset] == "}":
-                depth -= 1
-                if depth == 0:
-                    ranges.append((open_offset + 1, offset))
-                    break
-    return ranges
-
-
-def is_descriptor_body_top_level(code: str, start: int, offset: int) -> bool:
-    brace_depth = 0
-    parenthesis_depth = 0
-    bracket_depth = 0
-    for character in code[start:offset]:
-        if character == "{":
-            brace_depth += 1
-        elif character == "}":
-            brace_depth -= 1
-        elif character == "(":
-            parenthesis_depth += 1
-        elif character == ")":
-            parenthesis_depth -= 1
-        elif character == "[":
-            bracket_depth += 1
-        elif character == "]":
-            bracket_depth -= 1
-    return brace_depth == 0 and parenthesis_depth == 0 and bracket_depth == 0
-
-
 def find_recording_time_packet_state_overrides(source: str) -> list[tuple[int, str]]:
     code = blank_non_code(source)
     references = [
         (line_number(code, match.start()), match.group())
         for match in RETIRED_IDENTIFIER.finditer(code)
     ]
-    for start, end in native_packet_record_desc_body_ranges(code):
+    for _, start, end in delimited_body_ranges(code, NATIVE_PACKET_RECORD_DESC_OPEN):
         for match in RETIRED_NATIVE_PACKET_RECORD_FIELD.finditer(code, start, end):
-            if not is_descriptor_body_top_level(code, start, match.start()):
+            if not is_body_top_level(code, start, match.start()):
                 continue
             references.append((line_number(code, match.start()), f"GpuNativePacketRecordDesc/{match.group()}"))
     return sorted(references)

@@ -173,6 +173,16 @@ static bool HasPendingTextureUploads(const ImDrawData& drawData){
     };
 }
 
+static void AppendTextureReadUse(
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses,
+    const Core::GpuGraphResourceId texture){
+    for(const Core::GpuTaskResourceUse& use : resourceUses){
+        if(use.resource == texture)
+            return;
+    }
+    resourceUses.push_back(ReadTextureUse(texture));
+}
+
 [[nodiscard]] static bool ValidAcquiredPresentationFrame(const Core::AcquiredPresentationFrame& frame){
     if(!frame.valid())
         return false;
@@ -1116,17 +1126,8 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
 
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses(scratchArena);
         resourceUses.reserve(uploadedTextures.size());
-        for(const Core::GpuGraphResourceId texture : uploadedTextures){
-            bool alreadyDeclared = false;
-            for(const Core::GpuTaskResourceUse& use : resourceUses){
-                if(use.resource == texture){
-                    alreadyDeclared = true;
-                    break;
-                }
-            }
-            if(!alreadyDeclared)
-                resourceUses.push_back(__hidden_ui::ReadTextureUse(texture));
-        }
+        for(const Core::GpuGraphResourceId texture : uploadedTextures)
+            __hidden_ui::AppendTextureReadUse(resourceUses, texture);
 
         Core::GpuTaskSchedulingHint scheduling;
         scheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -1235,17 +1236,8 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
 
     // A requested texture may not appear in this frame's draw commands. Still declare it on the terminal Graphics
     // task so a Transfer upload publishes ShaderResource state and ownership for the next frame's UI consumer.
-    for(const Core::GpuGraphResourceId texture : uploadedTextures){
-        bool alreadyDeclared = false;
-        for(const Core::GpuTaskResourceUse& use : resourceUses){
-            if(use.resource == texture){
-                alreadyDeclared = true;
-                break;
-            }
-        }
-        if(!alreadyDeclared)
-            resourceUses.push_back(__hidden_ui::ReadTextureUse(texture));
-    }
+    for(const Core::GpuGraphResourceId texture : uploadedTextures)
+        __hidden_ui::AppendTextureReadUse(resourceUses, texture);
 
     const auto appendDrawTextureUse = [&](const TaskGraphDrawCommand& drawCommand){
         if(!drawCommand.texture)
@@ -1268,11 +1260,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         }
         if(!textureResource.valid())
             return false;
-        for(const Core::GpuTaskResourceUse& use : resourceUses){
-            if(use.resource == textureResource)
-                return true;
-        }
-        resourceUses.push_back(__hidden_ui::ReadTextureUse(textureResource));
+        __hidden_ui::AppendTextureReadUse(resourceUses, textureResource);
         return true;
     };
     for(const TaskGraphDrawCommand& drawCommand : m_taskGraphDrawCommands){
@@ -1526,11 +1514,7 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
     const auto appendTextureUse = [&](const Core::GpuGraphResourceId texture){
         if(!texture.valid())
             return false;
-        for(const Core::GpuTaskResourceUse& use : resourceUses){
-            if(use.resource == texture)
-                return true;
-        }
-        resourceUses.push_back(__hidden_ui::ReadTextureUse(texture));
+        __hidden_ui::AppendTextureReadUse(resourceUses, texture);
         return true;
     };
     for(const Core::GpuGraphResourceId texture : uploadedTextures){
@@ -1698,17 +1682,8 @@ Core::GpuTaskId UiSystem::declareStandaloneTextureUploadGraph(Core::GpuTaskGraph
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses(scratchArena);
     resourceUses.reserve(uploadedTextures.size());
-    for(const Core::GpuGraphResourceId texture : uploadedTextures){
-        bool alreadyDeclared = false;
-        for(const Core::GpuTaskResourceUse& use : resourceUses){
-            if(use.resource == texture){
-                alreadyDeclared = true;
-                break;
-            }
-        }
-        if(!alreadyDeclared)
-            resourceUses.push_back(__hidden_ui::ReadTextureUse(texture));
-    }
+    for(const Core::GpuGraphResourceId texture : uploadedTextures)
+        __hidden_ui::AppendTextureReadUse(resourceUses, texture);
 
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;

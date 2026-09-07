@@ -2,30 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Vec3 ToVec3(const ufbx_vec3 value){
-    return Vec3{
-        static_cast<f32>(value.x),
-        static_cast<f32>(value.y),
-        static_cast<f32>(value.z),
-    };
-}
-
-Vec2 ToVec2(const ufbx_vec2 value){
-    return Vec2{
-        static_cast<f32>(value.x),
-        static_cast<f32>(value.y),
-    };
-}
-
-Vec4 ToVec4(const ufbx_vec4 value){
-    return Vec4{
-        static_cast<f32>(value.x),
-        static_cast<f32>(value.y),
-        static_cast<f32>(value.z),
-        static_cast<f32>(value.w),
-    };
-}
-
 SIMDVector ToVector(const ufbx_vec3 value, const f32 w = 0.0f){
     return VectorSet(
         static_cast<f32>(value.x),

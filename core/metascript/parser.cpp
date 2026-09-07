@@ -798,36 +798,6 @@ private:
         return current;
     }
 
-    Value resolveRead(const ScratchPath& path){
-        NWB_ASSERT(!path.empty());
-
-        if(!isDeclaredVariable(path[0])){
-            error("references must target a declared variable");
-            return Value(m_arena);
-        }
-
-        auto rootIt = m_variables.find(path[0]);
-        if(rootIt == m_variables.end()){
-            error("undefined variable");
-            return Value(m_arena);
-        }
-
-        const Value* current = &rootIt.value();
-        for(usize i = 1; i < path.size(); ++i){
-            if(!current->isMap()){
-                error("cannot access field on non-map value");
-                return Value(m_arena);
-            }
-            current = current->findField(path[i]);
-            if(!current){
-                error("undefined field");
-                return Value(m_arena);
-            }
-        }
-
-        return *current;
-    }
-
     Value makeReference(const ScratchPath& path){
         NWB_ASSERT(!path.empty());
 

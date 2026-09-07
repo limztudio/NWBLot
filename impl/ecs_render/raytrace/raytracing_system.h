@@ -1422,33 +1422,10 @@ private:
         bool graphEntryStatesOwned = false,
         bool graphOwnsPassEntryStates = false
     );
-    void dispatchCausticResolveFirstWavelet(
+    void dispatchCausticResolveWaveletPass(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false,
-        bool graphOwnsPassEntryStates = false
-    );
-    void dispatchCausticResolveSecondWavelet(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false,
-        bool graphOwnsPassEntryStates = false
-    );
-    void dispatchCausticResolveThirdWavelet(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false,
-        bool graphOwnsPassEntryStates = false
-    );
-    void dispatchCausticResolveFourthWavelet(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false,
-        bool graphOwnsPassEntryStates = false
-    );
-    void dispatchCausticResolveFifthWavelet(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
+        u32 passIndex,
         bool graphEntryStatesOwned = false,
         bool graphOwnsPassEntryStates = false
     );

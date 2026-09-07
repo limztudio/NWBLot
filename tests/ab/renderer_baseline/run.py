@@ -36,6 +36,7 @@ from window_capture_smoke import (  # noqa: E402
     SmokeFailure,
     SmokeSkip,
     build_launch_environment,
+    make_runtime_launch_args,
     create_capture_backend,
     ensure_process_running,
     launch_logserver,
@@ -260,18 +261,6 @@ def difference_failures(args: argparse.Namespace, difference: PixelDifference) -
     return failures
 
 
-def make_launch_args(args: argparse.Namespace) -> SimpleNamespace:
-    return SimpleNamespace(
-        no_logserver=args.no_logserver,
-        logserver_executable=args.logserver_executable,
-        log_port=0,
-        working_directory=args.runtime_dir,
-        timeout=args.startup_timeout,
-        application_arg=["--gpudbg"] if args.gpu_validation else [],
-        software_vulkan="off",
-    )
-
-
 def validate_runtime_log(log_text: str, rejected_messages: Sequence[str]) -> Tuple[str, ...]:
     if not log_text:
         raise SmokeFailure("renderer baseline capture produced no captured logger output")
@@ -294,7 +283,7 @@ def capture_scene(
     if not args.runtime_dir.is_dir():
         raise SmokeFailure(f"renderer baseline runtime directory does not exist: {args.runtime_dir}")
 
-    launch_args = make_launch_args(args)
+    launch_args = make_runtime_launch_args(args)
     environment = build_launch_environment(launch_args)
     environment["NWB_RENDER_UNFOCUSED"] = "1"
     environment.update(frozen_environment)

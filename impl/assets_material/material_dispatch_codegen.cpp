@@ -63,13 +63,8 @@ bool AssignMaterialShadingModelIdsImpl(
         uniqueSources.push_back(AStringView(entry.bxdfSource));
     Sort(uniqueSources.begin(), uniqueSources.end(), [](const AStringView lhs, const AStringView rhs){ return lhs < rhs; });
 
-    usize uniqueCount = 0u;
-    for(usize i = 0u; i < uniqueSources.size(); ++i){
-        if(i == 0u || uniqueSources[i] != uniqueSources[uniqueCount - 1u])
-            uniqueSources[uniqueCount++] = uniqueSources[i];
-    }
-    uniqueSources.resize(uniqueCount);
-    if(uniqueCount > static_cast<usize>(Limit<u32>::s_Max)){
+    uniqueSources.erase(Unique(uniqueSources.begin(), uniqueSources.end()), uniqueSources.end());
+    if(uniqueSources.size() > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material cook: too many unique deferred bxdfs"));
         return false;
     }
@@ -96,13 +91,8 @@ bool AssignMaterialShadingModelIdsImpl(
     }
     Sort(uniqueSurfaces.begin(), uniqueSurfaces.end(), [](const AStringView lhs, const AStringView rhs){ return lhs < rhs; });
 
-    usize uniqueSurfaceCount = 0u;
-    for(usize i = 0u; i < uniqueSurfaces.size(); ++i){
-        if(i == 0u || uniqueSurfaces[i] != uniqueSurfaces[uniqueSurfaceCount - 1u])
-            uniqueSurfaces[uniqueSurfaceCount++] = uniqueSurfaces[i];
-    }
-    uniqueSurfaces.resize(uniqueSurfaceCount);
-    if(uniqueSurfaceCount > static_cast<usize>(Limit<u32>::s_Max)){
+    uniqueSurfaces.erase(Unique(uniqueSurfaces.begin(), uniqueSurfaces.end()), uniqueSurfaces.end());
+    if(uniqueSurfaces.size() > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material cook: too many unique shadow transmittance surfaces"));
         return false;
     }

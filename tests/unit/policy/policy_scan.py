@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
-from return_value_handling import blank_non_code, line_number
+from return_value_handling import blank_non_code, line_number, matching_delimiter
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -72,6 +73,44 @@ def first_party_code_files(source_root: Path) -> list[Path]:
 
 def header_files(source_root: Path) -> list[Path]:
     return files_under(source_root, FIRST_PARTY_CODE_DIRECTORIES, HEADER_SUFFIXES)
+
+
+def delimited_body_ranges(
+    code: str, pattern: re.Pattern[str], opening: str = "{", closing: str = "}"
+) -> Iterable[tuple[re.Match[str], int, int]]:
+    """Find complete bodies in already-masked code; the pattern includes the opening delimiter."""
+    for match in pattern.finditer(code):
+        open_offset = match.end() - 1
+        end = matching_delimiter(code, open_offset, opening, closing)
+        if end is not None:
+            yield match, open_offset + 1, end
+
+
+def class_body_ranges(code: str, pattern: re.Pattern[str]) -> Iterable[tuple[str, int, int, str]]:
+    """Return class name, body bounds, and default access from a class/struct opening pattern."""
+    for match, start, end in delimited_body_ranges(code, pattern):
+        default_access = "public" if match.group(1) == "struct" else "private"
+        yield match.group(2), start, end, default_access
+
+
+def is_body_top_level(code: str, start: int, offset: int) -> bool:
+    brace_depth = 0
+    parenthesis_depth = 0
+    bracket_depth = 0
+    for character in code[start:offset]:
+        if character == "{":
+            brace_depth += 1
+        elif character == "}":
+            brace_depth -= 1
+        elif character == "(":
+            parenthesis_depth += 1
+        elif character == ")":
+            parenthesis_depth -= 1
+        elif character == "[":
+            bracket_depth += 1
+        elif character == "]":
+            bracket_depth -= 1
+    return brace_depth == 0 and parenthesis_depth == 0 and bracket_depth == 0
 
 
 def find_regex_matches(source: str, pattern) -> list[Match]:

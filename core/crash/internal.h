@@ -289,11 +289,6 @@ template<typename ArenaT>
     return ::Path<ArenaT>(arena, request.spoolDirectory) / PackageNames::s_PendingDirectoryName / request.crashId;
 }
 
-template<typename ArenaT>
-[[nodiscard]] inline ::Path<ArenaT> RequestBucketDirectory(ArenaT& arena, const CrashRequest& request, const char* bucketName){
-    return ::Path<ArenaT>(arena, request.spoolDirectory) / bucketName / request.crashId;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

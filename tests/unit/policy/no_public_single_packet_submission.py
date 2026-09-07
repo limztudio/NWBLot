@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from policy_scan import REPOSITORY_ROOT, SOURCE_SUFFIXES, blank_non_code, first_party_source_files, line_number
+from policy_scan import REPOSITORY_ROOT, blank_non_code, class_body_ranges, first_party_source_files, is_body_top_level, line_number
 from return_value_handling import matching_parenthesis
 RETIRED_SUBMISSION_LEASE = re.compile(r"\bGpuTaskPacketSubmissionLease\b")
 RETIRED_PACKET_RUNTIME_TYPES = re.compile(r"\b(?:GpuPacketRuntimeState|GpuPacketRuntime)\b")
@@ -52,43 +52,6 @@ CLASS_MEMBER_TOKENS = {
     )
     for class_name, members in PRIVATE_SUBMISSION_MEMBERS.items()
 }
-
-
-def target_class_body_ranges(code: str) -> list[tuple[str, int, int, str]]:
-    ranges: list[tuple[str, int, int, str]] = []
-    for match in TARGET_CLASS_OPEN.finditer(code):
-        open_offset = match.end() - 1
-        default_access = "public" if match.group(1) == "struct" else "private"
-        depth = 0
-        for offset in range(open_offset, len(code)):
-            if code[offset] == "{":
-                depth += 1
-            elif code[offset] == "}":
-                depth -= 1
-                if depth == 0:
-                    ranges.append((match.group(2), open_offset + 1, offset, default_access))
-                    break
-    return ranges
-
-
-def is_class_body_top_level(code: str, start: int, offset: int) -> bool:
-    brace_depth = 0
-    parenthesis_depth = 0
-    bracket_depth = 0
-    for character in code[start:offset]:
-        if character == "{":
-            brace_depth += 1
-        elif character == "}":
-            brace_depth -= 1
-        elif character == "(":
-            parenthesis_depth += 1
-        elif character == ")":
-            parenthesis_depth -= 1
-        elif character == "[":
-            bracket_depth += 1
-        elif character == "]":
-            bracket_depth -= 1
-    return brace_depth == 0 and parenthesis_depth == 0 and bracket_depth == 0
 
 
 def function_parameter_count(code: str, opening: int, closing: int) -> int:
@@ -142,10 +105,10 @@ def find_public_single_packet_submission(source: str) -> list[tuple[int, str]]:
         (line_number(code, match.start()), match.group())
         for match in RETIRED_PACKET_RUNTIME_TYPES.finditer(code)
     )
-    for class_name, start, end, default_access in target_class_body_ranges(code):
+    for class_name, start, end, default_access in class_body_ranges(code, TARGET_CLASS_OPEN):
         access = default_access
         for match in CLASS_MEMBER_TOKENS[class_name].finditer(code, start, end):
-            if not is_class_body_top_level(code, start, match.start()):
+            if not is_body_top_level(code, start, match.start()):
                 continue
             if match.group(1):
                 access = match.group(1)
@@ -179,10 +142,6 @@ def find_public_single_packet_submission(source: str) -> list[tuple[int, str]]:
                     (line_number(code, match.start()), f"{class_name}/{access} {member}/{parameter_count}")
                 )
     return sorted(references)
-
-
-def source_files(source_root: Path) -> list[Path]:
-    return first_party_source_files(source_root)
 
 
 def run_self_test() -> int:
@@ -647,7 +606,7 @@ def main() -> int:
 
     source_root = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else REPOSITORY_ROOT
     violations: list[str] = []
-    for path in source_files(source_root):
+    for path in first_party_source_files(source_root):
         source = path.read_text(encoding="utf-8", errors="replace")
         for line, identifier in find_public_single_packet_submission(source):
             violations.append(

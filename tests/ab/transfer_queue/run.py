@@ -25,14 +25,15 @@ from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from profile_probe import ProfileFailure, capture_vulkan_summary, parse_result  # noqa: E402
+
+
 SKIP_EXIT_CODE = 77
 INCOMPLETE_EXIT_CODE = 2
 RESULT_PREFIX = "NWB_TRANSFER_UPLOAD_PROFILE_RESULT "
 GRAPHICS_AND_TRANSFER_SHARING_MASK = (1 << 0) | (1 << 2)
-
-
-class ProfileFailure(RuntimeError):
-    pass
 
 
 @dataclass(frozen=True)
@@ -42,20 +43,6 @@ class ArmResult:
     elapsed_seconds: float
     payload: Optional[Dict[str, Any]]
     log_path: Path
-
-
-def parse_result(text: str) -> Optional[Dict[str, Any]]:
-    for line in reversed(text.splitlines()):
-        if not line.startswith(RESULT_PREFIX):
-            continue
-        try:
-            payload = json.loads(line[len(RESULT_PREFIX) :])
-        except json.JSONDecodeError as error:
-            raise ProfileFailure(f"invalid profile result JSON: {error}") from error
-        if not isinstance(payload, dict):
-            raise ProfileFailure("profile result must be a JSON object")
-        return payload
-    return None
 
 
 def run_arm(args: argparse.Namespace, route: str, output_dir: Path) -> ArmResult:
@@ -85,18 +72,8 @@ def run_arm(args: argparse.Namespace, route: str, output_dir: Path) -> ArmResult
     elapsed_seconds = time.perf_counter() - started
     log_path = output_dir / f"{route}.log"
     log_path.write_text(completed.stdout, encoding="utf-8")
-    payload = parse_result(completed.stdout)
+    payload = parse_result(completed.stdout, RESULT_PREFIX)
     return ArmResult(route, completed.returncode, elapsed_seconds, payload, log_path)
-
-
-def capture_vulkan_summary(output_dir: Path) -> Optional[Path]:
-    vulkaninfo = shutil.which("vulkaninfo")
-    if vulkaninfo is None:
-        return None
-    completed = subprocess.run([vulkaninfo, "--summary"], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    output_path = output_dir / "vulkaninfo-summary.txt"
-    output_path.write_text(completed.stdout, encoding="utf-8")
-    return output_path
 
 
 def require_ok(arm: ArmResult) -> Dict[str, Any]:
@@ -436,8 +413,8 @@ def run_self_test() -> int:
         "logger_errors": 0,
     }
     text = f"noise\n{RESULT_PREFIX}{json.dumps(payload)}\n"
-    assert parse_result(text) == payload
-    assert parse_result("no result") is None
+    assert parse_result(text, RESULT_PREFIX) == payload
+    assert parse_result("no result", RESULT_PREFIX) is None
     graphics_payload = dict(
         payload,
         requested_route="graphics",

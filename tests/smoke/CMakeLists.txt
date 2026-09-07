@@ -369,6 +369,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
                 DEPENDS
                     nwb_tex_conv
                     "${_nwb_texture_smoke_generator}"
+                    "${PROJECT_SOURCE_DIR}/tests/common/png_fixture.py"
                 COMMENT "Generating NWB texture smoke source asset for $<CONFIG>..."
                 VERBATIM
                 USES_TERMINAL

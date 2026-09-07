@@ -194,18 +194,6 @@ static bool ParseMetadataF32TupleWithLabel(
 }
 
 template<usize ComponentCount>
-static bool ParseMetadataF32Tuple(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& value,
-    const tchar* metaKind,
-    const AStringView label,
-    f32 (&outValues)[ComponentCount],
-    Core::Alloc::ScratchArena& scratchArena
-){
-    return ParseMetadataF32TupleWithLabel(nwbFilePath, value, metaKind, label, outValues, scratchArena);
-}
-
-template<usize ComponentCount>
 static bool ParseMetadataF32TupleListElement(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,

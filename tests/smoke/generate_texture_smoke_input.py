@@ -3,18 +3,13 @@
 
 import argparse
 from pathlib import Path
-import struct
+import sys
 from typing import Tuple
-import zlib
 
 
-def png_chunk(kind: bytes, data: bytes) -> bytes:
-    return (
-        struct.pack(">I", len(data))
-        + kind
-        + data
-        + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
-    )
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "common"))
+
+from png_fixture import write_png_rows  # noqa: E402
 
 
 def texture_pixel(x: int, y: int) -> Tuple[int, int, int, int]:
@@ -51,14 +46,8 @@ def write_texture_png(path: Path) -> None:
         for x in range(width):
             rows.extend(texture_pixel(x, y))
 
-    png = (
-        b"\x89PNG\r\n\x1a\n"
-        + png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
-        + png_chunk(b"IDAT", zlib.compress(bytes(rows), level=9))
-        + png_chunk(b"IEND", b"")
-    )
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(png)
+    write_png_rows(path, width, height, 6, rows, compression_level=9)
 
 
 def main() -> int:

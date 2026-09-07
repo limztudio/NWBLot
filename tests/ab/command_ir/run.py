@@ -16,7 +16,6 @@ import json
 import math
 import re
 import shlex
-import shutil
 import statistics
 import subprocess
 import sys
@@ -26,6 +25,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Sequence
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from profile_probe import ProfileFailure, capture_vulkan_summary, parse_result  # noqa: E402
 
 
 SKIP_EXIT_CODE = 77
@@ -42,30 +46,12 @@ MAX_RECORDS = 65536
 MAX_SAMPLES = 64
 
 
-class ProfileFailure(RuntimeError):
-    pass
-
-
 @dataclass(frozen=True)
 class ProfileResult:
     return_code: int
     elapsed_seconds: float
     payload: Optional[Dict[str, Any]]
     log_path: Path
-
-
-def parse_result(text: str) -> Optional[Dict[str, Any]]:
-    for line in reversed(text.splitlines()):
-        if not line.startswith(RESULT_PREFIX):
-            continue
-        try:
-            payload = json.loads(line[len(RESULT_PREFIX) :])
-        except json.JSONDecodeError as error:
-            raise ProfileFailure(f"invalid profile result JSON: {error}") from error
-        if not isinstance(payload, dict):
-            raise ProfileFailure("profile result must be a JSON object")
-        return payload
-    return None
 
 
 def profile_command(args: argparse.Namespace) -> List[str]:
@@ -96,17 +82,7 @@ def run_profile(args: argparse.Namespace, output_dir: Path) -> ProfileResult:
     elapsed_seconds = time.perf_counter() - started
     log_path = output_dir / "command_ir_profile.log"
     log_path.write_text(completed.stdout, encoding="utf-8")
-    return ProfileResult(completed.returncode, elapsed_seconds, parse_result(completed.stdout), log_path)
-
-
-def capture_vulkan_summary(output_dir: Path) -> Optional[Path]:
-    vulkaninfo = shutil.which("vulkaninfo")
-    if vulkaninfo is None:
-        return None
-    completed = subprocess.run([vulkaninfo, "--summary"], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    output_path = output_dir / "vulkaninfo-summary.txt"
-    output_path.write_text(completed.stdout, encoding="utf-8")
-    return output_path
+    return ProfileResult(completed.returncode, elapsed_seconds, parse_result(completed.stdout, RESULT_PREFIX), log_path)
 
 
 def write_profile_command(args: argparse.Namespace, output_dir: Path) -> None:
@@ -441,8 +417,8 @@ def run_self_test() -> int:
     }
     payload.update({stage: dict(timing) for stage in TIMING_STAGES})
     text = f"noise\n{RESULT_PREFIX}{json.dumps(payload)}\n"
-    assert parse_result(text) == payload
-    assert parse_result("no result") is None
+    assert parse_result(text, RESULT_PREFIX) == payload
+    assert parse_result("no result", RESULT_PREFIX) is None
     args = SimpleNamespace(adapter_index=0, records=4, warmup=1, samples=3)
     result = ProfileResult(0, 0.1, payload, Path("command_ir_profile.log"))
     assert require_ok(args, result)["replayed_records"] == 4

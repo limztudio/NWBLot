@@ -31,6 +31,11 @@ constexpr void Sort(RandomIt first, RandomIt last, Compare&& compare){
 }
 
 template<typename ForwardIt>
+[[nodiscard]] constexpr ForwardIt Unique(ForwardIt first, ForwardIt last){
+    return std::unique(first, last);
+}
+
+template<typename ForwardIt>
 constexpr ForwardIt Rotate(ForwardIt first, ForwardIt middle, ForwardIt last){
     return std::rotate(first, middle, last);
 }

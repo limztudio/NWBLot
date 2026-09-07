@@ -4,6 +4,7 @@ import ctypes
 from dataclasses import dataclass
 import os
 from pathlib import Path
+from types import SimpleNamespace
 import platform
 import socket
 import struct
@@ -436,6 +437,18 @@ def resolve_lavapipe_icd():
             return candidate
 
     return None
+
+
+def make_runtime_launch_args(args: argparse.Namespace) -> SimpleNamespace:
+    return SimpleNamespace(
+        no_logserver=args.no_logserver,
+        logserver_executable=args.logserver_executable,
+        log_port=0,
+        working_directory=args.runtime_dir,
+        timeout=args.startup_timeout,
+        application_arg=["--gpudbg"] if args.gpu_validation else [],
+        software_vulkan="off",
+    )
 
 
 def build_launch_environment(args):

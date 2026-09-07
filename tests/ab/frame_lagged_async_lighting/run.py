@@ -28,6 +28,7 @@ from window_capture_smoke import (  # noqa: E402
     SmokeFailure,
     SmokeSkip,
     build_launch_environment,
+    make_runtime_launch_args,
     collect_log_delta,
     create_capture_backend,
     ensure_process_running,
@@ -162,18 +163,6 @@ def wait_for_lifecycle_stage(
     )
 
 
-def make_launch_args(args: argparse.Namespace) -> SimpleNamespace:
-    return SimpleNamespace(
-        no_logserver=args.no_logserver,
-        logserver_executable=args.logserver_executable,
-        log_port=0,
-        working_directory=args.runtime_dir,
-        timeout=args.startup_timeout,
-        application_arg=["--gpudbg"] if args.gpu_validation else [],
-        software_vulkan="off",
-    )
-
-
 def require_positive(parser: argparse.ArgumentParser, option: str, value: float) -> None:
     if value <= 0.0:
         parser.error(f"{option} must be positive")
@@ -215,7 +204,7 @@ def run(args: argparse.Namespace) -> int:
     if not args.runtime_dir.is_dir():
         raise SmokeFailure(f"lagged-lighting runtime directory does not exist: {args.runtime_dir}")
 
-    launch_args = make_launch_args(args)
+    launch_args = make_runtime_launch_args(args)
     environment = build_launch_environment(launch_args)
     environment["NWB_RENDER_UNFOCUSED"] = "1"
     capture_backend = None

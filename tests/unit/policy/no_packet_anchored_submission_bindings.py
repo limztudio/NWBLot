@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from policy_scan import REPOSITORY_ROOT, blank_non_code, line_number, production_source_files
+from policy_scan import REPOSITORY_ROOT, blank_non_code, delimited_body_ranges, is_body_top_level, line_number, production_source_files
 RETIRED_IDENTIFIER = re.compile(
     r"\b(?:GpuTaskGraphPacketTimingTicket|GpuTaskGraphPacketSubmissionHook|"
     r"GpuTaskGraphPacketAcceptedCallback|submitPacketRangeInCompileOrderFromTasks|"
@@ -22,70 +22,18 @@ SUBMIT_PACKET_OPEN = re.compile(r"\bsubmitPacket\s*\(")
 RETIRED_SUBMIT_PACKET_BINDING = re.compile(r"\b(?:GpuTimingSubmissionTicket|QueueSubmissionPreSubmitHook)\b")
 
 
-def normal_execution_desc_body_ranges(code: str) -> list[tuple[int, int]]:
-    ranges: list[tuple[int, int]] = []
-    for match in NORMAL_EXECUTION_DESC_OPEN.finditer(code):
-        open_offset = match.end() - 1
-        depth = 0
-        for offset in range(open_offset, len(code)):
-            if code[offset] == "{":
-                depth += 1
-            elif code[offset] == "}":
-                depth -= 1
-                if depth == 0:
-                    ranges.append((open_offset + 1, offset))
-                    break
-    return ranges
-
-
-def submit_packet_parameter_ranges(code: str) -> list[tuple[int, int]]:
-    ranges: list[tuple[int, int]] = []
-    for match in SUBMIT_PACKET_OPEN.finditer(code):
-        open_offset = match.end() - 1
-        depth = 0
-        for offset in range(open_offset, len(code)):
-            if code[offset] == "(":
-                depth += 1
-            elif code[offset] == ")":
-                depth -= 1
-                if depth == 0:
-                    ranges.append((open_offset + 1, offset))
-                    break
-    return ranges
-
-
-def is_descriptor_body_top_level(code: str, start: int, offset: int) -> bool:
-    brace_depth = 0
-    parenthesis_depth = 0
-    bracket_depth = 0
-    for character in code[start:offset]:
-        if character == "{":
-            brace_depth += 1
-        elif character == "}":
-            brace_depth -= 1
-        elif character == "(":
-            parenthesis_depth += 1
-        elif character == ")":
-            parenthesis_depth -= 1
-        elif character == "[":
-            bracket_depth += 1
-        elif character == "]":
-            bracket_depth -= 1
-    return brace_depth == 0 and parenthesis_depth == 0 and bracket_depth == 0
-
-
 def find_packet_anchored_submission_references(source: str) -> list[tuple[int, str]]:
     code = blank_non_code(source)
     references = [
         (line_number(code, match.start()), match.group())
         for match in RETIRED_IDENTIFIER.finditer(code)
     ]
-    for start, end in normal_execution_desc_body_ranges(code):
+    for _, start, end in delimited_body_ranges(code, NORMAL_EXECUTION_DESC_OPEN):
         for match in RETIRED_NORMAL_EXECUTION_FIELD.finditer(code, start, end):
-            if not is_descriptor_body_top_level(code, start, match.start()):
+            if not is_body_top_level(code, start, match.start()):
                 continue
             references.append((line_number(code, match.start()), match.group()))
-    for start, end in submit_packet_parameter_ranges(code):
+    for _, start, end in delimited_body_ranges(code, SUBMIT_PACKET_OPEN, "(", ")"):
         for match in RETIRED_SUBMIT_PACKET_BINDING.finditer(code, start, end):
             references.append((line_number(code, match.start()), f"submitPacket/{match.group()}"))
     return sorted(references)

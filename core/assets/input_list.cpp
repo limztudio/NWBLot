@@ -14,6 +14,9 @@
 NWB_ASSETS_BEGIN
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool ReadAssetInputList(const Path& path, AssetVector<AssetString>& inputs, const bool resolveRelativePaths){
     Alloc::ScratchArena scratchArena(Name("assets/input_list"));
     AString<Alloc::ScratchArena> text(scratchArena);
@@ -49,6 +52,9 @@ bool ReadAssetInputList(const Path& path, AssetVector<AssetString>& inputs, cons
     }
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ASSETS_END

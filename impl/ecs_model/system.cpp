@@ -14,6 +14,7 @@
 #include <impl/ecs_scene/components.h>
 #include <impl/ecs_skeleton/components.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
+#include <global/algorithm.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,6 +31,44 @@ namespace __hidden_model_system{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+struct AttachmentJointQuery{
+    Core::ECS::EntityID parentEntity;
+    u32 parentJointIndex = s_SkeletonInvalidJointIndex;
+    SkeletonJointMatrix jointMatrix{};
+    bool resolved = false;
+};
+
+static void ResolveAttachmentJointQueries(
+    Core::ECS::World& world,
+    Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette,
+    AttachmentJointQuery* const queries,
+    const usize queryCount,
+    const usize* const parentOrder){
+    const auto queryAt = [&](const usize index) -> AttachmentJointQuery&{
+        return queries[parentOrder ? parentOrder[index] : index];
+    };
+    usize groupBegin = 0u;
+    while(groupBegin < queryCount){
+        const Core::ECS::EntityID parentEntity = queryAt(groupBegin).parentEntity;
+        usize groupEnd = groupBegin + 1u;
+        while(groupEnd < queryCount && queryAt(groupEnd).parentEntity == parentEntity)
+            ++groupEnd;
+
+        const SkeletonPoseComponent* const pose = world.tryGetComponent<SkeletonPoseComponent>(parentEntity);
+        u32 skinningMode = SkeletonSkinningMode::LinearBlend;
+        if(pose && SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, jointPalette, skinningMode)){
+            for(usize queryIndex = groupBegin; queryIndex < groupEnd; ++queryIndex){
+                AttachmentJointQuery& query = queryAt(queryIndex);
+                if(query.parentJointIndex >= jointPalette.size())
+                    continue;
+                query.jointMatrix = jointPalette[query.parentJointIndex];
+                query.resolved = true;
+            }
+        }
+        groupBegin = groupEnd;
+    }
+}
 
 static constexpr usize s_ParallelModelObjectTransformGrainSize = 256u;
 
@@ -464,7 +503,65 @@ void ModelSystem::updateModelObjectTransforms(){
 }
 
 void ModelSystem::updateStaticMeshAttachments(){
-    m_world.view<ModelObjectComponent, ModelStaticMeshAttachmentComponent, Scene::TransformComponent>().each(
+    const auto attachments = m_world.view<ModelObjectComponent, ModelStaticMeshAttachmentComponent, Scene::TransformComponent>();
+    usize queryCount = 0u;
+    if(attachments.candidateCount() > 1u){
+        attachments.each(
+            [&](const Core::ECS::EntityID entity, const ModelObjectComponent& object,
+                const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform){
+                static_cast<void>(entity);
+                static_cast<void>(object);
+                static_cast<void>(transform);
+                if(attachment.parentEntity.valid() && attachment.parentJointIndex != s_SkeletonInvalidJointIndex)
+                    ++queryCount;
+            }
+        );
+    }
+
+    // This operation owns grouping storage; zero or one joint query needs neither an index nor a scratch arena.
+    Optional<Core::Alloc::ScratchArena> scratchArena;
+    Optional<Vector<__hidden_model_system::AttachmentJointQuery, Core::Alloc::ScratchArena>> jointQueries;
+    if(queryCount > 1u){
+        scratchArena.emplace(Name("impl/ecs_model/attachment_joints"));
+        jointQueries.emplace(*scratchArena);
+        jointQueries->reserve(queryCount);
+        bool sharedParent = true;
+        attachments.each(
+            [&](const Core::ECS::EntityID entity, const ModelObjectComponent& object,
+                const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform){
+                static_cast<void>(entity);
+                static_cast<void>(object);
+                static_cast<void>(transform);
+                if(!attachment.parentEntity.valid() || attachment.parentJointIndex == s_SkeletonInvalidJointIndex)
+                    return;
+                if(!jointQueries->empty() && jointQueries->front().parentEntity != attachment.parentEntity)
+                    sharedParent = false;
+                jointQueries->push_back(__hidden_model_system::AttachmentJointQuery{
+                    .parentEntity = attachment.parentEntity,
+                    .parentJointIndex = attachment.parentJointIndex,
+                });
+            }
+        );
+        auto* const queries = jointQueries->data();
+        if(sharedParent){
+            __hidden_model_system::ResolveAttachmentJointQueries(m_world, m_scratchJoints, queries, queryCount, nullptr);
+        }
+        else{
+            Vector<usize, Core::Alloc::ScratchArena> parentOrder(*scratchArena);
+            parentOrder.reserve(queryCount);
+            for(usize queryIndex = 0u; queryIndex < queryCount; ++queryIndex)
+                parentOrder.push_back(queryIndex);
+            Sort(parentOrder.begin(), parentOrder.end(), [&](const usize lhs, const usize rhs){
+                return (*jointQueries)[lhs].parentEntity < (*jointQueries)[rhs].parentEntity;
+            });
+            __hidden_model_system::ResolveAttachmentJointQueries(
+                m_world, m_scratchJoints, queries, queryCount, parentOrder.data()
+            );
+        }
+    }
+
+    usize nextQuery = 0u;
+    attachments.each(
         [&](const Core::ECS::EntityID entity, ModelObjectComponent& object, ModelStaticMeshAttachmentComponent& attachment, Scene::TransformComponent& transform){
             static_cast<void>(entity);
 
@@ -497,16 +594,24 @@ void ModelSystem::updateStaticMeshAttachments(){
                 worldTransform = MatrixMultiply(parentMatrix, localMatrix);
             }
             else{
-                const SkeletonPoseComponent* pose = m_world.tryGetComponent<SkeletonPoseComponent>(attachment.parentEntity);
-                if(!pose)
-                    return;
-
-                u32 skinningMode = SkeletonSkinningMode::LinearBlend;
-                if(!SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, m_scratchJoints, skinningMode))
-                    return;
-
-                NWB_ASSERT(attachment.parentJointIndex < m_scratchJoints.size());
-                const SIMDMatrix jointMatrix = LoadFloat(m_scratchJoints[attachment.parentJointIndex]);
+                SIMDMatrix jointMatrix{};
+                if(jointQueries){
+                    const __hidden_model_system::AttachmentJointQuery& query = (*jointQueries)[nextQuery++];
+                    if(!query.resolved)
+                        return;
+                    jointMatrix = LoadFloat(query.jointMatrix);
+                }
+                else{
+                    const SkeletonPoseComponent* const pose = m_world.tryGetComponent<SkeletonPoseComponent>(attachment.parentEntity);
+                    u32 skinningMode = SkeletonSkinningMode::LinearBlend;
+                    if(
+                        !pose
+                        || !SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, m_scratchJoints, skinningMode)
+                        || attachment.parentJointIndex >= m_scratchJoints.size()
+                    )
+                        return;
+                    jointMatrix = LoadFloat(m_scratchJoints[attachment.parentJointIndex]);
+                }
                 worldTransform = MatrixMultiply(MatrixMultiply(parentMatrix, jointMatrix), localMatrix);
             }
 

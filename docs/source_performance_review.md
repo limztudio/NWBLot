@@ -79,3 +79,15 @@ The tracked command buffer now owns one focused resource-reference component. Sm
 | Four buffers + one texture, 256 repeated recordings | 0.8782 → 0.9167 | 0.0119 → 0.0146 |
 
 Small-list overhead is about 150 ns per repeated recording in dbg and 11 ns in opt. Large clear time changes from 0.1887 to 0.1403 ms in dbg and 0.0083 to 0.0099 ms in opt. Nine resource-reference regressions pass in dbg, opt, and fin, alongside the full graphics task-graph suite. Tests cover lifetime, promotion, mixed ownership, journal reuse, and allocation-free warmed reuse; these CPU fixtures do not measure GPU execution.
+
+## Shared skeleton attachment palettes
+
+An attachment update groups joint queries by full parent entity identity, builds each referenced pose palette once, and stores only requested matrices. A separate index groups parents while query results and transform reads/writes retain the original ECS order. Palette contents refresh every update, and zero/single-query paths avoid grouping storage. Missing, invalid, empty, or shortened poses leave affected transforms untouched and can recover on the next update.
+
+| Workload | dbg before → after | opt before → after |
+| --- | ---: | ---: |
+| 1,024 attachments, one 128-joint parent, four updates | 782.0280 → 16.2776 | 4.7760 → 0.2680 |
+| 256 attachments on distinct 32-joint parents, four updates | 55.6174 → 54.1501 | 0.4007 → 0.3988 |
+| One attachment on a 16-joint parent, 256 updates | 7.4193 → 7.5338 | 0.0651 → 0.0648 |
+
+The gain comes from shared-parent reuse; distinct-parent and singleton timings are essentially unchanged. Grouping requires operation-local scratch storage for multi-query updates. All seven attachment regressions and five runtime-cleanup regressions pass in dbg, opt, and fin, including generation replacement, pose changes, bounds recovery, transform-write ordering, and singleton allocation reuse.

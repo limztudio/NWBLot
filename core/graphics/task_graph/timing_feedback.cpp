@@ -4,6 +4,8 @@
 
 #include "timing_feedback.h"
 
+#include <global/scope_exit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -376,17 +378,14 @@ bool GpuTaskTimingHistoryStore::recordNonCommittingSample(
         if(!m_historyIndex && m_histories.size() == s_LinearHistoryCount)
             promoteHistoryIndex();
         record = &m_histories.emplace_back(m_arena);
+        ScopeExit discardRecord([&]()noexcept{ m_histories.pop_back(); });
+
         record->entry.key = key;
         record->entry.physicalQueue = physicalQueue;
-        try{
-            record->samples.reserve(m_maximumSamplesPerHistory);
-            if(m_historyIndex)
-                m_historyIndex->emplace(StoredRouteKey(key, physicalQueue), m_histories.size() - 1u);
-        }
-        catch(...){
-            m_histories.pop_back();
-            throw;
-        }
+        record->samples.reserve(m_maximumSamplesPerHistory);
+        if(m_historyIndex)
+            m_historyIndex->emplace(StoredRouteKey(key, physicalQueue), m_histories.size() - 1u);
+        discardRecord.release();
     }
     if(record->samples.size() == m_maximumSamplesPerHistory)
         record->samples.erase(record->samples.begin());
@@ -416,19 +415,16 @@ bool GpuTaskTimingHistoryStore::noteAcceptedAssignment(
         if(!m_assignmentIndex && m_assignments.size() == s_LinearHistoryCount)
             promoteAssignmentIndex();
         assignment = &m_assignments.emplace_back();
+        ScopeExit discardAssignment([&]()noexcept{ m_assignments.pop_back(); });
+
         assignment->key = assignmentKey;
         assignment->lastAcceptedQueue = physicalQueue;
         assignment->lastAcceptedFrameIndex = sourceFrameIndex;
         assignment->lastSwitchFrameIndex = sourceFrameIndex;
         assignment->hasAcceptedAssignment = true;
-        try{
-            if(m_assignmentIndex)
-                m_assignmentIndex->emplace(StoredAssignmentKey(assignmentKey), m_assignments.size() - 1u);
-        }
-        catch(...){
-            m_assignments.pop_back();
-            throw;
-        }
+        if(m_assignmentIndex)
+            m_assignmentIndex->emplace(StoredAssignmentKey(assignmentKey), m_assignments.size() - 1u);
+        discardAssignment.release();
         return true;
     }
     if(sourceFrameIndex < assignment->lastAcceptedFrameIndex)
@@ -454,34 +450,33 @@ void GpuTaskTimingHistoryStore::snapshot(GpuTaskTimingHistorySnapshot& outSnapsh
     if(m_deviceGeneration == 0u)
         return;
 
-    try{
-        outSnapshot.m_histories.reserve(m_histories.size());
-        for(const HistoryRecord& record : m_histories)
-            outSnapshot.m_histories.push_back(record.entry);
-
-        outSnapshot.m_assignments.assign(m_assignments.begin(), m_assignments.end());
-        if(m_historyIndex){
-            if(!outSnapshot.m_historyIndex)
-                outSnapshot.m_historyIndex.emplace(outSnapshot.m_histories.get_allocator().arena());
-            *outSnapshot.m_historyIndex = *m_historyIndex;
-        }else
-            outSnapshot.m_historyIndex.reset();
-        if(m_assignmentIndex){
-            if(!outSnapshot.m_assignmentIndex)
-                outSnapshot.m_assignmentIndex.emplace(outSnapshot.m_assignments.get_allocator().arena());
-            *outSnapshot.m_assignmentIndex = *m_assignmentIndex;
-        }else
-            outSnapshot.m_assignmentIndex.reset();
-    }
-    catch(...){
+    ScopeExit resetFailedSnapshot([&outSnapshot]()noexcept{
         outSnapshot.m_historyIndex.reset();
         outSnapshot.m_assignmentIndex.reset();
         outSnapshot.reset();
-        throw;
-    }
+    });
+
+    outSnapshot.m_histories.reserve(m_histories.size());
+    for(const HistoryRecord& record : m_histories)
+        outSnapshot.m_histories.push_back(record.entry);
+
+    outSnapshot.m_assignments.assign(m_assignments.begin(), m_assignments.end());
+    if(m_historyIndex){
+        if(!outSnapshot.m_historyIndex)
+            outSnapshot.m_historyIndex.emplace(outSnapshot.m_histories.get_allocator().arena());
+        *outSnapshot.m_historyIndex = *m_historyIndex;
+    }else
+        outSnapshot.m_historyIndex.reset();
+    if(m_assignmentIndex){
+        if(!outSnapshot.m_assignmentIndex)
+            outSnapshot.m_assignmentIndex.emplace(outSnapshot.m_assignments.get_allocator().arena());
+        *outSnapshot.m_assignmentIndex = *m_assignmentIndex;
+    }else
+        outSnapshot.m_assignmentIndex.reset();
 
     outSnapshot.m_deviceGeneration = m_deviceGeneration;
     outSnapshot.m_valid = true;
+    resetFailedSnapshot.release();
 }
 
 

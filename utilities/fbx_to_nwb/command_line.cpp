@@ -5,6 +5,7 @@
 #include "module.h"
 
 #include <CLI.hpp>
+#include <core/common/terminal_entry.h>
 
 #include <core/common/log.h>
 
@@ -387,187 +388,184 @@ int Run(int argc, char** argv, Core::Alloc::ThreadPool& threadPool, bool& prompt
     app.add_flag("-y,--yes", options.acceptDefaults, "Use defaults for any import options that were not supplied");
     app.add_flag("--list-meshes", options.listMeshes, "List importable mesh instances and exit");
 
-    try{
+    return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){
         app.parse(argc, argv);
-    }
-    catch(const CLI::ParseError& error){
-        return app.exit(error, NWB_COUT, NWB_CERR);
-    }
 
-    options.inputPath.assign(inputPath.data(), inputPath.size());
-    options.outputPath.assign(outputPathText.data(), outputPathText.size());
-    options.assetType.assign(assetType.data(), assetType.size());
-    options.virtualRoot.assign(virtualRoot.data(), virtualRoot.size());
-    options.meshSelector.assign(meshSelector.data(), meshSelector.size());
-    options.normalMode.assign(normalMode.data(), normalMode.size());
-    options.defaultColorText.assign(defaultColorText.data(), defaultColorText.size());
+        options.inputPath.assign(inputPath.data(), inputPath.size());
+        options.outputPath.assign(outputPathText.data(), outputPathText.size());
+        options.assetType.assign(assetType.data(), assetType.size());
+        options.virtualRoot.assign(virtualRoot.data(), virtualRoot.size());
+        options.meshSelector.assign(meshSelector.data(), meshSelector.size());
+        options.normalMode.assign(normalMode.data(), normalMode.size());
+        options.defaultColorText.assign(defaultColorText.data(), defaultColorText.size());
 
-    options.bakeTransforms = !local;
-    options.importColors = !ignoreColors;
+        options.bakeTransforms = !local;
+        options.importColors = !ignoreColors;
 
-    presence.output = outputOption->count() > 0u;
-    presence.assetType = assetTypeOption->count() > 0u;
-    presence.mesh = meshOption->count() > 0u;
-    presence.normalMode = normalModeOption->count() > 0u;
-    presence.scale = scaleOption->count() > 0u;
-    presence.defaultColor = defaultColorOption->count() > 0u;
-    presence.preserveSpace = preserveSpaceOption->count() > 0u;
-    presence.includeHidden = includeHiddenOption->count() > 0u;
-    presence.local = localOption->count() > 0u;
-    presence.ignoreColors = ignoreColorsOption->count() > 0u;
-    presence.flipWinding = flipWindingOption->count() > 0u;
-    presence.separateAssets = separateAssetsOption->count() > 0u;
-    presence.refreshNwb = refreshNwbOption->count() > 0u;
+        presence.output = outputOption->count() > 0u;
+        presence.assetType = assetTypeOption->count() > 0u;
+        presence.mesh = meshOption->count() > 0u;
+        presence.normalMode = normalModeOption->count() > 0u;
+        presence.scale = scaleOption->count() > 0u;
+        presence.defaultColor = defaultColorOption->count() > 0u;
+        presence.preserveSpace = preserveSpaceOption->count() > 0u;
+        presence.includeHidden = includeHiddenOption->count() > 0u;
+        presence.local = localOption->count() > 0u;
+        presence.ignoreColors = ignoreColorsOption->count() > 0u;
+        presence.flipWinding = flipWindingOption->count() > 0u;
+        presence.separateAssets = separateAssetsOption->count() > 0u;
+        presence.refreshNwb = refreshNwbOption->count() > 0u;
 
-    if(!__hidden_command_line::ConfigurePromptsBeforeLoad(options, presence, prompted))
-        return 1;
-
-    if(!IsFinite(options.scale) || options.scale <= 0.0){
-        NWB_LOGGER_WARNING(NWB_TEXT("--scale must be a positive finite number."));
-        return 1;
-    }
-    if(!IsFinite(options.triangleAreaLengthSquaredEpsilon) || options.triangleAreaLengthSquaredEpsilon < 0.0){
-        NWB_LOGGER_WARNING(NWB_TEXT("--triangle-area-length-squared-epsilon must be a finite non-negative number."));
-        return 1;
-    }
-
-    ErrorCode errorCode;
-    const bool inputIsRegularFile = IsRegularFile(Path(UtilityDetail::Arena(), options.inputPath), errorCode);
-    if(errorCode && !IsMissingPathError(errorCode)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to query input FBX path: {}"), StringConvert(errorCode.message()));
-        return 1;
-    }
-    if(!inputIsRegularFile){
-        NWB_LOGGER_WARNING(NWB_TEXT("Input file was not found: {}"), StringConvert(options.inputPath));
-        return 1;
-    }
-
-    if(__hidden_command_line::IsNwbRefreshMode(options))
-        return __hidden_command_line::RunNwbRefresh(options, presence, threadPool, prompted);
-
-    SceneHandle scene;
-    if(!LoadScene(options, scene))
-        return 1;
-
-    if(!presence.includeHidden && !options.acceptDefaults && !options.listMeshes)
-        __hidden_command_line::PromptBool("Include hidden mesh nodes?", options.includeHidden, options.includeHidden, prompted);
-
-    UtilityVector<MeshInstance> instances = CollectMeshInstances(scene.scene, options.includeHidden);
-    if(options.listMeshes){
-        PrintMeshInstances(instances);
-        return 0;
-    }
-    if(instances.empty()){
-        if(options.includeHidden)
-            NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX."));
-        else
-            NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX (use --include-hidden to include hidden nodes)."));
-        return 1;
-    }
-
-    if(!__hidden_command_line::ConfigurePromptsAfterLoad(options, presence, instances, prompted))
-        return 1;
-
-    if(!ValidateAssetTypeText(options.assetType))
-        return 1;
-    if(!ValidateNormalModeText(options.normalMode))
-        return 1;
-
-    Vec4 defaultColor;
-    if(!ParseColorText(options.defaultColorText, defaultColor)){
-        NWB_LOGGER_WARNING(NWB_TEXT("--default-color must contain four finite numbers, for example 1,1,1,1."));
-        return 1;
-    }
-
-    UtilityVector<usize> selection;
-    if(!SelectMeshInstances(instances, options.meshSelector, selection))
-        return 1;
-
-    OutputAssetType::Enum assetTypeValue = OutputAssetType::Mesh;
-    if(!ParseAssetTypeText(options.assetType, assetTypeValue)){
-        NWB_LOGGER_WARNING(StringConvert(OutputAssetTypeErrorText()));
-        return 1;
-    }
-    bool usesSkinning = false;
-    bool wantsSkinning = false;
-    if(__hidden_command_line::AssetTypeCanUseSkinning(assetTypeValue)){
-        if(!__hidden_command_line::SelectedMeshesUseSkinning(instances, selection, wantsSkinning))
+        if(!__hidden_command_line::ConfigurePromptsBeforeLoad(options, presence, prompted))
             return 1;
-        usesSkinning = wantsSkinning;
-    }
-    if(__hidden_command_line::AssetTypeRequiresSkinning(assetTypeValue) && !usesSkinning){
-        NWB_LOGGER_WARNING(NWB_TEXT("Selected source mesh is not skinned; requested asset type requires skinning."));
-        return 1;
-    }
 
-    const Path outputPath(UtilityDetail::Arena(), options.outputPath);
-    if(outputPath.empty()){
-        NWB_LOGGER_WARNING(NWB_TEXT("Output path is empty."));
-        return 1;
-    }
-    if(!__hidden_command_line::ValidateOutputOverwrite(outputPath, options, prompted))
-        return 1;
+        if(!IsFinite(options.scale) || options.scale <= 0.0){
+            NWB_LOGGER_WARNING(NWB_TEXT("--scale must be a positive finite number."));
+            return 1;
+        }
+        if(!IsFinite(options.triangleAreaLengthSquaredEpsilon) || options.triangleAreaLengthSquaredEpsilon < 0.0){
+            NWB_LOGGER_WARNING(NWB_TEXT("--triangle-area-length-squared-epsilon must be a finite non-negative number."));
+            return 1;
+        }
 
-    SourceMeshStreams mesh;
-    UtilityVector<ufbx_node*> skeletonJoints;
-    UtilityVector<JointMatrix> skeletonBindPoseMatrices;
-    UtilityVector<JointMatrix> inverseBindMatrices;
-    bool sawVertexColors = false;
-    bool sawVertexUvs = false;
-    SourceTangentReport tangentReport;
-    if(!BuildMesh(
-        instances,
-        selection,
-        options,
-        wantsSkinning,
-        defaultColor,
-        threadPool,
-        mesh,
-        skeletonJoints,
-        skeletonBindPoseMatrices,
-        inverseBindMatrices,
-        sawVertexColors,
-        sawVertexUvs,
-        tangentReport
-    ))
-        return 1;
+        ErrorCode errorCode;
+        const bool inputIsRegularFile = IsRegularFile(Path(UtilityDetail::Arena(), options.inputPath), errorCode);
+        if(errorCode && !IsMissingPathError(errorCode)){
+            NWB_LOGGER_WARNING(NWB_TEXT("Failed to query input FBX path: {}"), StringConvert(errorCode.message()));
+            return 1;
+        }
+        if(!inputIsRegularFile){
+            NWB_LOGGER_WARNING(NWB_TEXT("Input file was not found: {}"), StringConvert(options.inputPath));
+            return 1;
+        }
 
-    if(!WriteNwbAsset(
-        outputPath,
-        mesh,
-        options.assetType,
-        options.virtualRoot,
-        options.separateAssets,
-        skeletonJoints,
-        skeletonBindPoseMatrices,
-        inverseBindMatrices
-    ))
-        return 1;
+        if(__hidden_command_line::IsNwbRefreshMode(options))
+            return __hidden_command_line::RunNwbRefresh(options, presence, threadPool, prompted);
 
-    AStringStream report;
-    report
-        << "Wrote " << PathToGenericString<AString>(outputPath) << "\n"
-        << "  positions: " << mesh.positions.size() << "\n"
-        << "  normals: " << mesh.normals.size() << "\n"
-        << "  vertex_refs: " << mesh.vertexRefs.size() << "\n"
-        << "  triangles: " << (mesh.indices.size() / s_TriangleIndexCount) << "\n"
-        << "  asset_type: " << options.assetType << "\n"
-        << "  normal_mode: " << options.normalMode << "\n"
-        << "  tangents: " << SourceTangentModeText(tangentReport.mode) << "\n"
-        << "  vertex colors: " << (sawVertexColors ? "imported" : "default") << "\n";
-    if(assetTypeValue == OutputAssetType::Bunch)
-        report << "  asset_layout: " << (options.separateAssets ? "separate" : "bunch") << "\n";
-    report << "  uv0: " << (sawVertexUvs ? "imported" : "default") << "\n";
-    if(!skeletonJoints.empty())
-        report << "  skeleton_joints: " << skeletonJoints.size() << "\n";
-    if(tangentReport.mode == SourceTangentMode::GeneratedFallback){
+        SceneHandle scene;
+        if(!LoadScene(options, scene))
+            return 1;
+
+        if(!presence.includeHidden && !options.acceptDefaults && !options.listMeshes)
+            __hidden_command_line::PromptBool("Include hidden mesh nodes?", options.includeHidden, options.includeHidden, prompted);
+
+        UtilityVector<MeshInstance> instances = CollectMeshInstances(scene.scene, options.includeHidden);
+        if(options.listMeshes){
+            PrintMeshInstances(instances);
+            return 0;
+        }
+        if(instances.empty()){
+            if(options.includeHidden)
+                NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX."));
+            else
+                NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX (use --include-hidden to include hidden nodes)."));
+            return 1;
+        }
+
+        if(!__hidden_command_line::ConfigurePromptsAfterLoad(options, presence, instances, prompted))
+            return 1;
+
+        if(!ValidateAssetTypeText(options.assetType))
+            return 1;
+        if(!ValidateNormalModeText(options.normalMode))
+            return 1;
+
+        Vec4 defaultColor;
+        if(!ParseColorText(options.defaultColorText, defaultColor)){
+            NWB_LOGGER_WARNING(NWB_TEXT("--default-color must contain four finite numbers, for example 1,1,1,1."));
+            return 1;
+        }
+
+        UtilityVector<usize> selection;
+        if(!SelectMeshInstances(instances, options.meshSelector, selection))
+            return 1;
+
+        OutputAssetType::Enum assetTypeValue = OutputAssetType::Mesh;
+        if(!ParseAssetTypeText(options.assetType, assetTypeValue)){
+            NWB_LOGGER_WARNING(StringConvert(OutputAssetTypeErrorText()));
+            return 1;
+        }
+        bool usesSkinning = false;
+        bool wantsSkinning = false;
+        if(__hidden_command_line::AssetTypeCanUseSkinning(assetTypeValue)){
+            if(!__hidden_command_line::SelectedMeshesUseSkinning(instances, selection, wantsSkinning))
+                return 1;
+            usesSkinning = wantsSkinning;
+        }
+        if(__hidden_command_line::AssetTypeRequiresSkinning(assetTypeValue) && !usesSkinning){
+            NWB_LOGGER_WARNING(NWB_TEXT("Selected source mesh is not skinned; requested asset type requires skinning."));
+            return 1;
+        }
+
+        const Path outputPath(UtilityDetail::Arena(), options.outputPath);
+        if(outputPath.empty()){
+            NWB_LOGGER_WARNING(NWB_TEXT("Output path is empty."));
+            return 1;
+        }
+        if(!__hidden_command_line::ValidateOutputOverwrite(outputPath, options, prompted))
+            return 1;
+
+        SourceMeshStreams mesh;
+        UtilityVector<ufbx_node*> skeletonJoints;
+        UtilityVector<JointMatrix> skeletonBindPoseMatrices;
+        UtilityVector<JointMatrix> inverseBindMatrices;
+        bool sawVertexColors = false;
+        bool sawVertexUvs = false;
+        SourceTangentReport tangentReport;
+        if(!BuildMesh(
+            instances,
+            selection,
+            options,
+            wantsSkinning,
+            defaultColor,
+            threadPool,
+            mesh,
+            skeletonJoints,
+            skeletonBindPoseMatrices,
+            inverseBindMatrices,
+            sawVertexColors,
+            sawVertexUvs,
+            tangentReport
+        ))
+            return 1;
+
+        if(!WriteNwbAsset(
+            outputPath,
+            mesh,
+            options.assetType,
+            options.virtualRoot,
+            options.separateAssets,
+            skeletonJoints,
+            skeletonBindPoseMatrices,
+            inverseBindMatrices
+        ))
+            return 1;
+
+        AStringStream report;
         report
-            << "  tangent_fallback_vertices: " << tangentReport.fallbackTangentVertexCount << "\n"
-            << "  tangent_degenerate_uv_triangles: " << tangentReport.degenerateUvTriangleCount << "\n";
-    }
-    NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
+            << "Wrote " << PathToGenericString<AString>(outputPath) << "\n"
+            << "  positions: " << mesh.positions.size() << "\n"
+            << "  normals: " << mesh.normals.size() << "\n"
+            << "  vertex_refs: " << mesh.vertexRefs.size() << "\n"
+            << "  triangles: " << (mesh.indices.size() / s_TriangleIndexCount) << "\n"
+            << "  asset_type: " << options.assetType << "\n"
+            << "  normal_mode: " << options.normalMode << "\n"
+            << "  tangents: " << SourceTangentModeText(tangentReport.mode) << "\n"
+            << "  vertex colors: " << (sawVertexColors ? "imported" : "default") << "\n";
+        if(assetTypeValue == OutputAssetType::Bunch)
+            report << "  asset_layout: " << (options.separateAssets ? "separate" : "bunch") << "\n";
+        report << "  uv0: " << (sawVertexUvs ? "imported" : "default") << "\n";
+        if(!skeletonJoints.empty())
+            report << "  skeleton_joints: " << skeletonJoints.size() << "\n";
+        if(tangentReport.mode == SourceTangentMode::GeneratedFallback){
+            report
+                << "  tangent_fallback_vertices: " << tangentReport.fallbackTangentVertexCount << "\n"
+                << "  tangent_degenerate_uv_triangles: " << tangentReport.degenerateUvTriangleCount << "\n";
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
 
-    return 0;
+        return 0;
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return -1; });
 }
 
 

@@ -94,25 +94,27 @@ static bool ResolveRoots(const PipelineOptions& parsed, NWB::Pipeline::AssetBuil
 int RunPipelineTool(const int argc, char** argv){
     NWB::Core::Assets::AssetArena arena(Name("pipeline/asset_builder"));
     PipelineOptions parsed(arena);
-    const auto result = ParseCommandLine(argc, argv, PipelineTool::AssetBuilder, parsed);
-    if(result != CommandLineParseResult::Success)
-        return result == CommandLineParseResult::Help ? 0 : 1;
+    PipelineCommandLine commandLine(PipelineTool::AssetBuilder);
+    return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){
+        if(!commandLine.parse(argc, argv, parsed))
+            return 1;
 
-    const u32 cores = QueryCpuCoreCount(CpuAffinity::Any);
-    NWB::Core::Alloc::ThreadPool threadPool(cores > 1u ? cores - 1u : 0u, CpuAffinity::Any);
-    NWB::Pipeline::AssetBuilder::AssetBuildOptions options(arena, threadPool);
-    options.repoRoot = parsed.repoRoot;
-    options.outputDirectory = parsed.outputDirectory;
-    options.cacheDirectory = parsed.cacheDirectory;
-    options.configuration = parsed.configuration;
-    options.assetType = parsed.assetType;
-    options.inputs = parsed.inputs;
-    options.useExplicitInputs = true;
-    if(!__hidden_asset_builder::ResolveRoots(parsed, options))
-        return 1;
-    const bool built = NWB::Pipeline::AssetBuilder::BuildAssets(options);
-    threadPool.finish();
-    return built ? 0 : 1;
+        const u32 cores = QueryCpuCoreCount(CpuAffinity::Any);
+        NWB::Core::Alloc::ThreadPool threadPool(cores > 1u ? cores - 1u : 0u, CpuAffinity::Any);
+        NWB::Pipeline::AssetBuilder::AssetBuildOptions options(arena, threadPool);
+        options.repoRoot = parsed.repoRoot;
+        options.outputDirectory = parsed.outputDirectory;
+        options.cacheDirectory = parsed.cacheDirectory;
+        options.configuration = parsed.configuration;
+        options.assetType = parsed.assetType;
+        options.inputs = parsed.inputs;
+        options.useExplicitInputs = true;
+        if(!__hidden_asset_builder::ResolveRoots(parsed, options))
+            return 1;
+        const bool built = NWB::Pipeline::AssetBuilder::BuildAssets(options);
+        threadPool.finish();
+        return built ? 0 : 1;
+    }, [&](const CLI::ParseError& error){ return commandLine.exit(error); }, [](){ return -1; });
 }
 
 

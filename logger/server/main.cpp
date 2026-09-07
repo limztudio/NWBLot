@@ -11,6 +11,7 @@
 #include <CLI.hpp>
 
 #include <core/common/command_line.h>
+#include <core/common/terminal_entry.h>
 #include <core/common/module.h>
 #include "module.h"
 #include "frame.h"
@@ -51,37 +52,33 @@ static int MainLogic(
     AStringView crashUploadToken,
     void* inst
 ){
-    {
-        NWB::Log::Server logger;
-        if(!logger.init(logPort, __hidden_logger_server_main::s_LogFileNameBase, crashSymbolStoreDirectory, crashRetentionConfig, crashUploadToken))
-            return -1;
-        NWB::Log::ServerLoggerRegistrationGuard loggerRegistrationGuard(logger);
-        logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Log server: listening on port {}"), logPort), NWB::Log::Type::EssentialInfo);
+    NWB::Log::Server logger;
+    if(!logger.init(logPort, __hidden_logger_server_main::s_LogFileNameBase, crashSymbolStoreDirectory, crashRetentionConfig, crashUploadToken))
+        return -1;
+    NWB::Log::ServerLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Log server: listening on port {}"), logPort), NWB::Log::Type::EssentialInfo);
 
-        try{
-            NWB::Log::Frame frame(inst);
-            if(!frame.init()){
-                logger.enqueue(BasicStringView<tchar>(NWB_TEXT("Log server frame initialization failed")), NWB::Log::Type::Fatal);
-                return -1;
-            }
-
-            if(!frame.showFrame()){
-                logger.enqueue(BasicStringView<tchar>(NWB_TEXT("Log server frame show failed")), NWB::Log::Type::Error);
-                return -1;
-            }
-
-            if(!frame.mainLoop()){
-                logger.enqueue(BasicStringView<tchar>(NWB_TEXT("Log server main loop failed")), NWB::Log::Type::Error);
-                return -1;
-            }
-        }
-        catch(const GeneralException& e){
-            logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Exception: {}"), StringConvert(logger.arena(), e.what())), NWB::Log::Type::Fatal);
+    return NWB::Core::Common::InvokeTerminalEntry<GeneralException>([&](){
+        NWB::Log::Frame frame(inst);
+        if(!frame.init()){
+            logger.enqueue(BasicStringView<tchar>(NWB_TEXT("Log server frame initialization failed")), NWB::Log::Type::Fatal);
             return -1;
         }
-    }
 
-    return 0;
+        if(!frame.showFrame()){
+            logger.enqueue(BasicStringView<tchar>(NWB_TEXT("Log server frame show failed")), NWB::Log::Type::Error);
+            return -1;
+        }
+
+        if(!frame.mainLoop()){
+            logger.enqueue(BasicStringView<tchar>(NWB_TEXT("Log server main loop failed")), NWB::Log::Type::Error);
+            return -1;
+        }
+        return 0;
+    }, [&](const GeneralException& error){
+        logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Exception: {}"), StringConvert(logger.arena(), error.what())), NWB::Log::Type::Fatal);
+        return -1;
+    }, [](){ return -1; });
 }
 
 
@@ -94,31 +91,27 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
     AString<NWB::Core::Alloc::GlobalArena> crashSymbolStoreDirectory(commandLineArena);
     AString<NWB::Core::Alloc::GlobalArena> crashUploadToken(commandLineArena);
     NWB::Log::CrashRetentionConfig crashRetentionConfig;
-    {
-        CLI::App app{ __hidden_logger_server_main::s_AppName.data() };
+    CLI::App app{ __hidden_logger_server_main::s_AppName.data() };
 
-        NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, logPort);
-        app.add_option(__hidden_logger_server_main::s_CrashSymbolStoreOption.data(), crashSymbolStoreDirectory, "Directory containing crash symbol files");
-        app.add_option(__hidden_logger_server_main::s_CrashUploadTokenOption.data(), crashUploadToken, "Bearer token required for crash uploads; empty disables upload auth");
-        app.add_option(__hidden_logger_server_main::s_CrashRetainPackagesOption.data(), crashRetentionConfig.maxExtractedPackages, "Maximum extracted crash packages to keep; zero disables pruning");
-        app.add_option(__hidden_logger_server_main::s_CrashRetainRawOption.data(), crashRetentionConfig.maxRawArchives, "Maximum raw crash uploads to keep; zero disables pruning");
-        app.add_option(__hidden_logger_server_main::s_CrashRetainInvalidOption.data(), crashRetentionConfig.maxInvalidArchives, "Maximum invalid crash uploads to keep; zero disables pruning");
+    NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, logPort);
+    app.add_option(__hidden_logger_server_main::s_CrashSymbolStoreOption.data(), crashSymbolStoreDirectory, "Directory containing crash symbol files");
+    app.add_option(__hidden_logger_server_main::s_CrashUploadTokenOption.data(), crashUploadToken, "Bearer token required for crash uploads; empty disables upload auth");
+    app.add_option(__hidden_logger_server_main::s_CrashRetainPackagesOption.data(), crashRetentionConfig.maxExtractedPackages, "Maximum extracted crash packages to keep; zero disables pruning");
+    app.add_option(__hidden_logger_server_main::s_CrashRetainRawOption.data(), crashRetentionConfig.maxRawArchives, "Maximum raw crash uploads to keep; zero disables pruning");
+    app.add_option(__hidden_logger_server_main::s_CrashRetainInvalidOption.data(), crashRetentionConfig.maxInvalidArchives, "Maximum invalid crash uploads to keep; zero disables pruning");
 
-        try{
-            CommandLineParseApp(app, argc, argv);
-        }
-        catch(const CLI::ParseError& e){
-            app.exit(e, NWB_COUT, NWB_CERR);
-            return -1;
-        }
-    }
+    return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){
+        CommandLineParseApp(app, argc, argv);
 
-    return MainLogic(
-        logPort,
-        AStringView(crashSymbolStoreDirectory.data(), crashSymbolStoreDirectory.size()),
-        crashRetentionConfig,
-        AStringView(crashUploadToken.data(), crashUploadToken.size()),
-        inst
+        return MainLogic(
+            logPort,
+            AStringView(crashSymbolStoreDirectory.data(), crashSymbolStoreDirectory.size()),
+            crashRetentionConfig,
+            AStringView(crashUploadToken.data(), crashUploadToken.size()),
+            inst
+        );
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return -1; },
+        NWB::Core::Common::TerminalErrorExitPolicy::ApplicationFailure
     );
 }
 

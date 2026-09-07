@@ -685,16 +685,39 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     ASSERT_NE(setPolicyOffset, AStringView::npos);
     ASSERT_NE(beginSampleOffset, AStringView::npos);
     const AStringView setPolicy = timingFeedback.substr(setPolicyOffset, beginSampleOffset - setPolicyOffset);
-    const usize catchOffset = setPolicy.find("catch(...){");
-    ASSERT_NE(catchOffset, AStringView::npos);
-    const AStringView collectionUpdateFailure = setPolicy.substr(catchOffset);
-    const usize rollbackOffset = collectionUpdateFailure.find(
-        "ResolveRendererTaskTimingFeedbackPolicyTransition(m_policy, transition, false);"
+    const usize collectionResultOffset = setPolicy.find("bool collectionUpdated = false;");
+    const usize resolutionGuardOffset = setPolicy.find("ScopeExit resolvePolicy([&]()noexcept{");
+    const usize resolutionOffset = setPolicy.find(
+        "ResolveRendererTaskTimingFeedbackPolicyTransition(m_policy, transition, collectionUpdated);"
     );
-    const usize rethrowOffset = collectionUpdateFailure.find("throw;");
-    ASSERT_NE(rollbackOffset, AStringView::npos);
-    ASSERT_NE(rethrowOffset, AStringView::npos);
-    EXPECT_LT(rollbackOffset, rethrowOffset);
+    const usize collectionUpdateOffset = setPolicy.find("collectionUpdated = m_graphics.gpuTiming().");
+    ASSERT_NE(collectionResultOffset, AStringView::npos);
+    ASSERT_NE(resolutionGuardOffset, AStringView::npos);
+    ASSERT_NE(resolutionOffset, AStringView::npos);
+    ASSERT_NE(collectionUpdateOffset, AStringView::npos);
+    EXPECT_LT(collectionResultOffset, resolutionGuardOffset);
+    EXPECT_LT(resolutionGuardOffset, resolutionOffset);
+    EXPECT_LT(resolutionOffset, collectionUpdateOffset);
+    EXPECT_FALSE(ContainsText(setPolicy, "resolvePolicy.release()"));
+    EXPECT_FALSE(ContainsText(timingFeedback, "catch("));
+    EXPECT_FALSE(ContainsText(timingFeedback, "throw;"));
+
+    const usize activateOffset = timingFeedback.find("void RendererTaskTimingFeedback::activate(){");
+    const usize feedbackDeactivateOffset = timingFeedback.find("void RendererTaskTimingFeedback::deactivate()noexcept{");
+    ASSERT_NE(activateOffset, AStringView::npos);
+    ASSERT_NE(feedbackDeactivateOffset, AStringView::npos);
+    const AStringView activate = timingFeedback.substr(activateOffset, feedbackDeactivateOffset - activateOffset);
+    const usize subscriptionGuardOffset = activate.find("ScopeExit discardSubscription(");
+    const usize collectionEnableOffset = activate.find("timing.setFeedbackCollectionScopes(");
+    const usize subscriptionPublicationOffset = activate.find("m_subscription = subscription;");
+    const usize subscriptionReleaseOffset = activate.find("discardSubscription.release();");
+    ASSERT_NE(subscriptionGuardOffset, AStringView::npos);
+    ASSERT_NE(collectionEnableOffset, AStringView::npos);
+    ASSERT_NE(subscriptionPublicationOffset, AStringView::npos);
+    ASSERT_NE(subscriptionReleaseOffset, AStringView::npos);
+    EXPECT_LT(subscriptionGuardOffset, collectionEnableOffset);
+    EXPECT_LT(collectionEnableOffset, subscriptionPublicationOffset);
+    EXPECT_LT(subscriptionPublicationOffset, subscriptionReleaseOffset);
 
     const usize resetOffset = timingFeedback.find("void RendererTaskTimingFeedback::reset()noexcept{");
     const usize sampleCallbackOffset = timingFeedback.find("void RendererTaskTimingFeedback::onGpuTimingSample(");

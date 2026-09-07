@@ -34,7 +34,7 @@ int Run(const int argc, char** argv){
     bool prompted = false;
     const int result = NWB::FbxToNwb::Run(argc, argv, threadPool, prompted);
     threadPool.finish();
-    if(prompted){
+    if(prompted && result >= 0){
         NWB_COUT << "Press Enter to exit...";
         NWB::FbxToNwb::AString line;
         if(!ReadTextLine(NWB_CIN, line))

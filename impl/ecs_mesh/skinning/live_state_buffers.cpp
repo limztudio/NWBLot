@@ -4,6 +4,8 @@
 
 #include "live_state_buffers.h"
 
+#include <global/scope_exit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -79,13 +81,10 @@ void MeshSkinningStateBufferCollector::retainBuffer(const Core::BufferHandle& bu
     const auto [found, inserted] = m_index->insert(identity);
     if(!inserted)
         return;
-    try{
-        m_buffers.push_back(buffer);
-    }
-    catch(...){
-        m_index->erase(found);
-        throw;
-    }
+    ScopeExit discardIdentity([&]()noexcept{ m_index->erase(found); });
+
+    m_buffers.push_back(buffer);
+    discardIdentity.release();
 }
 
 void MeshSkinningStateBufferCollector::promoteBufferIndex(){

@@ -8,6 +8,7 @@
 #include "module.h"
 #include "arena_names.h"
 #include "name_symbols.h"
+#include "terminal_entry.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,17 +43,19 @@ public:
 
 template<typename Invoke>
 [[nodiscard]] inline int InvokeWithInitializedCommon(Invoke&& invoke){
-    try{
+    const auto terminalFailure = [](){
+#if defined(NWB_BUILDMODE)
+        if(!NameSymbols::WriteDefaultFile())
+            return -1;
+#endif
+        return -1;
+    };
+    return InvokeTerminalEntry<GeneralException>([&](){
         const ScopedNameSymbolRegistry nameSymbolRegistry;
 
         InitializerGuard commonInitializerGuard;
-        if(!commonInitializerGuard.initialize()){
-#if defined(NWB_BUILDMODE)
-            if(!NameSymbols::WriteDefaultFile())
-                return -1;
-#endif
-            return -1;
-        }
+        if(!commonInitializerGuard.initialize())
+            return terminalFailure();
 
         const int result = Forward<Invoke>(invoke)();
 #if defined(NWB_BUILDMODE)
@@ -60,14 +63,7 @@ template<typename Invoke>
             return -1;
 #endif
         return result;
-    }
-    catch(...){
-#if defined(NWB_BUILDMODE)
-        if(!NameSymbols::WriteDefaultFile())
-            return -1;
-#endif
-        return -1;
-    }
+    }, [&](const GeneralException&){ return terminalFailure(); }, terminalFailure);
 }
 
 template<typename EntryPoint, typename CharT>

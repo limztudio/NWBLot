@@ -6,6 +6,8 @@
 
 #include <core/graphics/backend_selection.h>
 
+#include <global/scope_exit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -271,27 +273,23 @@ void RendererTaskTimingFeedback::activate(){
         NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback failed to subscribe to GPU timing samples."));
         return;
     }
+    ScopeExit discardSubscription([&]()noexcept{ timing.unsubscribeSampleListener(subscription); });
+
     if(feedbackCollectionEnabled){
-        try{
-            if(!timing.setFeedbackCollectionScopes(
-                subscription,
-                NotNull<const Name*>(m_feedbackCollectionScopes.data()),
-                m_feedbackCollectionScopes.size()
-            )){
-                timing.unsubscribeSampleListener(subscription);
-                NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback failed to enable GPU sample collection."));
-                return;
-            }
-        }
-        catch(...){
-            timing.unsubscribeSampleListener(subscription);
-            throw;
+        if(!timing.setFeedbackCollectionScopes(
+            subscription,
+            NotNull<const Name*>(m_feedbackCollectionScopes.data()),
+            m_feedbackCollectionScopes.size()
+        )){
+            NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback failed to enable GPU sample collection."));
+            return;
         }
     }
 
     ScopedLock lock(m_mutex);
     m_subscription = subscription;
     m_active = true;
+    discardSubscription.release();
 }
 
 void RendererTaskTimingFeedback::deactivate()noexcept{
@@ -334,25 +332,19 @@ bool RendererTaskTimingFeedback::setPolicy(const Core::GpuTaskTimingFeedbackPoli
     }
 
     bool collectionUpdated = false;
-    try{
-        if(transition.action == RendererTaskTimingFeedbackCollectionAction::Enable){
-            collectionUpdated = m_graphics.gpuTiming().setFeedbackCollectionScopes(
-                subscription,
-                NotNull<const Name*>(m_feedbackCollectionScopes.data()),
-                m_feedbackCollectionScopes.size()
-            );
-        }else{
-            collectionUpdated = m_graphics.gpuTiming().clearFeedbackCollectionScopes(subscription);
-        }
-    }
-    catch(...){
-        ScopedLock lock(m_mutex);
-        ResolveRendererTaskTimingFeedbackPolicyTransition(m_policy, transition, false);
-        throw;
-    }
-    {
+    ScopeExit resolvePolicy([&]()noexcept{
         ScopedLock lock(m_mutex);
         ResolveRendererTaskTimingFeedbackPolicyTransition(m_policy, transition, collectionUpdated);
+    });
+
+    if(transition.action == RendererTaskTimingFeedbackCollectionAction::Enable){
+        collectionUpdated = m_graphics.gpuTiming().setFeedbackCollectionScopes(
+            subscription,
+            NotNull<const Name*>(m_feedbackCollectionScopes.data()),
+            m_feedbackCollectionScopes.size()
+        );
+    }else{
+        collectionUpdated = m_graphics.gpuTiming().clearFeedbackCollectionScopes(subscription);
     }
     return collectionUpdated;
 }

@@ -12,6 +12,8 @@
 
 #include <global/global.h>
 #include <global/exception.h>
+#include <global/scope_exit.h>
+#include <core/common/terminal_entry.h>
 #include <global/filesystem.h>
 
 #include <core/common/command_line.h>
@@ -76,15 +78,13 @@ public:
             return;
         }
 
-        try{
-            m_callbacks.onShutdown();
-        }
-        catch(...){
-            const ExceptionPtr exception = CaptureCurrentException();
+        ScopeExit drainOnFailure([&]()noexcept{
             m_jobSystem.drain();
             m_threadPool.drain();
-            RethrowException(exception);
-        }
+        });
+
+        m_callbacks.onShutdown();
+        drainOnFailure.release();
 
         NWB::Core::Alloc::FinishBorrowedSchedulerDomain(m_jobSystem, m_threadPool);
     }
@@ -495,31 +495,27 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
 
     NWB::Core::Alloc::GlobalArena commandLineArena(__hidden_loader::s_CommandLineArena);
     __hidden_loader::LoaderOptions options(commandLineArena);
-    {
-        CLI::App app{ "loader" };
+    CLI::App app{ "loader" };
 
-        AInteropString address = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogAddress)>(NWB::Core::Common::g_ArgDefault);
-        u16 port = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::g_ArgDefault);
-        NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogAddress>(app, address);
-        NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, port);
-        app.add_option("--crash-upload-token", options.crashUploadToken, "Bearer token sent with crash uploads");
-        app.add_flag("--sdr", options.forceSdrOutput, "Force SDR presentation even when the project requests HDR10");
-        __hidden_loader::AddDebugCommandLineOptions(app, options);
+    AInteropString address = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogAddress)>(NWB::Core::Common::g_ArgDefault);
+    u16 port = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::g_ArgDefault);
+    NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogAddress>(app, address);
+    NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, port);
+    app.add_option("--crash-upload-token", options.crashUploadToken, "Bearer token sent with crash uploads");
+    app.add_flag("--sdr", options.forceSdrOutput, "Force SDR presentation even when the project requests HDR10");
+    __hidden_loader::AddDebugCommandLineOptions(app, options);
 
-        try{
-            CommandLineParseApp(app, argc, argv);
-        }
-        catch(const CLI::ParseError& e){
-            app.exit(e, NWB_COUT, NWB_CERR);
-            return -1;
-        }
+    return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){
+        CommandLineParseApp(app, argc, argv);
 
         options.useStandaloneLogger = address.empty() || port == 0u;
         if(!options.useStandaloneLogger)
             options.logAddress = StringFormat(commandLineArena, "{}:{}", AStringView(address.data(), address.size()), port);
-    }
 
-    return MainLogic(commandLineArena, options, inst, crashReportingInstalled);
+        return MainLogic(commandLineArena, options, inst, crashReportingInstalled);
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return -1; },
+        NWB::Core::Common::TerminalErrorExitPolicy::ApplicationFailure
+    );
 }
 
 

@@ -19,11 +19,19 @@ NWB_ASSETS_BEGIN
 
 namespace BuiltAssetDetail{
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline constexpr AStringView s_Extension = ".nwba";
 inline constexpr AStringView s_ManifestFilename = "assets.list";
 
 [[nodiscard]] bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest);
 [[nodiscard]] bool ReadBuiltAsset(const Path& path, AssetBytes& bytes, Name& outVirtualPath, usize& outPayloadOffset);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 };
 

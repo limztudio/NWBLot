@@ -5,9 +5,50 @@
 #pragma once
 
 
+#include "generic.h"
 #include "unique_ptr.h"
 
 #include <new>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ArenaObjectDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T, typename Arena>
+class ConstructionStorage final : NoCopy{
+public:
+    ConstructionStorage(Arena& arena, T* const memory, const usize count)noexcept
+        : m_arena(arena)
+        , m_memory(memory)
+        , m_count(count)
+    {}
+    ~ConstructionStorage(){
+        if(m_memory)
+            m_arena.template deallocate<T>(m_memory, m_count);
+    }
+
+
+public:
+    void release()noexcept{ m_memory = nullptr; }
+
+
+private:
+    Arena& m_arena;
+    T* m_memory;
+    usize m_count;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,7 +60,10 @@ Concrete* NewArenaObject(Arena& arena, Args&&... args){
     if(!mem)
         return nullptr;
 
-    return new(mem) Concrete(Forward<Args>(args)...);
+    ArenaObjectDetail::ConstructionStorage<Concrete, Arena> storage(arena, mem, 1u);
+    auto* const object = new(mem) Concrete(Forward<Args>(args)...);
+    storage.release();
+    return object;
 }
 
 template<typename Concrete, typename Arena>
@@ -96,11 +140,7 @@ using ArenaUniquePtr = UniquePtr<T, ArenaDeleter<T, Arena>>;
 
 template<typename T, typename Arena, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, ArenaUniquePtr<T, Arena>>::type MakeArenaUnique(Arena& arena, Args&&... args){
-    auto* mem = arena.template allocate<T>(1);
-    if(!mem)
-        return ArenaUniquePtr<T, Arena>(nullptr, typename ArenaUniquePtr<T, Arena>::deleter_type(arena));
-
-    return ArenaUniquePtr<T, Arena>(new(mem) T(Forward<Args>(args)...), typename ArenaUniquePtr<T, Arena>::deleter_type(arena));
+    return ArenaUniquePtr<T, Arena>(NewArenaObject<T>(arena, Forward<Args>(args)...), typename ArenaUniquePtr<T, Arena>::deleter_type(arena));
 }
 template<typename T, typename Arena>
 inline typename EnableIf<IsUnboundedArray<T>::value, ArenaUniquePtr<T, Arena>>::type MakeArenaUnique(Arena& arena, usize n){
@@ -109,7 +149,10 @@ inline typename EnableIf<IsUnboundedArray<T>::value, ArenaUniquePtr<T, Arena>>::
     if(!mem)
         return ArenaUniquePtr<T, Arena>(static_cast<TBase*>(nullptr), typename ArenaUniquePtr<T, Arena>::deleter_type(arena, n));
 
-    return ArenaUniquePtr<T, Arena>(new(mem) TBase[n], typename ArenaUniquePtr<T, Arena>::deleter_type(arena, n));
+    ArenaObjectDetail::ConstructionStorage<TBase, Arena> storage(arena, mem, n);
+    auto* const objects = new(mem) TBase[n];
+    storage.release();
+    return ArenaUniquePtr<T, Arena>(objects, typename ArenaUniquePtr<T, Arena>::deleter_type(arena, n));
 }
 template<typename T, typename Arena, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type

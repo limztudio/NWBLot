@@ -331,3 +331,21 @@ One declaration-owned selection resolves distinct requested buffers, tracks thei
 The optimized singleton adds about 7ns per operation while debug improves. At 1,024 distinct builds, peak scratch grows from 114,736 to 663,792 bytes in dbg (114,688 to 663,552 in opt); cold reserved capacity becomes 971,776/909,312 bytes. For 4,096 shared-buffer builds, borrowing name identities keeps peak scratch near its old size: 262,240 to 260,368 bytes in dbg and 262,192 to 260,208 in opt. Singleton/sparse scratch remains unchanged. Storage follows distinct requested resources and mesh identities, not unrelated graph resources or repeated input buffers.
 
 Nine functional cases preserve full identities, promotion, current graph replacement, phase ordering, failure fallback and scratch bounds. They pass in dbg, opt and fin along with the complete ECS graphics suite; frame and descriptor-buffer targets build in all three. Reported times include preparation and collection teardown. Individual phase subtotals moved with the reservation/lookup work, so only complete operation timings are compared.
+
+## Material sampled-texture graph imports
+
+Material and trace consumers share one import helper. A single texture uses a direct graph lookup; larger requests memoize distinct pointer identities inline through 32 textures and then use a caller-scratch index with one graph-declaration scan. Existing aliases retain their current full resource ID and bypass creation metadata as before. Missing textures still pass through complete graph import validation in request order, and rejected input preserves the accepted output prefix. No declaration view survives an import.
+
+| Complete import workload | dbg before to after (ms) | opt before to after (ms) |
+| --- | ---: | ---: |
+| One texture, 2,048 operations | 1.2656 → 1.2750 | 0.1337 → 0.1355 |
+| Eight textures, 256 operations | 0.4543 → 0.3885 | 0.0384 → 0.0465 |
+| 32 textures, 64 operations | 0.4830 → 0.4556 | 0.0343 → 0.0393 |
+| 1,024 textures plus 1,024 unrelated resources, three operations | 29.5312 → 1.6703 | 3.8602 → 0.1932 |
+| 4,096 requests for one shared texture, three operations | 10.0871 → 0.4504 | 0.5406 → 0.0526 |
+| 256 new imports plus 256 unrelated resources, three operations | 4.4258 → 3.0979 | 0.2867 → 0.2001 |
+| One texture among 4,096 unrelated resources, 32 operations | 0.8058 → 0.8112 | 0.1126 → 0.1143 |
+
+Singleton and sparse timings are effectively unchanged. The small opt 8/32-texture cases add about 32/78ns per operation; no universal small-list speedup is claimed. Unique 1,024 peak scratch grows from 16,400 to 175,200 bytes in dbg (16,384 to 175,104 in opt), including output storage; cold reservation is 230,400/229,376 bytes. Small and repeated-pointer workloads retain their original scratch usage. The requested index never scales with unrelated graph declarations or duplicate requests.
+
+Ten functional regressions cover inline/promotion paths, existing aliases, complete import validation, all rejection classes, sequential prefixes, graph generations and resets, resource lifetime and scratch bounds. They and all 229 ECS graphics tests pass in dbg/opt, with 232 in fin; frame and descriptor-buffer targets build in all three. Benchmark setup and assertions are outside the timer; output allocation and helper teardown are included.

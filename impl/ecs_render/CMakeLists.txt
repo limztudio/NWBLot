@@ -99,6 +99,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/mesh/runtime_mesh_pruning.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/mesh_view.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material/material_surface.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/material/sampled_texture_graph_resources.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/material/sampled_texture_graph_resources.h"
     "${CMAKE_CURRENT_LIST_DIR}/material/material_instance.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shader/shader_loading.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shader/shader_system.cpp"

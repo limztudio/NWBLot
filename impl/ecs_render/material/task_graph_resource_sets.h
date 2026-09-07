@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/material/material_system.h>
+#include <impl/ecs_render/material/sampled_texture_graph_resources.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 
 #include <global/hash_utils.h>
@@ -257,27 +258,10 @@ namespace RendererTaskGraphDetail{
 
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> members{ scratchArena };
     members.reserve(sampledTextures.size());
-    for(const Core::TextureHandle& texture : sampledTextures){
-        Core::GpuGraphResourceId resource;
-        {
-            const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-            if(!declarations.valid())
-                return false;
-            resource = declarations.findImportedTexture(texture);
-        }
-        if(!resource.valid()){
-            const Name textureIdentity = texture->getCreationDescription().name;
-            if(!textureIdentity)
-                return false;
-            resource = graph.importTexture(
-                texture,
-                TextureResourceDesc(textureIdentity, "Prepared Material Sampled Texture")
-            );
-        }
-        if(!resource.valid())
-            return false;
-        members.push_back(resource);
-    }
+    if(ImportMaterialSampledTextureResources(
+        graph, sampledTextures.data(), sampledTextures.size(), "Prepared Material Sampled Texture", members, scratchArena
+    ) != SampledTextureImportResult::Success)
+        return false;
     if(members.empty())
         return true;
 

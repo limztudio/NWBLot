@@ -415,29 +415,25 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     // Shadow, caustic, and surfel closest-hit dispatchers use the frozen material context to select these Texture2D
     // assets through the bindless heap. Reuse a typed preflight import when G-buffer/AVBOIT already owns it, rather
     // than introducing an opaque descriptor domain around the trace paths.
-    for(const Core::TextureHandle& texture : preparedTraceMaterialSampledTextures){
-        Core::GpuGraphResourceId resource;
-        {
-            const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
-            if(!declarations.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared trace material texture graph was unavailable"));
-                return;
-            }
-            resource = declarations.findImportedTexture(texture);
-        }
-        if(!resource.valid()){
-            const Name textureIdentity = texture ? texture->getCreationDescription().name : NAME_NONE;
-            if(!textureIdentity){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared trace material texture has no stable identity"));
-                return;
-            }
-            resource = importTexture(texture, textureIdentity, "Prepared Trace Material Sampled Texture");
-        }
-        if(!resource.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import prepared trace material sampled texture"));
-            return;
-        }
-        traceMaterialSampledTextureResources.push_back(resource);
+    switch(ImportMaterialSampledTextureResources(
+        m_deferredLightingTaskGraph,
+        preparedTraceMaterialSampledTextures.data(),
+        preparedTraceMaterialSampledTextures.size(),
+        "Prepared Trace Material Sampled Texture",
+        traceMaterialSampledTextureResources,
+        traceGeometryScratchArena
+    )){
+    case SampledTextureImportResult::Success:
+        break;
+    case SampledTextureImportResult::GraphUnavailable:
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared trace material texture graph was unavailable"));
+        return;
+    case SampledTextureImportResult::MissingIdentity:
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared trace material texture has no stable identity"));
+        return;
+    case SampledTextureImportResult::ImportFailed:
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import prepared trace material sampled texture"));
+        return;
     }
     Core::GpuGraphResourceSetId shadowTraceGeometrySet;
     if(!traceGeometryResources.empty()){

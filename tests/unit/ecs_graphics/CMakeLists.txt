@@ -9,6 +9,7 @@ target_sources(nwb_ecs_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/skinning_payload_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/skinning_graph_resource_uses_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/skinning_live_state_buffers_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow_prepare_geometry_resources_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shadow_trace_geometry_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_csg_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_descriptor_contract_tests.cpp"

@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
+#include <impl/ecs_render/raytrace/shadow_prepare_geometry_resources.h>
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_finalize_task.h>
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_tasks.h>
 
@@ -615,9 +616,17 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceSetUse, Core::Alloc::ScratchArena> resourceSetUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accelStructFinalizeResourceUses{ scratchArena };
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> meshBlasGeometryBuildInputResources{ scratchArena };
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hybridSoftwareTailInputResources{ scratchArena };
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> shadowPrepareTraceGeometryResources{ scratchArena };
+    const ShadowPrepareGeometryInputs geometryInputs{
+        .blasBuilds = preparedMeshBlasBuilds,
+        .softwareBuilds = preparedMeshSwBvhBuilds,
+        .traceResources = shadowTraceGeometryResources,
+        .traceResourceCount = shadowTraceGeometryResourceCount,
+        .blasBuildsGraphOwned = meshBlasBuildsGraphOwned,
+    };
+    ShadowPrepareGeometryResources geometryResources(geometryInputs, scratchArena);
+    const auto& meshBlasGeometryBuildInputResources = geometryResources.m_blasBuildInputs;
+    const auto& hybridSoftwareTailInputResources = geometryResources.m_softwareTailInputs;
+    const auto& shadowPrepareTraceGeometryResources = geometryResources.m_remainingTraceGeometry;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hybridSoftwareTailResourceUses{ scratchArena };
     Vector<PreparedMeshSwBvhGraphResources, Core::Alloc::ScratchArena> pureSoftwareMeshSwBvhGraphResources{
         scratchArena
@@ -636,9 +645,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         + preparedMeshBlasBuilds.size()
     );
     resourceSetUses.reserve(3u);
-    meshBlasGeometryBuildInputResources.reserve(preparedMeshBlasBuilds.size() * 2u);
-    hybridSoftwareTailInputResources.reserve(preparedMeshSwBvhBuilds.size() * 2u);
-    shadowPrepareTraceGeometryResources.reserve(shadowTraceGeometryResourceCount);
+    geometryResources.prepareStorage(meshBlasGeometryBuildInputStatesGraphOwned, meshSwBvhInputStatesGraphOwned);
     hybridSoftwareTailResourceUses.reserve(preparedMeshSwBvhBuilds.size() * 2u + 3u);
     pureSoftwareMeshSwBvhGraphResources.reserve(preparedMeshSwBvhBuilds.size());
     // Shadow Preparation owns each preflight input's post-transition packet boundary. This deliberately supersedes
@@ -679,80 +686,11 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     }
 
     bool resourcesImported = true;
-    const auto isShadowTraceGeometryResource = [&](const Core::GpuGraphResourceId resource){
-        for(usize resourceIndex = 0u; resourceIndex < shadowTraceGeometryResourceCount; ++resourceIndex){
-            if(shadowTraceGeometryResources[resourceIndex] == resource)
-                return true;
-        }
-        return false;
-    };
-    const auto appendTraceGeometryResource = [&](
-        Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& resources,
-        const Core::BufferHandle& buffer
-    ){
-        Core::GpuGraphResourceId resource;
-        {
-            const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
-            if(!declarations.valid())
-                return false;
-            resource = declarations.findImportedBuffer(buffer);
-        }
-        if(!resource.valid() || !isShadowTraceGeometryResource(resource))
-            return false;
-        for(const Core::GpuGraphResourceId existing : resources){
-            if(existing == resource)
-                return true;
-        }
-        resources.push_back(resource);
-        return true;
-    };
-    if(meshBlasGeometryBuildInputStatesGraphOwned){
-        for(const PreparedMeshBlasBuild& build : preparedMeshBlasBuilds){
-            if(
-                !appendTraceGeometryResource(meshBlasGeometryBuildInputResources, build.positionBuffer)
-                || !appendTraceGeometryResource(meshBlasGeometryBuildInputResources, build.triangleIndexBuffer)
-            ){
-                // Do not reject an otherwise valid packet merely because a future preflight change omitted one
-                // frozen stream from the graph-owned trace set. Retain the complete native BLAS/SW bridge instead.
-                meshBlasGeometryBuildInputStatesGraphOwned = false;
-                meshSwBvhInputStatesGraphOwned = false;
-                meshBlasGeometryBuildInputResources.clear();
-                break;
-            }
-        }
-    }
-    if(meshSwBvhInputStatesGraphOwned){
-        for(const PreparedMeshSwBvhBuild& build : preparedMeshSwBvhBuilds){
-            if(
-                !appendTraceGeometryResource(hybridSoftwareTailInputResources, build.positionBuffer)
-                || !appendTraceGeometryResource(hybridSoftwareTailInputResources, build.triangleIndexBuffer)
-            ){
-                // The prepared SW recorder accepts one all-or-native input-state policy. If any frozen input cannot
-                // be declared at the tail boundary, preserve the established native bridge for both callbacks.
-                meshBlasGeometryBuildInputStatesGraphOwned = false;
-                meshSwBvhInputStatesGraphOwned = false;
-                meshBlasGeometryBuildInputResources.clear();
-                hybridSoftwareTailInputResources.clear();
-                break;
-            }
-        }
-    }
-    const auto isMeshBlasGeometryBuildInput = [&](const Core::GpuGraphResourceId resource){
-        for(const Core::GpuGraphResourceId buildInput : meshBlasGeometryBuildInputResources){
-            if(buildInput == resource)
-                return true;
-        }
-        return false;
-    };
-    const auto isPreparedMeshBlasBuild = [&](const Name meshName){
-        if(!meshBlasBuildsGraphOwned)
-            return false;
-        for(const PreparedMeshBlasBuild& build : preparedMeshBlasBuilds){
-            if(build.meshName == meshName)
-                return true;
-        }
-        return false;
-    };
+    geometryResources.gatherBuildInputs(
+        m_deferredLightingTaskGraph,
+        meshBlasGeometryBuildInputStatesGraphOwned,
+        meshSwBvhInputStatesGraphOwned
+    );
     if(meshBlasBuildsGraphOwned){
         for(const PreparedMeshBlasBuild& build : preparedMeshBlasBuilds){
             const Name blasIdentity = DeriveName(build.meshName, AStringView(":blas"));
@@ -821,17 +759,11 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         .requiredState = Core::ResourceStates::ShaderResource,
         .access = Core::GpuTaskResourceAccess::Read,
     };
-    for(usize resourceIndex = 0u; resourceIndex < shadowTraceGeometryResourceCount; ++resourceIndex){
-        const Core::GpuGraphResourceId resource = shadowTraceGeometryResources[resourceIndex];
-        if(!resource.valid())
-            return false;
-        if(isMeshBlasGeometryBuildInput(resource))
-            continue;
-        shadowPrepareTraceGeometryResources.push_back(resource);
-    }
+    if(!geometryResources.gatherRemainingTraceResources())
+        return false;
 
 
-// The frozen trace list can carry BLAS position/index resources that need AccelStructBuildInput in this task.
+    // The frozen trace list can carry BLAS position/index resources that need AccelStructBuildInput in this task.
     // Keep those exact members separate, but declare the remaining SRV subset as one immutable graph collection.
     Core::GpuGraphResourceSetId shadowPrepareTraceGeometrySet;
     if(!shadowPrepareTraceGeometryResources.empty()){
@@ -918,7 +850,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     for(const ECSRenderDetail::MeshBlasGraphState& state : liveMeshBlasGraphStates){
         // A frozen plan owns its retained handles even if a record-time replacement later sends it through the
         // native compatibility fallback. Do not collide a replacement with the frozen graph identity here.
-        if(isPreparedMeshBlasBuild(state.meshName))
+        if(geometryResources.isPreparedMeshBlasBuild(state.meshName))
             continue;
 
         const Name blasIdentity = DeriveName(state.meshName, AStringView(":blas"));

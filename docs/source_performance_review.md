@@ -312,3 +312,22 @@ Expansion filters bunch declarations once and shares one exact-text lookup acros
 The large debug workload reduces backing allocations from 33,201,075 to 175,548; opt changes from 11,073,386 to 64,877. The small workload also allocates less and retains its original scratch capacity. The final scratch reservation after the large fixture's repetitions grows from 3,351,552 to 6,071,296 bytes in dbg and 2,105,344 to 2,400,256 in opt. These values include existing transient-string and cross-chunk scratch retention until arena destruction; they do not establish stable warm reuse. Resolved metadata ownership remains balanced.
 
 Six lookup regressions cover inline/indexed thresholds, full reference text, case and duplicate policies, excluded bunch declarations, local cycles and ordered nested failures. All 59 selected asset cases pass in dbg, opt and fin, including the eight prior ownership regressions; pipeline and frame targets build in all three. The baseline already owns resolved metadata values, so these measurements isolate lookup work from the earlier leak correction.
+
+## Shadow preparation resource membership
+
+One declaration-owned selection resolves distinct requested buffers, tracks their BLAS/software roles and trace membership, and partitions the original ordered trace list. Large selections scan graph declarations once; small selections resolve only their requested buffers. Output reservations follow unique active roles. Full resource generations, duplicate trace order, failure cleanup and independent prepared-BLAS policy remain unchanged. Prepared mesh membership borrows immutable full name hashes for the operation, avoiding name copies while retaining exact equality.
+
+| Complete gather, partition and mesh-query workload | dbg before to after (ms) | opt before to after (ms) |
+| --- | ---: | ---: |
+| One build, 1,024 operations | 2.9285 → 2.3879 | 0.2854 → 0.2926 |
+| Eight builds, 256 operations | 5.5128 → 2.0614 | 0.2358 → 0.2051 |
+| 16 builds, 256 operations | 15.3505 → 5.5475 | 0.5862 → 0.4818 |
+| 32 builds, 64 operations | 12.3854 → 4.7212 | 0.4811 → 0.1958 |
+| 64 builds, 32 operations | 21.4436 → 4.9418 | 0.8861 → 0.2185 |
+| 1,024 distinct builds plus 1,024 unrelated buffers | 179.7437 → 2.8541 | 12.3227 → 0.3783 |
+| 4,096 builds sharing two buffers | 92.4379 → 1.7051 | 4.0918 → 0.2615 |
+| One build among 4,096 unrelated buffers, 32 operations | 3.2444 → 1.9625 | 0.4208 → 0.2178 |
+
+The optimized singleton adds about 7ns per operation while debug improves. At 1,024 distinct builds, peak scratch grows from 114,736 to 663,792 bytes in dbg (114,688 to 663,552 in opt); cold reserved capacity becomes 971,776/909,312 bytes. For 4,096 shared-buffer builds, borrowing name identities keeps peak scratch near its old size: 262,240 to 260,368 bytes in dbg and 262,192 to 260,208 in opt. Singleton/sparse scratch remains unchanged. Storage follows distinct requested resources and mesh identities, not unrelated graph resources or repeated input buffers.
+
+Nine functional cases preserve full identities, promotion, current graph replacement, phase ordering, failure fallback and scratch bounds. They pass in dbg, opt and fin along with the complete ECS graphics suite; frame and descriptor-buffer targets build in all three. Reported times include preparation and collection teardown. Individual phase subtotals moved with the reservation/lookup work, so only complete operation timings are compared.

@@ -443,24 +443,19 @@ private:
                         resolvedDependencies.push_back(dependencyNode);
                 }
 
-                for(usize i = 0u; i < resolvedDependencies.size(); ++i){
-                    JobNode* const dependencyNode = resolvedDependencies[i];
-                    bool firstOccurrence = true;
-                    for(usize j = 0u; j < i; ++j){
-                        if(resolvedDependencies[j] == dependencyNode){
-                            firstOccurrence = false;
-                            break;
-                        }
-                    }
-                    if(!firstOccurrence)
-                        continue;
+                if(resolvedDependencies.size() > 1u)
+                    Sort(resolvedDependencies.begin(), resolvedDependencies.end(), LessThan<JobNode*>{});
 
-                    usize occurrenceCount = 1u;
-                    for(usize j = i + 1u; j < resolvedDependencies.size(); ++j){
-                        if(resolvedDependencies[j] == dependencyNode)
-                            ++occurrenceCount;
-                    }
-                    dependencyNode->dependents.reserve(AddSize(dependencyNode->dependents.size(), occurrenceCount));
+                // Retain each duplicate notification, and finish every potentially throwing reserve before publishing any.
+                for(usize groupBegin = 0u; groupBegin < resolvedDependencies.size();){
+                    JobNode* const dependencyNode = resolvedDependencies[groupBegin];
+                    usize groupEnd = groupBegin + 1u;
+                    while(groupEnd < resolvedDependencies.size() && resolvedDependencies[groupEnd] == dependencyNode)
+                        ++groupEnd;
+
+                    const usize requiredCapacity = AddSize(dependencyNode->dependents.size(), groupEnd - groupBegin);
+                    ContainerDetail::ReserveGrowingCapacity(dependencyNode->dependents, requiredCapacity);
+                    groupBegin = groupEnd;
                 }
 
                 for(JobNode* dependencyNode : resolvedDependencies)

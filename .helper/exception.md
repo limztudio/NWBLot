@@ -1,7 +1,5 @@
 # Dependency Inversion Exceptions
 
-Updated: 2026-06-23
-
 Read this before changing code for the dependency-inversion cleanup schedule.
 
 ## Accepted Shape

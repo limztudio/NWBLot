@@ -9,6 +9,7 @@
 
 
 #include "cook.h"
+#include "arena_names.h"
 #include "binary_payload.h"
 
 #include <core/assets/binary_payload_io.h>
@@ -37,7 +38,8 @@ bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     }
 
     const Model& model = static_cast<const Model&>(asset);
-    if(!model.validatePayload())
+    Core::Alloc::ScratchArena scratchArena(AssetsModelArenaScope::s_SerializeArena);
+    if(!model.validatePayload(scratchArena))
         return false;
 
     Core::Assets::AssetVector<ModelBinaryPayload::ModelSkeletonObjectBinary> skeletonObjectBinaries(outBinary.get_allocator().arena());
@@ -445,7 +447,8 @@ bool ParseModelCookMetadata(
     const Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    ModelCookEntry& outEntry
+    ModelCookEntry& outEntry,
+    Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace __hidden_model_cook;
 
@@ -507,7 +510,7 @@ bool ParseModelCookMetadata(
         Model::StaticMeshObjectVector(outEntry.staticMeshObjects),
         Model::SkinnedMeshObjectVector(outEntry.skinnedMeshObjects)
     );
-    return testModel.validatePayload();
+    return testModel.validatePayload(scratchArena);
 }
 
 bool ParseModelCookMetadata(
@@ -521,17 +524,17 @@ bool ParseModelCookMetadata(
     Name virtualPath = NAME_NONE;
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, virtualPath, scratchArena))
         return false;
-    return ParseModelCookMetadata(virtualPath, nwbFilePath, doc.asset(), outEntry);
+    return ParseModelCookMetadata(virtualPath, nwbFilePath, doc.asset(), outEntry, scratchArena);
 }
 
-bool BuildModelAsset(ModelCookEntry& modelEntry, Model& outModel){
+bool BuildModelAsset(ModelCookEntry& modelEntry, Model& outModel, Core::Alloc::ScratchArena& scratchArena){
     outModel = Model(modelEntry.skeletonObjects.get_allocator().arena(), modelEntry.virtualPath);
     outModel.setObjects(
         Move(modelEntry.skeletonObjects),
         Move(modelEntry.staticMeshObjects),
         Move(modelEntry.skinnedMeshObjects)
     );
-    return outModel.validatePayload();
+    return outModel.validatePayload(scratchArena);
 }
 
 

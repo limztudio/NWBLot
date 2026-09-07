@@ -55,10 +55,11 @@ struct ModelCookEntry{
     Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    ModelCookEntry& outEntry
+    ModelCookEntry& outEntry,
+    Core::Alloc::ScratchArena& scratchArena
 );
 
-[[nodiscard]] bool BuildModelAsset(ModelCookEntry& modelEntry, Model& outModel);
+[[nodiscard]] bool BuildModelAsset(ModelCookEntry& modelEntry, Model& outModel, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

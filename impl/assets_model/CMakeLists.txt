@@ -1,6 +1,7 @@
 nwb_declare_static_library(nwb_assets_model)
 target_sources(nwb_assets_model PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
+    "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
 )
@@ -10,6 +11,7 @@ if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_model_cook)
     target_sources(nwb_assets_model_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/asset.h"
+        "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
         "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"

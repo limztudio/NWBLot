@@ -9,6 +9,7 @@
 
 
 #include "cook.h"
+#include "arena_names.h"
 
 #include <core/assets/cook_entry_registry.h>
 
@@ -51,18 +52,20 @@ static bool ParseModelValue(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     ModelCookEntry& outEntry,
-    Core::Assets::CookEntryParseContext&
+    Core::Assets::CookEntryParseContext& context
 ){
     return ParseModelCookMetadata(
         virtualPath,
         nwbFilePath,
         asset,
-        outEntry
+        outEntry,
+        context.scratchArena
     );
 }
 
 static bool BuildModelCookedAsset(ModelCookEntry& entry, Model& outAsset){
-    return BuildModelAsset(entry, outAsset);
+    Core::Alloc::ScratchArena scratchArena(AssetsModelArenaScope::s_BuildAssetArena);
+    return BuildModelAsset(entry, outAsset, scratchArena);
 }
 
 static bool RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){

@@ -12,6 +12,7 @@
 
 
 #include "cook_entry_registry.h"
+#include "expanded_metadata.h"
 
 #include <core/assets/paths.h>
 
@@ -141,14 +142,6 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct ExpandedAssetMetadata{
-    Name assetType = NAME_NONE;
-    Name virtualPath = NAME_NONE;
-    const Core::Metascript::Value* value = nullptr;
-};
-
-using ExpandedAssetMetadataVector = Vector<ExpandedAssetMetadata, ScratchArena>;
 
 namespace AssetBunchExpandResult{
 enum Enum : u8{

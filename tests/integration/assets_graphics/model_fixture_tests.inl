@@ -356,7 +356,7 @@ static bool ExpandModelBunchFixture(
     const AStringView meta,
     const AStringView caseName,
     NWB::Core::Metascript::Document& doc,
-    NWB::Core::Assets::AssetsBunchCook::ExpandedAssetVector& outAssets,
+    NWB::Core::Assets::ExpandedAssetMetadataVector& outAssets,
     NWB::Core::Alloc::ScratchArena& scratchArena
 ){
     if(!doc.parse(meta))
@@ -401,7 +401,7 @@ asset_bunch bunch = [
     TestArena testArena;
     NWB::Core::Metascript::Document doc(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(s_ModelFixtureScratchArena);
-    NWB::Core::Assets::AssetsBunchCook::ExpandedAssetVector expandedAssets(scratchArena);
+    NWB::Core::Assets::ExpandedAssetMetadataVector expandedAssets(scratchArena);
     const bool expanded = ExpandModelBunchFixture(
         testArena,
         AStringView(meta.data(), meta.size()),
@@ -441,7 +441,7 @@ asset_bunch bunch = [
     TestArena testArena;
     NWB::Core::Metascript::Document doc(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(s_ModelFixtureScratchArena);
-    NWB::Core::Assets::AssetsBunchCook::ExpandedAssetVector expandedAssets(scratchArena);
+    NWB::Core::Assets::ExpandedAssetMetadataVector expandedAssets(scratchArena);
     const bool expanded = ExpandModelBunchFixture(
         testArena,
         AStringView(meta.data(), meta.size()),

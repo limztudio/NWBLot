@@ -315,25 +315,15 @@ static Core::Assets::AssetBunchExpandResult::Enum ExpandAssetBunchForAssetCook(C
     if(!HasAssetBunchDeclaration(context.doc))
         return Core::Assets::AssetBunchExpandResult::Unsupported;
 
-    ExpandedAssetVector expandedAssets(context.scratchArena);
     if(!ExpandAssetBunch(
         context.assetRoot,
         context.virtualRoot,
         context.nwbFilePath,
         context.doc,
-        expandedAssets,
+        context.outAssets,
         context.scratchArena
     ))
         return Core::Assets::AssetBunchExpandResult::Error;
-
-    context.outAssets.reserve(expandedAssets.size());
-    for(const ExpandedAsset& expandedAsset : expandedAssets){
-        context.outAssets.push_back(Core::Assets::ExpandedAssetMetadata{
-            expandedAsset.assetType,
-            expandedAsset.virtualPath,
-            expandedAsset.value
-        });
-    }
 
     return Core::Assets::AssetBunchExpandResult::Parsed;
 }
@@ -365,7 +355,7 @@ bool ExpandAssetBunch(
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    ExpandedAssetVector& outAssets,
+    ExpandedAssetMetadataVector& outAssets,
     ScratchArena& scratchArena
 ){
     using namespace __hidden_assets_bunch_cook;
@@ -453,7 +443,7 @@ bool ExpandAssetBunch(
             return false;
         }
 
-        Metascript::Value* resolvedAssetValue = NewArenaObject<Metascript::Value>(assetValue->arena(), assetValue->arena());
+        Metascript::Value resolvedAssetValue(assetValue->arena());
         if(!ResolveAssetReferenceValue(
             nwbFilePath,
             doc,
@@ -461,7 +451,7 @@ bool ExpandAssetBunch(
             usedVariables,
             resolvingVariableHashes,
             *assetValue,
-            *resolvedAssetValue,
+            resolvedAssetValue,
             scratchArena
         ))
             return false;
@@ -482,10 +472,10 @@ bool ExpandAssetBunch(
             return false;
         }
 
-        outAssets.push_back(ExpandedAsset{
+        outAssets.push_back(ExpandedAssetMetadata{
             ToName(DeclarationType(*itemDeclaration)),
             virtualPath,
-            resolvedAssetValue
+            Move(resolvedAssetValue)
         });
     }
 

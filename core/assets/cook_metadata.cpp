@@ -380,18 +380,12 @@ bool ParseAssetMetadata(
             return false;
         if(assetBunchResult == AssetBunchExpandResult::Parsed){
             for(const ExpandedAssetMetadata& expandedAsset : expandedAssets){
-                if(!expandedAsset.value){
-                    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset_bunch meta '{}' expanded a null asset value")
-                        , PathToString<tchar>(discoveredNwbFile.filePath)
-                    );
-                    return false;
-                }
                 if(!__hidden_cook_metadata::ParseDeclaredAssetItem(
                     cookArena,
                     discoveredNwbFile,
                     expandedAsset.assetType,
                     expandedAsset.virtualPath,
-                    *expandedAsset.value,
+                    expandedAsset.value,
                     outMetadata,
                     seenPropertyAssetPathHashes,
                     threadPool,

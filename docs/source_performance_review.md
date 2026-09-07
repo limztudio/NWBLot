@@ -166,3 +166,19 @@ A focused collector replaces three growing-vector duplicate scans. It records ex
 The shared opt workload adds about 27 ns per plan; the debug improvement and unique-resource scaling are the main gains. One/shared-plan scratch peaks drop from 5,200 to 1,616 bytes in dbg and from 5,152 to 1,568 bytes in opt. For the unique workload, indexing raises peak scratch from about 5.73 to 7.78 MiB. Repeated identical plans use exactly the same scratch capacity as one plan; storage grows with actual unique resources.
 
 Six collector regressions and all 176 ECS graphics tests pass in dbg/opt, with 179 tests in fin because of configuration-specific coverage. Renderer/frame and pipeline builds pass in all three. Coverage includes full generations, role order, shared resources, every phase's conflict/missing-resource rejection, and recovery after promoted-table failure. Fixtures exercise production CPU collection using immutable dispatch inputs; no GPU timing claim is made.
+
+## Model metadata skeleton normalization
+
+Model parsing builds one caller-scratch index of complete binary name identities, direct object-name presence, and unique/ambiguous skeleton asset aliases. Direct names retain precedence; mesh traversal and ambiguity diagnostics keep their original order. Unknown aliases and duplicate object names still reach the existing validator. Empty and single-skeleton cases avoid the index, and the index is destroyed before payload validation.
+
+| Complete parse workload | dbg before → after | opt before → after |
+| --- | ---: | ---: |
+| 256 skeletons and aliased meshes, three parses | 20.1841 → 15.9562 | 1.0792 → 0.8912 |
+| 1,024 skeletons and aliased meshes, three parses | 142.4238 → 65.3803 | 8.5128 → 3.5375 |
+| 4,096 skeletons and aliased meshes, three parses | 1496.9419 → 277.2686 | 109.9718 → 19.3041 |
+| 4,096 skeletons and direct-name meshes, three parses | 494.9427 → 241.1452 | 29.7104 → 18.3643 |
+| One skeleton and aliased mesh, 1,024 parses | 25.0923 → 26.0879 | 1.0608 → 1.0580 |
+
+The singleton debug difference is about one microsecond per complete parse; no singleton gain is claimed. Heap allocation counts are unchanged because metadata copying and validation remain part of the public parse operation. At 4,096 objects, retained scratch capacity changes from 11,011,072 to 13,894,656 bytes in dbg and 2,621,440 to 2,883,584 bytes in opt. Debug LIFO scratch retains 32 bytes after warm-up versus 16 before; used and reserved bytes remain stable across repeated parsing. Opt retains zero used bytes.
+
+All six normalization regressions and the selected 26-case asset integration suite pass in dbg, opt, and fin; pipeline builds also pass. Benchmark assertions verify the normalized typed references, unchanged source metadata, and stable warmed scratch. The baseline and optimized fixtures use the same corrected warm-capacity check rather than assuming debug scratch returns every byte immediately.

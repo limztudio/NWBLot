@@ -387,27 +387,58 @@ template<typename ObjectVectorT, typename ParseObjectFn>
     ;
 }
 
-[[nodiscard]] bool SkeletonObjectNameExists(const ModelCookEntry& entry, const Name skeletonObjectName){
-    for(const ModelSkeletonObject& skeletonObject : entry.skeletonObjects){
-        if(skeletonObject.name == skeletonObjectName)
-            return true;
-    }
-    return false;
-}
+struct SkeletonNameResolution{
+    const ModelSkeletonObject* assetMatch = nullptr;
+    bool isObjectName = false;
+    bool ambiguousAsset = false;
+};
 
-[[nodiscard]] bool NormalizeSkinnedMeshSkeletonObject(
+[[nodiscard]] bool NormalizeSkinnedMeshSkeletonObjects(
     const Path& nwbFilePath,
-    const ModelCookEntry& entry,
-    ModelSkinnedMeshObject& object
+    ModelCookEntry& entry,
+    Core::Alloc::ScratchArena& scratchArena
 ){
-    if(SkeletonObjectNameExists(entry, object.skeletonObject))
+    if(entry.skinnedMeshObjects.empty() || entry.skeletonObjects.empty())
         return true;
 
-    ModelSkeletonObject const* matchedSkeletonObject = nullptr;
+    if(entry.skeletonObjects.size() == 1u){
+        const ModelSkeletonObject& skeletonObject = entry.skeletonObjects.front();
+        for(ModelSkinnedMeshObject& object : entry.skinnedMeshObjects){
+            if(
+                object.skeletonObject != skeletonObject.name
+                && skeletonObject.skeleton.valid()
+                && object.skeletonObject == skeletonObject.skeleton.name()
+            )
+                object.skeletonObject = skeletonObject.name;
+        }
+        return true;
+    }
+
+    if(entry.skeletonObjects.size() > Limit<usize>::s_Max / 4u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': skeleton name index capacity overflows"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+
+    // At most two identities per skeleton and a 0.5 load factor fit without scratch-backed rehashing.
+    // Object names and asset aliases share a table, but direct object names always take precedence.
+    HashMap<NameHash, SkeletonNameResolution, Core::Alloc::ScratchArena> resolutions(entry.skeletonObjects.size() * 4u, scratchArena);
     for(const ModelSkeletonObject& skeletonObject : entry.skeletonObjects){
-        if(!skeletonObject.skeleton.valid() || skeletonObject.skeleton.name() != object.skeletonObject)
+        resolutions.try_emplace(skeletonObject.name.identityHash()).first.value().isObjectName = true;
+        if(!skeletonObject.skeleton.valid())
             continue;
-        if(matchedSkeletonObject){
+        auto& resolution = resolutions.try_emplace(skeletonObject.skeleton.name().identityHash()).first.value();
+        if(resolution.assetMatch)
+            resolution.ambiguousAsset = true;
+        else
+            resolution.assetMatch = &skeletonObject;
+    }
+
+    for(ModelSkinnedMeshObject& object : entry.skinnedMeshObjects){
+        const auto found = resolutions.find(object.skeletonObject.identityHash());
+        if(found == resolutions.end() || found.value().isObjectName)
+            continue;
+        const SkeletonNameResolution& resolution = found.value();
+        if(resolution.ambiguousAsset){
             NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': skinned mesh '{}' skeleton '{}' matches multiple skeleton objects")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(object.name.c_str())
@@ -415,20 +446,8 @@ template<typename ObjectVectorT, typename ParseObjectFn>
             );
             return false;
         }
-        matchedSkeletonObject = &skeletonObject;
-    }
-
-    if(!matchedSkeletonObject)
-        return true;
-
-    object.skeletonObject = matchedSkeletonObject->name;
-    return true;
-}
-
-[[nodiscard]] bool NormalizeSkinnedMeshSkeletonObjects(const Path& nwbFilePath, ModelCookEntry& entry){
-    for(ModelSkinnedMeshObject& object : entry.skinnedMeshObjects){
-        if(!NormalizeSkinnedMeshSkeletonObject(nwbFilePath, entry, object))
-            return false;
+        if(resolution.assetMatch)
+            object.skeletonObject = resolution.assetMatch->name;
     }
     return true;
 }
@@ -501,7 +520,7 @@ bool ParseModelCookMetadata(
     )
         return false;
 
-    if(!NormalizeSkinnedMeshSkeletonObjects(nwbFilePath, outEntry))
+    if(!NormalizeSkinnedMeshSkeletonObjects(nwbFilePath, outEntry, scratchArena))
         return false;
 
     Model testModel(outEntry.skeletonObjects.get_allocator().arena(), outEntry.virtualPath);

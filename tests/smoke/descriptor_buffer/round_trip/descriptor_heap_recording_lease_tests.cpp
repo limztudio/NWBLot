@@ -373,6 +373,177 @@ TEST_F(DescriptorBufferRoundTripTest, DeviceDescriptorHeapPendingRecordingLeaseT
 }
 
 
+// Heap bookkeeping has fixed bounds at initialize(). Exercise its public lifecycle at every bound: shutdown must
+// release retained resources, capacity changes must start from a fully reset generation, and the pre-sized slot and
+// retirement storage must recycle a complete leased generation without touching the shared object arena.
+TEST_F(DescriptorBufferAllocationTest, DescriptorHeapFixedMetadataResizesAndRecyclesLeasedFullCapacity){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    GraphicsBackend::GpuDescriptorHeap heap(device);
+    const auto makeHeapDesc = [](const u32 resourceCapacity, const u32 samplerCapacity){
+        GpuDescriptorHeapDesc desc;
+        desc
+            .setResourceCapacity(resourceCapacity)
+            .setSamplerCapacity(samplerCapacity)
+            .setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
+        ;
+        return desc;
+    };
+    const auto expectShutdownLifecycle = [&heap](){
+        const GpuDescriptorHeapLifecycleStatistics statistics = heap.lifecycleStatistics();
+        EXPECT_FALSE(statistics.initialized);
+        EXPECT_EQ(statistics.resourceCapacity, 0u);
+        EXPECT_EQ(statistics.samplerCapacity, 0u);
+        EXPECT_EQ(statistics.accelStructCapacity, 0u);
+        EXPECT_EQ(statistics.resourceLiveSlotCount, 0u);
+        EXPECT_EQ(statistics.samplerLiveSlotCount, 0u);
+        EXPECT_EQ(statistics.accelStructLiveSlotCount, 0u);
+        EXPECT_EQ(statistics.pendingRetiredSlotCount, 0u);
+        EXPECT_EQ(statistics.acceptedHeapUseCount, 0u);
+        EXPECT_EQ(statistics.unsubmittedHeapUseCount, 0u);
+        EXPECT_EQ(statistics.abandonedHeapUseCount, 0u);
+    };
+
+    auto storageBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(4096u)
+            .setStructStride(16u)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    auto sampler = device.createSampler(SamplerDesc().setAllFilters(true));
+    ASSERT_TRUE(storageBuffer);
+    ASSERT_TRUE(sampler);
+    const usize resourceReferencesBeforeHeap = storageBuffer->getReferenceCount();
+    const usize samplerReferencesBeforeHeap = sampler->getReferenceCount();
+
+    constexpr u32 s_InitialResourceCapacity = 2u;
+    constexpr u32 s_InitialSamplerCapacity = 2u;
+    ASSERT_TRUE(heap.initialize(makeHeapDesc(s_InitialResourceCapacity, s_InitialSamplerCapacity)));
+    EXPECT_EQ(heap.lifecycleStatistics().resourceCapacity, s_InitialResourceCapacity);
+    EXPECT_EQ(heap.lifecycleStatistics().samplerCapacity, s_InitialSamplerCapacity);
+
+    // Leave both descriptors live deliberately. resetStateForShutdownLocked() must discard these retainers even
+    // though they never flowed through the normal deferred-free path.
+    const GpuDescriptorHandle retainedResource = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    const GpuDescriptorHandle retainedSampler = heap.allocate(GpuDescriptorClass::Sampler);
+    ASSERT_TRUE(retainedResource.valid());
+    ASSERT_TRUE(retainedSampler.valid());
+    ASSERT_TRUE(heap.write(retainedResource, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
+    ASSERT_TRUE(heap.write(retainedSampler, DescriptorWriteItem::Sampler(0u, sampler.get())));
+    EXPECT_EQ(storageBuffer->getReferenceCount(), resourceReferencesBeforeHeap + 1u);
+    EXPECT_EQ(sampler->getReferenceCount(), samplerReferencesBeforeHeap + 1u);
+
+    heap.shutdown();
+    expectShutdownLifecycle();
+    EXPECT_EQ(storageBuffer->getReferenceCount(), resourceReferencesBeforeHeap);
+    EXPECT_EQ(sampler->getReferenceCount(), samplerReferencesBeforeHeap);
+
+    constexpr u32 s_LargeResourceCapacity = 5u;
+    constexpr u32 s_LargeSamplerCapacity = 4u;
+    ASSERT_TRUE(heap.initialize(makeHeapDesc(s_LargeResourceCapacity, s_LargeSamplerCapacity)));
+    const GpuDescriptorHeapLifecycleStatistics largeStatistics = heap.lifecycleStatistics();
+    ASSERT_TRUE(largeStatistics.initialized);
+    EXPECT_EQ(largeStatistics.resourceCapacity, s_LargeResourceCapacity);
+    EXPECT_EQ(largeStatistics.samplerCapacity, s_LargeSamplerCapacity);
+
+    GpuDescriptorHandle resourceHandles[s_LargeResourceCapacity] = {};
+    GpuDescriptorHandle samplerHandles[s_LargeSamplerCapacity] = {};
+    const ArenaMemoryStats beforeLeasedRecycle = DescriptorBufferRoundTripTest::arena().memoryStats();
+    {
+        auto pendingRecordingLease = heap.acquirePendingRecordingLease();
+        ASSERT_TRUE(pendingRecordingLease.valid());
+
+        for(u32 slot = 0u; slot < s_LargeResourceCapacity; ++slot){
+            resourceHandles[slot] = heap.allocate(GpuDescriptorClass::StorageBuffer);
+            ASSERT_TRUE(resourceHandles[slot].valid());
+            ASSERT_TRUE(heap.write(
+                resourceHandles[slot],
+                DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())
+            ));
+        }
+        for(u32 slot = 0u; slot < s_LargeSamplerCapacity; ++slot){
+            samplerHandles[slot] = heap.allocate(GpuDescriptorClass::Sampler);
+            ASSERT_TRUE(samplerHandles[slot].valid());
+            ASSERT_TRUE(heap.write(samplerHandles[slot], DescriptorWriteItem::Sampler(0u, sampler.get())));
+        }
+        const GpuDescriptorHeapLifecycleStatistics fullStatistics = heap.lifecycleStatistics();
+        EXPECT_EQ(fullStatistics.resourceLiveSlotCount, s_LargeResourceCapacity);
+        EXPECT_EQ(fullStatistics.samplerLiveSlotCount, s_LargeSamplerCapacity);
+        EXPECT_EQ(fullStatistics.pendingRetiredSlotCount, 0u);
+        EXPECT_EQ(storageBuffer->getReferenceCount(), resourceReferencesBeforeHeap + s_LargeResourceCapacity);
+        EXPECT_EQ(sampler->getReferenceCount(), samplerReferencesBeforeHeap + s_LargeSamplerCapacity);
+
+        for(const GpuDescriptorHandle handle : resourceHandles)
+            heap.free(handle);
+        for(const GpuDescriptorHandle handle : samplerHandles)
+            heap.free(handle);
+        const GpuDescriptorHeapLifecycleStatistics pendingStatistics = heap.lifecycleStatistics();
+        EXPECT_EQ(pendingStatistics.resourceLiveSlotCount, 0u);
+        EXPECT_EQ(pendingStatistics.samplerLiveSlotCount, 0u);
+        EXPECT_EQ(
+            pendingStatistics.pendingRetiredSlotCount,
+            s_LargeResourceCapacity + s_LargeSamplerCapacity
+        );
+    }
+
+    const GpuDescriptorHeapLifecycleStatistics releasedLeaseStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(
+        releasedLeaseStatistics.pendingRetiredSlotCount,
+        s_LargeResourceCapacity + s_LargeSamplerCapacity
+    );
+    heap.collectRetired();
+    const GpuDescriptorHeapLifecycleStatistics collectedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(collectedStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(collectedStatistics.samplerLiveSlotCount, 0u);
+    EXPECT_EQ(collectedStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(storageBuffer->getReferenceCount(), resourceReferencesBeforeHeap);
+    EXPECT_EQ(sampler->getReferenceCount(), samplerReferencesBeforeHeap);
+
+    // Refill both namespaces from the free lists. This must stay entirely inside the initialized heap's fixed
+    // metadata; no GlobalArena allocation, reallocation, or deallocation is allowed on this hot lifecycle path.
+    for(GpuDescriptorHandle& handle : resourceHandles){
+        handle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+        ASSERT_TRUE(handle.valid());
+    }
+    for(GpuDescriptorHandle& handle : samplerHandles){
+        handle = heap.allocate(GpuDescriptorClass::Sampler);
+        ASSERT_TRUE(handle.valid());
+    }
+    const GpuDescriptorHeapLifecycleStatistics recycledStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(recycledStatistics.resourceLiveSlotCount, s_LargeResourceCapacity);
+    EXPECT_EQ(recycledStatistics.samplerLiveSlotCount, s_LargeSamplerCapacity);
+    EXPECT_EQ(recycledStatistics.pendingRetiredSlotCount, 0u);
+    const ArenaMemoryStats afterLeasedRecycle = DescriptorBufferRoundTripTest::arena().memoryStats();
+    EXPECT_EQ(afterLeasedRecycle.usedBytes, beforeLeasedRecycle.usedBytes);
+    EXPECT_EQ(afterLeasedRecycle.allocationCount, beforeLeasedRecycle.allocationCount);
+    EXPECT_EQ(afterLeasedRecycle.reallocationCount, beforeLeasedRecycle.reallocationCount);
+    EXPECT_EQ(afterLeasedRecycle.deallocationCount, beforeLeasedRecycle.deallocationCount);
+
+    // A new descriptor size must never overwrite the active generation. Tear it down first, then create a smaller
+    // fixed arena/table set and prove both namespaces begin usable again.
+    heap.shutdown();
+    expectShutdownLifecycle();
+
+    constexpr u32 s_SmallResourceCapacity = 1u;
+    constexpr u32 s_SmallSamplerCapacity = 1u;
+    ASSERT_TRUE(heap.initialize(makeHeapDesc(s_SmallResourceCapacity, s_SmallSamplerCapacity)));
+    const GpuDescriptorHeapLifecycleStatistics smallStatistics = heap.lifecycleStatistics();
+    ASSERT_TRUE(smallStatistics.initialized);
+    EXPECT_EQ(smallStatistics.resourceCapacity, s_SmallResourceCapacity);
+    EXPECT_EQ(smallStatistics.samplerCapacity, s_SmallSamplerCapacity);
+    const GpuDescriptorHandle smallResource = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    const GpuDescriptorHandle smallSampler = heap.allocate(GpuDescriptorClass::Sampler);
+    ASSERT_TRUE(smallResource.valid());
+    ASSERT_TRUE(smallSampler.valid());
+    heap.free(smallResource);
+    heap.free(smallSampler);
+    heap.collectRetired();
+    heap.shutdown();
+    expectShutdownLifecycle();
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

@@ -2162,6 +2162,41 @@ class GpuDescriptorHeap final : NoCopy{
 
 
 private:
+    // Capacities are fixed per initialized generation. The shared pool outlives
+    // these typed allocations, including partially initialized tables.
+    template<typename T>
+    class FixedTable final : NoCopy{
+    public:
+        [[nodiscard]] static usize RequiredBytes(usize count){
+            return count == 0u ? 0u : Alloc::PersistentArena::StructureAlignedSize(SizeOf<sizeof(T)>(count), alignof(T));
+        }
+        [[nodiscard]] bool initialize(Alloc::PersistentArena& arena, usize count){
+            clear();
+            if(count == 0u)
+                return true;
+            m_storage = MakePersistentUnique<T[]>(arena, count);
+            if(!m_storage)
+                return false;
+            m_count = count;
+            return true;
+        }
+        void clear()noexcept{
+            m_storage.reset();
+            m_count = 0u;
+        }
+        [[nodiscard]] usize size()const noexcept{ return m_count; }
+        [[nodiscard]] T* begin()noexcept{ return m_storage.get(); }
+        [[nodiscard]] const T* begin()const noexcept{ return m_storage.get(); }
+        [[nodiscard]] T* end()noexcept{ return m_count == 0u ? begin() : begin() + m_count; }
+        [[nodiscard]] const T* end()const noexcept{ return m_count == 0u ? begin() : begin() + m_count; }
+        [[nodiscard]] T& operator[](usize index)noexcept{ return m_storage[index]; }
+        [[nodiscard]] const T& operator[](usize index)const noexcept{ return m_storage[index]; }
+
+    private:
+        PersistentUniquePtr<T[]> m_storage;
+        usize m_count = 0u;
+    };
+
     enum class SlotState : u8{
         Free,
         Live,
@@ -2173,18 +2208,16 @@ private:
     struct SlotAllocator{
         u32 capacity = 0;
         u32 nextFresh = 0;
-        Vector<u32, Alloc::GlobalArena> freeList;
+        FixedTable<u32> freeList;
         usize freeCount = 0u;
         // PendingRecording is the only freed state that native recording may still consume.
-        Vector<SlotState, Alloc::GlobalArena> slotStates;
+        FixedTable<SlotState> slotStates;
         // Keeps the allocated class authoritative while a slot is live or quarantined.
-        Vector<u8, Alloc::GlobalArena> allocatedClasses;
+        FixedTable<u8> allocatedClasses;
 
-        explicit SlotAllocator(Alloc::GlobalArena& arena)
-            : freeList(arena)
-            , slotStates(arena)
-            , allocatedClasses(arena)
-        {}
+        [[nodiscard]] static usize RequiredBytes(u32 capacity);
+        [[nodiscard]] bool initialize(Alloc::PersistentArena& arena, u32 newCapacity);
+        void clear()noexcept;
     };
     struct RetiredSlot{
         GpuDescriptorHandle handle;
@@ -2316,6 +2349,7 @@ private:
     void shutdownForDeviceTeardown()noexcept;
     void shutdownLocked();
     void resetStateForShutdownLocked()noexcept;
+    [[nodiscard]] bool initializeStorage(u32 resourceCapacity, u32 samplerCapacity, u32 accelStructCapacity);
 
     // Allocates persistent resource/sampler blocks; TLAS blocks are per handle.
     bool initializeDescriptorBufferBlocks(u32 offsetAlignmentBytes);
@@ -2333,15 +2367,17 @@ private:
     BindingLayoutHandle m_samplerLayout;
     BindingLayoutHandle m_accelStructLayout;
 
+    // The pool is destroyed after every table, including during unwinding.
+    Optional<Alloc::PersistentArena> m_storageArena;
     DescriptorBufferSegment m_resourceBufferBlock{};
     DescriptorBufferSegment m_samplerBufferBlock{};
     // TLAS blocks are immutable per generation until deferred free.
-    Vector<DescriptorBufferSegment, Alloc::GlobalArena> m_accelStructBufferBlocks;
-    Vector<RayTracingAccelStructHandle, Alloc::GlobalArena> m_accelStructResources;
+    FixedTable<DescriptorBufferSegment> m_accelStructBufferBlocks;
+    FixedTable<RayTracingAccelStructHandle> m_accelStructResources;
     // Resource keep-alives protect descriptors used by in-flight work.
-    Vector<BufferHandle, Alloc::GlobalArena> m_resourceDescriptorBuffers;
-    Vector<TextureHandle, Alloc::GlobalArena> m_resourceDescriptorTextures;
-    Vector<SamplerHandle, Alloc::GlobalArena> m_samplerDescriptorResources;
+    FixedTable<BufferHandle> m_resourceDescriptorBuffers;
+    FixedTable<TextureHandle> m_resourceDescriptorTextures;
+    FixedTable<SamplerHandle> m_samplerDescriptorResources;
     u32 m_accelStructBufferBindingOffset = 0u;
     // Binding byte offsets within a set block.
     u32 m_classBufferOffset[GpuDescriptorClass::kCount] = {};
@@ -2350,8 +2386,8 @@ private:
     SlotAllocator m_samplerSlots;
     SlotAllocator m_accelStructSlots;
 
-    Vector<GpuDescriptorHandle, Alloc::GlobalArena> m_pendingRecording;
-    Vector<RetiredSlot, Alloc::GlobalArena> m_retired;
+    FixedTable<GpuDescriptorHandle> m_pendingRecording;
+    FixedTable<RetiredSlot> m_retired;
     Vector<HeapUse, Alloc::GlobalArena> m_heapUses;
     usize m_pendingRecordingCount = 0u;
     usize m_retiredCount = 0u;

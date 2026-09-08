@@ -223,7 +223,7 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
     EXPECT_TRUE(ContainsText(heapHeader, "PendingRecordingLease(const PendingRecordingLease&) = delete;"));
     EXPECT_TRUE(ContainsText(heapHeader, "PendingRecordingLease(PendingRecordingLease&&) = delete;"));
     EXPECT_TRUE(ContainsText(heapHeader, "u64 m_descriptorBufferGeneration = 0u;"));
-    EXPECT_TRUE(ContainsText(heapHeader, "Vector<GpuDescriptorHandle, Alloc::GlobalArena> m_pendingRecording;"));
+    EXPECT_TRUE(ContainsText(heapHeader, "FixedTable<GpuDescriptorHandle> m_pendingRecording;"));
     EXPECT_TRUE(ContainsText(heapHeader, "usize m_pendingRecordingCount = 0u;"));
     EXPECT_TRUE(ContainsText(heapHeader, "usize m_retiredCount = 0u;"));
     EXPECT_TRUE(ContainsText(heapHeader, "usize freeCount = 0u;"));
@@ -238,9 +238,10 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
         heap,
         "statistics.pendingRetiredSlotCount = m_pendingRecordingCount + m_retiredCount;"
     ));
-    EXPECT_TRUE(ContainsText(heap, "m_resourceSlots.freeList.resize(resourceCapacity);"));
-    EXPECT_TRUE(ContainsText(heap, "m_samplerSlots.freeList.resize(samplerCapacity);"));
-    EXPECT_TRUE(ContainsText(heap, "m_accelStructSlots.freeList.resize(s_AccelStructCapacity);"));
+    EXPECT_TRUE(ContainsText(heap, "!m_resourceSlots.initialize(arena, resourceCapacity)"));
+    EXPECT_TRUE(ContainsText(heap, "!m_samplerSlots.initialize(arena, samplerCapacity)"));
+    EXPECT_TRUE(ContainsText(heap, "!m_accelStructSlots.initialize(arena, accelStructCapacity)"));
+    EXPECT_TRUE(ContainsText(heap, "!freeList.initialize(arena, newCapacity)"));
     EXPECT_TRUE(ContainsText(heap, "allocator.freeList[allocator.freeCount] = retired.handle.slot();"));
 
     const usize releasePendingBegin = heap.find("void GpuDescriptorHeap::releasePendingRecordingLease(");

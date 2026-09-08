@@ -49,6 +49,7 @@ inline constexpr Name s_QueueSubmitArena("core/graphics/queue_submit");
 inline constexpr Name s_RayTracingArena("core/graphics/ray_tracing");
 
 inline constexpr Name s_DescriptorBindingArena("core/graphics/descriptor_binding");
+inline constexpr Name s_DescriptorHeapStorageArena("core/graphics/descriptor_heap_storage");
 
 inline constexpr Name s_ShaderReflectionArena("core/graphics/shader_reflection");
 inline constexpr Name s_InputLayoutArena("core/graphics/shader_input_layout");

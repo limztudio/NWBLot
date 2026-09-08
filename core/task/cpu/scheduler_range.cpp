@@ -93,6 +93,8 @@ void CpuTaskScheduler::parallelRange(
             node.next = TaskHandle::s_InvalidIndex;
             if(runInline){
                 node.state = TaskState::Running;
+                if(m_profileEnabled.load(MemoryOrder::relaxed))
+                    profileReadyLocked(index);
                 inlineTask = { m_domainIdentity, index, node.generation };
                 ++m_dispatchCount;
             }

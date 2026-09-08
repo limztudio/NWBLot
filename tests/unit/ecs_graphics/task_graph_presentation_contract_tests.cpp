@@ -137,7 +137,7 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     const AStringView render = graphics.substr(renderOffset, averageOffset - renderOffset);
     EXPECT_TRUE(ContainsText(render, "Framebuffer* const framebuffer = m_acquiredPresentationFrame.framebuffer.get();"));
     EXPECT_FALSE(ContainsText(render, "getCurrent"));
-    EXPECT_TRUE(ContainsText(render, "CpuTaskScope frameTasks(m_cpuScheduler);"));
+    EXPECT_TRUE(ContainsText(render, "CpuTaskScope frameTasks(m_cpuScheduler, m_frameTaskProfileLabel);"));
     EXPECT_TRUE(ContainsText(render, ".priority = CpuTaskPriority::Critical"));
     EXPECT_TRUE(ContainsText(render, ".target = CpuTaskTarget::MainThread"));
     EXPECT_TRUE(ContainsText(render, "previous.valid() ? &previous : nullptr, previous.valid() ? 1u : 0u"));

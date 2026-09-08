@@ -77,6 +77,7 @@ CpuTaskScheduler::CpuTaskScheduler(const u32 workerCount)
 CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     : m_domainIdentity(allocateDomainIdentity())
     , m_mainThread(QueryCurrentThreadId())
+    , m_profileEventCapacity(config.profileEventCapacity)
     , m_arena(TaskArenaScope::s_CpuTaskScheduler)
     , m_nodes(m_arena)
     , m_placements(m_arena)
@@ -84,6 +85,9 @@ CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     , m_searchStack(m_arena)
     , m_searchVisits(m_arena)
     , m_scopeNegativeVisits(m_arena)
+    , m_profileLabels(m_arena)
+    , m_profileEvents(m_arena)
+    , m_readyProfiles(m_arena)
     , m_workers(m_arena)
 {
     InteropVector<CpuWorkerPlacement> topology;
@@ -155,6 +159,10 @@ CpuTaskSchedulerStatistics CpuTaskScheduler::statistics()const{
     ScopedLock lock(m_mutex);
     CpuTaskSchedulerStatistics result = m_statistics;
     result.outstandingTasks = m_outstanding;
+    result.profileEnabled = m_profileEnabled.load(MemoryOrder::relaxed);
+    result.profilePendingEvents = m_profileCount;
+    result.profileRecordedEvents = m_profileRecordedEvents;
+    result.profileDroppedEvents = m_profileDroppedEvents;
     return result;
 }
 
@@ -168,6 +176,8 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::reserveTaskLocked(){
         ContainerDetail::ReserveGrowingCapacity(m_searchStack, m_nodes.size() + 1u);
         m_searchVisits.resize(m_nodes.size() + 1u, 0u);
         m_scopeNegativeVisits.resize(m_nodes.size() + 1u, 0u);
+        if(m_profileEnabled.load(MemoryOrder::relaxed))
+            m_readyProfiles.resize(m_nodes.size() + 1u);
         m_nodes.emplace_back(m_arena);
     }
     else
@@ -329,6 +339,8 @@ void CpuTaskScheduler::enqueueLocked(const u32 index)noexcept{
     TaskNode& node = m_nodes[index];
     ReadyQueue& queue = m_ready[queueIndex(node.options)];
     node.state = TaskState::Ready;
+    if(m_profileEnabled.load(MemoryOrder::relaxed))
+        profileReadyLocked(index);
     if(node.options.target == CpuTaskTarget::Worker)
         ++m_readyWorkerCosts[node.options.cost];
     node.next = TaskHandle::s_InvalidIndex;
@@ -476,6 +488,8 @@ void CpuTaskScheduler::execute(
     const bool cooperative){
     TaskNode* node;
     bool invoke;
+    Optional<ProfileSample> profile;
+    Optional<ReadyProfile> readyProfile;
     u32 wakeMask;
     {
         ScopedLock lock(m_mutex);
@@ -504,13 +518,30 @@ void CpuTaskScheduler::execute(
             default: ++m_statistics.unclassifiedTasks; break;
             }
         }
+        if(invoke && m_profileEnabled.load(MemoryOrder::relaxed)){
+            profile = beginProfileLocked(CpuTaskProfileKind::Execution, handle, {}, workerIndex, affinity);
+            const ReadyProfile& ready = m_readyProfiles[handle.index];
+            if(ready.captureEpoch == m_profileEpoch)
+                readyProfile = ready;
+        }
         wakeMask = workerWakeMaskLocked();
     }
     notifyWorkers(wakeMask);
     bool succeeded = false;
     ScopeExit finish([&]()noexcept{
+        const Timer end = profile ? TimerNow() : Timer{};
         {
             ScopedLock lock(m_mutex);
+            if(profile){
+                if(readyProfile){
+                    ProfileSample queued = *profile;
+                    queued.kind = CpuTaskProfileKind::QueueDelay;
+                    queued.begin = readyProfile->ready;
+                    queued.frameIndex = readyProfile->frameIndex;
+                    finishProfileLocked(queued, profile->begin);
+                }
+                finishProfileLocked(*profile, end);
+            }
             if(workerIndex != 0u && --m_workerDepth[workerIndex - 1u] == 0u){
                 if(affinity == CpuAffinity::Performance)
                     --m_busyPerformance;
@@ -522,6 +553,8 @@ void CpuTaskScheduler::execute(
     });
     {
         Execution execution(*this, handle, workerIndex, affinity);
+        if(profile)
+            profile->begin = TimerNow();
         if(invoke)
             node->function();
     }
@@ -634,7 +667,15 @@ void CpuTaskScheduler::workerLoop(const StopToken& stop, const usize workerIndex
             if(!hasReadyLocked(affinity, false, false)){
                 ++m_sleepingWorkers[affinity];
                 ScopeExit unpark([this, affinity]()noexcept{ --m_sleepingWorkers[affinity]; });
-                if(!m_workerChanged[affinity].wait(lock, stop, [this, affinity](){ return hasReadyLocked(affinity, false, false); }))
+                Optional<ProfileSample> idle;
+                if(m_profileEnabled.load(MemoryOrder::relaxed))
+                    idle = beginProfileLocked(CpuTaskProfileKind::WorkerIdle, {}, {}, workerIndex, affinity);
+                const bool ready = m_workerChanged[affinity].wait(lock, stop, [this, affinity](){
+                    return hasReadyLocked(affinity, false, false);
+                });
+                if(idle)
+                    finishProfileLocked(*idle, TimerNow());
+                if(!ready)
                     return;
             }
             handle = claimLocked(affinity, false, false);

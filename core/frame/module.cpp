@@ -6,6 +6,7 @@
 #include "arena_names.h"
 
 #include <core/common/log.h>
+#include <core/perf/cpu_task_profile.h>
 #include <global/cpu_topology.h>
 #include <global/exception.h>
 
@@ -116,6 +117,7 @@ void Frame::requestQuit(){
 }
 void Frame::setPerfCapture(const Perf::CaptureOptions& options){
     m_perfSession.setCaptureOptions(options);
+    m_cpuTasks.setProfiling(options.cpuTimingActive(), m_perfSession.frameIndex());
     m_graphics.gpuTiming().setQueryCollectionEnabled(options.gpuTimingActive());
 }
 void Frame::setTelemetryCapture(const Telemetry::CaptureOptions& options){
@@ -147,6 +149,7 @@ bool Frame::update(f32 delta){
     const u64 frameIndex = m_graphics.getFrameIndex();
     m_perfSession.beginFrame(frameIndex);
     m_telemetrySession.setFrameIndex(frameIndex);
+    m_cpuTasks.setProfiling(m_perfSession.captureOptions().cpuTimingActive(), frameIndex);
 
     if(m_telemetrySession.enabled()){
         Telemetry::CaptureSessionCaptureScope telemetryScope(m_telemetrySession);
@@ -156,6 +159,8 @@ bool Frame::update(f32 delta){
     return updateFrame(delta);
 }
 bool Frame::updateFrame(f32 delta){
+    ScopeExit discardUnpublishedProfile([this]()noexcept{ m_cpuTasks.setProfiling(false, m_perfSession.frameIndex()); });
+
     m_cpuTasks.pumpMainThread();
     Perf::TimingSink& cpuTiming = m_perfSession.cpuTimingSink();
     Perf::TimingScopeId projectUpdateTimingScope;
@@ -197,7 +202,10 @@ bool Frame::updateFrame(f32 delta){
             NWB_LOGGER_WARNING(NWB_TEXT("Frame: frame graph telemetry record failed"));
     }
 
+    if(cpuTiming.enabled())
+        Perf::CollectCpuTaskProfile(m_cpuTasks, cpuTiming);
     m_perfSession.publishFrame();
+    discardUnpublishedProfile.release();
     if(m_telemetrySession.captureOptions().perfEnabled()){
         const Telemetry::PerfSessionRecordResult perfRecordResult =
             m_telemetrySession.recordPerfReport(m_perfSession.report());

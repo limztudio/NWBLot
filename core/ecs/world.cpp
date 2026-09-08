@@ -19,7 +19,7 @@ NWB_ECS_BEGIN
 
 World::World(Alloc::GlobalArena& arena, CpuTaskScheduler& taskScheduler)
     : m_arena(arena)
-    , m_tasks(taskScheduler)
+    , m_tasks(taskScheduler, taskScheduler.registerProfileLabel(Name("cpu.task.ecs.world")))
     , m_entityManager(m_arena)
     , m_entityComponentHeads(m_arena)
     , m_entityComponentNodes(m_arena)

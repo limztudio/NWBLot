@@ -129,7 +129,8 @@ GraphicsRuntime::GraphicsRuntime(
     : m_allocator(allocator)
     , m_cpuScheduler(cpuScheduler)
     , m_gpuTasks(gpuTasks)
-    , m_tasks(cpuScheduler)
+    , m_tasks(cpuScheduler, cpuScheduler.registerProfileLabel(Name("cpu.task.graphics.setup")))
+    , m_frameTaskProfileLabel(cpuScheduler.registerProfileLabel(Name("cpu.task.graphics.frame")))
     , m_deviceCreationParams(m_allocator.getObjectArena())
     , m_gpuTiming(m_allocator.getObjectArena(), gpuTiming)
     , m_cpuTiming(cpuTiming)
@@ -701,7 +702,7 @@ void GraphicsRuntime::render(){
 
     // Each task pairs preparation with rendering. The dependency chain preserves skinning publication before the
     // next pass prepares dependent meshes, while main-thread execution preserves the platform and UI contracts.
-    CpuTaskScope frameTasks(m_cpuScheduler);
+    CpuTaskScope frameTasks(m_cpuScheduler, m_frameTaskProfileLabel);
     const CpuTaskOptions options{
         .priority = CpuTaskPriority::Critical,
         .target = CpuTaskTarget::MainThread,

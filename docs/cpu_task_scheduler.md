@@ -157,3 +157,24 @@ Each slot retains its newest canceled generation inline and a sorted vector of o
 The 512-lookup benchmark with 4096 canceled handles improved from median 525.350 → 61.685 µs and p95 561.969 → 100.058 µs over three ABBA epochs (48 samples/design). Other median controls stayed similar, with the coarse control varying by about 4%. Raw results and baseline are under ignored `__cmake/cpu_scheduler_followup/step4/`.
 
 Debug/Optimize CPU suites and all 52 policy checks passed. Added coverage alternates successful/canceled generations through 1024 slot reuses, checks independent slots with matching generation numbers, and verifies original cancellation results after both successful and canceled parallel ranges reuse those slots.
+
+### Step 5: optional CPU task profiling
+
+Profiling is disabled by default. Steady-state disabled scheduling reads no profiling clocks and allocates no event or ready-timer buffers. `CpuTaskOptions::profileLabel` and scope labels are compact eight-byte handles; register their owned names once through `registerProfileLabel()` during subsystem setup. Names are copied into events only during capture. Task labels override scope/ancestor labels. A foreign scheduler label resolves to an unnamed event rather than aliasing a local name.
+
+`setProfiling(enabled, frameIndex)` enables or disables collection and updates frame attribution. `CpuTaskSchedulerConfig::profileEventCapacity` bounds storage (default 4096 events; zero disables capture). Events are read through `readProfileEvents()`; statistics expose pending, recorded, and dropped event counts. A full buffer retains existing events and counts newly dropped samples. Changing capture state discards buffered samples and advances an epoch, preventing old ready, execution, join, or idle timers from crossing a disable/re-enable boundary. Updating only the frame index preserves the capture epoch.
+
+The event kinds are:
+
+- Queue delay: time from becoming ready to callback start, excluding predecessor dependency waits.
+- Execution: callback wall time, including nested cooperative work, with completion-mutex acquisition excluded.
+- Handle, scope, and whole-scheduler joins: caller wait intervals, including cooperative work.
+- Worker idle: completed condition-variable waiting intervals that began during capture. Enabling capture while a worker is already parked omits that initial interval.
+
+Events retain task identity, worker lane/affinity, captured frame and epoch, and an owned label. Canceled callbacks do not produce execution samples. Events are emitted when their measured interval completes, so delayed samples retain their original frame attribution. Execution and join intervals overlap with nested/cooperative work; totals across workers and timing kinds are not frame wall time.
+
+Frame CPU perf capture now enables scheduler profiling automatically. `Perf::CollectCpuTaskProfile()` drains only the initial pending-count snapshot on the timing-sink owner thread, before perf publication. Worker threads never call the non-thread-safe timing recorder. Named execution scopes cover graphics setup/frame work, ECS worlds, and project work; other events use `cpu.task.queue_delay`, `cpu.task.execution`, `cpu.task.handle_join`, `cpu.task.scope_join`, `cpu.task.scheduler_join`, and `cpu.worker.idle`. Existing perf telemetry transports these timing scopes without a new wire schema. Failed or quit frames discard unpublished profiling data.
+
+The disabled-path ABBA comparison against step 4 used 48 samples/design. Single-chunk median was 33.061 → 33.289 µs and tiny-batch median 921.848 → 932.381 µs; the other median controls ranged from about -5% to +4.4%, with worker p95 variation. These measurements establish the local disabled overhead rather than claiming profiling itself is free. Raw comparisons and the baseline are under ignored `__cmake/cpu_scheduler_followup/step5/`.
+
+Final validation: the Linux Debug build passed for CPU/GPU tasks, perf/telemetry, graphics, ECS/rendering, native smoke tests, asset tools, FBX conversion, and Testbed. All ten selected CTest targets passed, including the three native Vulkan/asset suites; all 52 source-policy checks/self-tests passed. The final Debug and Optimize CPU suites each ran 68 cases: 66 passed and two physical heterogeneous-class cases skipped on this host. Eight CPU profiling cases cover disabled capture, labels/frame attribution, buffer wrap/overflow, stale epoch rejection, native idle lanes, foreign labels, zero capacity, and concurrent capture changes. Four adapter tests verify perf/telemetry publication, owner-thread delivery, disabled-sink draining, and bounded collection. Native tests retain capability-based skips for unavailable queues/extensions. Windows builds and application frame-rate measurements were not performed on this Linux host.

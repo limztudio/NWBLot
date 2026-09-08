@@ -343,6 +343,7 @@ private:
     CpuTaskScheduler& m_cpuScheduler;
     GpuTaskScheduler& m_gpuTasks;
     CpuTaskScope m_tasks;
+    CpuTaskProfileLabel m_frameTaskProfileLabel;
     DeviceCreationParameters m_deviceCreationParams;
     SwapChainRuntimeState m_swapChainState;
     GpuTimingRecorder m_gpuTiming;

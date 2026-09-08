@@ -20,6 +20,9 @@ NWB_CORE_BEGIN
 void CpuTaskScheduler::wait(const TaskHandle handle){
     if(!handle.valid())
         return;
+    Optional<ProfileMeasure> profile;
+    if(m_profileEnabled.load(MemoryOrder::relaxed))
+        profile.emplace(*this, CpuTaskProfileKind::HandleJoin, handle);
     {
         ScopedLock lock(m_mutex);
         if(handle.domainIdentity != m_domainIdentity)
@@ -39,6 +42,9 @@ void CpuTaskScheduler::wait(const TaskHandle handle){
 void CpuTaskScheduler::wait(){
     if(isExecuting())
         throw RuntimeException("CPU task cannot wait for its entire scheduler");
+    Optional<ProfileMeasure> profile;
+    if(m_profileEnabled.load(MemoryOrder::relaxed))
+        profile.emplace(*this, CpuTaskProfileKind::SchedulerJoin);
     for(;;){
         {
             ScopedLock lock(m_mutex);
@@ -105,6 +111,9 @@ void CpuTaskScheduler::validateWaitLocked(const TaskHandle handle, const CpuTask
 }
 
 void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
+    Optional<ProfileMeasure> profile;
+    if(m_profileEnabled.load(MemoryOrder::relaxed))
+        profile.emplace(*this, CpuTaskProfileKind::ScopeJoin, TaskHandle{}, scope.m_profileLabel);
     ScopeWait wait{ scope };
     {
         ScopedLock lock(m_mutex);

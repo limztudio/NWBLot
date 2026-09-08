@@ -5,9 +5,11 @@
 #pragma once
 
 
+#include "profiling.h"
+
 #include <core/alloc/general.h>
 
-#include <global/cpu_topology.h>
+#include <global/timer.h>
 #include <global/scope_exit.h>
 
 
@@ -18,71 +20,6 @@ NWB_CORE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace CpuTaskCost{
-    enum Enum : u8{
-        Any,
-        Heavy,
-        Light
-    };
-};
-
-namespace CpuTaskPriority{
-    enum Enum : u8{
-        Critical,
-        Normal,
-        Background
-    };
-};
-
-namespace CpuTaskTarget{
-    enum Enum : u8{
-        Worker,
-        MainThread
-    };
-};
-
-
-struct CpuTaskOptions{
-    CpuTaskCost::Enum cost = CpuTaskCost::Heavy;
-    CpuTaskPriority::Enum priority = CpuTaskPriority::Normal;
-    CpuTaskTarget::Enum target = CpuTaskTarget::Worker;
-};
-
-struct CpuTaskSchedulerConfig{
-    static constexpr u32 s_AutomaticWorkerCount = Limit<u32>::s_Max;
-
-    u32 workerCount = s_AutomaticWorkerCount;
-    u32 reservedThreadCount = 1u;
-    bool heterogeneous = true;
-};
-
-struct CpuTaskHandle{
-    static constexpr u32 s_InvalidIndex = Limit<u32>::s_Max;
-
-    u64 domainIdentity = 0u;
-    u32 index = s_InvalidIndex;
-    u32 generation = 0u;
-
-    [[nodiscard]] bool valid()const noexcept{ return domainIdentity != 0u && index != s_InvalidIndex && generation != 0u; }
-    explicit operator bool()const noexcept{ return valid(); }
-};
-
-struct CpuTaskSchedulerStatistics{
-    u64 completedTasks = 0u;
-    u64 canceledTasks = 0u;
-    u64 performanceTasks = 0u;
-    u64 efficiencyTasks = 0u;
-    u64 unclassifiedTasks = 0u;
-    u64 cooperativeTasks = 0u;
-    usize outstandingTasks = 0u;
-    usize peakOutstandingTasks = 0u;
-    u32 performanceWorkers = 0u;
-    u32 efficiencyWorkers = 0u;
-    u32 unclassifiedWorkers = 0u;
-    u32 placementFailures = 0u;
-};
 
 
 class CpuTaskScope;
@@ -139,6 +76,39 @@ private:
         u32 tail = TaskHandle::s_InvalidIndex;
     };
 
+    struct ReadyProfile{
+        Timer ready;
+        u64 frameIndex = 0u;
+        u64 captureEpoch = 0u;
+    };
+
+    struct ProfileLabelRecord{
+        CpuTaskProfileLabel label;
+        Name name;
+    };
+
+    struct ProfileSample{
+        Timer begin;
+        CpuTaskProfileKind::Enum kind;
+        CpuTaskHandle task;
+        CpuTaskProfileLabel label;
+        u64 frameIndex;
+        u64 captureEpoch;
+        usize workerIndex;
+        CpuAffinity::Enum affinity;
+    };
+
+    class ProfileMeasure final : NoCopy{
+    public:
+        ProfileMeasure(CpuTaskScheduler& scheduler, CpuTaskProfileKind::Enum kind, TaskHandle task = {}, CpuTaskProfileLabel label = {});
+        ~ProfileMeasure()noexcept;
+
+
+    private:
+        CpuTaskScheduler& m_scheduler;
+        Optional<ProfileSample> m_sample;
+    };
+
     struct ScopeWait{
         CpuTaskScope& scope;
         u64 identity = 0u;
@@ -164,6 +134,7 @@ private:
 
 private:
     static u64 allocateDomainIdentity()noexcept;
+    static u64 allocateProfileLabelIdentity()noexcept;
     static CpuTaskSchedulerConfig workerConfig(u32 workerCount);
     static usize queueIndex(const CpuTaskOptions& options)noexcept;
 
@@ -200,6 +171,11 @@ public:
     void pumpMainThread();
     [[nodiscard]] bool isComplete(TaskHandle handle)const;
     [[nodiscard]] CpuTaskSchedulerStatistics statistics()const;
+    // Register labels during setup and reuse their compact handles in task options and scopes.
+    [[nodiscard]] CpuTaskProfileLabel registerProfileLabel(const Name& name);
+    // Capture changes discard buffered events and stale timers. Zero configured capacity disables profiling.
+    void setProfiling(bool enabled, u64 frameIndex = 0u);
+    [[nodiscard]] usize readProfileEvents(CpuTaskProfileEvent* output, usize capacity)noexcept;
     [[nodiscard]] u64 domainIdentity()const noexcept{ return m_domainIdentity; }
     [[nodiscard]] u32 workerThreadCount()const noexcept{ return m_workerCount; }
     [[nodiscard]] bool isParallelEnabled()const noexcept{ return m_workerCount != 0u; }
@@ -265,11 +241,21 @@ private:
     void notifyWorkers(u32 wakeMask)noexcept;
     void notifyProgress(u32 wakeMask)noexcept;
     void notifyProgress()noexcept;
+    void profileReadyLocked(u32 index)noexcept;
+    [[nodiscard]] ProfileSample beginProfileLocked(
+        CpuTaskProfileKind::Enum kind,
+        TaskHandle task,
+        CpuTaskProfileLabel label,
+        usize workerIndex,
+        CpuAffinity::Enum affinity
+    )const noexcept;
+    void finishProfileLocked(const ProfileSample& sample, Timer end)noexcept;
 
 
 private:
     const u64 m_domainIdentity;
     const ThreadId m_mainThread;
+    const usize m_profileEventCapacity;
     Alloc::GlobalArena m_arena;
     Deque<TaskNode, Alloc::GlobalArena> m_nodes;
     Vector<CpuWorkerPlacement, Alloc::GlobalArena> m_placements;
@@ -277,6 +263,9 @@ private:
     Vector<u32, Alloc::GlobalArena> m_searchStack;
     Vector<u64, Alloc::GlobalArena> m_searchVisits;
     Vector<u64, Alloc::GlobalArena> m_scopeNegativeVisits;
+    Vector<ProfileLabelRecord, Alloc::GlobalArena> m_profileLabels;
+    Vector<CpuTaskProfileEvent, Alloc::GlobalArena> m_profileEvents;
+    Vector<ReadyProfile, Alloc::GlobalArena> m_readyProfiles;
     ReadyQueue m_ready[s_QueueCount];
     u32 m_readyWorkerCosts[3u]{};
     u32 m_sleepingWorkers[3u]{};
@@ -295,6 +284,13 @@ private:
     usize m_outstanding = 0u;
     bool m_aborting = false;
     CpuTaskSchedulerStatistics m_statistics;
+    Atomic<bool> m_profileEnabled{ false };
+    u64 m_profileEpoch = 0u;
+    u64 m_profileFrameIndex = 0u;
+    u64 m_profileRecordedEvents = 0u;
+    u64 m_profileDroppedEvents = 0u;
+    usize m_profileRead = 0u;
+    usize m_profileCount = 0u;
     Vector<JoiningThread, Alloc::GlobalArena> m_workers;
 };
 
@@ -311,8 +307,9 @@ public:
 
 
 public:
-    explicit CpuTaskScope(CpuTaskScheduler& scheduler)noexcept
+    explicit CpuTaskScope(CpuTaskScheduler& scheduler, CpuTaskProfileLabel label = {})noexcept
         : m_scheduler(scheduler)
+        , m_profileLabel(label)
     {}
     ~CpuTaskScope()noexcept(false);
 
@@ -367,6 +364,7 @@ public:
 
 private:
     CpuTaskScheduler& m_scheduler;
+    const CpuTaskProfileLabel m_profileLabel;
     Atomic<usize> m_pending{ 0u };
     bool m_canceled = false;
     bool m_allowCallerWork = false;

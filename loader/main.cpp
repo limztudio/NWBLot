@@ -370,7 +370,7 @@ static int RunProjectRuntime(
                 return -1;
             }
 
-            NWB::Core::CpuTaskScope projectTasks(frame.cpuTasks());
+            NWB::Core::CpuTaskScope projectTasks(frame.cpuTasks(), frame.cpuTasks().registerProfileLabel(Name("cpu.task.project")));
             NWB::ProjectRuntimeContext context = {
                 frame.graphics(),
                 frame.input(),

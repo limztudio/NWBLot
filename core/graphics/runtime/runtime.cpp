@@ -42,6 +42,9 @@ private:
 };
 
 
+constexpr Name s_GraphicsSetupTaskProfileName("cpu.task.graphics.setup");
+constexpr Name s_GraphicsFrameTaskProfileName("cpu.task.graphics.frame");
+
 inline constexpr Name s_GraphicsFrameCpuTimingScope("graphics.frame");
 inline constexpr Name s_GraphicsAnimateCpuTimingScope("graphics.animate");
 inline constexpr Name s_GraphicsBeginFrameCpuTimingScope("graphics.begin_frame");
@@ -129,8 +132,8 @@ GraphicsRuntime::GraphicsRuntime(
     : m_allocator(allocator)
     , m_cpuScheduler(cpuScheduler)
     , m_gpuTasks(gpuTasks)
-    , m_tasks(cpuScheduler, cpuScheduler.registerProfileLabel(Name("cpu.task.graphics.setup")))
-    , m_frameTaskProfileLabel(cpuScheduler.registerProfileLabel(Name("cpu.task.graphics.frame")))
+    , m_tasks(cpuScheduler, cpuScheduler.registerProfileLabel(__hidden_graphics_lifecycle::s_GraphicsSetupTaskProfileName))
+    , m_frameTaskProfileLabel(cpuScheduler.registerProfileLabel(__hidden_graphics_lifecycle::s_GraphicsFrameTaskProfileName))
     , m_deviceCreationParams(m_allocator.getObjectArena())
     , m_gpuTiming(m_allocator.getObjectArena(), gpuTiming)
     , m_cpuTiming(cpuTiming)

@@ -143,6 +143,79 @@ TEST(ScratchArenaReuse, ReverseFreesCrossChunkBoundariesAndReuseAllEmptyChunks){
     }
 }
 
+TEST(ScratchArenaReuse, ColdAlignmentBucketsAllocateOnceAndReleaseAllBacking){
+    constexpr usize s_Alignments[]{ 1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u };
+    ArenaMemoryStats before;
+    ArenaMemoryStats live;
+    bool valid = true;
+    usize expectedReserved = 0u;
+    ArenaMemoryStats released;
+    {
+        ScratchArena arena(Name("tests/scratch_reuse/cold_alignment_buckets"), 257u);
+        u8* allocations[LengthOf(s_Alignments)] = {};
+        before = HeapBackingMemoryStats();
+        for(usize index = 0u; index < LengthOf(s_Alignments); ++index){
+            const usize alignment = s_Alignments[index];
+            const usize bytes = alignment + 3u;
+            allocations[index] = static_cast<u8*>(arena.allocate(alignment, bytes));
+            if(!allocations[index]){
+                valid = false;
+                continue;
+            }
+            valid &= reinterpret_cast<usize>(allocations[index]) % alignment == 0u;
+            allocations[index][0u] = static_cast<u8>(index + 1u);
+            allocations[index][bytes - 1u] = static_cast<u8>(index + 19u);
+            expectedReserved += Alignment(alignment, 257u);
+        }
+        live = HeapBackingMemoryStats();
+        valid &= arena.memoryStats().reservedBytes == expectedReserved;
+        for(usize index = LengthOf(s_Alignments); index != 0u;){
+            --index;
+            if(!allocations[index])
+                continue;
+            const usize alignment = s_Alignments[index];
+            const usize bytes = alignment + 3u;
+            valid &= allocations[index][0u] == static_cast<u8>(index + 1u);
+            valid &= allocations[index][bytes - 1u] == static_cast<u8>(index + 19u);
+            arena.deallocate(allocations[index], alignment, bytes);
+        }
+        released = arena.memoryStats();
+    }
+    const ArenaMemoryStats after = HeapBackingMemoryStats();
+    EXPECT_TRUE(valid);
+    EXPECT_EQ(live.allocationCount - before.allocationCount, LengthOf(s_Alignments));
+    EXPECT_EQ(after.deallocationCount - before.deallocationCount, LengthOf(s_Alignments));
+    EXPECT_EQ(after.usedBytes, before.usedBytes);
+    EXPECT_EQ(released.usedBytes, 0u);
+    EXPECT_EQ(released.reservedBytes, expectedReserved);
+}
+
+TEST(ScratchArenaReuse, InvalidRuntimeAlignmentDoesNotConsumeExistingBucket){
+    ScratchArena arena(Name("tests/scratch_reuse/invalid_alignment"), 256u);
+    auto* sentinel = static_cast<u8*>(arena.allocate(2u, 32u));
+    ASSERT_NE(sentinel, nullptr);
+    sentinel[0u] = 71u;
+    const ArenaMemoryStats before = arena.memoryStats();
+#if defined(NWB_DEBUG)
+    EXPECT_DEATH_IF_SUPPORTED({ (void)arena.allocate(3u, 32u); }, "");
+    EXPECT_DEATH_IF_SUPPORTED({ (void)arena.reallocate(sentinel, 3u, 64u); }, "");
+    EXPECT_DEATH_IF_SUPPORTED({ arena.deallocate(sentinel, 3u, 32u); }, "");
+#else
+    EXPECT_EQ(arena.allocate(3u, 32u), nullptr);
+    EXPECT_EQ(arena.reallocate(sentinel, 3u, 64u), nullptr);
+    arena.deallocate(sentinel, 3u, 32u);
+#endif
+    EXPECT_EQ(sentinel[0u], 71u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, before.usedBytes);
+    EXPECT_EQ(arena.memoryStats().allocationCount, before.allocationCount);
+    EXPECT_EQ(arena.memoryStats().reallocationCount, before.reallocationCount);
+    EXPECT_EQ(arena.memoryStats().deallocationCount, before.deallocationCount);
+    EXPECT_THROW((void)arena.allocate(256u, Limit<usize>::s_Max), std::bad_array_new_length);
+    EXPECT_EQ(arena.memoryStats().usedBytes, before.usedBytes);
+    arena.deallocate(sentinel, 2u, 32u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+}
+
 TEST(ScratchArenaReuse, AlignmentBucketsKeepIndependentLifoStacksAndCallerSentinels){
     ScratchArena arena(Name("tests/scratch_reuse/alignments"), 256u);
     constexpr usize s_Alignments[]{ 1u, 8u, 64u, 256u };
@@ -274,6 +347,21 @@ TEST(ScratchArenaReuse, ZeroByteOperationsRemainValidBeforeAndAfterCachingTheLas
     EXPECT_EQ(arena.memoryStats().deallocationCount, 2u);
 }
 
+TEST(ScratchArenaReuse, ZeroInitialCapacityNeedsPositiveBackingBeforeRawZeroAllocation){
+    ScratchArena arena(Name("tests/scratch_reuse/zero_initial_capacity"), 0u);
+    EXPECT_EQ(arena.allocate(8u, 0u), nullptr);
+    EXPECT_EQ(arena.memoryStats().reservedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().allocationCount, 0u);
+    void* allocation = arena.allocate(8u, 9u);
+    ASSERT_NE(allocation, nullptr);
+    arena.deallocate(allocation, 8u, 9u);
+    const ArenaMemoryStats cached = arena.memoryStats();
+    EXPECT_NE(arena.allocate(8u, 0u), nullptr);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().reservedBytes, cached.reservedBytes);
+    EXPECT_EQ(arena.memoryStats().allocationCount, cached.allocationCount);
+}
+
 TEST(ScratchArenaReuse, RelocationReusesCachedBackingAndUnlinksAnEmptiedFormerTop){
     ScratchArena arena(Name("tests/scratch_reuse/cached_relocation"), 256u);
     auto* sentinel = static_cast<u8*>(arena.allocate(8u, 64u));
@@ -330,6 +418,8 @@ TEST(ScratchArenaReuse, FailedRelocationPreservesLiveAllocationsCachedChunksAndC
     arena.deallocate(cached, 1u, 1536u);
     const ArenaMemoryStats before = arena.memoryStats();
     EXPECT_EQ(arena.reallocate(allocation, 1u, Limit<usize>::s_Max), nullptr);
+    // This request is already aligned; only adding the chunk header can overflow.
+    EXPECT_EQ(arena.allocate(256u, Limit<usize>::s_Max - 255u), nullptr);
     const ArenaMemoryStats after = arena.memoryStats();
     EXPECT_EQ(after.usedBytes, before.usedBytes);
     EXPECT_EQ(after.reservedBytes, before.reservedBytes);

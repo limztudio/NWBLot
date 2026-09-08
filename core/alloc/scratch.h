@@ -10,6 +10,7 @@
 
 #include <global/arena_base.h>
 
+#include <bit>
 #include <new>
 
 
@@ -39,25 +40,33 @@ private:
 
     public:
         [[nodiscard]] static inline Chunk* create(usize align, usize size){
-            auto* chunk = new(std::nothrow) Chunk(align, size);
-            if(!chunk || !chunk->m_buffer){
-                delete chunk;
+            const usize payloadSize = Alignment(align, size);
+            if(payloadSize == 0u)
                 return nullptr;
-            }
-            return chunk;
+            const usize backingAlign = Max(align, alignof(Chunk));
+            const usize payloadOffset = Alignment(backingAlign, sizeof(Chunk));
+            if(AddOverflows<usize>(payloadOffset, payloadSize))
+                return nullptr;
+            void* const backing = CoreAllocAligned(payloadOffset + payloadSize, backingAlign);
+            if(!backing)
+                return nullptr;
+
+            // Header and aligned payload share one backing allocation. Logical capacity
+            // excludes the header so cache sizing and arena telemetry keep their contract.
+            return new(backing) Chunk(payloadSize, static_cast<u8*>(backing) + payloadOffset);
         }
         static inline void destroy(Chunk* chunk){
-            CoreFreeAligned(chunk->m_buffer);
-            delete chunk;
+            chunk->~Chunk();
+            CoreFreeAligned(chunk);
         }
 
 
     public:
-        inline Chunk(usize align, usize size)
-            : m_size(Alignment(align, size))
+        inline Chunk(usize size, void* buffer)noexcept
+            : m_size(size)
             , m_remaining(m_size)
             , m_next(nullptr)
-            , m_buffer(CoreAllocAligned(m_size, align))
+            , m_buffer(buffer)
             , m_available(m_buffer)
         {}
     private:
@@ -128,6 +137,14 @@ private:
         usize size;
     };
 
+    [[nodiscard]] static constexpr bool IsValidAlignment(usize align)noexcept{
+        return align != 0u && align <= s_MaxAlignSize && (align & (align - 1u)) == 0u;
+    }
+    [[nodiscard]] static constexpr usize AlignedSize(usize align, usize size){
+        // All callers validate a power-of-two alignment before using this fast path.
+        return AddSize(size, align - 1u) & ~(align - 1u);
+    }
+
 
 public:
     using Base::allocate;
@@ -142,7 +159,7 @@ public:
             auto& bucket = m_bucket[i];
             bucket.active = nullptr;
             bucket.cached = nullptr;
-            bucket.size = Alignment(static_cast<usize>(1) << i, initSize);
+            bucket.size = AlignedSize(static_cast<usize>(1) << i, initSize);
         }
     }
     ~ScratchArena(){
@@ -161,19 +178,14 @@ public:
 
 public:
     inline void* allocate(usize align, usize size){
-        NWB_ASSERT_MSG(align != 0, NWB_TEXT("ScratchArena alignment must be non-zero"));
-        NWB_ASSERT_MSG(align <= s_MaxAlignSize, NWB_TEXT("ScratchArena alignment exceeds s_MaxAlignSize"));
-        if(align == 0 || align > s_MaxAlignSize)
+        NWB_ASSERT_MSG(IsValidAlignment(align), NWB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
+        if(!IsValidAlignment(align))
             return nullptr;
 
-        const usize bucketIndex = FloorLog2(align);
-        NWB_ASSERT_MSG(bucketIndex < LengthOf(m_bucket), NWB_TEXT("ScratchArena alignment bucket index is out of range"));
-        if(bucketIndex >= LengthOf(m_bucket))
-            return nullptr;
-
+        const usize bucketIndex = static_cast<usize>(std::countr_zero(align));
         auto& bucket = m_bucket[bucketIndex];
 
-        size = Alignment(align, size);
+        size = AlignedSize(align, size);
         if(!bucket.active || size > bucket.active->m_remaining){
             if(!acquireChunk(bucket, align, size))
                 return nullptr;
@@ -189,24 +201,19 @@ public:
     // LIFO reclaim only: p must be the bucket's most-recent allocation (same contract as deallocate);
     // resizes the top in place, or relocates to a fresh block and copies when it cannot grow in place.
     inline void* reallocate(void* p, usize align, usize size){
-        NWB_ASSERT_MSG(align != 0, NWB_TEXT("ScratchArena alignment must be non-zero"));
-        NWB_ASSERT_MSG(align <= s_MaxAlignSize, NWB_TEXT("ScratchArena alignment exceeds s_MaxAlignSize"));
-        if(align == 0 || align > s_MaxAlignSize)
+        NWB_ASSERT_MSG(IsValidAlignment(align), NWB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
+        if(!IsValidAlignment(align))
             return nullptr;
         if(!p)
             return allocate(align, size);
 
-        const usize bucketIndex = FloorLog2(align);
-        NWB_ASSERT_MSG(bucketIndex < LengthOf(m_bucket), NWB_TEXT("ScratchArena alignment bucket index is out of range"));
-        if(bucketIndex >= LengthOf(m_bucket))
-            return nullptr;
-
+        const usize bucketIndex = static_cast<usize>(std::countr_zero(align));
         auto& bucket = m_bucket[bucketIndex];
         NWB_ASSERT_MSG(bucket.active != nullptr, NWB_TEXT("Attempted to reallocate before allocating"));
         if(!bucket.active)
             return nullptr;
 
-        size = Alignment(align, size);
+        size = AlignedSize(align, size);
 
         Chunk* chunk = bucket.active;
         const usize oldSize = chunk->lifoTopSpan(p);
@@ -237,22 +244,17 @@ public:
     // LIFO reclaim spans chunks: empty chunks are cached and expose the previous live allocation;
     // any out-of-order free is a no-op and is reclaimed in bulk when the arena is destroyed.
     inline void deallocate(void* p, usize align, usize size){
-        NWB_ASSERT_MSG(align != 0, NWB_TEXT("ScratchArena alignment must be non-zero"));
-        NWB_ASSERT_MSG(align <= s_MaxAlignSize, NWB_TEXT("ScratchArena alignment exceeds s_MaxAlignSize"));
-        if(align == 0 || align > s_MaxAlignSize || size == 0u)
+        NWB_ASSERT_MSG(IsValidAlignment(align), NWB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
+        if(!IsValidAlignment(align) || size == 0u)
             return;
 
-        const usize bucketIndex = FloorLog2(align);
-        NWB_ASSERT_MSG(bucketIndex < LengthOf(m_bucket), NWB_TEXT("ScratchArena alignment bucket index is out of range"));
-        if(bucketIndex >= LengthOf(m_bucket))
-            return;
-
+        const usize bucketIndex = static_cast<usize>(std::countr_zero(align));
         auto& bucket = m_bucket[bucketIndex];
         NWB_ASSERT_MSG(bucket.active != nullptr, NWB_TEXT("Attempted to deallocate before allocating"));
         if(!bucket.active)
             return;
 
-        size = Alignment(align, size);
+        size = AlignedSize(align, size);
         Chunk* chunk = bucket.active;
         if(chunk->tryPopLifo(p, size)){
             m_memoryStats.recordDeallocation(size);

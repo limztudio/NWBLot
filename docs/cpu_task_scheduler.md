@@ -2,7 +2,7 @@
 
 NWB's runtime owns one `Core::CpuTaskScheduler`, constructed before GraphicsRuntime and project initialization. Systems own task scopes and data; they borrow the execution service. Asset-builder and FBX-converter processes each construct their own scheduler once at their entry point.
 
-The CPU execution service belongs to the `core/task` domain: include `<core/task/cpu/scheduler.h>` and link `nwb_cpu_task` for `Core::CpuTaskScheduler`, `Core::CpuTaskScope`, and the associated task types. Allocator primitives remain in `core/alloc`. Scheduler coverage lives in `tests/unit/task` under `nwb_cpu_task_tests`; processor topology coverage remains in `tests/unit/global`.
+The CPU execution service belongs to the `core/task` domain: include `<core/task/cpu/scheduler.h>` and link `nwb_cpu_task` for `Core::CpuTaskScheduler`, `Core::CpuTaskScope`, and the associated task types. Allocator primitives remain in `core/alloc`. Scheduler coverage lives in `tests/unit/task/cpu` under `nwb_cpu_task_tests`; processor topology coverage remains in `tests/unit/global`.
 
 ## Initialization and heterogeneous CPUs
 
@@ -46,7 +46,7 @@ Ordinary task handles and task scopes are the completion boundaries. A scope inc
 
 Normal scope and scheduler destruction joins outstanding work through a throwing wait. `drain()` is reserved for terminal cleanup: it stops admission across the shared scheduler and skips queued callbacks before joining active work and retiring captures. Scope `drain()` also aborts the shared service, because application unwind is terminal under the engine exception policy. Use `cancel()` followed by `wait()` for ordinary scope-local cancellation. During an existing exception, destructors use terminal drain so cleanup cannot invoke another queued throwing callback. Owners that store task scopes behind a non-throwing smart-pointer destructor must explicitly join before resetting the pointer; project world shutdown already does this through `World::clear()`.
 
-Task nodes, dependency storage, and worker metadata belong to the scheduler's tracked `Alloc::GlobalArena`. The task domain owns its arena identities in `core/task/cpu/arena_names.h`: `core/task/cpu/scheduler` and `core/task/cpu/dependencies`. Storage grows with the task graph and reuses completed node slots. There is no small fixed arena limit on ordinary task bursts. Search storage grows geometrically and is reserved before publishing nodes, keeping completion cleanup allocation-free.
+Task nodes, dependency storage, and worker metadata belong to the scheduler's tracked `Alloc::GlobalArena`. The task domain owns its arena identity in `core/task/cpu/arena_names.h`: `core/task/cpu/scheduler`. Nested dependency checks reuse the scheduler-owned search storage instead of allocating a temporary arena. Storage grows with the task graph and reuses completed node slots. There is no small fixed arena limit on ordinary task bursts. Search storage grows geometrically and is reserved before publishing nodes, keeping completion cleanup allocation-free.
 
 ## Parallel loops and main-thread work
 
@@ -58,7 +58,7 @@ The main thread must pump the scheduler while main-thread tasks are outstanding.
 
 ECS preparation remains a serial caller phase because existing preparation can create entities and change component storage. Each preparation callback must complete those structural changes before returning. Updates are dependency tasks: every conflicting component access preserves system registration order; read/read accesses can overlap. Structural changes during concurrent updates still require the caller to provide a safe structural boundary. UI updates explicitly target the main thread.
 
-Graphics owns a scope for async resource setup and resource-lifetime joins. The loader owns a project scope and joins it before project callbacks are unloaded. Normal world clearing joins only its world scope. GPU recording uses the shared CPU scheduler while retaining worker-local command storage, serial command-IR capture, and the current skinning preparation/submission ordering.
+`GraphicsRuntime` owns a scope for async resource setup and resource-lifetime joins. The loader owns a project scope and joins it before project callbacks are unloaded. Normal world clearing joins only its world scope. GPU recording uses the shared CPU scheduler while retaining worker-local command storage, serial command-IR capture, and the current skinning preparation/submission ordering.
 
 `Core::GpuTaskScheduler`, declared in `core/task/gpu/scheduler.h`, coordinates GPU graph recording, submission, and recovery. It lives in the GPU task domain alongside the graph compiler and recorder. `GraphicsRuntime` owns the separate device, resource, and presentation lifecycle and borrows the frame-owned CPU/GPU schedulers. The GPU graph continues to own resource barriers, physical queues, acceptance, rollback, and device-completion tokens. CPU submission completion does not imply GPU completion. Resource destruction still requires its existing GPU join in addition to CPU scope retirement.
 
@@ -178,3 +178,9 @@ Frame CPU perf capture now enables scheduler profiling automatically. `Perf::Col
 The disabled-path ABBA comparison against step 4 used 48 samples/design. Single-chunk median was 33.061 → 33.289 µs and tiny-batch median 921.848 → 932.381 µs; the other median controls ranged from about -5% to +4.4%, with worker p95 variation. These measurements establish the local disabled overhead rather than claiming profiling itself is free. Raw comparisons and the baseline are under ignored `__cmake/cpu_scheduler_followup/step5/`.
 
 Final validation: the Linux Debug build passed for CPU/GPU tasks, perf/telemetry, graphics, ECS/rendering, native smoke tests, asset tools, FBX conversion, and Testbed. All ten selected CTest targets passed, including the three native Vulkan/asset suites; all 52 source-policy checks/self-tests passed. The final Debug and Optimize CPU suites each ran 68 cases: 66 passed and two physical heterogeneous-class cases skipped on this host. Eight CPU profiling cases cover disabled capture, labels/frame attribution, buffer wrap/overflow, stale epoch rejection, native idle lanes, foreign labels, zero capacity, and concurrent capture changes. Four adapter tests verify perf/telemetry publication, owner-thread delivery, disabled-sink draining, and bounded collection. Native tests retain capability-based skips for unavailable queues/extensions. Windows builds and application frame-rate measurements were not performed on this Linux host.
+
+### Post-integration cleanup
+
+Graphics resources now expose their shared scheduler directly to Vulkan callers; the redundant parallel-range forwarding methods are removed. The resource base needs only a scheduler forward declaration, and upload declaration files include the task graph instead of the compiler. Nested dependency checks reuse the scheduler's pre-sized search vectors and generation stamps, removing the temporary dependency arena. Profiling metadata preparation no longer reads a timestamp that execution immediately overwrites; each measured interval establishes its own start time.
+
+The Linux Debug build, eight selected CPU/GPU/graphics/telemetry/native test targets, the Optimize CPU suite, and all 52 policy checks passed. Capability-dependent tests retained their existing skips.

@@ -5,7 +5,7 @@
 #include "runtime_internal.h"
 
 #include <core/graphics/backend_selection.h>
-#include <core/task/gpu/compiler.h>
+#include <core/task/gpu/task_graph.h>
 
 #include <core/common/log.h>
 

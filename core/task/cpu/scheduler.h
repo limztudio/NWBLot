@@ -242,7 +242,7 @@ private:
     void notifyProgress(u32 wakeMask)noexcept;
     void notifyProgress()noexcept;
     void profileReadyLocked(u32 index)noexcept;
-    [[nodiscard]] ProfileSample beginProfileLocked(
+    [[nodiscard]] ProfileSample prepareProfileLocked(
         CpuTaskProfileKind::Enum kind,
         TaskHandle task,
         CpuTaskProfileLabel label,

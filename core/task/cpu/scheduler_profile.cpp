@@ -28,13 +28,14 @@ CpuTaskScheduler::ProfileMeasure::ProfileMeasure(
     ScopedLock lock(m_scheduler.m_mutex);
 
     if(m_scheduler.m_profileEnabled.load(MemoryOrder::relaxed)){
-        m_sample = m_scheduler.beginProfileLocked(
+        m_sample = m_scheduler.prepareProfileLocked(
             kind,
             task,
             label,
             scheduler.currentWorkerIndex(),
             scheduler.currentWorkerAffinity()
         );
+        m_sample->begin = TimerNow();
     }
 }
 CpuTaskScheduler::ProfileMeasure::~ProfileMeasure()noexcept{
@@ -122,7 +123,7 @@ void CpuTaskScheduler::profileReadyLocked(const u32 index)noexcept{
     ready.captureEpoch = m_profileEpoch;
 }
 
-CpuTaskScheduler::ProfileSample CpuTaskScheduler::beginProfileLocked(
+CpuTaskScheduler::ProfileSample CpuTaskScheduler::prepareProfileLocked(
     const CpuTaskProfileKind::Enum kind,
     const TaskHandle task,
     CpuTaskProfileLabel label,
@@ -138,7 +139,7 @@ CpuTaskScheduler::ProfileSample CpuTaskScheduler::beginProfileLocked(
             label = node->scope->m_profileLabel;
         ancestor = node->parent;
     }
-    return { TimerNow(), kind, task, label, m_profileFrameIndex, m_profileEpoch, workerIndex, affinity };
+    return { Timer{}, kind, task, label, m_profileFrameIndex, m_profileEpoch, workerIndex, affinity };
 }
 
 void CpuTaskScheduler::finishProfileLocked(const ProfileSample& sample, const Timer end)noexcept{

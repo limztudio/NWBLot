@@ -5,8 +5,6 @@
 #include "scheduler.h"
 #include "arena_names.h"
 
-#include <core/alloc/scratch.h>
-
 #include <global/exception.h>
 #include <global/termination.h>
 
@@ -227,28 +225,33 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
         if(node->latestCanceledGeneration != 0u)
             ContainerDetail::ReserveGrowingCapacity(node->olderCanceledGenerations, AddSize(node->olderCanceledGenerations.size(), 1u));
         if(dependencyCount != 0u && s_execution && &s_execution->scheduler == this && s_execution->task.valid()){
-            Alloc::ScratchArena scratch(TaskArenaScope::s_CpuTaskDependencies, 4096u);
-            Vector<TaskHandle, Alloc::ScratchArena> frontier(scratch);
-            Vector<u8, Alloc::ScratchArena> visited(m_nodes.size(), 0u, scratch);
-            frontier.push_back(s_execution->task);
-            for(usize cursor = 0u; cursor < frontier.size(); ++cursor){
-                const TaskHandle candidate = frontier[cursor];
-                TaskNode* reachable = resolveLocked(candidate);
-                if(!reachable || visited[candidate.index] != 0u)
-                    continue;
-                visited[candidate.index] = 1u;
+            if(++m_searchGeneration == 0u){
+                for(u64& visit : m_searchVisits)
+                    visit = 0u;
+                ++m_searchGeneration;
+            }
+            m_searchStack.clear();
+            const auto visit = [this](const TaskHandle candidate){
+                if(resolveLocked(candidate) && m_searchVisits[candidate.index] != m_searchGeneration){
+                    m_searchVisits[candidate.index] = m_searchGeneration;
+                    m_searchStack.push_back(candidate.index);
+                }
+            };
+            visit(s_execution->task);
+            for(usize cursor = 0u; cursor < m_searchStack.size(); ++cursor){
+                const u32 candidateIndex = m_searchStack[cursor];
+                const TaskNode& reachable = m_nodes[candidateIndex];
                 for(usize dependency = 0u; dependency < dependencyCount; ++dependency){
                     if(
                         dependencies[dependency].domainIdentity == m_domainIdentity
-                        && dependencies[dependency].index == candidate.index
-                        && dependencies[dependency].generation == candidate.generation
+                        && dependencies[dependency].index == candidateIndex
+                        && dependencies[dependency].generation == reachable.generation
                     )
                         return {};
                 }
-                for(const TaskHandle dependent : reachable->dependents)
-                    frontier.push_back(dependent);
-                if(reachable->parent.valid())
-                    frontier.push_back(reachable->parent);
+                for(const TaskHandle dependent : reachable.dependents)
+                    visit(dependent);
+                visit(reachable.parent);
             }
         }
         // Reserve all dependency storage before publishing any edge. Duplicate predecessors are valid fan-in edges.
@@ -519,7 +522,7 @@ void CpuTaskScheduler::execute(
             }
         }
         if(invoke && m_profileEnabled.load(MemoryOrder::relaxed)){
-            profile = beginProfileLocked(CpuTaskProfileKind::Execution, handle, {}, workerIndex, affinity);
+            profile = prepareProfileLocked(CpuTaskProfileKind::Execution, handle, {}, workerIndex, affinity);
             const ReadyProfile& ready = m_readyProfiles[handle.index];
             if(ready.captureEpoch == m_profileEpoch)
                 readyProfile = ready;
@@ -668,8 +671,10 @@ void CpuTaskScheduler::workerLoop(const StopToken& stop, const usize workerIndex
                 ++m_sleepingWorkers[affinity];
                 ScopeExit unpark([this, affinity]()noexcept{ --m_sleepingWorkers[affinity]; });
                 Optional<ProfileSample> idle;
-                if(m_profileEnabled.load(MemoryOrder::relaxed))
-                    idle = beginProfileLocked(CpuTaskProfileKind::WorkerIdle, {}, {}, workerIndex, affinity);
+                if(m_profileEnabled.load(MemoryOrder::relaxed)){
+                    idle = prepareProfileLocked(CpuTaskProfileKind::WorkerIdle, {}, {}, workerIndex, affinity);
+                    idle->begin = TimerNow();
+                }
                 const bool ready = m_workerChanged[affinity].wait(lock, stop, [this, affinity](){
                     return hasReadyLocked(affinity, false, false);
                 });

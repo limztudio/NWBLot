@@ -8,7 +8,6 @@
 #include <core/global.h>
 
 #include <core/alloc/module.h>
-#include <core/task/cpu/scheduler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,6 +17,9 @@ NWB_CORE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CpuTaskScheduler;
 
 
 typedef u32 ObjectType;
@@ -81,16 +83,6 @@ public:
 
 protected:
     [[nodiscard]] CpuTaskScheduler& taskScheduler()const noexcept{ return m_cpuScheduler; }
-
-    template<typename Func>
-    void scheduleParallelFor(usize begin, usize end, const Func& func){
-        m_cpuScheduler.parallelFor(begin, end, func);
-    }
-
-    template<typename Func>
-    void scheduleParallelFor(usize begin, usize end, usize grainSize, const Func& func){
-        m_cpuScheduler.parallelFor(begin, end, grainSize, func);
-    }
 
 
 private:

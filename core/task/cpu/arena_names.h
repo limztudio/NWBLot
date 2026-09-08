@@ -26,7 +26,6 @@ namespace TaskArenaScope{
 
 
 inline constexpr Name s_CpuTaskScheduler("core/task/cpu/scheduler");
-inline constexpr Name s_CpuTaskDependencies("core/task/cpu/dependencies");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -408,7 +408,7 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     };
 
     if(taskScheduler().isParallelEnabled() && propertyCount >= s_ParallelCoopVecThreshold)
-        scheduleParallelFor(static_cast<usize>(0), propertyCount, fillMatMulFormat);
+        taskScheduler().parallelFor(static_cast<usize>(0), propertyCount, fillMatMulFormat);
     else{
         for(usize i = 0; i < propertyCount; ++i)
             fillMatMulFormat(i);

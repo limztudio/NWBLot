@@ -292,7 +292,7 @@ ShaderHandle Device::createShaderSpecialization(Shader* baseShader, const Shader
         };
 
         if(taskScheduler().isParallelEnabled() && numConstants >= s_ParallelSpecializationThreshold)
-            scheduleParallelFor(static_cast<usize>(0), numConstants, fillConstant);
+            taskScheduler().parallelFor(static_cast<usize>(0), numConstants, fillConstant);
         else{
             for(usize i = 0; i < numConstants; ++i)
                 fillConstant(i);
@@ -478,7 +478,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     };
 
     if(taskScheduler().isParallelEnabled() && attributeCount >= s_ParallelInputLayoutThreshold)
-        scheduleParallelFor(static_cast<usize>(0), attributeCount, s_InputLayoutGrainSize, fillVkAttribute);
+        taskScheduler().parallelFor(static_cast<usize>(0), attributeCount, s_InputLayoutGrainSize, fillVkAttribute);
     else{
         for(usize i = 0; i < attributeCount; ++i)
             fillVkAttribute(i);

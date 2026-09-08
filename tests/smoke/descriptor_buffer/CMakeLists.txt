@@ -116,6 +116,7 @@ target_sources(nwb_descriptor_buffer_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/round_trip/graph_upload_validation_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/round_trip/graphics_semantic_rejection_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/round_trip/imgui_texture_layout_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/round_trip/input_layout_storage_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/round_trip/imported_final_state_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/round_trip/imported_queue_ownership_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/round_trip/material_probes_test_support.h"

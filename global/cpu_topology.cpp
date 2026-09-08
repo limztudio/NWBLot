@@ -4,16 +4,16 @@
 
 #include "cpu_topology.h"
 
-#include "containers.h"
-#include "limit.h"
 #include "platform.h"
-#include "sync.h"
+#include "simplemath.h"
 #include "thread.h"
 
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
 #if defined(NWB_PLATFORM_LINUX)
+#include <cerrno>
+#include <cstdio>
 #include <sched.h>
 #endif
 
@@ -27,99 +27,189 @@ namespace __hidden_cpu_topology{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
-static constexpr u8 s_MaxEfficiencyClass = Limit<u8>::s_Max;
 static constexpr u32 s_AffinityMaskBitCount = sizeof(u64) * 8u;
-#endif
 
 
-struct AffinityMasks{
-    u64 m_performance = 0;
-    u64 m_efficiency = 0;
-
-    void initialize(){
-#if defined(NWB_PLATFORM_WINDOWS)
-        queryMask(m_performance, CpuAffinity::Performance);
-        queryMask(m_efficiency, CpuAffinity::Efficiency);
-#endif
+void classifyPlacements(InteropVector<CpuWorkerPlacement>& placements){
+    u32 minimumClass = Limit<u32>::s_Max;
+    u32 maximumClass = 0u;
+    for(const CpuWorkerPlacement& placement : placements){
+        minimumClass = Min(minimumClass, placement.performanceClass);
+        maximumClass = Max(maximumClass, placement.performanceClass);
     }
-
-#if defined(NWB_PLATFORM_WINDOWS)
-    void queryMask(u64& outMask, CpuAffinity::Enum type){
-        ULONG bufferSize = 0;
-        GetSystemCpuSetInformation(nullptr, 0, &bufferSize, GetCurrentProcess(), 0);
-        if(bufferSize == 0)
-            return;
-
-        InteropVector<u8> buffer(static_cast<usize>(bufferSize));
-        if(!GetSystemCpuSetInformation(
-            reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(buffer.data()),
-            bufferSize, &bufferSize, GetCurrentProcess(), 0
-        ))
-            return;
-
-        u8 minEfficiency = s_MaxEfficiencyClass;
-        u8 maxEfficiency = 0;
-
-        auto* ptr = buffer.data();
-        auto* end = ptr + bufferSize;
-        while(ptr < end){
-            auto* info = reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(ptr);
-            if(info->Type == CpuSetInformation){
-                u8 eff = info->CpuSet.EfficiencyClass;
-                if(eff < minEfficiency)
-                    minEfficiency = eff;
-                if(eff > maxEfficiency)
-                    maxEfficiency = eff;
-            }
-            ptr += info->Size;
-        }
-
-        if(minEfficiency == maxEfficiency)
-            return;
-
-        const u8 targetClass = (type == CpuAffinity::Performance) ? maxEfficiency : minEfficiency;
-
-        u64 mask = 0;
-        ptr = buffer.data();
-        while(ptr < end){
-            auto* info = reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(ptr);
-            if(info->Type == CpuSetInformation && info->CpuSet.EfficiencyClass == targetClass){
-                const u32 logicalIndex = info->CpuSet.LogicalProcessorIndex;
-                if(logicalIndex < s_AffinityMaskBitCount)
-                    mask |= (1ULL << logicalIndex);
-            }
-            ptr += info->Size;
-        }
-
-        outMask = mask;
+    for(CpuWorkerPlacement& placement : placements){
+        if(minimumClass == maximumClass)
+            placement.affinity = CpuAffinity::Any;
+        else
+            placement.affinity = placement.performanceClass == maximumClass ? CpuAffinity::Performance : CpuAffinity::Efficiency;
     }
-#endif
-};
-
-static AffinityMasks s_AffinityMasks;
-static OnceFlag s_AffinityMasksOnce;
-
-AffinityMasks& GetAffinityMasks(){
-    CallOnce(s_AffinityMasksOnce, [](){
-        s_AffinityMasks.initialize();
-    });
-    return s_AffinityMasks;
 }
 
 
-u32 QueryCurrentThreadCpuCoreCount(){
+#if defined(NWB_PLATFORM_WINDOWS)
+static constexpr u32 s_QueryRetryCount = 4u;
+
+
+[[nodiscard]] bool queryWindowsPlacements(InteropVector<CpuWorkerPlacement>& placements){
+    const HANDLE process = GetCurrentProcess();
+    GROUP_AFFINITY primaryAffinity{};
+    if(!GetThreadGroupAffinity(GetCurrentThread(), &primaryAffinity))
+        return false;
+
+    DWORD_PTR processMask = 0u;
+    DWORD_PTR systemMask = 0u;
+    if(!GetProcessAffinityMask(process, &processMask, &systemMask))
+        return false;
+
+    // Windows 11 reports all default groups here. Earlier Windows versions report the groups assigned to this process.
+    USHORT groupCount = GetActiveProcessorGroupCount();
+    if(groupCount == 0u)
+        return false;
+    InteropVector<USHORT> processGroups(groupCount);
+    if(!GetProcessGroupAffinity(process, &groupCount, processGroups.data()))
+        return false;
+    processGroups.resize(groupCount);
+
+    InteropVector<ULONG> defaultSets;
+    bool defaultSetsReady = false;
+    for(u32 attempt = 0u; attempt < s_QueryRetryCount; ++attempt){
+        ULONG requiredCount = 0u;
+        if(GetProcessDefaultCpuSets(process, defaultSets.data(), static_cast<ULONG>(defaultSets.size()), &requiredCount)){
+            defaultSets.resize(requiredCount);
+            defaultSetsReady = true;
+            break;
+        }
+        if(GetLastError() != ERROR_INSUFFICIENT_BUFFER || requiredCount == 0u)
+            return false;
+        defaultSets.resize(requiredCount);
+    }
+    if(!defaultSetsReady)
+        return false;
+
+    InteropVector<u64> informationStorage;
+    ULONG informationBytes = 0u;
+    bool informationReady = false;
+    for(u32 attempt = 0u; attempt < s_QueryRetryCount; ++attempt){
+        ULONG requiredBytes = 0u;
+        if(GetSystemCpuSetInformation(
+            reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(informationStorage.data()),
+            informationBytes, &requiredBytes, process, 0u
+        )){
+            informationBytes = requiredBytes;
+            informationReady = true;
+            break;
+        }
+        if(GetLastError() != ERROR_INSUFFICIENT_BUFFER || requiredBytes == 0u)
+            return false;
+        informationStorage.resize((static_cast<usize>(requiredBytes) + sizeof(u64) - 1u) / sizeof(u64));
+        informationBytes = requiredBytes;
+    }
+    if(!informationReady || informationBytes == 0u)
+        return false;
+
+    const auto* bytes = reinterpret_cast<const u8*>(informationStorage.data());
+    usize offset = 0u;
+    placements.reserve(informationBytes / sizeof(SYSTEM_CPU_SET_INFORMATION));
+    while(offset < informationBytes){
+        if(informationBytes - offset < sizeof(DWORD) + sizeof(CPU_SET_INFORMATION_TYPE))
+            return false;
+        const auto* information = reinterpret_cast<const SYSTEM_CPU_SET_INFORMATION*>(bytes + offset);
+        if(information->Size < sizeof(DWORD) + sizeof(CPU_SET_INFORMATION_TYPE) || information->Size > informationBytes - offset)
+            return false;
+        if(information->Type == CpuSetInformation){
+            if(information->Size < sizeof(SYSTEM_CPU_SET_INFORMATION))
+                return false;
+            const auto& cpuSet = information->CpuSet;
+            const bool permittedGroup = FindIf(
+                processGroups.begin(), processGroups.end(),
+                [&cpuSet](const USHORT group){ return group == cpuSet.Group; }
+            ) != processGroups.end();
+            const bool permittedSet = defaultSets.empty() || FindIf(
+                defaultSets.begin(), defaultSets.end(),
+                [&cpuSet](const ULONG id){ return id == cpuSet.Id; }
+            ) != defaultSets.end();
+            const bool reservedElsewhere = cpuSet.Allocated && !cpuSet.AllocatedToTargetProcess;
+            bool permittedMask = true;
+            if(processMask != 0u && systemMask != 0u){
+                if(cpuSet.Group == primaryAffinity.Group)
+                    permittedMask = (processMask & (static_cast<DWORD_PTR>(1u) << cpuSet.LogicalProcessorIndex)) != 0u;
+                else if(processMask != systemMask)
+                    permittedMask = false;
+            }
+            if(permittedGroup && permittedSet && permittedMask && !reservedElsewhere){
+                placements.push_back(CpuWorkerPlacement{
+                    cpuSet.LogicalProcessorIndex,
+                    cpuSet.Group,
+                    cpuSet.EfficiencyClass,
+                    CpuAffinity::Any
+                });
+            }
+        }
+        offset += information->Size;
+    }
+    return !placements.empty();
+}
+#endif
+
+
 #if defined(NWB_PLATFORM_LINUX)
-    cpu_set_t cpuSet;
-    CPU_ZERO(&cpuSet);
-    if(::sched_getaffinity(0, sizeof(cpuSet), &cpuSet) == 0){
-        const int coreCount = CPU_COUNT(&cpuSet);
-        if(coreCount > 0)
-            return static_cast<u32>(coreCount);
+static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
+
+
+[[nodiscard]] bool queryLinuxAffinity(InteropVector<usize>& affinityWords){
+    usize byteCount = sizeof(cpu_set_t);
+    while(byteCount <= s_MaxCpuAffinityBytes){
+        affinityWords.assign((byteCount + sizeof(usize) - 1u) / sizeof(usize), 0u);
+        const usize storageBytes = affinityWords.size() * sizeof(usize);
+        if(::sched_getaffinity(0, storageBytes, reinterpret_cast<cpu_set_t*>(affinityWords.data())) == 0)
+            return true;
+        if(errno != EINVAL)
+            return false;
+        byteCount *= 2u;
     }
-#endif
-    return 0u;
+    return false;
 }
+
+
+[[nodiscard]] u32 queryLinuxCapacity(u32 processorIndex){
+    char path[128];
+    const int pathLength = snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%u/cpu_capacity", processorIndex);
+    if(pathLength <= 0 || static_cast<usize>(pathLength) >= sizeof(path))
+        return 0u;
+    InputFileStream stream(path);
+    u32 capacity = 0u;
+    if(!(stream >> capacity))
+        return 0u;
+    return capacity;
+}
+
+
+[[nodiscard]] bool queryLinuxPlacements(InteropVector<CpuWorkerPlacement>& placements){
+    InteropVector<usize> affinityWords;
+    if(!queryLinuxAffinity(affinityWords))
+        return false;
+    const usize byteCount = affinityWords.size() * sizeof(usize);
+    const auto* affinity = reinterpret_cast<const cpu_set_t*>(affinityWords.data());
+    const int processorCount = CPU_COUNT_S(byteCount, affinity);
+    if(processorCount <= 0)
+        return false;
+    placements.reserve(static_cast<usize>(processorCount));
+    bool allCapacitiesKnown = true;
+    for(usize processorIndex = 0u; processorIndex < byteCount * 8u; ++processorIndex){
+        if(!CPU_ISSET_S(processorIndex, byteCount, affinity))
+            continue;
+        const u32 capacity = queryLinuxCapacity(static_cast<u32>(processorIndex));
+        allCapacitiesKnown = allCapacitiesKnown && capacity != 0u;
+        placements.push_back(CpuWorkerPlacement{ static_cast<u32>(processorIndex), 0u, capacity, CpuAffinity::Any });
+    }
+    // Missing capacity is unknown, not an efficiency tier. Do not compare partial capacity data or clock frequencies.
+    if(!allCapacitiesKnown){
+        for(CpuWorkerPlacement& placement : placements)
+            placement.performanceClass = 0u;
+    }
+    return !placements.empty();
+}
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -129,44 +219,109 @@ u32 QueryCurrentThreadCpuCoreCount(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool QueryCpuWorkerPlacements(InteropVector<CpuWorkerPlacement>& outPlacements){
+    outPlacements.clear();
+#if defined(NWB_PLATFORM_WINDOWS)
+    const bool queried = __hidden_cpu_topology::queryWindowsPlacements(outPlacements);
+#elif defined(NWB_PLATFORM_LINUX)
+    const bool queried = __hidden_cpu_topology::queryLinuxPlacements(outPlacements);
+#else
+    const bool queried = false;
+#endif
+    if(!queried){
+        outPlacements.clear();
+        return false;
+    }
+    __hidden_cpu_topology::classifyPlacements(outPlacements);
+    return true;
+}
+
+
+bool SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement){
+    if(!placement.valid())
+        return false;
+#if defined(NWB_PLATFORM_WINDOWS)
+    if(placement.processorGroup >= GetActiveProcessorGroupCount() || placement.logicalProcessorIndex >= sizeof(KAFFINITY) * 8u)
+        return false;
+    GROUP_AFFINITY affinity{};
+    affinity.Group = static_cast<WORD>(placement.processorGroup);
+    affinity.Mask = static_cast<KAFFINITY>(1u) << placement.logicalProcessorIndex;
+    return SetThreadGroupAffinity(GetCurrentThread(), &affinity, nullptr) != FALSE;
+#elif defined(NWB_PLATFORM_LINUX)
+    InteropVector<usize> affinityWords;
+    if(placement.processorGroup != 0u || !__hidden_cpu_topology::queryLinuxAffinity(affinityWords))
+        return false;
+    const usize byteCount = affinityWords.size() * sizeof(usize);
+    auto* affinity = reinterpret_cast<cpu_set_t*>(affinityWords.data());
+    if(placement.logicalProcessorIndex >= byteCount * 8u || !CPU_ISSET_S(placement.logicalProcessorIndex, byteCount, affinity))
+        return false;
+    CPU_ZERO_S(byteCount, affinity);
+    CPU_SET_S(placement.logicalProcessorIndex, byteCount, affinity);
+    return ::sched_setaffinity(0, byteCount, affinity) == 0;
+#else
+    return false;
+#endif
+}
 
 
 u64 QueryCpuAffinityMask(CpuAffinity::Enum type){
-    const auto& affinityMasks = __hidden_cpu_topology::GetAffinityMasks();
-    switch(type){
-    case CpuAffinity::Performance: return affinityMasks.m_performance;
-    case CpuAffinity::Efficiency: return affinityMasks.m_efficiency;
-    default: return 0;
+    if(type == CpuAffinity::Any)
+        return 0u;
+    InteropVector<CpuWorkerPlacement> placements;
+    if(!QueryCpuWorkerPlacements(placements))
+        return 0u;
+    u32 primaryGroup = 0u;
+#if defined(NWB_PLATFORM_WINDOWS)
+    GROUP_AFFINITY affinity{};
+    if(!GetThreadGroupAffinity(GetCurrentThread(), &affinity))
+        return 0u;
+    primaryGroup = affinity.Group;
+#endif
+    u64 mask = 0u;
+    for(const CpuWorkerPlacement& placement : placements){
+        if(
+            placement.affinity == type && placement.processorGroup == primaryGroup
+            && placement.logicalProcessorIndex < __hidden_cpu_topology::s_AffinityMaskBitCount
+        )
+            mask |= 1ULL << placement.logicalProcessorIndex;
     }
+    return mask;
 }
 
-u32 QueryCpuCoreCount(CpuAffinity::Enum type){
-    u64 mask = QueryCpuAffinityMask(type);
-    if(mask == 0){
-        // Linux callers inherit their effective cpuset/taskset mask. Honor it when no platform-specific
-        // performance/efficiency mask is available so worker pools do not oversubscribe constrained processes.
-        if(type == CpuAffinity::Any){
-            const u32 currentThreadCoreCount = __hidden_cpu_topology::QueryCurrentThreadCpuCoreCount();
-            if(currentThreadCoreCount > 0u)
-                return currentThreadCoreCount;
-        }
-        return static_cast<u32>(Thread::hardware_concurrency());
-    }
 
-    u32 count = 0;
-    while(mask){
-        count += static_cast<u32>(mask & 1);
-        mask >>= 1;
+u32 QueryCpuCoreCount(CpuAffinity::Enum type){
+    InteropVector<CpuWorkerPlacement> placements;
+    if(!QueryCpuWorkerPlacements(placements))
+        return Max(1u, static_cast<u32>(Thread::hardware_concurrency()));
+    u32 count = 0u;
+    for(const CpuWorkerPlacement& placement : placements){
+        if(type == CpuAffinity::Any || placement.affinity == type || placement.affinity == CpuAffinity::Any)
+            ++count;
     }
     return count;
 }
 
+
 void SetCurrentThreadCpuAffinity(u64 mask){
+    if(mask == 0u)
+        return;
 #if defined(NWB_PLATFORM_WINDOWS)
-    if(mask != 0)
-        SetThreadAffinityMask(GetCurrentThread(), static_cast<DWORD_PTR>(mask));
-#else
-    static_cast<void>(mask);
+    if(SetThreadAffinityMask(GetCurrentThread(), static_cast<DWORD_PTR>(mask)) == 0u)
+        return;
+#elif defined(NWB_PLATFORM_LINUX)
+    InteropVector<usize> affinityWords;
+    if(!__hidden_cpu_topology::queryLinuxAffinity(affinityWords))
+        return;
+    const usize byteCount = affinityWords.size() * sizeof(usize);
+    auto* affinity = reinterpret_cast<cpu_set_t*>(affinityWords.data());
+    for(usize processorIndex = 0u; processorIndex < byteCount * 8u; ++processorIndex){
+        if(processorIndex >= __hidden_cpu_topology::s_AffinityMaskBitCount || (mask & (1ULL << processorIndex)) == 0u)
+            CPU_CLR_S(processorIndex, byteCount, affinity);
+    }
+    if(::sched_setaffinity(0, byteCount, affinity) != 0)
+        return;
 #endif
 }
 

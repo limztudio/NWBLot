@@ -25,6 +25,7 @@ using Latch = std::latch;
 
 using Thread = std::thread;
 using JoiningThread = std::jthread;
+using ThreadId = std::thread::id;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,6 +34,9 @@ using JoiningThread = std::jthread;
 inline void SleepMS(u32 duration){
     std::this_thread::sleep_for(std::chrono::milliseconds(duration));
 }
+
+
+[[nodiscard]] inline ThreadId QueryCurrentThreadId()noexcept{ return std::this_thread::get_id(); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

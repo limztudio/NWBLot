@@ -29,6 +29,8 @@ inline constexpr Name s_ThreadPool("core/alloc/thread_pool");
 inline constexpr Name s_ThreadPoolBatch("core/alloc/thread_pool_batch");
 inline constexpr Name s_JobSystem("core/alloc/job_system");
 inline constexpr Name s_JobReadyBatch("core/alloc/job_ready_batch");
+inline constexpr Name s_CpuTaskScheduler("core/alloc/cpu_task_scheduler");
+inline constexpr Name s_CpuTaskDependencies("core/alloc/cpu_task_dependencies");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -434,10 +434,7 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
 
     auto* const block = __hidden_persistent::BlockFromAllocation(p);
     const bool liveBlock = __hidden_persistent::IsLiveBlock(m_bucket, m_maxSize, block);
-    NWB_ASSERT_MSG(
-        liveBlock,
-        NWB_TEXT("PersistentArena reallocation must reference a live block from this arena")
-    );
+    NWB_ASSERT_MSG(liveBlock, NWB_TEXT("PersistentArena reallocation must reference a live block from this arena"));
     if(!liveBlock)
         return nullptr;
 
@@ -455,9 +452,7 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
     const usize alignment = __hidden_persistent::EffectiveAlignment(align);
     __hidden_persistent::AllocationLayout layout;
     const usize pointerAddress = reinterpret_cast<usize>(p);
-    const bool keepsPointer = pointerAddress % alignment == 0u
-        && __hidden_persistent::BuildExistingPointerLayout(*block, p, size, layout)
-    ;
+    const bool keepsPointer = (pointerAddress % alignment == 0u) && __hidden_persistent::BuildExistingPointerLayout(*block, p, size, layout);
     if(keepsPointer && layout.spanBytes <= block->spanBytes){
         __hidden_persistent::SplitUsedBlock(m_freeHead, *block, layout.spanBytes);
         block->requestedBytes = size;
@@ -467,11 +462,7 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
 
     if(keepsPointer && layout.spanBytes > block->spanBytes){
         usize combinedSpanBytes = block->spanBytes;
-        for(
-            __hidden_persistent::Block* next = block->next;
-            next && next->isFree && combinedSpanBytes < layout.spanBytes;
-            next = next->next
-        ){
+        for(__hidden_persistent::Block* next = block->next; next && next->isFree && combinedSpanBytes < layout.spanBytes; next = next->next){
             const usize nextTotalBytes = sizeof(__hidden_persistent::Block) + next->spanBytes;
             if(AddOverflows<usize>(combinedSpanBytes, nextTotalBytes))
                 break;

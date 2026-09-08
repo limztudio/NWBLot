@@ -210,7 +210,7 @@ TEST(ScratchArenaReuse, InvalidRuntimeAlignmentDoesNotConsumeExistingBucket){
     EXPECT_EQ(arena.memoryStats().allocationCount, before.allocationCount);
     EXPECT_EQ(arena.memoryStats().reallocationCount, before.reallocationCount);
     EXPECT_EQ(arena.memoryStats().deallocationCount, before.deallocationCount);
-    EXPECT_THROW((void)arena.allocate(256u, Limit<usize>::s_Max), std::bad_array_new_length);
+    EXPECT_THROW((void)arena.allocate(256u, Limit<usize>::s_Max), AllocationSizeException);
     EXPECT_EQ(arena.memoryStats().usedBytes, before.usedBytes);
     arena.deallocate(sentinel, 2u, 32u);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);

@@ -8,10 +8,9 @@
 #include "global.h"
 #include "core.h"
 
+#include <global/allocation_size.h>
 #include <global/arena_base.h>
-
-#include <bit>
-#include <new>
+#include <global/bit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -182,7 +181,7 @@ public:
         if(!IsValidAlignment(align))
             return nullptr;
 
-        const usize bucketIndex = static_cast<usize>(std::countr_zero(align));
+        const usize bucketIndex = static_cast<usize>(CountTrailingZeros(align));
         auto& bucket = m_bucket[bucketIndex];
 
         size = AlignedSize(align, size);
@@ -207,7 +206,7 @@ public:
         if(!p)
             return allocate(align, size);
 
-        const usize bucketIndex = static_cast<usize>(std::countr_zero(align));
+        const usize bucketIndex = static_cast<usize>(CountTrailingZeros(align));
         auto& bucket = m_bucket[bucketIndex];
         NWB_ASSERT_MSG(bucket.active != nullptr, NWB_TEXT("Attempted to reallocate before allocating"));
         if(!bucket.active)
@@ -248,7 +247,7 @@ public:
         if(!IsValidAlignment(align) || size == 0u)
             return;
 
-        const usize bucketIndex = static_cast<usize>(std::countr_zero(align));
+        const usize bucketIndex = static_cast<usize>(CountTrailingZeros(align));
         auto& bucket = m_bucket[bucketIndex];
         NWB_ASSERT_MSG(bucket.active != nullptr, NWB_TEXT("Attempted to deallocate before allocating"));
         if(!bucket.active)

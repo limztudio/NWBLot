@@ -3651,19 +3651,100 @@ private:
         u32 marker = 0u;
     };
     struct AmdBreadcrumbBuffer{
+        struct Metadata{
+            Alloc::PersistentArena arena;
+            PersistentUniquePtr<AmdBreadcrumbSlotRecord[]> slotRecords;
+            PersistentUniquePtr<u64[]> nextSerials;
+            usize slotRecordCount = 0u;
+            usize nextSerialCount = 0u;
+
+            Metadata(
+                const Name& allocationLog,
+                const usize arenaBytes,
+                const usize newSlotRecordCount,
+                const usize newNextSerialCount
+            )
+                : arena(allocationLog, arenaBytes)
+                , slotRecords(MakePersistentUnique<AmdBreadcrumbSlotRecord[]>(arena, newSlotRecordCount))
+                , nextSerials(MakePersistentUnique<u64[]>(arena, newNextSerialCount))
+                , slotRecordCount(newSlotRecordCount)
+                , nextSerialCount(newNextSerialCount)
+            {}
+        };
+
         VkBuffer buffer = VK_NULL_HANDLE;
         VulkanAllocationHandle allocation = {};
         void* mappedMemory = nullptr;
         VulkanDetail::AmdBreadcrumbRingLayout layout;
         // Prevents concurrent recording from tearing marker records or per-queue reservation serials.
         Futex slotMutex;
-        GraphicsVector<AmdBreadcrumbSlotRecord> slotRecords;
-        GraphicsVector<u64> nextSerials;
+        Optional<Metadata> metadata;
 
-        explicit AmdBreadcrumbBuffer(Alloc::GlobalArena& arena)
-            : slotRecords(arena)
-            , nextSerials(arena)
-        {}
+        // The caller supplies a validated, non-empty ring layout. Both arrays allocate once and retain their fixed
+        // device-lifetime backing, so their exact allocation spans are sufficient for the private persistent arena.
+        [[nodiscard]] bool initializeMetadata(
+            const VulkanDetail::AmdBreadcrumbRingLayout& newLayout,
+            const Name& allocationLog
+        ){
+            usize expectedSlotCount = 0u;
+            if(
+                metadata
+                || newLayout.physicalQueueCount == 0u
+                || newLayout.slotsPerQueue == 0u
+                || !TryMultiply<usize>(
+                    newLayout.physicalQueueCount,
+                    newLayout.slotsPerQueue,
+                    expectedSlotCount
+                )
+                || expectedSlotCount != newLayout.totalSlotCount
+            )
+                return false;
+
+            usize slotRecordBytes = 0u;
+            usize nextSerialBytes = 0u;
+            if(
+                !TryMultiply<usize>(
+                    newLayout.totalSlotCount,
+                    sizeof(AmdBreadcrumbSlotRecord),
+                    slotRecordBytes
+                )
+                || !TryMultiply<usize>(
+                    newLayout.physicalQueueCount,
+                    sizeof(u64),
+                    nextSerialBytes
+                )
+            )
+                return false;
+
+            const usize slotRecordAllocationBytes = Alloc::PersistentArena::StructureAlignedSize(
+                slotRecordBytes,
+                alignof(AmdBreadcrumbSlotRecord)
+            );
+            const usize nextSerialAllocationBytes = Alloc::PersistentArena::StructureAlignedSize(
+                nextSerialBytes,
+                alignof(u64)
+            );
+            if(AddOverflows<usize>(slotRecordAllocationBytes, nextSerialAllocationBytes))
+                return false;
+
+            metadata.emplace(
+                allocationLog,
+                slotRecordAllocationBytes + nextSerialAllocationBytes,
+                newLayout.totalSlotCount,
+                newLayout.physicalQueueCount
+            );
+            if(!metadata->slotRecords || !metadata->nextSerials){
+                metadata.reset();
+                return false;
+            }
+
+            for(usize slotIndex = 0u; slotIndex < metadata->slotRecordCount; ++slotIndex)
+                metadata->slotRecords[slotIndex] = {};
+            for(usize queueIndex = 0u; queueIndex < metadata->nextSerialCount; ++queueIndex)
+                metadata->nextSerials[queueIndex] = 0u;
+            layout = newLayout;
+            return true;
+        }
     };
 
 
@@ -3871,7 +3952,7 @@ public:
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue);
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue);
     bool isGpuCrashDiagnosticsEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.NV_device_diagnostic_checkpoints; }
-    bool isAmdBreadcrumbEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.AMD_buffer_marker && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
+    bool isAmdBreadcrumbEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.AMD_buffer_marker && m_amdBreadcrumb.metadata && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
     // NV and AMD marker paths share one command-list tracker.
     bool isAnyGpuMarkerEnabled()const noexcept{ return isGpuCrashDiagnosticsEnabled() || isAmdBreadcrumbEnabled(); }
     [[nodiscard]] GpuCrashTracker& getGpuCrashTracker(){ return m_gpuCrashTracker; }

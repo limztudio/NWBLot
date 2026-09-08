@@ -91,6 +91,40 @@ TEST(PersistentArenaTests, StructureAlignedSizeFitsAnExactOverAlignedPayload){
 }
 
 
+TEST(PersistentArenaTests, StructureAlignedSizeFitsMultipleExactTypedArrayBackings){
+    struct SlotRecord{
+        u64 serial = 0u;
+        usize markerHash = 0u;
+        u32 marker = 0u;
+    };
+
+    constexpr usize s_QueueCount = 9u;
+    constexpr usize s_SlotsPerQueue = 256u;
+    constexpr usize s_SlotCount = s_QueueCount * s_SlotsPerQueue;
+    const usize slotRecordBytes = s_SlotCount * sizeof(SlotRecord);
+    const usize nextSerialBytes = s_QueueCount * sizeof(u64);
+    const usize poolBytes =
+        PersistentArena::StructureAlignedSize(slotRecordBytes, alignof(SlotRecord))
+        + PersistentArena::StructureAlignedSize(nextSerialBytes, alignof(u64))
+    ;
+    PersistentArena arena(Name("tests/persistent_arena/fixed_array_backings"), poolBytes);
+
+    {
+        auto slotRecords = NWB::Core::MakePersistentUnique<SlotRecord[]>(arena, s_SlotCount);
+        auto nextSerials = NWB::Core::MakePersistentUnique<u64[]>(arena, s_QueueCount);
+
+        ASSERT_TRUE(slotRecords);
+        ASSERT_TRUE(nextSerials);
+        slotRecords[0u].marker = 7u;
+        nextSerials[s_QueueCount - 1u] = 11u;
+        EXPECT_EQ(slotRecords[0u].marker, 7u);
+        EXPECT_EQ(nextSerials[s_QueueCount - 1u], 11u);
+    }
+
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+}
+
+
 TEST(PersistentArenaTests, ReusesAdjacentFreeBlocksForGrowthAndCoalescing){
     PersistentArena arena(
         Name("tests/persistent_arena/coalescing"),

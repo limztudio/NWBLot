@@ -54,7 +54,13 @@ void Device::captureDeviceLoss(const AStringView context){
 
     const bool hasCheckpoints = m_context.extensions.NV_device_diagnostic_checkpoints;
     const bool hasDeviceFault = m_context.extensions.EXT_device_fault;
-    const bool hasBufferMarker = m_context.extensions.AMD_buffer_marker && m_amdBreadcrumb.buffer != VK_NULL_HANDLE;
+    const bool hasBufferMarker =
+        m_context.extensions.AMD_buffer_marker
+        && m_amdBreadcrumb.metadata
+        && m_amdBreadcrumb.metadata->slotRecordCount == m_amdBreadcrumb.layout.totalSlotCount
+        && m_amdBreadcrumb.metadata->nextSerialCount == m_amdBreadcrumb.layout.physicalQueueCount
+        && m_amdBreadcrumb.buffer != VK_NULL_HANDLE
+    ;
 
     // Capture only the first concurrent device-loss report.
     if(m_gpuCrashCaptured.exchange(true))
@@ -139,7 +145,7 @@ void Device::captureDeviceLoss(const AStringView context){
                                 continue;
 
                             hasObservedMarker = true;
-                            const AmdBreadcrumbSlotRecord& record = m_amdBreadcrumb.slotRecords[flatSlot];
+                            const AmdBreadcrumbSlotRecord& record = m_amdBreadcrumb.metadata->slotRecords[flatSlot];
                             if(
                                 VulkanDetail::MatchesAmdBreadcrumbObservation(observedMarker, record.marker)
                                 && record.serial > newestRecord.serial
@@ -297,8 +303,10 @@ Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(
         m_amdBreadcrumb.buffer == VK_NULL_HANDLE
         || !queueInfo
         || queueInfo->id != queue
-        || static_cast<usize>(queue.index) >= m_amdBreadcrumb.nextSerials.size()
-        || m_amdBreadcrumb.slotRecords.size() != m_amdBreadcrumb.layout.totalSlotCount
+        || !m_amdBreadcrumb.metadata
+        || static_cast<usize>(queue.index) >= m_amdBreadcrumb.metadata->nextSerialCount
+        || m_amdBreadcrumb.metadata->slotRecordCount != m_amdBreadcrumb.layout.totalSlotCount
+        || m_amdBreadcrumb.metadata->nextSerialCount != m_amdBreadcrumb.layout.physicalQueueCount
     )
         return write;
 
@@ -309,7 +317,7 @@ Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(
         // Serialize the queue-local reservation and its paired CPU record.
         ScopedLock lock(m_amdBreadcrumb.slotMutex);
         if(!VulkanDetail::TryBuildNextAmdBreadcrumbReservation(
-            m_amdBreadcrumb.nextSerials[queue.index],
+            m_amdBreadcrumb.metadata->nextSerials[queue.index],
             m_amdBreadcrumb.layout.slotsPerQueue,
             reservation
         ))
@@ -323,10 +331,10 @@ Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(
         ))
             return write;
 
-        m_amdBreadcrumb.nextSerials[queue.index] = reservation.serial;
-        m_amdBreadcrumb.slotRecords[flatSlot].serial = reservation.serial;
-        m_amdBreadcrumb.slotRecords[flatSlot].markerHash = markerHash;
-        m_amdBreadcrumb.slotRecords[flatSlot].marker = reservation.marker;
+        m_amdBreadcrumb.metadata->nextSerials[queue.index] = reservation.serial;
+        m_amdBreadcrumb.metadata->slotRecords[flatSlot].serial = reservation.serial;
+        m_amdBreadcrumb.metadata->slotRecords[flatSlot].markerHash = markerHash;
+        m_amdBreadcrumb.metadata->slotRecords[flatSlot].marker = reservation.marker;
     }
 
     write.buffer = m_amdBreadcrumb.buffer;

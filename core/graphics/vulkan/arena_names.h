@@ -58,6 +58,7 @@ inline constexpr Name s_TextureResolveArena("core/graphics/texture_resolve");
 
 inline constexpr Name s_GpuCrashReportArena("core/graphics/gpu_crash_report");
 inline constexpr Name s_GpuCrashVendorBinaryArena("core/graphics/gpu_crash_vendor_binary");
+inline constexpr Name s_AmdBreadcrumbMetadataArena("core/graphics/amd_breadcrumb_metadata");
 inline constexpr Name s_AftermathDumpArena("core/graphics/aftermath_dump");
 
 

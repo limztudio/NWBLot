@@ -2372,11 +2372,13 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
     Core::Buffer* keysBuffer = m_rayTracingState.m_bvhSortKeysBuffer.get();
     Core::Buffer* payloadBuffer = m_rayTracingState.m_bvhSortPayloadBuffer.get();
 
-    // Consecutive sort steps require UAV barriers.
+    // Sort scratch is allocated for the maximum mesh size. Fence only this dispatch's padded lanes, including
+    // sentinel entries that participate in the sorting network.
+    const Core::BufferRange sortRange(0u, static_cast<u64>(paddedCount) * sizeof(u32));
     commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
     commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
-    commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
-    commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);
+    commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess, false, sortRange);
+    commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess, false, sortRange);
     commandList.commitBarriers();
 
     const u32 groupCount = paddedCount / static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE);
@@ -2391,9 +2393,9 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         commandList.dispatch(groups, 1u, 1u);
     };
-    const auto bvhSortBarrier = [&commandList, keysBuffer, payloadBuffer](){
-        commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);
+    const auto bvhSortBarrier = [&commandList, keysBuffer, payloadBuffer, sortRange](){
+        commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess, false, sortRange);
+        commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess, false, sortRange);
         commandList.commitBarriers();
     };
 

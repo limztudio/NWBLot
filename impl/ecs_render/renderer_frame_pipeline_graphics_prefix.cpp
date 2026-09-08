@@ -901,6 +901,12 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         csgIntervalClearTask = m_graphicsPrefixCsgIntervalClearTask;
     }
 
+    // Capacity grows independently of each frozen draw stream. Synchronize only the bytes uploaded for this pass.
+    const Core::BufferRange materialInstanceRange(0u, instanceData.size() * sizeof(InstanceGpuData));
+    const Core::BufferRange materialTypedRange(0u, materialTypedBytes.size());
+    const Core::BufferRange csgReceiverRange(0u, csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData));
+    const Core::BufferRange csgCutterRange(0u, csgFrameData.cutters.size() * sizeof(CsgCutterGpuData));
+
     Core::Alloc::ScratchArena gbufferResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferResourceUses{ gbufferResourceScratch };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaqueComputeEmulationResourceUses{
@@ -1079,12 +1085,12 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     );
     gbufferResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
     if(hasOpaqueDrawItems){
-        gbufferResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
-        gbufferResourceUses.push_back(ReadUse(materialTyped, Core::ResourceStates::ShaderResource));
+        gbufferResourceUses.push_back(ReadBufferUse(materialInstances, materialInstanceRange));
+        gbufferResourceUses.push_back(ReadBufferUse(materialTyped, materialTypedRange));
     }
     if(hasCsgFrameGpuWork){
-        gbufferResourceUses.push_back(ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource));
-        gbufferResourceUses.push_back(ReadUse(csgCutters, Core::ResourceStates::ShaderResource));
+        gbufferResourceUses.push_back(ReadBufferUse(csgReceiverRanges, csgReceiverRange));
+        gbufferResourceUses.push_back(ReadBufferUse(csgCutters, csgCutterRange));
         gbufferResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
         gbufferResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
         // CSG resolves target-specific images through the deferred bindless-slot buffer selected in its context.
@@ -1261,8 +1267,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
 
         opaqueComputeEmulationResourceUses.reserve(3u);
         opaqueComputeEmulationResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
-        opaqueComputeEmulationResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
-        opaqueComputeEmulationResourceUses.push_back(ReadUse(materialTyped, Core::ResourceStates::ShaderResource));
+        opaqueComputeEmulationResourceUses.push_back(ReadBufferUse(materialInstances, materialInstanceRange));
+        opaqueComputeEmulationResourceUses.push_back(ReadBufferUse(materialTyped, materialTypedRange));
         Core::GpuTaskResourceSetUse opaqueComputeEmulationResourceSetUses[3u] = {};
         usize opaqueComputeEmulationResourceSetUseCount = 0u;
         opaqueComputeEmulationResourceSetUses[opaqueComputeEmulationResourceSetUseCount++] = gbufferMaterialGeometrySetUse;
@@ -1331,18 +1337,18 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             ReadUse(meshView, Core::ResourceStates::ConstantBuffer)
         );
         opaqueCsgReceiverComputeEmulationResourceUses.push_back(
-            ReadUse(materialInstances, Core::ResourceStates::ShaderResource)
+            ReadBufferUse(materialInstances, materialInstanceRange)
         );
         opaqueCsgReceiverComputeEmulationResourceUses.push_back(
-            ReadUse(materialTyped, Core::ResourceStates::ShaderResource)
+            ReadBufferUse(materialTyped, materialTypedRange)
         );
         // The compute pipeline shares CSG's descriptor-visible clip context. It does not write receiver-event
         // images; those remain G-buffer raster outputs and are intentionally absent from this producer's uses.
         opaqueCsgReceiverComputeEmulationResourceUses.push_back(
-            ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource)
+            ReadBufferUse(csgReceiverRanges, csgReceiverRange)
         );
         opaqueCsgReceiverComputeEmulationResourceUses.push_back(
-            ReadUse(csgCutters, Core::ResourceStates::ShaderResource)
+            ReadBufferUse(csgCutters, csgCutterRange)
         );
         opaqueCsgReceiverComputeEmulationResourceUses.push_back(
             ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer)
@@ -1453,10 +1459,10 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             ReadUse(meshView, Core::ResourceStates::ConstantBuffer)
         );
         opaqueSharedComputeEmulationGenerateResourceUses.push_back(
-            ReadUse(materialInstances, Core::ResourceStates::ShaderResource)
+            ReadBufferUse(materialInstances, materialInstanceRange)
         );
         opaqueSharedComputeEmulationGenerateResourceUses.push_back(
-            ReadUse(materialTyped, Core::ResourceStates::ShaderResource)
+            ReadBufferUse(materialTyped, materialTypedRange)
         );
         opaqueSharedComputeEmulationGenerateResourceUses.push_back(
             WriteUse(opaqueSharedComputeEmulationOutput, Core::ResourceStates::UnorderedAccess)
@@ -1467,10 +1473,10 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             ReadUse(meshView, Core::ResourceStates::ConstantBuffer)
         );
         opaqueSharedComputeEmulationRasterResourceUses.push_back(
-            ReadUse(materialInstances, Core::ResourceStates::ShaderResource)
+            ReadBufferUse(materialInstances, materialInstanceRange)
         );
         opaqueSharedComputeEmulationRasterResourceUses.push_back(
-            ReadUse(materialTyped, Core::ResourceStates::ShaderResource)
+            ReadBufferUse(materialTyped, materialTypedRange)
         );
         opaqueSharedComputeEmulationRasterResourceUses.push_back(
             ReadUse(opaqueSharedComputeEmulationOutput, Core::ResourceStates::VertexBuffer)
@@ -1762,12 +1768,12 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         );
         csgIntervalSampleResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
         if(hasOpaqueDrawItems){
-            csgIntervalSampleResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
-            csgIntervalSampleResourceUses.push_back(ReadUse(materialTyped, Core::ResourceStates::ShaderResource));
+            csgIntervalSampleResourceUses.push_back(ReadBufferUse(materialInstances, materialInstanceRange));
+            csgIntervalSampleResourceUses.push_back(ReadBufferUse(materialTyped, materialTypedRange));
         }
         if(hasCsgFrameGpuWork){
-            csgIntervalSampleResourceUses.push_back(ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource));
-            csgIntervalSampleResourceUses.push_back(ReadUse(csgCutters, Core::ResourceStates::ShaderResource));
+            csgIntervalSampleResourceUses.push_back(ReadBufferUse(csgReceiverRanges, csgReceiverRange));
+            csgIntervalSampleResourceUses.push_back(ReadBufferUse(csgCutters, csgCutterRange));
             csgIntervalSampleResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
             csgIntervalSampleResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
             csgIntervalSampleResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -1871,16 +1877,16 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
                 ReadUse(meshView, Core::ResourceStates::ConstantBuffer)
             );
             opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(
-                ReadUse(materialInstances, Core::ResourceStates::ShaderResource)
+                ReadBufferUse(materialInstances, materialInstanceRange)
             );
             opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(
-                ReadUse(materialTyped, Core::ResourceStates::ShaderResource)
+                ReadBufferUse(materialTyped, materialTypedRange)
             );
             opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(
-                ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource)
+                ReadBufferUse(csgReceiverRanges, csgReceiverRange)
             );
             opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(
-                ReadUse(csgCutters, Core::ResourceStates::ShaderResource)
+                ReadBufferUse(csgCutters, csgCutterRange)
             );
             opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(
                 ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer)

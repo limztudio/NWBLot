@@ -115,6 +115,17 @@ template<typename Plan>
 }
 
 
+[[nodiscard]] inline Core::GpuTaskResourceUse ReadBufferUse(
+    const Core::GpuGraphResourceId resource,
+    const Core::BufferRange& range,
+    const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource,
+    const bool hasIndependentStateSource = false
+){
+    Core::GpuTaskResourceUse result = ReadUse(resource, state, hasIndependentStateSource);
+    result.range.bufferRange = range;
+    return result;
+}
+
 [[nodiscard]] inline Core::GpuTaskResourceUse ReadTextureUse(
     const Core::GpuGraphResourceId resource,
     const Core::TextureSubresourceSet& subresources,

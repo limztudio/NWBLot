@@ -133,10 +133,6 @@ void CommandList::setComputeState(const ComputeState& state){
         return;
 
     endActiveRenderPass();
-    if(state.indirectParams)
-        setBufferState(state.indirectParams, ResourceStates::IndirectArgument);
-    if(m_commandRecordingFailed)
-        return;
     commitBarriers();
     if(m_commandRecordingFailed)
         return;
@@ -196,6 +192,14 @@ void CommandList::dispatchIndirect(u32 offsetBytes){
         rejectCommandRecording(NWB_TEXT("dispatch indirect"), NWB_TEXT("indirect argument range is outside the buffer"));
         return;
     }
+
+    // The bound buffer can pack independent commands or shader data. Only this dispatch's arguments are consumed.
+    setBufferState(buffer, ResourceStates::IndirectArgument, false, BufferRange(offsetBytes, sizeof(DispatchIndirectArguments)));
+    if(m_commandRecordingFailed)
+        return;
+    commitBarriers();
+    if(m_commandRecordingFailed)
+        return;
 
     m_context.deviceDispatch.vkCmdDispatchIndirect(m_currentCmdBuf->m_cmdBuf, buffer->m_buffer, offsetBytes);
     retainResource(buffer);

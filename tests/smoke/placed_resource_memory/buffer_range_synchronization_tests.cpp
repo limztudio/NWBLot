@@ -124,6 +124,40 @@ TEST_F(BufferRangeGpuTest, NativeTransitionsPreserveAdjacentByteStates){
     EXPECT_FALSE(commands->commandRecordingFailed());
 }
 
+TEST_F(BufferRangeGpuTest, RepeatedUavBarriersCoverOnlyActiveScratchPrefix){
+    auto& device = BufferRangeGpuTest::device();
+    constexpr u64 s_ScratchBytes = 1024u * 1024u;
+    auto buffer = device.createBuffer(BufferDesc().setByteSize(s_ScratchBytes).setCanHaveUAVs(true));
+    ASSERT_TRUE(buffer);
+    auto commands = device.createCommandList();
+    ASSERT_TRUE(commands);
+    Alloc::ScratchArena scratchArena(Name("tests/buffer_range/repeated_uav"));
+    BarrierCapture capture(scratchArena);
+    CaptureScope captureScope(device, capture);
+    commands->open();
+    commands->beginTrackingBufferState(buffer.get(), ResourceStates::UnorderedAccess);
+    commands->setEnableUavBarriersForBuffer(buffer.get(), true);
+
+    // Reused scratch can grow and shrink between meshes. Every same-state fence must retain the selected prefix.
+    constexpr u64 s_ActiveBytes[] = { 1024u, 4096u, 1024u, s_ScratchBytes };
+    for(const u64 activeBytes : s_ActiveBytes){
+        for(u32 step = 0u; step < 3u; ++step){
+            capture.barriers.clear();
+            commands->setBufferState(buffer.get(), ResourceStates::UnorderedAccess, false, BufferRange(0u, activeBytes));
+            commands->commitBarriers();
+            ASSERT_FALSE(commands->commandRecordingFailed());
+            ASSERT_EQ(capture.barriers.size(), 1u);
+            EXPECT_EQ(capture.barriers.front().offset, 0u);
+            EXPECT_EQ(capture.barriers.front().size, activeBytes);
+            EXPECT_NE(capture.barriers.front().srcAccessMask & VK_ACCESS_2_SHADER_WRITE_BIT, 0u);
+            EXPECT_NE(capture.barriers.front().dstAccessMask & VK_ACCESS_2_SHADER_WRITE_BIT, 0u);
+        }
+        EXPECT_EQ(commands->getBufferState(buffer.get()), ResourceStates::UnorderedAccess);
+    }
+    commands->close();
+    EXPECT_FALSE(commands->commandRecordingFailed());
+}
+
 TEST_F(BufferRangeGpuTest, GraphDisjointUploadsFanInToFullBufferReadback){
     auto& device = BufferRangeGpuTest::device();
     const u32 firstWords[] = { 11u, 22u, 33u, 44u };

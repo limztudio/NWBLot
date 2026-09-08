@@ -2473,16 +2473,33 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     // The interval producer consumes the first frozen transparent CSG stream. Its graph-visible states must be
     // declared here, before its native work records, rather than on the later occupancy task.
+    const Core::BufferRange transparentCsgInstanceRange(
+        0u,
+        avboitPrePayload.transparentCsgSnapshot.instanceCount * sizeof(InstanceGpuData)
+    );
+    const Core::BufferRange transparentCsgMaterialTypedRange(
+        0u,
+        avboitPrePayload.transparentCsgSnapshot.materialTypedByteCount
+    );
+    const Core::BufferRange transparentCsgReceiverRange(
+        0u,
+        avboitPrePayload.transparentCsgSnapshot.csgReceiverRanges.size() * sizeof(CsgReceiverRangeGpuData)
+    );
+    const Core::BufferRange transparentCsgCutterRange(
+        0u,
+        avboitPrePayload.transparentCsgSnapshot.csgCutters.size() * sizeof(CsgCutterGpuData)
+    );
+
     Core::Alloc::ScratchArena avboitIntervalResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitIntervalResourceUses{ avboitIntervalResourceScratch };
     avboitIntervalResourceUses.reserve(16u);
     if(avboitPrePayload.transparentCsgStreamsUploaded){
         avboitIntervalResourceUses.push_back(ReadUse(depth));
         avboitIntervalResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
-        avboitIntervalResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
-        avboitIntervalResourceUses.push_back(ReadUse(materialTyped, Core::ResourceStates::ShaderResource));
-        avboitIntervalResourceUses.push_back(ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource));
-        avboitIntervalResourceUses.push_back(ReadUse(csgCutters, Core::ResourceStates::ShaderResource));
+        avboitIntervalResourceUses.push_back(ReadBufferUse(materialInstances, transparentCsgInstanceRange));
+        avboitIntervalResourceUses.push_back(ReadBufferUse(materialTyped, transparentCsgMaterialTypedRange));
+        avboitIntervalResourceUses.push_back(ReadBufferUse(csgReceiverRanges, transparentCsgReceiverRange));
+        avboitIntervalResourceUses.push_back(ReadBufferUse(csgCutters, transparentCsgCutterRange));
         avboitIntervalResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
         avboitIntervalResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
         // The sparse peel and event payloads are never loaded by this producer. Interval ID preserves its preceding
@@ -3361,6 +3378,20 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         ));
     }
 
+    const Core::BufferRange occupancyInstanceRange(
+        0u,
+        avboitOccupancyPayload.occupancySnapshot.instanceCount * sizeof(InstanceGpuData)
+    );
+    const Core::BufferRange occupancyMaterialTypedRange(0u, avboitOccupancyPayload.occupancySnapshot.materialTypedByteCount);
+    const Core::BufferRange occupancyReceiverRange(
+        0u,
+        avboitOccupancyPayload.occupancySnapshot.csgReceiverRanges.size() * sizeof(CsgReceiverRangeGpuData)
+    );
+    const Core::BufferRange occupancyCutterRange(
+        0u,
+        avboitOccupancyPayload.occupancySnapshot.csgCutters.size() * sizeof(CsgCutterGpuData)
+    );
+
     Core::Alloc::ScratchArena avboitPreResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitPreResourceUses{ avboitPreResourceScratch };
     avboitPreResourceUses.reserve(
@@ -3376,11 +3407,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitPreResourceUses.push_back(ReadWriteUse(avboitCoverage, Core::ResourceStates::UnorderedAccess));
     if(avboitOccupancyPayload.occupancyStreamsUploaded){
         avboitPreResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
-        avboitPreResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
-        avboitPreResourceUses.push_back(ReadUse(materialTyped, Core::ResourceStates::ShaderResource));
+        avboitPreResourceUses.push_back(ReadBufferUse(materialInstances, occupancyInstanceRange));
+        avboitPreResourceUses.push_back(ReadBufferUse(materialTyped, occupancyMaterialTypedRange));
         if(occupancyCsgStreamsUploaded){
-            avboitPreResourceUses.push_back(ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource));
-            avboitPreResourceUses.push_back(ReadUse(csgCutters, Core::ResourceStates::ShaderResource));
+            avboitPreResourceUses.push_back(ReadBufferUse(csgReceiverRanges, occupancyReceiverRange));
+            avboitPreResourceUses.push_back(ReadBufferUse(csgCutters, occupancyCutterRange));
             avboitPreResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
             // The preceding full-resolution interval producer owns this state. Occupancy only samples it.
             avboitPreResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
@@ -3492,20 +3523,20 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         );
         occupancyComputeEmulationResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
         occupancyComputeEmulationResourceUses.push_back(
-            ReadUse(materialInstances, Core::ResourceStates::ShaderResource)
+            ReadBufferUse(materialInstances, occupancyInstanceRange)
         );
         occupancyComputeEmulationResourceUses.push_back(
-            ReadUse(materialTyped, Core::ResourceStates::ShaderResource)
+            ReadBufferUse(materialTyped, occupancyMaterialTypedRange)
         );
         occupancyComputeEmulationResourceUses.push_back(
             ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer)
         );
         if(occupancyCsgComputeEmulationPlanCaptured){
             occupancyComputeEmulationResourceUses.push_back(
-                ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource)
+                ReadBufferUse(csgReceiverRanges, occupancyReceiverRange)
             );
             occupancyComputeEmulationResourceUses.push_back(
-                ReadUse(csgCutters, Core::ResourceStates::ShaderResource)
+                ReadBufferUse(csgCutters, occupancyCutterRange)
             );
             occupancyComputeEmulationResourceUses.push_back(
                 ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer)
@@ -3599,14 +3630,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             meshView,
             Core::ResourceStates::ConstantBuffer
         ));
-        occupancySharedGenerateResourceUses.push_back(ReadUse(
-            materialInstances,
-            Core::ResourceStates::ShaderResource
-        ));
-        occupancySharedGenerateResourceUses.push_back(ReadUse(
-            materialTyped,
-            Core::ResourceStates::ShaderResource
-        ));
+        occupancySharedGenerateResourceUses.push_back(ReadBufferUse(materialInstances, occupancyInstanceRange));
+        occupancySharedGenerateResourceUses.push_back(ReadBufferUse(materialTyped, occupancyMaterialTypedRange));
         occupancySharedGenerateResourceUses.push_back(ReadUse(
             currentBindlessSlots,
             Core::ResourceStates::ConstantBuffer
@@ -4292,6 +4317,20 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             ? &avboitExtinctionComputeEmulationTiming
             : nullptr
     ;
+    const Core::BufferRange extinctionInstanceRange(
+        0u,
+        avboitExtinctionPayload.extinctionSnapshot.instanceCount * sizeof(InstanceGpuData)
+    );
+    const Core::BufferRange extinctionMaterialTypedRange(0u, avboitExtinctionPayload.extinctionSnapshot.materialTypedByteCount);
+    const Core::BufferRange extinctionReceiverRange(
+        0u,
+        avboitExtinctionPayload.extinctionSnapshot.csgReceiverRanges.size() * sizeof(CsgReceiverRangeGpuData)
+    );
+    const Core::BufferRange extinctionCutterRange(
+        0u,
+        avboitExtinctionPayload.extinctionSnapshot.csgCutters.size() * sizeof(CsgCutterGpuData)
+    );
+
     Core::Alloc::ScratchArena extinctionResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionResourceUses{ extinctionResourceScratch };
     extinctionResourceUses.reserve(
@@ -4312,11 +4351,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     extinctionResourceUses.push_back(ReadWriteUse(avboitExtinctionOverflow, Core::ResourceStates::UnorderedAccess));
     if(extinctionStreamsUploaded){
         extinctionResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
-        extinctionResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
-        extinctionResourceUses.push_back(ReadUse(materialTyped, Core::ResourceStates::ShaderResource));
+        extinctionResourceUses.push_back(ReadBufferUse(materialInstances, extinctionInstanceRange));
+        extinctionResourceUses.push_back(ReadBufferUse(materialTyped, extinctionMaterialTypedRange));
         if(extinctionCsgStreamsUploaded){
-            extinctionResourceUses.push_back(ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource));
-            extinctionResourceUses.push_back(ReadUse(csgCutters, Core::ResourceStates::ShaderResource));
+            extinctionResourceUses.push_back(ReadBufferUse(csgReceiverRanges, extinctionReceiverRange));
+            extinctionResourceUses.push_back(ReadBufferUse(csgCutters, extinctionCutterRange));
             extinctionResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
             // The full-resolution interval producer owns this sample state throughout all low-raster AVBOIT phases.
             extinctionResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
@@ -4425,20 +4464,20 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         );
         extinctionComputeEmulationResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
         extinctionComputeEmulationResourceUses.push_back(
-            ReadUse(materialInstances, Core::ResourceStates::ShaderResource)
+            ReadBufferUse(materialInstances, extinctionInstanceRange)
         );
         extinctionComputeEmulationResourceUses.push_back(
-            ReadUse(materialTyped, Core::ResourceStates::ShaderResource)
+            ReadBufferUse(materialTyped, extinctionMaterialTypedRange)
         );
         extinctionComputeEmulationResourceUses.push_back(
             ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer)
         );
         if(extinctionCsgComputeEmulationPlanCaptured){
             extinctionComputeEmulationResourceUses.push_back(
-                ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource)
+                ReadBufferUse(csgReceiverRanges, extinctionReceiverRange)
             );
             extinctionComputeEmulationResourceUses.push_back(
-                ReadUse(csgCutters, Core::ResourceStates::ShaderResource)
+                ReadBufferUse(csgCutters, extinctionCutterRange)
             );
             extinctionComputeEmulationResourceUses.push_back(
                 ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer)
@@ -4532,14 +4571,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             meshView,
             Core::ResourceStates::ConstantBuffer
         ));
-        extinctionSharedGenerateResourceUses.push_back(ReadUse(
-            materialInstances,
-            Core::ResourceStates::ShaderResource
-        ));
-        extinctionSharedGenerateResourceUses.push_back(ReadUse(
-            materialTyped,
-            Core::ResourceStates::ShaderResource
-        ));
+        extinctionSharedGenerateResourceUses.push_back(ReadBufferUse(materialInstances, extinctionInstanceRange));
+        extinctionSharedGenerateResourceUses.push_back(ReadBufferUse(materialTyped, extinctionMaterialTypedRange));
         extinctionSharedGenerateResourceUses.push_back(ReadUse(
             currentBindlessSlots,
             Core::ResourceStates::ConstantBuffer
@@ -5221,6 +5254,23 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         ));
     }
 
+    const Core::BufferRange accumulationInstanceRange(
+        0u,
+        avboitAccumulationPayload.accumulationSnapshot.instanceCount * sizeof(InstanceGpuData)
+    );
+    const Core::BufferRange accumulationMaterialTypedRange(
+        0u,
+        avboitAccumulationPayload.accumulationSnapshot.materialTypedByteCount
+    );
+    const Core::BufferRange accumulationReceiverRange(
+        0u,
+        avboitAccumulationPayload.accumulationSnapshot.csgReceiverRanges.size() * sizeof(CsgReceiverRangeGpuData)
+    );
+    const Core::BufferRange accumulationCutterRange(
+        0u,
+        avboitAccumulationPayload.accumulationSnapshot.csgCutters.size() * sizeof(CsgCutterGpuData)
+    );
+
     Core::Alloc::ScratchArena accumulationResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationResourceUses{ accumulationResourceScratch };
     accumulationResourceUses.reserve(
@@ -5242,11 +5292,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     accumulationResourceUses.push_back(ReadWriteUse(avboitAccumExtinction, Core::ResourceStates::RenderTarget));
     if(accumulationStreamsUploaded){
         accumulationResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
-        accumulationResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
-        accumulationResourceUses.push_back(ReadUse(materialTyped, Core::ResourceStates::ShaderResource));
+        accumulationResourceUses.push_back(ReadBufferUse(materialInstances, accumulationInstanceRange));
+        accumulationResourceUses.push_back(ReadBufferUse(materialTyped, accumulationMaterialTypedRange));
         if(accumulationCsgStreamsUploaded){
-            accumulationResourceUses.push_back(ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource));
-            accumulationResourceUses.push_back(ReadUse(csgCutters, Core::ResourceStates::ShaderResource));
+            accumulationResourceUses.push_back(ReadBufferUse(csgReceiverRanges, accumulationReceiverRange));
+            accumulationResourceUses.push_back(ReadBufferUse(csgCutters, accumulationCutterRange));
             accumulationResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
             // This remains the full-resolution interval producer's state; accumulation only samples it.
             accumulationResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
@@ -5356,20 +5406,20 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         );
         accumulationComputeEmulationResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
         accumulationComputeEmulationResourceUses.push_back(
-            ReadUse(materialInstances, Core::ResourceStates::ShaderResource)
+            ReadBufferUse(materialInstances, accumulationInstanceRange)
         );
         accumulationComputeEmulationResourceUses.push_back(
-            ReadUse(materialTyped, Core::ResourceStates::ShaderResource)
+            ReadBufferUse(materialTyped, accumulationMaterialTypedRange)
         );
         accumulationComputeEmulationResourceUses.push_back(
             ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer)
         );
         if(accumulationCsgComputeEmulationPlanCaptured){
             accumulationComputeEmulationResourceUses.push_back(
-                ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource)
+                ReadBufferUse(csgReceiverRanges, accumulationReceiverRange)
             );
             accumulationComputeEmulationResourceUses.push_back(
-                ReadUse(csgCutters, Core::ResourceStates::ShaderResource)
+                ReadBufferUse(csgCutters, accumulationCutterRange)
             );
             accumulationComputeEmulationResourceUses.push_back(
                 ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer)
@@ -5464,14 +5514,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             meshView,
             Core::ResourceStates::ConstantBuffer
         ));
-        accumulationSharedGenerateResourceUses.push_back(ReadUse(
-            materialInstances,
-            Core::ResourceStates::ShaderResource
-        ));
-        accumulationSharedGenerateResourceUses.push_back(ReadUse(
-            materialTyped,
-            Core::ResourceStates::ShaderResource
-        ));
+        accumulationSharedGenerateResourceUses.push_back(ReadBufferUse(materialInstances, accumulationInstanceRange));
+        accumulationSharedGenerateResourceUses.push_back(ReadBufferUse(materialTyped, accumulationMaterialTypedRange));
         accumulationSharedGenerateResourceUses.push_back(ReadUse(
             currentBindlessSlots,
             Core::ResourceStates::ConstantBuffer

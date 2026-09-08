@@ -5,6 +5,7 @@ target_sources(nwb_placed_resource_memory_tests PRIVATE
     "${CMAKE_SOURCE_DIR}/tests/common/vulkan_test_sync.h"
     "${CMAKE_CURRENT_LIST_DIR}/buffer_gpu_readiness_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/buffer_range_synchronization_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/compute_indirect_buffer_range_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/command_ir_backend_alias_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/command_ir_backend_operand_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/command_list_provenance_tests.cpp"

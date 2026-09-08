@@ -1,5 +1,6 @@
 nwb_declare_gtest_executable(nwb_global_tests)
 target_sources(nwb_global_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/allocator_benchmark_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/allocator_churn_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/allocator_contention_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/allocator_owner_concurrency_tests.cpp"

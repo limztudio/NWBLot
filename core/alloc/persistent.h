@@ -49,13 +49,13 @@ public:
 
 
 private:
-    [[nodiscard]] void* allocateLocked(usize align, usize size)noexcept;
-    void deallocateLocked(void* p)noexcept;
+    [[nodiscard]] void* allocateLocked(usize align, usize size, void*& outBlock)noexcept;
+    void deallocateBlockLocked(void* block)noexcept;
 
 
 private:
     // Individual fixed-pool operations are serialized. The caller owns arena and allocated-object lifetime synchronization.
-    Futex m_mutex;
+    MallocMutex m_mutex;
     void* m_bucket = nullptr;
     usize m_maxSize = 0u;
     void* m_freeHead = nullptr;

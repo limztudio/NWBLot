@@ -127,6 +127,37 @@ TEST(PersistentArenaTests, ReusesAdjacentFreeBlocksForGrowthAndCoalescing){
 }
 
 
+TEST(PersistentArenaTests, ReallocationGrowsAcrossMultipleDeferredAdjacentBlocks){
+    constexpr usize s_BlockBytes = 512u;
+    PersistentArena arena(
+        Name("tests/persistent_arena/deferred_reallocation_growth"),
+        3u * PersistentArena::StructureAlignedSize(s_BlockBytes)
+    );
+
+    auto* const first = static_cast<u8*>(arena.allocate(1u, s_BlockBytes));
+    auto* const second = static_cast<u8*>(arena.allocate(1u, s_BlockBytes));
+    auto* const third = static_cast<u8*>(arena.allocate(1u, s_BlockBytes));
+    ASSERT_NE(first, nullptr);
+    ASSERT_NE(second, nullptr);
+    ASSERT_NE(third, nullptr);
+    FillPattern(first, s_BlockBytes);
+
+    arena.deallocate(second, 1u, s_BlockBytes);
+    const ArenaMemoryStats beforeFailedGrowth = arena.memoryStats();
+    EXPECT_EQ(arena.reallocate(first, 1u, 1600u), nullptr);
+    ExpectPattern(first, s_BlockBytes);
+    ExpectSameStats(arena.memoryStats(), beforeFailedGrowth);
+
+    arena.deallocate(third, 1u, s_BlockBytes);
+
+    auto* const grown = static_cast<u8*>(arena.reallocate(first, 1u, 1600u));
+    ASSERT_EQ(grown, first);
+    ExpectPattern(grown, s_BlockBytes);
+    arena.deallocate(grown, 1u, 1600u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+}
+
+
 TEST(PersistentArenaTests, FailedAlignedReallocationRetainsPayloadAndStats){
     PersistentArena arena(
         Name("tests/persistent_arena/failed_reallocation"),

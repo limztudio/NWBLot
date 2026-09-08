@@ -172,11 +172,11 @@ public:
     // In many cases, an object of this type is initialized eagerly on hot path,
     // as in for(AtomicBackOff backoff; ; backoff.pause()) { /*loop body*/ }
     // For this reason, the construction cost must be very small!
-    AtomicBackOff()
+    AtomicBackOff()noexcept
         : m_count(1)
         {}
     // This constructor pauses immediately; do not use on hot paths!
-    AtomicBackOff(bool)
+    AtomicBackOff(bool)noexcept
         : m_count(1)
         { pause(); }
 
@@ -186,7 +186,7 @@ public:
 
 public:
     //! Pause for a while.
-    void pause(){
+    void pause()noexcept{
         if(m_count <= s_LoopsBeforeYield){
             MachinePause(m_count);
             m_count <<= 1;
@@ -198,7 +198,7 @@ public:
     }
 
     //! Pause for a few times and return false if saturated.
-    bool boundedPause(){
+    bool boundedPause()noexcept{
         MachinePause(m_count);
         if(m_count < s_LoopsBeforeYield){
             m_count <<= 1;
@@ -209,7 +209,7 @@ public:
         }
     }
 
-    void reset(){ m_count = 1; }
+    void reset()noexcept{ m_count = 1; }
 
 
 private:
@@ -227,7 +227,7 @@ private:
     are running. */
 class MallocMutex : NoCopy{
 public:
-    void lock(){
+    void lock()noexcept{
         AtomicBackOff backoff;
         bool locked = m_flag.test_and_set();
         while(locked){
@@ -235,8 +235,8 @@ public:
             locked = m_flag.test_and_set();
         }
     }
-    bool try_lock(){ return (!m_flag.test_and_set()); }
-    void unlock(){ m_flag.clear(MemoryOrder::release); }
+    bool try_lock()noexcept{ return (!m_flag.test_and_set()); }
+    void unlock()noexcept{ m_flag.clear(MemoryOrder::release); }
 
 
 private:

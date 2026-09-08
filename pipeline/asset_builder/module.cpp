@@ -7,7 +7,7 @@
 #include "../command_line.h"
 
 #include <core/assets/paths.h>
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 #include <core/common/log.h>
 #include <global/cpu_topology.h>
 

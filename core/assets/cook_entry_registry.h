@@ -13,7 +13,7 @@
 
 #include "module.h"
 
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 
 #include <core/alloc/scratch.h>
 

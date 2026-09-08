@@ -7,8 +7,8 @@
 #include <impl/ecs_render/kernel/timing_names.h>
 
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/module.h>
-#include <core/graphics/task_graph/compiled_graph.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/compiled_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

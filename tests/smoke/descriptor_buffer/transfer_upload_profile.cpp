@@ -14,9 +14,9 @@
 #include <core/common/application_entry.h>
 #include <core/common/module.h>
 #include <core/alloc/general.h>
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 #include <core/graphics/api.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <core/graphics/vulkan/backend.h>
 #include <core/perf/timing.h>
 #include <impl/assets/graphics/bindless/runtime_abi.h>
@@ -254,7 +254,7 @@ struct Result{
 }
 
 [[nodiscard]] static bool CaptureSelectedAdapterIdentity(
-    Graphics& graphics,
+    GraphicsRuntime& graphics,
     GraphicsAllocator& allocator,
     Result& outResult
 ){
@@ -455,7 +455,7 @@ static void FillUploadData(Vector<u8, Alloc::GlobalArena>& outBytes){
 }
 
 [[nodiscard]] static bool RunBufferProfile(
-    Graphics& graphics,
+    GraphicsRuntime& graphics,
     Alloc::GlobalArena& arena,
     const Arguments& arguments,
     Result& outResult
@@ -494,7 +494,7 @@ static void FillUploadData(Vector<u8, Alloc::GlobalArena>& outBytes){
             return false;
 
         QueueSubmissionToken uploadToken;
-        Graphics::BufferSetupDesc setupDesc;
+        GraphicsRuntime::BufferSetupDesc setupDesc;
         setupDesc.bufferDesc = BufferDesc()
             .setByteSize(static_cast<u64>(uploadBytes))
             .setInitialState(ResourceStates::Common)
@@ -560,7 +560,7 @@ static void FillUploadData(Vector<u8, Alloc::GlobalArena>& outBytes){
 }
 
 [[nodiscard]] static bool RunTextureProfile(
-    Graphics& graphics,
+    GraphicsRuntime& graphics,
     Alloc::GlobalArena& arena,
     const Arguments& arguments,
     Result& outResult
@@ -614,7 +614,7 @@ static void FillUploadData(Vector<u8, Alloc::GlobalArena>& outBytes){
             return false;
 
         QueueSubmissionToken uploadToken;
-        Graphics::TextureSetupDesc setupDesc;
+        GraphicsRuntime::TextureSetupDesc setupDesc;
         setupDesc.textureDesc = textureDesc;
         setupDesc.data = input.data();
         setupDesc.uploadDataSize = input.size();
@@ -757,7 +757,8 @@ static void EmitResult(const Result& result){
     GraphicsAllocator allocator(arena);
     CpuTaskScheduler cpuScheduler(2u);
     Perf::TimingRecorder gpuTiming(arena);
-    Graphics graphics(allocator, cpuScheduler, gpuTiming);
+    GpuTaskScheduler gpuTasks;
+    GraphicsRuntime graphics(allocator, cpuScheduler, gpuTasks, gpuTiming);
 
     Result result;
     result.requestedRoute = arguments.route;

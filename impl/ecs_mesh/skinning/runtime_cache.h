@@ -18,7 +18,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Graphics;
+class GraphicsRuntime;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -86,7 +86,7 @@ private:
 
 
 public:
-    MeshSkinningRuntimeCache(Core::Alloc::GlobalArena& arena, Core::Graphics& graphics, Core::Assets::AssetManager& assetManager);
+    MeshSkinningRuntimeCache(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager);
 
 
 public:
@@ -118,7 +118,7 @@ private:
 
 private:
     Core::Alloc::GlobalArena& m_arena;
-    Core::Graphics& m_graphics;
+    Core::GraphicsRuntime& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
 
     HashMap<Name, MeshSkinningSource, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_sources;

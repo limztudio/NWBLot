@@ -5,11 +5,11 @@
 #pragma once
 
 
-#include "module.h"
+#include "runtime.h"
 
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 
-#include "task_graph/task_desc.h"
+#include <core/task/gpu/task_desc.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,7 +66,7 @@ using GraphTaskDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
 [[nodiscard]] ResourceStates::Mask SetupUploadGraphFinalState(ResourceStates::Mask declaredInitialState)noexcept;
 
 [[nodiscard]] bool SubmitGraphOwnedStandaloneTask(
-    const Graphics& graphics,
+    const GraphicsRuntime& graphics,
     GraphicsArena& graphArena,
     void* userData,
     GraphTaskDeclaration declareTask,
@@ -75,7 +75,7 @@ using GraphTaskDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
     CpuTaskScheduler* readyFrontierScheduler = nullptr
 );
 [[nodiscard]] bool SubmitGraphOwnedSetupUpload(
-    const Graphics& graphics,
+    const GraphicsRuntime& graphics,
     GraphicsArena& graphArena,
     ResourceQueueSharing::Mask queueSharing,
     CommandQueue::Enum uploadQueue,
@@ -86,14 +86,14 @@ using GraphTaskDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
     GpuPhysicalQueueId requiredTerminalQueue = {}
 );
 [[nodiscard]] bool SubmitGraphOwnedFrameTimingReset(
-    const Graphics& graphics,
+    const GraphicsRuntime& graphics,
     GraphicsArena& graphArena,
     GpuTimingRecorder& timing
 );
 
-bool ValidateBufferSetupUpload(const Graphics::BufferSetupDesc& desc);
-bool ValidateTextureSetupUpload(const Graphics::TextureSetupDesc& desc);
-bool ValidateMeshSetupDesc(const Graphics::MeshSetupDesc& desc);
+bool ValidateBufferSetupUpload(const GraphicsRuntime::BufferSetupDesc& desc);
+bool ValidateTextureSetupUpload(const GraphicsRuntime::TextureSetupDesc& desc);
+bool ValidateMeshSetupDesc(const GraphicsRuntime::MeshSetupDesc& desc);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

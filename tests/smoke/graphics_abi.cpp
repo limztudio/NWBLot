@@ -4,7 +4,7 @@
 
 #include <loader/project_entry.h>
 
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <impl/assets/graphics/bindless/runtime_abi.h>
 
 
@@ -12,7 +12,7 @@
 
 
 bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context){
-    Core::Graphics& graphics = context.graphics;
+    Core::GraphicsRuntime& graphics = context.graphics;
     if(!graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()))
         return false;
 

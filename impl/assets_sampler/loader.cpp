@@ -21,7 +21,7 @@ bool SamplerAssetLoader::Create(
     SamplerGpuResource& outResource,
     const Sampler& samplerAsset,
     const Name& debugName,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     const tchar* const ownerName
 ){
     const tchar* const owner = ownerName ? ownerName : NWB_TEXT("SamplerAssetLoader");
@@ -76,7 +76,7 @@ bool SamplerAssetLoader::Load(
     SamplerGpuResource& outResource,
     const Core::Assets::AssetRef<Sampler>& samplerAsset,
     const Name& debugName,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     const tchar* const ownerName
 ){
@@ -103,7 +103,7 @@ bool SamplerAssetLoader::Load(
     return Create(outResource, static_cast<const Sampler&>(*loadedAsset), debugName, graphics, owner);
 }
 
-void SamplerAssetLoader::Release(SamplerGpuResource& inOutResource, Core::Graphics& graphics){
+void SamplerAssetLoader::Release(SamplerGpuResource& inOutResource, Core::GraphicsRuntime& graphics){
     if(inOutResource.samplerHeapHandle.valid()){
         Core::GpuDescriptorHeap& heap = graphics.getDevice().getDescriptorHeap();
         if(heap.isInitialized())

@@ -14,7 +14,7 @@
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets_mesh/meshlet_triangle_indices.h>
 #include <impl/assets_mesh/meshlet_vertex_attributes.h>
@@ -122,7 +122,7 @@ void CaptureRayTracingResourceSnapshot(
 
 template<typename PayloadT, typename PayloadVector>
 [[nodiscard]] static Core::BufferHandle SetupMeshBuffer(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     const Name& meshName,
     const AStringView suffix,
     const PayloadVector& payload,
@@ -179,7 +179,7 @@ template<typename PayloadT, typename PayloadVector>
 
 template<typename PayloadT, typename PayloadVector>
 [[nodiscard]] static bool AssignMeshBuffer(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     const Name& meshName,
     Core::BufferHandle& outBuffer,
     const AStringView suffix,
@@ -202,7 +202,7 @@ template<typename PayloadT, typename PayloadVector>
 
 template<typename PayloadVector>
 [[nodiscard]] static bool AssignPaddedRawMeshBuffer(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::Alloc::GlobalArena& arena,
     const Name& meshName,
     Core::BufferHandle& outBuffer,

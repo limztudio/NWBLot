@@ -9,7 +9,7 @@
 #include <global/global.h>
 #include <global/unique_ptr.h>
 #include <core/graphics/rhi/queue_sharing.h>
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/task/gpu/task_graph.h>
 #include <core/graphics/vulkan/backend.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>

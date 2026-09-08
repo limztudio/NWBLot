@@ -8,8 +8,8 @@
 #include <loader/project_entry.h>
 
 #include <core/alloc/scratch.h>
-#include <core/graphics/module.h>
-#include <core/graphics/task_graph/presentation_contributor.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/presentation_contributor.h>
 #include <global/filesystem/path.h>
 #include <global/refcount_ptr.h>
 

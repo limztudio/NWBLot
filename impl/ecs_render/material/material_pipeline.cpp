@@ -13,7 +13,7 @@
 #include <impl/assets_material/shader_stage_names.h>
 
 #include <core/common/log.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <core/graphics/shader_archive.h>
 #include <impl/ecs_csg/shape_registry.h>
 

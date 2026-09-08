@@ -7,7 +7,7 @@
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <global/math/frame.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 #include <impl/ecs_csg/module.h>
 #endif
@@ -123,7 +123,7 @@ private:
 // only in this dedicated smoke executable; production projects retain their normal focus throttling policy.
 class FrameLaggedAsyncLightingUnfocusedPass final : public NWB::Core::IRenderPass{
 public:
-    explicit FrameLaggedAsyncLightingUnfocusedPass(NWB::Core::Graphics& graphics)
+    explicit FrameLaggedAsyncLightingUnfocusedPass(NWB::Core::GraphicsRuntime& graphics)
         : IRenderPass(graphics)
     {}
 

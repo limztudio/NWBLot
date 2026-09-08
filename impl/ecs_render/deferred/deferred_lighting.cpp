@@ -12,7 +12,7 @@
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
 
 #include <core/common/log.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <core/graphics/shader_archive.h>
 
 #include <impl/assets/graphics/deferred/binding_slots.h>

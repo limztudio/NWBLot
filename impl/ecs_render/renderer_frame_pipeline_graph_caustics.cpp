@@ -9,7 +9,7 @@
 
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 
-#include <core/graphics/capture/command_ir.h>
+#include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/gpu_timing.h>
 
 #include <global/timer.h>

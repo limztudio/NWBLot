@@ -694,7 +694,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorOrdersNonmonotonicReady
     normalExecution.terminalTask = independentTask;
     normalExecution.readyFrontierScheduler = &recordingWorkers;
     GpuSubmissionPacketId failedPacket;
-    ASSERT_TRUE(submitter.recordAndSubmitNormalGraph(
+    ASSERT_TRUE(submitter.submit(
         graph,
         compiledGraph,
         recorder,

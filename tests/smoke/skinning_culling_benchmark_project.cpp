@@ -7,7 +7,7 @@
 #include <core/assets/manager.h>
 #include <core/common/log.h>
 #include <core/ecs/module.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_skeleton/asset.h>

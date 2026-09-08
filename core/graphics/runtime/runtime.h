@@ -5,12 +5,12 @@
 #pragma once
 
 
-#include "api.h"
+#include <core/graphics/api.h>
 
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 
-#include "gpu_timing.h"
-#include "render_pass.h"
+#include <core/graphics/gpu_timing.h>
+#include <core/graphics/runtime/render_pass.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,11 +23,12 @@ NWB_CORE_BEGIN
 
 
 class IGpuTaskGraphPresentationContributor;
+class GpuTaskScheduler;
 class GpuTaskGraph;
 struct GpuTaskId;
 
 
-class Graphics{
+class GraphicsRuntime{
 private:
     using Backend = GraphicsBackend::Backend;
     using BackendOwner = GlobalUniquePtr<Backend>;
@@ -148,18 +149,20 @@ private:
     struct CpuTimingPhaseBatch;
 
 public:
-    Graphics(
+    GraphicsRuntime(
         GraphicsAllocator& allocator,
         CpuTaskScheduler& cpuScheduler,
+        GpuTaskScheduler& gpuTasks,
         Perf::TimingSink& gpuTiming
     );
-    Graphics(
+    GraphicsRuntime(
         GraphicsAllocator& allocator,
         CpuTaskScheduler& cpuScheduler,
+        GpuTaskScheduler& gpuTasks,
         Perf::TimingSink& gpuTiming,
         Perf::TimingSink* cpuTiming
     );
-    ~Graphics()noexcept(false);
+    ~GraphicsRuntime()noexcept(false);
 
 
 public:
@@ -210,6 +213,7 @@ public:
 
 public:
     [[nodiscard]] GraphicsBackend::Device& getDevice()const noexcept;
+    [[nodiscard]] GpuTaskScheduler& gpuTasks()const noexcept{ return m_gpuTasks; }
     [[nodiscard]] bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters);
     // Returns identity from the physical device selected for the current logical device, rather than from a later
     // adapter enumeration. Available only after successful device creation.
@@ -337,6 +341,7 @@ private:
 private:
     GraphicsAllocator& m_allocator;
     CpuTaskScheduler& m_cpuScheduler;
+    GpuTaskScheduler& m_gpuTasks;
     CpuTaskScope m_tasks;
     DeviceCreationParameters m_deviceCreationParams;
     SwapChainRuntimeState m_swapChainState;

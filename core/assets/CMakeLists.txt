@@ -28,7 +28,7 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/expanded_metadata.h"
         "${CMAKE_CURRENT_LIST_DIR}/metadata_extension.h"
     )
-    target_link_libraries(nwb_assets_cook PUBLIC nwb_assets nwb_metascript nwb_filesystem nwb_task)
+    target_link_libraries(nwb_assets_cook PUBLIC nwb_assets nwb_metascript nwb_filesystem nwb_cpu_task)
     target_compile_definitions(nwb_assets_cook PRIVATE NWB_COOK=1)
 endif()
 

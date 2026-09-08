@@ -14,8 +14,8 @@
 #include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
 
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/module.h>
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,7 +45,7 @@ namespace RendererTaskGraphDetail{
 
 struct AvboitExtinctionComputeEmulationGraphTask{
     struct Payload{
-        Core::Graphics* graphics = nullptr;
+        Core::GraphicsRuntime* graphics = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
         ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
@@ -92,7 +92,7 @@ struct AvboitExtinctionSharedComputeEmulationGraphTask{
     };
 
     struct Payload{
-        Core::Graphics* graphics = nullptr;
+        Core::GraphicsRuntime* graphics = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;

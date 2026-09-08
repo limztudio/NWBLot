@@ -6,7 +6,7 @@
 #include "compiled_graph.h"
 #include "task_graph_builtin_internal.h"
 
-#include <core/graphics/capture/command_ir.h>
+#include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/rhi/command.h>
 

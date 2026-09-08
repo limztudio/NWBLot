@@ -46,7 +46,7 @@ TEST(EcsGraphics, DeferredGraphExportsAcceptedQueueAssignmentHistory){
     const AStringView frameGraph(frameGraphSource.data(), frameGraphSource.size());
     const AStringView frameModule(frameModuleSource.data(), frameModuleSource.size());
 
-    EXPECT_TRUE(ContainsText(systemHeader, "#include <core/graphics/task_graph/queue_assignment_telemetry.h>"));
+    EXPECT_TRUE(ContainsText(systemHeader, "#include <core/task/gpu/queue_assignment_telemetry.h>"));
     EXPECT_TRUE(ContainsText(
         systemHeader,
         "Core::GpuTaskGraphQueueAssignmentTelemetryTracker m_deferredLightingTaskGraphQueueAssignmentTelemetry;"
@@ -157,8 +157,8 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     AString compiledGraphSource;
     AString frameGraphSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "rhi" / "command.h", commandHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "task_graph" / "compiled_graph.h", compiledGraphHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "task_graph" / "compiled_graph.cpp", compiledGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "task" / "gpu" / "compiled_graph.h", compiledGraphHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "task" / "gpu" / "compiled_graph.cpp", compiledGraphSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_telemetry.cpp", frameGraphSource));
     const AStringView commandHeader(commandHeaderSource.data(), commandHeaderSource.size());
     const AStringView compiledGraphHeader(compiledGraphHeaderSource.data(), compiledGraphHeaderSource.size());

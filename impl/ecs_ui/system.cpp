@@ -7,9 +7,9 @@
 
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
-#include <core/graphics/module.h>
-#include <core/graphics/task_graph/compiled_graph.h>
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/compiled_graph.h>
+#include <core/task/gpu/task_graph.h>
 #include <impl/assets/graphics/imgui/binding_slots.h>
 #include <core/common/log.h>
 
@@ -397,7 +397,7 @@ struct UiSystem::StandaloneLegacyPresentationTask{
 UiSystem::UiSystem(
     Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::InputDispatcher& input,
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolveCallback shaderPathResolver

@@ -61,7 +61,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketRejectsIncomplete
     auto framebuffer = device.createFramebuffer(FramebufferDesc().addColorAttachment(target.get()));
     ASSERT_NE(framebuffer.get(), nullptr);
 
-    // Establish the one prepared pool on the device timeline, exactly as Graphics::prepareFramePreamble() does
+    // Establish the one prepared pool on the device timeline, exactly as GraphicsRuntime::prepareFramePreamble() does
     // before its passes.
     auto resetCommandList = device.createCommandList();
     ASSERT_NE(resetCommandList.get(), nullptr);
@@ -506,7 +506,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
     Latch queryReservationsStarted(2);
     bool firstRecorded = false;
     bool secondRecorded = false;
-    const Graphics::TaskHandle firstJob = graphics.scheduleGraphicsTask([&](){
+    const GraphicsRuntime::TaskHandle firstJob = graphics.scheduleGraphicsTask([&](){
         GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
         firstCommandList->open();
         recordingStarted.count_down();
@@ -519,7 +519,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
         firstCommandList->close();
         firstRecorded = firstCommandList->hasCommandBuffer();
     });
-    const Graphics::TaskHandle secondJob = graphics.scheduleGraphicsTask([&](){
+    const GraphicsRuntime::TaskHandle secondJob = graphics.scheduleGraphicsTask([&](){
         GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
         secondCommandList->open();
         recordingStarted.count_down();

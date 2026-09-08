@@ -45,7 +45,7 @@ TEST(EcsGraphics, MeshSkinningUsesFrontierScoredSerialPacketization){
     EXPECT_TRUE(ContainsText(skinning, "const Core::GpuTaskGraphTaskAcceptedCallback acceptedCallback{"));
     EXPECT_TRUE(ContainsText(skinning, ".task = terminalTask,\n        .context = &skinningState,"));
     EXPECT_TRUE(ContainsText(skinning, "context->stateAccepted = context->cache->commit(*context->candidate);"));
-    EXPECT_TRUE(ContainsText(skinning, "submitter.recordAndSubmitNormalGraph("));
+    EXPECT_TRUE(ContainsText(skinning, "submitter.submit("));
     EXPECT_FALSE(ContainsText(skinning, "recorder.recordPacketRangeInCompileOrder("));
     EXPECT_FALSE(ContainsText(skinning, "submitter.submitPacketRangeInCompileOrderFromTasks("));
     EXPECT_TRUE(ContainsText(skinning, "const Core::QueueSubmissionToken skinningToken = transaction.taskToken("));

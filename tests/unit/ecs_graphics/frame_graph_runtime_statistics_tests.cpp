@@ -7,7 +7,7 @@
 #include <core/telemetry/frame_graph_registry.h>
 #include <core/telemetry/session.h>
 
-#include <core/graphics/task_graph/compiler.h>
+#include <core/task/gpu/compiler.h>
 
 #include <tests/common/test_context.h>
 

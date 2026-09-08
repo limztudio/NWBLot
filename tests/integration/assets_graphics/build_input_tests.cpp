@@ -3,7 +3,7 @@
 
 
 #include <pipeline/asset_builder/build_inputs.h>
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
 #include <global/timer.h>

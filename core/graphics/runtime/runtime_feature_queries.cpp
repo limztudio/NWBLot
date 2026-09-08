@@ -2,9 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "module.h"
+#include "runtime.h"
 
-#include "backend_selection.h"
+#include <core/graphics/backend_selection.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,12 +44,12 @@ constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Graphics::queryFeatureSupport(const Feature::Enum feature, void* featureInfo, const usize featureInfoSize)const{
+bool GraphicsRuntime::queryFeatureSupport(const Feature::Enum feature, void* featureInfo, const usize featureInfoSize)const{
     auto& device = getDevice();
     return device.queryFeatureSupport(feature, featureInfo, featureInfoSize);
 }
 
-u32 Graphics::queryWaveLaneCount()const noexcept{
+u32 GraphicsRuntime::queryWaveLaneCount()const noexcept{
     WaveLaneCountMinMaxFeatureInfo info{};
     if(queryFeatureSupport(Feature::WaveLaneCountMinMax, &info, sizeof(info)) && info.maxWaveLaneCount > 0u)
         return info.maxWaveLaneCount;
@@ -62,7 +62,7 @@ u32 Graphics::queryWaveLaneCount()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Graphics::CoopVectorSupport Graphics::queryCoopVecSupport()const{
+GraphicsRuntime::CoopVectorSupport GraphicsRuntime::queryCoopVecSupport()const{
     CoopVectorSupport output;
 
     output.inferencingSupported = queryFeatureSupport(Feature::CooperativeVectorInferencing);
@@ -83,17 +83,17 @@ Graphics::CoopVectorSupport Graphics::queryCoopVecSupport()const{
     return output;
 }
 
-CooperativeVectorDeviceFeatures Graphics::queryCoopVecFeatures()const{
+CooperativeVectorDeviceFeatures GraphicsRuntime::queryCoopVecFeatures()const{
     auto& device = getDevice();
     return device.queryCoopVecFeatures();
 }
 
-usize Graphics::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const{
+usize GraphicsRuntime::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const{
     auto& device = getDevice();
     return device.getCoopVecMatrixSize(type, layout, rows, columns);
 }
 
-void Graphics::waitTask(TaskHandle handle)const{
+void GraphicsRuntime::waitTask(TaskHandle handle)const{
     if(!handle.valid())
         return;
 

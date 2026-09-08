@@ -8,7 +8,7 @@
 #include "../../global.h"
 
 #include <core/alloc/general.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <global/overflow.h>
 
 
@@ -50,7 +50,7 @@ inline constexpr usize s_RawByteLoadAlignmentBytes = sizeof(u32);
 
 template<typename PayloadT>
 [[nodiscard]] inline Core::BufferHandle SetupBuffer(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     const Name& debugName,
     const PayloadT* payload,
     const usize count,
@@ -60,7 +60,7 @@ template<typename PayloadT>
     if(!TryMultiply<usize>(count, sizeof(PayloadT), payloadBytes))
         return {};
 
-    Core::Graphics::BufferSetupDesc setup;
+    Core::GraphicsRuntime::BufferSetupDesc setup;
     setup.bufferDesc
         .setByteSize(static_cast<u64>(payloadBytes))
         .setStructStride(sizeof(PayloadT))
@@ -77,7 +77,7 @@ template<typename PayloadT>
 
 template<typename PayloadT, typename PayloadVector>
 [[nodiscard]] inline Core::BufferHandle SetupBuffer(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     const Name& debugName,
     const PayloadVector& payload,
     const BufferFlags flags = {}
@@ -87,7 +87,7 @@ template<typename PayloadT, typename PayloadVector>
 
 template<typename PayloadT, typename PayloadVector>
 [[nodiscard]] inline BufferSetupFailure::Enum SetupRequiredBuffer(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     const Name& debugName,
     const PayloadVector& payload,
     const BufferFlags flags,
@@ -105,7 +105,7 @@ template<typename PayloadT, typename PayloadVector>
 
 template<typename PayloadVector>
 [[nodiscard]] inline BufferSetupFailure::Enum SetupRequiredPaddedRawByteBuffer(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::Alloc::GlobalArena& arena,
     const Name& debugName,
     const PayloadVector& payload,
@@ -130,7 +130,7 @@ template<typename PayloadVector>
         return outBuffer ? BufferSetupFailure::None : BufferSetupFailure::CreateFailed;
     }
 
-    // Graphics::setupBuffer records its upload before this temporary payload is destroyed.  Explicitly zero the
+    // GraphicsRuntime::setupBuffer records its upload before this temporary payload is destroyed.  Explicitly zero the
     // physically allocated tail rather than relying on backend allocation contents.
     Vector<u8, Core::Alloc::GlobalArena> paddedPayload{arena};
     paddedPayload.assign(payload.begin(), payload.end());

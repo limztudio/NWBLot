@@ -7,7 +7,7 @@
 
 #include <impl/global.h>
 
-#include <core/graphics/task_graph/packet_runtime.h>
+#include <core/task/gpu/packet_runtime.h>
 #include <core/telemetry/frame_graph.h>
 
 

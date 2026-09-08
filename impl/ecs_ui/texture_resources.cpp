@@ -6,8 +6,8 @@
 #include "ui_internal.h"
 
 #include <core/graphics/backend_selection.h>
-#include <core/graphics/module.h>
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/task_graph.h>
 #include <global/text_utils.h>
 #include <impl/assets/graphics/imgui/binding_slots.h>
 #include <core/common/log.h>

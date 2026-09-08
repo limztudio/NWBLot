@@ -8,8 +8,8 @@
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/rhi/command.h>
-#include <core/graphics/task_graph/compiled_graph.h>
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/task/gpu/compiled_graph.h>
+#include <core/task/gpu/task_graph.h>
 #include <global/filesystem/operations.h>
 
 
@@ -152,7 +152,7 @@ bool FramebufferCapture::start(){
     if(m_failed || m_stopped)
         return false;
 
-    Core::Graphics& graphics = getGraphics();
+    Core::GraphicsRuntime& graphics = getGraphics();
     Core::IGpuTaskGraphPresentationContributor* const contributor = graphics.taskGraphPresentationContributor();
     if(contributor && contributor != this){
         markFailed(NWB_TEXT("another task-graph presentation contributor is already registered"));
@@ -169,7 +169,7 @@ void FramebufferCapture::stop(){
     if(!m_registered)
         return;
 
-    Core::Graphics& graphics = getGraphics();
+    Core::GraphicsRuntime& graphics = getGraphics();
     graphics.clearTaskGraphPresentationContributor(*this);
     m_registered = false;
     m_stopped = true;

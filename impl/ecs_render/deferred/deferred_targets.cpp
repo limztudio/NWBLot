@@ -12,7 +12,7 @@
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 
 #include <core/common/log.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 
@@ -860,7 +860,7 @@ bool RendererDeferredSystem::createDeferredFrameTargetResources(
 }
 
 void ClearDeferredCsgIntervalTargets(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const Core::Rect& csgClearRect

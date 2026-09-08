@@ -11,9 +11,9 @@
 #include <core/alloc/general.h>
 #include <core/ecs/system.h>
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/render_pass.h>
-#include <core/graphics/task_graph/packet_runtime.h>
-#include <core/graphics/task_graph/timing_feedback.h>
+#include <core/graphics/runtime/render_pass.h>
+#include <core/task/gpu/packet_runtime.h>
+#include <core/task/gpu/timing_feedback.h>
 #include <core/telemetry/frame_graph_contributor.h>
 
 
@@ -60,7 +60,7 @@ public:
     RendererSystem(
         Core::Alloc::GlobalArena& arena,
         Core::ECS::World& world,
-        Core::Graphics& graphics,
+        Core::GraphicsRuntime& graphics,
         Core::Assets::AssetManager& assetManager,
         ShaderPathResolveCallback shaderPathResolver
     );

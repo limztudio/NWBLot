@@ -13,7 +13,7 @@
 #include <impl/assets/graphics/csg/constants.h>
 
 #include <core/common/log.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <impl/ecs_csg/module.h>
 
 #include <global/algorithm.h>
@@ -288,7 +288,7 @@ static void BuildResolvedClipCutterGpuData(
 }
 
 [[nodiscard]] static bool ReserveCsgStructuredBuffer(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::BufferHandle& buffer,
     usize& inOutCapacity,
     const usize requiredCount,

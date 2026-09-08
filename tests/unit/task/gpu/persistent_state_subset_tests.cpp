@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/graphics/task_graph/persistent_state.h>
+#include <core/task/gpu/persistent_state.h>
 #include <core/alloc/scratch.h>
 
 #include <tests/common/graphics_metadata_test_objects.h>

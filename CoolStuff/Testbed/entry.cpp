@@ -5,7 +5,7 @@
 #include "project.h"
 
 #include <core/ecs/module.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <core/telemetry/frame_graph_registry.h>
 #include <impl/assets/graphics/bindless/runtime_abi.h>
 #include <impl/ecs_mesh/skinning/module.h>
@@ -30,7 +30,7 @@ const tchar* NWB::QueryProjectWindowTitle(){
 }
 
 bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context){
-    Core::Graphics& graphics = context.graphics;
+    Core::GraphicsRuntime& graphics = context.graphics;
     return
         graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
         && graphics.setHDR10OutputEnabled(true)

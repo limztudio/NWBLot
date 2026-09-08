@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 RendererCsgSystem::RendererCsgSystem(
     Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     CsgShapeRegistry& csgShapeRegistry,
     RendererCsgState& csgState,
     RendererShaderSystem& shaderSystem,

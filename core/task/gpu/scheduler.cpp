@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "packet_runtime.h"
+#include "scheduler.h"
 
 #include "task_graph.h"
 
@@ -135,7 +135,7 @@ namespace __hidden_gpu_packet_runtime_execution{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskScheduler::recordAndSubmitNormalGraph(
+bool GpuTaskScheduler::submit(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecorder& recorder,
@@ -147,6 +147,10 @@ bool GpuTaskScheduler::recordAndSubmitNormalGraph(
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
+    DeviceOperation deviceOperation(*this);
+    if(!deviceOperation.m_admitted || &recorder.m_device != &device())
+        return false;
+
     SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, compiledGraph, recordedGraph, transaction);
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     if(!planAccess.valid())
@@ -332,6 +336,12 @@ bool GpuTaskScheduler::recordAndSubmitTaskRangeInCompileOrder(
     Alloc::ScratchArena& scratchArena,
     GpuSubmissionPacketId* const outFailedPacket
 )const{
+    if(outFailedPacket)
+        *outFailedPacket = {};
+    DeviceOperation deviceOperation(*this);
+    if(!deviceOperation.m_admitted || &recorder.m_device != &device())
+        return false;
+
     return recordAndSubmitTaskRange(
         graph,
         compiledGraph,
@@ -359,6 +369,12 @@ bool GpuTaskScheduler::recordAndSubmitTaskRangeInReadyFrontiers(
     Alloc::ScratchArena& scratchArena,
     GpuSubmissionPacketId* const outFailedPacket
 )const{
+    if(outFailedPacket)
+        *outFailedPacket = {};
+    DeviceOperation deviceOperation(*this);
+    if(!deviceOperation.m_admitted || &recorder.m_device != &device())
+        return false;
+
     return recordAndSubmitTaskRange(
         graph,
         compiledGraph,
@@ -501,6 +517,10 @@ bool GpuTaskScheduler::recordAndSubmitAcceptedFrontierTask(
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
+    DeviceOperation deviceOperation(*this);
+    if(!deviceOperation.m_admitted || &recorder.m_device != &device())
+        return false;
+
     SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, compiledGraph, recordedGraph, transaction);
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     if(!planAccess.valid())
@@ -629,6 +649,10 @@ bool GpuTaskScheduler::recordAndSubmitTask(
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
+    DeviceOperation deviceOperation(*this);
+    if(!deviceOperation.m_admitted || &recorder.m_device != &device())
+        return false;
+
     SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, compiledGraph, recordedGraph, transaction);
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     if(!planAccess.valid())

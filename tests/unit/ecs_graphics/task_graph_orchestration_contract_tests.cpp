@@ -83,7 +83,7 @@ TEST(EcsGraphics, RendererTaskPayloadsDependOnExactDomainsInsteadOfFramePipeline
     verifyTaskHeader(
         "raytrace/task_graph_shadow_prepare_tasks.h",
         {
-            { "Core::Graphics* graphics = nullptr;", 1u },
+            { "Core::GraphicsRuntime* graphics = nullptr;", 1u },
             { "RendererRayTracingSystem* raytracingSystem = nullptr;", 3u },
             { "ShadowPreparationOutcome* outcome = nullptr;", 1u },
         }
@@ -91,7 +91,7 @@ TEST(EcsGraphics, RendererTaskPayloadsDependOnExactDomainsInsteadOfFramePipeline
     verifyTaskHeader(
         "mesh/task_graph_prefix_tasks.h",
         {
-            { "Core::Graphics* graphics = nullptr;", 1u },
+            { "Core::GraphicsRuntime* graphics = nullptr;", 1u },
             { "RendererMeshSystem* meshSystem = nullptr;", 1u },
         }
     );
@@ -104,7 +104,7 @@ TEST(EcsGraphics, RendererTaskPayloadsDependOnExactDomainsInsteadOfFramePipeline
     verifyTaskHeader(
         "deferred/task_graph_gbuffer_task.h",
         {
-            { "Core::Graphics* graphics = nullptr;", 1u },
+            { "Core::GraphicsRuntime* graphics = nullptr;", 1u },
             { "RendererMaterialSystem* materialSystem = nullptr;", 1u },
             { "RendererCsgSystem* csgSystem = nullptr;", 1u },
         }
@@ -119,7 +119,7 @@ TEST(EcsGraphics, RendererTaskPayloadsDependOnExactDomainsInsteadOfFramePipeline
     verifyTaskHeader(
         "csg/task_graph_opaque_compute_tasks.h",
         {
-            { "Core::Graphics* graphics = nullptr;", 1u },
+            { "Core::GraphicsRuntime* graphics = nullptr;", 1u },
             { "RendererMeshSystem* meshSystem = nullptr;", 0u },
             { "RendererMaterialSystem* materialSystem = nullptr;", 2u },
             { "RendererCsgSystem", 0u },
@@ -128,7 +128,7 @@ TEST(EcsGraphics, RendererTaskPayloadsDependOnExactDomainsInsteadOfFramePipeline
     verifyTaskHeader(
         "csg/task_graph_opaque_interval_tasks.h",
         {
-            { "Core::Graphics* graphics = nullptr;", 1u },
+            { "Core::GraphicsRuntime* graphics = nullptr;", 1u },
             { "RendererMaterialSystem* materialSystem = nullptr;", 3u },
             { "RendererCsgSystem* csgSystem = nullptr;", 3u },
         }
@@ -143,7 +143,7 @@ TEST(EcsGraphics, RendererTaskPayloadsDependOnExactDomainsInsteadOfFramePipeline
     verifyTaskHeader(
         "avboit/task_graph_occupancy_tasks.h",
         {
-            { "Core::Graphics* graphics = nullptr;", 2u },
+            { "Core::GraphicsRuntime* graphics = nullptr;", 2u },
             { "RendererMeshSystem* meshSystem = nullptr;", 0u },
             { "RendererMaterialSystem* materialSystem = nullptr;", 2u },
             { "RendererCsgSystem", 0u },
@@ -152,7 +152,7 @@ TEST(EcsGraphics, RendererTaskPayloadsDependOnExactDomainsInsteadOfFramePipeline
     verifyTaskHeader(
         "avboit/task_graph_extinction_integration_tasks.h",
         {
-            { "Core::Graphics* graphics = nullptr;", 2u },
+            { "Core::GraphicsRuntime* graphics = nullptr;", 2u },
             { "RendererMeshSystem* meshSystem = nullptr;", 0u },
             { "RendererMaterialSystem* materialSystem = nullptr;", 2u },
             { "RendererCsgSystem", 0u },
@@ -161,7 +161,7 @@ TEST(EcsGraphics, RendererTaskPayloadsDependOnExactDomainsInsteadOfFramePipeline
     verifyTaskHeader(
         "avboit/task_graph_accumulation_tasks.h",
         {
-            { "Core::Graphics* graphics = nullptr;", 2u },
+            { "Core::GraphicsRuntime* graphics = nullptr;", 2u },
             { "RendererMeshSystem* meshSystem = nullptr;", 0u },
             { "RendererMaterialSystem* materialSystem = nullptr;", 2u },
             { "RendererCsgSystem", 0u },
@@ -227,7 +227,7 @@ TEST(EcsGraphics, RendererNormalExecutionUsesSemanticTaskAnchors){
     EXPECT_TRUE(ContainsText(queueLookup, "return context.compiledPlan.queueInfoForTask(*task);"));
     EXPECT_EQ(CountText(queueLookup, "packetForTask("), 0u);
     EXPECT_EQ(CountText(queueLookup, "GpuSubmissionPacketId"), 0u);
-    EXPECT_EQ(CountText(system, ".recordAndSubmitNormalGraph("), 1u);
+    EXPECT_EQ(CountText(system, ".submit("), 1u);
     EXPECT_EQ(CountText(system, ".recordAndSubmitAcceptedFrontierTask("), 1u);
     EXPECT_EQ(CountText(system, ".recordAndSubmitTask("), 2u);
     EXPECT_EQ(CountText(system, ".recordTaskRangeInReadyFrontiers("), 0u);
@@ -266,7 +266,7 @@ TEST(EcsGraphics, ProductionRecoveryTasksDeclareExactSubmissionRole){
 
     AString standaloneSource;
     AString deferredSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module_graph_setup.cpp", standaloneSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "runtime" / "runtime_graph_setup.cpp", standaloneSource));
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp",
         deferredSource

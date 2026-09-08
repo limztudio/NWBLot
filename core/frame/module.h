@@ -7,11 +7,12 @@
 
 #include <core/global.h>
 
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
+#include <core/task/gpu/scheduler.h>
 
 #include <core/common/module.h>
 #include <core/input/module.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <core/perf/session.h>
 #include <core/telemetry/codec.h>
 #include <core/telemetry/frame_graph_registry.h>
@@ -67,8 +68,8 @@ public:
         m_projectUpdateUserData = userData;
     }
 
-    [[nodiscard]] inline Graphics& graphics(){ return m_graphics; }
-    [[nodiscard]] inline const Graphics& graphics()const{ return m_graphics; }
+    [[nodiscard]] inline GraphicsRuntime& graphics(){ return m_graphics; }
+    [[nodiscard]] inline const GraphicsRuntime& graphics()const{ return m_graphics; }
 
     [[nodiscard]] inline InputDispatcher& input(){ return m_input; }
     [[nodiscard]] inline const InputDispatcher& input()const{ return m_input; }
@@ -77,6 +78,7 @@ public:
     [[nodiscard]] inline const Alloc::GlobalArena& projectObjectArena()const{ return m_projectObjectArena; }
 
     [[nodiscard]] inline CpuTaskScheduler& cpuTasks(){ return m_cpuTasks; }
+    [[nodiscard]] inline GpuTaskScheduler& gpuTasks(){ return m_gpuTasks; }
 
     void setTelemetryCapture(const Telemetry::CaptureOptions& options);
     void setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData);
@@ -110,6 +112,7 @@ private:
 
 private:
     CpuTaskScheduler m_cpuTasks;
+    GpuTaskScheduler m_gpuTasks;
     Common::FrameData m_data;
 
     Alloc::GlobalArena m_graphicsObjectArena;
@@ -123,7 +126,7 @@ private:
     Telemetry::FrameGraphRegistry m_frameGraphRegistry;
     Telemetry::TelemetryBytes m_telemetryUploadBytes;
 
-    Graphics m_graphics;
+    GraphicsRuntime m_graphics;
 
     ProjectUpdateCallback m_projectUpdateCallback = nullptr;
     void* m_projectUpdateUserData = nullptr;

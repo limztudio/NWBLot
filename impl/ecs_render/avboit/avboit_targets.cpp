@@ -21,7 +21,7 @@ namespace __hidden_avboit_targets{
 
 
 static Core::TextureHandle CreateRenderTarget(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     const u32 width,
     const u32 height,
     const Core::Format::Enum format,
@@ -50,7 +50,7 @@ static Core::TextureHandle CreateRenderTarget(
 }
 
 static Core::TextureHandle CreateTransmittanceVolume(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     const u32 width,
     const u32 height,
     const u32 depth,
@@ -80,7 +80,7 @@ static Core::TextureHandle CreateTransmittanceVolume(
 }
 
 static Core::BufferHandle CreateU32Buffer(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     const u64 byteSize,
     const char* debugName
 ){

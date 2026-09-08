@@ -5,7 +5,7 @@
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
-#include <core/graphics/task_graph/compiled_graph.h>
+#include <core/task/gpu/compiled_graph.h>
 
 #include <global/algorithm.h>
 
@@ -28,7 +28,7 @@ namespace RayTracingShadowVisibilityTaskDetail{
 struct ShadowVisibilityOpaqueGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
-        Core::Graphics* graphics = nullptr;
+        Core::GraphicsRuntime* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
         DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
@@ -163,7 +163,7 @@ struct ShadowVisibilityOpaqueGraphTask{
 struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
-        Core::Graphics* graphics = nullptr;
+        Core::GraphicsRuntime* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
         DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
@@ -403,7 +403,7 @@ struct ShadowTransparentSoftTraceGraphTask{
 struct ShadowTransparentSoftTemporalMergeGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
-        Core::Graphics* graphics = nullptr;
+        Core::GraphicsRuntime* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
         DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
@@ -478,7 +478,7 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
 struct ShadowTransparentSoftFirstWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
-        Core::Graphics* graphics = nullptr;
+        Core::GraphicsRuntime* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
         DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
@@ -660,7 +660,7 @@ struct ShadowTransparentSoftFoldGraphTask{
 struct ShadowVisibilityGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
-        Core::Graphics* graphics = nullptr;
+        Core::GraphicsRuntime* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
         DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;

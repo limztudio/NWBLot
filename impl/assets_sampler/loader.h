@@ -9,7 +9,7 @@
 
 #include <core/assets/manager.h>
 #include <core/assets/ref.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,18 +44,18 @@ namespace SamplerAssetLoader{
     SamplerGpuResource& outResource,
     const Sampler& samplerAsset,
     const Name& debugName,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     const tchar* ownerName
 );
 [[nodiscard]] bool Load(
     SamplerGpuResource& outResource,
     const Core::Assets::AssetRef<Sampler>& samplerAsset,
     const Name& debugName,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     const tchar* ownerName
 );
-void Release(SamplerGpuResource& inOutResource, Core::Graphics& graphics);
+void Release(SamplerGpuResource& inOutResource, Core::GraphicsRuntime& graphics);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

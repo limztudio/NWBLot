@@ -43,7 +43,7 @@ static constexpr Name s_DeferredTaskTimingFeedbackScopes[] = {
 RendererFramePipeline::RendererFramePipeline(
     Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolveCallback shaderPathResolver
 )

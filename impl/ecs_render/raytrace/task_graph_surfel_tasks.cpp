@@ -7,8 +7,8 @@
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 
 #include <core/graphics/backend_selection.h>
-#include <core/graphics/capture/command_ir.h>
-#include <core/graphics/task_graph/compiled_graph.h>
+#include <core/task/gpu/capture/command_ir.h>
+#include <core/task/gpu/compiled_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -2,8 +2,8 @@
 
 ## Important Rules
 
-1. `Graphics` owns a required `GraphicsBackend::Device` while its renderer runtime is live. Express that invariant in graphics/rendering APIs and local bindings with `Device&` (or `const Device&`), not a non-null `Device*`; reserve pointers for documented lifecycle or genuinely optional-device boundaries.
-2. `Graphics::getDevice()` currently returns `Device*` for historical lifecycle behavior. Converting that accessor, the backend contract, and its callers to a reference-based live-device API is a deliberate follow-up; until then, do not add defensive null checks on normal live-renderer paths that hide invalid states.
+1. `GraphicsRuntime` owns a required `GraphicsBackend::Device` while its renderer runtime is live. Express that invariant in graphics/rendering APIs and local bindings with `Device&` (or `const Device&`), not a non-null `Device*`; reserve pointers for documented lifecycle or genuinely optional-device boundaries.
+2. `GraphicsRuntime::getDevice()` returns `Device&` for its live-device API. Keep optional device pointers confined to creation, teardown, and scheduler binding boundaries.
 3. Asset-to-asset and component-to-asset bindings must use typed `Core::Assets::AssetRef<T>`, not raw `Name` or string forms.
 4. Graphics pipeline caches must include framebuffer/render-target compatibility in the cache key; material/shader identity alone is not enough when pipeline creation depends on framebuffer info.
 5. Basic built-in mesh should live in `.nwb` metadata payloads, not as hardcoded vertex/index arrays inside the cooker.
@@ -58,7 +58,7 @@
 54. Generic integer alignment helpers belong in `global/algorithm.h`; Vulkan code should use `AlignUp`, `AlignUpChecked`, or the typed wrappers instead of keeping local duplicate align-up helpers.
 55. Vulkan ray tracing arbitrary procedural primitives are represented by AABB build geometry plus an intersection shader. Native spheres/LSS are a separate `VK_NV_ray_tracing_linear_swept_spheres` path and must stay feature-gated through the device feature struct and pipeline create flag.
 56. Generic build-configuration helpers belong in `global/compile.h`; do not keep local module copies of simple `NWB_DEBUG` / optimization-mode checks.
-57. `Graphics` owns a required backend for its full object lifetime through `NotNullUniquePtr`; lifecycle `destroy()` tears down backend runtime state, not the backend object itself.
+57. `GraphicsRuntime` owns a required backend for its full object lifetime through `NotNullUniquePtr`; lifecycle `destroy()` tears down backend runtime state, not the backend object itself.
 58. ECS infrastructure that owns persistent containers must be constructed with an explicit caller-owned arena. Do not add module-local default arenas or default constructors that hide allocator ownership.
 59. `utilities/fbx_to_nwb` owns a standalone logger at entry, links `nwb_logclient`, routes non-interactive status/error/list output through `NWB_LOGGER_*`, and keeps prompts/help/pause/logger-init fallback on direct console streams. Its validation/build/write helpers should log failures in-place instead of propagating diagnostic-only `AString& outError` parameters.
 60. Current material metadata fields are defined by `impl/assets_material/metadata.h`: `interface`, `surface`, `bxdf`, `shaders`, `shader_variant`, `parameters`, `transparent`, `two_sided`, and `refractive`. Materials must explicitly author `transparent`, `two_sided`, and `refractive`, including zero values. There is no current `asset.alpha` metadata field; alpha belongs in typed material parameters or shader output. Legacy fields such as `compiler`, `default_variant`, and `instance_override` are validation failures.
@@ -93,8 +93,8 @@
 8. ECS system update dependencies preserve registration order for every component read/write hazard. System preparation remains a serial phase before updates because preparation may change entity/component storage. UI updates explicitly target the main-thread queue.
 9. Native worker exceptions remain terminal. Inline failures unwind to terminal application handling; capture retirement and scope draining remain responsible for lifetime cleanup during that unwind.
 10. CPU task submission supports multiple producers from any thread, including external OS threads sharing one scope. Ready queues support multiple worker consumers under the scheduler mutex. Producer threads must stop before scope/scheduler destruction; a task wait does not close admission or join external producers.
-11. CPU scheduling belongs to `core/task`, exposed by `<core/task/cpu_task.h>` and target `nwb_task` under `Core`. Scheduler arena identities belong to `core/task/arena_names.h` with `core/task/cpu_task_scheduler` and `core/task/cpu_task_dependencies` paths; allocator primitives remain in `core/alloc`. CPU scheduler tests belong to `tests/unit/task` and target `nwb_task_tests`, while processor topology tests remain in `tests/unit/global`.
-12. `Core::GpuTaskScheduler` belongs to `core/graphics/task_graph/packet_runtime.h` and coordinates GPU graph recording, submission, and recovery. `Graphics` remains the broader device/resource/presentation owner; graph compilation and command recording retain their distinct types.
+11. CPU scheduling belongs to `core/task/cpu`, exposed by `<core/task/cpu/scheduler.h>` and target `nwb_cpu_task` under `Core`. Scheduler arena identities belong to `core/task/cpu/arena_names.h` with `core/task/cpu/scheduler` and `core/task/cpu/dependencies` paths; allocator primitives remain in `core/alloc`. CPU scheduler tests belong to `tests/unit/task/cpu` and target `nwb_cpu_task_tests`, while processor topology tests remain in `tests/unit/global`.
+12. `Core::GpuTaskScheduler` belongs to `core/task/gpu/scheduler.h` and coordinates GPU graph recording, submission, and recovery. `GraphicsRuntime` remains the broader device/resource/presentation owner; graph compilation and command recording retain their distinct types.
 
 ## Project Bootstrap Invariants
 
@@ -139,3 +139,10 @@
 9. Editing a `.slangi` source does not recook the packed `.vol` on launch. Invalidate the relevant asset stamp/cache and rerun `pipeline/launch.py` before comparing a shader change.
 10. Treat shadow resolve pass-count and trace-resolution changes as visual-quality tradeoffs: capture the intended scene and use unaffected control scopes to distinguish a real timing change from system variance.
 11. Hardware caustic photons use frame-parity 2× checkerboard reuse. Keep the full-grid jitter mapping, per-frame index reset, and shared splat-space EMA so HW and SW preserve the same temporal-reuse invariant.
+
+## Parallel execution domains
+
+- `Frame` owns persistent `CpuTaskScheduler` and `GpuTaskScheduler` peers, exposed through `cpuTasks()` and `gpuTasks()`. Project runtime contexts borrow both.
+- CPU and GPU scheduling live in `core/task/cpu` and `core/task/gpu`, with targets `nwb_cpu_task` and `nwb_gpu_task`. GPU graph and capture code belong to the GPU task domain.
+- Device/backend types remain in `nwb_graphics_backend`; `GraphicsRuntime` in `core/graphics/runtime` owns resource setup, rendering, and presentation outside both schedulers. Its target `nwb_graphics` depends on GPU tasks, never the reverse.
+- Bind the shared GPU scheduler after device creation and before resource-validation callbacks. Join producers and GPU work before invalidation/unbinding/device destruction. Reject detach while scheduler operations are active; preserve the binding across swap-chain resize.

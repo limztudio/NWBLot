@@ -607,6 +607,7 @@ TEST(GpuTaskGraph, RetainedTextureStateCompletenessHasNoProductionTestMutationHo
         .parent_path()
         .parent_path()
         .parent_path()
+        .parent_path()
         .lexically_normal()
     ;
     TestAString backendHeaderSource;

@@ -22,7 +22,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Graphics;
+class GraphicsRuntime;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,7 +93,7 @@ public:
     RendererMaterialSystem(
         Core::Alloc::GlobalArena& arena,
         Core::ECS::World& world,
-        Core::Graphics& graphics,
+        Core::GraphicsRuntime& graphics,
         Core::Assets::AssetManager& assetManager,
         CsgShapeRegistry& csgShapeRegistry,
         RendererMaterialState& materialState,
@@ -322,7 +322,7 @@ private:
 private:
     Core::Alloc::GlobalArena& m_arena;
     Core::ECS::World& m_world;
-    Core::Graphics& m_graphics;
+    Core::GraphicsRuntime& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
     CsgShapeRegistry& m_csgShapeRegistry;
     RendererMaterialState& m_materialState;

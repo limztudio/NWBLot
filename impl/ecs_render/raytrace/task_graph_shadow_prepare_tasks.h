@@ -7,7 +7,7 @@
 
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/task/gpu/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,7 +33,7 @@ namespace ECSRenderDetail{
 
 struct ShadowPrepareGraphTask{
     struct Payload{
-        Core::Graphics* graphics = nullptr;
+        Core::GraphicsRuntime* graphics = nullptr;
         RendererRayTracingSystem* raytracingSystem = nullptr;
         ShadowPreparationOutcome* outcome = nullptr;
         DeferredFrameTargets* targets = nullptr;

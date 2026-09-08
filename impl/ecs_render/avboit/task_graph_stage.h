@@ -8,8 +8,8 @@
 #include <impl/ecs_render/shared/task_graph_stage.h>
 
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/task_graph/compiler.h>
-#include <core/graphics/task_graph/packet_runtime.h>
+#include <core/task/gpu/compiler.h>
+#include <core/task/gpu/packet_runtime.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

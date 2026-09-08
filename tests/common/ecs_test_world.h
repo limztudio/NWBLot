@@ -6,7 +6,7 @@
 
 
 #include <core/alloc/general.h>
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 #include <core/ecs/world.h>
 
 #include <global/global.h>

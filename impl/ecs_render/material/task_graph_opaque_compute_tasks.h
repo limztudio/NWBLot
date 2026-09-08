@@ -10,7 +10,7 @@
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
 
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/task/gpu/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

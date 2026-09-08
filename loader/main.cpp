@@ -186,7 +186,7 @@ void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options){
 #endif
 }
 
-bool ApplyGraphicsOptions(NWB::Core::Graphics& graphics, const LoaderOptions& options){
+bool ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderOptions& options){
     if(options.forceSdrOutput){
         if(!graphics.setHDR10OutputEnabled(false)){
             NWB_LOGGER_FATAL(NWB_TEXT("Loader: SDR output must be selected before graphics initialization"));
@@ -376,6 +376,7 @@ static int RunProjectRuntime(
                 frame.input(),
                 frame.projectObjectArena(),
                 frame.cpuTasks(),
+                frame.gpuTasks(),
                 projectTasks,
                 assetManager,
                 *graphicsFilesystem,

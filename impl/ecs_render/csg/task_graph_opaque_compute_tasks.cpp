@@ -11,7 +11,7 @@
 
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -139,7 +139,7 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
     )
         return false;
 
-    Core::Graphics& graphics = *payload.graphics;
+    Core::GraphicsRuntime& graphics = *payload.graphics;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
     const bool frameSetupReady =

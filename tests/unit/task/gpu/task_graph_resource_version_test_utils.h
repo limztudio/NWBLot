@@ -10,7 +10,7 @@
 
 #include <gtest/gtest.h>
 
-#include <core/graphics/task_graph/compiler.h>
+#include <core/task/gpu/compiler.h>
 #include <core/graphics/vulkan/backend.h>
 
 
@@ -38,7 +38,7 @@ namespace TaskGraphResourceVersionTestUtils{
 using TestArena = ::NWB::Tests::TestArena<struct TaskGraphResourceVersionTestsTag>;
 namespace Graphics = Core;
 
-inline constexpr Name s_ResourceVersionScratchArena("tests/graphics/task_graph_resource_version_scratch");
+inline constexpr Name s_ResourceVersionScratchArena("tests/task/gpu/resource_version_scratch");
 
 
 [[nodiscard]] inline Graphics::GpuPhysicalQueueInfo GraphicsQueue(){

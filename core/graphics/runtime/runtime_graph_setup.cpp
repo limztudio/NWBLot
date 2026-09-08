@@ -2,11 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "module_internal.h"
+#include "runtime_internal.h"
 
-#include "backend_selection.h"
-#include "task_graph/compiler.h"
-#include "task_graph/packet_runtime.h"
+#include <core/graphics/backend_selection.h>
+#include <core/task/gpu/compiler.h>
+#include <core/task/gpu/scheduler.h>
 
 #include <core/graphics/rhi/queue_sharing.h>
 
@@ -363,7 +363,7 @@ CommandQueue::Enum ResolveSetupUploadQueue(
     case CommandQueue::Graphics:
         return CommandQueue::Graphics;
     default:
-        NWB_ASSERT_MSG(false, NWB_TEXT("Graphics: setup upload requested an invalid command queue"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("GraphicsRuntime: setup upload requested an invalid command queue"));
         return CommandQueue::Graphics;
     }
 }
@@ -434,7 +434,7 @@ ResourceStates::Mask SetupUploadGraphFinalState(const ResourceStates::Mask decla
 
 
 bool SubmitGraphOwnedStandaloneTask(
-    const Graphics& graphics,
+    const GraphicsRuntime& graphics,
     GraphicsArena& graphArena,
     void* const userData,
     const GraphTaskDeclaration declareTask,
@@ -508,13 +508,13 @@ bool SubmitGraphOwnedStandaloneTask(
 
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    const GpuTaskScheduler submitter(device);
+    const GpuTaskScheduler& submitter = graphics.gpuTasks();
     // Setup and timing callers preserve their established serial behavior. The public standalone graph boundary
     // supplies the Graphics worker pool; the normal executor derives its recovery suffix and each task decides
     // whether it can safely opt into ready-frontier worker recording.
     GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.readyFrontierScheduler = readyFrontierScheduler;
-    const bool submitted = submitter.recordAndSubmitNormalGraph(
+    const bool submitted = submitter.submit(
         graph,
         compiledGraph,
         recorder,
@@ -558,7 +558,7 @@ bool SubmitGraphOwnedStandaloneTask(
 }
 
 bool SubmitGraphOwnedSetupUpload(
-    const Graphics& graphics,
+    const GraphicsRuntime& graphics,
     GraphicsArena& graphArena,
     const ResourceQueueSharing::Mask queueSharing,
     const CommandQueue::Enum uploadQueue,
@@ -601,7 +601,7 @@ bool SubmitGraphOwnedSetupUpload(
 }
 
 bool SubmitGraphOwnedFrameTimingReset(
-    const Graphics& graphics,
+    const GraphicsRuntime& graphics,
     GraphicsArena& graphArena,
     GpuTimingRecorder& timing
 ){
@@ -639,7 +639,7 @@ bool SubmitGraphOwnedFrameTimingReset(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Graphics::submitStandaloneTaskGraph(
+bool GraphicsRuntime::submitStandaloneTaskGraph(
     void* const userData,
     const StandaloneTaskGraphDeclaration declareTask,
     QueueSubmissionToken& outSubmissionToken,

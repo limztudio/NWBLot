@@ -20,7 +20,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Graphics;
+class GraphicsRuntime;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,7 +59,7 @@ NWB_IMPL_BEGIN
 class RendererShaderSystem final : NoCopy{
 public:
     RendererShaderSystem(
-        Core::Graphics& graphics,
+        Core::GraphicsRuntime& graphics,
         Core::Assets::AssetManager& assetManager,
         RendererShaderPathResolveCallback& shaderPathResolver
     );
@@ -80,7 +80,7 @@ public:
     }
 
 private:
-    Core::Graphics& m_graphics;
+    Core::GraphicsRuntime& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
     RendererShaderPathResolveCallback& m_shaderPathResolver;
     Core::ShaderHandle m_deferredCompositeVertexShader;

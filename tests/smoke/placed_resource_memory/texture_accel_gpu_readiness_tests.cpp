@@ -11,10 +11,10 @@
 #include <global/filesystem/path.h>
 #include <global/global.h>
 #include <global/unique_ptr.h>
-#include <core/graphics/capture/command_ir.h>
-#include <core/graphics/task_graph/compiler.h>
-#include <core/graphics/task_graph/packet_runtime.h>
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/task/gpu/capture/command_ir.h>
+#include <core/task/gpu/compiler.h>
+#include <core/task/gpu/packet_runtime.h>
+#include <core/task/gpu/task_graph.h>
 #include <core/graphics/vulkan/backend.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/gpu_task_graph_read_views.h>
@@ -139,7 +139,7 @@ TEST(GpuResourceReadinessSourceContract, PacketRuntimePreflightUsesExactTextureA
 
     TestAString source;
     ASSERT_TRUE(ReadTextFile(
-        repoRoot / "core" / "graphics" / "task_graph" / "packet_runtime_preflight.cpp",
+        repoRoot / "core" / "task" / "gpu" / "packet_runtime_preflight.cpp",
         source
     ));
     const AStringView fullSource(source.data(), source.size());

@@ -397,7 +397,7 @@ TEST(GpuTaskGraph, CompiledTaskLookupScalesAcrossDenseTaskIds){
 
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    Core::Alloc::ScratchArena lookupScratchArena(Name("tests/graphics/task_graph_lookup_scale_scratch"));
+    Core::Alloc::ScratchArena lookupScratchArena(Name("tests/task/gpu/lookup_scale_scratch"));
     Vector<Graphics::GpuTaskId, Core::Alloc::ScratchArena> tasks(lookupScratchArena);
     tasks.reserve(s_TaskCount);
     const Name taskBaseName("tests/task_graph/compiled_lookup_scale_task_");

@@ -7,7 +7,7 @@
 
 #include "module.h"
 
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"

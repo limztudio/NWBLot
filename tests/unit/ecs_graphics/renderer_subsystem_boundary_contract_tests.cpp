@@ -118,7 +118,7 @@ TEST(EcsGraphics, ShaderSystemOwnsOnlyItsNarrowConstructionBoundary){
         compactHeader,
         "RendererShaderSystem(",
         {
-            "Core::Graphics&",
+            "Core::GraphicsRuntime&",
             "Core::Assets::AssetManager&",
             "RendererShaderPathResolveCallback&",
         }
@@ -142,7 +142,7 @@ TEST(EcsGraphics, MeshSystemOwnsOnlyItsNarrowConstructionBoundary){
         {
             "Core::Alloc::GlobalArena&",
             "Core::ECS::World&",
-            "Core::Graphics&",
+            "Core::GraphicsRuntime&",
             "Core::Assets::AssetManager&",
             "RendererMeshState&",
         }
@@ -902,7 +902,7 @@ TEST(EcsGraphics, AvboitDoesNotDependOnDeferredPrivateState){
         "RendererAvboitSystem(",
         {
             "Core::Alloc::GlobalArena&",
-            "Core::Graphics&",
+            "Core::GraphicsRuntime&",
             "RendererAvboitState&",
             "RendererShaderSystem&",
             "RendererMaterialSystem&",
@@ -1013,7 +1013,7 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
         {
             "Core::Alloc::GlobalArena&",
             "Core::ECS::World&",
-            "Core::Graphics&",
+            "Core::GraphicsRuntime&",
             "CsgShapeRegistry&",
             "RendererCsgState&",
             "RendererShaderSystem&",
@@ -1532,7 +1532,7 @@ TEST(EcsGraphics, RootMediatesDeferredRayTracingLightingClassification){
         {
             "Core::Alloc::GlobalArena&",
             "Core::ECS::World&",
-            "Core::Graphics&",
+            "Core::GraphicsRuntime&",
             "RendererDeferredState&",
             "RendererShaderSystem&",
         }
@@ -1646,7 +1646,7 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
         {
             "Core::Alloc::GlobalArena&",
             "Core::ECS::World&",
-            "Core::Graphics&",
+            "Core::GraphicsRuntime&",
             "RendererShaderSystem&",
             "RendererMeshSystem&",
             "RendererMaterialSystem&",

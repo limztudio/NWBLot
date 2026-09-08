@@ -234,7 +234,7 @@ void RendererTaskTimingFeedback::onGpuTimingSampleCallback(
 
 RendererTaskTimingFeedback::RendererTaskTimingFeedback(
     Core::Alloc::GlobalArena& arena,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     const NotNull<const Name*> feedbackCollectionScopes,
     const usize feedbackCollectionScopeCount
 )

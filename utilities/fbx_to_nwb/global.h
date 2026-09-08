@@ -18,7 +18,7 @@
 #include <global/type.h>
 
 #include <core/alloc/module.h>
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 
 #include <ufbx.h>
 

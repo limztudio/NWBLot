@@ -17,9 +17,9 @@
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/module.h>
-#include <core/graphics/task_graph/compiler.h>
-#include <core/graphics/task_graph/packet_runtime.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/compiler.h>
+#include <core/task/gpu/scheduler.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
 
 
@@ -310,7 +310,7 @@ bool MeshSkinningSystem::replaceAcceptedSkinningState(
 MeshSkinningSystem::MeshSkinningSystem(
     Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     IRuntimeMeshRegistry& runtimeMeshRegistry,
     ShaderPathResolveCallback shaderPathResolver)
@@ -1041,8 +1041,8 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     normalExecution.taskAcceptedCallbacks = &acceptedCallback;
     normalExecution.taskAcceptedCallbackCount = 1u;
     const Core::GpuNativePacketRecorder recorder(device);
-    const Core::GpuTaskScheduler submitter(device);
-    const bool skinningSubmitted = submitter.recordAndSubmitNormalGraph(
+    const Core::GpuTaskScheduler& submitter = m_graphics.gpuTasks();
+    const bool skinningSubmitted = submitter.submit(
         graph,
         compiledGraph,
         recorder,

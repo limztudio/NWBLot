@@ -5,7 +5,7 @@
 #include <tests/common/gpu_task_graph_read_views.h>
 #include <tests/common/test_context.h>
 
-#include <core/graphics/task_graph/compiler.h>
+#include <core/task/gpu/compiler.h>
 #include <global/text_utils.h>
 
 #include <gtest/gtest.h>
@@ -35,7 +35,7 @@ namespace __hidden_task_graph_analysis_tests{
 using TestArena = ::NWB::Tests::TestArena<struct TaskGraphAnalysisTestsTag>;
 namespace Graphics = Core;
 
-inline constexpr Name s_AnalysisScratchArena("tests/graphics/task_graph_analysis_scratch");
+inline constexpr Name s_AnalysisScratchArena("tests/task/gpu/analysis_scratch");
 
 
 [[nodiscard]] static Graphics::GpuTaskId AddTask(

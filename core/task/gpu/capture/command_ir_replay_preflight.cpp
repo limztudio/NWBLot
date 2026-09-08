@@ -5,9 +5,9 @@
 #include "command_ir_internal.h"
 
 #include <core/graphics/backend_selection.h>
-#include <core/graphics/task_graph/texture_clear_value.h>
-#include <core/graphics/task_graph/compiled_graph.h>
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/task/gpu/texture_clear_value.h>
+#include <core/task/gpu/compiled_graph.h>
+#include <core/task/gpu/task_graph.h>
 #include <core/graphics/vulkan/texture_clear_contract.h>
 #include <core/graphics/vulkan/texture_copy_contract.h>
 

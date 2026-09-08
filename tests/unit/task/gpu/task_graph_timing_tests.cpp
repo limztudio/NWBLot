@@ -8,7 +8,7 @@
 
 #include <gtest/gtest.h>
 
-#include <core/graphics/task_graph/compiler.h>
+#include <core/task/gpu/compiler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,7 +35,7 @@ namespace __hidden_task_graph_timing_tests{
 using TestArena = ::NWB::Tests::TestArena<struct TaskGraphTimingTestsTag>;
 namespace Graphics = Core;
 
-inline constexpr Name s_TaskGraphTimingScratchArena("tests/graphics/task_graph_timing_scratch");
+inline constexpr Name s_TaskGraphTimingScratchArena("tests/task/gpu/timing_scratch");
 
 using TaskGraphResourceVersionTestUtils::GraphicsQueue;
 

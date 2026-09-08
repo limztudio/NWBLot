@@ -5,7 +5,7 @@
 #include "system.h"
 
 #include <core/graphics/backend_selection.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <core/graphics/shader_archive.h>
 #include <impl/assets/graphics/imgui/binding_slots.h>
 #include <impl/assets/graphics/imgui/names.h>
@@ -54,7 +54,7 @@ static Core::RenderState BuildUiRenderState(){
 }
 
 static bool LoadShader(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     UiSystem::ShaderPathResolveCallback& shaderPathResolver,
     Core::ShaderHandle& outShader,

@@ -7,8 +7,8 @@
 
 #include <impl/global.h>
 
-#include <core/graphics/task_graph/task_desc.h>
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/task/gpu/task_desc.h>
+#include <core/task/gpu/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

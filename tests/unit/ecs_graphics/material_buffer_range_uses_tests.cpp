@@ -10,7 +10,7 @@
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
 
-#include <core/graphics/task_graph/compiler.h>
+#include <core/task/gpu/compiler.h>
 
 #include <gtest/gtest.h>
 

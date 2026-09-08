@@ -9,7 +9,7 @@ target_sources(nwb_pipeline_asset_builder PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/cook_paths.h"
     "${CMAKE_CURRENT_LIST_DIR}/cook_paths.cpp"
 )
-target_link_libraries(nwb_pipeline_asset_builder PUBLIC nwb_assets_volume_cook nwb_task)
+target_link_libraries(nwb_pipeline_asset_builder PUBLIC nwb_assets_volume_cook nwb_cpu_task)
 target_compile_definitions(nwb_pipeline_asset_builder PRIVATE NWB_COOK=1)
 
 nwb_declare_executable(nwb_asset_builder)

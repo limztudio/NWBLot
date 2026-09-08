@@ -8,8 +8,8 @@
 #include <impl/global.h>
 
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/module.h>
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,7 +37,7 @@ namespace RendererTaskGraphDetail{
 struct DeferredPresentGraphTask{
     struct Payload{
         RendererDeferredSystem* deferredSystem = nullptr;
-        Core::Graphics* graphics = nullptr;
+        Core::GraphicsRuntime* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::AcquiredPresentationFrame presentationFrame;
         Core::GpuGraphResourceId backBuffer;

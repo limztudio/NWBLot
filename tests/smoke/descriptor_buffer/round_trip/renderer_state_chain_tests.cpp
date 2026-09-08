@@ -105,7 +105,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalizedStatePreludeFansInIndependentBra
     Latch recordingStarted(2);
     bool firstRecorded = false;
     bool secondRecorded = false;
-    const Graphics::TaskHandle firstJob = graphics.scheduleGraphicsTask([&](){
+    const GraphicsRuntime::TaskHandle firstJob = graphics.scheduleGraphicsTask([&](){
         recordingStarted.count_down();
         recordingStarted.wait();
         firstBranch->open(&normalizedState);
@@ -114,7 +114,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalizedStatePreludeFansInIndependentBra
         firstBranch->close(&firstBranchState);
         firstRecorded = firstBranchState.valid() && firstBranch->hasCommandBuffer();
     });
-    const Graphics::TaskHandle secondJob = graphics.scheduleGraphicsTask([&](){
+    const GraphicsRuntime::TaskHandle secondJob = graphics.scheduleGraphicsTask([&](){
         recordingStarted.count_down();
         recordingStarted.wait();
         secondBranch->open(&normalizedState);

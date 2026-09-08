@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "module_internal.h"
+#include "runtime_internal.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,12 +29,12 @@ static constexpr usize s_HeavySetupUploadBytes = 64u * 1024u;
 
 
 struct BufferSetupTaskData{
-    Graphics::BufferSetupDesc setupDesc;
+    GraphicsRuntime::BufferSetupDesc setupDesc;
     UploadBytes uploadBytes;
     BufferHandle& outBuffer;
 
 
-    BufferSetupTaskData(Alloc::GlobalArena& arena, const Graphics::BufferSetupDesc& desc, BufferHandle& output)
+    BufferSetupTaskData(Alloc::GlobalArena& arena, const GraphicsRuntime::BufferSetupDesc& desc, BufferHandle& output)
         : setupDesc(desc)
         , uploadBytes(arena)
         , outBuffer(output)
@@ -42,12 +42,12 @@ struct BufferSetupTaskData{
 };
 
 struct TextureSetupTaskData{
-    Graphics::TextureSetupDesc setupDesc;
+    GraphicsRuntime::TextureSetupDesc setupDesc;
     UploadBytes uploadBytes;
     TextureHandle& outTexture;
 
 
-    TextureSetupTaskData(Alloc::GlobalArena& arena, const Graphics::TextureSetupDesc& desc, TextureHandle& output)
+    TextureSetupTaskData(Alloc::GlobalArena& arena, const GraphicsRuntime::TextureSetupDesc& desc, TextureHandle& output)
         : setupDesc(desc)
         , uploadBytes(arena)
         , outTexture(output)
@@ -55,13 +55,13 @@ struct TextureSetupTaskData{
 };
 
 struct MeshSetupTaskData{
-    Graphics::MeshSetupDesc setupDesc;
+    GraphicsRuntime::MeshSetupDesc setupDesc;
     UploadBytes vertexBytes;
     UploadBytes indexBytes;
-    Graphics::MeshResource& outMesh;
+    GraphicsRuntime::MeshResource& outMesh;
 
 
-    MeshSetupTaskData(Alloc::GlobalArena& arena, const Graphics::MeshSetupDesc& desc, Graphics::MeshResource& output)
+    MeshSetupTaskData(Alloc::GlobalArena& arena, const GraphicsRuntime::MeshSetupDesc& desc, GraphicsRuntime::MeshResource& output)
         : setupDesc(desc)
         , vertexBytes(arena)
         , indexBytes(arena)
@@ -89,8 +89,8 @@ struct MeshSetupTaskData{
 
 
 template<typename TaskData, typename Desc, typename Output, typename Validate, typename ConfigurePayload, typename ExecutePayload>
-[[nodiscard]] static Graphics::TaskHandle SubmitSetupUploadTask(
-    Graphics& graphics,
+[[nodiscard]] static GraphicsRuntime::TaskHandle SubmitSetupUploadTask(
+    GraphicsRuntime& graphics,
     Alloc::GlobalArena& arena,
     CpuTaskScope& tasks,
     const Desc& desc,
@@ -119,7 +119,7 @@ static void ConfigureBufferSetupPayload(BufferSetupTaskData& payload, Alloc::Glo
     payload.setupDesc.dataSize = payload.uploadBytes.size();
 }
 
-static void ExecuteBufferSetupPayload(Graphics& graphics, BufferSetupTaskData& payload){
+static void ExecuteBufferSetupPayload(GraphicsRuntime& graphics, BufferSetupTaskData& payload){
     payload.setupDesc.data = payload.uploadBytes.empty() ? nullptr : payload.uploadBytes.data();
     payload.setupDesc.dataSize = payload.uploadBytes.size();
     payload.outBuffer = graphics.setupBuffer(payload.setupDesc);
@@ -131,7 +131,7 @@ static void ConfigureTextureSetupPayload(TextureSetupTaskData& payload, Alloc::G
     payload.setupDesc.uploadDataSize = payload.uploadBytes.size();
 }
 
-static void ExecuteTextureSetupPayload(Graphics& graphics, TextureSetupTaskData& payload){
+static void ExecuteTextureSetupPayload(GraphicsRuntime& graphics, TextureSetupTaskData& payload){
     payload.setupDesc.data = payload.uploadBytes.empty() ? nullptr : payload.uploadBytes.data();
     payload.setupDesc.uploadDataSize = payload.uploadBytes.size();
     payload.outTexture = graphics.setupTexture(payload.setupDesc);
@@ -147,7 +147,7 @@ static void ExecuteTextureSetupPayload(Graphics& graphics, TextureSetupTaskData&
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Graphics::TaskHandle Graphics::setupBufferAsync(const BufferSetupDesc& desc, BufferHandle& outBuffer){
+GraphicsRuntime::TaskHandle GraphicsRuntime::setupBufferAsync(const BufferSetupDesc& desc, BufferHandle& outBuffer){
     return __hidden_graphics_setup_async::SubmitSetupUploadTask<__hidden_graphics_setup_async::BufferSetupTaskData>(
         *this,
         m_allocator.getObjectArena(),
@@ -160,7 +160,7 @@ Graphics::TaskHandle Graphics::setupBufferAsync(const BufferSetupDesc& desc, Buf
     );
 }
 
-Graphics::TaskHandle Graphics::setupTextureAsync(const TextureSetupDesc& desc, TextureHandle& outTexture){
+GraphicsRuntime::TaskHandle GraphicsRuntime::setupTextureAsync(const TextureSetupDesc& desc, TextureHandle& outTexture){
     return __hidden_graphics_setup_async::SubmitSetupUploadTask<__hidden_graphics_setup_async::TextureSetupTaskData>(
         *this,
         m_allocator.getObjectArena(),
@@ -173,7 +173,7 @@ Graphics::TaskHandle Graphics::setupTextureAsync(const TextureSetupDesc& desc, T
     );
 }
 
-Graphics::TaskHandle Graphics::setupMeshAsync(const MeshSetupDesc& desc, MeshResource& outMesh){
+GraphicsRuntime::TaskHandle GraphicsRuntime::setupMeshAsync(const MeshSetupDesc& desc, MeshResource& outMesh){
     if(!GraphicsModuleDetail::ValidateMeshSetupDesc(desc)){
         outMesh = {};
         return {};

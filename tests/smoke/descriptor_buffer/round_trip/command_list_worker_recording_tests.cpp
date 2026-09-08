@@ -190,7 +190,7 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
     Latch recordingStarted(2);
     bool firstRecorded = false;
     bool secondRecorded = false;
-    const Graphics::TaskHandle firstJob = graphics.scheduleGraphicsTask([&](){
+    const GraphicsRuntime::TaskHandle firstJob = graphics.scheduleGraphicsTask([&](){
         recordingStarted.count_down();
         recordingStarted.wait();
         firstCommandList->open();
@@ -198,7 +198,7 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
         firstCommandList->close();
         firstRecorded = true;
     });
-    const Graphics::TaskHandle secondJob = graphics.scheduleGraphicsTask([&](){
+    const GraphicsRuntime::TaskHandle secondJob = graphics.scheduleGraphicsTask([&](){
         recordingStarted.count_down();
         recordingStarted.wait();
         secondCommandList->open();
@@ -294,7 +294,7 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
     Latch reusedRecordingStarted(2);
     firstRecorded = false;
     secondRecorded = false;
-    const Graphics::TaskHandle reusedFirstJob = graphics.scheduleGraphicsTask([&](){
+    const GraphicsRuntime::TaskHandle reusedFirstJob = graphics.scheduleGraphicsTask([&](){
         reusedRecordingStarted.count_down();
         reusedRecordingStarted.wait();
         firstCommandList->open();
@@ -302,7 +302,7 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
         firstCommandList->close();
         firstRecorded = true;
     });
-    const Graphics::TaskHandle reusedSecondJob = graphics.scheduleGraphicsTask([&](){
+    const GraphicsRuntime::TaskHandle reusedSecondJob = graphics.scheduleGraphicsTask([&](){
         reusedRecordingStarted.count_down();
         reusedRecordingStarted.wait();
         secondCommandList->open();

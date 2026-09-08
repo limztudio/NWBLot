@@ -45,7 +45,7 @@ namespace RendererTaskGraphDetail{
     )
         return false;
 
-    Core::Graphics& graphics = *payload.graphics;
+    Core::GraphicsRuntime& graphics = *payload.graphics;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     const bool csgComputeEmulation = payload.csgPlan.captured;
@@ -138,7 +138,7 @@ namespace RendererTaskGraphDetail{
     )
         return false;
 
-    Core::Graphics& graphics = *payload.graphics;
+    Core::GraphicsRuntime& graphics = *payload.graphics;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     if(

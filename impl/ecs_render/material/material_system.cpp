@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 RendererMaterialSystem::RendererMaterialSystem(
     Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     CsgShapeRegistry& csgShapeRegistry,
     RendererMaterialState& materialState,

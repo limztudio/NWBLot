@@ -13,7 +13,7 @@
 
 #include "cook_entry_registry.h"
 
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 #include "expanded_metadata.h"
 #include "metadata_extension.h"
 

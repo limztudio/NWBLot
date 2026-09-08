@@ -12,7 +12,7 @@
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 
 #include <core/graphics/backend_selection.h>
-#include <core/graphics/task_graph/compiled_graph.h>
+#include <core/task/gpu/compiled_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -107,7 +107,7 @@ namespace RendererTaskGraphDetail{
     )
         return false;
 
-    Core::Graphics& graphics = *payload.graphics;
+    Core::GraphicsRuntime& graphics = *payload.graphics;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     const bool csgComputeEmulation = payload.csgPlan.captured;
@@ -200,7 +200,7 @@ namespace RendererTaskGraphDetail{
     )
         return false;
 
-    Core::Graphics& graphics = *payload.graphics;
+    Core::GraphicsRuntime& graphics = *payload.graphics;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     if(

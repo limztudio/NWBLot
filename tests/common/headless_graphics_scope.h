@@ -8,8 +8,9 @@
 #include <global/global.h>
 #include <global/thread.h>
 #include <core/alloc/general.h>
-#include <core/task/cpu_task.h>
-#include <core/graphics/module.h>
+#include <core/task/cpu/scheduler.h>
+#include <core/task/gpu/scheduler.h>
+#include <core/graphics/runtime/runtime.h>
 #include <core/perf/timing.h>
 #include <impl/assets/graphics/bindless/runtime_abi.h>
 
@@ -69,7 +70,7 @@ public:
         , m_allocator(m_objectArena)
         , m_cpuScheduler(s_TestWorkerThreadCount)
         , m_gpuTiming(m_objectArena)
-        , m_graphics(m_allocator, m_cpuScheduler, m_gpuTiming)
+        , m_graphics(m_allocator, m_cpuScheduler, m_gpuTasks, m_gpuTiming)
     {}
 
     ~HeadlessGraphicsScope(){}
@@ -108,7 +109,8 @@ public:
         return m_graphics.setCrossFamilySameClassQueueRoutingEnabled(enabled);
     }
 
-    [[nodiscard]] Core::Graphics& graphics(){ return m_graphics; }
+    [[nodiscard]] Core::GraphicsRuntime& graphics(){ return m_graphics; }
+    [[nodiscard]] Core::GpuTaskScheduler& gpuTasks(){ return m_gpuTasks; }
     [[nodiscard]] Core::Alloc::GlobalArena& arena(){ return m_objectArena; }
     [[nodiscard]] Core::Perf::TimingRecorder& gpuTimingSink(){ return m_gpuTiming; }
 
@@ -124,8 +126,9 @@ private:
     Core::Alloc::GlobalArena m_objectArena;
     Core::GraphicsAllocator m_allocator;
     Core::CpuTaskScheduler m_cpuScheduler;
+    Core::GpuTaskScheduler m_gpuTasks;
     Core::Perf::TimingRecorder m_gpuTiming;
-    Core::Graphics m_graphics;
+    Core::GraphicsRuntime m_graphics;
 };
 
 

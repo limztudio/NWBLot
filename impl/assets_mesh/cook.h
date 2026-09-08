@@ -14,7 +14,7 @@
 #include "asset.h"
 
 #include <core/alloc/scratch.h>
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 #include <core/metascript/parser.h>
 
 

@@ -540,7 +540,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
             const GpuNativePacketRecorder recorder(device);
             const GpuTaskScheduler submitter(device);
             GpuSubmissionPacketId failedPacket;
-            const bool normalAccepted = submitter.recordAndSubmitNormalGraph(
+            const bool normalAccepted = submitter.submit(
                 graph,
                 compiledGraph,
                 recorder,
@@ -912,7 +912,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphRejectsDedicatedFirstComputeA
     const GpuNativePacketRecorder recorder(device);
     const GpuTaskScheduler submitter(device);
     GpuSubmissionPacketId failedPacket;
-    EXPECT_FALSE(submitter.recordAndSubmitNormalGraph(
+    EXPECT_FALSE(submitter.submit(
         graph,
         compiledGraph,
         recorder,

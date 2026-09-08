@@ -10,7 +10,7 @@
 
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <impl/assets/graphics/skinned_mesh/binding_slots.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
@@ -33,7 +33,7 @@ namespace __hidden_resources{
 
 template<typename PayloadT>
 static Core::BufferHandle SetupStructuredBuffer(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     const Name& debugName,
     const PayloadT* payload,
     const usize count,

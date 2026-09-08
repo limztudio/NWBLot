@@ -5,7 +5,6 @@
 #include "backend_contract.h"
 
 #include "backend_selection.h"
-#include "module.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,7 +17,6 @@ NWB_CORE_BEGIN
 
 
 static_assert(GraphicsContract::BackendApi<GraphicsBackend::Backend>);
-static_assert(GraphicsContract::GraphicsApi<Graphics>);
 static_assert(GraphicsContract::DeviceApi<GraphicsBackend::Device>);
 static_assert(GraphicsContract::CommandListApi<GraphicsBackend::CommandList>);
 

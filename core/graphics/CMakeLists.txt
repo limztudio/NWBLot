@@ -5,69 +5,20 @@ target_sources(nwb_shader_archive PRIVATE
 )
 target_link_libraries(nwb_shader_archive PUBLIC nwb_common)
 
-nwb_declare_static_library(nwb_graphics)
-target_sources(nwb_graphics PRIVATE
+nwb_declare_static_library(nwb_graphics_backend)
+target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/backend_contract.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/api.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir_capture.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir_replay_lowering.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir_replay_preflight.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir_stream.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_accumulator.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_listener.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_metric_correlator.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_metrics.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_submission.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/module_feature_queries.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/module_graph_setup.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/module_setup.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/module_setup_async.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/module_texture_upload.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/pipeline_helpers.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/rhi/resource_state_selection.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/rhi/resource_state_selection.h"
     "${CMAKE_CURRENT_LIST_DIR}/spirv_entry_point.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiled_graph.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_analysis.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_analysis_internal.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_analysis_topology.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_finalization.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_packetization.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_queue_assignment.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_queue_policy.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_queue_scoring.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_resource_ranges.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_resource_versions.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_resource_state.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_execution.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_recorded_graph.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_recording.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_preflight.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_recording_frontier.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_state_seed.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_submission.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_submission_tasks.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_transaction.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_transaction_handoff.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_transaction_rejection.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/persistent_state.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/queue_assignment_telemetry.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_barriers.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_builtin_buffer_copy.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_builtin_clears.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_builtin_texture_transfers.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_builtin_uploads.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_declaration_admission.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_declarations.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_imports.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_packet_lifecycle.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_state.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_storage.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_telemetry.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/timing_feedback.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/allocator.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/buffer.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/buffer_native.cpp"
@@ -140,34 +91,13 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/api.h"
     "${CMAKE_CURRENT_LIST_DIR}/rhi/presentation.h"
     "${CMAKE_CURRENT_LIST_DIR}/rhi/queue_sharing.h"
-    "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir.h"
-    "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir_internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing.h"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_metric_correlator.h"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_metrics.h"
-    "${CMAKE_CURRENT_LIST_DIR}/module.h"
-    "${CMAKE_CURRENT_LIST_DIR}/module_internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_nodes.h"
-    "${CMAKE_CURRENT_LIST_DIR}/render_pass.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_param.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_stage_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/spirv_entry_point.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiled_graph.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_internal.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_artifact.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_internal.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph_builtin_internal.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/texture_clear_value.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/persistent_state.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/presentation_contributor.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/queue_assignment_telemetry.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_contract.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_desc.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/timing_feedback.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph/types.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend.h"
@@ -195,19 +125,21 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/aftermath.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vma.h"
 )
-target_link_libraries(nwb_graphics PUBLIC nwb_common nwb_task)
-target_link_libraries(nwb_graphics PUBLIC nwb_perf)
-target_link_libraries(nwb_graphics PUBLIC nwb_telemetry)
-target_link_libraries(nwb_graphics PUBLIC nwb::volk)
-target_link_libraries(nwb_graphics PRIVATE nwb::vma_headers)
-target_link_libraries(nwb_graphics PRIVATE nwb_filesystem)
-target_link_libraries(nwb_graphics PRIVATE nwb::aftermath_headers)
+target_link_libraries(nwb_graphics_backend PUBLIC nwb_common nwb_cpu_task)
+target_link_libraries(nwb_graphics_backend PUBLIC nwb_perf)
+target_link_libraries(nwb_graphics_backend PUBLIC nwb_telemetry)
+target_link_libraries(nwb_graphics_backend PUBLIC nwb::volk)
+target_link_libraries(nwb_graphics_backend PRIVATE nwb::vma_headers)
+target_link_libraries(nwb_graphics_backend PRIVATE nwb_filesystem)
+target_link_libraries(nwb_graphics_backend PRIVATE nwb::aftermath_headers)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    target_link_libraries(nwb_graphics PRIVATE nwb::x11)
+    target_link_libraries(nwb_graphics_backend PRIVATE nwb::x11)
 
     if(TARGET nwb::wayland)
-        target_link_libraries(nwb_graphics PRIVATE nwb::wayland)
-        target_compile_definitions(nwb_graphics PRIVATE NWB_WITH_WAYLAND=1)
+        target_link_libraries(nwb_graphics_backend PRIVATE nwb::wayland)
+        target_compile_definitions(nwb_graphics_backend PRIVATE NWB_WITH_WAYLAND=1)
     endif()
 endif()
+
+add_subdirectory(runtime)

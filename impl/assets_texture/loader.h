@@ -9,7 +9,7 @@
 
 #include <core/assets/manager.h>
 #include <core/assets/ref.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,7 +51,7 @@ namespace TextureAssetLoader{
     TextureGpuResource& outResource,
     const Texture& textureAsset,
     const Name& debugName,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     const tchar* ownerName
 );
 
@@ -60,13 +60,13 @@ namespace TextureAssetLoader{
     TextureGpuResource& outResource,
     const Core::Assets::AssetRef<Texture>& textureAsset,
     const Name& debugName,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     const tchar* ownerName
 );
 
 // Frees the global descriptor first, then releases the owner's TextureHandle. Safe to call on an empty resource.
-void Release(TextureGpuResource& inOutResource, Core::Graphics& graphics);
+void Release(TextureGpuResource& inOutResource, Core::GraphicsRuntime& graphics);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

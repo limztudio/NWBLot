@@ -6,8 +6,8 @@
 
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/rhi/queue_sharing.h>
-#include <core/graphics/task_graph/compiled_graph.h>
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/task/gpu/compiled_graph.h>
+#include <core/task/gpu/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

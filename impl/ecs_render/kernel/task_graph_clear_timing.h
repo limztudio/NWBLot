@@ -7,8 +7,8 @@
 
 #include "timing_names.h"
 
-#include <core/graphics/module.h>
-#include <core/graphics/task_graph/task_desc.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/task_desc.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,7 +21,7 @@ NWB_IMPL_BEGIN
 
 
 struct GraphClearTimingRecordState{
-    Core::Graphics* graphics = nullptr;
+    Core::GraphicsRuntime* graphics = nullptr;
     Optional<Core::GpuTimingMeasure>* timing = nullptr;
     Core::GpuTimingSubmissionTicket** rebindableTimingTicket = nullptr;
     Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
@@ -36,7 +36,7 @@ struct GraphClearTimingRecordState{
 }
 
 [[nodiscard]] inline bool BeginGraphClearTiming(
-    Core::Graphics* const graphics,
+    Core::GraphicsRuntime* const graphics,
     Optional<Core::GpuTimingMeasure>* const timing,
     Core::GpuTimingSubmissionTicket* const timingTicket,
     const Core::GpuTimingScopeDefinition& scope,

@@ -32,8 +32,8 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     AString backendPresentationSource;
     AString rendererResourcesSource;
     AString uiSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.h", graphicsHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.cpp", graphicsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "runtime" / "runtime.h", graphicsHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "runtime" / "runtime.cpp", graphicsSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "backend_contract.h", backendContractSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_context_orchestration.cpp", backendOrchestrationSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_context_presentation.cpp", backendPresentationSource));
@@ -130,8 +130,8 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
         "resetFramePresentationSignal();"
     ));
 
-    const usize renderOffset = graphics.find("void Graphics::render(){");
-    const usize averageOffset = graphics.find("void Graphics::updateAverageFrameTime", renderOffset);
+    const usize renderOffset = graphics.find("void GraphicsRuntime::render(){");
+    const usize averageOffset = graphics.find("void GraphicsRuntime::updateAverageFrameTime", renderOffset);
     ASSERT_NE(renderOffset, AStringView::npos);
     ASSERT_NE(averageOffset, AStringView::npos);
     const AStringView render = graphics.substr(renderOffset, averageOffset - renderOffset);
@@ -153,7 +153,7 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     EXPECT_LT(prepareOffset, drawOffset);
     EXPECT_LT(drawOffset, joinOffset);
 
-    const usize animateOffset = graphics.find("bool Graphics::animateRenderPresentInternal");
+    const usize animateOffset = graphics.find("bool GraphicsRuntime::animateRenderPresentInternal");
     ASSERT_NE(animateOffset, AStringView::npos);
     const AStringView animate = graphics.substr(animateOffset);
     const usize entryClearOffset = animate.find("m_acquiredPresentationFrame = {};");
@@ -220,10 +220,10 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     EXPECT_TRUE(ContainsText(animate, "prepareFramePreamble() returns false only after the device requires recreation"));
     EXPECT_TRUE(ContainsText(animate, "required device teardown owns the unresolved acquired image and synchronization"));
     EXPECT_TRUE(ContainsText(graphics, "~ScopedAcquiredPresentationFrameReset(){ m_frame = {}; }"));
-    EXPECT_TRUE(ContainsText(graphics, "bool Graphics::init(const Common::FrameData& data){\n    m_acquiredPresentationFrame = {};"));
-    EXPECT_TRUE(ContainsText(graphics, "bool Graphics::createHeadlessDevice(){\n    m_acquiredPresentationFrame = {};"));
+    EXPECT_TRUE(ContainsText(graphics, "bool GraphicsRuntime::init(const Common::FrameData& data){\n    m_acquiredPresentationFrame = {};"));
+    EXPECT_TRUE(ContainsText(graphics, "bool GraphicsRuntime::createHeadlessDevice(){\n    m_acquiredPresentationFrame = {};"));
 
-    const usize destroyLifecycleOffset = graphics.find("bool Graphics::destroy(){");
+    const usize destroyLifecycleOffset = graphics.find("bool GraphicsRuntime::destroy(){");
     const usize destroyJobJoinOffset = graphics.find("waitTasks();", destroyLifecycleOffset);
     const usize destroyPrepareOffset = graphics.find(
         "prepareSwapChainTransition(SwapChainTransitionKind::Destroy, transitionTicket)",
@@ -244,7 +244,7 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     EXPECT_LT(destroyPrepareOffset, destroySnapshotClearOffset);
     EXPECT_LT(destroySnapshotClearOffset, destroyCommitOffset);
 
-    const usize resizeLifecycleOffset = graphics.find("bool Graphics::backBufferResizing(SwapChainTransitionTicket& outTicket){");
+    const usize resizeLifecycleOffset = graphics.find("bool GraphicsRuntime::backBufferResizing(SwapChainTransitionTicket& outTicket){");
     const usize resizeJobJoinOffset = graphics.find("waitTasks();", resizeLifecycleOffset);
     const usize resizePrepareOffset = graphics.find(
         "prepareSwapChainTransition(SwapChainTransitionKind::Resize, outTicket)",
@@ -470,7 +470,7 @@ TEST(EcsGraphics, RendererPresentationGraphBindsExactAcquiredTexture){
     AString presentationTaskHeaderSource;
     AString presentationTaskSource;
     ASSERT_TRUE(ReadTextFile(
-        repoRoot / "core" / "graphics" / "task_graph" / "presentation_contributor.h",
+        repoRoot / "core" / "task" / "gpu" / "presentation_contributor.h",
         contributorHeaderSource
     ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.h", rendererHeaderSource));

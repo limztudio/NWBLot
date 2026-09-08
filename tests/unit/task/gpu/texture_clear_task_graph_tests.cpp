@@ -7,8 +7,8 @@
 
 #include <gtest/gtest.h>
 
-#include <core/graphics/capture/command_ir.h>
-#include <core/graphics/task_graph/compiler.h>
+#include <core/task/gpu/capture/command_ir.h>
+#include <core/task/gpu/compiler.h>
 #include <core/graphics/vulkan/backend.h>
 
 

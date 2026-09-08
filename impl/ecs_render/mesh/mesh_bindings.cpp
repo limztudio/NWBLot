@@ -8,7 +8,7 @@
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 
 #include <core/common/log.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

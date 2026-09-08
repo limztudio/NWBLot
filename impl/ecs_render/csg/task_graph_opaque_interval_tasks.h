@@ -10,7 +10,7 @@
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
 
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/task/gpu/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,7 +22,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Graphics;
+class GraphicsRuntime;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -116,7 +116,7 @@ struct CsgIntervalCombineGraphTask{
 // renderer thunk.
 struct CsgIntervalSampleGraphTask{
     struct Payload{
-        Core::Graphics* graphics = nullptr;
+        Core::GraphicsRuntime* graphics = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
         RendererCsgSystem* csgSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;

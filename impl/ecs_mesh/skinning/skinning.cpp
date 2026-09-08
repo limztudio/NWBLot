@@ -12,10 +12,10 @@
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/graphics/task_graph/compiled_graph.h>
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/task/gpu/compiled_graph.h>
+#include <core/task/gpu/task_graph.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
 
 

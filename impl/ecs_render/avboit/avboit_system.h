@@ -38,7 +38,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Graphics;
+class GraphicsRuntime;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -77,7 +77,7 @@ class RendererAvboitSystem final : NoCopy{
 public:
     RendererAvboitSystem(
         Core::Alloc::GlobalArena& arena,
-        Core::Graphics& graphics,
+        Core::GraphicsRuntime& graphics,
         RendererAvboitState& avboitState,
         RendererShaderSystem& shaderSystem,
         RendererMaterialSystem& materialSystem,
@@ -255,7 +255,7 @@ private:
 
 private:
     Core::Alloc::GlobalArena& m_arena;
-    Core::Graphics& m_graphics;
+    Core::GraphicsRuntime& m_graphics;
     RendererAvboitState& m_avboitState;
     RendererShaderSystem& m_shaderSystem;
     RendererMaterialSystem& m_materialSystem;

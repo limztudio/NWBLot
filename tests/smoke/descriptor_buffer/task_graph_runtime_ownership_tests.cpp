@@ -9,11 +9,11 @@
 
 #include <gtest/gtest.h>
 
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 #include <core/common/module.h>
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/task_graph/compiler.h>
-#include <core/graphics/task_graph/packet_runtime.h>
+#include <core/task/gpu/compiler.h>
+#include <core/task/gpu/scheduler.h>
 #include <core/graphics/vulkan/backend.h>
 #include <global/global.h>
 #include <global/termination.h>
@@ -240,7 +240,7 @@ struct RecordableTask{
 
 struct ThrowingSplitTimingTask{
     struct Payload{
-        Core::Graphics* graphics = nullptr;
+        Core::GraphicsRuntime* graphics = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         Optional<Core::GpuTimingMeasure>* visibilityTiming = nullptr;
@@ -286,7 +286,7 @@ struct ThrowingSplitTimingTask{
 
 
 static void RecordThrowingSplitTimingTask(HeadlessGraphicsScope& graphicsScope){
-    Core::Graphics& graphics = graphicsScope.graphics();
+    Core::GraphicsRuntime& graphics = graphicsScope.graphics();
     Core::GraphicsBackend::Device& device = graphics.getDevice();
     Core::GpuTimingSubmissionTicket timingTicket(graphics.gpuTiming());
     Optional<Core::GpuTimingMeasure> asyncTiming;

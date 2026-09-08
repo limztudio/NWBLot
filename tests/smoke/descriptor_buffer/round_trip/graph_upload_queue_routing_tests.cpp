@@ -149,7 +149,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSetupBufferUsesDedicatedTransfer
         uploadWords[wordIndex] = 0x9e3779b9u * static_cast<u32>(wordIndex) + 0x5a17c3e1u;
 
     QueueSubmissionToken uploadToken;
-    Graphics::BufferSetupDesc setupDesc;
+    GraphicsRuntime::BufferSetupDesc setupDesc;
     setupDesc.bufferDesc = BufferDesc()
         .setByteSize(s_UploadByteSize)
         .setInitialState(ResourceStates::Common)
@@ -236,7 +236,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSetupBufferUsesAuxiliaryGraphics
         uploadWords[wordIndex] = 0x51ed270bu * static_cast<u32>(wordIndex) + 0x8d1c79f3u;
 
     QueueSubmissionToken uploadToken;
-    Graphics::BufferSetupDesc setupDesc;
+    GraphicsRuntime::BufferSetupDesc setupDesc;
     setupDesc.bufferDesc = BufferDesc()
         .setByteSize(s_UploadByteSize)
         .setInitialState(ResourceStates::Common)
@@ -361,8 +361,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureBatchUsesAuxiliaryGraphic
         LengthOf(initialTextures),
         ResourceStates::ShaderResource
     ));
-    const Graphics::TextureUploadRegion regions[] = {
-        Graphics::TextureUploadRegion{
+    const GraphicsRuntime::TextureUploadRegion regions[] = {
+        GraphicsRuntime::TextureUploadRegion{
             .data = mip0Bytes.data(),
             .dataSize = mip0Bytes.size(),
             .rowPitch = s_Mip0Width * 4u,
@@ -370,7 +370,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureBatchUsesAuxiliaryGraphic
             .arraySlice = 0u,
             .mipLevel = 0u,
         },
-        Graphics::TextureUploadRegion{
+        GraphicsRuntime::TextureUploadRegion{
             .data = mip1Bytes.data(),
             .dataSize = mip1Bytes.size(),
             .rowPitch = s_Mip1Width * 4u,
@@ -380,7 +380,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureBatchUsesAuxiliaryGraphic
         },
     };
     QueueSubmissionToken uploadToken;
-    ASSERT_TRUE(graphics.uploadTextureBatch(Graphics::TextureUploadBatchDesc{
+    ASSERT_TRUE(graphics.uploadTextureBatch(GraphicsRuntime::TextureUploadBatchDesc{
         .destination = destination,
         .regions = regions,
         .regionCount = LengthOf(regions),
@@ -467,7 +467,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSetupBufferAutomaticallyFallsBac
         uploadBytes[byteIndex] = static_cast<u8>(byteIndex);
 
     QueueSubmissionToken uploadToken;
-    Graphics::BufferSetupDesc setupDesc;
+    GraphicsRuntime::BufferSetupDesc setupDesc;
     setupDesc.bufferDesc = BufferDesc()
         .setByteSize(s_UploadByteSize)
         .setInitialState(ResourceStates::Common)
@@ -516,7 +516,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSetupTextureAutomaticallyFallsBa
         uploadBytes[byteIndex] = static_cast<u8>(byteIndex * 17u);
 
     QueueSubmissionToken uploadToken;
-    Graphics::TextureSetupDesc setupDesc;
+    GraphicsRuntime::TextureSetupDesc setupDesc;
     setupDesc.textureDesc = TextureDesc()
         .setWidth(s_TextureWidth)
         .setHeight(s_TextureHeight)

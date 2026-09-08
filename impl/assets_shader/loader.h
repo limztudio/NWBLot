@@ -8,7 +8,7 @@
 #include <impl/global.h>
 
 #include <core/assets/manager.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/shader_stage_names.h>
 #include <impl/assets_shader/asset.h>
@@ -37,7 +37,7 @@ template<typename ShaderPathResolver>
     AStringView variantName,
     Core::ShaderType::Mask shaderType,
     const Name& debugName,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolver& shaderPathResolver,
     const tchar* ownerName,

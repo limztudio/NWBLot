@@ -540,7 +540,7 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeRecordedCallbackExceptionResolves
     GpuSubmissionPacketId failedPacket;
     bool exceptionObserved = false;
     try{
-        const bool submitted = submitter.recordAndSubmitNormalGraph(
+        const bool submitted = submitter.submit(
             graph,
             compiledGraph,
             recorder,

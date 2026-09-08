@@ -25,12 +25,12 @@
 
 #include <core/ecs/system.h>
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/render_pass.h>
-#include <core/graphics/task_graph/compiler.h>
-#include <core/graphics/task_graph/packet_runtime.h>
-#include <core/graphics/task_graph/persistent_state.h>
-#include <core/graphics/task_graph/presentation_contributor.h>
-#include <core/graphics/task_graph/queue_assignment_telemetry.h>
+#include <core/graphics/runtime/render_pass.h>
+#include <core/task/gpu/compiler.h>
+#include <core/task/gpu/packet_runtime.h>
+#include <core/task/gpu/persistent_state.h>
+#include <core/task/gpu/presentation_contributor.h>
+#include <core/task/gpu/queue_assignment_telemetry.h>
 #include <core/telemetry/frame_graph_contributor.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets_material/asset.h>
@@ -122,7 +122,7 @@ public:
     RendererFramePipeline(
         Core::Alloc::GlobalArena& arena,
         Core::ECS::World& world,
-        Core::Graphics& graphics,
+        Core::GraphicsRuntime& graphics,
         Core::Assets::AssetManager& assetManager,
         ShaderPathResolveCallback shaderPathResolver
     );
@@ -371,7 +371,7 @@ private:
 private:
     Core::Alloc::GlobalArena& m_arena;
     Core::ECS::World& m_world;
-    Core::Graphics& m_graphics;
+    Core::GraphicsRuntime& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;

@@ -10,7 +10,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/task/gpu/task_graph.h>
 #include <global/simdmath.h>
 
 
@@ -23,7 +23,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Graphics;
+class GraphicsRuntime;
 namespace ECS{
     class World;
 };
@@ -323,7 +323,7 @@ public:
     RendererRayTracingSystem(
         Core::Alloc::GlobalArena& arena,
         Core::ECS::World& world,
-        Core::Graphics& graphics,
+        Core::GraphicsRuntime& graphics,
         RendererShaderSystem& shaderSystem,
         RendererMeshSystem& meshSystem,
         RendererMaterialSystem& materialSystem,
@@ -1465,7 +1465,7 @@ private:
 private:
     Core::Alloc::GlobalArena& m_arena;
     Core::ECS::World& m_world;
-    Core::Graphics& m_graphics;
+    Core::GraphicsRuntime& m_graphics;
     RendererShaderSystem& m_shaderSystem;
     RendererMeshSystem& m_meshSystem;
     RendererMaterialSystem& m_materialSystem;

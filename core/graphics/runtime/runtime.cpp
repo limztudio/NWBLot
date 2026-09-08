@@ -3,14 +3,16 @@
 
 
 
-#include "module.h"
-#include "module_internal.h"
+#include "runtime.h"
+#include "runtime_internal.h"
 
-#include "backend_selection.h"
+#include <core/graphics/backend_selection.h>
 
 #include <core/common/log.h>
+#include <core/task/gpu/scheduler.h>
 #include <core/telemetry/session.h>
 #include <global/exception.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,7 +70,7 @@ inline constexpr usize s_MaxBeginFrameResizeAttempts = 3u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct Graphics::CpuTimingPhaseBatch final : NoCopy{
+struct GraphicsRuntime::CpuTimingPhaseBatch final : NoCopy{
 private:
     struct PhaseTiming{
         Name scopeName = NAME_NONE;
@@ -108,22 +110,25 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Graphics::Graphics(
+GraphicsRuntime::GraphicsRuntime(
     GraphicsAllocator& allocator,
     CpuTaskScheduler& cpuScheduler,
+    GpuTaskScheduler& gpuTasks,
     Perf::TimingSink& gpuTiming
 )
-    : Graphics(allocator, cpuScheduler, gpuTiming, nullptr)
+    : GraphicsRuntime(allocator, cpuScheduler, gpuTasks, gpuTiming, nullptr)
 {}
 
-Graphics::Graphics(
+GraphicsRuntime::GraphicsRuntime(
     GraphicsAllocator& allocator,
     CpuTaskScheduler& cpuScheduler,
+    GpuTaskScheduler& gpuTasks,
     Perf::TimingSink& gpuTiming,
     Perf::TimingSink* const cpuTiming
 )
     : m_allocator(allocator)
     , m_cpuScheduler(cpuScheduler)
+    , m_gpuTasks(gpuTasks)
     , m_tasks(cpuScheduler)
     , m_deviceCreationParams(m_allocator.getObjectArena())
     , m_gpuTiming(m_allocator.getObjectArena(), gpuTiming)
@@ -136,15 +141,22 @@ Graphics::Graphics(
     m_deviceCreationParams.enableRayTracingExtensions = true;
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
 }
-Graphics::~Graphics()noexcept(false){
-    // An active unwind is already terminal. Retire scheduler captures without re-entering the throwing Vulkan
-    // lifecycle path, so the original exception reaches the application-entry boundary.
-    if(UncaughtExceptionCount() > 0){
+GraphicsRuntime::~GraphicsRuntime()noexcept(false){
+    // An active unwind is already terminal. Retire CPU captures and the borrowed device binding without native
+    // callbacks or a GPU join, so the original exception reaches the application-entry boundary.
+    const auto retireTasks = [this]()noexcept{
         m_tasks.drain();
+        if(auto* device = m_backend->getDevice(); device && m_gpuTasks.isAttachedTo(*device)){
+            if(!m_gpuTasks.detachDevice(*device))
+                TerminateInvariant();
+        }
+    };
+    if(UncaughtExceptionCount() > 0){
+        retireTasks();
         return;
     }
 
-    ScopeExit drainOnFailure([this]()noexcept{ m_tasks.drain(); });
+    ScopeExit drainOnFailure(retireTasks);
 
     NWB_FATAL_ASSERT_MSG(
         destroy(),
@@ -153,7 +165,7 @@ Graphics::~Graphics()noexcept(false){
     drainOnFailure.release();
 }
 
-bool Graphics::init(const Common::FrameData& data){
+bool GraphicsRuntime::init(const Common::FrameData& data){
     m_acquiredPresentationFrame = {};
     m_deviceCreationParams.headlessDevice = false;
     m_hasPresentedFrame = false;
@@ -173,6 +185,10 @@ bool Graphics::init(const Common::FrameData& data){
 
     if(!m_backend->createDevice())
         return false;
+    if(!m_gpuTasks.attachDevice(getDevice())){
+        requestDeviceRecreation();
+        return false;
+    }
 
     m_deviceRecreationRequested = false;
 
@@ -187,14 +203,14 @@ bool Graphics::init(const Common::FrameData& data){
     }
     m_previousFrameTimestamp = TimerNow();
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Graphics: window device and swap chain created ({}x{})")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GraphicsRuntime: window device and swap chain created ({}x{})")
         , data.width()
         , data.height()
     );
     return true;
 }
 
-bool Graphics::createHeadlessDevice(){
+bool GraphicsRuntime::createHeadlessDevice(){
     m_acquiredPresentationFrame = {};
     m_deviceCreationParams.headlessDevice = true;
     m_hasPresentedFrame = false;
@@ -207,18 +223,22 @@ bool Graphics::createHeadlessDevice(){
 
     if(!m_backend->createDevice())
         return false;
+    if(!m_gpuTasks.attachDevice(getDevice())){
+        requestDeviceRecreation();
+        return false;
+    }
 
     m_deviceRecreationRequested = false;
 
     m_previousFrameTimestamp = TimerNow();
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Graphics: headless device created"));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GraphicsRuntime: headless device created"));
     return validateRenderPassResources();
 }
 
-bool Graphics::createInstance(const InstanceParameters& params){
+bool GraphicsRuntime::createInstance(const InstanceParameters& params){
     if(!__hidden_graphics_lifecycle::CopyInstanceParameters(m_deviceCreationParams, params)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: debug runtime is only available in non-final builds"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: debug runtime is only available in non-final builds"));
         return false;
     }
 
@@ -229,7 +249,7 @@ bool Graphics::createInstance(const InstanceParameters& params){
     return true;
 }
 
-bool Graphics::setDebugRuntimeEnabled(bool enabled){
+bool GraphicsRuntime::setDebugRuntimeEnabled(bool enabled){
     if(enabled && !CanEnableDebugRuntime())
         return false;
     if(m_instanceCreated && m_deviceCreationParams.enableDebugRuntime != enabled)
@@ -239,7 +259,7 @@ bool Graphics::setDebugRuntimeEnabled(bool enabled){
     return true;
 }
 
-bool Graphics::setNativeMeshShadersEnabled(const bool enabled){
+bool GraphicsRuntime::setNativeMeshShadersEnabled(const bool enabled){
     if(m_instanceCreated)
         return false;
 
@@ -247,7 +267,7 @@ bool Graphics::setNativeMeshShadersEnabled(const bool enabled){
     return true;
 }
 
-bool Graphics::setAsyncComputeLaneEnabled(const bool enabled){
+bool GraphicsRuntime::setAsyncComputeLaneEnabled(const bool enabled){
     if(m_backend->getDevice())
         return false;
 
@@ -255,7 +275,7 @@ bool Graphics::setAsyncComputeLaneEnabled(const bool enabled){
     return true;
 }
 
-bool Graphics::setTransferQueueEnabled(const bool enabled){
+bool GraphicsRuntime::setTransferQueueEnabled(const bool enabled){
     if(m_backend->getDevice())
         return false;
 
@@ -263,7 +283,7 @@ bool Graphics::setTransferQueueEnabled(const bool enabled){
     return true;
 }
 
-bool Graphics::setSameClassMultiQueueEnabled(const bool enabled){
+bool GraphicsRuntime::setSameClassMultiQueueEnabled(const bool enabled){
     if(m_backend->getDevice())
         return false;
 
@@ -271,7 +291,7 @@ bool Graphics::setSameClassMultiQueueEnabled(const bool enabled){
     return true;
 }
 
-bool Graphics::setCrossFamilySameClassQueueRoutingEnabled(const bool enabled){
+bool GraphicsRuntime::setCrossFamilySameClassQueueRoutingEnabled(const bool enabled){
     if(m_backend->getDevice())
         return false;
 
@@ -279,7 +299,7 @@ bool Graphics::setCrossFamilySameClassQueueRoutingEnabled(const bool enabled){
     return true;
 }
 
-bool Graphics::setAdapterIndex(const i32 index){
+bool GraphicsRuntime::setAdapterIndex(const i32 index){
     if(index < -1 || m_backend->getDevice())
         return false;
 
@@ -287,7 +307,7 @@ bool Graphics::setAdapterIndex(const i32 index){
     return true;
 }
 
-bool Graphics::setHDR10OutputEnabled(const bool enabled){
+bool GraphicsRuntime::setHDR10OutputEnabled(const bool enabled){
     if(m_backend->getDevice())
         return false;
 
@@ -295,7 +315,7 @@ bool Graphics::setHDR10OutputEnabled(const bool enabled){
     return true;
 }
 
-bool Graphics::setSwapChainReadbackEnabled(const bool enabled){
+bool GraphicsRuntime::setSwapChainReadbackEnabled(const bool enabled){
     if(m_backend->getDevice())
         return false;
 
@@ -303,7 +323,7 @@ bool Graphics::setSwapChainReadbackEnabled(const bool enabled){
     return true;
 }
 
-bool Graphics::setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi){
+bool GraphicsRuntime::setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi){
     if(!abi.valid() || m_backend->getDevice())
         return false;
 
@@ -311,26 +331,26 @@ bool Graphics::setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi){
     return true;
 }
 
-void Graphics::setPipelineCacheDirectory(const Path& directory){
+void GraphicsRuntime::setPipelineCacheDirectory(const Path& directory){
     m_deviceCreationParams.pipelineCacheDirectory = directory;
 }
 
-bool Graphics::setFilesystemFactory(const Filesystem::FilesystemFactory& factory){
+bool GraphicsRuntime::setFilesystemFactory(const Filesystem::FilesystemFactory& factory){
     if(m_backend->getDevice())
         return false;
     m_deviceCreationParams.filesystemFactory = factory;
     return true;
 }
 
-void Graphics::requestDeviceRecreation()const{
+void GraphicsRuntime::requestDeviceRecreation()const{
     if(m_deviceRecreationRequested)
         return;
 
     m_deviceRecreationRequested = true;
-    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: device recreation requested; ending the current graphics session before another submission."));
+    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: device recreation requested; ending the current graphics session before another submission."));
 }
 
-bool Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
+bool GraphicsRuntime::updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
     if(m_deviceRecreationRequested)
         return false;
     if(auto* device = m_backend->getDevice(); device && device->requiresRecreation()){
@@ -362,7 +382,7 @@ bool Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
     return true;
 }
 
-bool Graphics::destroy(){
+bool GraphicsRuntime::destroy(){
     waitTasks();
 
     SwapChainTransitionTicket transitionTicket;
@@ -377,8 +397,18 @@ bool Graphics::destroy(){
     m_gpuTiming.resetQueries();
 
     m_swapChainFramebuffers.clear();
+    GraphicsBackend::Device* const device = m_backend->getDevice();
+    const bool detachScheduler = device && m_gpuTasks.isAttachedTo(*device);
+    if(detachScheduler && !m_gpuTasks.detachDevice(*device)){
+        requestDeviceRecreation();
+        return false;
+    }
     if(!m_backend->commitDestroy(Move(transitionTicket))){
-        m_deviceRecreationRequested = true;
+        // Commit rejection retains the backend device. Restore only our binding; failed initialization must never
+        // detach or replace a scheduler belonging to a different runtime.
+        if(detachScheduler && m_backend->getDevice() == device && !m_gpuTasks.attachDevice(*device))
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to restore the GPU scheduler after device teardown was rejected."));
+        requestDeviceRecreation();
         return false;
     }
     m_instanceCreated = false;
@@ -386,67 +416,71 @@ bool Graphics::destroy(){
     return true;
 }
 
-bool Graphics::waitForIdle(){
-    if(auto* device = m_backend->getDevice())
+bool GraphicsRuntime::waitForIdle(){
+    if(auto* device = m_backend->getDevice()){
+        if(m_gpuTasks.isAttachedTo(*device))
+            return m_gpuTasks.wait();
+        // A failed initialization may have created this device while the injected scheduler belongs elsewhere.
         return device->waitForIdle();
+    }
     return true;
 }
-bool Graphics::isDeviceLost()const noexcept{
+bool GraphicsRuntime::isDeviceLost()const noexcept{
     if(const auto* device = m_backend->getDevice())
         return device->isDeviceLost();
     return false;
 }
 
-GraphicsBackend::Device& Graphics::getDevice()const noexcept{
+GraphicsBackend::Device& GraphicsRuntime::getDevice()const noexcept{
     GraphicsBackend::Device* const device = m_backend->getDevice();
     NWB_ASSERT(device);
     return *device;
 }
 
-bool Graphics::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters){
+bool GraphicsRuntime::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters){
     return m_backend->enumerateAdapters(outAdapters);
 }
 
-bool Graphics::getSelectedAdapterInfo(AdapterInfo& outAdapter)const{
+bool GraphicsRuntime::getSelectedAdapterInfo(AdapterInfo& outAdapter)const{
     return m_backend->getSelectedAdapterInfo(outAdapter);
 }
 
-QueueSubmissionPreSubmitHook Graphics::claimFramePresentationSignal()noexcept{
+QueueSubmissionPreSubmitHook GraphicsRuntime::claimFramePresentationSignal()noexcept{
     return m_backend->claimFramePresentationSignal();
 }
 
-bool Graphics::confirmFramePresentationSignal(
+bool GraphicsRuntime::confirmFramePresentationSignal(
     const QueueSubmissionPreSubmitHook& claim,
     const QueueSubmissionToken& token
 )noexcept{
     return m_backend->confirmFramePresentationSignal(claim, token);
 }
 
-bool Graphics::cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim){
+bool GraphicsRuntime::cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim){
     return m_backend->cancelFramePresentationSignal(claim);
 }
 
-void Graphics::addRenderPassToFront(IRenderPass& pass){
+void GraphicsRuntime::addRenderPassToFront(IRenderPass& pass){
     m_renderPasses.remove(&pass);
     m_renderPasses.push_front(&pass);
 
     pass.backBufferResizing();
     pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
     if(!pass.validateResources(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount))
-        NWB_LOGGER_WARNING(NWB_TEXT("Graphics: front render pass failed to validate resources after registration"));
+        NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: front render pass failed to validate resources after registration"));
 }
 
-void Graphics::addRenderPassToBack(IRenderPass& pass){
+void GraphicsRuntime::addRenderPassToBack(IRenderPass& pass){
     m_renderPasses.remove(&pass);
     m_renderPasses.push_back(&pass);
 
     pass.backBufferResizing();
     pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
     if(!pass.validateResources(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount))
-        NWB_LOGGER_WARNING(NWB_TEXT("Graphics: back render pass failed to validate resources after registration"));
+        NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: back render pass failed to validate resources after registration"));
 }
 
-void Graphics::removeRenderPass(IRenderPass& pass){
+void GraphicsRuntime::removeRenderPass(IRenderPass& pass){
     waitTasks();
     const bool deviceIdle = waitForIdle();
     GraphicsBackend::Device* const device = m_backend->getDevice();
@@ -459,64 +493,64 @@ void Graphics::removeRenderPass(IRenderPass& pass){
     m_renderPasses.remove(&pass);
 }
 
-const tchar* Graphics::getRendererString()const{
+const tchar* GraphicsRuntime::getRendererString()const{
     return m_backend->getRendererString();
 }
 
-GraphicsAPI::Enum Graphics::getGraphicsAPI()const{
+GraphicsAPI::Enum GraphicsRuntime::getGraphicsAPI()const{
     return GraphicsBackend::s_Api;
 }
 
-void Graphics::reportLiveObjects()const{
+void GraphicsRuntime::reportLiveObjects()const{
     m_backend->reportLiveObjects();
 }
 
-void Graphics::getWindowDimensions(i32& width, i32& height)const{
+void GraphicsRuntime::getWindowDimensions(i32& width, i32& height)const{
     width = m_swapChainState.backBufferWidth;
     height = m_swapChainState.backBufferHeight;
 }
 
-void Graphics::getDPIScaleInfo(f32& x, f32& y)const{
+void GraphicsRuntime::getDPIScaleInfo(f32& x, f32& y)const{
     x = m_dpiScaleFactorX;
     y = m_dpiScaleFactorY;
 }
 
-void Graphics::setWindowTitle(NotNull<const tchar*> title){
+void GraphicsRuntime::setWindowTitle(NotNull<const tchar*> title){
     if(m_windowTitle == title.get())
         return;
 
     m_windowTitle = title.get();
 }
 
-void Graphics::setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData){
+void GraphicsRuntime::setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData){
     m_pointerScaleChangedCallback = callback;
     m_pointerScaleChangedUserData = userData;
     notifyPointerScaleChanged();
 }
 
-Texture* Graphics::getBackBuffer(u32 index)const{
+Texture* GraphicsRuntime::getBackBuffer(u32 index)const{
     return m_backend->getBackBuffer(index);
 }
 
-u32 Graphics::getBackBufferCount()const{
+u32 GraphicsRuntime::getBackBufferCount()const{
     return m_backend->getBackBufferCount();
 }
 
-Framebuffer* Graphics::getFramebuffer(u32 index)const{
+Framebuffer* GraphicsRuntime::getFramebuffer(u32 index)const{
     if(index < m_swapChainFramebuffers.size())
         return m_swapChainFramebuffers[index].get();
     return nullptr;
 }
 
-BufferHandle Graphics::createBuffer(const BufferDesc& desc)const{
+BufferHandle GraphicsRuntime::createBuffer(const BufferDesc& desc)const{
     return getDevice().createBuffer(desc);
 }
 
-TextureHandle Graphics::createTexture(const TextureDesc& desc)const{
+TextureHandle GraphicsRuntime::createTexture(const TextureDesc& desc)const{
     return getDevice().createTexture(desc);
 }
 
-bool Graphics::backBufferResizing(SwapChainTransitionTicket& outTicket){
+bool GraphicsRuntime::backBufferResizing(SwapChainTransitionTicket& outTicket){
     waitTasks();
     if(!m_backend->prepareSwapChainTransition(SwapChainTransitionKind::Resize, outTicket)){
         requestDeviceRecreation();
@@ -532,7 +566,7 @@ bool Graphics::backBufferResizing(SwapChainTransitionTicket& outTicket){
     return true;
 }
 
-bool Graphics::resizeBackBuffer(
+bool GraphicsRuntime::resizeBackBuffer(
     const u32 width,
     const u32 height,
     const bool vsyncEnabled
@@ -555,7 +589,7 @@ bool Graphics::resizeBackBuffer(
     return true;
 }
 
-bool Graphics::backBufferResized(){
+bool GraphicsRuntime::backBufferResized(){
     for(auto* renderPass : m_renderPasses)
         renderPass->backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
 
@@ -567,7 +601,7 @@ bool Graphics::backBufferResized(){
             FramebufferDesc().addColorAttachment(getBackBuffer(index))
         );
         if(!framebuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to rebuild swap-chain framebuffer {}"), index);
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to rebuild swap-chain framebuffer {}"), index);
             m_swapChainFramebuffers.clear();
             invalidateRenderPassResources();
             return false;
@@ -576,21 +610,21 @@ bool Graphics::backBufferResized(){
     }
 
     if(!validateRenderPassResources()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: one or more render passes failed to validate resources after back buffer resize"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: one or more render passes failed to validate resources after back buffer resize"));
         m_swapChainFramebuffers.clear();
         invalidateRenderPassResources();
         return false;
     }
-    NWB_LOGGER_INFO(NWB_TEXT("Graphics: Back buffer resized to {}x{}"), m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
+    NWB_LOGGER_INFO(NWB_TEXT("GraphicsRuntime: Back buffer resized to {}x{}"), m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
     return true;
 }
 
-void Graphics::invalidateRenderPassResources(){
+void GraphicsRuntime::invalidateRenderPassResources(){
     for(auto* renderPass : m_renderPasses)
         renderPass->invalidateResources();
 }
 
-bool Graphics::validateRenderPassResources(){
+bool GraphicsRuntime::validateRenderPassResources(){
     bool valid = true;
     for(auto* renderPass : m_renderPasses){
         valid =
@@ -605,21 +639,21 @@ bool Graphics::validateRenderPassResources(){
     return valid;
 }
 
-void Graphics::displayScaleChanged(){
+void GraphicsRuntime::displayScaleChanged(){
     notifyPointerScaleChanged();
 
     for(auto* renderPass : m_renderPasses)
         renderPass->displayScaleChanged(m_dpiScaleFactorX, m_dpiScaleFactorY);
 }
 
-void Graphics::animate(f64 elapsedTime){
+void GraphicsRuntime::animate(f64 elapsedTime){
     for(auto* renderPass : m_renderPasses){
         renderPass->animate(static_cast<f32>(elapsedTime));
         renderPass->setLatewarpOptions();
     }
 }
 
-bool Graphics::prepareFramePreamble(){
+bool GraphicsRuntime::prepareFramePreamble(){
     auto& device = getDevice();
     if(device.requiresRecreation()){
         requestDeviceRecreation();
@@ -634,7 +668,7 @@ bool Graphics::prepareFramePreamble(){
     // later render packet on the same GPU timeline.
     if(m_gpuTiming.collectionActive()){
         if(!m_gpuTiming.materializeRequestedQueries(device))
-            NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to materialize one or more requested GPU-timing query pools"));
+            NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: failed to materialize one or more requested GPU-timing query pools"));
 
         // Do not allow render-pass scopes to reuse a prior frame's reset if graph recording or submission fails.
         // The task's accepted callback reenables only the pools covered by the successfully submitted packet.
@@ -645,7 +679,7 @@ bool Graphics::prepareFramePreamble(){
             m_gpuTiming
         )){
             m_gpuTiming.discardFrameReset();
-            NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to submit the graph-owned frame GPU-timing reset packet"));
+            NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: failed to submit the graph-owned frame GPU-timing reset packet"));
         }
     }
 
@@ -657,7 +691,7 @@ bool Graphics::prepareFramePreamble(){
     return true;
 }
 
-void Graphics::render(){
+void GraphicsRuntime::render(){
     Framebuffer* const framebuffer = m_acquiredPresentationFrame.framebuffer.get();
     auto& device = getDevice();
     if(device.requiresRecreation()){
@@ -681,7 +715,7 @@ void Graphics::render(){
                 return;
             }
             if(!renderPass->prepareResources(framebuffer)){
-                NWB_LOGGER_WARNING(NWB_TEXT("Graphics: render pass skipped after resource preparation failed"));
+                NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: render pass skipped after resource preparation failed"));
                 return;
             }
 
@@ -697,7 +731,7 @@ void Graphics::render(){
     frameTasks.wait();
 }
 
-void Graphics::updateAverageFrameTime(f64 elapsedTime){
+void GraphicsRuntime::updateAverageFrameTime(f64 elapsedTime){
     m_frameTimeSum += elapsedTime;
     m_numberOfAccumulatedFrames += 1;
 
@@ -708,7 +742,7 @@ void Graphics::updateAverageFrameTime(f64 elapsedTime){
     }
 }
 
-void Graphics::notifyPointerScaleChanged()const{
+void GraphicsRuntime::notifyPointerScaleChanged()const{
     if(!m_pointerScaleChangedCallback)
         return;
 
@@ -718,7 +752,7 @@ void Graphics::notifyPointerScaleChanged()const{
         m_pointerScaleChangedCallback(m_pointerScaleChangedUserData, m_dpiScaleFactorX, m_dpiScaleFactorY);
 }
 
-bool Graphics::shouldRenderUnfocused()const{
+bool GraphicsRuntime::shouldRenderUnfocused()const{
     for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
         if((*it)->shouldRenderUnfocused())
             return true;
@@ -726,7 +760,7 @@ bool Graphics::shouldRenderUnfocused()const{
     return false;
 }
 
-bool Graphics::runFrame(){
+bool GraphicsRuntime::runFrame(){
     // This deliberately spans the complete logical graphics frame: normal presentation, headless no-window work,
     // and submission-suspended maintenance. Detailed phase scopes sit within this aggregate, so consumers must not
     // sum them with it. Record only a successful call so a failed frame can never be published with a later one.
@@ -777,11 +811,11 @@ bool Graphics::runFrame(){
     return true;
 }
 
-bool Graphics::animateRenderPresent(){
+bool GraphicsRuntime::animateRenderPresent(){
     return animateRenderPresentInternal(nullptr);
 }
 
-bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTiming){
+bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTiming){
     m_acquiredPresentationFrame = {};
     if(m_deviceRecreationRequested)
         return false;
@@ -834,9 +868,9 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
                 phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsBeginFrameCpuTimingScope, beginFrameBegin);
             if(!beginFrameResult.acquired()){
                 if(beginFrameResult.status == BeginFrameStatus::ResizeRequired)
-                    NWB_LOGGER_WARNING(NWB_TEXT("Graphics: swap-chain resize retries were exhausted; requesting device recreation."));
+                    NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: swap-chain resize retries were exhausted; requesting device recreation."));
                 else
-                    NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to acquire a presentation frame; requesting device recreation."));
+                    NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: failed to acquire a presentation frame; requesting device recreation."));
                 requestDeviceRecreation();
                 return false;
             }
@@ -847,9 +881,9 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
                     acquiredBackBufferIndex >= m_swapChainFramebuffers.size()
                     || !m_swapChainFramebuffers[acquiredBackBufferIndex]
                 ){
-                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: acquired swap-chain image has no matching framebuffer; requesting recreation."));
+                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: acquired swap-chain image has no matching framebuffer; requesting recreation."));
                     if(!m_backend->abandonAcquiredFrame())
-                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: failed to drain the abandoned acquired-frame wait; device teardown is required."));
+                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to drain the abandoned acquired-frame wait; device teardown is required."));
                     requestDeviceRecreation();
                     return false;
                 }
@@ -860,9 +894,9 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
                     acquiredFramebufferDesc.colorAttachments.size() != 1u
                     || acquiredFramebufferDesc.colorAttachments[0].texture != acquiredBackBuffer.texture.get()
                 ){
-                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: acquired swap-chain image mismatches its framebuffer attachment; requesting recreation."));
+                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: acquired swap-chain image mismatches its framebuffer attachment; requesting recreation."));
                     if(!m_backend->abandonAcquiredFrame())
-                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: failed to drain the abandoned acquired-frame wait; device teardown is required."));
+                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to drain the abandoned acquired-frame wait; device teardown is required."));
                     requestDeviceRecreation();
                     return false;
                 }
@@ -897,7 +931,7 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
                     if(device.requiresRecreation())
                         requestDeviceRecreation();
                     else if(!m_backend->abandonAcquiredFrame())
-                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: failed to quarantine the aborted acquired frame; device teardown is required."));
+                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to quarantine the aborted acquired frame; device teardown is required."));
                     return false;
                 }
 
@@ -911,7 +945,7 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
                     // A consumed presentation already cleared acquisition and makes abandonment a no-op. Every
                     // healthy unconsumed failure is drained and quarantined before recreation.
                     if(!device.requiresRecreation() && !m_backend->abandonAcquiredFrame())
-                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: failed to quarantine the unpresented acquired frame; device teardown is required."));
+                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to quarantine the unpresented acquired frame; device teardown is required."));
                     requestDeviceRecreation();
                     return false;
                 }

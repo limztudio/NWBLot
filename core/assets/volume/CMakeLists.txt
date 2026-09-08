@@ -16,7 +16,7 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/volume_prepare_registry.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/volume_prepare_registry.h"
     )
-    target_link_libraries(nwb_assets_volume_cook PUBLIC nwb_assets nwb_assets_cook nwb_task)
+    target_link_libraries(nwb_assets_volume_cook PUBLIC nwb_assets nwb_assets_cook nwb_cpu_task)
     target_link_libraries(nwb_assets_volume_cook PRIVATE
         nwb_metascript
         nwb_filesystem

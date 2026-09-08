@@ -14,12 +14,12 @@
 
 #include <gtest/gtest.h>
 
-#include <core/graphics/capture/command_ir.h>
-#include <core/graphics/capture/command_ir_internal.h>
-#include <core/graphics/task_graph/compiler.h>
-#include <core/graphics/task_graph/compiler_internal.h>
-#include <core/graphics/task_graph/packet_runtime.h>
-#include <core/graphics/task_graph/queue_assignment_telemetry.h>
+#include <core/task/gpu/capture/command_ir.h>
+#include <core/task/gpu/capture/command_ir_internal.h>
+#include <core/task/gpu/compiler.h>
+#include <core/task/gpu/compiler_internal.h>
+#include <core/task/gpu/packet_runtime.h>
+#include <core/task/gpu/queue_assignment_telemetry.h>
 #include <core/graphics/vulkan/backend.h>
 #include <core/graphics/vulkan/command_validation.h>
 #include <core/graphics/vulkan/device_detail.h>
@@ -55,7 +55,7 @@ namespace Graphics = Core;
 namespace Telemetry = Core::Telemetry;
 using TestPath = ::Path<Graphics::Alloc::GlobalArena>;
 
-inline constexpr Name s_TaskGraphScratchArena("tests/graphics/task_graph_scratch");
+inline constexpr Name s_TaskGraphScratchArena("tests/task/gpu/scratch");
 
 
 void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryStats& actual);

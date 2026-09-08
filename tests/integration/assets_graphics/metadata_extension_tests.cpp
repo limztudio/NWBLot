@@ -3,7 +3,7 @@
 
 
 #include <core/assets/cook_metadata.h>
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 
 #include <impl/assets_model/cook.h>
 #include <impl/assets_sampler/cook.h>

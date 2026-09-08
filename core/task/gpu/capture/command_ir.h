@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <core/graphics/task_graph/compiled_graph.h>
+#include <core/task/gpu/compiled_graph.h>
 
 #include <global/binary.h>
 

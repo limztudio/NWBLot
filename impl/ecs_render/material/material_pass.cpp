@@ -12,7 +12,7 @@
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_scene/module.h>
 

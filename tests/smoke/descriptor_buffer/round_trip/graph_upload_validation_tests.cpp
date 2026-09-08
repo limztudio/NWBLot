@@ -30,7 +30,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsRejectUnsafeLegacy
         Format::D32S8,
     };
     for(const Format::Enum format : combinedDepthStencilFormats){
-        Graphics::TextureSetupDesc setupDesc;
+        GraphicsRuntime::TextureSetupDesc setupDesc;
         setupDesc.textureDesc = TextureDesc()
             .setWidth(1u)
             .setHeight(1u)
@@ -64,7 +64,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsRejectUnsafeLegacy
             .setInitialState(ResourceStates::DepthWrite)
     );
     ASSERT_NE(depthStencilDestination.get(), nullptr);
-    const Graphics::TextureUploadRegion depthStencilRegion{
+    const GraphicsRuntime::TextureUploadRegion depthStencilRegion{
         .data = depthStencilBytes,
         .dataSize = sizeof(depthStencilBytes),
         .rowPitch = 0u,
@@ -72,7 +72,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsRejectUnsafeLegacy
         .arraySlice = 0u,
         .mipLevel = 0u,
     };
-    const Graphics::TextureUploadBatchDesc depthStencilBatchDesc{
+    const GraphicsRuntime::TextureUploadBatchDesc depthStencilBatchDesc{
         .destination = depthStencilDestination,
         .regions = &depthStencilRegion,
         .regionCount = 1u,
@@ -81,20 +81,20 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsRejectUnsafeLegacy
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
     EXPECT_DEATH_IF_SUPPORTED({
         QueueSubmissionToken depthStencilBatchToken;
-        Graphics::TextureUploadBatchDesc rejectedBatchDesc = depthStencilBatchDesc;
+        GraphicsRuntime::TextureUploadBatchDesc rejectedBatchDesc = depthStencilBatchDesc;
         rejectedBatchDesc.acceptedToken = &depthStencilBatchToken;
         EXPECT_FALSE(graphics.uploadTextureBatch(rejectedBatchDesc));
     }, "");
 #else
     QueueSubmissionToken depthStencilBatchToken;
-    Graphics::TextureUploadBatchDesc depthStencilRejectedBatchDesc = depthStencilBatchDesc;
+    GraphicsRuntime::TextureUploadBatchDesc depthStencilRejectedBatchDesc = depthStencilBatchDesc;
     depthStencilRejectedBatchDesc.acceptedToken = &depthStencilBatchToken;
     EXPECT_FALSE(graphics.uploadTextureBatch(depthStencilRejectedBatchDesc));
     EXPECT_FALSE(depthStencilBatchToken.valid());
 #endif
 
     const u8 colorBytes[4u] = {};
-    Graphics::TextureSetupDesc unknownSetupDesc;
+    GraphicsRuntime::TextureSetupDesc unknownSetupDesc;
     unknownSetupDesc.textureDesc = TextureDesc()
         .setWidth(1u)
         .setHeight(1u)
@@ -120,7 +120,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsRejectUnsafeLegacy
 
     const TextureHandle unknownDestination = graphics.createTexture(unknownSetupDesc.textureDesc);
     ASSERT_NE(unknownDestination.get(), nullptr);
-    const Graphics::TextureUploadRegion unknownRegion{
+    const GraphicsRuntime::TextureUploadRegion unknownRegion{
         .data = colorBytes,
         .dataSize = sizeof(colorBytes),
         .rowPitch = 0u,
@@ -128,7 +128,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsRejectUnsafeLegacy
         .arraySlice = 0u,
         .mipLevel = 0u,
     };
-    const Graphics::TextureUploadBatchDesc unknownBatchDesc{
+    const GraphicsRuntime::TextureUploadBatchDesc unknownBatchDesc{
         .destination = unknownDestination,
         .regions = &unknownRegion,
         .regionCount = 1u,
@@ -137,13 +137,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsRejectUnsafeLegacy
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
     EXPECT_DEATH_IF_SUPPORTED({
         QueueSubmissionToken unknownBatchToken;
-        Graphics::TextureUploadBatchDesc rejectedBatchDesc = unknownBatchDesc;
+        GraphicsRuntime::TextureUploadBatchDesc rejectedBatchDesc = unknownBatchDesc;
         rejectedBatchDesc.acceptedToken = &unknownBatchToken;
         EXPECT_FALSE(graphics.uploadTextureBatch(rejectedBatchDesc));
     }, "");
 #else
     QueueSubmissionToken unknownBatchToken;
-    Graphics::TextureUploadBatchDesc unknownRejectedBatchDesc = unknownBatchDesc;
+    GraphicsRuntime::TextureUploadBatchDesc unknownRejectedBatchDesc = unknownBatchDesc;
     unknownRejectedBatchDesc.acceptedToken = &unknownBatchToken;
     EXPECT_FALSE(graphics.uploadTextureBatch(unknownRejectedBatchDesc));
     EXPECT_FALSE(unknownBatchToken.valid());
@@ -160,7 +160,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsAcceptExplicitDept
 
     const f32 setupDepthPlane = 0.375f;
     QueueSubmissionToken setupToken;
-    Graphics::TextureSetupDesc setupDesc;
+    GraphicsRuntime::TextureSetupDesc setupDesc;
     setupDesc.textureDesc = TextureDesc()
         .setWidth(1u)
         .setHeight(1u)
@@ -182,15 +182,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsAcceptExplicitDept
 
     const f32 batchDepthPlane = 0.625f;
     const u8 batchStencilPlane = 0x5du;
-    const Graphics::TextureUploadRegion regions[] = {
-        Graphics::TextureUploadRegion{
+    const GraphicsRuntime::TextureUploadRegion regions[] = {
+        GraphicsRuntime::TextureUploadRegion{
             .data = &batchDepthPlane,
             .dataSize = sizeof(batchDepthPlane),
             .arraySlice = 0u,
             .mipLevel = 0u,
             .aspect = TextureUploadAspect::Depth,
         },
-        Graphics::TextureUploadRegion{
+        GraphicsRuntime::TextureUploadRegion{
             .data = &batchStencilPlane,
             .dataSize = sizeof(batchStencilPlane),
             .arraySlice = 0u,
@@ -199,7 +199,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsAcceptExplicitDept
         },
     };
     QueueSubmissionToken batchToken;
-    ASSERT_TRUE(graphics.uploadTextureBatch(Graphics::TextureUploadBatchDesc{
+    ASSERT_TRUE(graphics.uploadTextureBatch(GraphicsRuntime::TextureUploadBatchDesc{
         .destination = destination,
         .regions = regions,
         .regionCount = LengthOf(regions),
@@ -220,7 +220,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedBufferUploadsRejectUnsafeLegacyD
     const u8 oneByte = 0xabu;
     const u8 alignedBytes[4u] = {};
 
-    Graphics::BufferSetupDesc unalignedSizeDesc;
+    GraphicsRuntime::BufferSetupDesc unalignedSizeDesc;
     unalignedSizeDesc.bufferDesc = BufferDesc()
         .setByteSize(sizeof(alignedBytes))
         .setInitialState(ResourceStates::Common)
@@ -240,7 +240,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedBufferUploadsRejectUnsafeLegacyD
     EXPECT_FALSE(unalignedSizeToken.valid());
 #endif
 
-    Graphics::BufferSetupDesc unalignedOffsetDesc;
+    GraphicsRuntime::BufferSetupDesc unalignedOffsetDesc;
     unalignedOffsetDesc.bufferDesc = BufferDesc()
         .setByteSize(8u)
         .setInitialState(ResourceStates::Common)
@@ -261,7 +261,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedBufferUploadsRejectUnsafeLegacyD
     EXPECT_FALSE(unalignedOffsetToken.valid());
 #endif
 
-    Graphics::BufferSetupDesc unknownSetupDesc;
+    GraphicsRuntime::BufferSetupDesc unknownSetupDesc;
     unknownSetupDesc.bufferDesc = BufferDesc()
         .setByteSize(sizeof(alignedBytes))
         .setInitialState(ResourceStates::Unknown)

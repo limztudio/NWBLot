@@ -9,7 +9,7 @@
 #include <impl/ecs_render/material/material_pass_csg_private.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

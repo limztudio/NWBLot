@@ -60,6 +60,7 @@ Frame::Frame(void* inst, u16 width, u16 height, const CpuTaskSchedulerConfig& cp
     , m_graphics(
         m_graphicsAllocator,
         m_cpuTasks,
+        m_gpuTasks,
         m_perfSession.gpuTimingSink(),
         &m_perfSession.cpuTimingSink()
     )

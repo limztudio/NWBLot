@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "packet_runtime.h"
+#include "scheduler.h"
 #include "packet_runtime_internal.h"
 
 #include "task_graph.h"
@@ -84,6 +84,12 @@ bool GpuTaskScheduler::submitPacketRangeInCompileOrder(
     const GpuTaskGraphTaskSubmissionHook* const taskSubmissionHooks,
     const usize taskSubmissionHookCount
 )const{
+    if(outFailedPacket)
+        *outFailedPacket = {};
+    DeviceOperation deviceOperation(*this);
+    if(!deviceOperation.m_admitted)
+        return false;
+
     return submitPacketRangeInCompileOrderWithOperationPolicy(
         graph,
         compiledGraph,
@@ -125,6 +131,10 @@ bool GpuTaskScheduler::submitTaskRangeInCompileOrder(
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
+    DeviceOperation deviceOperation(*this);
+    if(!deviceOperation.m_admitted)
+        return false;
+
     GpuSubmissionPacketRange range;
     {
         GpuCompiledGraph::ReadView planAccess(compiledGraph);

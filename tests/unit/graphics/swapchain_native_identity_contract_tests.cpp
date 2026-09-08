@@ -1235,13 +1235,13 @@ TEST(SwapChainPresentation, TeardownFailureDoesNotPublishADeadOrRecreatedInstanc
     EXPECT_NE(fullBackendHeader.find("[[nodiscard]] bool destroy();"), AStringView::npos);
 
     AString graphicsHeader;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.h", graphicsHeader));
-    EXPECT_NE(graphicsHeader.find("~Graphics()noexcept(false);"), AString::npos);
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "runtime" / "runtime.h", graphicsHeader));
+    EXPECT_NE(graphicsHeader.find("~GraphicsRuntime()noexcept(false);"), AString::npos);
 
     AString graphicsSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.cpp", graphicsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "runtime" / "runtime.cpp", graphicsSource));
     const AStringView fullGraphicsSource(graphicsSource.data(), graphicsSource.size());
-    const usize graphicsDestroyOffset = fullGraphicsSource.find("bool Graphics::destroy(){");
+    const usize graphicsDestroyOffset = fullGraphicsSource.find("bool GraphicsRuntime::destroy(){");
     const usize prepareDestroyOffset = fullGraphicsSource.find(
         "prepareSwapChainTransition(SwapChainTransitionKind::Destroy, transitionTicket)",
         graphicsDestroyOffset
@@ -1263,25 +1263,34 @@ TEST(SwapChainPresentation, TeardownFailureDoesNotPublishADeadOrRecreatedInstanc
     EXPECT_LT(prepareDestroyOffset, highLevelClearOffset);
     EXPECT_LT(highLevelClearOffset, commitDestroyOffset);
     EXPECT_LT(commitDestroyOffset, instanceDestroyedOffset);
-    const usize graphicsDestructorOffset = fullGraphicsSource.find("Graphics::~Graphics()noexcept(false){");
-    const usize activeUnwindOffset = fullGraphicsSource.find("if(UncaughtExceptionCount() > 0){", graphicsDestructorOffset);
-    const usize destructorTaskDrainOffset = fullGraphicsSource.find("m_tasks.drain();", activeUnwindOffset);
-    const usize activeUnwindReturnOffset = fullGraphicsSource.find("return;", destructorTaskDrainOffset);
-    const usize destructorFailureGuardOffset = fullGraphicsSource.find("ScopeExit drainOnFailure([this]()noexcept{ m_tasks.drain(); });", activeUnwindReturnOffset);
+    const usize graphicsDestructorOffset = fullGraphicsSource.find("GraphicsRuntime::~GraphicsRuntime()noexcept(false){");
+    const usize retirementScopeOffset = fullGraphicsSource.find("const auto retireTasks = [this]()noexcept{", graphicsDestructorOffset);
+    const usize destructorTaskDrainOffset = fullGraphicsSource.find("m_tasks.drain();", retirementScopeOffset);
+    const usize schedulerDetachOffset = fullGraphicsSource.find("m_gpuTasks.detachDevice(*device)", destructorTaskDrainOffset);
+    const usize activeUnwindOffset = fullGraphicsSource.find("if(UncaughtExceptionCount() > 0){", schedulerDetachOffset);
+    const usize unwindRetirementOffset = fullGraphicsSource.find("retireTasks();", activeUnwindOffset);
+    const usize activeUnwindReturnOffset = fullGraphicsSource.find("return;", unwindRetirementOffset);
+    const usize destructorFailureGuardOffset = fullGraphicsSource.find("ScopeExit drainOnFailure(retireTasks);", activeUnwindReturnOffset);
     const usize destructorAssertionOffset = fullGraphicsSource.find("NWB_FATAL_ASSERT_MSG(", graphicsDestructorOffset);
     const usize destructorDestroyOffset = fullGraphicsSource.find("destroy(),", destructorAssertionOffset);
     const usize destructorGuardReleaseOffset = fullGraphicsSource.find("drainOnFailure.release();", destructorDestroyOffset);
     ASSERT_NE(graphicsDestructorOffset, AStringView::npos);
-    ASSERT_NE(activeUnwindOffset, AStringView::npos);
+    ASSERT_NE(retirementScopeOffset, AStringView::npos);
     ASSERT_NE(destructorTaskDrainOffset, AStringView::npos);
+    ASSERT_NE(schedulerDetachOffset, AStringView::npos);
+    ASSERT_NE(activeUnwindOffset, AStringView::npos);
+    ASSERT_NE(unwindRetirementOffset, AStringView::npos);
     ASSERT_NE(activeUnwindReturnOffset, AStringView::npos);
     ASSERT_NE(destructorFailureGuardOffset, AStringView::npos);
     ASSERT_NE(destructorAssertionOffset, AStringView::npos);
     ASSERT_NE(destructorDestroyOffset, AStringView::npos);
     ASSERT_NE(destructorGuardReleaseOffset, AStringView::npos);
-    EXPECT_LT(graphicsDestructorOffset, activeUnwindOffset);
-    EXPECT_LT(activeUnwindOffset, destructorTaskDrainOffset);
-    EXPECT_LT(destructorTaskDrainOffset, activeUnwindReturnOffset);
+    EXPECT_LT(graphicsDestructorOffset, retirementScopeOffset);
+    EXPECT_LT(retirementScopeOffset, destructorTaskDrainOffset);
+    EXPECT_LT(destructorTaskDrainOffset, schedulerDetachOffset);
+    EXPECT_LT(schedulerDetachOffset, activeUnwindOffset);
+    EXPECT_LT(activeUnwindOffset, unwindRetirementOffset);
+    EXPECT_LT(unwindRetirementOffset, activeUnwindReturnOffset);
     EXPECT_LT(activeUnwindReturnOffset, destructorFailureGuardOffset);
     EXPECT_LT(destructorFailureGuardOffset, destructorAssertionOffset);
     EXPECT_LT(destructorAssertionOffset, destructorDestroyOffset);

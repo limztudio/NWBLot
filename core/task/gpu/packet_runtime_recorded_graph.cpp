@@ -229,7 +229,7 @@ bool GpuRecordedGraph::PacketRecordingScratch::ensureValid(GraphicsArena& arena)
     if(!stateFanInScratchArena){
         stateFanInScratchArena = MakeGlobalUnique<Alloc::ScratchArena>(
             arena,
-            Name("core/graphics/task_graph/packet_state_fan_in")
+            Name("core/task/gpu/packet_state_fan_in")
         );
     }
     return stateFanInScratchArena != nullptr;

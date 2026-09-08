@@ -4,7 +4,7 @@
 
 #include <tests/common/test_context.h>
 
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/task/gpu/task_graph.h>
 #include <global/text_utils.h>
 #include <global/timer.h>
 
@@ -33,7 +33,7 @@ namespace __hidden_task_graph_storage_tests{
 
 
 using TestArena = ::NWB::Tests::TestArena<struct TaskGraphStorageTestsTag>;
-inline constexpr Name s_StorageScratchArena("tests/graphics/task_graph_storage_scratch");
+inline constexpr Name s_StorageScratchArena("tests/task/gpu/storage_scratch");
 
 
 TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){

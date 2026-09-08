@@ -33,7 +33,7 @@
 #include <gtest/gtest.h>
 
 #include <core/alloc/scratch.h>
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 #include <core/common/module.h>
 #include <core/mesh/classification.h>
 #include <core/metascript/parser.h>

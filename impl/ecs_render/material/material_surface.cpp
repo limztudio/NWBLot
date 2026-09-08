@@ -11,7 +11,7 @@
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <impl/assets_sampler/loader.h>
 #include <impl/assets_texture/loader.h>
 
@@ -31,7 +31,7 @@ namespace __hidden_material_surface{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void ReleaseTextureAssetCache(Core::Graphics& graphics, RendererMaterialResourceState& resources){
+static void ReleaseTextureAssetCache(Core::GraphicsRuntime& graphics, RendererMaterialResourceState& resources){
     for(auto it = resources.textureAssetCache.begin(); it != resources.textureAssetCache.end(); ++it){
         if(it.value())
             TextureAssetLoader::Release(*it.value(), graphics);
@@ -39,7 +39,7 @@ static void ReleaseTextureAssetCache(Core::Graphics& graphics, RendererMaterialR
     resources.textureAssetCache.clear();
 }
 
-static void ReleaseSamplerAssetCache(Core::Graphics& graphics, RendererMaterialResourceState& resources){
+static void ReleaseSamplerAssetCache(Core::GraphicsRuntime& graphics, RendererMaterialResourceState& resources){
     for(auto it = resources.samplerAssetCache.begin(); it != resources.samplerAssetCache.end(); ++it){
         if(it.value())
             SamplerAssetLoader::Release(*it.value(), graphics);
@@ -47,7 +47,7 @@ static void ReleaseSamplerAssetCache(Core::Graphics& graphics, RendererMaterialR
     resources.samplerAssetCache.clear();
 }
 
-static void ReleaseMaterialResourceState(Core::Graphics& graphics, RendererMaterialResourceState& resources){
+static void ReleaseMaterialResourceState(Core::GraphicsRuntime& graphics, RendererMaterialResourceState& resources){
     ReleaseTextureAssetCache(graphics, resources);
     ReleaseSamplerAssetCache(graphics, resources);
 }
@@ -55,7 +55,7 @@ static void ReleaseMaterialResourceState(Core::Graphics& graphics, RendererMater
 [[nodiscard]] static bool ResolveTextureAssetSlot(
     RendererMaterialResourceState& resources,
     const Core::Assets::AssetRef<Texture>& textureAsset,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     u32& outHeapSlot
 ){
@@ -109,7 +109,7 @@ static void ReleaseMaterialResourceState(Core::Graphics& graphics, RendererMater
 [[nodiscard]] static bool ResolveSamplerAssetSlot(
     RendererMaterialResourceState& resources,
     const Core::Assets::AssetRef<Sampler>& samplerAsset,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     u32& outHeapSlot
 ){
@@ -176,7 +176,7 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
     }
 
     RendererMaterialResourceState& resources = m_materialState.m_resourceState;
-    Core::Graphics& graphicsModule = m_graphics;
+    Core::GraphicsRuntime& graphicsModule = m_graphics;
     Core::GpuDescriptorHeap& heap = graphicsModule.getDevice().getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot resolve material resources without an initialized descriptor heap"));

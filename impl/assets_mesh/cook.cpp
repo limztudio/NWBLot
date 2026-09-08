@@ -17,7 +17,7 @@
 #include "meshlet_payload_packing.h"
 
 #include <core/alloc/scratch.h>
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 #include <core/assets/paths.h>
 #include <global/math/frame.h>
 #include <core/metascript/parser.h>

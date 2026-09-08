@@ -122,7 +122,7 @@ namespace __hidden_gpu_packet_runtime_recording_frontier{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph/packet_recording_frontier");
+inline constexpr Name s_PacketRecordingFrontierScratchArena("core/task/gpu/packet_recording_frontier");
 
 struct PacketRecordingFrontierEntry{
     GpuSubmissionPacketId packet;

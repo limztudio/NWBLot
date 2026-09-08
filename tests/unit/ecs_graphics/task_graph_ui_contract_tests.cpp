@@ -316,8 +316,8 @@ TEST(EcsGraphics, UiPresentationRetriesOnlyThroughStandaloneGraphs){
     AString uiHeaderSource;
     AString uiSource;
     AString uiTextureSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.h", graphicsHeaderSource));
-    ASSERT_TRUE(ReadGraphicsModuleSources(repoRoot, graphicsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "runtime" / "runtime.h", graphicsHeaderSource));
+    ASSERT_TRUE(ReadGraphicsRuntimeSources(repoRoot, graphicsSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.h", uiHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "texture_resources.cpp", uiTextureSource));
@@ -329,7 +329,7 @@ TEST(EcsGraphics, UiPresentationRetriesOnlyThroughStandaloneGraphs){
 
     EXPECT_TRUE(ContainsText(graphicsHeader, "StandaloneTaskGraphDeclaration"));
     EXPECT_TRUE(ContainsText(graphicsHeader, "submitStandaloneTaskGraph"));
-    EXPECT_TRUE(ContainsText(graphics, "Graphics::submitStandaloneTaskGraph"));
+    EXPECT_TRUE(ContainsText(graphics, "GraphicsRuntime::submitStandaloneTaskGraph"));
     EXPECT_TRUE(ContainsText(ui, "StandaloneTextureUploadCompletionTask"));
     EXPECT_TRUE(ContainsText(ui, "declareStandaloneTextureUploadGraph"));
     EXPECT_TRUE(ContainsText(ui, "submitStandaloneTaskGraphPresentation"));
@@ -500,8 +500,8 @@ TEST(EcsGraphics, SetupUploadReadinessBridgeRemainsGraphOwned){
 
     AString graphicsSource;
     AString textureUploadSource;
-    ASSERT_TRUE(ReadGraphicsModuleSources(repoRoot, graphicsSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module_texture_upload.cpp", textureUploadSource));
+    ASSERT_TRUE(ReadGraphicsRuntimeSources(repoRoot, graphicsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "runtime" / "runtime_texture_upload.cpp", textureUploadSource));
     const AStringView graphics(graphicsSource.data(), graphicsSource.size());
     const AStringView textureUpload(textureUploadSource.data(), textureUploadSource.size());
 
@@ -513,7 +513,7 @@ TEST(EcsGraphics, SetupUploadReadinessBridgeRemainsGraphOwned){
     const usize setupGraphOffset = graphics.find("GpuTaskId DeclareSetupUploadGraph");
     const usize timingResetOffset = graphics.find("struct FrameTimingResetGraphTask", setupGraphOffset);
     const usize setupUploadOffset = graphics.find("bool SubmitGraphOwnedSetupUpload");
-    const usize standaloneGraphOffset = graphics.find("bool Graphics::submitStandaloneTaskGraph", setupUploadOffset);
+    const usize standaloneGraphOffset = graphics.find("bool GraphicsRuntime::submitStandaloneTaskGraph", setupUploadOffset);
     ASSERT_NE(setupGraphOffset, AStringView::npos);
     ASSERT_NE(timingResetOffset, AStringView::npos);
     ASSERT_NE(setupUploadOffset, AStringView::npos);
@@ -530,8 +530,8 @@ TEST(EcsGraphics, SetupUploadReadinessBridgeRemainsGraphOwned){
     EXPECT_TRUE(ContainsText(graphics, "preferNonPrimarySameClassQueue"));
     EXPECT_TRUE(ContainsText(graphics, "sameClassRouting.enabled ? sameClassRouting.primaryQueue"));
 
-    const usize textureBatchOffset = graphics.find("bool Graphics::uploadTextureBatch");
-    const usize meshSetupOffset = graphics.find("Graphics::MeshResource Graphics::setupMesh", textureBatchOffset);
+    const usize textureBatchOffset = graphics.find("bool GraphicsRuntime::uploadTextureBatch");
+    const usize meshSetupOffset = graphics.find("GraphicsRuntime::MeshResource GraphicsRuntime::setupMesh", textureBatchOffset);
     ASSERT_NE(textureBatchOffset, AStringView::npos);
     ASSERT_NE(meshSetupOffset, AStringView::npos);
     const AStringView textureBatch = graphics.substr(textureBatchOffset, meshSetupOffset - textureBatchOffset);

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "packet_runtime.h"
+#include "scheduler.h"
 #include "packet_runtime_internal.h"
 
 #include "task_graph.h"
@@ -241,7 +241,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     if(
         !planAccess.validFor(declarationAccess)
         || !declarationAccess.validForDeviceGeneration(planAccess.deviceGeneration())
-        || m_device.getDeviceGeneration() != planAccess.deviceGeneration()
+        || device().getDeviceGeneration() != planAccess.deviceGeneration()
         || !planAccess.validPacket(packetID)
         || !recordedGraph.validForWithinArtifactOperation(
             graph,
@@ -316,7 +316,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         || recordedPacket->commandListCount == 0u
         || recordedPacket->commandListCount > GpuRecordedPacket::s_MaxCommandLists
         || !queue
-        || !m_device.matchesPhysicalQueueIdentity(packet.queue)
+        || !device().matchesPhysicalQueueIdentity(packet.queue)
     ){
         return false;
     }
@@ -355,7 +355,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         }
         if(!token)
             return false;
-        const GpuPhysicalQueueInfo* const externalQueue = m_device.getPhysicalQueueInfo(GpuPhysicalQueueId{
+        const GpuPhysicalQueueInfo* const externalQueue = device().getPhysicalQueueInfo(GpuPhysicalQueueId{
             token->physicalQueueIndex,
             token->deviceGeneration,
         });
@@ -410,7 +410,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     // Device repeats this validation at its final boundary because another queue may still be resolving a concurrent
     // native submit. Roll ticket preparation back here so a corrected external dependency can retry this packet.
     for(const QueueSubmissionToken& waitToken : waitTokens){
-        if(m_device.validateSubmissionWaitToken(waitToken))
+        if(device().validateSubmissionWaitToken(waitToken))
             continue;
         return false;
     }
@@ -463,7 +463,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     if(preSubmitHook)
         submitDesc.setPreSubmitHook(*preSubmitHook);
     const Timer submissionBegin = TimerNow();
-    const QueueSubmissionToken token = m_device.executeGraphCommandLists(
+    const QueueSubmissionToken token = device().executeGraphCommandLists(
         recordedPacket->commandLists,
         recordedPacket->commandListCount,
         packet.queue,

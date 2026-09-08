@@ -229,8 +229,8 @@ TEST(EcsGraphics, FeatureSupportAndSmokeRoutesRemainNativeCapabilityAuthoritativ
     AString smokeProjectSource;
     AString smokeCmakeSource;
     AString smokeLauncherSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.h", moduleHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module_feature_queries.cpp", moduleFeatureQueriesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "runtime" / "runtime.h", moduleHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "runtime" / "runtime_feature_queries.cpp", moduleFeatureQueriesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "CoolStuff" / "Testbed" / "runtime.cpp", testbedRuntimeSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "smoke_scene_helpers.h", smokeHelperSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "CMakeLists.txt", smokeCmakeSource));
@@ -263,7 +263,7 @@ TEST(EcsGraphics, FeatureSupportAndSmokeRoutesRemainNativeCapabilityAuthoritativ
 
     EXPECT_TRUE(ContainsText(
         moduleFeatureQueries,
-        "bool Graphics::queryFeatureSupport(const Feature::Enum feature, void* featureInfo, const usize featureInfoSize)const{\n"
+        "bool GraphicsRuntime::queryFeatureSupport(const Feature::Enum feature, void* featureInfo, const usize featureInfoSize)const{\n"
         "    auto& device = getDevice();\n"
         "    return device.queryFeatureSupport(feature, featureInfo, featureInfoSize);\n"
         "}"

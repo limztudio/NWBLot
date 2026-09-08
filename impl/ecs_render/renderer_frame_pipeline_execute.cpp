@@ -12,6 +12,7 @@
 
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
+#include <core/task/gpu/scheduler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1601,7 +1602,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         m_deferredFrameRecoveryArmed = true;
         m_deferredFrameRecoveryRetiresTiming = retireTiming;
         Core::Alloc::ScratchArena recoveryScratchArena(RendererArenaScope::s_TaskGraphArena);
-        const Core::GpuTaskScheduler submitter(device);
+        const Core::GpuTaskScheduler& submitter = m_graphics.gpuTasks();
         const bool recoveryAccepted = submitter.recordAndSubmitAcceptedFrontierTask(
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph,
@@ -2477,8 +2478,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         : 0u
     ;
 
-    const Core::GpuTaskScheduler normalSubmitter(device);
-    const bool normalGraphAccepted = normalSubmitter.recordAndSubmitNormalGraph(
+    const Core::GpuTaskScheduler& normalSubmitter = m_graphics.gpuTasks();
+    const bool normalGraphAccepted = normalSubmitter.submit(
         m_deferredLightingTaskGraph,
         m_deferredLightingCompiledGraph,
         deferredRecorder,
@@ -2771,7 +2772,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 .invoke = acceptReadbackFinalState,
             };
             const Core::GpuNativePacketRecorder recorder(device, m_graphics.gpuTiming());
-            const Core::GpuTaskScheduler submitter(device);
+            const Core::GpuTaskScheduler& submitter = m_graphics.gpuTasks();
             const bool readbackAccepted = submitter.recordAndSubmitTask(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
@@ -2953,7 +2954,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 .invoke = acceptHistoryCopyFinalState,
             };
             const Core::GpuNativePacketRecorder recorder(device, m_graphics.gpuTiming());
-            const Core::GpuTaskScheduler submitter(device);
+            const Core::GpuTaskScheduler& submitter = m_graphics.gpuTasks();
             const bool historyCopyAccepted = submitter.recordAndSubmitTask(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,

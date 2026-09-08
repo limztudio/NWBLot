@@ -29,7 +29,7 @@ namespace Tests{
 class FrameTimingPreambleProbePass final : public IRenderPass{
 public:
     explicit FrameTimingPreambleProbePass(
-        Graphics& graphics,
+        GraphicsRuntime& graphics,
         const GpuTimingScopeDefinition& timingScope = s_FrameTimingPreambleScope
     )
         : IRenderPass(graphics)

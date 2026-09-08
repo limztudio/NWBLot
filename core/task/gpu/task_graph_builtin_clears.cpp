@@ -7,7 +7,7 @@
 #include "task_graph_builtin_internal.h"
 #include "texture_clear_value.h"
 
-#include <core/graphics/capture/command_ir.h>
+#include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/rhi/command.h>
 #include <core/graphics/vulkan/texture_clear_contract.h>

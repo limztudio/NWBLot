@@ -94,15 +94,15 @@ inline bool ReadRendererSources(
 }
 
 
-inline bool ReadGraphicsModuleSources(const TestPath& repoRoot, AString& outSource){
+inline bool ReadGraphicsRuntimeSources(const TestPath& repoRoot, AString& outSource){
     static constexpr StringView s_SourceNames[] = {
-        "module.cpp",
-        "module_graph_setup.cpp",
-        "module_texture_upload.cpp",
-        "module_setup.cpp",
+        "runtime.cpp",
+        "runtime_graph_setup.cpp",
+        "runtime_texture_upload.cpp",
+        "runtime_setup.cpp",
     };
 
-    const TestPath graphicsDirectory = repoRoot / "core" / "graphics";
+    const TestPath graphicsDirectory = repoRoot / "core" / "graphics" / "runtime";
     outSource.clear();
     for(const StringView sourceName : s_SourceNames){
         AString source;

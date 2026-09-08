@@ -9,14 +9,13 @@ target_sources(nwb_graphics_presentation_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan_adapter_capability_tests.cpp"
 )
 target_link_libraries(nwb_graphics_presentation_tests PRIVATE
-    nwb_graphics
+    nwb_graphics_backend
     nwb_common
     nwb_alloc
 )
 
-nwb_declare_gtest_executable(nwb_graphics_task_graph_tests)
-target_sources(nwb_graphics_task_graph_tests PRIVATE
-    "${CMAKE_SOURCE_DIR}/tests/common/gpu_task_graph_read_views.h"
+nwb_declare_gtest_executable(nwb_graphics_resource_tests)
+target_sources(nwb_graphics_resource_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/buffer_range_handoff_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/buffer_range_state_tracking_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/command_buffer_resource_references_tests.cpp"
@@ -26,80 +25,11 @@ target_sources(nwb_graphics_task_graph_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/heap_binding_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/host_readback_sync_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/persistent_state_subset_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/pipeline_cache_validation_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/resource_queue_sharing_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_analysis_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_set_memory_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_set_validation_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_avboit_accumulation_emulation_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_avboit_accumulation_shared_output_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_avboit_async_emulation_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_avboit_csg_emulation_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_avboit_csg_occupancy_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_avboit_csg_sample_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_avboit_extinction_integration_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_avboit_extinction_shared_output_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_avboit_finalization_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_avboit_lighting_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_avboit_occupancy_emulation_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_avboit_packet_merge_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_barrier_planning_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_buffer_range_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_caustics_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_command_ir_capture_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_command_ir_reader_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_command_ir_replay_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_command_ir_scaling_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_command_ir_test_utils.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_command_ir_test_utils.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_compiler_telemetry_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_csg_gbuffer_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_csg_resource_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_declaration_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_dependency_inference_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_external_completion_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_external_final_state_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_frontier_packetization_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_geometry_preparation_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_import_index_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_initial_ownership_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_initial_state_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_lifecycle_api_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_lifecycle_test_utils.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_opaque_emulation_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_packet_compilation_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_packet_runtime_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_payload_lifecycle_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_presentation_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_primitive_buffer_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_primitive_retained_texture_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_primitive_texture_copy_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_primitive_texture_queue_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_queue_assignment_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_queue_ownership_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_queue_routing_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_queue_timing_feedback_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_import_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_version_api_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_version_dependency_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_version_lifetime_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_version_range_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_shadow_upload_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_shadow_visibility_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_soft_shadow_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_state_texture_subresource_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_storage_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_surfel_gi_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_test_utils.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_test_utils.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_timing_history_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_timing_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_vulkan_contract_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/texture_clear_task_graph_tests.cpp"
 )
-target_link_libraries(nwb_graphics_task_graph_tests PRIVATE
-    nwb_graphics
+target_link_libraries(nwb_graphics_resource_tests PRIVATE
+    nwb_graphics_backend
     nwb_common
     nwb_alloc
 )

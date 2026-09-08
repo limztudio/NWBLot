@@ -802,7 +802,7 @@ TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordB
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         ASSERT_TRUE(Analyze(graph, analysis));
-        Core::Alloc::ScratchArena reachabilityScratchArena(Name("tests/graphics/task_graph_packed_reachability_scratch"));
+        Core::Alloc::ScratchArena reachabilityScratchArena(Name("tests/task/gpu/packed_reachability_scratch"));
         Graphics::GpuTaskGraphCompilerDetail::GpuTaskSchedulingReachability reachability(reachabilityScratchArena);
         u64 graphGeneration = 0u;
         {

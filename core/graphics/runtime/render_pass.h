@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "api.h"
+#include <core/graphics/api.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,11 +17,11 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Graphics;
+class GraphicsRuntime;
 
 class IRenderPass{
 public:
-    explicit IRenderPass(Graphics& graphics)
+    explicit IRenderPass(GraphicsRuntime& graphics)
         : m_graphics(graphics)
     {}
     virtual ~IRenderPass() = default;
@@ -42,11 +42,11 @@ public:
     virtual void backBufferResized(u32, u32, u32){}
     virtual void displayScaleChanged(f32, f32){}
 
-    [[nodiscard]] Graphics& getGraphics()const{ return m_graphics; }
+    [[nodiscard]] GraphicsRuntime& getGraphics()const{ return m_graphics; }
 
 
 private:
-    Graphics& m_graphics;
+    GraphicsRuntime& m_graphics;
 };
 
 

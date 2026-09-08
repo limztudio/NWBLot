@@ -741,7 +741,7 @@ bool TextureAssetLoader::Create(
     TextureGpuResource& outResource,
     const Texture& textureAsset,
     const Name& debugName,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     const tchar* const ownerName
 ){
     const tchar* const owner = ownerName ? ownerName : NWB_TEXT("TextureAssetLoader");
@@ -867,7 +867,7 @@ bool TextureAssetLoader::Create(
         }
     }
 
-    Vector<Core::Graphics::TextureUploadRegion, Core::Alloc::ScratchArena> uploadRegions{scratchArena};
+    Vector<Core::GraphicsRuntime::TextureUploadRegion, Core::Alloc::ScratchArena> uploadRegions{scratchArena};
     for(usize mipIndex = 0u; mipIndex < textureAsset.mipLevels().size(); ++mipIndex){
         const TextureMipLevel& mip = textureAsset.mipLevels()[mipIndex];
         const __hidden_texture_loader::DecodedTextureMipUpload& decoded = decodedMips[mipIndex];
@@ -886,7 +886,7 @@ bool TextureAssetLoader::Create(
         }
 
         if(textureAsset.dimension() == TextureDimension::Texture3D){
-            uploadRegions.emplace_back(Core::Graphics::TextureUploadRegion{
+            uploadRegions.emplace_back(Core::GraphicsRuntime::TextureUploadRegion{
                 .data = decoded.bytes.data(),
                 .dataSize = decoded.bytes.size(),
                 .rowPitch = decoded.rowPitch,
@@ -898,7 +898,7 @@ bool TextureAssetLoader::Create(
         }
 
         for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
-            uploadRegions.emplace_back(Core::Graphics::TextureUploadRegion{
+            uploadRegions.emplace_back(Core::GraphicsRuntime::TextureUploadRegion{
                 .data = decoded.bytes.data() + static_cast<usize>(sliceIndex) * decoded.sliceByteCount,
                 .dataSize = decoded.sliceByteCount,
                 .rowPitch = decoded.rowPitch,
@@ -910,7 +910,7 @@ bool TextureAssetLoader::Create(
     }
 
     Core::QueueSubmissionToken uploadToken;
-    if(!graphics.uploadTextureBatch(Core::Graphics::TextureUploadBatchDesc{
+    if(!graphics.uploadTextureBatch(Core::GraphicsRuntime::TextureUploadBatchDesc{
         .destination = texture,
         .regions = uploadRegions.data(),
         .regionCount = uploadRegions.size(),
@@ -952,7 +952,7 @@ bool TextureAssetLoader::Load(
     TextureGpuResource& outResource,
     const Core::Assets::AssetRef<Texture>& textureAsset,
     const Name& debugName,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     const tchar* const ownerName
 ){
@@ -979,7 +979,7 @@ bool TextureAssetLoader::Load(
     return Create(outResource, static_cast<const Texture&>(*loadedAsset), debugName, graphics, owner);
 }
 
-void TextureAssetLoader::Release(TextureGpuResource& inOutResource, Core::Graphics& graphics){
+void TextureAssetLoader::Release(TextureGpuResource& inOutResource, Core::GraphicsRuntime& graphics){
     if(inOutResource.sampledImageHeapHandle.valid()){
         Core::GpuDescriptorHeap& heap = graphics.getDevice().getDescriptorHeap();
         if(heap.isInitialized())

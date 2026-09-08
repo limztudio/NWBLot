@@ -15,12 +15,12 @@
 #include <core/common/application_entry.h>
 #include <core/common/module.h>
 #include <core/alloc/general.h>
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 #include <core/graphics/api.h>
-#include <core/graphics/capture/command_ir.h>
-#include <core/graphics/module.h>
-#include <core/graphics/task_graph/compiler.h>
-#include <core/graphics/task_graph/packet_runtime.h>
+#include <core/task/gpu/capture/command_ir.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/compiler.h>
+#include <core/task/gpu/packet_runtime.h>
 #include <core/graphics/vulkan/backend.h>
 #include <core/perf/timing.h>
 #include <impl/assets/graphics/bindless/runtime_abi.h>
@@ -213,7 +213,7 @@ struct Result{
 }
 
 [[nodiscard]] static bool CaptureSelectedAdapterIdentity(
-    Graphics& graphics,
+    GraphicsRuntime& graphics,
     GraphicsAllocator& allocator,
     Result& outResult
 ){
@@ -545,7 +545,7 @@ struct Result{
 }
 
 [[nodiscard]] static bool RunProfile(
-    Graphics& graphics,
+    GraphicsRuntime& graphics,
     Alloc::GlobalArena& arena,
     const Arguments& arguments,
     Result& outResult
@@ -951,7 +951,8 @@ static void EmitResult(const Result& result){
     GraphicsAllocator allocator(arena);
     CpuTaskScheduler cpuScheduler(2u);
     Perf::TimingRecorder gpuTiming(arena);
-    Graphics graphics(allocator, cpuScheduler, gpuTiming);
+    GpuTaskScheduler gpuTasks;
+    GraphicsRuntime graphics(allocator, cpuScheduler, gpuTasks, gpuTiming);
 
     Result result;
     result.requestedAdapterIndex = arguments.adapterIndex;

@@ -156,7 +156,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorSubmitsOrdinaryPrefix){
     normalExecution.taskRecordedCallbacks = &recordedCallback;
     normalExecution.taskRecordedCallbackCount = 1u;
     GpuSubmissionPacketId failedPacket;
-    ASSERT_TRUE(submitter.recordAndSubmitNormalGraph(
+    ASSERT_TRUE(submitter.submit(
         graph,
         compiledGraph,
         recorder,
@@ -317,7 +317,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsAtSemanticTerminal
     GpuGraphSubmissionTransaction staleTransaction(DescriptorBufferRoundTripTest::arena());
     staleTransaction.reset(compiledGraph);
     GpuSubmissionPacketId staleFailedPacket;
-    EXPECT_FALSE(submitter.recordAndSubmitNormalGraph(
+    EXPECT_FALSE(submitter.submit(
         graph,
         compiledGraph,
         recorder,
@@ -337,7 +337,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsAtSemanticTerminal
     GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.terminalTask = terminalTask;
     GpuSubmissionPacketId failedPacket;
-    ASSERT_TRUE(submitter.recordAndSubmitNormalGraph(
+    ASSERT_TRUE(submitter.submit(
         graph,
         compiledGraph,
         recorder,

@@ -90,7 +90,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsBeforeRejectedReco
     const GpuNativePacketRecorder recorder(device);
     const GpuTaskScheduler submitter(device);
     GpuSubmissionPacketId failedPacket;
-    EXPECT_FALSE(submitter.recordAndSubmitNormalGraph(
+    EXPECT_FALSE(submitter.submit(
         graph,
         compiledGraph,
         recorder,
@@ -249,7 +249,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorPreservesRecoveryOwners
 
     // The first normal packet accepts, then the semantic callback arms a rejection for the second normal packet.
     // The executor must leave the terminal frontier declared for the caller's explicit recovery submission.
-    EXPECT_FALSE(submitter.recordAndSubmitNormalGraph(
+    EXPECT_FALSE(submitter.submit(
         graph,
         compiledGraph,
         recorder,
@@ -380,7 +380,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorRejectsNonTerminalFront
     GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.terminalTask = normalTask;
     GpuSubmissionPacketId failedPacket;
-    EXPECT_FALSE(submitter.recordAndSubmitNormalGraph(
+    EXPECT_FALSE(submitter.submit(
         graph,
         compiledGraph,
         recorder,

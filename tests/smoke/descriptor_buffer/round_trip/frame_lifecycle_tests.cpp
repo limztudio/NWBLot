@@ -22,7 +22,7 @@ namespace Tests{
 
 class OrderedCpuRenderPass final : public IRenderPass{
 public:
-    OrderedCpuRenderPass(Graphics& graphics, Vector<u32, Alloc::GlobalArena>& events, Atomic<u32>& completed,
+    OrderedCpuRenderPass(GraphicsRuntime& graphics, Vector<u32, Alloc::GlobalArena>& events, Atomic<u32>& completed,
         const ThreadId mainThread, const u32 index)
         : IRenderPass(graphics)
         , m_events(events)
@@ -66,7 +66,7 @@ TEST_F(DescriptorBufferRoundTripTest, RenderPassTasksPreserveMainThreadInterleav
     graphics.addRenderPassToBack(first);
     graphics.addRenderPassToBack(second);
     struct RenderPassCleanup{
-        Graphics& graphics;
+        GraphicsRuntime& graphics;
         IRenderPass& first;
         IRenderPass& second;
 

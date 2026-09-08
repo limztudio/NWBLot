@@ -8,8 +8,8 @@
 #include <impl/global.h>
 
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/module.h>
-#include <core/graphics/task_graph/compiler.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/compiler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -128,7 +128,7 @@ private:
 public:
     RendererTaskTimingFeedback(
         Core::Alloc::GlobalArena& arena,
-        Core::Graphics& graphics,
+        Core::GraphicsRuntime& graphics,
         NotNull<const Name*> feedbackCollectionScopes,
         usize feedbackCollectionScopeCount
     );
@@ -160,7 +160,7 @@ private:
 
 
 private:
-    Core::Graphics& m_graphics;
+    Core::GraphicsRuntime& m_graphics;
     RendererTaskTimingFeedbackState m_state;
     Core::GpuTaskTimingHistoryStore m_history;
     Core::GpuTaskTimingHistorySnapshot m_snapshot;

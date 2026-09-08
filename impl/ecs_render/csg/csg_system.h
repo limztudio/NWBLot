@@ -21,7 +21,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Graphics;
+class GraphicsRuntime;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,7 +67,7 @@ public:
     RendererCsgSystem(
         Core::Alloc::GlobalArena& arena,
         Core::ECS::World& world,
-        Core::Graphics& graphics,
+        Core::GraphicsRuntime& graphics,
         CsgShapeRegistry& csgShapeRegistry,
         RendererCsgState& csgState,
         RendererShaderSystem& shaderSystem,
@@ -169,7 +169,7 @@ private:
 private:
     Core::Alloc::GlobalArena& m_arena;
     Core::ECS::World& m_world;
-    Core::Graphics& m_graphics;
+    Core::GraphicsRuntime& m_graphics;
     CsgShapeRegistry& m_csgShapeRegistry;
     RendererCsgState& m_csgState;
     RendererShaderSystem& m_shaderSystem;

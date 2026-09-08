@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/graphics/task_graph/compiler.h>
-#include <core/graphics/task_graph/packet_runtime.h>
+#include <core/task/gpu/compiler.h>
+#include <core/task/gpu/scheduler.h>
 #include <tests/common/gpu_task_graph_read_views.h>
 #include <tests/common/headless_gtest_fixture.h>
 #include <tests/common/vulkan_test_sync.h>

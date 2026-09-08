@@ -48,7 +48,7 @@ namespace ECSRenderDetail{
     )
         return false;
 
-    Core::Graphics& graphics = *payload.graphics;
+    Core::GraphicsRuntime& graphics = *payload.graphics;
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
     RendererCsgSystem& csgSystem = *payload.csgSystem;
     DeferredFrameTargets& deferredTargets = *payload.targets;

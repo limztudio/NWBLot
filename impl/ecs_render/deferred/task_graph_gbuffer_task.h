@@ -11,8 +11,8 @@
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/module.h>
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,7 +40,7 @@ namespace ECSRenderDetail{
 
 struct GbufferGraphTask{
     struct Payload{
-        Core::Graphics* graphics = nullptr;
+        Core::GraphicsRuntime* graphics = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
         RendererCsgSystem* csgSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;

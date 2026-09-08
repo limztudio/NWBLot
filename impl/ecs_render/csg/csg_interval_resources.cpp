@@ -13,7 +13,7 @@
 
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <core/graphics/shader_archive.h>
 
 

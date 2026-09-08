@@ -810,7 +810,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.terminalTask = presentTask;
     GpuSubmissionPacketId normalFailedPacket;
-    ASSERT_TRUE(submitter.recordAndSubmitNormalGraph(
+    ASSERT_TRUE(submitter.submit(
         graph,
         compiledGraph,
         recorder,

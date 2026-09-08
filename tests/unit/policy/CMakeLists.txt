@@ -4,6 +4,7 @@ set(_nwb_policy_python_tests
     no_direct_std_in_tests
     no_direct_std_in_interop_boundaries
     no_core_implementation_dependencies
+    task_domain_boundaries
     no_engine_default_bxdf
     no_render_lane_facade
     no_manual_packet_transaction_facade

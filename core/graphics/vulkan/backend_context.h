@@ -7,7 +7,7 @@
 
 #include "backend.h"
 
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 #include "swapchain_presentation.h"
 
 

@@ -7,7 +7,7 @@
 
 #include "coopvec.h"
 
-#include <core/task/cpu_task.h>
+#include <core/task/cpu/scheduler.h>
 #include "gpu_descriptor_heap.h"
 
 #include <core/filesystem/factory.h>

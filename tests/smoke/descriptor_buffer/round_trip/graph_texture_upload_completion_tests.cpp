@@ -386,8 +386,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
     );
     ASSERT_NE(destination.get(), nullptr);
 
-    const Graphics::TextureUploadRegion regions[] = {
-        Graphics::TextureUploadRegion{
+    const GraphicsRuntime::TextureUploadRegion regions[] = {
+        GraphicsRuntime::TextureUploadRegion{
             .data = mip0Bytes,
             .dataSize = sizeof(mip0Bytes),
             .rowPitch = 4u * 4u,
@@ -395,7 +395,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
             .arraySlice = 0u,
             .mipLevel = 0u,
         },
-        Graphics::TextureUploadRegion{
+        GraphicsRuntime::TextureUploadRegion{
             .data = mip1Bytes,
             .dataSize = sizeof(mip1Bytes),
             .rowPitch = 2u * 4u,
@@ -405,7 +405,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
         },
     };
     QueueSubmissionToken acceptedToken;
-    ASSERT_TRUE(graphics.uploadTextureBatch(Graphics::TextureUploadBatchDesc{
+    ASSERT_TRUE(graphics.uploadTextureBatch(GraphicsRuntime::TextureUploadBatchDesc{
         .destination = destination,
         .regions = regions,
         .regionCount = LengthOf(regions),

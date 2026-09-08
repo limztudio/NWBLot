@@ -72,7 +72,7 @@ const Skin* MeshSkinningRuntimeCache::MeshSkinningSource::skin()const{
 }
 
 
-MeshSkinningRuntimeCache::MeshSkinningRuntimeCache(Core::Alloc::GlobalArena& arena, Core::Graphics& graphics, Core::Assets::AssetManager& assetManager)
+MeshSkinningRuntimeCache::MeshSkinningRuntimeCache(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager)
     : m_arena(arena)
     , m_graphics(graphics)
     , m_assetManager(assetManager)

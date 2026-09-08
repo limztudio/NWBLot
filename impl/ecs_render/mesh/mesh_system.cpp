@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 RendererMeshSystem::RendererMeshSystem(
     Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     RendererMeshState& meshState
 )

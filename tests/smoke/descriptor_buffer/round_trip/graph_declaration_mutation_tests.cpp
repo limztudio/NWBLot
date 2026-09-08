@@ -206,7 +206,7 @@ struct DeclarationMutationSubmitterPreflightTask{
                 return;
 
             state->attempted = true;
-            state->succeeded = state->submitter->recordAndSubmitNormalGraph(
+            state->succeeded = state->submitter->submit(
                 *state->graph,
                 *state->compiledGraph,
                 *state->recorder,

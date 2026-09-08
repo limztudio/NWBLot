@@ -7,7 +7,7 @@
 #include "task_graph.h"
 
 #include <core/graphics/backend_selection.h>
-#include <core/graphics/capture/command_ir.h>
+#include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/gpu_timing.h>
 
 #include <global/exception.h>
@@ -62,7 +62,7 @@ namespace __hidden_gpu_packet_runtime_recording{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_PacketTimingScratchArena("core/graphics/task_graph/packet_timing_scratch");
+inline constexpr Name s_PacketTimingScratchArena("core/task/gpu/packet_timing_scratch");
 inline constexpr AStringView s_PacketMarkerLabel = "GPU Task Packet";
 inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
 

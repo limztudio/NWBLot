@@ -11,10 +11,10 @@
 
 #include <core/alloc/scratch.h>
 #include <core/ecs/system.h>
-#include <core/graphics/render_pass.h>
+#include <core/graphics/runtime/render_pass.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/graphics/task_graph/persistent_state.h>
-#include <core/graphics/task_graph/types.h>
+#include <core/task/gpu/persistent_state.h>
+#include <core/task/gpu/types.h>
 #include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <impl/ecs_mesh/runtime/mesh.h>
 #include <impl/ecs_mesh/components.h>
@@ -208,7 +208,7 @@ public:
     MeshSkinningSystem(
         Core::Alloc::GlobalArena& arena,
         Core::ECS::World& world,
-        Core::Graphics& graphics,
+        Core::GraphicsRuntime& graphics,
         Core::Assets::AssetManager& assetManager,
         IRuntimeMeshRegistry& runtimeMeshRegistry,
         ShaderPathResolveCallback shaderPathResolver
@@ -280,7 +280,7 @@ private:
 private:
     Core::Alloc::GlobalArena& m_arena;
     Core::ECS::World& m_world;
-    Core::Graphics& m_graphics;
+    Core::GraphicsRuntime& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
     IRuntimeMeshRegistry& m_runtimeMeshRegistry;
     ShaderPathResolveCallback m_shaderPathResolver;

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/graphics/task_graph/task_graph.h>
+#include <core/task/gpu/task_graph.h>
 
 #include <global/arena_memory.h>
 #include <global/text_utils.h>
@@ -33,7 +33,7 @@ namespace __hidden_resource_set_memory_tests{
 
 using ResourceIds = Vector<Core::GpuGraphResourceId, Core::Alloc::GlobalArena>;
 
-static constexpr Name s_ScratchOwner("core/graphics/task_graph/declaration_scratch");
+static constexpr Name s_ScratchOwner("core/task/gpu/declaration_scratch");
 
 
 [[nodiscard]] static ArenaMemoryStats ScratchOwnerStats(){

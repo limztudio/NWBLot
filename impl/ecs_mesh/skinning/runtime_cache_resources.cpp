@@ -9,7 +9,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
-#include <core/graphics/module.h>
+#include <core/graphics/runtime/runtime.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_triangle_indices.h>
 #include <impl/assets_mesh/meshlet_vertex_attributes.h>
@@ -206,7 +206,7 @@ static constexpr usize s_RuntimeBlasScratchArenaOverheadBytes = 4096u;
 
 template<typename PayloadT, typename PayloadVector>
 [[nodiscard]] Core::BufferHandle SetupRuntimeBuffer(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     const MeshSkinningRuntimeInstance& instance,
     const AStringView suffix,
     const PayloadVector& payload,
@@ -259,7 +259,7 @@ template<typename PayloadT, typename PayloadVector>
 
 template<typename PayloadT, typename PayloadVector>
 [[nodiscard]] bool AssignRuntimeBuffer(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     MeshSkinningRuntimeInstance& instance,
     Core::BufferHandle& outBuffer,
     const AStringView suffix,
@@ -286,7 +286,7 @@ template<typename PayloadT, typename PayloadVector>
 
 template<typename PayloadVector>
 [[nodiscard]] bool AssignPaddedRawRuntimeBuffer(
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     Core::Alloc::GlobalArena& arena,
     MeshSkinningRuntimeInstance& instance,
     Core::BufferHandle& outBuffer,

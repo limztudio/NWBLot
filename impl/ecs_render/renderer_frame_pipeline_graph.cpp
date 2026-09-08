@@ -15,7 +15,7 @@
 
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 
-#include <core/graphics/capture/command_ir.h>
+#include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/gpu_timing.h>
 
 #include <global/timer.h>
@@ -1600,7 +1600,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         Core::GpuTaskSchedulingHint irradianceClearScheduling;
         irradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
         irradianceClearScheduling.allowPacketMerge = true;
-        // Start Hardware Caustics on the selected same-class Graphics lane when available, including an alternate
+        // Start Hardware Caustics on the selected same-class GraphicsRuntime lane when available, including an alternate
         // Graphics family only when its declared resources support the crossing. Every later direct successor
         // retains that lane through the graph's normal physical-queue dependency plan.
         EnableSameFamilyComputeEffectRouting(irradianceClearScheduling, false);
@@ -6032,7 +6032,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     // UI/overlay work must be declared before the independent diagnostic and history-copy tails. Its explicit
     // dependency on Deferred Present makes it the final presentation contributor that the timing endpoint follows,
-    // instead of leaving Graphics::render() to submit a later untracked backbuffer write.
+    // instead of leaving GraphicsRuntime::render() to submit a later untracked backbuffer write.
     m_deferredPresentationOverlayRequired =
         m_preparedTaskGraphPresentationContributor
         && m_preparedTaskGraphPresentationContributor->hasTaskGraphPresentationWork()

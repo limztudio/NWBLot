@@ -12,8 +12,8 @@
 #include <core/assets/global.h>
 #include <core/ecs/system.h>
 #include <core/graphics/api.h>
-#include <core/graphics/render_pass.h>
-#include <core/graphics/task_graph/presentation_contributor.h>
+#include <core/graphics/runtime/render_pass.h>
+#include <core/task/gpu/presentation_contributor.h>
 #include <core/input/module.h>
 
 #include <imgui.h>
@@ -77,7 +77,7 @@ public:
     UiSystem(
         Core::Alloc::GlobalArena& arena,
         Core::ECS::World& world,
-        Core::Graphics& graphics,
+        Core::GraphicsRuntime& graphics,
         Core::InputDispatcher& input,
         Core::Assets::AssetManager& assetManager,
         ShaderPathResolveCallback shaderPathResolver
@@ -265,7 +265,7 @@ private:
 private:
     Core::Alloc::GlobalArena& m_arena;
     Core::ECS::World& m_world;
-    Core::Graphics& m_graphics;
+    Core::GraphicsRuntime& m_graphics;
     Core::InputDispatcher& m_input;
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;

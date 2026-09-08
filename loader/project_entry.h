@@ -20,7 +20,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Graphics;
+class GraphicsRuntime;
 class InputDispatcher;
 
 namespace ECS{
@@ -28,6 +28,7 @@ namespace ECS{
 };
 
 class CpuTaskScheduler;
+class GpuTaskScheduler;
 class CpuTaskScope;
 
 namespace Alloc{
@@ -67,7 +68,7 @@ struct ProjectFrameClientSize{
 };
 
 struct ProjectStartupContext{
-    Core::Graphics& graphics;
+    Core::GraphicsRuntime& graphics;
     Core::Alloc::GlobalArena& objectArena;
     // The factory is copied into graphics configuration and must own any captured service lifetimes.
     Core::Filesystem::FilesystemFactory filesystemFactory;
@@ -81,10 +82,11 @@ struct ProjectRuntimeContext{
     using PerfCaptureCallback = Function<void(const Core::Perf::CaptureOptions& options)>;
     using RequestQuitCallback = Function<void()>;
 
-    Core::Graphics& graphics;
+    Core::GraphicsRuntime& graphics;
     Core::InputDispatcher& input;
     Core::Alloc::GlobalArena& objectArena;
     Core::CpuTaskScheduler& cpuTasks;
+    Core::GpuTaskScheduler& gpuTasks;
     Core::CpuTaskScope& tasks;
     Core::Assets::AssetManager& assetManager;
     Core::Filesystem::IFilesystem& filesystem;

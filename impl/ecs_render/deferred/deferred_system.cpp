@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 RendererDeferredSystem::RendererDeferredSystem(
     Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
-    Core::Graphics& graphics,
+    Core::GraphicsRuntime& graphics,
     RendererDeferredState& deferredState,
     RendererShaderSystem& shaderSystem
 )

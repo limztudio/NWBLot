@@ -132,6 +132,7 @@ private:
     };
 
     struct ReadyQueue{
+        // Intrusive MPMC links: every producer publication and consumer claim holds m_mutex.
         u32 head = TaskHandle::s_InvalidIndex;
         u32 tail = TaskHandle::s_InvalidIndex;
     };
@@ -167,6 +168,7 @@ public:
 
 
 public:
+    // Concurrent submission is supported from any thread; producers must finish before scheduler destruction.
     template<typename Func>
     TaskHandle submit(Func&& function, CpuTaskOptions options = {}){
         return submitTask(TaskFunction(Forward<Func>(function)), nullptr, options, nullptr, 0u);
@@ -301,6 +303,7 @@ public:
 
 
 public:
+    // The same scope accepts concurrent producers from any thread. Join producers before destroying the scope.
     template<typename Func>
     TaskHandle submit(Func&& function, CpuTaskOptions options = {}){
         return m_scheduler.submitTask(CpuTaskScheduler::TaskFunction(Forward<Func>(function)), this, options, nullptr, 0u);

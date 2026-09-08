@@ -92,6 +92,7 @@
 7. Synchronous `parallelFor` and ECS `parallelEach` join their own bounded child batches cooperatively. Asynchronous captures require storage that outlives the complete task subtree; a local frame/scratch allocation must not escape its joined lifetime.
 8. ECS system update dependencies preserve registration order for every component read/write hazard. System preparation remains a serial phase before updates because preparation may change entity/component storage. UI updates explicitly target the main-thread queue.
 9. Native worker exceptions remain terminal. Inline failures unwind to terminal application handling; capture retirement and scope draining remain responsible for lifetime cleanup during that unwind.
+10. CPU task submission supports multiple producers from any thread, including external OS threads sharing one scope. Ready queues support multiple worker consumers under the scheduler mutex. Producer threads must stop before scope/scheduler destruction; a task wait does not close admission or join external producers.
 
 ## Project Bootstrap Invariants
 

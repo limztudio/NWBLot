@@ -12,6 +12,7 @@ target_sources(nwb_global_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/cpu_task_cleanup_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/cpu_task_fanin_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/cpu_task_submission_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_mpmc_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/scratch_reuse_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/scope_exit_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/sync_tests.cpp"

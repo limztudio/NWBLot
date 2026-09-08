@@ -22,6 +22,16 @@ Task cost and urgency are independent:
 
 Matching-class workers get first opportunity. When all matching-class workers are busy, other workers may take the work, preserving the shared CPU budget under uniform workloads. Cooperative joins can also cross cost preferences to guarantee progress. Cost is therefore a placement hint; main-thread execution is a hard constraint. Priority cannot preempt a running callback: choose bounded batches for expensive work. Small setup uploads use Light and larger uploads use Heavy; both keep Normal urgency. ECS systems can override `taskOptions()`, and query batches accept options explicitly.
 
+## Submission from any thread
+
+`CpuTaskScheduler::submit()` and `CpuTaskScope::submit()` accept concurrent calls from the engine main thread, scheduler callbacks, and external OS threads. Producers do not register with the scheduler or own a worker lane. Multiple producers may share one task scope.
+
+The ready queues are MPMC (multiple producer, multiple consumer), protected by the engine `Futex`. Task reservation, dependency publication, queue insertion, and consumer claims synchronize through the scheduler mutex. A ready task is claimed once; its callback runs after releasing the mutex. Callable construction and capture retirement also stay outside that mutex. The implementation is mutex-protected, not lock-free.
+
+Submission thread and execution target are independent. Worker tasks run on the configured workers or an eligible cooperative caller; `MainThread` tasks submitted anywhere still execute only on the scheduler owner. External waiters do not become extra worker consumers or borrow a GPU recording slot. With zero workers, the owner must pump or wait to execute submitted work.
+
+Publish the initialized scheduler/scope to producers using normal C++ synchronization. Keep the scope, scheduler, and referenced task data alive until producers have stopped and tasks have joined. A scope/scheduler `wait()` observes admitted work; it does not close admission or wait for an external producer that has not submitted yet. Dependency handles shared across producer threads also require normal caller synchronization. Expected cancellation or terminal shutdown can reject submissions with an invalid handle.
+
 ## Dependencies and structured completion
 
 `CpuTaskScope::submit()` returns a generation-tagged handle in the scheduler's single identity domain. Dependencies may cross system scopes. Foreign scheduler handles are rejected. Completed handles remain valid prerequisites after node reuse.
@@ -74,7 +84,9 @@ The subsequent GPU active-buffer-range change, `aec212c4`, integrated without CP
 
 Linux and Windows x64 were not built or run on this ARM64 host. Local test and benchmark artifacts are retained in the ignored build/artifact directories; the device-capability skips above are not counted as executed tests.
 
-After legacy code removal, the 11 selected Optimize engine, renderer, loader, tool, test, and Testbed targets rebuilt successfully. All 58 selected Optimize checks passed: seven primary suites, 50 source-policy checks and self-tests, and the fresh Testbed window capture (4.11 seconds). The global suite also rebuilt and passed in Debug and Final. The current global suite contains 169 tests, including migrated large fan-in, callable-construction, lvalue-invocation, and native-worker terminal-failure coverage; tests specific to the retired pool/job implementation were removed.
+After legacy code removal, the 11 selected Optimize engine, renderer, loader, tool, test, and Testbed targets rebuilt successfully. All 58 selected Optimize checks passed: seven primary suites, 50 source-policy checks and self-tests, and the fresh Testbed window capture (4.11 seconds). The global suite also rebuilt and passed in Debug and Final. At that step the global suite contained 169 tests, including migrated large fan-in, callable-construction, lvalue-invocation, and native-worker terminal-failure coverage; tests specific to the retired pool/job implementation were removed.
+
+The explicit MPMC verification adds two tests, bringing the global suite to 171 passing tests in Debug, Optimize, and Final. One combines the owner, four external producers, and four worker producers sharing scopes and direct submission, with 4,612 task completions checked exactly once. Worker producers consume a submitted task and its descendants before finishing their submission burst; cross-producer dependencies verify descendant completion visibility. The other checks 512 externally submitted main-thread callbacks and producer waits while only the owner pumps. All 100 Optimize repetitions passed (200 cases and 512,400 task callbacks), followed by all 50 source-policy checks and self-tests. The audit required no queue algorithm change: existing publication and claims already use the same mutex. After integrating GPU cleanup `b84e0445`, the affected Optimize graphics targets rebuilt, the task-graph suite passed, and native buffer-range checks passed four cases with one unavailable separate-transfer-queue capability skip.
 
 ## Measurement method
 

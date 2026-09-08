@@ -5,6 +5,7 @@
 #include "scheduler.h"
 
 #include <global/exception.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -104,19 +105,23 @@ void CpuTaskScheduler::validateWaitLocked(const TaskHandle handle, const CpuTask
 }
 
 void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
+    ScopeWait wait{ scope };
     {
         ScopedLock lock(m_mutex);
+        wait.identity = ++m_nextScopeWaitIdentity;
+        if(wait.identity == 0u)
+            TerminateInvariant();
         validateWaitLocked({}, &scope);
     }
     while(scope.m_pending.load(MemoryOrder::acquire) != 0u){
-        if(executeOne(isExecuting() || scope.m_allowCallerWork, &scope))
+        if(executeOne(isExecuting() || scope.m_allowCallerWork, &wait))
             continue;
         UniqueLock lock(m_mutex);
-        m_changed.wait(lock, [this, &scope](){
+        m_changed.wait(lock, [this, &scope, &wait](){
             validateWaitLocked({}, &scope);
             return
                 scope.m_pending.load(MemoryOrder::acquire) == 0u
-                || hasReadyLocked(currentWorkerAffinity(), isMainThread(), isExecuting() || scope.m_allowCallerWork, &scope)
+                || hasReadyLocked(currentWorkerAffinity(), isMainThread(), isExecuting() || scope.m_allowCallerWork, &wait)
             ;
         });
     }

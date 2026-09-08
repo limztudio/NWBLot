@@ -137,6 +137,11 @@ private:
         u32 tail = TaskHandle::s_InvalidIndex;
     };
 
+    struct ScopeWait{
+        CpuTaskScope& scope;
+        u64 identity = 0u;
+    };
+
     struct Execution{
         CpuTaskScheduler& scheduler;
         TaskHandle task;
@@ -232,21 +237,22 @@ private:
         CpuAffinity::Enum affinity,
         bool mainThread,
         bool cooperative,
-        CpuTaskScope* preferredScope = nullptr
+        const ScopeWait* preferredScope = nullptr
     )noexcept;
     [[nodiscard]] bool hasReadyLocked(
         CpuAffinity::Enum affinity,
         bool mainThread,
         bool cooperative,
-        CpuTaskScope* preferredScope = nullptr
+        const ScopeWait* preferredScope = nullptr
     )noexcept;
-    [[nodiscard]] bool contributesToScopeLocked(u32 index, const CpuTaskScope& scope)noexcept;
+    void invalidateScopeSearchLocked()noexcept;
+    [[nodiscard]] bool contributesToScopeLocked(u32 index, const ScopeWait& wait)noexcept;
     [[nodiscard]] bool queueEligible(usize queue, CpuAffinity::Enum affinity, bool mainThread, bool cooperative)const noexcept;
     void execute(TaskHandle handle, usize workerIndex, CpuAffinity::Enum affinity, bool cooperative);
     void finishBody(TaskHandle handle, bool succeeded)noexcept;
     void retire(TaskHandle handle)noexcept;
     void workerLoop(const StopToken& stop, usize workerIndex);
-    [[nodiscard]] bool executeOne(bool cooperative, CpuTaskScope* preferredScope = nullptr);
+    [[nodiscard]] bool executeOne(bool cooperative, const ScopeWait* preferredScope = nullptr);
     void drainTask(TaskHandle handle)noexcept;
     void validateWaitLocked(TaskHandle handle, const CpuTaskScope* scope);
     void waitScope(CpuTaskScope& scope);
@@ -267,6 +273,7 @@ private:
     Vector<u32, Alloc::GlobalArena> m_workerDepth;
     Vector<u32, Alloc::GlobalArena> m_searchStack;
     Vector<u64, Alloc::GlobalArena> m_searchVisits;
+    Vector<u64, Alloc::GlobalArena> m_scopeNegativeVisits;
     Vector<TaskHandle, Alloc::GlobalArena> m_canceledHandles;
     ReadyQueue m_ready[s_QueueCount];
     u32 m_readyWorkerCosts[3u]{};
@@ -276,6 +283,9 @@ private:
     u32 m_busyPerformance = 0u;
     u32 m_busyEfficiency = 0u;
     u64 m_searchGeneration = 0u;
+    u64 m_nextScopeWaitIdentity = 0u;
+    u64 m_scopeSearchWaitIdentity = 0u;
+    u64 m_scopeSearchGeneration = 1u;
     u64 m_dispatchCount = 0u;
     mutable Futex m_mutex;
     ConditionVariableAny m_changed;

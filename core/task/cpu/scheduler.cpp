@@ -82,6 +82,7 @@ CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     , m_workerDepth(m_arena)
     , m_searchStack(m_arena)
     , m_searchVisits(m_arena)
+    , m_scopeNegativeVisits(m_arena)
     , m_canceledHandles(m_arena)
     , m_workers(m_arena)
 {
@@ -166,6 +167,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::reserveTaskLocked(){
         index = static_cast<u32>(m_nodes.size());
         ContainerDetail::ReserveGrowingCapacity(m_searchStack, m_nodes.size() + 1u);
         m_searchVisits.resize(m_nodes.size() + 1u, 0u);
+        m_scopeNegativeVisits.resize(m_nodes.size() + 1u, 0u);
         m_nodes.emplace_back(m_arena);
     }
     else
@@ -289,6 +291,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
         m_statistics.peakOutstandingTasks = Max(m_statistics.peakOutstandingTasks, m_outstanding);
         if(scope)
             scope->m_pending.fetch_add(1u, MemoryOrder::release);
+        invalidateScopeSearchLocked();
         node->state = TaskState::Waiting;
         if(node->dependencies == 0u)
             enqueueLocked(handle.index);
@@ -338,7 +341,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(
     const CpuAffinity::Enum affinity,
     const bool mainThread,
     const bool cooperative,
-    CpuTaskScope* const preferredScope)noexcept{
+    const ScopeWait* const preferredScope)noexcept{
     // Periodically admit background and normal work even while critical producers keep publishing.
     const u64 dispatch = m_dispatchCount;
     const usize firstPriority = dispatch % 32u == 31u ? 2u : (dispatch % 8u == 7u ? 1u : 0u);
@@ -384,7 +387,7 @@ bool CpuTaskScheduler::hasReadyLocked(
     const CpuAffinity::Enum affinity,
     const bool mainThread,
     const bool cooperative,
-    CpuTaskScope* const preferredScope)noexcept{
+    const ScopeWait* const preferredScope)noexcept{
     for(usize index = 0u; index < s_QueueCount; ++index){
         if(!queueEligible(index, affinity, mainThread, cooperative))
             continue;
@@ -396,7 +399,23 @@ bool CpuTaskScheduler::hasReadyLocked(
     return false;
 }
 
-bool CpuTaskScheduler::contributesToScopeLocked(const u32 index, const CpuTaskScope& scope)noexcept{
+void CpuTaskScheduler::invalidateScopeSearchLocked()noexcept{
+    if(++m_scopeSearchGeneration != 0u)
+        return;
+    for(u64& visit : m_scopeNegativeVisits)
+        visit = 0u;
+    ++m_scopeSearchGeneration;
+}
+
+bool CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& wait)noexcept{
+    if(m_nodes[index].scope == &wait.scope)
+        return true;
+    if(m_scopeSearchWaitIdentity != wait.identity){
+        m_scopeSearchWaitIdentity = wait.identity;
+        invalidateScopeSearchLocked();
+    }
+    if(m_scopeNegativeVisits[index] == m_scopeSearchGeneration)
+        return false;
     if(++m_searchGeneration == 0u){
         for(u64& visit : m_searchVisits)
             visit = 0u;
@@ -407,10 +426,13 @@ bool CpuTaskScheduler::contributesToScopeLocked(const u32 index, const CpuTaskSc
     m_searchVisits[index] = m_searchGeneration;
     for(usize cursor = 0u; cursor < m_searchStack.size(); ++cursor){
         const TaskNode& node = m_nodes[m_searchStack[cursor]];
-        if(node.scope == &scope)
+        if(node.scope == &wait.scope)
             return true;
         const auto visit = [this](const TaskHandle handle){
-            if(resolveLocked(handle) && m_searchVisits[handle.index] != m_searchGeneration){
+            if(
+                resolveLocked(handle) && m_searchVisits[handle.index] != m_searchGeneration
+                && m_scopeNegativeVisits[handle.index] != m_scopeSearchGeneration
+            ){
                 m_searchVisits[handle.index] = m_searchGeneration;
                 m_searchStack.push_back(handle.index);
             }
@@ -419,6 +441,10 @@ bool CpuTaskScheduler::contributesToScopeLocked(const u32 index, const CpuTaskSc
         for(const TaskHandle dependent : node.dependents)
             visit(dependent);
     }
+    // Only exhausted searches are reusable. Removing nodes/edges preserves negatives; publication invalidates them.
+    // The wait identity avoids retaining a scope pointer after its owner returns or destroys that scope.
+    for(const u32 visited : m_searchStack)
+        m_scopeNegativeVisits[visited] = m_scopeSearchGeneration;
     return false;
 }
 
@@ -613,7 +639,7 @@ void CpuTaskScheduler::workerLoop(const StopToken& stop, const usize workerIndex
     }
 }
 
-bool CpuTaskScheduler::executeOne(const bool cooperative, CpuTaskScope* const preferredScope){
+bool CpuTaskScheduler::executeOne(const bool cooperative, const ScopeWait* const preferredScope){
     TaskHandle handle;
     const usize workerIndex = currentWorkerIndex();
     const CpuAffinity::Enum affinity = currentWorkerAffinity();

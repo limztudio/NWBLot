@@ -141,3 +141,11 @@ Seven opt-in `CpuTaskProfile.DISABLED_*` cases record raw samples and validate d
 The one-worker nested tail varied in the first combined run. A focused six-epoch ABBA confirmation (96 samples/design) measured median 100.751 → 91.421 µs and p95 131.455 → 121.088 µs. Unrelated-scope and cancellation-history controls stayed similar; their optimizations are later steps. Raw XML, summaries, and the baseline binary are retained under ignored `__cmake/cpu_scheduler_followup/step2/`.
 
 Validation includes Debug and Optimize CPU suites, an inline exception/descendant-retirement case, caller/worker identity, external producer routing, cancellation, nested ranges, and all 52 source-policy checks/self-tests. Physical heterogeneous-class cases skip on this homogeneous host.
+
+### Step 3: reuse negative scope searches
+
+A join caches only exhausted searches that prove a node cannot contribute to its scope. The cache stores a unique wait identity and per-node generation stamps, never a persistent scope pointer. Successful single-task and range publication invalidate the stamps. Retirement preserves them because it only removes graph paths. Direct scope membership remains a constant-time check; nested and concurrent joins switch identities before using cached results.
+
+The zero-worker scope benchmark (128 unrelated roots feeding a shared 64-task chain ahead of 32 joined tasks) improved from median 2865.730 → 29.494 µs and p95 2898.091 → 32.984 µs. This is a deliberately dependency-heavy microbenchmark. Three ABBA epochs produced 48 samples per design; output/lifetime checks all passed. Other workload medians remained similar or improved, while some worker-based p95 values varied between runs. Raw results and the baseline binary are under ignored `__cmake/cpu_scheduler_followup/step3/`.
+
+Debug/Optimize CPU suites and all 52 policy checks passed. Eight wait cases passed 50 repetitions (400 cases), including a newly published prerequisite, recycled node slots, nested scope identities, and concurrent waiters traversing unscoped prerequisites.

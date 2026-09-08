@@ -98,6 +98,7 @@ void CpuTaskScheduler::parallelRange(
                 enqueueLocked(index);
             index = next;
         }
+        invalidateScopeSearchLocked();
         chunks.m_pending.fetch_add(chunkCount, MemoryOrder::release);
         m_outstanding = outstanding;
         m_statistics.peakOutstandingTasks = Max(m_statistics.peakOutstandingTasks, m_outstanding);

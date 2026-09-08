@@ -191,16 +191,14 @@ namespace GpuTaskGraphCompilerDetail{
             // work, while newly introduced texture subresources or buffer bytes still receive graph seeds and
             // transitions. Acceleration structures retain their whole-resource path.
             bool alreadyPlannedByTask = false;
-            if(resource.type != GpuGraphResourceType::Texture && resource.type != GpuGraphResourceType::Buffer){
+            if(resource.type == GpuGraphResourceType::AccelStruct){
                 for(usize previousUseIndex = 0u; previousUseIndex < useIndex; ++previousUseIndex){
                     const GpuTaskResourceUse& previousUse = task.resourceUses[previousUseIndex];
                     if(previousUse.resource != use.resource)
                         continue;
 
-                    if(RangesOverlap(resource, previousUse.range, plannedRange)){
-                        alreadyPlannedByTask = true;
-                        break;
-                    }
+                    alreadyPlannedByTask = true;
+                    break;
                 }
             }
             if(alreadyPlannedByTask){
@@ -510,13 +508,12 @@ namespace GpuTaskGraphCompilerDetail{
                 continue;
             }
 
+            NWB_ASSERT(resource.type == GpuGraphResourceType::AccelStruct);
+            NWB_ASSERT(resource.initialOwnerHandoffSourceCount == 0u);
             const TrackedCompiledResourceState* previousState = nullptr;
             for(usize stateIndex = trackedResourceStates.size(); stateIndex > 0u; --stateIndex){
                 const TrackedCompiledResourceState& candidate = trackedResourceStates[stateIndex - 1u];
-                if(
-                    candidate.resource == use.resource
-                    && RangesOverlap(resource, candidate.range, use.range)
-                ){
+                if(candidate.resource == use.resource){
                     previousState = &candidate;
                     break;
                 }
@@ -535,13 +532,8 @@ namespace GpuTaskGraphCompilerDetail{
             // state must survive into the packet snapshot.
             const bool hasInitialOwnerStateSeed =
                 !previousState
-                && (
-                    resource.initialOwnerHandoffSourceCount != 0u
-                    || (
-                        resource.initialOwnerReleaseDestinationQueue.valid()
-                        && resource.initialOwnerStateSource != nullptr
-                    )
-                )
+                && resource.initialOwnerReleaseDestinationQueue.valid()
+                && resource.initialOwnerStateSource != nullptr
             ;
             const bool materializesGraphInitialState =
                 !previousState
@@ -563,48 +555,7 @@ namespace GpuTaskGraphCompilerDetail{
                 // be this task's broad queue class. Its fixed release destination remains authoritative.
                 return false;
             }
-            if(!previousState && resource.initialOwnerHandoffSourceCount != 0u){
-                const GpuTaskGraphInitialOwnerHandoffSourceView* const source = FindInitialOwnerHandoffSource(
-                    graph,
-                    resource,
-                    use.range,
-                    compiledTask->queue
-                );
-                if(!source)
-                    return false;
-                const GpuCompiledBarrierType::Enum acquireType = OwnershipAcquireBarrierType(resource.type);
-                if(acquireType >= GpuCompiledBarrierType::kCount)
-                    return false;
-                // The packet recorder imports the exact immutable source range before prologue lowering. This marker
-                // keeps one source owner and one completion bound to every first consumer range, including a
-                // same-physical-queue source whose timeline wait still proves the external producer accepted.
-                if(!AppendCompiledOwnershipTransfer(
-                    plan,
-                    resource,
-                    use.range,
-                    GpuTaskId{},
-                    taskID,
-                    source->sourceQueue,
-                    compiledTask->queue,
-                    GpuOwnershipTransferRoute::ExternalImport
-                ))
-                    return false;
-                compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{
-                    .resource = use.resource,
-                    .range = use.range,
-                    .before = before,
-                    .after = before,
-                    .sourceQueue = source->sourceQueue,
-                    .destinationQueue = compiledTask->queue,
-                    .type = acquireType,
-                    .isInitialOwnerHandoff = true,
-                });
-                initialOwnershipDependencies.push_back(GpuTaskExternalDependencyEdge{
-                    .completion = source->completion,
-                    .consumer = taskID,
-                });
-            }
-            else if(!previousState && resource.initialOwnerQueue.valid() && resource.initialOwnerQueue != compiledTask->queue){
+            if(!previousState && resource.initialOwnerQueue.valid() && resource.initialOwnerQueue != compiledTask->queue){
                 if(
                     !resource.initialOwnerReleaseDestinationQueue.valid()
                     || resource.initialOwnerReleaseDestinationQueue != compiledTask->queue
@@ -656,14 +607,7 @@ namespace GpuTaskGraphCompilerDetail{
             const bool needsUavDependency = needsSameStateDependency
                 && ResourceStates::HasUnorderedAccess(before)
             ;
-            if(
-                previousState
-                && (
-                    resource.type == GpuGraphResourceType::Texture
-                    || resource.type == GpuGraphResourceType::Buffer
-                    || resource.type == GpuGraphResourceType::AccelStruct
-                )
-            ){
+            if(previousState){
                 const GpuSubmissionPacketId sourcePacket = FindCompiledPacketForTask(
                     compiledPlan,
                     previousState->task

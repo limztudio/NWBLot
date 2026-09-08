@@ -151,7 +151,7 @@ struct InitialOwnershipCompletionRequirement{
     case GpuGraphResourceType::Texture:
         if(
             !ResolveTextureRangeForPlanning(plan.graph.textureForResource(resource.id), range, transferRange)
-            || !IsValidTextureRange(transferRange.textureSubresources)
+            || !transferRange.textureSubresources.hasExtent()
         )
             return false;
         transferRange.bufferRange = s_EntireBuffer;

@@ -233,13 +233,11 @@ struct GpuTaskQueueScoringData{
 
 [[nodiscard]] bool IsReadAccess(GpuTaskResourceAccess::Enum access)noexcept;
 [[nodiscard]] bool IsWriteAccess(GpuTaskResourceAccess::Enum access)noexcept;
-[[nodiscard]] bool IsValidTextureRange(const TextureSubresourceSet& range)noexcept;
 [[nodiscard]] bool ResolveTextureRangeForPlanning(
     const Texture* texture,
     const GpuTaskResourceRange& range,
     GpuTaskResourceRange& outRange
 )noexcept;
-[[nodiscard]] bool IsValidBufferRange(const BufferRange& range)noexcept;
 [[nodiscard]] bool ResolveResourceRangeForPlanning(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphResourceView& resource,

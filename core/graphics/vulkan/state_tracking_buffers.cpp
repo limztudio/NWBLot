@@ -71,8 +71,36 @@ ResourceStates::Mask StateTracker::getBufferState(Buffer* buffer, const BufferRa
     if(permanent != m_permanentBufferStates.end())
         return permanent.value().state;
 
-    ResourceStates::Mask state = ResourceStates::Unknown;
-    return getTransientBufferState(*buffer, state, range) ? state : ResourceStates::Unknown;
+    const BufferRange resolvedRange = range.resolve(buffer->m_creationDesc);
+    const ResourceStates::Mask fallbackState = buffer->isRetainedStateKnown() ? buffer->m_creationDesc.initialState : ResourceStates::Unknown;
+    const auto found = m_bufferStates.find(buffer);
+    if(found == m_bufferStates.end())
+        return fallbackState;
+
+    ResourceStates::Mask resolvedState = ResourceStates::Unknown;
+    bool first = true;
+    const auto accumulate = [&](const ResourceStates::Mask state){
+        if(first){
+            resolvedState = state;
+            first = false;
+            return true;
+        }
+        return state == resolvedState;
+    };
+    u64 cursor = resolvedRange.byteOffset;
+    for(const BufferRangeState& entry : found.value()){
+        const BufferRange overlap = entry.range.intersect(resolvedRange);
+        if(!overlap.hasExtent())
+            continue;
+        if(overlap.byteOffset > cursor && !accumulate(fallbackState))
+            return ResourceStates::Unknown;
+        if(!accumulate(entry.state))
+            return ResourceStates::Unknown;
+        cursor = overlap.end();
+    }
+    if(cursor < resolvedRange.end() && !accumulate(fallbackState))
+        return ResourceStates::Unknown;
+    return resolvedState;
 }
 
 bool StateTracker::hasExplicitBufferState(Buffer* buffer, const BufferRange range, const bool requireKnown)const{
@@ -104,50 +132,6 @@ void StateTracker::beginTrackingBuffer(Buffer* buffer, ResourceStates::Mask stat
     if(!buffer || m_permanentBufferStates.find(buffer) != m_permanentBufferStates.end())
         return;
     beginTrackingTransientBuffer(*buffer, state, range);
-}
-
-bool StateTracker::getTransientBufferState(Buffer& buffer, ResourceStates::Mask& outState, const BufferRange range)const{
-    outState = ResourceStates::Unknown;
-    if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer.m_creationDesc))
-        return false;
-    const BufferRange resolvedRange = range.resolve(buffer.m_creationDesc);
-    if(!resolvedRange.hasExtent())
-        return false;
-
-    const ResourceStates::Mask fallbackState = buffer.isRetainedStateKnown() ? buffer.m_creationDesc.initialState : ResourceStates::Unknown;
-    const auto found = m_bufferStates.find(&buffer);
-    if(found == m_bufferStates.end()){
-        outState = fallbackState;
-        return true;
-    }
-
-    bool first = true;
-    const auto accumulate = [&](const ResourceStates::Mask state){
-        if(first){
-            outState = state;
-            first = false;
-            return true;
-        }
-        if(state != outState){
-            outState = ResourceStates::Unknown;
-            return false;
-        }
-        return true;
-    };
-    u64 cursor = resolvedRange.byteOffset;
-    for(const BufferRangeState& entry : found.value()){
-        const BufferRange overlap = entry.range.intersect(resolvedRange);
-        if(!overlap.hasExtent())
-            continue;
-        if(overlap.byteOffset > cursor && !accumulate(fallbackState))
-            return true;
-        if(!accumulate(entry.state))
-            return true;
-        cursor = overlap.end();
-    }
-    if(cursor < resolvedRange.end() && !accumulate(fallbackState))
-        return true;
-    return true;
 }
 
 void StateTracker::beginTrackingTransientBuffer(

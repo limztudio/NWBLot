@@ -180,10 +180,6 @@ void CommandList::dispatchIndirect(u32 offsetBytes){
     }
 
     auto* buffer = m_currentComputeState.indirectParams;
-    if(!buffer->m_creationDesc.isDrawIndirectArgs){
-        rejectCommandRecording(NWB_TEXT("dispatch indirect"), NWB_TEXT("buffer was not created with indirect-argument usage"));
-        return;
-    }
     if((offsetBytes & s_BufferAlignmentMask) != 0u){
         rejectCommandRecording(NWB_TEXT("dispatch indirect"), NWB_TEXT("indirect argument offset is not 4-byte aligned"));
         return;
@@ -202,7 +198,6 @@ void CommandList::dispatchIndirect(u32 offsetBytes){
         return;
 
     m_context.deviceDispatch.vkCmdDispatchIndirect(m_currentCmdBuf->m_cmdBuf, buffer->m_buffer, offsetBytes);
-    retainResource(buffer);
 }
 
 

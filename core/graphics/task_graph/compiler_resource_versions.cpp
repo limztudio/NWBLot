@@ -22,10 +22,6 @@ namespace __hidden_gpu_task_resource_versions{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 BufferRangeEnd(const BufferRange& range)noexcept{
-    return range.byteSize == BufferRange::AllBytes ? Limit<u64>::s_Max : range.byteOffset + range.byteSize;
-}
-
 [[nodiscard]] static bool ResolvePhysicalRange(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphResourceView& resource,
@@ -39,13 +35,13 @@ namespace __hidden_gpu_task_resource_versions{
     case GpuGraphResourceType::Texture:
         if(!ResolveTextureRangeForPlanning(graph.textureForResource(resource.id), range, outRange))
             return false;
-        return IsValidTextureRange(outRange.textureSubresources);
+        return outRange.textureSubresources.hasExtent();
     case GpuGraphResourceType::Buffer:
-        if(!IsValidBufferRange(range.bufferRange))
+        if(!range.bufferRange.hasExtent())
             return false;
         if(const Buffer* const buffer = graph.bufferForResource(resource.id))
             outRange.bufferRange = range.bufferRange.resolve(buffer->getCreationDescription());
-        return IsValidBufferRange(outRange.bufferRange);
+        return outRange.bufferRange.hasExtent();
     case GpuGraphResourceType::AccelStruct:
     case GpuGraphResourceType::HazardDomain:
         return true;
@@ -87,8 +83,6 @@ namespace __hidden_gpu_task_resource_versions{
     case GpuGraphResourceType::Buffer:
     {
         const BufferRange& requested = range.bufferRange;
-        if(BufferRangeEnd(requested) <= requested.byteOffset)
-            return false;
         if(!graph.bufferForResource(resource.id))
             return true;
 
@@ -121,11 +115,8 @@ namespace __hidden_gpu_task_resource_versions{
 
     switch(resource.type){
     case GpuGraphResourceType::Texture:
-        return GpuTaskGraphCompilerDetail::RangeContains(resource, resolvedOuter, resolvedInner);
     case GpuGraphResourceType::Buffer:
-        return resolvedOuter.bufferRange.byteOffset <= resolvedInner.bufferRange.byteOffset
-            && BufferRangeEnd(resolvedOuter.bufferRange) >= BufferRangeEnd(resolvedInner.bufferRange)
-        ;
+        return GpuTaskGraphCompilerDetail::RangeContains(resource, resolvedOuter, resolvedInner);
     case GpuGraphResourceType::AccelStruct:
     case GpuGraphResourceType::HazardDomain:
         return true;
@@ -150,11 +141,8 @@ namespace __hidden_gpu_task_resource_versions{
 
     switch(resource.type){
     case GpuGraphResourceType::Texture:
-        return GpuTaskGraphCompilerDetail::RangesOverlap(resource, resolvedPhysical, resolvedVersion);
     case GpuGraphResourceType::Buffer:
-        return resolvedPhysical.bufferRange.byteOffset < BufferRangeEnd(resolvedVersion.bufferRange)
-            && resolvedVersion.bufferRange.byteOffset < BufferRangeEnd(resolvedPhysical.bufferRange)
-        ;
+        return GpuTaskGraphCompilerDetail::RangesOverlap(resource, resolvedPhysical, resolvedVersion);
     case GpuGraphResourceType::AccelStruct:
     case GpuGraphResourceType::HazardDomain:
         return true;

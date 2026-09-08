@@ -270,11 +270,11 @@ bool GpuTaskGraphCompiler::analyze(
                     && use.requiredState == ResourceStates::Unknown
                 ) || (
                     resource.type == GpuGraphResourceType::Texture
-                    && !IsValidTextureRange(use.range.textureSubresources)
+                    && !use.range.textureSubresources.hasExtent()
                 )
                 || (
                     resource.type == GpuGraphResourceType::Buffer
-                    && !IsValidBufferRange(use.range.bufferRange)
+                    && !use.range.bufferRange.hasExtent()
                 )
             )
                 return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, task.id, {}, use.resource);

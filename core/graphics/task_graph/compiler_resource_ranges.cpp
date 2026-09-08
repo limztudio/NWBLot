@@ -30,10 +30,6 @@ namespace GpuTaskGraphCompilerDetail{
     return access == GpuTaskResourceAccess::Write || access == GpuTaskResourceAccess::ReadWrite;
 }
 
-[[nodiscard]] bool IsValidTextureRange(const TextureSubresourceSet& range)noexcept{
-    return range.hasExtent();
-}
-
 // Typed imports retain the physical Texture descriptor, so compile-time state planning must use the same finite
 // subresource extent as native recording. Metadata-only texture declarations intentionally remain symbolic: their
 // dimensions are not known until a later backend import.
@@ -50,11 +46,7 @@ namespace GpuTaskGraphCompilerDetail{
         texture->getCreationDescription(),
         TextureSubresourceMipResolve::Range
     );
-    return IsValidTextureRange(outRange.textureSubresources);
-}
-
-[[nodiscard]] bool IsValidBufferRange(const BufferRange& range)noexcept{
-    return range.hasExtent();
+    return outRange.textureSubresources.hasExtent();
 }
 
 [[nodiscard]] bool ResolveResourceRangeForPlanning(

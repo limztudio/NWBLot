@@ -137,77 +137,6 @@ CpuTaskScheduler::~CpuTaskScheduler()noexcept(false){
 }
 
 
-void CpuTaskScheduler::wait(const TaskHandle handle){
-    if(!handle.valid())
-        return;
-    {
-        ScopedLock lock(m_mutex);
-        if(handle.domainIdentity != m_domainIdentity)
-            throw RuntimeException("CPU task wait belongs to another scheduler");
-        if(++m_searchGeneration == 0u){
-            for(u64& visit : m_searchVisits)
-                visit = 0u;
-            ++m_searchGeneration;
-        }
-        m_searchStack.clear();
-        const auto visit = [this](const TaskHandle candidate){
-            if(resolveLocked(candidate) && m_searchVisits[candidate.index] != m_searchGeneration){
-                m_searchVisits[candidate.index] = m_searchGeneration;
-                m_searchStack.push_back(candidate.index);
-            }
-        };
-        for(Execution* current = s_execution; current; current = current->previous){
-            if(&current->scheduler == this)
-                visit(current->task);
-        }
-        // Dependent tasks and structured parents cannot complete until the current execution finishes.
-        for(usize cursor = 0u; cursor < m_searchStack.size(); ++cursor){
-            const u32 index = m_searchStack[cursor];
-            const TaskNode& node = m_nodes[index];
-            if(index == handle.index && node.generation == handle.generation)
-                throw RuntimeException("CPU task cannot wait for itself, an ancestor, or dependent work");
-            visit(node.parent);
-            for(const TaskHandle dependent : node.dependents)
-                visit(dependent);
-        }
-    }
-    while(!isComplete(handle)){
-        if(executeOne(isExecuting()))
-            continue;
-        UniqueLock lock(m_mutex);
-        m_changed.wait(lock, [this, handle](){
-            return !resolveLocked(handle) || hasReadyLocked(currentWorkerAffinity(), isMainThread(), isExecuting());
-        });
-    }
-}
-
-void CpuTaskScheduler::wait(){
-    if(isExecuting())
-        throw RuntimeException("CPU task cannot wait for its entire scheduler");
-    for(;;){
-        {
-            ScopedLock lock(m_mutex);
-            if(m_outstanding == 0u)
-                return;
-        }
-        if(executeOne(false))
-            continue;
-        UniqueLock lock(m_mutex);
-        m_changed.wait(lock, [this](){
-            return m_outstanding == 0u || hasReadyLocked(CpuAffinity::Any, isMainThread(), false);
-        });
-    }
-}
-
-void CpuTaskScheduler::drain()noexcept{
-    {
-        ScopedLock lock(m_mutex);
-        m_aborting = true;
-    }
-    notifyProgress();
-    wait();
-}
-
 void CpuTaskScheduler::pumpMainThread(){
     if(!isMainThread())
         throw RuntimeException("CPU main-thread tasks require the scheduler owner thread");
@@ -689,42 +618,6 @@ bool CpuTaskScheduler::executeOne(const bool cooperative, CpuTaskScope* const pr
         return false;
     execute(handle, workerIndex, affinity, cooperative);
     return true;
-}
-
-void CpuTaskScheduler::drainTask(const TaskHandle handle)noexcept{
-    {
-        ScopedLock lock(m_mutex);
-        m_aborting = true;
-    }
-    notifyProgress();
-    wait(handle);
-}
-
-void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
-    {
-        ScopedLock lock(m_mutex);
-        for(Execution* current = s_execution; current; current = current->previous){
-            if(&current->scheduler != this)
-                continue;
-            TaskHandle ancestor = current->task;
-            while(TaskNode* node = resolveLocked(ancestor)){
-                if(node->scope == &scope)
-                    throw RuntimeException("CPU task cannot join a scope that contains itself");
-                ancestor = node->parent;
-            }
-        }
-    }
-    while(scope.m_pending.load(MemoryOrder::acquire) != 0u){
-        if(executeOne(isExecuting() || scope.m_allowCallerWork, &scope))
-            continue;
-        UniqueLock lock(m_mutex);
-        m_changed.wait(lock, [this, &scope](){
-            return
-                scope.m_pending.load(MemoryOrder::acquire) == 0u
-                || hasReadyLocked(currentWorkerAffinity(), isMainThread(), isExecuting() || scope.m_allowCallerWork, &scope)
-            ;
-        });
-    }
 }
 
 bool CpuTaskScheduler::isMainThread()const noexcept{

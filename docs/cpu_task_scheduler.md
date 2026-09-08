@@ -60,7 +60,7 @@ ECS preparation remains a serial caller phase because existing preparation can c
 
 Graphics owns a scope for async resource setup and resource-lifetime joins. The loader owns a project scope and joins it before project callbacks are unloaded. Normal world clearing joins only its world scope. GPU recording uses the shared CPU scheduler while retaining worker-local command storage, serial command-IR capture, and the current skinning preparation/submission ordering.
 
-`Core::GpuTaskScheduler`, declared in `core/task/gpu/scheduler.h`, coordinates GPU graph recording, submission, and recovery. It remains in the graphics domain alongside the graph compiler and recorder. `GraphicsRuntime` owns the separate device, resource, and presentation lifecycle and borrows the frame-owned CPU/GPU schedulers. The GPU graph continues to own resource barriers, physical queues, acceptance, rollback, and device-completion tokens. CPU submission completion does not imply GPU completion. Resource destruction still requires its existing GPU join in addition to CPU scope retirement.
+`Core::GpuTaskScheduler`, declared in `core/task/gpu/scheduler.h`, coordinates GPU graph recording, submission, and recovery. It lives in the GPU task domain alongside the graph compiler and recorder. `GraphicsRuntime` owns the separate device, resource, and presentation lifecycle and borrows the frame-owned CPU/GPU schedulers. The GPU graph continues to own resource barriers, physical queues, acceptance, rollback, and device-completion tokens. CPU submission completion does not imply GPU completion. Resource destruction still requires its existing GPU join in addition to CPU scope retirement.
 
 ## Verification and delivery steps
 
@@ -115,3 +115,11 @@ The final five-case run validated all 440 warmup and measured results against th
 The simultaneous and nested cases reduce median elapsed time by about 24% and 54%. Coarse work is similar on this host. Individual tiny submissions still cost more than the legacy pool, and the legacy specialized range remains faster for the tiny batched case. The shared scheduler adds dependency, structured-lifetime, cancellation, and heterogeneous placement accounting; it does not make every scheduling pattern faster. Use bounded batches or `parallelFor` for fine-grained collections. Batching the tiny shared workload reduced elapsed time from 5.61 ms to 0.261 ms, about 21.5 times faster than its individual submissions.
 
 The initial shared implementation took 30.75 ms for the tiny queue case because task transitions woke every worker. Per-class notifications and ready-work/parked-worker gating reduced that to 5.61 ms. An independent confirmation reproduced the final coarse-range result; the earlier 2.9 ms coarse measurement from another notification variant is not used as a claim for the final implementation. Local raw runs, checksums, placement records, build metadata, and historical variants are retained under the ignored `global_test_artifacts/cpu_scheduler_profile/` directory.
+
+## CPU scheduler follow-up improvements
+
+### Step 1: scope wait cycle rejection
+
+Scope joins now reject direct and transitive dependents of the current execution or its structured ancestors, matching task-handle joins. Cooperative work and wakeups recheck the graph so later dependency publication cannot silently introduce this wait cycle. Wait and cycle logic live together in `core/task/cpu/scheduler_wait.cpp`. Regression coverage includes direct, transitive, newly published dependencies, and valid independent joins.
+
+Validation: the direct-cycle regression timed out against the original implementation. All four new wait cases, the full Linux Debug CPU task suite, and all 52 source-policy checks/self-tests passed after the fix.

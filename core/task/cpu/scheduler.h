@@ -245,6 +245,7 @@ private:
     void workerLoop(const StopToken& stop, usize workerIndex);
     [[nodiscard]] bool executeOne(bool cooperative, CpuTaskScope* preferredScope = nullptr);
     void drainTask(TaskHandle handle)noexcept;
+    void validateWaitLocked(TaskHandle handle, const CpuTaskScope* scope);
     void waitScope(CpuTaskScope& scope);
     [[nodiscard]] bool isMainThread()const noexcept;
     [[nodiscard]] bool isExecuting()const noexcept{ return s_execution && &s_execution->scheduler == this; }

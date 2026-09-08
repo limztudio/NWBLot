@@ -132,8 +132,10 @@ public:
         using is_equal_type = typename segment_table_allocator_traits::is_always_equal;
 
         if (this != &other) {
-            // NWB: release destination segments through their original allocator before propagation.
-            if (pocma_type::value && my_segment_table_allocator != other.my_segment_table_allocator) {
+            // NWB: always release destination segments through the original allocator before
+            // POCMA. internal_move() also clear()s, but only after the allocator has already been
+            // replaced, so a skipped pre-clear frees destination storage with the source arena.
+            if (pocma_type::value) {
                 clear();
             }
             move_assign_allocators(my_segment_table_allocator, other.my_segment_table_allocator);

@@ -15,6 +15,7 @@
 #include <core/common/module.h>
 #include <core/alloc/general.h>
 #include <core/task/cpu/scheduler.h>
+#include <core/task/gpu/scheduler.h>
 #include <core/graphics/api.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/vulkan/backend.h>

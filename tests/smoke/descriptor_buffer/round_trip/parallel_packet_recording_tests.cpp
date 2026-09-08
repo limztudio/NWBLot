@@ -232,7 +232,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderReportsWorkerRoutingW
     EXPECT_EQ(views.compiled.packet(firstPacket).plan->recordingFrontier, 0u);
     EXPECT_EQ(views.compiled.packet(secondPacket).plan->recordingFrontier, 0u);
 
-    Alloc::ThreadPool recordingWorkers(2u, CpuAffinity::Any);
+    Alloc::CpuTaskScheduler recordingWorkers(2u);
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
     ASSERT_TRUE(recorder.recordPacketRangeInReadyFrontiers(
@@ -478,7 +478,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRecordsExplicitGpuDep
     EXPECT_EQ(views.compiled.packet(firstPacket).plan->recordingFrontier, 0u);
     EXPECT_EQ(views.compiled.packet(secondPacket).plan->recordingFrontier, 0u);
 
-    Alloc::ThreadPool recordingWorkers(1u, CpuAffinity::Any);
+    Alloc::CpuTaskScheduler recordingWorkers(1u);
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
     ASSERT_TRUE(recorder.recordPacketRangeInReadyFrontiers(
@@ -648,7 +648,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecordingOverlapCacheHandlesO
     ASSERT_EQ(views.compiled.packet(firstShortPacket).plan->recordingFrontier, 0u);
     ASSERT_EQ(views.compiled.packet(secondShortPacket).plan->recordingFrontier, 0u);
 
-    Alloc::ThreadPool recordingWorkers(1u, CpuAffinity::Any);
+    Alloc::CpuTaskScheduler recordingWorkers(1u);
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
     ASSERT_TRUE(recorder.recordPacketRangeInReadyFrontiers(
@@ -800,7 +800,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecordingOverlapCacheKeepsPub
     ASSERT_EQ(views.compiled.packet(secondPacket).plan->recordingFrontier, 0u);
     ASSERT_EQ(views.compiled.packet(expectedFailedPacket).plan->recordingFrontier, 0u);
 
-    Alloc::ThreadPool recordingWorkers(2u, CpuAffinity::Any);
+    Alloc::CpuTaskScheduler recordingWorkers(2u);
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
     GpuSubmissionPacketId failedPacket;

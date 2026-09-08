@@ -32,8 +32,8 @@ using TaskGraphTestUtils::TestArena;
 TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForTexturePrimitives){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const auto createTexture = [&](const Graphics::TextureDesc& sourceDescription){
         Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
@@ -491,8 +491,8 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForTexturePrimitives){
 TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPublishDescriptorState){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
         testArena.arena,
@@ -623,8 +623,8 @@ TEST(GpuTaskGraph, RetainedTextureStateCompletenessHasNoProductionTestMutationHo
 TEST(GpuTaskGraph, AllowsExplicitUnknownRetainedTextureFirstWriteDestinations){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const auto createTexture = [&](const Graphics::TextureDesc& sourceDescription){
         Graphics::Texture* const textureObject = NewMetadataOnlyTexture(

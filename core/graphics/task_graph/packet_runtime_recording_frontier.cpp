@@ -249,7 +249,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketRange& range,
     GpuRecordedGraph& outRecordedGraph,
-    Alloc::ThreadPool& workerPool,
+    Alloc::CpuTaskScheduler& cpuScheduler,
     GpuSubmissionPacketId* const outFailedPacket,
     GpuCommandIrCapture* const commandIrCapture
 )const{
@@ -376,9 +376,9 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 workerBusySeconds += recordedPacket->recordingSeconds;
         }
 
-        // ThreadPool workers and its calling thread are all callable logical recording slots. Keeping the entire
+        // CpuTaskScheduler workers and its calling thread are all callable logical recording slots. Keeping the entire
         // successful ready-frontier operation in the denominator exposes serial fallbacks and underfilled frontiers.
-        const f64 logicalWorkerSlotCount = static_cast<f64>(workerPool.workerThreadCount()) + 1.0;
+        const f64 logicalWorkerSlotCount = static_cast<f64>(cpuScheduler.workerThreadCount()) + 1.0;
         outRecordedGraph.addRecordingElapsedSeconds(elapsedSeconds, artifactOperation);
         outRecordedGraph.addReadyFrontierStatistics(
             elapsedSeconds,
@@ -393,7 +393,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     // ready-frontier operation owns exactly one elapsed span rather than nesting compile-order telemetry.
     if(
         commandIrCapture
-        || !workerPool.isParallelEnabled()
+        || !cpuScheduler.isParallelEnabled()
         || range.packetCount < 2u
     ){
         if(!recordPreparedPacketRangeInCompileOrder(
@@ -503,7 +503,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 recordingAttemptGeneration
             );
 
-            workerPool.parallelFor(0u, parallelPacketIndices.size(), [&](const usize parallelIndex){
+            cpuScheduler.parallelFor(0u, parallelPacketIndices.size(), [&](const usize parallelIndex){
                 const GpuSubmissionPacketId packet = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);
                 GpuRecordedGraph::PacketRecordingScratch* const scratch = outRecordedGraph.packetRecordingScratch(
                     packet,
@@ -513,8 +513,8 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                     parallelResults[parallelIndex] = 0u;
                     return;
                 }
-                // Reserve zero for serial/direct command lists. ThreadPool's caller is worker zero, so shift every
-                // ready-frontier lease by one. The stable pool domain prevents a second ThreadPool with the same
+                // Reserve zero for serial/direct command lists. The scheduler's caller is worker zero, so shift every
+                // ready-frontier lease by one. The stable scheduler domain prevents a second scheduler with the same
                 // local worker index from aliasing this native command-pool shard.
                 parallelResults[parallelIndex] = recordPacket(
                     graph,
@@ -526,8 +526,8 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                     *scratch,
                     *scratch->stateFanInScratchArena,
                     nullptr,
-                    workerPool.domainIdentity(),
-                    static_cast<u32>(workerPool.currentWorkerIndex() + 1u),
+                    cpuScheduler.domainIdentity(),
+                    static_cast<u32>(cpuScheduler.currentWorkerIndex() + 1u),
                     &parallelAborts[parallelIndex]
                 ) ? 1u : 0u;
             });

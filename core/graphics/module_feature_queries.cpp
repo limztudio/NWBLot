@@ -93,11 +93,11 @@ usize Graphics::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coope
     return device.getCoopVecMatrixSize(type, layout, rows, columns);
 }
 
-void Graphics::waitJob(JobHandle handle)const{
+void Graphics::waitTask(TaskHandle handle)const{
     if(!handle.valid())
         return;
 
-    m_jobSystem.wait(handle);
+    m_cpuScheduler.wait(handle);
 }
 
 

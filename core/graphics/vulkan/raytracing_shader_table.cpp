@@ -107,7 +107,7 @@ RayTracingShaderTableHandle RayTracingPipeline::createShaderTable(){
 
 
 ShaderTable::ShaderTable(const VulkanContext& context, Device& device)
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_missGroupIndices(context.objectArena)
     , m_hitGroupIndices(context.objectArena)
     , m_callableGroupIndices(context.objectArena)

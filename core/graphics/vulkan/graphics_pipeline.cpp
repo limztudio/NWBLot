@@ -65,7 +65,7 @@ void SetGraphicsDynamicState(
 
 
 GraphicsPipeline::GraphicsPipeline(const VulkanContext& context)
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_context(context)
 {}
 GraphicsPipeline::~GraphicsPipeline(){

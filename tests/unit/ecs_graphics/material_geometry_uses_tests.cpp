@@ -44,8 +44,8 @@ inline constexpr Name s_GeometryScratchArena("tests/material_geometry_uses/scrat
 struct GeometryContext{
     TestArena testArena;
     Core::GraphicsAllocator graphicsAllocator{ testArena.arena };
-    Core::Alloc::ThreadPool threadPool{ 0u };
-    Core::GraphicsBackend::VulkanContext context{ graphicsAllocator, threadPool, 1u };
+    Core::Alloc::CpuTaskScheduler cpuScheduler{ 0u };
+    Core::GraphicsBackend::VulkanContext context{ graphicsAllocator, cpuScheduler, 1u };
     Core::GraphicsBackend::VulkanAllocator allocator{ context };
     Core::GpuTaskGraph graph{ testArena.arena };
     Core::Alloc::ScratchArena scratchArena{ s_GeometryScratchArena };

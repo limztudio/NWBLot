@@ -291,7 +291,7 @@ void WriteCanonicalizeReport(AStringStream& report, const SourceMeshCanonicalize
     WriteRefreshCount(report, "indices", canonicalizeReport.before.indices, canonicalizeReport.after.indices);
 }
 
-int RunNwbRefresh(ImportOptions& options, const OptionPresence& presence, Core::Alloc::ThreadPool& threadPool, bool& prompted){
+int RunNwbRefresh(ImportOptions& options, const OptionPresence& presence, Core::Alloc::CpuTaskScheduler& cpuScheduler, bool& prompted){
     if(options.listMeshes){
         NWB_LOGGER_WARNING(NWB_TEXT("--list-meshes is only valid for FBX input."));
         return 1;
@@ -316,7 +316,7 @@ int RunNwbRefresh(ImportOptions& options, const OptionPresence& presence, Core::
 
     SourceMeshCanonicalizeReport canonicalizeReport;
     const Path inputPath(UtilityDetail::Arena(), options.inputPath);
-    if(!RefreshNwbMeshAsset(inputPath, outputPath, threadPool, canonicalizeReport))
+    if(!RefreshNwbMeshAsset(inputPath, outputPath, cpuScheduler, canonicalizeReport))
         return 1;
 
     AStringStream report;
@@ -339,7 +339,7 @@ int RunNwbRefresh(ImportOptions& options, const OptionPresence& presence, Core::
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-int Run(int argc, char** argv, Core::Alloc::ThreadPool& threadPool, bool& prompted){
+int Run(int argc, char** argv, Core::Alloc::CpuTaskScheduler& cpuScheduler, bool& prompted){
     ImportOptions options;
     __hidden_command_line::OptionPresence presence;
 
@@ -440,7 +440,7 @@ int Run(int argc, char** argv, Core::Alloc::ThreadPool& threadPool, bool& prompt
         }
 
         if(__hidden_command_line::IsNwbRefreshMode(options))
-            return __hidden_command_line::RunNwbRefresh(options, presence, threadPool, prompted);
+            return __hidden_command_line::RunNwbRefresh(options, presence, cpuScheduler, prompted);
 
         SceneHandle scene;
         if(!LoadScene(options, scene))
@@ -518,7 +518,7 @@ int Run(int argc, char** argv, Core::Alloc::ThreadPool& threadPool, bool& prompt
             options,
             wantsSkinning,
             defaultColor,
-            threadPool,
+            cpuScheduler,
             mesh,
             skeletonJoints,
             skeletonBindPoseMatrices,

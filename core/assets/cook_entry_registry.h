@@ -13,6 +13,8 @@
 
 #include "module.h"
 
+#include <core/alloc/cpu_task.h>
+
 #include <core/alloc/scratch.h>
 
 #include <core/common/log.h>
@@ -52,7 +54,7 @@ class ICookedAssetWriter;
 
 struct CookEntryParseContext{
     CookArena& cookArena;
-    Core::Alloc::ThreadPool& threadPool;
+    Core::Alloc::CpuTaskScheduler& cpuScheduler;
     ScratchArena& scratchArena;
     CookEntryPathHashSet& seenVirtualPathHashes;
 };

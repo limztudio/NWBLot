@@ -3,7 +3,7 @@
 
 
 #include <pipeline/asset_builder/build_inputs.h>
-#include <core/alloc/thread.h>
+#include <core/alloc/cpu_task.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
 #include <global/timer.h>
@@ -26,13 +26,13 @@ namespace Builder = NWB::Pipeline::AssetBuilder;
 class BuildInputSelection : public testing::Test{
 protected:
     NWB::Tests::TestArena<> m_testArena;
-    NWB::Core::Alloc::ThreadPool m_threadPool{ 1u };
+    NWB::Core::Alloc::CpuTaskScheduler m_cpuScheduler{ 1u };
     NWB::Tests::CapturingLogger m_logger;
     NWB::Core::Common::LoggerRegistrationGuard m_loggerGuard{ m_logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal };
     NWB::Path m_root{ m_testArena.arena };
     Assets::ResolvedCookPaths m_paths{ m_testArena.arena };
     Assets::DiscoveredNwbFileVector m_files{ m_testArena.arena };
-    Builder::AssetBuildOptions m_options{ m_testArena.arena, m_threadPool };
+    Builder::AssetBuildOptions m_options{ m_testArena.arena, m_cpuScheduler };
 
     virtual void SetUp()override{
         m_root = NWB::Path(m_testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path()

@@ -6,6 +6,8 @@
 
 
 #include "coopvec.h"
+
+#include <core/alloc/cpu_task.h>
 #include "gpu_descriptor_heap.h"
 
 #include <core/filesystem/factory.h>
@@ -138,7 +140,7 @@ struct CommandListParameters{
     // same-class queues.
     GpuPhysicalQueueId physicalQueue;
     // Worker zero is the ordinary serial/direct lease. Ready-frontier graph recording combines a stable nonzero
-    // ThreadPool domain with its local nonzero worker index so different pools cannot alias one native arena shard.
+    // CpuTaskScheduler domain with its local nonzero worker index so different pools cannot alias one native arena shard.
     // Manual nonzero worker indices may leave the domain at zero when the caller deliberately owns that namespace.
     u64 recordingWorkerDomain = 0u;
     u32 recordingWorkerIndex = 0u;

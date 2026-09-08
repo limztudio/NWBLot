@@ -118,7 +118,7 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 class SkinnedCausticSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.threadPool);
+        auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.cpuTasks);
         if(!world){
             NWB_LOGGER_FATAL(NWB_TEXT("SkinnedCausticSmokeProject initialization failed: ECS world allocation failed"));
             throw RuntimeException("SkinnedCausticSmokeProject initialization failed");

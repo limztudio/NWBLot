@@ -161,7 +161,7 @@ VkMemoryBarrier2 BuildOpacityMicromapWriteAfterWriteBarrier()noexcept{
 
 
 OpacityMicromap::OpacityMicromap(const VulkanContext& context)
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(context.objectArena)
     , m_context(context)
 {}

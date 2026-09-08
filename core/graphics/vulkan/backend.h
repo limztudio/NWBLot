@@ -6,6 +6,8 @@
 
 
 #include "module.h"
+
+#include <core/alloc/cpu_task.h>
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -570,7 +572,7 @@ void ConfigurePipelineDepthStencilState(const DepthStencilState& state, Pipeline
 VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc);
 
 inline void CopyHostMemory(
-    Alloc::ThreadPool& workerPool,
+    Alloc::CpuTaskScheduler& cpuScheduler,
     void* dst,
     const void* src,
     usize size,
@@ -583,11 +585,11 @@ inline void CopyHostMemory(
     const usize effectiveParallelThreshold = parallelThreshold > 0 ? parallelThreshold : 1;
     const usize effectiveChunkSize = chunkSize > 0 ? chunkSize : 1;
 
-    if(workerPool.isParallelEnabled() && size >= effectiveParallelThreshold){
+    if(cpuScheduler.isParallelEnabled() && size >= effectiveParallelThreshold){
         auto* dstBytes = static_cast<u8*>(dst);
         auto* srcBytes = static_cast<const u8*>(src);
         const usize chunkCount = DivideUp(size, effectiveChunkSize);
-        workerPool.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex){
+        cpuScheduler.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex){
             const usize chunkOffset = chunkIndex * effectiveChunkSize;
             const usize chunkBytes = Min(effectiveChunkSize, size - chunkOffset);
             NWB_MEMCPY(dstBytes + chunkOffset, chunkBytes, srcBytes + chunkOffset, chunkBytes);
@@ -639,7 +641,7 @@ struct VulkanContext{
 
     Alloc::GlobalArena& objectArena;
     GraphicsAllocator& allocator;
-    Alloc::ThreadPool& threadPool;
+    Alloc::CpuTaskScheduler& cpuScheduler;
 
     VkPhysicalDeviceProperties physicalDeviceProperties{};
     VkPhysicalDeviceMemoryProperties memoryProperties{};
@@ -717,15 +719,15 @@ struct VulkanContext{
     } extensions;
 
 
-    explicit VulkanContext(GraphicsAllocator& allocatorRef, Alloc::ThreadPool& threadPoolRef, u16 generation = 0u)
+    explicit VulkanContext(GraphicsAllocator& allocatorRef, Alloc::CpuTaskScheduler& cpuSchedulerRef, u16 generation = 0u)
         : deviceGeneration(generation)
         , objectArena(allocatorRef.getObjectArena())
         , allocator(allocatorRef)
-        , threadPool(threadPoolRef)
+        , cpuScheduler(cpuSchedulerRef)
     {}
     VulkanContext(
         GraphicsAllocator& allocatorRef,
-        Alloc::ThreadPool& threadPoolRef,
+        Alloc::CpuTaskScheduler& cpuSchedulerRef,
         VkInstance inst,
         VkPhysicalDevice physDev,
         VkDevice dev,
@@ -744,7 +746,7 @@ struct VulkanContext{
         , allocationCallbacks(allocCb)
         , objectArena(allocatorRef.getObjectArena())
         , allocator(allocatorRef)
-        , threadPool(threadPoolRef)
+        , cpuScheduler(cpuSchedulerRef)
     {}
 };
 
@@ -1325,7 +1327,7 @@ private:
 
 
         BufferChunk(
-            Alloc::ThreadPool& pool,
+            Alloc::CpuTaskScheduler& pool,
             BufferHandle buf,
             TrackedCommandBuffer* chunkOwner,
             u64 chunkNativeRecordingID,
@@ -1530,7 +1532,7 @@ private:
 
 
 inline UploadManager::BufferChunk::BufferChunk(
-    Alloc::ThreadPool& pool,
+    Alloc::CpuTaskScheduler& pool,
     BufferHandle buf,
     TrackedCommandBuffer* chunkOwner,
     u64 chunkNativeRecordingID,

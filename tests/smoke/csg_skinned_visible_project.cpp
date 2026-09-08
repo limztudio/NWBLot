@@ -156,7 +156,7 @@ private:
 
 
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.threadPool);
+        auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.cpuTasks);
         if(!world){
             NWB_LOGGER_FATAL(NWB_TEXT("CsgSkinnedVisibleSmokeProject initialization failed: ECS world allocation failed"));
             throw RuntimeException("CsgSkinnedVisibleSmokeProject initialization failed");

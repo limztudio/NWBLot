@@ -60,11 +60,9 @@ class CallbackShutdownGuard : NoCopy{
 public:
     explicit CallbackShutdownGuard(
         NWB::IProjectEntryCallbacks& callbacks,
-        NWB::Core::Alloc::JobSystem& jobSystem,
-        NWB::Core::Alloc::ThreadPool& threadPool)
+        NWB::Core::Alloc::CpuTaskScope& tasks)
         : m_callbacks(callbacks)
-        , m_jobSystem(jobSystem)
-        , m_threadPool(threadPool)
+        , m_tasks(tasks)
     {}
 
     ~CallbackShutdownGuard()noexcept(false){
@@ -73,20 +71,19 @@ public:
 
         m_active = false;
         if(UncaughtExceptionCount() > 0){
-            m_jobSystem.drain();
-            m_threadPool.drain();
+            m_tasks.drain();
             return;
         }
 
         ScopeExit drainOnFailure([&]()noexcept{
-            m_jobSystem.drain();
-            m_threadPool.drain();
+            m_tasks.drain();
         });
 
+        m_tasks.wait();
         m_callbacks.onShutdown();
         drainOnFailure.release();
 
-        NWB::Core::Alloc::FinishBorrowedSchedulerDomain(m_jobSystem, m_threadPool);
+        m_tasks.wait();
     }
 
     void activate(){
@@ -95,8 +92,7 @@ public:
 
 private:
     NWB::IProjectEntryCallbacks& m_callbacks;
-    NWB::Core::Alloc::JobSystem& m_jobSystem;
-    NWB::Core::Alloc::ThreadPool& m_threadPool;
+    NWB::Core::Alloc::CpuTaskScope& m_tasks;
     bool m_active = false;
 };
 
@@ -374,12 +370,13 @@ static int RunProjectRuntime(
                 return -1;
             }
 
+            NWB::Core::Alloc::CpuTaskScope projectTasks(frame.cpuTasks());
             NWB::ProjectRuntimeContext context = {
                 frame.graphics(),
                 frame.input(),
                 frame.projectObjectArena(),
-                frame.projectThreadPool(),
-                frame.projectJobSystem(),
+                frame.cpuTasks(),
+                projectTasks,
                 assetManager,
                 *graphicsFilesystem,
                 frame.frameGraphRegistry(),
@@ -419,8 +416,7 @@ static int RunProjectRuntime(
             }
             __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{
                 *callbacks,
-                frame.projectJobSystem(),
-                frame.projectThreadPool()
+                projectTasks
             };
             __hidden_loader::UpdateCallbackContext updateCallbackContext{ *callbacks };
 

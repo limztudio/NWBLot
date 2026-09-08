@@ -264,7 +264,7 @@ bool UploadManager::suballocateBuffer(
         return false;
 
     ledger->chunks.push_back(MakeRefCount<BufferChunk>(
-        m_device.m_context.threadPool,
+        m_device.m_context.cpuScheduler,
         Move(bufferHandle),
         owner,
         nativeRecordingID,

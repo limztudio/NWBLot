@@ -18,12 +18,12 @@ BackendContext::BackendContext(
     const DeviceCreationParameters& params,
     SwapChainRuntimeState& swapChainState,
     GraphicsAllocator& allocator,
-    Alloc::ThreadPool& threadPool
+    Alloc::CpuTaskScheduler& cpuScheduler
 )
     : m_deviceParams(params)
     , m_swapChainState(swapChainState)
     , m_allocator(allocator)
-    , m_threadPool(threadPool)
+    , m_cpuScheduler(cpuScheduler)
     , m_arena(m_allocator.getObjectArena())
     , m_enabledExtensions(m_arena)
     , m_optionalExtensions(m_arena)

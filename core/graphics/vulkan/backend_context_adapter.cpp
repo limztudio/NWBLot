@@ -416,8 +416,8 @@ bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters)
         outAdapters[i] = Move(adapterInfo);
     };
 
-    if(m_threadPool.isParallelEnabled() && deviceCount >= s_ParallelAdapterThreshold)
-        m_threadPool.parallelFor(static_cast<usize>(0), static_cast<usize>(deviceCount), fillAdapterInfo);
+    if(m_cpuScheduler.isParallelEnabled() && deviceCount >= s_ParallelAdapterThreshold)
+        m_cpuScheduler.parallelFor(static_cast<usize>(0), static_cast<usize>(deviceCount), fillAdapterInfo);
     else{
         for(usize i = 0; i < static_cast<usize>(deviceCount); ++i)
             fillAdapterInfo(i);

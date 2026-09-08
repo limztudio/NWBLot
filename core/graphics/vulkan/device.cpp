@@ -115,7 +115,7 @@ template<typename EnumerateTimeDomains, typename GetCalibratedTimestamps>
 
 
 Device::Device(const DeviceDesc& desc)
-    : RefCounter<GraphicsResource>(desc.threadPool)
+    : RefCounter<GraphicsResource>(desc.cpuScheduler)
     , m_gpuCrashDiagnosticsEnabled(desc.gpuCrashDiagnosticsEnabled)
     , m_deviceGeneration(__hidden_vulkan_device::AllocateDeviceGeneration())
     , m_gpuCrashTracker(desc.allocator.getObjectArena())
@@ -124,7 +124,7 @@ Device::Device(const DeviceDesc& desc)
     , m_amdBreadcrumb(desc.allocator.getObjectArena())
     , m_context(
         desc.allocator,
-        desc.threadPool,
+        desc.cpuScheduler,
         desc.instance,
         desc.physicalDevice,
         desc.device,

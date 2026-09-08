@@ -33,7 +33,7 @@
 #include <gtest/gtest.h>
 
 #include <core/alloc/scratch.h>
-#include <core/alloc/thread.h>
+#include <core/alloc/cpu_task.h>
 #include <core/common/module.h>
 #include <core/mesh/classification.h>
 #include <core/metascript/parser.h>
@@ -1278,8 +1278,8 @@ static bool BuildPreparedGraphicsAssetRoots(
     const InitializerList<Path> assetRoots,
     const u32 workerThreadCount = 0u
 ){
-    NWB::Core::Alloc::ThreadPool cookThreadPool(workerThreadCount, CpuAffinity::Any);
-    NWB::Pipeline::AssetBuilder::AssetBuildOptions options(testArena.arena, cookThreadPool);
+    NWB::Core::Alloc::CpuTaskScheduler cookCpuTaskScheduler(workerThreadCount);
+    NWB::Pipeline::AssetBuilder::AssetBuildOptions options(testArena.arena, cookCpuTaskScheduler);
     options.repoRoot = PathToString(testArena.arena, AssetsGraphicsTestRepoRoot(testArena));
     options.assetRoots.reserve(assetRoots.size());
     for(const Path& assetRoot : assetRoots){

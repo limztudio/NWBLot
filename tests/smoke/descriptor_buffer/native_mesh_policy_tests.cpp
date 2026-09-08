@@ -175,7 +175,7 @@ TEST(NativeMeshPolicy, RawOptionalExtensionCannotBypassDisabledPolicy){
     {
         Alloc::GlobalArena arena(__hidden_native_mesh_policy_tests::s_BackendArenaName);
         GraphicsAllocator allocator(arena);
-        Alloc::ThreadPool threadPool(2u, CpuAffinity::Any);
+        Alloc::CpuTaskScheduler cpuScheduler(2u);
         DeviceCreationParameters parameters(arena);
         parameters.headlessDevice = true;
         parameters.enableGpuCrashDiagnostics = false;
@@ -187,7 +187,7 @@ TEST(NativeMeshPolicy, RawOptionalExtensionCannotBypassDisabledPolicy){
         parameters.optionalBackendDeviceExtensions.emplace_back(VK_EXT_MESH_SHADER_EXTENSION_NAME, arena);
 
         SwapChainRuntimeState swapChainState;
-        GraphicsBackend::BackendContext context(parameters, swapChainState, allocator, threadPool);
+        GraphicsBackend::BackendContext context(parameters, swapChainState, allocator, cpuScheduler);
         __hidden_native_mesh_policy_tests::BackendContextDestroyGuard contextGuard(context);
         if(!context.createInstance())
             GTEST_SKIP() << "Native mesh raw extension policy: no usable Vulkan instance.";

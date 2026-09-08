@@ -29,11 +29,11 @@ int Run(const int argc, char** argv){
 
     const u32 coreCount = ::QueryCpuCoreCount(CpuAffinity::Any);
     const u32 workerCount = coreCount > 1u ? coreCount - 1u : 0u;
-    NWB::Core::Alloc::ThreadPool threadPool(workerCount, CpuAffinity::Any);
+    NWB::Core::Alloc::CpuTaskScheduler cpuScheduler(workerCount);
 
     bool prompted = false;
-    const int result = NWB::FbxToNwb::Run(argc, argv, threadPool, prompted);
-    threadPool.finish();
+    const int result = NWB::FbxToNwb::Run(argc, argv, cpuScheduler, prompted);
+    cpuScheduler.drain();
     if(prompted && result >= 0){
         NWB_COUT << "Press Enter to exit...";
         NWB::FbxToNwb::AString line;

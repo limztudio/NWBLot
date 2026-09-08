@@ -72,7 +72,7 @@ inline VkResult GetTimerQueryResults(const VulkanContext& context, const VkQuery
 
 
 TimerQuery::TimerQuery(const VulkanContext& context, const u64 incarnation)
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_incarnation(incarnation)
     , m_context(context)
 {

@@ -103,7 +103,7 @@ Buffer::Buffer(
     const VkBufferCreateInfo& bufferInfo,
     const bool initialStateKnown
 )
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(creationDesc)
     , m_creationDesc(creationDesc)
     , m_creationInitialStateKnown(initialStateKnown)
@@ -421,7 +421,7 @@ bool CommandList::prepareUploadStaging(
     if(!prepareUploadStaging(dataSize, operationName, outStagingBuffer, outStagingOffset, cpuVA, alignment))
         return false;
 
-    VulkanDetail::CopyHostMemory(taskPool(), cpuVA, data, dataSize);
+    VulkanDetail::CopyHostMemory(taskScheduler(), cpuVA, data, dataSize);
     return true;
 }
 

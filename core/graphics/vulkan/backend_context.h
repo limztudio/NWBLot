@@ -6,6 +6,8 @@
 
 
 #include "backend.h"
+
+#include <core/alloc/cpu_task.h>
 #include "swapchain_presentation.h"
 
 
@@ -158,7 +160,7 @@ public:
         const DeviceCreationParameters& params,
         SwapChainRuntimeState& swapChainState,
         GraphicsAllocator& allocator,
-        Alloc::ThreadPool& threadPool
+        Alloc::CpuTaskScheduler& cpuScheduler
     );
 
 
@@ -283,7 +285,7 @@ private:
     const DeviceCreationParameters& m_deviceParams;
     SwapChainRuntimeState& m_swapChainState;
     GraphicsAllocator& m_allocator;
-    Alloc::ThreadPool& m_threadPool;
+    Alloc::CpuTaskScheduler& m_cpuScheduler;
     Alloc::GlobalArena& m_arena;
     Common::FrameParam m_platformFrameParam = {};
 

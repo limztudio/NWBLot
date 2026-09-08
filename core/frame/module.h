@@ -7,6 +7,8 @@
 
 #include <core/global.h>
 
+#include <core/alloc/cpu_task.h>
+
 #include <core/common/module.h>
 #include <core/input/module.h>
 #include <core/graphics/module.h>
@@ -31,17 +33,11 @@ private:
 
 
 private:
-    static constexpr u32 s_ReservedCoresForMainThread = 1;
-
-
-private:
     static void ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY);
-    static u32 queryGraphicsWorkerThreadCount();
-    static u32 queryProjectWorkerThreadCount();
 
 
 public:
-    Frame(void* inst, u16 width, u16 height);
+    Frame(void* inst, u16 width, u16 height, const Alloc::CpuTaskSchedulerConfig& cpuTaskConfig = {});
     ~Frame()noexcept(false);
 
 
@@ -80,11 +76,7 @@ public:
     [[nodiscard]] inline Alloc::GlobalArena& projectObjectArena(){ return m_projectObjectArena; }
     [[nodiscard]] inline const Alloc::GlobalArena& projectObjectArena()const{ return m_projectObjectArena; }
 
-    [[nodiscard]] inline Alloc::ThreadPool& projectThreadPool(){ return m_projectThreadPool; }
-    [[nodiscard]] inline const Alloc::ThreadPool& projectThreadPool()const{ return m_projectThreadPool; }
-
-    [[nodiscard]] inline Alloc::JobSystem& projectJobSystem(){ return m_projectJobSystem; }
-    [[nodiscard]] inline const Alloc::JobSystem& projectJobSystem()const{ return m_projectJobSystem; }
+    [[nodiscard]] inline Alloc::CpuTaskScheduler& cpuTasks(){ return m_cpuTasks; }
 
     void setTelemetryCapture(const Telemetry::CaptureOptions& options);
     void setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData);
@@ -117,13 +109,12 @@ private:
 
 
 private:
+    Alloc::CpuTaskScheduler m_cpuTasks;
     Common::FrameData m_data;
 
     Alloc::GlobalArena m_graphicsObjectArena;
     FrameString m_appliedWindowTitle;
     GraphicsAllocator m_graphicsAllocator;
-    Alloc::ThreadPool m_graphicsThreadPool;
-    Alloc::JobSystem m_graphicsJobSystem;
     InputDispatcher m_input;
 
     Alloc::GlobalArena m_projectObjectArena;
@@ -131,8 +122,6 @@ private:
     Telemetry::CaptureSession m_telemetrySession;
     Telemetry::FrameGraphRegistry m_frameGraphRegistry;
     Telemetry::TelemetryBytes m_telemetryUploadBytes;
-    Alloc::ThreadPool m_projectThreadPool;
-    Alloc::JobSystem m_projectJobSystem;
 
     Graphics m_graphics;
 

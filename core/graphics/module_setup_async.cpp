@@ -23,40 +23,45 @@ namespace __hidden_graphics_setup_async{
 using UploadBytes = Vector<u8, Alloc::GlobalArena>;
 
 
-struct BufferSetupJobData{
+// Small setup payloads favor efficiency workers; larger copies favor performance workers. Both retain normal
+// priority because a caller may need the resulting resource in the current frame.
+static constexpr usize s_HeavySetupUploadBytes = 64u * 1024u;
+
+
+struct BufferSetupTaskData{
     Graphics::BufferSetupDesc setupDesc;
     UploadBytes uploadBytes;
     BufferHandle& outBuffer;
 
 
-    BufferSetupJobData(Alloc::GlobalArena& arena, const Graphics::BufferSetupDesc& desc, BufferHandle& output)
+    BufferSetupTaskData(Alloc::GlobalArena& arena, const Graphics::BufferSetupDesc& desc, BufferHandle& output)
         : setupDesc(desc)
         , uploadBytes(arena)
         , outBuffer(output)
     {}
 };
 
-struct TextureSetupJobData{
+struct TextureSetupTaskData{
     Graphics::TextureSetupDesc setupDesc;
     UploadBytes uploadBytes;
     TextureHandle& outTexture;
 
 
-    TextureSetupJobData(Alloc::GlobalArena& arena, const Graphics::TextureSetupDesc& desc, TextureHandle& output)
+    TextureSetupTaskData(Alloc::GlobalArena& arena, const Graphics::TextureSetupDesc& desc, TextureHandle& output)
         : setupDesc(desc)
         , uploadBytes(arena)
         , outTexture(output)
     {}
 };
 
-struct MeshSetupJobData{
+struct MeshSetupTaskData{
     Graphics::MeshSetupDesc setupDesc;
     UploadBytes vertexBytes;
     UploadBytes indexBytes;
     Graphics::MeshResource& outMesh;
 
 
-    MeshSetupJobData(Alloc::GlobalArena& arena, const Graphics::MeshSetupDesc& desc, Graphics::MeshResource& output)
+    MeshSetupTaskData(Alloc::GlobalArena& arena, const Graphics::MeshSetupDesc& desc, Graphics::MeshResource& output)
         : setupDesc(desc)
         , vertexBytes(arena)
         , indexBytes(arena)
@@ -76,11 +81,18 @@ struct MeshSetupJobData{
     return bytes;
 }
 
-template<typename JobData, typename Desc, typename Output, typename Validate, typename ConfigurePayload, typename ExecutePayload>
-[[nodiscard]] static Graphics::JobHandle SubmitSetupUploadJob(
+[[nodiscard]] static Alloc::CpuTaskOptions SetupUploadTaskOptions(const usize firstUploadBytes, const usize secondUploadBytes = 0u)noexcept{
+    const bool heavy = firstUploadBytes >= s_HeavySetupUploadBytes
+        || secondUploadBytes >= s_HeavySetupUploadBytes - firstUploadBytes;
+    return Alloc::CpuTaskOptions{ .cost = heavy ? Alloc::CpuTaskCost::Heavy : Alloc::CpuTaskCost::Light };
+}
+
+
+template<typename TaskData, typename Desc, typename Output, typename Validate, typename ConfigurePayload, typename ExecutePayload>
+[[nodiscard]] static Graphics::TaskHandle SubmitSetupUploadTask(
     Graphics& graphics,
     Alloc::GlobalArena& arena,
-    Alloc::JobSystem& jobSystem,
+    Alloc::CpuTaskScope& tasks,
     const Desc& desc,
     Output& output,
     Validate&& validate,
@@ -92,33 +104,34 @@ template<typename JobData, typename Desc, typename Output, typename Validate, ty
         return {};
     }
 
-    auto payload = MakeGlobalUnique<JobData>(arena, arena, desc, output);
+    auto payload = MakeGlobalUnique<TaskData>(arena, arena, desc, output);
     configurePayload(*payload, arena);
+    const Alloc::CpuTaskOptions options = SetupUploadTaskOptions(payload->uploadBytes.size());
 
-    return jobSystem.submit([&graphics, payload = Move(payload), executePayload = Forward<ExecutePayload>(executePayload)]() mutable{
+    return tasks.submit([&graphics, payload = Move(payload), executePayload = Forward<ExecutePayload>(executePayload)]() mutable{
         executePayload(graphics, *payload);
-    });
+    }, options);
 }
 
-static void ConfigureBufferSetupPayload(BufferSetupJobData& payload, Alloc::GlobalArena& arena){
+static void ConfigureBufferSetupPayload(BufferSetupTaskData& payload, Alloc::GlobalArena& arena){
     payload.uploadBytes = CopyBytes(arena, payload.setupDesc.data, payload.setupDesc.dataSize);
     payload.setupDesc.data = nullptr;
     payload.setupDesc.dataSize = payload.uploadBytes.size();
 }
 
-static void ExecuteBufferSetupPayload(Graphics& graphics, BufferSetupJobData& payload){
+static void ExecuteBufferSetupPayload(Graphics& graphics, BufferSetupTaskData& payload){
     payload.setupDesc.data = payload.uploadBytes.empty() ? nullptr : payload.uploadBytes.data();
     payload.setupDesc.dataSize = payload.uploadBytes.size();
     payload.outBuffer = graphics.setupBuffer(payload.setupDesc);
 }
 
-static void ConfigureTextureSetupPayload(TextureSetupJobData& payload, Alloc::GlobalArena& arena){
+static void ConfigureTextureSetupPayload(TextureSetupTaskData& payload, Alloc::GlobalArena& arena){
     payload.uploadBytes = CopyBytes(arena, payload.setupDesc.data, payload.setupDesc.uploadDataSize);
     payload.setupDesc.data = nullptr;
     payload.setupDesc.uploadDataSize = payload.uploadBytes.size();
 }
 
-static void ExecuteTextureSetupPayload(Graphics& graphics, TextureSetupJobData& payload){
+static void ExecuteTextureSetupPayload(Graphics& graphics, TextureSetupTaskData& payload){
     payload.setupDesc.data = payload.uploadBytes.empty() ? nullptr : payload.uploadBytes.data();
     payload.setupDesc.uploadDataSize = payload.uploadBytes.size();
     payload.outTexture = graphics.setupTexture(payload.setupDesc);
@@ -134,11 +147,11 @@ static void ExecuteTextureSetupPayload(Graphics& graphics, TextureSetupJobData& 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Graphics::JobHandle Graphics::setupBufferAsync(const BufferSetupDesc& desc, BufferHandle& outBuffer){
-    return __hidden_graphics_setup_async::SubmitSetupUploadJob<__hidden_graphics_setup_async::BufferSetupJobData>(
+Graphics::TaskHandle Graphics::setupBufferAsync(const BufferSetupDesc& desc, BufferHandle& outBuffer){
+    return __hidden_graphics_setup_async::SubmitSetupUploadTask<__hidden_graphics_setup_async::BufferSetupTaskData>(
         *this,
         m_allocator.getObjectArena(),
-        m_jobSystem,
+        m_tasks,
         desc,
         outBuffer,
         GraphicsModuleDetail::ValidateBufferSetupUpload,
@@ -147,11 +160,11 @@ Graphics::JobHandle Graphics::setupBufferAsync(const BufferSetupDesc& desc, Buff
     );
 }
 
-Graphics::JobHandle Graphics::setupTextureAsync(const TextureSetupDesc& desc, TextureHandle& outTexture){
-    return __hidden_graphics_setup_async::SubmitSetupUploadJob<__hidden_graphics_setup_async::TextureSetupJobData>(
+Graphics::TaskHandle Graphics::setupTextureAsync(const TextureSetupDesc& desc, TextureHandle& outTexture){
+    return __hidden_graphics_setup_async::SubmitSetupUploadTask<__hidden_graphics_setup_async::TextureSetupTaskData>(
         *this,
         m_allocator.getObjectArena(),
-        m_jobSystem,
+        m_tasks,
         desc,
         outTexture,
         GraphicsModuleDetail::ValidateTextureSetupUpload,
@@ -160,13 +173,13 @@ Graphics::JobHandle Graphics::setupTextureAsync(const TextureSetupDesc& desc, Te
     );
 }
 
-Graphics::JobHandle Graphics::setupMeshAsync(const MeshSetupDesc& desc, MeshResource& outMesh){
+Graphics::TaskHandle Graphics::setupMeshAsync(const MeshSetupDesc& desc, MeshResource& outMesh){
     if(!GraphicsModuleDetail::ValidateMeshSetupDesc(desc)){
         outMesh = {};
         return {};
     }
 
-    auto payload = MakeGlobalUnique<__hidden_graphics_setup_async::MeshSetupJobData>(
+    auto payload = MakeGlobalUnique<__hidden_graphics_setup_async::MeshSetupTaskData>(
         m_allocator.getObjectArena(),
         m_allocator.getObjectArena(),
         desc,
@@ -179,13 +192,17 @@ Graphics::JobHandle Graphics::setupMeshAsync(const MeshSetupDesc& desc, MeshReso
     payload->setupDesc.indexData = nullptr;
     payload->setupDesc.indexDataSize = payload->indexBytes.size();
 
-    return m_jobSystem.submit([this, payload = Move(payload)]() mutable{
+    const Alloc::CpuTaskOptions options = __hidden_graphics_setup_async::SetupUploadTaskOptions(
+        payload->vertexBytes.size(),
+        payload->indexBytes.size()
+    );
+    return m_tasks.submit([this, payload = Move(payload)]() mutable{
         payload->setupDesc.vertexData = payload->vertexBytes.empty() ? nullptr : payload->vertexBytes.data();
         payload->setupDesc.vertexDataSize = payload->vertexBytes.size();
         payload->setupDesc.indexData = payload->indexBytes.empty() ? nullptr : payload->indexBytes.data();
         payload->setupDesc.indexDataSize = payload->indexBytes.size();
         payload->outMesh = setupMesh(payload->setupDesc);
-    });
+    }, options);
 }
 
 

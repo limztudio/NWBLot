@@ -6,7 +6,7 @@
 
 
 #include <core/alloc/general.h>
-#include <core/alloc/thread.h>
+#include <core/alloc/cpu_task.h>
 #include <core/ecs/world.h>
 
 #include <global/global.h>
@@ -31,13 +31,13 @@ inline constexpr Name s_EcsTestWorldArena("tests/common/ecs_test_world");
 
 struct EcsTestWorld{
     Core::Alloc::GlobalArena arena;
-    Core::Alloc::ThreadPool threadPool;
+    Core::Alloc::CpuTaskScheduler taskScheduler;
     Core::ECS::World world;
 
     EcsTestWorld()
         : arena(s_EcsTestWorldArena)
-        , threadPool(0)
-        , world(arena, threadPool)
+        , taskScheduler(0u)
+        , world(arena, taskScheduler)
     {}
 };
 

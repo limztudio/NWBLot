@@ -9,7 +9,7 @@
 
 #include <gtest/gtest.h>
 
-#include <core/alloc/thread.h>
+#include <core/alloc/cpu_task.h>
 #include <core/common/module.h>
 #include <core/graphics/gpu_timing.h>
 #include <core/graphics/task_graph/compiler.h>
@@ -2048,7 +2048,7 @@ TEST(TaskGraphRuntimeOwnershipTest, TimedReadyFrontierFalseResultPreservesPeerAn
         ASSERT_EQ(failedPacketView.plan->recordingFrontier, 0u);
     }
 
-    Alloc::ThreadPool recordingWorkers(1u, CpuAffinity::Any);
+    Alloc::CpuTaskScheduler recordingWorkers(1u);
     GpuRecordedGraph recordedGraph(graphicsScope.arena());
     const GpuNativePacketRecorder recorder(device, graphicsScope.graphics().gpuTiming());
     GpuSubmissionPacketId failedPacket;

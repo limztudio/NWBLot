@@ -10,7 +10,7 @@
 #include "task_graph.h"
 
 #include <core/alloc/scratch.h>
-#include <core/alloc/thread.h>
+#include <core/alloc/cpu_task.h>
 #include <core/graphics/rhi/device.h>
 #include <global/sync.h>
 
@@ -55,8 +55,8 @@ struct GpuRecordedPacket{
     u64 recordingBeginNanoseconds = 0u;
     u64 recordingEndNanoseconds = 0u;
     f64 recordingSeconds = 0.0;
-    // Worker zero is serial/default recording; ready-frontier workers retain a process-unique ThreadPool domain
-    // and pool-local index.
+    // Worker zero is serial/default recording; ready-frontier workers retain a process-unique CpuTaskScheduler domain
+    // and scheduler-local index.
     u64 recordingWorkerDomain = 0u;
     u32 recordingWorkerIndex = 0u;
 };
@@ -87,7 +87,7 @@ struct GpuTaskGraphRecordingStatistics{
     f64 recordingElapsedSeconds = 0.0;
     f64 readyFrontierElapsedSeconds = 0.0;
     // Busy is summed packet-span occupancy across logical recording slots, not operating-system CPU time. Capacity
-    // is readyFrontierElapsedSeconds weighted per call by every callable ThreadPool slot, including its caller.
+    // is readyFrontierElapsedSeconds weighted per call by every callable CpuTaskScheduler slot, including its caller.
     f64 readyFrontierWorkerBusySeconds = 0.0;
     f64 readyFrontierWorkerCapacitySeconds = 0.0;
 
@@ -450,7 +450,7 @@ public:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
-    // Records compiler-ready frontiers with `workerPool`. Only packets whose tasks all set
+    // Records compiler-ready frontiers with `cpuScheduler`. Only packets whose tasks all set
     // GpuTaskSchedulingHint::allowParallelRecording may share a worker frontier; every other packet remains serial.
     // Command-IR capture deliberately keeps the established serial order. The method is synchronous: callers may
     // submit or destroy the recorded graph once it returns.
@@ -459,7 +459,7 @@ public:
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketRange& range,
         GpuRecordedGraph& outRecordedGraph,
-        Alloc::ThreadPool& workerPool,
+        Alloc::CpuTaskScheduler& cpuScheduler,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
@@ -596,9 +596,9 @@ struct GpuTaskGraphNormalExecutionDesc{
     // A false result leaves every packet unaccepted so the caller can discard or recover transactionally.
     const GpuTaskGraphTaskRecordedCallback* taskRecordedCallbacks = nullptr;
     usize taskRecordedCallbackCount = 0u;
-    // A null worker pool preserves serial compile-order recording. A supplied pool enables the recorder's
+    // A null scheduler preserves serial compile-order recording. A supplied scheduler enables the recorder's
     // per-packet ready-frontier policy; packets without declaration opt-in still record serially.
-    Alloc::ThreadPool* readyFrontierWorkerPool = nullptr;
+    Alloc::CpuTaskScheduler* readyFrontierScheduler = nullptr;
     GpuCommandIrCapture* commandIrCapture = nullptr;
     const GpuTaskGraphExternalCompletionToken* externalCompletionTokens = nullptr;
     usize externalCompletionTokenCount = 0u;
@@ -1288,7 +1288,7 @@ public:
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecorder& recorder,
         GpuRecordedGraph& recordedGraph,
-        Alloc::ThreadPool& workerPool,
+        Alloc::CpuTaskScheduler& cpuScheduler,
         GpuTaskId firstTask,
         GpuTaskId lastTask,
         GpuGraphSubmissionTransaction& transaction,
@@ -1334,7 +1334,7 @@ private:
         const GpuNativePacketRecorder& recorder,
         const GpuSubmissionPacketRange& range,
         GpuRecordedGraph& recordedGraph,
-        Alloc::ThreadPool* readyFrontierWorkerPool,
+        Alloc::CpuTaskScheduler* readyFrontierScheduler,
         GpuCommandIrCapture* commandIrCapture,
         GpuSubmissionPacketId* outFailedPacket
     )const;
@@ -1343,7 +1343,7 @@ private:
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecorder& recorder,
         GpuRecordedGraph& recordedGraph,
-        Alloc::ThreadPool* readyFrontierWorkerPool,
+        Alloc::CpuTaskScheduler* readyFrontierScheduler,
         GpuTaskId firstTask,
         GpuTaskId lastTask,
         GpuGraphSubmissionTransaction& transaction,

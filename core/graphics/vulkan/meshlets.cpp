@@ -19,7 +19,7 @@ NWB_VULKAN_BEGIN
 
 
 MeshletPipeline::MeshletPipeline(const VulkanContext& context)
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_context(context)
 {}
 MeshletPipeline::~MeshletPipeline(){

@@ -906,7 +906,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         blasScratch.rangeInfos[i] = rangeInfo;
     };
 
-    if(taskPool().isParallelEnabled() && numGeometries >= s_ParallelGeometryThreshold)
+    if(taskScheduler().isParallelEnabled() && numGeometries >= s_ParallelGeometryThreshold)
         scheduleParallelFor(static_cast<usize>(0), numGeometries, s_GeometryGrainSize, buildGeometry);
     else{
         for(usize i = 0; i < numGeometries; ++i)
@@ -1248,7 +1248,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
         );
     };
 
-    if(taskPool().isParallelEnabled() && numInstances >= s_ParallelTlasInstanceThreshold)
+    if(taskScheduler().isParallelEnabled() && numInstances >= s_ParallelTlasInstanceThreshold)
         scheduleParallelFor(static_cast<usize>(0), numInstances, s_TlasInstanceGrainSize, buildVkInstance);
     else{
         for(usize i = 0; i < numInstances; ++i)

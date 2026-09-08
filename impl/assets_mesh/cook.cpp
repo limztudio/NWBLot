@@ -17,7 +17,7 @@
 #include "meshlet_payload_packing.h"
 
 #include <core/alloc/scratch.h>
-#include <core/alloc/thread.h>
+#include <core/alloc/cpu_task.h>
 #include <core/assets/paths.h>
 #include <global/math/frame.h>
 #include <core/metascript/parser.h>
@@ -49,7 +49,7 @@ static bool ParseSourceMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset,
     MeshCookEntry& outEntry,
-    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 );
 static bool ValidateMeshAssetFields(
@@ -69,7 +69,7 @@ static bool ParseMeshMeta(
     const Core::Metascript::Value& asset,
     const Name& virtualPath,
     MeshCookEntry& outEntry,
-    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
     outEntry = MeshCookEntry(outEntry.positions.get_allocator().arena());
@@ -86,14 +86,14 @@ static bool ParseMeshMeta(
     }
     if(!ValidateMeshAssetFields(discoveredFile, asset))
         return false;
-    return ParseSourceMeshMeta(discoveredFile, asset, outEntry, threadPool, scratchArena);
+    return ParseSourceMeshMeta(discoveredFile, asset, outEntry, cpuScheduler, scratchArena);
 }
 
 static bool ParseMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Document& doc,
     MeshCookEntry& outEntry,
-    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
     Name virtualPath = NAME_NONE;
@@ -105,7 +105,7 @@ static bool ParseMeshMeta(
         scratchArena
     ))
         return false;
-    return ParseMeshMeta(discoveredFile, doc.asset(), virtualPath, outEntry, threadPool, scratchArena);
+    return ParseMeshMeta(discoveredFile, doc.asset(), virtualPath, outEntry, cpuScheduler, scratchArena);
 }
 
 static bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
@@ -150,13 +150,13 @@ bool ParseMeshCookMetadata(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     MeshCookEntry& outEntry,
-    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
     __hidden_assets_mesh_cook::DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
     if(!__hidden_assets_mesh_cook::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
         return false;
-    return __hidden_assets_mesh_cook::ParseMeshMeta(discoveredFile, doc, outEntry, threadPool, scratchArena);
+    return __hidden_assets_mesh_cook::ParseMeshMeta(discoveredFile, doc, outEntry, cpuScheduler, scratchArena);
 }
 
 bool ParseMeshCookMetadata(
@@ -164,12 +164,12 @@ bool ParseMeshCookMetadata(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     MeshCookEntry& outEntry,
-    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
     __hidden_assets_mesh_cook::DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
     discoveredFile.filePath = nwbFilePath;
-    return __hidden_assets_mesh_cook::ParseMeshMeta(discoveredFile, asset, virtualPath, outEntry, threadPool, scratchArena);
+    return __hidden_assets_mesh_cook::ParseMeshMeta(discoveredFile, asset, virtualPath, outEntry, cpuScheduler, scratchArena);
 }
 
 bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){

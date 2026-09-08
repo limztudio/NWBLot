@@ -209,7 +209,7 @@ void CommandList::GraphSubmissionOwnership::release()noexcept{
 
 
 CommandList::CommandList(Device& device, const CommandListParameters& params)
-    : RefCounter<GraphicsResource>(device.m_context.threadPool)
+    : RefCounter<GraphicsResource>(device.m_context.cpuScheduler)
     , m_creationDesc(params)
     , m_desc(params)
     , m_stateTracker(device.m_context)

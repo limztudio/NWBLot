@@ -34,8 +34,8 @@ inline constexpr AStringView s_SetLabel = "Compute Emulation Outputs";
 struct OutputContext{
     TestArena testArena;
     Core::GraphicsAllocator graphicsAllocator{ testArena.arena };
-    Core::Alloc::ThreadPool threadPool{ 0u };
-    Core::GraphicsBackend::VulkanContext context{ graphicsAllocator, threadPool, 1u };
+    Core::Alloc::CpuTaskScheduler cpuScheduler{ 0u };
+    Core::GraphicsBackend::VulkanContext context{ graphicsAllocator, cpuScheduler, 1u };
     Core::GraphicsBackend::VulkanAllocator allocator{ context };
     Core::GpuTaskGraph graph{ testArena.arena };
     BufferVector buffers{ testArena.arena };

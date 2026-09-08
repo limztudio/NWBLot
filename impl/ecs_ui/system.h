@@ -85,6 +85,10 @@ public:
     virtual ~UiSystem()override;
 
 public:
+    [[nodiscard]] virtual Core::Alloc::CpuTaskOptions taskOptions()const override{
+        return { .cost = Core::Alloc::CpuTaskCost::Light, .target = Core::Alloc::CpuTaskTarget::MainThread };
+    }
+
     virtual void update(Core::ECS::World& world, f32 delta)override;
     virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual void invalidateResources()override;

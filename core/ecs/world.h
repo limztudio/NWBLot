@@ -24,7 +24,7 @@ class Entity;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class World : NoCopy, public Alloc::ITaskScheduler{
+class World : NoCopy{
     friend class Entity;
 
 
@@ -47,7 +47,7 @@ private:
 
 
 public:
-    World(Alloc::GlobalArena& arena, Alloc::ThreadPool& threadPool);
+    World(Alloc::GlobalArena& arena, Alloc::CpuTaskScheduler& taskScheduler);
     ~World();
 
 
@@ -190,6 +190,9 @@ public:
 
 
 public:
+    [[nodiscard]] Alloc::CpuTaskScope& taskScope(){ return m_tasks; }
+    [[nodiscard]] Alloc::CpuTaskScheduler& taskScheduler(){ return m_tasks.scheduler(); }
+
     void tick(f32 delta);
     void clear();
 
@@ -248,6 +251,7 @@ private:
 
 private:
     Alloc::GlobalArena& m_arena;
+    Alloc::CpuTaskScope m_tasks;
 
     EntityManager m_entityManager;
     Vector<u32, Alloc::GlobalArena> m_entityComponentHeads;

@@ -29,7 +29,7 @@ inline constexpr u32 s_ParallelRecordingException = 0xE101u;
 
 
 struct ParallelRecordingExceptionState{
-    Alloc::ThreadPool& workers;
+    Alloc::CpuTaskScheduler& workers;
     Latch recordingStarted{ 3u };
     Atomic<u32> discardCount{ 0u };
     Atomic<u32> activeCallbacks{ 0u };
@@ -38,7 +38,7 @@ struct ParallelRecordingExceptionState{
     GpuSubmissionPacketId failedWorkerPacket;
     bool throwOnWorker = false;
 
-    explicit ParallelRecordingExceptionState(Alloc::ThreadPool& recordingWorkers, const bool workerThrows = false)noexcept
+    explicit ParallelRecordingExceptionState(Alloc::CpuTaskScheduler& recordingWorkers, const bool workerThrows = false)noexcept
         : workers(recordingWorkers)
         , throwOnWorker(workerThrows)
     {}
@@ -112,7 +112,7 @@ struct NativeAcceptedFrontierWithoutPrefixTask{
 
 TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierCallerExceptionDrainsTimedClaimsWithoutInvokingDiscardObservers){
     auto& device = DescriptorBufferRoundTripTest::device();
-    Alloc::ThreadPool recordingWorkers(2u, CpuAffinity::Any);
+    Alloc::CpuTaskScheduler recordingWorkers(2u);
     ParallelRecordingExceptionState state(recordingWorkers);
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     GpuTaskSchedulingHint scheduling;
@@ -250,7 +250,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierCallerExceptionDrainsTimedCla
 // must consume successful, false, and throwing packet states without invoking any discard observer.
 TEST_F(DescriptorBufferRoundTripTest, CompositeReadyFrontierCallerExceptionResolvesWholeAttemptWithoutDiscardCallbacks){
     auto& device = DescriptorBufferRoundTripTest::device();
-    Alloc::ThreadPool recordingWorkers(2u, CpuAffinity::Any);
+    Alloc::CpuTaskScheduler recordingWorkers(2u);
     ParallelRecordingExceptionState state(recordingWorkers);
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     GpuTaskSchedulingHint scheduling;
@@ -372,7 +372,7 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeReadyFrontierCallerExceptionResol
 TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierWorkerExceptionIsTerminal){
     const auto recordWithFailingWorker = [](){
         auto& device = DescriptorBufferRoundTripTest::device();
-        Alloc::ThreadPool recordingWorkers(2u, CpuAffinity::Any);
+        Alloc::CpuTaskScheduler recordingWorkers(2u);
         ParallelRecordingExceptionState state(recordingWorkers, true);
         GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
         GpuTaskSchedulingHint scheduling;

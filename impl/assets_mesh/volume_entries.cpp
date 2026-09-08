@@ -43,7 +43,7 @@ static bool ParseMeshDocument(
         nwbFilePath,
         doc,
         outEntry,
-        context.threadPool,
+        context.cpuScheduler,
         context.scratchArena
     );
 }
@@ -60,7 +60,7 @@ static bool ParseMeshValue(
         nwbFilePath,
         asset,
         outEntry,
-        context.threadPool,
+        context.cpuScheduler,
         context.scratchArena
     );
 }

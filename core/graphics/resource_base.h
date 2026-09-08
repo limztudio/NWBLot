@@ -8,6 +8,7 @@
 #include <core/global.h>
 
 #include <core/alloc/module.h>
+#include <core/alloc/cpu_task.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,14 +53,14 @@ NWB_INLINE bool operator!=(const Object& lhs, const Object& rhs)noexcept{ return
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class GraphicsResource : public Alloc::ITaskScheduler{
+class GraphicsResource{
     template<typename, typename> friend struct ::ArenaRefDeleter;
     template<typename ArenaT, typename ValueT> friend void ::ArenaObjectDetail::DestroyArenaReference(ArenaT* arena, ValueT* value)noexcept;
 
 
 protected:
-    inline explicit GraphicsResource(Alloc::ThreadPool& pool)noexcept
-        : Alloc::ITaskScheduler(pool)
+    inline explicit GraphicsResource(Alloc::CpuTaskScheduler& scheduler)noexcept
+        : m_cpuScheduler(scheduler)
     {}
     virtual ~GraphicsResource()noexcept = default;
 
@@ -76,6 +77,24 @@ public:
     virtual u32 release()noexcept = 0;
 
     virtual Object getNativeHandle(ObjectType type){ static_cast<void>(type); return nullptr; }
+
+
+protected:
+    [[nodiscard]] Alloc::CpuTaskScheduler& taskScheduler()const noexcept{ return m_cpuScheduler; }
+
+    template<typename Func>
+    void scheduleParallelFor(usize begin, usize end, const Func& func){
+        m_cpuScheduler.parallelFor(begin, end, func);
+    }
+
+    template<typename Func>
+    void scheduleParallelFor(usize begin, usize end, usize grainSize, const Func& func){
+        m_cpuScheduler.parallelFor(begin, end, grainSize, func);
+    }
+
+
+private:
+    Alloc::CpuTaskScheduler& m_cpuScheduler;
 };
 
 

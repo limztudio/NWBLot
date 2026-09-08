@@ -7,6 +7,8 @@
 #include "arena_names.h"
 #include "world.h"
 
+#include <global/scope_exit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,54 +25,15 @@ namespace __hidden_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_SchedulerRebuildScratchBytes = 4096u;
-
-[[nodiscard]] bool accessesCanShareStage(const ComponentAccess& stageAccess, const ComponentAccess& systemAccess){
-    if(stageAccess.typeId != systemAccess.typeId)
-        return true;
-
-    return stageAccess.mode != AccessMode::Write && systemAccess.mode != AccessMode::Write;
-}
-
-template<typename StageAccessContainer>
-[[nodiscard]] bool stageCanAddAccess(const StageAccessContainer& stageAccesses, const ComponentAccess& systemAccess){
-    for(const ComponentAccess& stageAccess : stageAccesses){
-        if(!accessesCanShareStage(stageAccess, systemAccess))
-            return false;
+template<typename AccessContainer>
+[[nodiscard]] bool systemsConflict(const AccessContainer& predecessorAccesses, const AccessContainer& systemAccesses){
+    for(const ComponentAccess& predecessor : predecessorAccesses){
+        for(const ComponentAccess& access : systemAccesses){
+            if(predecessor.typeId == access.typeId && (predecessor.mode == AccessMode::Write || access.mode == AccessMode::Write))
+                return true;
+        }
     }
-    return true;
-}
-
-template<typename StageAccessContainer, typename SystemAccessContainer>
-[[nodiscard]] bool stageCanAddSystem(
-    const StageAccessContainer& stageAccesses,
-    const SystemAccessContainer& systemAccesses
-){
-    for(const ComponentAccess& systemAccess : systemAccesses){
-        if(!stageCanAddAccess(stageAccesses, systemAccess))
-            return false;
-    }
-    return true;
-}
-
-template<typename StageAccessContainer>
-void mergeStageAccess(StageAccessContainer& stageAccesses, const ComponentAccess& systemAccess){
-    for(ComponentAccess& stageAccess : stageAccesses){
-        if(stageAccess.typeId != systemAccess.typeId)
-            continue;
-
-        if(systemAccess.mode == AccessMode::Write)
-            stageAccess.mode = AccessMode::Write;
-        return;
-    }
-
-    stageAccesses.push_back(systemAccess);
-}
-
-template<typename StageAccessContainer, typename SystemAccessContainer>
-void mergeSystemAccess(StageAccessContainer& stageAccesses, const SystemAccessContainer& systemAccesses){
-    for(const ComponentAccess& systemAccess : systemAccesses)
-        mergeStageAccess(stageAccesses, systemAccess);
+    return false;
 }
 
 
@@ -108,7 +71,7 @@ void ISystem::registerAccess(ComponentTypeId typeId, AccessMode::Enum mode){
 
 SystemScheduler::SystemScheduler(Alloc::GlobalArena& arena)
     : m_arena(arena)
-    , m_stages(arena)
+    , m_dependencies(arena)
     , m_allSystems(arena)
     , m_dirty(false)
 {}
@@ -138,81 +101,23 @@ void SystemScheduler::removeSystem(ISystem& system){
 
 void SystemScheduler::clear(){
     m_allSystems.clear();
-    m_stages.clear();
+    m_dependencies.clear();
     m_dirty = false;
 }
 
 
 void SystemScheduler::rebuild(){
-    m_stages.clear();
+    m_dependencies.clear();
     const usize systemCount = m_allSystems.size();
-    m_stages.reserve(systemCount);
+    m_dependencies.reserve(systemCount);
 
-    if(systemCount == 0u){
-        m_dirty = false;
-        return;
-    }
-
-    if(systemCount == 1u){
-        Stage stage{m_arena};
-        stage.push_back(m_allSystems[0]);
-        m_stages.push_back(Move(stage));
-        m_dirty = false;
-        return;
-    }
-
-    // Determine parallel stages by analyzing read/write dependencies.
-    // Two systems can share a stage if:
-    //  - They do not both write the same component type
-    //  - One does not write a component that the other reads
-
-    Alloc::ScratchArena scratchArena(EcsArenaScope::s_SchedulerRebuildScratch, __hidden_system::s_SchedulerRebuildScratchBytes);
-
-    Vector<u8, Alloc::ScratchArena> assignedSystems(
-        systemCount, 0,
-        scratchArena
-    );
-
-    usize componentAccessReserve = 0;
-    for(ISystem* sys : m_allSystems){
-        if(sys->m_access.size() > Limit<usize>::s_Max - componentAccessReserve){
-            componentAccessReserve = systemCount;
-            break;
+    for(usize systemIndex = 0u; systemIndex < systemCount; ++systemIndex){
+        DependencyList predecessors(m_arena);
+        for(usize predecessorIndex = 0u; predecessorIndex < systemIndex; ++predecessorIndex){
+            if(__hidden_system::systemsConflict(m_allSystems[predecessorIndex]->m_access, m_allSystems[systemIndex]->m_access))
+                predecessors.push_back(predecessorIndex);
         }
-        componentAccessReserve += sys->m_access.size();
-    }
-
-    Vector<ComponentAccess, Alloc::ScratchArena> stageAccesses{scratchArena};
-    stageAccesses.reserve(componentAccessReserve);
-
-    Vector<ISystem*, Alloc::ScratchArena> stageSystems{scratchArena};
-    stageSystems.reserve(systemCount);
-
-    usize numAssigned = 0;
-
-    while(numAssigned < systemCount){
-        stageAccesses.clear();
-        stageSystems.clear();
-
-        for(usize i = 0; i < systemCount; ++i){
-            if(assignedSystems[i] != 0u)
-                continue;
-
-            ISystem* sys = m_allSystems[i];
-            const auto& acc = sys->m_access;
-
-            if(!__hidden_system::stageCanAddSystem(stageAccesses, acc))
-                continue;
-
-            __hidden_system::mergeSystemAccess(stageAccesses, acc);
-            assignedSystems[i] = 1u;
-            stageSystems.push_back(sys);
-            ++numAssigned;
-        }
-
-        Stage stage{m_arena};
-        AssignTriviallyCopyableVector(stage, stageSystems);
-        m_stages.push_back(Move(stage));
+        m_dependencies.push_back(Move(predecessors));
     }
 
     m_dirty = false;
@@ -223,25 +128,36 @@ void SystemScheduler::execute(World& world, f32 delta){
     if(m_dirty)
         rebuild();
 
+    // Preparation can change entity/component storage, so it stays on the caller before any update starts.
     for(ISystem* system : m_allSystems)
         system->prepare(world);
 
-    Alloc::ThreadPool& pool = world.taskPool();
+    if(m_allSystems.empty())
+        return;
 
-    for(auto& stage : m_stages){
-        if(stage.size() == 1){
-            stage[0]->update(world, delta);
-        }
-        else{
-            pool.parallelFor(
-                static_cast<usize>(0),
-                stage.size(),
-                [&stage, &world, delta](usize i){
-                    stage[i]->update(world, delta);
-                }
-            );
-        }
+    using TaskHandle = Alloc::CpuTaskScheduler::TaskHandle;
+    Alloc::ScratchArena scratchArena(EcsArenaScope::s_SchedulerExecutionScratch);
+    Vector<TaskHandle, Alloc::ScratchArena> handles(m_allSystems.size(), TaskHandle{}, scratchArena);
+    Vector<TaskHandle, Alloc::ScratchArena> dependencies(scratchArena);
+    dependencies.reserve(m_allSystems.size());
+    Alloc::CpuTaskScope& tasks = world.taskScope();
+
+    // Keep world/system data alive if publishing a later node throws after earlier work has started.
+    ScopeExit drainSubmitted([&]()noexcept{ tasks.drain(); });
+    for(usize systemIndex = 0u; systemIndex < m_allSystems.size(); ++systemIndex){
+        dependencies.clear();
+        for(const usize predecessor : m_dependencies[systemIndex])
+            dependencies.push_back(handles[predecessor]);
+
+        ISystem* const system = m_allSystems[systemIndex];
+        handles[systemIndex] = tasks.submit([system, &world, delta](){
+            system->update(world, delta);
+        }, system->taskOptions(), dependencies.data(), dependencies.size());
+        if(!handles[systemIndex].valid())
+            throw RuntimeException("CPU task scheduler rejected an ECS system update");
     }
+    tasks.wait();
+    drainSubmitted.release();
 }
 
 

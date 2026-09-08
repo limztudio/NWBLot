@@ -18,7 +18,7 @@ NWB_VULKAN_BEGIN
 
 
 ComputePipeline::ComputePipeline(const VulkanContext& context)
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_context(context)
 {}
 ComputePipeline::~ComputePipeline(){

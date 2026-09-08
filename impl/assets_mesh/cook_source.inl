@@ -235,7 +235,7 @@ static bool ParseSourceMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset,
     MeshCookEntry& outEntry,
-    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
     SourceMeshStreams streams(outEntry.positions.get_allocator().arena(), scratchArena);
@@ -243,7 +243,7 @@ static bool ParseSourceMeshMeta(
         return false;
 
     CopySourceStreams(streams, outEntry);
-    return BuildMeshlets(discoveredFile.filePath, s_MeshMetaKind, streams.indices, outEntry, threadPool);
+    return BuildMeshlets(discoveredFile.filePath, s_MeshMetaKind, streams.indices, outEntry, cpuScheduler);
 }
 
 

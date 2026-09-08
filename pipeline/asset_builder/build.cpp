@@ -72,7 +72,7 @@ bool BuildAssets(const AssetBuildOptions& options){
         arena,
         nwbFiles,
         parsedMetadata,
-        options.services.threadPool,
+        options.services.cpuScheduler,
         scratchArena
     ))
         return false;
@@ -111,7 +111,7 @@ bool BuildAssets(const AssetBuildOptions& options){
     }
     if(!Assets::AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(
         arena,
-        options.services.threadPool,
+        options.services.cpuScheduler,
         resolvedPaths,
         configurationSafeName,
         parsedMetadata,

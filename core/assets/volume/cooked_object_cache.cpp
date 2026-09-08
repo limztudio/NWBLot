@@ -372,7 +372,7 @@ namespace AssetsVolumeCookDetail{
 
 bool BuildRegistryObjectManifestEntries(
     Core::Alloc::GlobalArena& arena,
-    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::CpuTaskScheduler& cpuScheduler,
     const ResolvedCookPaths& resolvedPaths,
     const AStringView configurationSafeName,
     ParsedAssetMetadata& parsedMetadata,
@@ -390,7 +390,7 @@ bool BuildRegistryObjectManifestEntries(
 
     Futex objectCacheWriteMutex;
     Atomic<bool> failed{ false };
-    threadPool.parallelFor(static_cast<usize>(0u), bucketCount, [&](const usize bucketIndex){
+    cpuScheduler.parallelFor(static_cast<usize>(0u), bucketCount, [&](const usize bucketIndex){
         if(failed.load(MemoryOrder::acquire))
             return;
 

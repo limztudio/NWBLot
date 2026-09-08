@@ -345,8 +345,8 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
 TEST(GpuTaskGraph, ClampsTypedTextureFragmentsToPhysicalSubresources){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
         testArena.arena,

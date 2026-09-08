@@ -233,7 +233,7 @@ static void ApplyCutterTransform(
 class CsgVisibleSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.threadPool);
+        auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.cpuTasks);
         if(!world){
             NWB_LOGGER_FATAL(NWB_TEXT("CsgVisibleSmokeProject initialization failed: ECS world allocation failed"));
             throw RuntimeException("CsgVisibleSmokeProject initialization failed");

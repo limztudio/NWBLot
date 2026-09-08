@@ -190,8 +190,8 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
 
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
 
     Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
@@ -436,8 +436,8 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
 TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwnership){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
 
     const Graphics::GpuPhysicalQueueInfo queues[] = {
@@ -716,8 +716,8 @@ TEST(GpuTaskGraph, TypedImportsRejectMalformedInheritedNativeQueueSharing){
 
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
 
     for(const Graphics::ResourceQueueSharing::Mask queueSharing : s_InvalidQueueSharingMasks){
@@ -811,8 +811,8 @@ TEST(GpuTaskGraph, TypedImportsValidateRetainedExternalFinalState){
 
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
 
     const Graphics::TextureDesc retainedTextureDesc = Graphics::TextureDesc()
@@ -1064,10 +1064,10 @@ TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
 
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext sourceContext(
         graphicsAllocator,
-        threadPool,
+        cpuScheduler,
         s_SourceDeviceGeneration
     );
     Graphics::GraphicsBackend::VulkanAllocator sourceAllocator(sourceContext);

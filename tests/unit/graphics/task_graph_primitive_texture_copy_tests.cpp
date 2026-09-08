@@ -76,8 +76,8 @@ TEST(GpuTaskGraph, CopyTextureTaskRequiresTypedTextureImports){
 TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const Graphics::TextureDesc validDescription = Graphics::TextureDesc()
         .setWidth(8u)
@@ -501,8 +501,8 @@ TEST(GpuTaskGraph, ResolveTextureTaskRequiresTypedTextureImports){
 TEST(GpuTaskGraph, ResolveTextureTaskPreflightsTypedTextureContract){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const Graphics::TextureDesc validSourceDescription = Graphics::TextureDesc()
         .setWidth(4u)

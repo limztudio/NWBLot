@@ -75,7 +75,7 @@ struct AutoMetadataParser{
     const Core::Metascript::Value& asset,
     ParsedAssetMetadata& outMetadata,
     CookEntryPathHashSet& seenPropertyAssetPathHashes,
-    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::CpuTaskScheduler& cpuScheduler,
     ScratchArena& scratchArena
 ){
     AssetValueMetadataParseContext metadataParseContext{
@@ -95,7 +95,7 @@ struct AutoMetadataParser{
 
     CookEntryParseContext parseContext{
         cookArena,
-        threadPool,
+        cpuScheduler,
         scratchArena,
         seenPropertyAssetPathHashes
     };
@@ -114,7 +114,7 @@ struct AutoMetadataParser{
     const Core::Metascript::Document& doc,
     ParsedAssetMetadata& outMetadata,
     CookEntryPathHashSet& seenPropertyAssetPathHashes,
-    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::CpuTaskScheduler& cpuScheduler,
     ScratchArena& scratchArena
 ){
     const AStringView rawAssetTypeText(doc.assetType().data(), doc.assetType().size());
@@ -136,7 +136,7 @@ struct AutoMetadataParser{
     if(outMetadata.entryRegistry.has(assetType)){
         CookEntryParseContext parseContext{
             cookArena,
-            threadPool,
+            cpuScheduler,
             scratchArena,
             seenPropertyAssetPathHashes
         };
@@ -347,7 +347,7 @@ bool ParseAssetMetadata(
     CookArena& cookArena,
     const DiscoveredNwbFileVector& nwbFiles,
     ParsedAssetMetadata& outMetadata,
-    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::CpuTaskScheduler& cpuScheduler,
     ScratchArena& scratchArena
 ){
     CookEntryPathHashSet seenPropertyAssetPathHashes(
@@ -387,7 +387,7 @@ bool ParseAssetMetadata(
                     expandedAsset.value,
                     outMetadata,
                     seenPropertyAssetPathHashes,
-                    threadPool,
+                    cpuScheduler,
                     scratchArena
                 ))
                     return false;
@@ -409,7 +409,7 @@ bool ParseAssetMetadata(
             doc,
             outMetadata,
             seenPropertyAssetPathHashes,
-            threadPool,
+            cpuScheduler,
             scratchArena
         ))
             return false;

@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <core/alloc/cpu_task.h>
+
 #include <core/graphics/api.h>
 
 
@@ -77,7 +79,7 @@ struct DeviceDesc{
     usize physicalQueueCount = 0u;
 
     GraphicsAllocator& allocator;
-    Alloc::ThreadPool& threadPool;
+    Alloc::CpuTaskScheduler& cpuScheduler;
 
     VkAllocationCallbacks* allocationCallbacks = nullptr;
 
@@ -131,9 +133,9 @@ struct DeviceDesc{
     Filesystem::FilesystemFactory filesystemFactory;
 
 
-    explicit DeviceDesc(GraphicsAllocator& allocatorRef, Alloc::ThreadPool& threadPoolRef)
+    explicit DeviceDesc(GraphicsAllocator& allocatorRef, Alloc::CpuTaskScheduler& cpuSchedulerRef)
         : allocator(allocatorRef)
-        , threadPool(threadPoolRef)
+        , cpuScheduler(cpuSchedulerRef)
         , vulkanLibraryName(allocatorRef.getObjectArena())
         , pipelineCacheDirectory(allocatorRef.getObjectArena())
     {}

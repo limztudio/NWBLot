@@ -130,10 +130,10 @@ private:
 struct PruneContext{
     Core::Alloc::GlobalArena arena{ Name("tests/runtime_mesh_pruning/owner") };
     Core::GraphicsAllocator graphicsAllocator{ arena };
-    Core::Alloc::ThreadPool threadPool{ 0u };
-    Core::GraphicsBackend::VulkanContext context{ graphicsAllocator, threadPool, 1u };
+    Core::Alloc::CpuTaskScheduler cpuScheduler{ 0u };
+    Core::GraphicsBackend::VulkanContext context{ graphicsAllocator, cpuScheduler, 1u };
     Core::GraphicsBackend::VulkanAllocator allocator{ context };
-    Core::ECS::World world{ arena, threadPool };
+    Core::ECS::World world{ arena, cpuScheduler };
     MeshSystem& meshSystem = world.addSystem<MeshSystem>(world);
     Core::BufferHandle buffer;
     WorldRuntimeProvider firstProvider{ world, meshSystem, 0u };

@@ -151,7 +151,7 @@ template<typename TriangleIndexVectorT, typename VertexRefVectorT>
     const MeshletScoreState& scoreState,
     const MeshletDesc& meshlet,
     const VertexRefVectorT& localVertexRefs,
-    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::CpuTaskScheduler& cpuScheduler,
     Core::Assets::AssetVector<MeshletCandidateSearchResult>& parallelCandidates,
     MeshletFrontierCandidate& outCandidate
 ){
@@ -160,7 +160,7 @@ template<typename TriangleIndexVectorT, typename VertexRefVectorT>
         return false;
 
     const usize searchCount = triangleCount - searchOffset;
-    if(!threadPool.isParallelEnabled() || searchCount < s_MeshletDisconnectedCandidateParallelThreshold){
+    if(!cpuScheduler.isParallelEnabled() || searchCount < s_MeshletDisconnectedCandidateParallelThreshold){
         return FindBestDisconnectedMeshletCandidateRange(
             trianglePrecompute,
             searchOffset,
@@ -173,7 +173,7 @@ template<typename TriangleIndexVectorT, typename VertexRefVectorT>
         );
     }
 
-    const usize workerCount = static_cast<usize>(threadPool.workerThreadCount()) + 1u;
+    const usize workerCount = static_cast<usize>(cpuScheduler.workerThreadCount()) + 1u;
     const usize maxChunkCount = workerCount * s_MeshletDisconnectedCandidateParallelOversubscription;
     const usize chunkCount = searchCount < maxChunkCount ? searchCount : maxChunkCount;
     const usize chunkSize = searchCount / chunkCount;
@@ -181,7 +181,7 @@ template<typename TriangleIndexVectorT, typename VertexRefVectorT>
 
     parallelCandidates.clear();
     parallelCandidates.resize(chunkCount);
-    threadPool.parallelFor(static_cast<usize>(0), chunkCount, [&](const usize chunkIndex){
+    cpuScheduler.parallelFor(static_cast<usize>(0), chunkCount, [&](const usize chunkIndex){
         const usize chunkBegin = searchOffset + chunkIndex * chunkSize + (chunkIndex < remainder ? chunkIndex : remainder);
         const usize chunkEnd = chunkBegin + chunkSize + (chunkIndex < remainder ? 1u : 0u);
 

@@ -190,7 +190,7 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
     Latch recordingStarted(2);
     bool firstRecorded = false;
     bool secondRecorded = false;
-    const Graphics::JobHandle firstJob = graphics.scheduleGraphicsJob([&](){
+    const Graphics::TaskHandle firstJob = graphics.scheduleGraphicsTask([&](){
         recordingStarted.count_down();
         recordingStarted.wait();
         firstCommandList->open();
@@ -198,7 +198,7 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
         firstCommandList->close();
         firstRecorded = true;
     });
-    const Graphics::JobHandle secondJob = graphics.scheduleGraphicsJob([&](){
+    const Graphics::TaskHandle secondJob = graphics.scheduleGraphicsTask([&](){
         recordingStarted.count_down();
         recordingStarted.wait();
         secondCommandList->open();
@@ -209,8 +209,8 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
     ASSERT_TRUE(firstJob.valid());
     ASSERT_TRUE(secondJob.valid());
 
-    graphics.waitJob(firstJob);
-    graphics.waitJob(secondJob);
+    graphics.waitTask(firstJob);
+    graphics.waitTask(secondJob);
     EXPECT_TRUE(firstRecorded);
     EXPECT_TRUE(secondRecorded);
 
@@ -294,7 +294,7 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
     Latch reusedRecordingStarted(2);
     firstRecorded = false;
     secondRecorded = false;
-    const Graphics::JobHandle reusedFirstJob = graphics.scheduleGraphicsJob([&](){
+    const Graphics::TaskHandle reusedFirstJob = graphics.scheduleGraphicsTask([&](){
         reusedRecordingStarted.count_down();
         reusedRecordingStarted.wait();
         firstCommandList->open();
@@ -302,7 +302,7 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
         firstCommandList->close();
         firstRecorded = true;
     });
-    const Graphics::JobHandle reusedSecondJob = graphics.scheduleGraphicsJob([&](){
+    const Graphics::TaskHandle reusedSecondJob = graphics.scheduleGraphicsTask([&](){
         reusedRecordingStarted.count_down();
         reusedRecordingStarted.wait();
         secondCommandList->open();
@@ -313,8 +313,8 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
     ASSERT_TRUE(reusedFirstJob.valid());
     ASSERT_TRUE(reusedSecondJob.valid());
 
-    graphics.waitJob(reusedFirstJob);
-    graphics.waitJob(reusedSecondJob);
+    graphics.waitTask(reusedFirstJob);
+    graphics.waitTask(reusedSecondJob);
     EXPECT_TRUE(firstRecorded);
     EXPECT_TRUE(secondRecorded);
     const GpuCommandArenaStatistics reusedStatistics = device.getCommandArenaStatistics(graphicsQueue);
@@ -396,10 +396,10 @@ TEST_F(DescriptorBufferRoundTripTest, CanonicalizesRawDirectWorkerIdentityAndKee
 }
 
 
-// ThreadPool worker indices are local to each pool. Distinct pool domains must therefore produce distinct native
+// CpuTaskScheduler worker indices are local to each pool. Distinct pool domains must therefore produce distinct native
 // command arenas even when their local indices collide. A second phase deliberately shares one arena so concurrent
 // destruction also exercises externally synchronized vkFreeCommandBuffers on abandoned, never-submitted buffers.
-TEST_F(DescriptorBufferRoundTripTest, ThreadPoolDomainsIsolateCollidingWorkersAndSerializeAbandonedBufferFree){
+TEST_F(DescriptorBufferRoundTripTest, CpuTaskSchedulerDomainsIsolateCollidingWorkersAndSerializeAbandonedBufferFree){
     auto& device = DescriptorBufferRoundTripTest::device();
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     ASSERT_TRUE(graphicsQueue.valid());
@@ -436,8 +436,10 @@ TEST_F(DescriptorBufferRoundTripTest, ThreadPoolDomainsIsolateCollidingWorkersAn
     ASSERT_NE(firstBuffer.get(), nullptr);
     ASSERT_NE(secondBuffer.get(), nullptr);
 
-    Alloc::ThreadPool firstWorkers(1u, CpuAffinity::Any);
-    Alloc::ThreadPool secondWorkers(1u, CpuAffinity::Any);
+    Alloc::CpuTaskScheduler firstWorkers(1u);
+    Alloc::CpuTaskScheduler secondWorkers(1u);
+    Alloc::CpuTaskScope firstTasks(firstWorkers);
+    Alloc::CpuTaskScope secondTasks(secondWorkers);
     ASSERT_NE(firstWorkers.domainIdentity(), 0u);
     ASSERT_NE(secondWorkers.domainIdentity(), 0u);
     ASSERT_NE(firstWorkers.domainIdentity(), secondWorkers.domainIdentity());
@@ -458,7 +460,7 @@ TEST_F(DescriptorBufferRoundTripTest, ThreadPoolDomainsIsolateCollidingWorkersAn
     u64 secondObservedDomain = 0u;
     u32 firstObservedWorkerIndex = 0u;
     u32 secondObservedWorkerIndex = 0u;
-    firstWorkers.enqueue([&](){
+    const auto firstRecordingTask = firstTasks.submit([&](){
         const u32 workerIndex = static_cast<u32>(firstWorkers.currentWorkerIndex() + 1u);
         CommandListParameters parameters;
         parameters.setPhysicalQueue(graphicsQueue).setRecordingWorker(firstWorkers.domainIdentity(), workerIndex);
@@ -474,7 +476,7 @@ TEST_F(DescriptorBufferRoundTripTest, ThreadPoolDomainsIsolateCollidingWorkersAn
         distinctCommandListsReady.count_down();
         releaseDistinctCommandLists.wait();
     });
-    secondWorkers.enqueue([&](){
+    const auto secondRecordingTask = secondTasks.submit([&](){
         const u32 workerIndex = static_cast<u32>(secondWorkers.currentWorkerIndex() + 1u);
         CommandListParameters parameters;
         parameters.setPhysicalQueue(graphicsQueue).setRecordingWorker(secondWorkers.domainIdentity(), workerIndex);
@@ -491,6 +493,8 @@ TEST_F(DescriptorBufferRoundTripTest, ThreadPoolDomainsIsolateCollidingWorkersAn
         releaseDistinctCommandLists.wait();
     });
 
+    EXPECT_TRUE(firstRecordingTask.valid());
+    EXPECT_TRUE(secondRecordingTask.valid());
     distinctCommandListsReady.wait();
     EXPECT_TRUE(firstRecorded);
     EXPECT_TRUE(secondRecorded);
@@ -543,8 +547,8 @@ TEST_F(DescriptorBufferRoundTripTest, ThreadPoolDomainsIsolateCollidingWorkersAn
     EXPECT_GT(secondDistinctWorkerStatistics.nativeHandleStorageLowerBoundBytes, 0u);
 
     releaseDistinctCommandLists.count_down();
-    firstWorkers.wait();
-    secondWorkers.wait();
+    firstTasks.wait();
+    secondTasks.wait();
     const GpuCommandArenaStatistics afterDistinctStatistics = device.getCommandArenaStatistics(graphicsQueue);
     ASSERT_TRUE(afterDistinctStatistics.valid());
     EXPECT_EQ(afterDistinctStatistics.currentCommandBufferCount, beforeStatistics.currentCommandBufferCount);
@@ -575,7 +579,7 @@ TEST_F(DescriptorBufferRoundTripTest, ThreadPoolDomainsIsolateCollidingWorkersAn
     Latch releaseSharedCommandLists(1);
     bool firstSharedRecorded = false;
     bool secondSharedRecorded = false;
-    firstWorkers.enqueue([&](){
+    const auto firstSharedRecordingTask = firstTasks.submit([&](){
         CommandListParameters parameters;
         parameters
             .setPhysicalQueue(graphicsQueue)
@@ -592,7 +596,7 @@ TEST_F(DescriptorBufferRoundTripTest, ThreadPoolDomainsIsolateCollidingWorkersAn
         sharedCommandListsReady.count_down();
         releaseSharedCommandLists.wait();
     });
-    secondWorkers.enqueue([&](){
+    const auto secondSharedRecordingTask = secondTasks.submit([&](){
         firstSharedCommandListRecorded.wait();
 
         CommandListParameters parameters;
@@ -611,6 +615,8 @@ TEST_F(DescriptorBufferRoundTripTest, ThreadPoolDomainsIsolateCollidingWorkersAn
         releaseSharedCommandLists.wait();
     });
 
+    EXPECT_TRUE(firstSharedRecordingTask.valid());
+    EXPECT_TRUE(secondSharedRecordingTask.valid());
     sharedCommandListsReady.wait();
     EXPECT_TRUE(firstSharedRecorded);
     EXPECT_TRUE(secondSharedRecorded);
@@ -634,8 +640,8 @@ TEST_F(DescriptorBufferRoundTripTest, ThreadPoolDomainsIsolateCollidingWorkersAn
     EXPECT_GE(sharedWorkerStatistics.highWaterCommandBufferCount, 2u);
 
     releaseSharedCommandLists.count_down();
-    firstWorkers.wait();
-    secondWorkers.wait();
+    firstTasks.wait();
+    secondTasks.wait();
     const GpuCommandArenaStatistics afterSharedStatistics = device.getCommandArenaStatistics(graphicsQueue);
     ASSERT_TRUE(afterSharedStatistics.valid());
     EXPECT_EQ(afterSharedStatistics.currentCommandBufferCount, beforeStatistics.currentCommandBufferCount);

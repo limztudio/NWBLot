@@ -43,7 +43,7 @@ bool BuildMesh(
     const ImportOptions& options,
     const bool wantsSkinning,
     const Vec4& defaultColor,
-    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::CpuTaskScheduler& cpuScheduler,
     SourceMeshStreams& outMesh,
     UtilityVector<ufbx_node*>& outSkeletonJoints,
     UtilityVector<JointMatrix>& outSkeletonBindPoseMatrices,
@@ -121,7 +121,7 @@ bool BuildMesh(
         outInverseBindMatrices = Move(skinContext.inverseBindMatrices);
     }
 
-    return CanonicalizeSourceMeshStreams(outMesh, threadPool, nullptr);
+    return CanonicalizeSourceMeshStreams(outMesh, cpuScheduler, nullptr);
 }
 
 

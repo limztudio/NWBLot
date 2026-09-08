@@ -20,6 +20,70 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class OrderedCpuRenderPass final : public IRenderPass{
+public:
+    OrderedCpuRenderPass(Graphics& graphics, Vector<u32, Alloc::GlobalArena>& events, Atomic<u32>& completed,
+        const ThreadId mainThread, const u32 index)
+        : IRenderPass(graphics)
+        , m_events(events)
+        , m_completed(completed)
+        , m_mainThread(mainThread)
+        , m_index(index)
+    {}
+
+    virtual bool prepareResources(Framebuffer*)override{
+        EXPECT_EQ(QueryCurrentThreadId(), m_mainThread);
+        EXPECT_EQ(m_completed.load(MemoryOrder::acquire), m_index);
+        m_events.push_back(m_index * 2u);
+        getGraphics().waitTasks();
+        return true;
+    }
+
+    virtual void render(Framebuffer*)override{
+        EXPECT_EQ(QueryCurrentThreadId(), m_mainThread);
+        m_events.push_back(m_index * 2u + 1u);
+        const auto child = getGraphics().scheduleGraphicsTask([this](){
+            m_completed.fetch_add(1u, MemoryOrder::release);
+        });
+        EXPECT_TRUE(child.valid());
+    }
+
+
+private:
+    Vector<u32, Alloc::GlobalArena>& m_events;
+    Atomic<u32>& m_completed;
+    ThreadId m_mainThread;
+    u32 m_index;
+};
+
+
+TEST_F(DescriptorBufferRoundTripTest, RenderPassTasksPreserveMainThreadInterleavingAndJoinDescendants){
+    auto& graphics = s_scope->graphics();
+    Vector<u32, Alloc::GlobalArena> events(DescriptorBufferRoundTripTest::arena());
+    Atomic<u32> completed{ 0u };
+    OrderedCpuRenderPass first(graphics, events, completed, QueryCurrentThreadId(), 0u);
+    OrderedCpuRenderPass second(graphics, events, completed, QueryCurrentThreadId(), 1u);
+    graphics.addRenderPassToBack(first);
+    graphics.addRenderPassToBack(second);
+    struct RenderPassCleanup{
+        Graphics& graphics;
+        IRenderPass& first;
+        IRenderPass& second;
+
+        ~RenderPassCleanup()noexcept(false){
+            graphics.removeRenderPass(second);
+            graphics.removeRenderPass(first);
+        }
+    } removePasses{ graphics, first, second };
+
+    graphics.render();
+
+    ASSERT_EQ(events.size(), 4u);
+    for(u32 index = 0u; index < 4u; ++index)
+        EXPECT_EQ(events[index], index);
+    EXPECT_EQ(completed.load(MemoryOrder::acquire), 2u);
+}
+
 struct FrameCpuTimingCallbackState{
     u32 invocationCount = 0u;
 };

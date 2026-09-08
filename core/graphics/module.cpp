@@ -110,27 +110,25 @@ public:
 
 Graphics::Graphics(
     GraphicsAllocator& allocator,
-    Alloc::ThreadPool& threadPool,
-    Alloc::JobSystem& jobSystem,
+    Alloc::CpuTaskScheduler& cpuScheduler,
     Perf::TimingSink& gpuTiming
 )
-    : Graphics(allocator, threadPool, jobSystem, gpuTiming, nullptr)
+    : Graphics(allocator, cpuScheduler, gpuTiming, nullptr)
 {}
 
 Graphics::Graphics(
     GraphicsAllocator& allocator,
-    Alloc::ThreadPool& threadPool,
-    Alloc::JobSystem& jobSystem,
+    Alloc::CpuTaskScheduler& cpuScheduler,
     Perf::TimingSink& gpuTiming,
     Perf::TimingSink* const cpuTiming
 )
     : m_allocator(allocator)
-    , m_threadPool(threadPool)
-    , m_jobSystem(jobSystem)
+    , m_cpuScheduler(cpuScheduler)
+    , m_tasks(cpuScheduler)
     , m_deviceCreationParams(m_allocator.getObjectArena())
     , m_gpuTiming(m_allocator.getObjectArena(), gpuTiming)
     , m_cpuTiming(cpuTiming)
-    , m_backend(MakeNotNullUnique(MakeGlobalUnique<Backend>(m_allocator.getObjectArena(), m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool)))
+    , m_backend(MakeNotNullUnique(MakeGlobalUnique<Backend>(m_allocator.getObjectArena(), m_deviceCreationParams, m_swapChainState, m_allocator, m_cpuScheduler)))
     , m_renderPasses(m_allocator.getObjectArena())
     , m_swapChainFramebuffers(m_allocator.getObjectArena())
     , m_windowTitle(m_allocator.getObjectArena())
@@ -142,8 +140,7 @@ Graphics::~Graphics()noexcept(false){
     // An active unwind is already terminal. Retire scheduler captures without re-entering the throwing Vulkan
     // lifecycle path, so the original exception reaches the application-entry boundary.
     if(UncaughtExceptionCount() > 0){
-        m_jobSystem.drain();
-        m_threadPool.drain();
+        m_tasks.drain();
         return;
     }
 
@@ -363,7 +360,7 @@ bool Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
 }
 
 bool Graphics::destroy(){
-    waitAllJobs();
+    waitTasks();
 
     SwapChainTransitionTicket transitionTicket;
     if(!m_backend->prepareSwapChainTransition(SwapChainTransitionKind::Destroy, transitionTicket)){
@@ -447,7 +444,7 @@ void Graphics::addRenderPassToBack(IRenderPass& pass){
 }
 
 void Graphics::removeRenderPass(IRenderPass& pass){
-    waitAllJobs();
+    waitTasks();
     const bool deviceIdle = waitForIdle();
     GraphicsBackend::Device* const device = m_backend->getDevice();
     NWB_FATAL_ASSERT_MSG(
@@ -517,7 +514,7 @@ TextureHandle Graphics::createTexture(const TextureDesc& desc)const{
 }
 
 bool Graphics::backBufferResizing(SwapChainTransitionTicket& outTicket){
-    waitAllJobs();
+    waitTasks();
     if(!m_backend->prepareSwapChainTransition(SwapChainTransitionKind::Resize, outTicket)){
         requestDeviceRecreation();
         return false;
@@ -665,30 +662,36 @@ void Graphics::render(){
         return;
     }
 
-    // Keep prepare -> render interleaved in registration order. Skinning submits its deformation work before the
-    // renderer prepares the dependent mesh, CSG, and ray-tracing packets; a global all-pass prepare phase would
-    // observe stale runtime meshes.
+    // Each task pairs preparation with rendering. The dependency chain preserves skinning publication before the
+    // next pass prepares dependent meshes, while main-thread execution preserves the platform and UI contracts.
+    Alloc::CpuTaskScope frameTasks(m_cpuScheduler);
+    const Alloc::CpuTaskOptions options{
+        .priority = Alloc::CpuTaskPriority::Critical,
+        .target = Alloc::CpuTaskTarget::MainThread,
+    };
+    TaskHandle previous;
     for(auto* renderPass : m_renderPasses){
-        if(m_deviceRecreationRequested || device.requiresRecreation()){
+        previous = frameTasks.submit([this, &device, framebuffer, renderPass](){
+            if(m_deviceRecreationRequested || device.requiresRecreation()){
+                if(device.requiresRecreation())
+                    requestDeviceRecreation();
+                return;
+            }
+            if(!renderPass->prepareResources(framebuffer)){
+                NWB_LOGGER_WARNING(NWB_TEXT("Graphics: render pass skipped after resource preparation failed"));
+                return;
+            }
+
+            renderPass->render(framebuffer);
+
+            // Later task callbacks observe this request before touching the invalidated device generation.
             if(device.requiresRecreation())
                 requestDeviceRecreation();
-            return;
-        }
-        if(!renderPass->prepareResources(framebuffer)){
-            NWB_LOGGER_WARNING(NWB_TEXT("Graphics: render pass skipped after resource preparation failed"));
-            continue;
-        }
-
-        renderPass->render(framebuffer);
-
-        // A render pass can request recreation after an unrecoverable cross-queue ownership failure. Do not let a
-        // later pass record or submit against this device generation in the same frame.
-        if(m_deviceRecreationRequested || device.requiresRecreation()){
-            if(device.requiresRecreation())
-                requestDeviceRecreation();
-            return;
-        }
+        }, options, previous.valid() ? &previous : nullptr, previous.valid() ? 1u : 0u);
+        if(!previous.valid())
+            throw RuntimeException("CPU task scheduler rejected a render pass");
     }
+    frameTasks.wait();
 }
 
 void Graphics::updateAverageFrameTime(f64 elapsedTime){

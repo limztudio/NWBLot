@@ -15,9 +15,9 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-World::World(Alloc::GlobalArena& arena, Alloc::ThreadPool& threadPool)
-    : Alloc::ITaskScheduler(threadPool)
-    , m_arena(arena)
+World::World(Alloc::GlobalArena& arena, Alloc::CpuTaskScheduler& taskScheduler)
+    : m_arena(arena)
+    , m_tasks(taskScheduler)
     , m_entityManager(m_arena)
     , m_entityComponentHeads(m_arena)
     , m_entityComponentNodes(m_arena)
@@ -52,6 +52,7 @@ void World::destroyEntity(EntityID entityId){
 
 
 void World::removeSystem(ISystem& system){
+    m_tasks.wait();
     m_scheduler.removeSystem(system);
 
     auto itr = FindIf(
@@ -65,12 +66,13 @@ void World::removeSystem(ISystem& system){
 
 
 void World::tick(f32 delta){
+    m_tasks.wait();
     m_messageBus.swapBuffers();
     m_scheduler.execute(*this, delta);
 }
 
 void World::clear(){
-    taskPool().wait();
+    m_tasks.drain();
     m_messageBus.clear();
     m_scheduler.clear();
     m_systems.clear();

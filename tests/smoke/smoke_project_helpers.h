@@ -37,7 +37,7 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
     ProjectRuntimeContext& context,
     const tchar* const projectName
 ){
-    auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.threadPool);
+    auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
     if(!world){
         NWB_LOGGER_FATAL(NWB_TEXT("{} initialization failed: ECS world allocation failed"), projectName);
         throw RuntimeException("Smoke project initialization failed");

@@ -32,8 +32,8 @@ using TaskGraphTestUtils::TestArena;
 TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
@@ -218,8 +218,8 @@ TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
 TEST(GpuTaskGraph, AcceptsPresentationEndpointFromPresentAcquisitionState){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
@@ -280,8 +280,8 @@ TEST(GpuTaskGraph, AcceptsPresentationEndpointFromPresentAcquisitionState){
 TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
     const Graphics::GpuTaskGraphQueueTopology topology{
@@ -632,8 +632,8 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
 TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
     const Graphics::GpuTaskGraphQueueTopology topology{
@@ -932,8 +932,8 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
 TEST(GpuTaskGraph, RejectsPresentationEndpointUsersOnDifferentGraphicsQueuesDuringFinalization){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
@@ -1033,8 +1033,8 @@ TEST(GpuTaskGraph, RejectsPresentationEndpointUsersOnDifferentGraphicsQueuesDuri
 TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(

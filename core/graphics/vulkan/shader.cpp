@@ -119,7 +119,7 @@ inline bool ResolveShaderEntryPoint(
 
 
 Sampler::Sampler(const VulkanContext& context)
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_context(context)
 {}
 Sampler::~Sampler(){
@@ -134,7 +134,7 @@ Sampler::~Sampler(){
 
 
 Shader::Shader(const VulkanContext& context)
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(context.objectArena)
     , m_spirvWords(context.objectArena)
     , m_entryPointName(context.objectArena)
@@ -163,7 +163,7 @@ VkSpecializationInfo Shader::makeSpecializationInfo()const{
 
 
 ShaderLibrary::ShaderLibrary(const VulkanContext& context)
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_spirvWords(context.objectArena)
     , m_shaders(0, ShaderLibraryKeyHasher(), EqualTo<ShaderLibraryKey>(), context.objectArena)
     , m_context(context)
@@ -291,7 +291,7 @@ ShaderHandle Device::createShaderSpecialization(Shader* baseShader, const Shader
             NWB_MEMCPY(shader->m_specializationData.data() + i, sizeof(u32), &constants[i].value, sizeof(u32));
         };
 
-        if(taskPool().isParallelEnabled() && numConstants >= s_ParallelSpecializationThreshold)
+        if(taskScheduler().isParallelEnabled() && numConstants >= s_ParallelSpecializationThreshold)
             scheduleParallelFor(static_cast<usize>(0), numConstants, fillConstant);
         else{
             for(usize i = 0; i < numConstants; ++i)
@@ -318,7 +318,7 @@ ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binary
 
 
 InputLayout::InputLayout(const VulkanContext& context)
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_attributes(context.objectArena)
     , m_bindings(context.objectArena)
     , m_vkAttributes(context.objectArena)
@@ -477,7 +477,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         layout->m_vkAttributes[i] = vkAttr;
     };
 
-    if(taskPool().isParallelEnabled() && attributeCount >= s_ParallelInputLayoutThreshold)
+    if(taskScheduler().isParallelEnabled() && attributeCount >= s_ParallelInputLayoutThreshold)
         scheduleParallelFor(static_cast<usize>(0), attributeCount, s_InputLayoutGrainSize, fillVkAttribute);
     else{
         for(usize i = 0; i < attributeCount; ++i)
@@ -492,7 +492,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
 
 
 Framebuffer::Framebuffer(const VulkanContext& context)
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_resources(context.objectArena)
     , m_context(context)
 {}

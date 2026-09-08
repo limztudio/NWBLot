@@ -497,7 +497,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierTaskRangeHelperPreservesRecov
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    Alloc::ThreadPool recordingWorkers(2u, CpuAffinity::Any);
+    Alloc::CpuTaskScheduler recordingWorkers(2u);
     const GpuTaskGraphSubmitter submitter(device);
     GpuSubmissionPacketId failedPacket;
 

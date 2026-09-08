@@ -137,7 +137,7 @@ static void AddMeshletTriangleToScoreState(
     MeshletDesc& meshlet,
     Core::Assets::AssetVector<u8>& primitiveIndices,
     MeshletScoreState& scoreState,
-    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::CpuTaskScheduler& cpuScheduler,
     Core::Assets::AssetVector<MeshletCandidateSearchResult>& parallelCandidates,
     Core::Assets::AssetVector<u32>& frontier,
     Core::Assets::AssetVector<u8>& frontierFlags
@@ -152,7 +152,7 @@ static void AddMeshletTriangleToScoreState(
                 scoreState,
                 meshlet,
                 localSourceVertexRefs,
-                threadPool,
+                cpuScheduler,
                 parallelCandidates,
                 disconnectedCandidate
             ))

@@ -431,7 +431,7 @@ Texture::Texture(
     const VkImageCreateInfo& imageInfo,
     const bool initialStateKnown
 )
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(creationDesc)
     , m_creationDesc(creationDesc)
     , m_creationInitialStateKnown(initialStateKnown)
@@ -696,7 +696,7 @@ void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, cons
 
 
 StagingTexture::StagingTexture(const VulkanContext& context, VulkanAllocator& allocator)
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_mipLayouts(context.objectArena)
     , m_admittedQueueFamilies(context.objectArena)
     , m_context(context)

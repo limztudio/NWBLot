@@ -294,7 +294,7 @@ Object Device::getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& q
 
 
 Heap::Heap(const VulkanContext& context, VulkanAllocator& allocator)
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_bindingReservations(context.objectArena)
     , m_context(context)
     , m_allocator(allocator)
@@ -407,7 +407,7 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
         combo.transposeSupported = prop.transpose != VK_FALSE;
     };
 
-    if(taskPool().isParallelEnabled() && propertyCount >= s_ParallelCoopVecThreshold)
+    if(taskScheduler().isParallelEnabled() && propertyCount >= s_ParallelCoopVecThreshold)
         scheduleParallelFor(static_cast<usize>(0), propertyCount, fillMatMulFormat);
     else{
         for(usize i = 0; i < propertyCount; ++i)

@@ -14,8 +14,7 @@
 #include <core/common/application_entry.h>
 #include <core/common/module.h>
 #include <core/alloc/general.h>
-#include <core/alloc/job.h>
-#include <core/alloc/thread.h>
+#include <core/alloc/cpu_task.h>
 #include <core/graphics/api.h>
 #include <core/graphics/module.h>
 #include <core/graphics/vulkan/backend.h>
@@ -756,10 +755,9 @@ static void EmitResult(const Result& result){
     static constexpr Name s_ArenaName{"tests/ab/transfer_queue/profile_arena"};
     Alloc::GlobalArena arena(s_ArenaName);
     GraphicsAllocator allocator(arena);
-    Alloc::ThreadPool threadPool(2u, CpuAffinity::Any);
-    Alloc::JobSystem jobSystem(threadPool);
+    Alloc::CpuTaskScheduler cpuScheduler(2u);
     Perf::TimingRecorder gpuTiming(arena);
-    Graphics graphics(allocator, threadPool, jobSystem, gpuTiming);
+    Graphics graphics(allocator, cpuScheduler, gpuTiming);
 
     Result result;
     result.requestedRoute = arguments.route;

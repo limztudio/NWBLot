@@ -506,7 +506,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
     Latch queryReservationsStarted(2);
     bool firstRecorded = false;
     bool secondRecorded = false;
-    const Graphics::JobHandle firstJob = graphics.scheduleGraphicsJob([&](){
+    const Graphics::TaskHandle firstJob = graphics.scheduleGraphicsTask([&](){
         GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
         firstCommandList->open();
         recordingStarted.count_down();
@@ -519,7 +519,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
         firstCommandList->close();
         firstRecorded = firstCommandList->hasCommandBuffer();
     });
-    const Graphics::JobHandle secondJob = graphics.scheduleGraphicsJob([&](){
+    const Graphics::TaskHandle secondJob = graphics.scheduleGraphicsTask([&](){
         GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
         secondCommandList->open();
         recordingStarted.count_down();
@@ -535,8 +535,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
     ASSERT_TRUE(firstJob.valid());
     ASSERT_TRUE(secondJob.valid());
 
-    graphics.waitJob(firstJob);
-    graphics.waitJob(secondJob);
+    graphics.waitTask(firstJob);
+    graphics.waitTask(secondJob);
     ASSERT_TRUE(firstRecorded);
     ASSERT_TRUE(secondRecorded);
 

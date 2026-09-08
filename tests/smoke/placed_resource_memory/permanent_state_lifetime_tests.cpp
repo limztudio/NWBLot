@@ -88,8 +88,8 @@ Optional<Common::LoggerRegistrationGuard> PermanentStateLifetimeTest::s_loggerGu
 TEST(PermanentStateOwnership, StateTrackerValuesOwnSnapshotsTransactionally){
     PermanentStateTestArena testArena;
     GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     GraphicsBackend::VulkanAllocator allocator(context);
 
     Buffer* const baselineBufferObject = NewMetadataOnlyBuffer(testArena.arena, context, allocator, BufferDesc{});
@@ -197,10 +197,10 @@ TEST(PermanentStateOwnership, StateTrackerUsesEachResourceArenaForLastOwnerDelet
     PermanentStateTestArena resourceArena;
     GraphicsAllocator trackerGraphicsAllocator(trackerArena.arena);
     GraphicsAllocator resourceGraphicsAllocator(resourceArena.arena);
-    Core::Alloc::ThreadPool trackerThreadPool(0u);
-    Core::Alloc::ThreadPool resourceThreadPool(0u);
-    GraphicsBackend::VulkanContext trackerContext(trackerGraphicsAllocator, trackerThreadPool, 1u);
-    GraphicsBackend::VulkanContext resourceContext(resourceGraphicsAllocator, resourceThreadPool, 2u);
+    Core::Alloc::CpuTaskScheduler trackerCpuTaskScheduler(0u);
+    Core::Alloc::CpuTaskScheduler resourceCpuTaskScheduler(0u);
+    GraphicsBackend::VulkanContext trackerContext(trackerGraphicsAllocator, trackerCpuTaskScheduler, 1u);
+    GraphicsBackend::VulkanContext resourceContext(resourceGraphicsAllocator, resourceCpuTaskScheduler, 2u);
     GraphicsBackend::VulkanAllocator resourceAllocator(resourceContext);
     const u64 trackerUsedBytesBefore = trackerArena.arena.memoryStats().usedBytes;
     const u64 resourceUsedBytesBefore = resourceArena.arena.memoryStats().usedBytes;

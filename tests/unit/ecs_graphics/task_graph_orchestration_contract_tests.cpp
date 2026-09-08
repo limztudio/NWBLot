@@ -233,7 +233,7 @@ TEST(EcsGraphics, RendererNormalExecutionUsesSemanticTaskAnchors){
     EXPECT_EQ(CountText(system, ".recordTaskRangeInReadyFrontiers("), 0u);
     EXPECT_EQ(CountText(system, ".submitTaskRangeInCompileOrderFromTasks("), 0u);
     EXPECT_EQ(CountText(system, "taskFinalStateSeed("), 0u);
-    EXPECT_TRUE(ContainsText(system, "normalExecution.readyFrontierWorkerPool = &m_world.taskPool();"));
+    EXPECT_TRUE(ContainsText(system, "normalExecution.readyFrontierScheduler = &m_world.taskScheduler();"));
     EXPECT_FALSE(ContainsText(system, "normalExecution.taskStateBindings"));
     EXPECT_FALSE(ContainsText(system, "normalExecution.taskStateBindingCount"));
     EXPECT_FALSE(ContainsText(system, "deferredStateBindings"));

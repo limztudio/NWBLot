@@ -41,14 +41,14 @@ inline constexpr Name s_TextureClearScratchArena("tests/graphics/texture_clear_t
 struct TextureClearTestContext{
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator;
-    Core::Alloc::ThreadPool threadPool;
+    Core::Alloc::CpuTaskScheduler cpuScheduler;
     Graphics::GraphicsBackend::VulkanContext context;
     Graphics::GraphicsBackend::VulkanAllocator allocator;
 
     TextureClearTestContext()
         : graphicsAllocator(testArena.arena)
-        , threadPool(0u)
-        , context(graphicsAllocator, threadPool, 1u)
+        , cpuScheduler(0u)
+        , context(graphicsAllocator, cpuScheduler, 1u)
         , allocator(context)
     {}
 

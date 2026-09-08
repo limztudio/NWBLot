@@ -440,7 +440,7 @@ bool SubmitGraphOwnedStandaloneTask(
     const GraphTaskDeclaration declareTask,
     QueueSubmissionToken& outSubmissionToken,
     const GpuPhysicalQueueId requiredTerminalQueue,
-    Alloc::ThreadPool* const readyFrontierWorkerPool
+    Alloc::CpuTaskScheduler* const readyFrontierScheduler
 ){
     outSubmissionToken = {};
     if(!declareTask)
@@ -513,7 +513,7 @@ bool SubmitGraphOwnedStandaloneTask(
     // supplies the Graphics worker pool; the normal executor derives its recovery suffix and each task decides
     // whether it can safely opt into ready-frontier worker recording.
     GpuTaskGraphNormalExecutionDesc normalExecution;
-    normalExecution.readyFrontierWorkerPool = readyFrontierWorkerPool;
+    normalExecution.readyFrontierScheduler = readyFrontierScheduler;
     const bool submitted = submitter.recordAndSubmitNormalGraph(
         graph,
         compiledGraph,
@@ -656,7 +656,7 @@ bool Graphics::submitStandaloneTaskGraph(
         declareTask,
         outSubmissionToken,
         requiredTerminalQueue,
-        &m_threadPool
+        &m_cpuScheduler
     );
 }
 

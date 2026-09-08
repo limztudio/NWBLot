@@ -3,7 +3,7 @@
 
 
 #include <core/assets/cook_metadata.h>
-#include <core/alloc/thread.h>
+#include <core/alloc/cpu_task.h>
 
 #include <impl/assets_model/cook.h>
 #include <impl/assets_sampler/cook.h>
@@ -151,7 +151,7 @@ static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 val
 static void BenchmarkMetadataParsing(const usize pairCount, const usize iterations){
     AssetArena fixtureArena(Name("tests/metadata_extension/parse_fixture"));
     AssetArena parseArena(Name("tests/metadata_extension/parse_output"));
-    Alloc::ThreadPool threadPool(0u);
+    Alloc::CpuTaskScheduler cpuScheduler(0u);
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
     const AssetString caseName = StringFormat(fixtureArena, "pairs_{}", pairCount);
@@ -183,7 +183,7 @@ static void BenchmarkMetadataParsing(const usize pairCount, const usize iteratio
         ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry));
         registeredBucketCount = metadata.entryRegistry.bucketCount();
         ASSERT_GE(registeredBucketCount, 7u);
-        ASSERT_TRUE(ParseAssetMetadata(parseArena, files, metadata, threadPool, scratchArena));
+        ASSERT_TRUE(ParseAssetMetadata(parseArena, files, metadata, cpuScheduler, scratchArena));
         ASSERT_EQ(metadata.entryRegistry.entryCount(), 0u);
         ASSERT_EQ(metadata.extensions.size(), 1u);
     }
@@ -204,7 +204,7 @@ static void BenchmarkMetadataParsing(const usize pairCount, const usize iteratio
             Alloc::ScratchArena scratchArena(Name("tests/metadata_extension/parse_scratch"));
             ParsedAssetMetadata metadata(parseArena);
             registered = RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry);
-            parsed = registered && ParseAssetMetadata(parseArena, files, metadata, threadPool, scratchArena);
+            parsed = registered && ParseAssetMetadata(parseArena, files, metadata, cpuScheduler, scratchArena);
             entryCount = metadata.entryRegistry.entryCount();
             extensionCount = metadata.extensions.size();
             bucketCount = metadata.entryRegistry.bucketCount();
@@ -479,7 +479,7 @@ TEST(MetadataExtensionOwnership, PublicShaderAndIncludeParsingRetiresAllMetadata
 TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnusedBuckets){
     AssetArena fixtureArena(Name("tests/metadata_registry/fixture"));
     AssetArena parseArena(Name("tests/metadata_registry/output"));
-    Alloc::ThreadPool threadPool(0u);
+    Alloc::CpuTaskScheduler cpuScheduler(0u);
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
     const NWB::Path root = NWB::Path(fixtureArena, __FILE__).parent_path().parent_path().parent_path().parent_path()
@@ -521,7 +521,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
             auto& models = metadata.entryRegistry.entries<Impl::ModelCookEntry>(Impl::Model::AssetTypeName());
             ASSERT_EQ(samplers.capacity(), 0u);
             ASSERT_EQ(models.capacity(), 0u);
-            EXPECT_EQ(ParseAssetMetadata(parseArena, files, metadata, threadPool, scratchArena), !rejectDuplicate);
+            EXPECT_EQ(ParseAssetMetadata(parseArena, files, metadata, cpuScheduler, scratchArena), !rejectDuplicate);
             ASSERT_EQ(samplers.size(), s_SamplerCount);
             EXPECT_GE(samplers.capacity(), s_SamplerCount);
             EXPECT_TRUE(models.empty());

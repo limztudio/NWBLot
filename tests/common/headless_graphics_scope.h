@@ -8,8 +8,7 @@
 #include <global/global.h>
 #include <global/thread.h>
 #include <core/alloc/general.h>
-#include <core/alloc/job.h>
-#include <core/alloc/thread.h>
+#include <core/alloc/cpu_task.h>
 #include <core/graphics/module.h>
 #include <core/perf/timing.h>
 #include <impl/assets/graphics/bindless/runtime_abi.h>
@@ -68,10 +67,9 @@ public:
     HeadlessGraphicsScope()
         : m_objectArena(s_TestArenaName)
         , m_allocator(m_objectArena)
-        , m_threadPool(s_TestWorkerThreadCount, CpuAffinity::Any)
-        , m_jobSystem(m_threadPool)
+        , m_cpuScheduler(s_TestWorkerThreadCount)
         , m_gpuTiming(m_objectArena)
-        , m_graphics(m_allocator, m_threadPool, m_jobSystem, m_gpuTiming)
+        , m_graphics(m_allocator, m_cpuScheduler, m_gpuTiming)
     {}
 
     ~HeadlessGraphicsScope(){}
@@ -125,8 +123,7 @@ private:
 
     Core::Alloc::GlobalArena m_objectArena;
     Core::GraphicsAllocator m_allocator;
-    Core::Alloc::ThreadPool m_threadPool;
-    Core::Alloc::JobSystem m_jobSystem;
+    Core::Alloc::CpuTaskScheduler m_cpuScheduler;
     Core::Perf::TimingRecorder m_gpuTiming;
     Core::Graphics m_graphics;
 };

@@ -2463,7 +2463,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     normalExecution.terminalTask = terminalPresentationTask;
     normalExecution.taskRecordedCallbacks = normalRecordedCallbacks;
     normalExecution.taskRecordedCallbackCount = normalRecordedCallbackCount;
-    normalExecution.readyFrontierWorkerPool = &m_world.taskPool();
+    normalExecution.readyFrontierScheduler = &m_world.taskScheduler();
     normalExecution.taskTimingTickets = normalTimingTickets;
     normalExecution.taskTimingTicketCount = normalTimingTicketCount;
     normalExecution.taskAcceptedCallbacks = normalAcceptedCallbacks;

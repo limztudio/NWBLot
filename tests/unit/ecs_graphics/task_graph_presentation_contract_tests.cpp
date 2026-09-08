@@ -137,6 +137,21 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     const AStringView render = graphics.substr(renderOffset, averageOffset - renderOffset);
     EXPECT_TRUE(ContainsText(render, "Framebuffer* const framebuffer = m_acquiredPresentationFrame.framebuffer.get();"));
     EXPECT_FALSE(ContainsText(render, "getCurrent"));
+    EXPECT_TRUE(ContainsText(render, "Alloc::CpuTaskScope frameTasks(m_cpuScheduler);"));
+    EXPECT_TRUE(ContainsText(render, ".priority = Alloc::CpuTaskPriority::Critical"));
+    EXPECT_TRUE(ContainsText(render, ".target = Alloc::CpuTaskTarget::MainThread"));
+    EXPECT_TRUE(ContainsText(render, "previous.valid() ? &previous : nullptr, previous.valid() ? 1u : 0u"));
+    const usize submitOffset = render.find("previous = frameTasks.submit(");
+    const usize prepareOffset = render.find("renderPass->prepareResources(framebuffer)", submitOffset);
+    const usize drawOffset = render.find("renderPass->render(framebuffer);", prepareOffset);
+    const usize joinOffset = render.find("frameTasks.wait();", drawOffset);
+    ASSERT_NE(submitOffset, AStringView::npos);
+    ASSERT_NE(prepareOffset, AStringView::npos);
+    ASSERT_NE(drawOffset, AStringView::npos);
+    ASSERT_NE(joinOffset, AStringView::npos);
+    EXPECT_LT(submitOffset, prepareOffset);
+    EXPECT_LT(prepareOffset, drawOffset);
+    EXPECT_LT(drawOffset, joinOffset);
 
     const usize animateOffset = graphics.find("bool Graphics::animateRenderPresentInternal");
     ASSERT_NE(animateOffset, AStringView::npos);
@@ -209,7 +224,7 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     EXPECT_TRUE(ContainsText(graphics, "bool Graphics::createHeadlessDevice(){\n    m_acquiredPresentationFrame = {};"));
 
     const usize destroyLifecycleOffset = graphics.find("bool Graphics::destroy(){");
-    const usize destroyJobJoinOffset = graphics.find("waitAllJobs();", destroyLifecycleOffset);
+    const usize destroyJobJoinOffset = graphics.find("waitTasks();", destroyLifecycleOffset);
     const usize destroyPrepareOffset = graphics.find(
         "prepareSwapChainTransition(SwapChainTransitionKind::Destroy, transitionTicket)",
         destroyJobJoinOffset
@@ -230,7 +245,7 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     EXPECT_LT(destroySnapshotClearOffset, destroyCommitOffset);
 
     const usize resizeLifecycleOffset = graphics.find("bool Graphics::backBufferResizing(SwapChainTransitionTicket& outTicket){");
-    const usize resizeJobJoinOffset = graphics.find("waitAllJobs();", resizeLifecycleOffset);
+    const usize resizeJobJoinOffset = graphics.find("waitTasks();", resizeLifecycleOffset);
     const usize resizePrepareOffset = graphics.find(
         "prepareSwapChainTransition(SwapChainTransitionKind::Resize, outTicket)",
         resizeJobJoinOffset

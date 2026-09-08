@@ -49,8 +49,8 @@ inline constexpr usize s_BuffersPerInstance = LengthOf(s_InstanceBuffers) + 3u;
 struct LiveStateContext{
     Core::Alloc::GlobalArena arena{ Name("tests/skinning_live_state/inputs") };
     Core::GraphicsAllocator graphicsAllocator{ arena };
-    Core::Alloc::ThreadPool threadPool{ 0u };
-    Core::GraphicsBackend::VulkanContext context{ graphicsAllocator, threadPool, 1u };
+    Core::Alloc::CpuTaskScheduler cpuScheduler{ 0u };
+    Core::GraphicsBackend::VulkanContext context{ graphicsAllocator, cpuScheduler, 1u };
     Core::GraphicsBackend::VulkanAllocator allocator{ context };
     BufferVector buffers{ arena };
     Vector<MeshSkinningRuntimeInstance, Core::Alloc::GlobalArena> instances{ arena };

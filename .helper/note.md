@@ -83,21 +83,15 @@
 
 ## Scheduler Architecture
 
-1. Keep responsibilities split:
-   - `Graphics` layer uses `Alloc::JobSystem` for orchestration-level async jobs and dependencies.
-   - Vulkan backend keeps `Alloc::ThreadPool` for fine-grained `parallelFor` style workloads.
-2. Do not unify Vulkan internals onto `JobSystem` without measured evidence (oversubscription/contention/scheduling conflict).
-3. Favor adapter-based unification later (if needed) over direct hard migration.
-
-## JobSystem Performance Status
-
-1. Applied:
-   - Per-job completion signaling (removed global completion wakeup behavior).
-   - Batched enqueue path for ready dependent jobs.
-   - Replace `std::function` task storage on hot path.
-   - Work-first dependent execution (inline one continuation, enqueue remainder).
-   - Split `ThreadPool` synchronization domains (`parallelFor` control vs task queue).
-   - Reduce per-completion temporary container overhead.
+1. `Frame` owns one `Alloc::CpuTaskScheduler`, initialized with the configured worker budget before graphics and project work starts. Standalone tools own one scheduler for their process work and pass it to consumers.
+2. ECS worlds and graphics own `Alloc::CpuTaskScope` task lifetimes and borrow the scheduler. Vulkan recording, data preparation, and cooking use the same scheduler through dependencies and synchronous task batches; subsystems must not create private thread pools.
+3. `Alloc::ThreadPool` and `Alloc::JobSystem` remain low-level compatibility implementations and test coverage. New engine, renderer, asset, and cooker work uses `CpuTaskScheduler`/`CpuTaskScope`.
+4. Declare CPU cost (`Heavy`, `Light`, `Any`), priority, and required main-thread execution through `CpuTaskOptions`. The scheduler owns processor placement and worker identity. Heavy/light cost is independent of task priority.
+5. Task completion includes the callback, its submitted descendants, and capture retirement. A CPU completion handle does not imply GPU completion; GPU resource readiness continues to use the GPU runtime's submission/completion contracts.
+6. Join a scope before releasing data referenced by its tasks. Stop external producers before destroying their scope or scheduler. Do not join a scope containing the current task or a structured ancestor, and do not create dependencies that wait on such an ancestor.
+7. Synchronous `parallelFor` and ECS `parallelEach` join their own bounded child batches cooperatively. Asynchronous captures require storage that outlives the complete task subtree; a local frame/scratch allocation must not escape its joined lifetime.
+8. ECS system update dependencies preserve registration order for every component read/write hazard. System preparation remains a serial phase before updates because preparation may change entity/component storage. UI updates explicitly target the main-thread queue.
+9. Native worker exceptions remain terminal. Inline failures unwind to terminal application handling; capture retirement and scope draining remain responsible for lifetime cleanup during that unwind.
 
 ## Project Bootstrap Invariants
 

@@ -117,7 +117,7 @@ struct StreamSortEntry{
 template<typename Value>
 [[nodiscard]] bool DeduplicateStream(
     UtilityVector<Value>& stream,
-    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::CpuTaskScheduler& cpuScheduler,
     UtilityVector<u32>& outRemap,
     const char* streamName
 ){
@@ -135,7 +135,7 @@ template<typename Value>
         sortedEntries[index].value = stream[index];
         sortedEntries[index].sourceIndex = index;
     };
-    threadPool.parallelFor(static_cast<usize>(0), stream.size(), s_DeduplicateParallelGrainSize, fillEntry);
+    cpuScheduler.parallelFor(static_cast<usize>(0), stream.size(), s_DeduplicateParallelGrainSize, fillEntry);
 
     Sort(
         sortedEntries.begin(),
@@ -233,7 +233,7 @@ template<typename Value>
 [[nodiscard]] bool CanonicalizeSkinnedMeshStreams(
     SourceMeshStreams& mesh,
     UtilityVector<MeshSkinInfluence>& skinInfluences,
-    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::CpuTaskScheduler& cpuScheduler,
     SourceMeshCanonicalizeReport* const outReport
 ){
     if(mesh.positions.size() != skinInfluences.size()){
@@ -258,13 +258,13 @@ template<typename Value>
     for(usize i = 0u; i < skinRemap.size(); ++i)
         skinRemap[i] = static_cast<u32>(i);
 
-    if(!DeduplicateStream(mesh.normals, threadPool, normalRemap, "normal"))
+    if(!DeduplicateStream(mesh.normals, cpuScheduler, normalRemap, "normal"))
         return false;
-    if(!DeduplicateStream(mesh.tangents, threadPool, tangentRemap, "tangent"))
+    if(!DeduplicateStream(mesh.tangents, cpuScheduler, tangentRemap, "tangent"))
         return false;
-    if(!DeduplicateStream(mesh.uv0, threadPool, uv0Remap, "uv0"))
+    if(!DeduplicateStream(mesh.uv0, cpuScheduler, uv0Remap, "uv0"))
         return false;
-    if(!DeduplicateStream(mesh.colors, threadPool, colorRemap, "color"))
+    if(!DeduplicateStream(mesh.colors, cpuScheduler, colorRemap, "color"))
         return false;
 
     if(!RemapComponentRefs(mesh, positionRemap, normalRemap, tangentRemap, uv0Remap, colorRemap, skinRemap))
@@ -1103,7 +1103,7 @@ SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh){
     return counts;
 }
 
-bool CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::Alloc::ThreadPool& threadPool, SourceMeshCanonicalizeReport* const outReport){
+bool CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::Alloc::CpuTaskScheduler& cpuScheduler, SourceMeshCanonicalizeReport* const outReport){
     if(outReport)
         outReport->before = CountSourceMeshStreams(mesh);
 
@@ -1114,17 +1114,17 @@ bool CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::Alloc::ThreadP
     UtilityVector<u32> colorRemap;
     UtilityVector<u32> skinRemap;
 
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.positions, threadPool, positionRemap, "position"))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.positions, cpuScheduler, positionRemap, "position"))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.normals, threadPool, normalRemap, "normal"))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.normals, cpuScheduler, normalRemap, "normal"))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.tangents, threadPool, tangentRemap, "tangent"))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.tangents, cpuScheduler, tangentRemap, "tangent"))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.uv0, threadPool, uv0Remap, "uv0"))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.uv0, cpuScheduler, uv0Remap, "uv0"))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.colors, threadPool, colorRemap, "color"))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.colors, cpuScheduler, colorRemap, "color"))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.skin, threadPool, skinRemap, "skin"))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.skin, cpuScheduler, skinRemap, "skin"))
         return false;
     if(!__hidden_mesh_refresh::RemapComponentRefs(mesh, positionRemap, normalRemap, tangentRemap, uv0Remap, colorRemap, skinRemap))
         return false;
@@ -1134,7 +1134,7 @@ bool CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::Alloc::ThreadP
     return true;
 }
 
-bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Alloc::ThreadPool& threadPool, SourceMeshCanonicalizeReport& outReport){
+bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Alloc::CpuTaskScheduler& cpuScheduler, SourceMeshCanonicalizeReport& outReport){
     outReport = SourceMeshCanonicalizeReport{};
 
     AString source;
@@ -1178,7 +1178,7 @@ bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Al
             UtilityVector<MeshSkinInfluence> skinInfluences;
             if(!skinValue || !__hidden_mesh_refresh::ParseSkinInfluences(inputPath, *skinValue, skinVariableName, skinInfluences))
                 return false;
-            if(!__hidden_mesh_refresh::CanonicalizeSkinnedMeshStreams(mesh, skinInfluences, threadPool, &itemReport))
+            if(!__hidden_mesh_refresh::CanonicalizeSkinnedMeshStreams(mesh, skinInfluences, cpuScheduler, &itemReport))
                 return false;
             if(!__hidden_mesh_refresh::AppendMeshReplacements(replacements, source, meshVariableName, before, mesh))
                 return false;
@@ -1193,7 +1193,7 @@ bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Al
             }
         }
         else{
-            if(!CanonicalizeSourceMeshStreams(mesh, threadPool, &itemReport))
+            if(!CanonicalizeSourceMeshStreams(mesh, cpuScheduler, &itemReport))
                 return false;
             if(!__hidden_mesh_refresh::AppendMeshReplacements(replacements, source, meshVariableName, before, mesh))
                 return false;

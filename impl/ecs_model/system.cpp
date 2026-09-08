@@ -490,7 +490,7 @@ bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const 
 
 void ModelSystem::updateModelObjectTransforms(){
     m_world.view<ModelObjectComponent, Scene::TransformComponent>().parallelEach(
-        m_world.taskPool(),
+        m_world.taskScope(),
         __hidden_model_system::s_ParallelModelObjectTransformGrainSize,
         [&](const Core::ECS::EntityID entity, ModelObjectComponent& object, Scene::TransformComponent& transform){
             static_cast<void>(entity);

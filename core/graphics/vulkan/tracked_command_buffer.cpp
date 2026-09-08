@@ -22,7 +22,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(
     const bool ownsCommandPool,
     Futex* const sharedCommandPoolMutex
 )
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_cmdPool(commandPool)
     , m_ownsCmdPool(ownsCommandPool)
     , m_sharedCommandPoolMutex(sharedCommandPoolMutex)

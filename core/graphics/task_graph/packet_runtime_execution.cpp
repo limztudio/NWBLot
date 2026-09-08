@@ -223,7 +223,7 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
         recorder,
         normalRange,
         recordedGraph,
-        desc.readyFrontierWorkerPool,
+        desc.readyFrontierScheduler,
         desc.commandIrCapture,
         &failedPacket
     )){
@@ -295,17 +295,17 @@ bool GpuTaskGraphSubmitter::recordPacketRange(
     const GpuNativePacketRecorder& recorder,
     const GpuSubmissionPacketRange& range,
     GpuRecordedGraph& recordedGraph,
-    Alloc::ThreadPool* const readyFrontierWorkerPool,
+    Alloc::CpuTaskScheduler* const readyFrontierScheduler,
     GpuCommandIrCapture* const commandIrCapture,
     GpuSubmissionPacketId* const outFailedPacket
 )const{
-    return readyFrontierWorkerPool
+    return readyFrontierScheduler
         ? recorder.recordPacketRangeInReadyFrontiers(
             graph,
             compiledGraph,
             range,
             recordedGraph,
-            *readyFrontierWorkerPool,
+            *readyFrontierScheduler,
             outFailedPacket,
             commandIrCapture
         )
@@ -352,7 +352,7 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskRangeInReadyFrontiers(
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecorder& recorder,
     GpuRecordedGraph& recordedGraph,
-    Alloc::ThreadPool& workerPool,
+    Alloc::CpuTaskScheduler& cpuScheduler,
     const GpuTaskId firstTask,
     const GpuTaskId lastTask,
     GpuGraphSubmissionTransaction& transaction,
@@ -364,7 +364,7 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskRangeInReadyFrontiers(
         compiledGraph,
         recorder,
         recordedGraph,
-        &workerPool,
+        &cpuScheduler,
         firstTask,
         lastTask,
         transaction,
@@ -379,7 +379,7 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskRange(
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecorder& recorder,
     GpuRecordedGraph& recordedGraph,
-    Alloc::ThreadPool* const readyFrontierWorkerPool,
+    Alloc::CpuTaskScheduler* const readyFrontierScheduler,
     const GpuTaskId firstTask,
     const GpuTaskId lastTask,
     GpuGraphSubmissionTransaction& transaction,
@@ -455,7 +455,7 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskRange(
         recorder,
         range,
         recordedGraph,
-        readyFrontierWorkerPool,
+        readyFrontierScheduler,
         nullptr,
         &failedPacket
     )){

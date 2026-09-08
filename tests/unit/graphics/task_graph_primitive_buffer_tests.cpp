@@ -32,8 +32,8 @@ using TaskGraphTestUtils::TestArena;
 TEST(GpuTaskGraph, UploadBufferTaskPreflightsNativeAlignmentContract){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const Graphics::BufferDesc destinationCreationDesc = Graphics::BufferDesc()
         .setByteSize(8u)
@@ -158,8 +158,8 @@ TEST(GpuTaskGraph, UploadBufferTaskPreflightsNativeAlignmentContract){
 TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::ThreadPool threadPool(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const auto createBuffer = [&](const Graphics::BufferDesc& sourceDescription){
         Graphics::Buffer* const bufferObject = NewMetadataOnlyBuffer(

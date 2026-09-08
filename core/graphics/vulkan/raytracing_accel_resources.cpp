@@ -146,7 +146,7 @@ AccelStruct::AccelStruct(
     const VulkanContext& context,
     const ResourceQueueSharing::Mask creationQueueSharing
 )
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(context.objectArena)
     , m_creationQueueSharing(creationQueueSharing)
     , m_context(context)

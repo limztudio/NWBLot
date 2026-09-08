@@ -210,16 +210,16 @@ public:
     }
 
     template<typename Func>
-    void parallelEach(Alloc::ThreadPool& pool, Func&& func)const{
-        parallelEachImpl(func, [this, &pool](const auto& apply){
-            pool.parallelFor(static_cast<usize>(0), m_count, apply);
+    void parallelEach(Alloc::CpuTaskScope& tasks, Func&& func)const{
+        parallelEachImpl(func, [this, &tasks](const auto& apply){
+            tasks.parallelFor(static_cast<usize>(0), m_count, apply);
         });
     }
 
     template<typename Func>
-    void parallelEach(Alloc::ThreadPool& pool, usize grainSize, Func&& func)const{
-        parallelEachImpl(func, [this, &pool, grainSize](const auto& apply){
-            pool.parallelFor(static_cast<usize>(0), m_count, grainSize, apply);
+    void parallelEach(Alloc::CpuTaskScope& tasks, usize grainSize, Func&& func, Alloc::CpuTaskOptions options = {})const{
+        parallelEachImpl(func, [this, &tasks, grainSize, options](const auto& apply){
+            tasks.parallelFor(static_cast<usize>(0), m_count, grainSize, apply, options);
         });
     }
 

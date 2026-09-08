@@ -337,11 +337,11 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - Correct: `constexpr StringView str = "foobar";`
   - Wrong: `constexpr const char* str = "foobar";`
 - Reserve container capacity when expected counts are known.
-- Use thread pool and chunking thresholds for larger CPU-side memory/data operations.
+- Use the shared CPU task scheduler and chunking thresholds for larger CPU-side memory/data operations.
 - Prefer scratch/arena allocations in hot paths to minimize heap churn.
 - Prefer `ScratchArena` for containers/temporary objects that only live within a local scope.
 - For function-local temporary containers (`Vector`, `HashSet`, `HashMap`, etc.), default to `ScratchArena` + `ScratchAllocator`; use `GlobalArena` or another owning domain arena only when data must outlive the current scope.
-- Data captured by async jobs/callbacks (e.g., lambda captures submitted to `ThreadPool`/`JobSystem`) is considered outliving the current scope; do not back such captures with `ScratchArena`.
+- Data captured by asynchronous tasks/callbacks submitted to `CpuTaskScheduler`/`CpuTaskScope` can outlive the submitting scope; do not back escaping captures with `ScratchArena`. Synchronous task batches may reference local scratch storage only when their complete task subtree joins before that storage is released.
 - Do not repeat structural validation in hot paths that run every frame or for many draw/dispatch items.
   - Move asset/payload/layout validation to cook, load, resource creation, or cache insertion time whenever possible.
   - In realtime paths, keep opt/fin code on the already-validated fast path. Use `#if defined(NWB_DEBUG)` / `NWB_ASSERT` for invariant checks that are useful while debugging.

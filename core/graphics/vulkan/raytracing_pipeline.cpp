@@ -76,7 +76,7 @@ RayTracingPipeline::RayTracingPipeline(
     Device& device,
     const bool allowClusterAccelerationStructures
 )
-    : RefCounter<GraphicsResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(context.objectArena)
     , m_allowClusterAccelerationStructuresAtCreation(allowClusterAccelerationStructures)
     , m_shaderGroupHandles(context.objectArena)

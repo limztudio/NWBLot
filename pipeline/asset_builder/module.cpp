@@ -7,7 +7,7 @@
 #include "../command_line.h"
 
 #include <core/assets/paths.h>
-#include <core/alloc/thread.h>
+#include <core/alloc/cpu_task.h>
 #include <core/common/log.h>
 #include <global/cpu_topology.h>
 
@@ -100,8 +100,8 @@ int RunPipelineTool(const int argc, char** argv){
             return 1;
 
         const u32 cores = QueryCpuCoreCount(CpuAffinity::Any);
-        NWB::Core::Alloc::ThreadPool threadPool(cores > 1u ? cores - 1u : 0u, CpuAffinity::Any);
-        NWB::Pipeline::AssetBuilder::AssetBuildOptions options(arena, threadPool);
+        NWB::Core::Alloc::CpuTaskScheduler cpuScheduler(cores > 1u ? cores - 1u : 0u);
+        NWB::Pipeline::AssetBuilder::AssetBuildOptions options(arena, cpuScheduler);
         options.repoRoot = parsed.repoRoot;
         options.outputDirectory = parsed.outputDirectory;
         options.cacheDirectory = parsed.cacheDirectory;
@@ -112,7 +112,7 @@ int RunPipelineTool(const int argc, char** argv){
         if(!__hidden_asset_builder::ResolveRoots(parsed, options))
             return 1;
         const bool built = NWB::Pipeline::AssetBuilder::BuildAssets(options);
-        threadPool.finish();
+        cpuScheduler.drain();
         return built ? 0 : 1;
     }, [&](const CLI::ParseError& error){ return commandLine.exit(error); }, [](){ return -1; });
 }

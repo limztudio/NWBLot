@@ -154,7 +154,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierSerializesFailedPacketDiscard
     ASSERT_EQ(views.compiled.packet(firstPacket).plan->recordingFrontier, 0u);
     ASSERT_EQ(views.compiled.packet(secondPacket).plan->recordingFrontier, 0u);
 
-    Alloc::ThreadPool recordingWorkers(1u, CpuAffinity::Any);
+    Alloc::CpuTaskScheduler recordingWorkers(1u);
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
     GpuSubmissionPacketId failedPacket;
@@ -388,7 +388,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedComm
     EXPECT_EQ(views.compiled.packet(firstPacket).plan->recordingFrontier, 0u);
     EXPECT_EQ(views.compiled.packet(secondPacket).plan->recordingFrontier, 0u);
 
-    Alloc::ThreadPool recordingWorkers(1u, CpuAffinity::Any);
+    Alloc::CpuTaskScheduler recordingWorkers(1u);
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
     ASSERT_TRUE(recorder.recordPacketRangeInReadyFrontiers(

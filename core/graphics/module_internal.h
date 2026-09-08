@@ -7,6 +7,8 @@
 
 #include "module.h"
 
+#include <core/alloc/cpu_task.h>
+
 #include "task_graph/task_desc.h"
 
 
@@ -70,7 +72,7 @@ using GraphTaskDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
     GraphTaskDeclaration declareTask,
     QueueSubmissionToken& outSubmissionToken,
     GpuPhysicalQueueId requiredTerminalQueue = {},
-    Alloc::ThreadPool* readyFrontierWorkerPool = nullptr
+    Alloc::CpuTaskScheduler* readyFrontierScheduler = nullptr
 );
 [[nodiscard]] bool SubmitGraphOwnedSetupUpload(
     const Graphics& graphics,

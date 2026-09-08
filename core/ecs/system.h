@@ -7,6 +7,8 @@
 
 #include "component.h"
 
+#include <core/alloc/cpu_task.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -62,7 +64,11 @@ public:
 
 public:
     virtual void prepare(World& world){ static_cast<void>(world); }
+    // The scheduler keeps this task incomplete until update and its submitted descendants finish.
     virtual void update(World& world, f32 delta) = 0;
+    [[nodiscard]] virtual Alloc::CpuTaskOptions taskOptions()const{
+        return { .cost = Alloc::CpuTaskCost::Heavy };
+    }
 
 
 protected:
@@ -86,7 +92,8 @@ private:
 
 class SystemScheduler{
 private:
-    using Stage = Vector<ISystem*, Alloc::GlobalArena>;
+    using SystemList = Vector<ISystem*, Alloc::GlobalArena>;
+    using DependencyList = Vector<usize, Alloc::GlobalArena>;
 
 
 public:
@@ -105,9 +112,9 @@ public:
 private:
     Alloc::GlobalArena& m_arena;
 
-    // Each stage is a group of systems that can safely run in parallel
-    Vector<Stage, Alloc::GlobalArena> m_stages;
-    Stage m_allSystems;
+    // Every conflicting predecessor keeps registration order; independent work has no stage barrier.
+    Vector<DependencyList, Alloc::GlobalArena> m_dependencies;
+    SystemList m_allSystems;
     bool m_dirty;
 };
 

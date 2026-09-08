@@ -8,7 +8,7 @@ static bool BuildMeshlets(
     const tchar* metaKind,
     const Core::Assets::AssetVector<u32>& indices,
     CookEntryT& entry,
-    Core::Alloc::ThreadPool& threadPool
+    Core::Alloc::CpuTaskScheduler& cpuScheduler
 ){
     entry.meshlets.clear();
     entry.meshletBounds.clear();
@@ -133,7 +133,7 @@ static bool BuildMeshlets(
             current,
             entry.meshletPrimitiveIndices,
             scoreState,
-            threadPool,
+            cpuScheduler,
             parallelCandidates,
             frontier,
             frontierFlags

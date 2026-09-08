@@ -7,6 +7,8 @@
 
 #include "api.h"
 
+#include <core/alloc/cpu_task.h>
+
 #include "gpu_timing.h"
 #include "render_pass.h"
 
@@ -132,7 +134,7 @@ public:
         bool fp32TrainingSupported = false;
     };
 
-    using JobHandle = Alloc::JobSystem::JobHandle;
+    using TaskHandle = Alloc::CpuTaskScheduler::TaskHandle;
     using PointerScaleChangedCallback = void(*)(void* userData, f32 scaleX, f32 scaleY);
     // A synchronous caller may declare one isolated graph through this callback. The graph owns all native command
     // recording and submission; the callback must only retain declaration-time inputs and return its terminal task.
@@ -148,14 +150,12 @@ private:
 public:
     Graphics(
         GraphicsAllocator& allocator,
-        Alloc::ThreadPool& threadPool,
-        Alloc::JobSystem& jobSystem,
+        Alloc::CpuTaskScheduler& cpuScheduler,
         Perf::TimingSink& gpuTiming
     );
     Graphics(
         GraphicsAllocator& allocator,
-        Alloc::ThreadPool& threadPool,
-        Alloc::JobSystem& jobSystem,
+        Alloc::CpuTaskScheduler& cpuScheduler,
         Perf::TimingSink& gpuTiming,
         Perf::TimingSink* cpuTiming
     );
@@ -288,28 +288,28 @@ public:
     )const;
     [[nodiscard]] MeshResource setupMesh(const MeshSetupDesc& desc)const;
 
-    [[nodiscard]] JobHandle setupBufferAsync(const BufferSetupDesc& desc, BufferHandle& outBuffer);
-    [[nodiscard]] JobHandle setupTextureAsync(const TextureSetupDesc& desc, TextureHandle& outTexture);
-    [[nodiscard]] JobHandle setupMeshAsync(const MeshSetupDesc& desc, MeshResource& outMesh);
+    [[nodiscard]] TaskHandle setupBufferAsync(const BufferSetupDesc& desc, BufferHandle& outBuffer);
+    [[nodiscard]] TaskHandle setupTextureAsync(const TextureSetupDesc& desc, TextureHandle& outTexture);
+    [[nodiscard]] TaskHandle setupMeshAsync(const MeshSetupDesc& desc, MeshResource& outMesh);
 
     [[nodiscard]] CoopVectorSupport queryCoopVecSupport()const;
     [[nodiscard]] CooperativeVectorDeviceFeatures queryCoopVecFeatures()const;
     [[nodiscard]] usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const;
 
-    // Schedules CPU-side graphics work on the graphics worker pool. Callers must wait for the returned job before
+    // Schedules CPU-side graphics tasks through the shared scheduler. Callers must wait for the returned task before
     // submitting or destroying any command lists/resources the work touches.
     template<typename Func>
-    [[nodiscard]] JobHandle scheduleGraphicsJob(Func&& task){
-        return m_jobSystem.submit(Forward<Func>(task));
+    [[nodiscard]] TaskHandle scheduleGraphicsTask(Func&& task){
+        return m_tasks.submit(Forward<Func>(task));
     }
 
     template<typename Func>
-    [[nodiscard]] JobHandle scheduleGraphicsJob(Func&& task, const JobHandle dependency){
-        return m_jobSystem.submit(Forward<Func>(task), dependency);
+    [[nodiscard]] TaskHandle scheduleGraphicsTask(Func&& task, const TaskHandle dependency){
+        return m_tasks.submit(Forward<Func>(task), dependency);
     }
 
-    void waitJob(JobHandle handle)const;
-    void waitAllJobs()const{ m_jobSystem.waitAll(); }
+    void waitTask(TaskHandle handle)const;
+    void waitTasks(){ m_tasks.wait(); }
 
     [[nodiscard]] bool backBufferResizing(SwapChainTransitionTicket& outTicket);
     [[nodiscard]] bool backBufferResized();
@@ -336,8 +336,8 @@ private:
 
 private:
     GraphicsAllocator& m_allocator;
-    Alloc::ThreadPool& m_threadPool;
-    Alloc::JobSystem& m_jobSystem;
+    Alloc::CpuTaskScheduler& m_cpuScheduler;
+    Alloc::CpuTaskScope m_tasks;
     DeviceCreationParameters m_deviceCreationParams;
     SwapChainRuntimeState m_swapChainState;
     GpuTimingRecorder m_gpuTiming;

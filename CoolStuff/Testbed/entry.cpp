@@ -52,7 +52,7 @@ UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::Pro
 bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& outWorld){
     outWorld.reset();
 
-    auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.threadPool);
+    auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
     if(!world){
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed"));
         return false;
@@ -117,7 +117,7 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
     context.graphics.removeRenderPass(*rendererSystem);
     context.graphics.removeRenderPass(*uiSystem);
 
-    context.graphics.waitAllJobs();
+    context.graphics.waitTasks();
     const bool deviceIdle = context.graphics.waitForIdle();
     NWB_FATAL_ASSERT_MSG(
         deviceIdle || context.graphics.isDeviceLost(),

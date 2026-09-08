@@ -112,6 +112,41 @@ public:
 };
 
 
+class ScheduledSystem final : public NWB::Core::ECS::ISystem{
+public:
+    ScheduledSystem(
+        NWB::Core::Alloc::GlobalArena& arena,
+        InitializerList<NWB::Core::ECS::ComponentAccess> accesses,
+        Function<void()> update,
+        NWB::Core::Alloc::CpuTaskOptions options = {}
+    )
+        : NWB::Core::ECS::ISystem(arena)
+        , m_update(Move(update))
+        , m_options(options)
+    {
+        for(const auto& access : accesses)
+            registerAccess(access.typeId, access.mode);
+    }
+
+
+public:
+    virtual void update(NWB::Core::ECS::World& world, f32 delta)override{
+        static_cast<void>(world);
+        static_cast<void>(delta);
+        m_update();
+    }
+
+    [[nodiscard]] virtual NWB::Core::Alloc::CpuTaskOptions taskOptions()const override{ return m_options; }
+
+
+private:
+    Function<void()> m_update;
+    NWB::Core::Alloc::CpuTaskOptions m_options;
+};
+
+
+static thread_local bool s_EcsCallerThread = false;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -189,13 +224,13 @@ TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
         }
     );
     testWorld.world.view<PositionComponent>().parallelEach(
-        testWorld.threadPool,
+        testWorld.world.taskScope(),
         [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&){
             ++singleViewCount;
         }
     );
     testWorld.world.view<PositionComponent, VelocityComponent>().parallelEach(
-        testWorld.threadPool,
+        testWorld.world.taskScope(),
         [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&){
             ++multiViewCount;
         }
@@ -486,8 +521,8 @@ TEST(Ecs, DuplicateComponentAddIsStable){
 
 TEST(Ecs, ParallelEachVisitsSingleAndMultiComponentViews){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::Alloc::ThreadPool threadPool(3u, CpuAffinity::Any);
-    NWB::Core::ECS::World world(arena, threadPool);
+    NWB::Core::Alloc::CpuTaskScheduler taskScheduler(3u);
+    NWB::Core::ECS::World world(arena, taskScheduler);
 
     static constexpr u32 s_EntityCount = 512u;
     for(u32 i = 0u; i < s_EntityCount; ++i){
@@ -503,7 +538,7 @@ TEST(Ecs, ParallelEachVisitsSingleAndMultiComponentViews){
 
     Atomic<u32> positionVisits{ 0u };
     world.view<PositionComponent>().parallelEach(
-        threadPool,
+        world.taskScope(),
         [&positionVisits](NWB::Core::ECS::EntityID, PositionComponent& position){
             position.y = position.x + 1;
             positionVisits.fetch_add(1u, MemoryOrder::relaxed);
@@ -523,7 +558,7 @@ TEST(Ecs, ParallelEachVisitsSingleAndMultiComponentViews){
 
     Atomic<u32> pairVisits{ 0u };
     world.view<PositionComponent, VelocityComponent>().parallelEach(
-        threadPool,
+        world.taskScope(),
         16u,
         [&pairVisits](NWB::Core::ECS::EntityID, PositionComponent& position, VelocityComponent& velocity){
             position.x += velocity.x;
@@ -534,10 +569,10 @@ TEST(Ecs, ParallelEachVisitsSingleAndMultiComponentViews){
     EXPECT_EQ(pairVisits.load(MemoryOrder::relaxed), s_EntityCount / 2u);
 }
 
-TEST(Ecs, ParallelEachNestedInParallelForFallsBackSerial){
+TEST(Ecs, ParallelEachNestedInTaskBatchCompletes){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::Alloc::ThreadPool threadPool(3u, CpuAffinity::Any);
-    NWB::Core::ECS::World world(arena, threadPool);
+    NWB::Core::Alloc::CpuTaskScheduler taskScheduler(3u);
+    NWB::Core::ECS::World world(arena, taskScheduler);
 
     static constexpr u32 s_EntityCount = 64u;
     static constexpr usize s_OuterCount = 4u;
@@ -548,13 +583,13 @@ TEST(Ecs, ParallelEachNestedInParallelForFallsBackSerial){
     }
 
     Atomic<u32> visits{ 0u };
-    threadPool.parallelFor(
+    world.taskScope().parallelFor(
         static_cast<usize>(0),
         s_OuterCount,
         [&](usize outerIndex){
             static_cast<void>(outerIndex);
             world.view<PositionComponent>().parallelEach(
-                threadPool,
+                world.taskScope(),
                 1u,
                 [&visits](NWB::Core::ECS::EntityID, PositionComponent& position){
                     static_cast<void>(position);
@@ -583,6 +618,177 @@ TEST(Ecs, DuplicateSchedulerAddIsStable){
     EXPECT_EQ(system.prepares, 1u);
     EXPECT_EQ(system.updates, 1u);
     EXPECT_EQ(position.x, 2);
+}
+
+
+TEST(Ecs, SystemDependenciesPreserveRegistrationOrderAcrossComponents){
+    TestWorld testWorld;
+    const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
+    const auto velocityType = NWB::Core::ECS::ComponentType<VelocityComponent>();
+    i32 position = 0;
+    i32 velocity = 0;
+    i32 observed = 0;
+
+    ScheduledSystem writer(testWorld.arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){ position = 17; });
+    ScheduledSystem transfer(testWorld.arena, {
+        { positionType, NWB::Core::ECS::AccessMode::Read },
+        { velocityType, NWB::Core::ECS::AccessMode::Write },
+    }, [&](){ velocity = position + 1; });
+    ScheduledSystem reader(testWorld.arena, { { velocityType, NWB::Core::ECS::AccessMode::Read } }, [&](){ observed = velocity; });
+
+    NWB::Core::ECS::SystemScheduler scheduler(testWorld.arena);
+    scheduler.addSystem(writer);
+    scheduler.addSystem(transfer);
+    scheduler.addSystem(reader);
+    scheduler.execute(testWorld.world, 0.0f);
+    EXPECT_EQ(observed, 18);
+
+    // Removing and adding a system invalidates the cached predecessor list.
+    scheduler.removeSystem(transfer);
+    velocity = 31;
+    scheduler.execute(testWorld.world, 0.0f);
+    EXPECT_EQ(observed, 31);
+    scheduler.addSystem(transfer);
+    velocity = 47;
+    scheduler.execute(testWorld.world, 0.0f);
+    EXPECT_EQ(observed, 47);
+    EXPECT_EQ(velocity, 18);
+}
+
+TEST(Ecs, SystemDependentsProceedWithoutWaitingForUnrelatedWork){
+    NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
+    NWB::Core::Alloc::CpuTaskScheduler taskScheduler(3u);
+    NWB::Core::ECS::World world(arena, taskScheduler);
+    const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
+    Atomic<bool> dependentCompleted{ false };
+    Atomic<bool> independentObservedCompletion{ false };
+    i32 value = 0;
+
+    ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){ value = 5; });
+    ScheduledSystem independent(arena, {}, [&](){
+        const Timer begin = TimerNow();
+        while(!dependentCompleted.load(MemoryOrder::acquire) && DurationInMS<u64>(TimerNow(), begin) < 2000u)
+            SleepMS(1u);
+        independentObservedCompletion.store(dependentCompleted.load(MemoryOrder::acquire), MemoryOrder::release);
+    });
+    ScheduledSystem dependent(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&](){
+        EXPECT_EQ(value, 5);
+        dependentCompleted.store(true, MemoryOrder::release);
+    });
+
+    NWB::Core::ECS::SystemScheduler scheduler(arena);
+    scheduler.addSystem(writer);
+    scheduler.addSystem(independent);
+    scheduler.addSystem(dependent);
+    scheduler.execute(world, 0.0f);
+    EXPECT_TRUE(independentObservedCompletion.load(MemoryOrder::acquire));
+}
+
+TEST(Ecs, MainThreadSystemRespectsWorkerDependencies){
+    NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
+    NWB::Core::Alloc::CpuTaskScheduler taskScheduler(2u);
+    NWB::Core::ECS::World world(arena, taskScheduler);
+    const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
+    s_EcsCallerThread = true;
+    bool executedOnCaller = false;
+    i32 value = 0;
+
+    ScheduledSystem worker(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){ value = 23; });
+    ScheduledSystem caller(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){
+        executedOnCaller = s_EcsCallerThread;
+        EXPECT_EQ(value, 23);
+        value = 29;
+    }, { .target = NWB::Core::Alloc::CpuTaskTarget::MainThread });
+    ScheduledSystem consumer(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&](){ EXPECT_EQ(value, 29); });
+
+    NWB::Core::ECS::SystemScheduler scheduler(arena);
+    scheduler.addSystem(worker);
+    scheduler.addSystem(caller);
+    scheduler.addSystem(consumer);
+    scheduler.execute(world, 0.0f);
+    EXPECT_TRUE(executedOnCaller);
+    s_EcsCallerThread = false;
+}
+
+TEST(Ecs, DependentSystemObservesAllNestedQueryTasks){
+    NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
+    NWB::Core::Alloc::CpuTaskScheduler taskScheduler(2u);
+    NWB::Core::ECS::World world(arena, taskScheduler);
+    static constexpr usize s_EntityCount = 512u;
+    for(usize i = 0u; i < s_EntityCount; ++i)
+        world.createEntity().addComponent<PositionComponent>().x = static_cast<i32>(i);
+    const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
+    usize observed = 0u;
+
+    ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){
+        world.view<PositionComponent>().parallelEach(world.taskScope(), 8u, [](NWB::Core::ECS::EntityID, PositionComponent& position){
+            position.y = position.x + 1;
+        });
+    });
+    ScheduledSystem reader(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&](){
+        world.view<PositionComponent>().each([&](NWB::Core::ECS::EntityID, PositionComponent& position){
+            EXPECT_EQ(position.y, position.x + 1);
+            ++observed;
+        });
+    });
+
+    NWB::Core::ECS::SystemScheduler scheduler(arena);
+    scheduler.addSystem(writer);
+    scheduler.addSystem(reader);
+    scheduler.execute(world, 0.0f);
+    EXPECT_EQ(observed, s_EntityCount);
+}
+
+TEST(Ecs, SystemCompletionIncludesAsynchronousDescendants){
+    NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
+    NWB::Core::Alloc::CpuTaskScheduler taskScheduler(2u);
+    NWB::Core::ECS::World world(arena, taskScheduler);
+    const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
+    Atomic<i32> value{ 0 };
+    i32 observed = 0;
+
+    ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){
+        world.taskScope().submit([&](){
+            SleepMS(25u);
+            world.taskScope().submit([&](){ value.store(41, MemoryOrder::release); });
+        });
+    });
+    ScheduledSystem reader(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&](){
+        observed = value.load(MemoryOrder::acquire);
+    });
+
+    NWB::Core::ECS::SystemScheduler scheduler(arena);
+    scheduler.addSystem(writer);
+    scheduler.addSystem(reader);
+    scheduler.execute(world, 0.0f);
+    EXPECT_EQ(observed, 41);
+}
+
+
+TEST(Ecs, WorldClearDoesNotWaitForUnrelatedSchedulerTasks){
+    NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
+    NWB::Core::Alloc::CpuTaskScheduler taskScheduler(2u);
+    NWB::Core::Alloc::CpuTaskScope unrelatedTasks(taskScheduler);
+    NWB::Core::ECS::World world(arena, taskScheduler);
+    Atomic<bool> started{ false };
+    Atomic<bool> release{ false };
+    Atomic<bool> completed{ false };
+    unrelatedTasks.submit([&](){
+        started.store(true, MemoryOrder::release);
+        started.notify_all();
+        const Timer begin = TimerNow();
+        while(!release.load(MemoryOrder::acquire) && DurationInMS<u64>(TimerNow(), begin) < 2000u)
+            SleepMS(1u);
+        completed.store(true, MemoryOrder::release);
+    });
+    started.wait(false, MemoryOrder::acquire);
+    world.createEntity().addComponent<PositionComponent>();
+    world.clear();
+    const bool unrelatedStillRunning = !completed.load(MemoryOrder::acquire);
+    release.store(true, MemoryOrder::release);
+    unrelatedTasks.wait();
+    EXPECT_TRUE(unrelatedStillRunning);
+    EXPECT_EQ(world.entityCount(), 0u);
 }
 
 

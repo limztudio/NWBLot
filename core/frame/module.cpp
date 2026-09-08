@@ -42,42 +42,24 @@ void Frame::ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY){
     NWB_ASSERT(frame);
     frame->m_input.setMousePositionScale(scaleX, scaleY);
 }
-u32 Frame::queryGraphicsWorkerThreadCount(){
-    u32 coreCount = ::QueryCpuCoreCount(CpuAffinity::Performance);
-    if(coreCount <= 1)
-        coreCount = ::QueryCpuCoreCount(CpuAffinity::Any);
-
-    return coreCount > s_ReservedCoresForMainThread ? (coreCount - s_ReservedCoresForMainThread) : 0;
-}
-u32 Frame::queryProjectWorkerThreadCount(){
-    u32 coreCount = ::QueryCpuCoreCount(CpuAffinity::Any);
-    const u32 graphicsWorkerThreadCount = queryGraphicsWorkerThreadCount();
-    const u32 reservedCoreCount = s_ReservedCoresForMainThread + graphicsWorkerThreadCount;
-
-    return coreCount > reservedCoreCount ? (coreCount - reservedCoreCount) : 0;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Frame::Frame(void* inst, u16 width, u16 height)
-    : m_graphicsObjectArena(FrameArenaScope::s_GraphicsObjectArena)
+Frame::Frame(void* inst, u16 width, u16 height, const Alloc::CpuTaskSchedulerConfig& cpuTaskConfig)
+    : m_cpuTasks(cpuTaskConfig)
+    , m_graphicsObjectArena(FrameArenaScope::s_GraphicsObjectArena)
     , m_appliedWindowTitle(m_graphicsObjectArena)
     , m_graphicsAllocator(m_graphicsObjectArena)
-    , m_graphicsThreadPool(queryGraphicsWorkerThreadCount(), CpuAffinity::Any)
-    , m_graphicsJobSystem(m_graphicsThreadPool)
     , m_projectObjectArena(FrameArenaScope::s_ProjectObjectArena)
     , m_perfSession(m_projectObjectArena)
     , m_telemetrySession(m_projectObjectArena)
     , m_frameGraphRegistry(m_projectObjectArena)
     , m_telemetryUploadBytes(m_projectObjectArena)
-    , m_projectThreadPool(queryProjectWorkerThreadCount(), CpuAffinity::Any)
-    , m_projectJobSystem(m_projectThreadPool)
     , m_graphics(
         m_graphicsAllocator,
-        m_graphicsThreadPool,
-        m_graphicsJobSystem,
+        m_cpuTasks,
         m_perfSession.gpuTimingSink(),
         &m_perfSession.cpuTimingSink()
     )
@@ -92,19 +74,14 @@ Frame::~Frame()noexcept(false){
     // Telemetry upload and graphics teardown can invoke throwing callbacks. During terminal unwind, quiesce only
     // scheduler-owned captures and detach callback-free platform state so the original exception survives.
     if(UncaughtExceptionCount() > 0){
-        m_projectJobSystem.drain();
-        m_projectThreadPool.drain();
-        m_graphicsJobSystem.drain();
-        m_graphicsThreadPool.drain();
+        m_cpuTasks.drain();
         cleanupPlatform();
         return;
     }
 
     cleanup();
+    m_cpuTasks.drain();
     cleanupPlatform();
-
-    Alloc::FinishBorrowedSchedulerDomain(m_projectJobSystem, m_projectThreadPool);
-    Alloc::FinishBorrowedSchedulerDomain(m_graphicsJobSystem, m_graphicsThreadPool);
 }
 
 
@@ -171,6 +148,7 @@ bool Frame::update(f32 delta){
     return updateFrame(delta);
 }
 bool Frame::updateFrame(f32 delta){
+    m_cpuTasks.pumpMainThread();
     Perf::TimingSink& cpuTiming = m_perfSession.cpuTimingSink();
     Perf::TimingScopeId projectUpdateTimingScope;
     f64 projectUpdateSeconds = 0.0;

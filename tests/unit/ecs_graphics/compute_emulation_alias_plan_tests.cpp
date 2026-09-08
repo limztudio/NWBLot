@@ -37,8 +37,8 @@ using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
 struct AliasPlanContext{
     TestArena m_testArena;
     Core::GraphicsAllocator m_graphicsAllocator{ m_testArena.arena };
-    Core::Alloc::ThreadPool m_threadPool{ 0u };
-    Core::GraphicsBackend::VulkanContext m_context{ m_graphicsAllocator, m_threadPool, 1u };
+    Core::Alloc::CpuTaskScheduler m_cpuScheduler{ 0u };
+    Core::GraphicsBackend::VulkanContext m_context{ m_graphicsAllocator, m_cpuScheduler, 1u };
     Core::GraphicsBackend::VulkanAllocator m_allocator{ m_context };
     Core::Alloc::GlobalArena m_planArena{ Name("tests/compute_emulation_alias/plan") };
     Core::Alloc::ScratchArena m_inputArena{ Name("tests/compute_emulation_alias/input") };

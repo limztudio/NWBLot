@@ -99,7 +99,7 @@ bool BackendContext::createDevice(){
     auto vecInstanceExt = VulkanDetail::StringSetToVector(m_enabledExtensions.instance, scratchArena);
     auto vecDeviceExt = VulkanDetail::StringMapKeysToVector(m_enabledExtensions.device, scratchArena);
 
-    DeviceDesc deviceDesc(m_allocator, m_threadPool);
+    DeviceDesc deviceDesc(m_allocator, m_cpuScheduler);
     deviceDesc.instance = m_vulkanInstance;
     deviceDesc.physicalDevice = m_vulkanPhysicalDevice;
     deviceDesc.device = m_vulkanDevice;

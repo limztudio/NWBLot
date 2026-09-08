@@ -263,6 +263,7 @@ private:
         ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
         GpuPhysicalQueueId ownerQueue;
         GpuPhysicalQueueId releaseDestinationQueue;
+        BufferRange range = s_EntireBuffer;
     };
 
     struct PermanentTextureState{
@@ -335,6 +336,9 @@ public:
         Texture* texture,
         TextureSubresourceSet subresources
     );
+    // Clips ordinary buffer states. Pending ownership releases must be selected in full because the acquire
+    // must use their original byte ranges; release smaller intervals independently before selecting them.
+    [[nodiscard]] bool buildBufferRangeSubset(const CommandListResourceStateHandoff& source, Buffer* buffer, BufferRange range);
     // Imported exclusive-owner texture handoffs must provide one concrete state for every selected subresource.
     // Verify that exact coverage before a graph lowers its paired acquire, including the source owner and (when
     // distinct) the release destination captured by the producer's native state tracker.
@@ -344,10 +348,12 @@ public:
         GpuPhysicalQueueId expectedOwnerQueue,
         GpuPhysicalQueueId expectedReleaseDestinationQueue
     )const;
+    // Buffer ownership must cover every byte in the requested range; unrelated intervals may have different owners.
     [[nodiscard]] bool coversBufferWithOwnership(
         Buffer* buffer,
         GpuPhysicalQueueId expectedOwnerQueue,
-        GpuPhysicalQueueId expectedReleaseDestinationQueue
+        GpuPhysicalQueueId expectedReleaseDestinationQueue,
+        BufferRange range = s_EntireBuffer
     )const;
     // Copies a valid state snapshot without exposing backend tracker storage.  Packet recording uses this to retain
     // graph-owned producer seeds while legacy consumers still request their own final handoff.

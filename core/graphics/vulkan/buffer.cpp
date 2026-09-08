@@ -462,7 +462,7 @@ bool CommandList::tryWriteBuffer(Buffer* bufferResource, const void* data, usize
     }
 
     endActiveRenderPass();
-    setBufferState(bufferResource, ResourceStates::CopyDest);
+    setBufferState(bufferResource, ResourceStates::CopyDest, false, BufferRange(destOffsetBytes, dataSize));
     if(m_commandRecordingFailed)
         return false;
 
@@ -583,13 +583,9 @@ void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* 
         return;
 
     endActiveRenderPass();
-    if(sameNativeBuffer)
-        setBufferState(srcResource, sourceState);
-    else{
-        setBufferState(srcResource, sourceState);
-        if(!m_commandRecordingFailed)
-            setBufferState(destResource, destinationState);
-    }
+    setBufferState(srcResource, sourceState, false, BufferRange(srcOffsetBytes, dataSizeBytes));
+    if(!m_commandRecordingFailed)
+        setBufferState(destResource, destinationState, false, BufferRange(destOffsetBytes, dataSizeBytes));
     if(m_commandRecordingFailed)
         return;
 

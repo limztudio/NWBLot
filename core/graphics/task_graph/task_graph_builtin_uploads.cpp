@@ -55,12 +55,13 @@ struct UploadBufferTask{
         commandList.endRenderPass();
         // The compiler tracks `finalState` for later tasks, but the native write itself requires CopyDest. Make the
         // internal transition explicit and commit it before vkCmdCopyBuffer; writeBuffer only queues its own state.
-        commandList.setBufferState(payload.destination.get(), ResourceStates::CopyDest);
+        const BufferRange uploadRange(payload.destinationOffsetBytes, byteSize);
+        commandList.setBufferState(payload.destination.get(), ResourceStates::CopyDest, false, uploadRange);
         commandList.commitBarriers();
         if(!commandList.tryWriteBuffer(payload.destination.get(), bytes, byteSize, payload.destinationOffsetBytes))
             return false;
         if(payload.finalState != ResourceStates::CopyDest){
-            commandList.setBufferState(payload.destination.get(), payload.finalState);
+            commandList.setBufferState(payload.destination.get(), payload.finalState, false, uploadRange);
             commandList.commitBarriers();
         }
         return true;
@@ -355,13 +356,13 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
     const GpuTaskResourceUse resourceUses[] = {
         GpuTaskResourceUse{
             .resource = uploadDesc.destination,
-            .range = {},
+            .range = GpuTaskResourceRange{ .bufferRange = BufferRange(uploadDesc.destinationOffsetBytes, source->bytes.size()) },
             .requiredState = ResourceStates::CopyDest,
             .access = GpuTaskResourceAccess::Write,
         },
         GpuTaskResourceUse{
             .resource = uploadDesc.destination,
-            .range = {},
+            .range = GpuTaskResourceRange{ .bufferRange = BufferRange(uploadDesc.destinationOffsetBytes, source->bytes.size()) },
             .requiredState = uploadDesc.finalState,
             .access = GpuTaskResourceAccess::Write,
         },

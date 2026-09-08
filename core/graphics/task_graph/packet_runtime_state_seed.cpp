@@ -135,8 +135,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                     Buffer* const buffer = declarationAccess.bufferForResource(use.resource);
                     if(!buffer)
                         return false;
-                    Buffer* const buffers[] = { buffer };
-                    if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u, stateFanInScratchArena))
+                    if(!scratch.stateSubsetScratch.buildBufferRangeSubset(*sourceStates, buffer, use.range.bufferRange))
                         return false;
                     break;
                 }
@@ -222,12 +221,12 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                 || !sourceStates->coversBufferWithOwnership(
                     buffer,
                     barrier.sourceQueue,
-                    barrier.destinationQueue
+                    barrier.destinationQueue,
+                    barrier.range.bufferRange
                 )
             )
                 return false;
-            Buffer* const buffers[] = { buffer };
-            if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u, stateFanInScratchArena))
+            if(!scratch.stateSubsetScratch.buildBufferRangeSubset(*sourceStates, buffer, barrier.range.bufferRange))
                 return false;
             break;
         }
@@ -376,8 +375,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                     return false;
             }
             else if(Buffer* const buffer = declarationAccess.bufferForResource(seed.resource)){
-                Buffer* const buffers[] = { buffer };
-                if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u, stateFanInScratchArena))
+                if(!scratch.stateSubsetScratch.buildBufferRangeSubset(*sourceStates, buffer, seed.range.bufferRange))
                     return false;
             }
             else if(RayTracingAccelStruct* const accelStruct = declarationAccess.accelStructForResource(seed.resource)){

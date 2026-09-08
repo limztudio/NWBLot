@@ -361,7 +361,7 @@ TEST(GpuTaskGraph, InfersRawWarAndWawDependenciesWithoutReadReadEdges){
     ));
 }
 
-TEST(GpuTaskGraph, KeepsTextureSubresourcesIndependentAndBuffersConservative){
+TEST(GpuTaskGraph, KeepsTextureSubresourcesAndBufferRangesIndependent){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuGraphResourceDesc textureDesc;
@@ -428,7 +428,7 @@ TEST(GpuTaskGraph, KeepsTextureSubresourcesIndependentAndBuffersConservative){
 
     Graphics::GpuTaskGraphAnalysis bufferAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, bufferAnalysis));
-    EXPECT_NE(FindEdge(bufferAnalysis, first, second), nullptr);
+    EXPECT_EQ(FindEdge(bufferAnalysis, first, second), nullptr);
 }
 
 TEST(GpuTaskGraph, DeduplicatesExplicitAndInferredEdgesAndProducesStableOrder){

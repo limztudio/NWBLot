@@ -136,19 +136,24 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
 
     GraphicsVector<GpuTaskResourceUse> resourceUses(m_arena);
     resourceUses.reserve(copyDesc.regionCount * 2u);
-    const auto appendResourceUse = [&](const GpuGraphResourceId resource, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access){
+    const auto appendResourceUse = [&](
+        const GpuGraphResourceId resource,
+        const BufferRange range,
+        const ResourceStates::Mask state,
+        const GpuTaskResourceAccess::Enum access
+    ){
         for(const GpuTaskResourceUse& existing : resourceUses){
             if(existing.resource != resource)
                 continue;
-            // A primitive copy cannot safely read and write the same imported buffer inside one task. Keep that
-            // sequencing explicit in separate tasks instead of silently weakening its graph declarations.
-            return existing.requiredState == state && existing.access == access;
+            // Keep command sequencing explicit when a batch reads and writes the same imported allocation.
+            if(existing.requiredState != state || existing.access != access)
+                return false;
+            if(existing.range.bufferRange.contains(range))
+                return true;
         }
-        // Buffer ownership and recorded-state handoffs are still whole-buffer. Keep the graph declaration equally
-        // conservative even though the native payload validates and records an exact byte range.
         resourceUses.push_back(GpuTaskResourceUse{
             .resource = resource,
-            .range = {},
+            .range = GpuTaskResourceRange{ .bufferRange = range },
             .requiredState = state,
             .access = access,
         });
@@ -187,8 +192,18 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
             )
             && validCopyRange(sourceResource.buffer->getCreationDescription(), region.sourceOffsetBytes, region.dataSizeBytes)
             && validCopyRange(destinationResource.buffer->getCreationDescription(), region.destinationOffsetBytes, region.dataSizeBytes)
-            && appendResourceUse(region.source, ResourceStates::CopySource, GpuTaskResourceAccess::Read)
-            && appendResourceUse(region.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write)
+            && appendResourceUse(
+                region.source,
+                BufferRange(region.sourceOffsetBytes, region.dataSizeBytes),
+                ResourceStates::CopySource,
+                GpuTaskResourceAccess::Read
+            )
+            && appendResourceUse(
+                region.destination,
+                BufferRange(region.destinationOffsetBytes, region.dataSizeBytes),
+                ResourceStates::CopyDest,
+                GpuTaskResourceAccess::Write
+            )
         ;
         if(valid){
             payload->copies.push_back(CopyTask::Copy{

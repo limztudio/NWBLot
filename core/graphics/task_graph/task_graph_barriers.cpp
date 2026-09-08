@@ -93,10 +93,9 @@ bool GpuTaskGraph::applyCompiledBarrier(
         if(barrier.isGraphInitialState){
             if(barrier.before == ResourceStates::Unknown)
                 return false;
-            if(!commandList.hasExplicitBufferState(resource.buffer.get()))
-                commandList.beginTrackingBufferState(resource.buffer.get(), barrier.before);
+            commandList.seedBufferState(resource.buffer.get(), barrier.before, barrier.range.bufferRange);
         }
-        commandList.setBufferState(resource.buffer.get(), barrier.after, barrier.forceMemoryDependency);
+        commandList.setBufferState(resource.buffer.get(), barrier.after, barrier.forceMemoryDependency, barrier.range.bufferRange);
         return true;
     }
     case GpuCompiledBarrierType::TextureStateExport:{
@@ -126,8 +125,8 @@ bool GpuTaskGraph::applyCompiledBarrier(
         const ResourceStates::Mask permanentState = commandList.getPermanentBufferState(resource.buffer.get());
         if(permanentState != ResourceStates::Unknown && permanentState != barrier.after)
             return false;
-        commandList.setBufferState(resource.buffer.get(), barrier.after);
-        commandList.beginTrackingBufferState(resource.buffer.get(), barrier.after);
+        commandList.setBufferState(resource.buffer.get(), barrier.after, false, barrier.range.bufferRange);
+        commandList.beginTrackingBufferState(resource.buffer.get(), barrier.after, barrier.range.bufferRange);
         return true;
     }
     case GpuCompiledBarrierType::AccelStructStateExport:{
@@ -199,7 +198,7 @@ bool GpuTaskGraph::applyCompiledBarrier(
             return false;
         if(commandList.getPermanentBufferState(resource.buffer.get()) != ResourceStates::Unknown)
             return false;
-        commandList.releaseBufferOwnership(resource.buffer.get(), destinationQueue->id);
+        commandList.releaseBufferOwnership(resource.buffer.get(), destinationQueue->id, barrier.range.bufferRange);
         return true;
     }
     case GpuCompiledBarrierType::AccelStructOwnershipRelease:{
@@ -304,25 +303,14 @@ bool GpuTaskGraph::seedTaskRetainedResourceStates(
             break;
         }
         case GpuGraphResourceType::Buffer:{
-            bool alreadySeededByTask = false;
-            for(usize previousUseIndex = 0u; previousUseIndex < useIndex; ++previousUseIndex){
-                const GpuTaskResourceUse& previousUse = resourceUses[previousUseIndex];
-                if(previousUse.resource == use.resource){
-                    alreadySeededByTask = true;
-                    break;
-                }
-            }
-            if(alreadySeededByTask)
-                continue;
-
             if(!resource.buffer)
                 return false;
             const BufferDesc& description = resource.buffer->getCreationDescription();
             if(!description.keepInitialState || description.initialState != use.requiredState)
                 continue;
-            if(commandList.getBufferState(resource.buffer.get()) != use.requiredState)
-                return false;
-            commandList.beginTrackingBufferState(resource.buffer.get(), use.requiredState);
+            if(commandList.getBufferState(resource.buffer.get(), use.range.bufferRange) != use.requiredState)
+                continue;
+            commandList.beginTrackingBufferState(resource.buffer.get(), use.requiredState, use.range.bufferRange);
             break;
         }
         case GpuGraphResourceType::AccelStruct:{

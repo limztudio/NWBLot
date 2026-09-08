@@ -98,8 +98,8 @@ namespace GpuTaskGraphCompilerDetail{
 }
 
 [[nodiscard]] static const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphResourceView& resource,
-    const Texture* const texture,
     const GpuTaskResourceRange& firstUseRange,
     const GpuPhysicalQueueId& destinationQueue
 )noexcept{
@@ -118,12 +118,11 @@ namespace GpuTaskGraphCompilerDetail{
         GpuTaskResourceRange plannedSourceRange;
         if(
             source.destinationQueue != destinationQueue
-            || !ResolveTextureRangeForPlanning(texture, source.range, plannedSourceRange)
+            || !ResolveResourceRangeForPlanning(graph, resource, source.range, plannedSourceRange)
             || !RangeContains(resource, plannedSourceRange, firstUseRange)
         )
             continue;
-        // One first graph use must have one exact external owner. A broader range that straddles two released mips
-        // cannot safely select one state source or one completion token, so reject it rather than guessing.
+        // One first-use fragment must have one exact external owner and one matching completion token.
         if(result)
             return nullptr;
         result = &source;
@@ -145,7 +144,7 @@ namespace GpuTaskGraphCompilerDetail{
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena>& pendingEpilogueBarriers = plan.pendingEpilogueBarriers;
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies = plan.initialOwnershipDependencies;
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies = plan.initialAvailabilityDependencies;
-    Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& stateFragments = plan.stateFragments;
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& stateFragments = plan.stateFragments;
     Vector<GpuTaskResourceRange, Alloc::ScratchArena>& taskFirstUseRanges = plan.taskFirstUseRanges;
 
     // The construction pass appended one compiled task for each entry in this stable order, and no later phase
@@ -184,22 +183,15 @@ namespace GpuTaskGraphCompilerDetail{
                 return false;
             }
 
-            const Texture* const typedTexture = resource.type == GpuGraphResourceType::Texture
-                ? graph.textureForResource(use.resource)
-                : nullptr
-            ;
-            GpuTaskResourceRange plannedRange = use.range;
-            if(
-                resource.type == GpuGraphResourceType::Texture
-                && !ResolveTextureRangeForPlanning(typedTexture, use.range, plannedRange)
-            )
+            GpuTaskResourceRange plannedRange;
+            if(!ResolveResourceRangeForPlanning(graph, resource, use.range, plannedRange))
                 return false;
 
-            // A task owns its internal resource ordering. Texture portions already declared earlier in this task
-            // remain local CommandList work, while newly introduced subresources still receive normal graph seeds
-            // and transitions. Buffers and acceleration structures retain their intentionally whole-resource path.
+            // A task owns its internal resource ordering. Previously declared portions remain local CommandList
+            // work, while newly introduced texture subresources or buffer bytes still receive graph seeds and
+            // transitions. Acceleration structures retain their whole-resource path.
             bool alreadyPlannedByTask = false;
-            if(resource.type != GpuGraphResourceType::Texture){
+            if(resource.type != GpuGraphResourceType::Texture && resource.type != GpuGraphResourceType::Buffer){
                 for(usize previousUseIndex = 0u; previousUseIndex < useIndex; ++previousUseIndex){
                     const GpuTaskResourceUse& previousUse = task.resourceUses[previousUseIndex];
                     if(previousUse.resource != use.resource)
@@ -226,28 +218,28 @@ namespace GpuTaskGraphCompilerDetail{
                 continue;
             }
 
-            if(resource.type == GpuGraphResourceType::Texture){
-                if(!CollectTextureFirstUseRangesWithinTask(
+            if(resource.type == GpuGraphResourceType::Texture || resource.type == GpuGraphResourceType::Buffer){
+                if(!CollectResourceFirstUseRangesWithinTask(
+                    graph,
                     task,
                     useIndex,
-                    use.resource,
-                    typedTexture,
+                    resource,
                     plannedRange,
                     scratchArena,
                     taskFirstUseRanges
                 ))
                     return false;
                 stateFragments.clear();
-                if(!CollectLatestTextureStateFragments(
+                if(!CollectLatestResourceStateFragments(
                     trackedResourceStates,
-                    use.resource,
+                    resource,
                     taskFirstUseRanges,
                     scratchArena,
                     stateFragments
                 ))
                     return false;
 
-                for(const TrackedTextureStateFragment& fragment : stateFragments){
+                for(const TrackedResourceStateFragment& fragment : stateFragments){
                     const TrackedCompiledResourceState* const previousState = fragment.state;
                     const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSource = nullptr;
                     bool usesInitialOwnerOnlyHandoff = false;
@@ -269,8 +261,8 @@ namespace GpuTaskGraphCompilerDetail{
                         }
                         if(resource.initialOwnerHandoffSourceCount != 0u){
                             initialOwnerHandoffSource = FindInitialOwnerHandoffSource(
+                                graph,
                                 resource,
-                                typedTexture,
                                 fragment.range,
                                 compiledTask->queue
                             );
@@ -573,8 +565,8 @@ namespace GpuTaskGraphCompilerDetail{
             }
             if(!previousState && resource.initialOwnerHandoffSourceCount != 0u){
                 const GpuTaskGraphInitialOwnerHandoffSourceView* const source = FindInitialOwnerHandoffSource(
+                    graph,
                     resource,
-                    nullptr,
                     use.range,
                     compiledTask->queue
                 );

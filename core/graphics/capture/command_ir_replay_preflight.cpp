@@ -75,7 +75,8 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     ;
     if(declaredSize > description.byteSize - declaration.byteOffset || offsetBytes < declaration.byteOffset)
         return false;
-    return sizeBytes <= declaredSize - (offsetBytes - declaration.byteOffset);
+    const u64 relativeOffset = offsetBytes - declaration.byteOffset;
+    return relativeOffset <= declaredSize && sizeBytes <= declaredSize - relativeOffset;
 }
 
 [[nodiscard]] static bool TextureSubresourcesAreCanonical(
@@ -221,31 +222,39 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     if(!source || !destination)
         return GpuCommandIrReplayError::MissingBackendResource;
 
-    const GpuTaskResourceUse* const sourceUse = FindTaskResourceUse(
-        task,
-        record.source,
-        ResourceStates::CopySource,
-        GpuTaskResourceAccess::Read
-    );
-    const GpuTaskResourceUse* const destinationUse = FindTaskResourceUse(
-        task,
-        record.destination,
-        ResourceStates::CopyDest,
-        GpuTaskResourceAccess::Write
-    );
-    if(!sourceUse || !destinationUse)
+    const auto declaresRange = [&](
+        const GpuGraphResourceId resource,
+        const BufferDesc& description,
+        const ResourceStates::Mask state,
+        const GpuTaskResourceAccess::Enum access,
+        const u64 offset
+    ){
+        for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
+            const GpuTaskResourceUse& use = task.resourceUses[useIndex];
+            if(
+                use.resource == resource
+                && use.requiredState == state
+                && use.access == access
+                && BufferRangeContains(description, use.range.bufferRange, offset, record.dataSizeBytes)
+            )
+                return true;
+        }
+        return false;
+    };
+    if(
+        !FindTaskResourceUse(task, record.source, ResourceStates::CopySource, GpuTaskResourceAccess::Read)
+        || !FindTaskResourceUse(task, record.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write)
+    )
         return GpuCommandIrReplayError::ResourceUseMismatch;
-
-    const BufferDesc& sourceDescription = source->getCreationDescription();
-    const BufferDesc& destinationDescription = destination->getCreationDescription();
     if(
         record.dataSizeBytes == 0u
-        || !BufferRangeContains(sourceDescription, sourceUse->range.bufferRange, record.sourceOffsetBytes, record.dataSizeBytes)
-        || !BufferRangeContains(
-            destinationDescription,
-            destinationUse->range.bufferRange,
-            record.destinationOffsetBytes,
-            record.dataSizeBytes
+        || !declaresRange(
+            record.source, source->getCreationDescription(), ResourceStates::CopySource,
+            GpuTaskResourceAccess::Read, record.sourceOffsetBytes
+        )
+        || !declaresRange(
+            record.destination, destination->getCreationDescription(), ResourceStates::CopyDest,
+            GpuTaskResourceAccess::Write, record.destinationOffsetBytes
         )
         || (
             source == destination

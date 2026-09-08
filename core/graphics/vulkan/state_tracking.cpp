@@ -161,18 +161,6 @@ ResourceStates::Mask StateTracker::getTextureState(Texture* texture, ArraySlice 
     return getTransientTextureState(*texture, arraySlice, mipLevel, state) ? state : ResourceStates::Unknown;
 }
 
-ResourceStates::Mask StateTracker::getBufferState(Buffer* buffer)const{
-    if(!buffer)
-        return ResourceStates::Unknown;
-
-    auto permIt = m_permanentBufferStates.find(buffer);
-    if(permIt != m_permanentBufferStates.end())
-        return permIt.value().state;
-
-    ResourceStates::Mask state = ResourceStates::Unknown;
-    return getTransientBufferState(*buffer, state) ? state : ResourceStates::Unknown;
-}
-
 bool StateTracker::hasExplicitTextureSubresourceState(
     Texture* const texture,
     const ArraySlice arraySlice,
@@ -183,14 +171,6 @@ bool StateTracker::hasExplicitTextureSubresourceState(
     if(m_permanentTextureStates.find(texture) != m_permanentTextureStates.end())
         return true;
     return m_textureStates.find(TextureSubresourceStateKey{ texture, mipLevel, arraySlice }) != m_textureStates.end();
-}
-
-bool StateTracker::hasExplicitBufferState(Buffer* const buffer)const{
-    if(!buffer)
-        return false;
-    return m_permanentBufferStates.find(buffer) != m_permanentBufferStates.end()
-        || m_bufferStates.find(buffer) != m_bufferStates.end()
-    ;
 }
 
 bool StateTracker::getTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel, ResourceStates::Mask& outState)const{
@@ -219,21 +199,6 @@ bool StateTracker::getResolvedTransientTextureState(Texture& texture, ArraySlice
     return true;
 }
 
-bool StateTracker::getTransientBufferState(Buffer& buffer, ResourceStates::Mask& outState)const{
-    outState = ResourceStates::Unknown;
-
-    auto it = m_bufferStates.find(&buffer);
-    if(it != m_bufferStates.end()){
-        outState = it.value();
-        return true;
-    }
-
-    if(buffer.isRetainedStateKnown())
-        outState = buffer.m_creationDesc.initialState;
-
-    return true;
-}
-
 void StateTracker::beginTrackingTexture(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
     if(!texture)
         return;
@@ -242,16 +207,6 @@ void StateTracker::beginTrackingTexture(Texture* texture, TextureSubresourceSet 
         return;
 
     beginTrackingTransientTexture(*texture, subresources, state);
-}
-
-void StateTracker::beginTrackingBuffer(Buffer* buffer, ResourceStates::Mask state){
-    if(!buffer)
-        return;
-
-    if(m_permanentBufferStates.find(buffer) != m_permanentBufferStates.end())
-        return;
-
-    beginTrackingTransientBuffer(*buffer, state);
 }
 
 void StateTracker::appendKeepInitialStateBarriers(
@@ -288,34 +243,27 @@ void StateTracker::appendKeepInitialStateBarriers(
     }
 
     for(auto it = m_bufferStates.begin(); it != m_bufferStates.end(); ++it){
-        Buffer* bufferResource = it->first;
-        if(!bufferResource)
+        Buffer* const buffer = it->first;
+        if(!buffer || !buffer->m_creationDesc.keepInitialState)
             continue;
 
-        const BufferDesc& desc = bufferResource->getCreationDescription();
-        const ResourceStates::Mask currentState = it.value();
-        if(!desc.keepInitialState)
-            continue;
-
-        auto* buffer = bufferResource;
-        if(currentState == desc.initialState){
-            commandBuffer.m_resourceReferences.appendBufferStateCommit(*buffer);
-            continue;
+        const BufferDesc& desc = buffer->m_creationDesc;
+        for(BufferRangeState& entry : it.value()){
+            if(entry.state != desc.initialState){
+                bufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferStateBarrier(
+                    buffer->m_buffer,
+                    entry.range,
+                    entry.state,
+                    desc.initialState,
+                    m_context.extensions.KHR_ray_tracing_pipeline
+                ));
+                entry.state = desc.initialState;
+            }
         }
-
-        auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
-        barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(currentState != ResourceStates::Unknown ? currentState : ResourceStates::Common, m_context.extensions.KHR_ray_tracing_pipeline);
-        barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(currentState != ResourceStates::Unknown ? currentState : ResourceStates::Common);
-        barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(desc.initialState, m_context.extensions.KHR_ray_tracing_pipeline);
-        barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(desc.initialState);
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.buffer = buffer->m_buffer;
-        barrier.offset = 0;
-        barrier.size = VK_WHOLE_SIZE;
-        bufferBarriers.push_back(barrier);
-        it.value() = desc.initialState;
-        commandBuffer.m_resourceReferences.appendBufferStateCommit(*buffer);
+        // The retained resource flag describes the entire allocation. Restoring a partial native import must not
+        // claim that bytes whose state was never known have also reached the initial state.
+        if(buffer->isRetainedStateKnown() || hasExplicitBufferState(buffer))
+            commandBuffer.m_resourceReferences.appendBufferStateCommit(*buffer);
     }
 }
 
@@ -350,10 +298,6 @@ void StateTracker::beginTrackingResolvedTransientTexture(Texture& texture, const
             m_textureStates.insert_or_assign(key, state);
         }
     }
-}
-
-void StateTracker::beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::Mask state){
-    m_bufferStates.insert_or_assign(&buffer, state);
 }
 
 void StateTracker::setEnableUavBarriersForTexture(Texture& texture, bool enableBarriers){
@@ -446,44 +390,11 @@ void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresource
     retainResource(texture);
 }
 
-void CommandList::beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits){
-    if(!buffer)
-        return;
-    constexpr const tchar* s_OperationName = NWB_TEXT("begin tracking buffer state");
-    if(!validateCommandRecordingScope(s_OperationName))
-        return;
-    if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("initial state cannot be unknown"));
-        return;
-    }
-    if(!validateBufferForGpuState(buffer, stateBits, s_OperationName))
-        return;
-
-    const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(buffer);
-    if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
-        rejectCommandRecording(
-            s_OperationName,
-            NWB_TEXT("initial state conflicts with the permanent buffer state")
-        );
-        return;
-    }
-
-    m_stateTracker.beginTrackingBuffer(buffer, stateBits);
-    retainResource(buffer);
-}
-
 ResourceStates::Mask CommandList::getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel){
     const GraphPublicationReadOwnership ownership(*this);
     if(!ownership.m_readable)
         return ResourceStates::Unknown;
     return m_stateTracker.getTextureState(texture, arraySlice, mipLevel);
-}
-
-ResourceStates::Mask CommandList::getBufferState(Buffer* buffer){
-    const GraphPublicationReadOwnership ownership(*this);
-    if(!ownership.m_readable)
-        return ResourceStates::Unknown;
-    return m_stateTracker.getBufferState(buffer);
 }
 
 ResourceStates::Mask CommandList::getPermanentTextureState(Texture* texture)const{
@@ -509,13 +420,6 @@ bool CommandList::hasExplicitTextureSubresourceState(
     if(!ownership.m_readable)
         return false;
     return m_stateTracker.hasExplicitTextureSubresourceState(texture, arraySlice, mipLevel);
-}
-
-bool CommandList::hasExplicitBufferState(Buffer* const buffer)const{
-    const GraphPublicationReadOwnership ownership(*this);
-    if(!ownership.m_readable)
-        return false;
-    return m_stateTracker.hasExplicitBufferState(buffer);
 }
 
 

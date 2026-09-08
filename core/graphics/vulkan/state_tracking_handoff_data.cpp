@@ -24,110 +24,6 @@ namespace __hidden_command_list_state_handoff{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using TextureStateKey = GraphicsBackend::TextureSubresourceStateKey;
-
-
-// ScratchArena reclaims one most-recent allocation per alignment bucket. Keep each temporary index in one fixed
-// allocation so destruction rewinds it exactly; node/bucket hash containers can leave non-LIFO storage behind and
-// grow the arena on every repeated fan-in query.
-template<typename Key, typename Hash, typename Equal>
-class ScratchStateIndexMap final : NoCopy{
-private:
-    struct Slot{
-        Key key{};
-        usize value = 0u;
-        bool occupied = false;
-    };
-
-
-public:
-    ScratchStateIndexMap(
-        Alloc::ScratchArena& arena,
-        const usize maximumEntryCount,
-        const Hash& hash = Hash(),
-        const Equal& equal = Equal()
-    )
-        : m_slots(arena)
-        , m_hash(hash)
-        , m_equal(equal)
-    {
-        if(maximumEntryCount == 0u)
-            return;
-
-        if(AddOverflows<usize>(maximumEntryCount, maximumEntryCount)){
-            m_valid = false;
-            return;
-        }
-        const usize doubledEntryCount = maximumEntryCount + maximumEntryCount;
-        if(AddOverflows<usize>(doubledEntryCount, 1u)){
-            m_valid = false;
-            return;
-        }
-        m_slots.resize(doubledEntryCount + 1u);
-    }
-
-
-public:
-    [[nodiscard]] bool valid()const noexcept{ return m_valid; }
-
-    [[nodiscard]] const usize* find(const Key& key)const noexcept{
-        if(m_slots.empty())
-            return nullptr;
-
-        usize slotIndex = m_hash(key) % m_slots.size();
-        for(usize probedSlotCount = 0u; probedSlotCount < m_slots.size(); ++probedSlotCount){
-            const Slot& slot = m_slots[slotIndex];
-            if(!slot.occupied)
-                return nullptr;
-            if(m_equal(slot.key, key))
-                return &slot.value;
-            if(++slotIndex == m_slots.size())
-                slotIndex = 0u;
-        }
-        return nullptr;
-    }
-
-    [[nodiscard]] bool insertOrAssign(const Key& key, const usize value)noexcept{
-        if(m_slots.empty())
-            return false;
-
-        usize slotIndex = m_hash(key) % m_slots.size();
-        for(usize probedSlotCount = 0u; probedSlotCount < m_slots.size(); ++probedSlotCount){
-            Slot& slot = m_slots[slotIndex];
-            if(!slot.occupied){
-                slot.key = key;
-                slot.value = value;
-                slot.occupied = true;
-                return true;
-            }
-            if(m_equal(slot.key, key)){
-                slot.value = value;
-                return true;
-            }
-            if(++slotIndex == m_slots.size())
-                slotIndex = 0u;
-        }
-        return false;
-    }
-
-
-private:
-    Vector<Slot, Alloc::ScratchArena> m_slots;
-    Hash m_hash;
-    Equal m_equal;
-    bool m_valid = true;
-};
-
-
-using TextureStateIndexMap = ScratchStateIndexMap<
-    TextureStateKey,
-    GraphicsBackend::TextureSubresourceStateKeyHasher,
-    GraphicsBackend::TextureSubresourceStateKeyEqualTo
->;
-using BufferStateIndexMap = ScratchStateIndexMap<Buffer*, Hasher<Buffer*>, EqualTo<Buffer*>>;
-using PermanentTextureStateIndexMap = ScratchStateIndexMap<Texture*, Hasher<Texture*>, EqualTo<Texture*>>;
-
-
 template<typename StateVector, typename Predicate>
 void RetainSelectedStates(StateVector& states, const Predicate& selected){
     usize retainedStateCount = 0u;
@@ -165,301 +61,6 @@ void RetainSelectedStates(StateVector& states, const Predicate& selected){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-bool CommandListResourceStateHandoff::buildFanIn(
-    const CommandListResourceStateHandoff& base,
-    const CommandListResourceStateHandoff* const* branches,
-    const usize branchCount,
-    Alloc::ScratchArena& scratchArena
-){
-    if(this == &base)
-        return false;
-
-    if(
-        !base.valid()
-        || base.m_deviceGeneration == 0u
-        || (branchCount != 0u && !branches)
-    ){
-        reset();
-        return false;
-    }
-
-    for(usize branchIndex = 0u; branchIndex < branchCount; ++branchIndex){
-        const CommandListResourceStateHandoff* branch = branches[branchIndex];
-        if(branch == this)
-            return false;
-
-        if(
-            !branch
-            || !branch->valid()
-            || branch->m_deviceGeneration != base.m_deviceGeneration
-        ){
-            reset();
-            return false;
-        }
-    }
-
-    usize textureStateCapacity = base.m_textureStates.size();
-    usize bufferStateCapacity = base.m_bufferStates.size();
-    usize permanentTextureStateCapacity = base.m_permanentTextureStates.size();
-    usize permanentBufferStateCapacity = base.m_permanentBufferStates.size();
-    for(usize branchIndex = 0u; branchIndex < branchCount; ++branchIndex){
-        const CommandListResourceStateHandoff& branch = *branches[branchIndex];
-        if(
-            AddOverflows<usize>(textureStateCapacity, branch.m_textureStates.size())
-            || AddOverflows<usize>(bufferStateCapacity, branch.m_bufferStates.size())
-            || AddOverflows<usize>(permanentTextureStateCapacity, branch.m_permanentTextureStates.size())
-            || AddOverflows<usize>(permanentBufferStateCapacity, branch.m_permanentBufferStates.size())
-        ){
-            reset();
-            return false;
-        }
-        textureStateCapacity += branch.m_textureStates.size();
-        bufferStateCapacity += branch.m_bufferStates.size();
-        permanentTextureStateCapacity += branch.m_permanentTextureStates.size();
-        permanentBufferStateCapacity += branch.m_permanentBufferStates.size();
-    }
-
-    reset();
-    m_deviceGeneration = base.m_deviceGeneration;
-
-    using namespace __hidden_command_list_state_handoff;
-    const auto sameTextureState = [](const TextureState& lhs, const TextureState& rhs){
-        return
-            lhs.state == rhs.state
-            && lhs.queueSharing == rhs.queueSharing
-            && lhs.ownerQueue == rhs.ownerQueue
-            && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
-        ;
-    };
-    const auto sameBufferState = [](const BufferState& lhs, const BufferState& rhs){
-        return
-            lhs.state == rhs.state
-            && lhs.queueSharing == rhs.queueSharing
-            && lhs.ownerQueue == rhs.ownerQueue
-            && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
-        ;
-    };
-    const auto samePermanentTextureState = [](const PermanentTextureState& lhs, const PermanentTextureState& rhs){
-        return
-            lhs.state == rhs.state
-            && lhs.queueSharing == rhs.queueSharing
-            && lhs.ownerQueue == rhs.ownerQueue
-            && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
-        ;
-    };
-
-    m_textureStates.reserve(textureStateCapacity);
-    m_bufferStates.reserve(bufferStateCapacity);
-    m_permanentTextureStates.reserve(permanentTextureStateCapacity);
-    m_permanentBufferStates.reserve(permanentBufferStateCapacity);
-
-    {
-        TextureStateIndexMap resultIndices(
-            scratchArena,
-            textureStateCapacity,
-            GraphicsBackend::TextureSubresourceStateKeyHasher(),
-            GraphicsBackend::TextureSubresourceStateKeyEqualTo()
-        );
-        if(!resultIndices.valid()){
-            reset();
-            return false;
-        }
-        for(const TextureState& state : base.m_textureStates){
-            const TextureStateKey key{ state.texture, state.mipLevel, state.arraySlice };
-            const usize index = m_textureStates.size();
-            m_textureStates.push_back(state);
-            if(!resultIndices.insertOrAssign(key, index)){
-                reset();
-                return false;
-            }
-        }
-
-        const usize baseStateCount = base.m_textureStates.size();
-        const auto mergeState = [&](const TextureState& state){
-            const TextureStateKey key{ state.texture, state.mipLevel, state.arraySlice };
-            const usize* const resultIndex = resultIndices.find(key);
-            if(!resultIndex){
-                const usize index = m_textureStates.size();
-                m_textureStates.push_back(state);
-                return resultIndices.insertOrAssign(key, index);
-            }
-
-            const TextureState* const baseState = *resultIndex < baseStateCount
-                ? &base.m_textureStates[*resultIndex]
-                : nullptr
-            ;
-            if(baseState && sameTextureState(state, *baseState))
-                return true;
-
-            TextureState& resultState = m_textureStates[*resultIndex];
-            if((!baseState || !sameTextureState(resultState, *baseState)) && !sameTextureState(resultState, state))
-                return false;
-
-            resultState = state;
-            return true;
-        };
-
-        for(usize branchIndex = 0u; branchIndex < branchCount; ++branchIndex){
-            for(const TextureState& state : branches[branchIndex]->m_textureStates){
-                if(!mergeState(state)){
-                    reset();
-                    return false;
-                }
-            }
-        }
-    }
-
-    {
-        BufferStateIndexMap resultIndices(scratchArena, bufferStateCapacity);
-        if(!resultIndices.valid()){
-            reset();
-            return false;
-        }
-        for(const BufferState& state : base.m_bufferStates){
-            const usize index = m_bufferStates.size();
-            m_bufferStates.push_back(state);
-            if(!resultIndices.insertOrAssign(state.buffer, index)){
-                reset();
-                return false;
-            }
-        }
-
-        const usize baseStateCount = base.m_bufferStates.size();
-        const auto mergeState = [&](const BufferState& state){
-            const usize* const resultIndex = resultIndices.find(state.buffer);
-            if(!resultIndex){
-                const usize index = m_bufferStates.size();
-                m_bufferStates.push_back(state);
-                return resultIndices.insertOrAssign(state.buffer, index);
-            }
-
-            const BufferState* const baseState = *resultIndex < baseStateCount
-                ? &base.m_bufferStates[*resultIndex]
-                : nullptr
-            ;
-            if(baseState && sameBufferState(state, *baseState))
-                return true;
-
-            BufferState& resultState = m_bufferStates[*resultIndex];
-            if((!baseState || !sameBufferState(resultState, *baseState)) && !sameBufferState(resultState, state))
-                return false;
-
-            resultState = state;
-            return true;
-        };
-
-        for(usize branchIndex = 0u; branchIndex < branchCount; ++branchIndex){
-            for(const BufferState& state : branches[branchIndex]->m_bufferStates){
-                if(!mergeState(state)){
-                    reset();
-                    return false;
-                }
-            }
-        }
-    }
-
-    {
-        PermanentTextureStateIndexMap resultIndices(scratchArena, permanentTextureStateCapacity);
-        if(!resultIndices.valid()){
-            reset();
-            return false;
-        }
-        for(const PermanentTextureState& state : base.m_permanentTextureStates){
-            const usize index = m_permanentTextureStates.size();
-            m_permanentTextureStates.push_back(state);
-            if(!resultIndices.insertOrAssign(state.texture, index)){
-                reset();
-                return false;
-            }
-        }
-
-        const usize baseStateCount = base.m_permanentTextureStates.size();
-        const auto mergeState = [&](const PermanentTextureState& state){
-            const usize* const resultIndex = resultIndices.find(state.texture);
-            if(!resultIndex){
-                const usize index = m_permanentTextureStates.size();
-                m_permanentTextureStates.push_back(state);
-                return resultIndices.insertOrAssign(state.texture, index);
-            }
-
-            const PermanentTextureState* const baseState = *resultIndex < baseStateCount
-                ? &base.m_permanentTextureStates[*resultIndex]
-                : nullptr
-            ;
-            if(baseState && samePermanentTextureState(state, *baseState))
-                return true;
-
-            PermanentTextureState& resultState = m_permanentTextureStates[*resultIndex];
-            if((!baseState || !samePermanentTextureState(resultState, *baseState)) && !samePermanentTextureState(resultState, state))
-                return false;
-
-            resultState = state;
-            return true;
-        };
-
-        for(usize branchIndex = 0u; branchIndex < branchCount; ++branchIndex){
-            for(const PermanentTextureState& state : branches[branchIndex]->m_permanentTextureStates){
-                if(!mergeState(state)){
-                    reset();
-                    return false;
-                }
-            }
-        }
-    }
-
-    {
-        BufferStateIndexMap resultIndices(scratchArena, permanentBufferStateCapacity);
-        if(!resultIndices.valid()){
-            reset();
-            return false;
-        }
-        for(const BufferState& state : base.m_permanentBufferStates){
-            const usize index = m_permanentBufferStates.size();
-            m_permanentBufferStates.push_back(state);
-            if(!resultIndices.insertOrAssign(state.buffer, index)){
-                reset();
-                return false;
-            }
-        }
-
-        const usize baseStateCount = base.m_permanentBufferStates.size();
-        const auto mergeState = [&](const BufferState& state){
-            const usize* const resultIndex = resultIndices.find(state.buffer);
-            if(!resultIndex){
-                const usize index = m_permanentBufferStates.size();
-                m_permanentBufferStates.push_back(state);
-                return resultIndices.insertOrAssign(state.buffer, index);
-            }
-
-            const BufferState* const baseState = *resultIndex < baseStateCount
-                ? &base.m_permanentBufferStates[*resultIndex]
-                : nullptr
-            ;
-            if(baseState && sameBufferState(state, *baseState))
-                return true;
-
-            BufferState& resultState = m_permanentBufferStates[*resultIndex];
-            if((!baseState || !sameBufferState(resultState, *baseState)) && !sameBufferState(resultState, state))
-                return false;
-
-            resultState = state;
-            return true;
-        };
-
-        for(usize branchIndex = 0u; branchIndex < branchCount; ++branchIndex){
-            for(const BufferState& state : branches[branchIndex]->m_permanentBufferStates){
-                if(!mergeState(state)){
-                    reset();
-                    return false;
-                }
-            }
-        }
-    }
-
-    m_valid = true;
-    return true;
-}
 
 bool CommandListResourceStateHandoff::buildResourceSubset(
     const CommandListResourceStateHandoff& source,
@@ -648,6 +249,70 @@ bool CommandListResourceStateHandoff::buildTextureRangeSubset(
     return true;
 }
 
+bool CommandListResourceStateHandoff::buildBufferRangeSubset(
+    const CommandListResourceStateHandoff& source,
+    Buffer* const buffer,
+    const BufferRange range
+){
+    if(!source.valid() || source.m_deviceGeneration == 0u || !buffer)
+        return false;
+
+    const BufferRange resolvedRange = range.resolve(buffer->getCreationDescription());
+    if(!resolvedRange.hasExtent())
+        return false;
+
+    usize bufferStateCount = 0u;
+    for(const BufferState& state : source.m_bufferStates){
+        if(state.buffer != buffer || !state.range.overlaps(resolvedRange))
+            continue;
+        if(
+            state.releaseDestinationQueue.valid()
+            && !resolvedRange.contains(state.range.resolve(buffer->getCreationDescription()))
+        )
+            return false;
+        ++bufferStateCount;
+    }
+    usize permanentBufferStateCount = 0u;
+    for(const BufferState& state : source.m_permanentBufferStates){
+        if(state.buffer == buffer)
+            ++permanentBufferStateCount;
+    }
+    m_bufferStates.reserve(bufferStateCount);
+    m_permanentBufferStates.reserve(permanentBufferStateCount);
+    const u16 sourceDeviceGeneration = source.m_deviceGeneration;
+    if(this == &source){
+        using namespace __hidden_command_list_state_handoff;
+        RetainSelectedStates(m_bufferStates, [&](const BufferState& state){
+            return state.buffer == buffer && state.range.overlaps(resolvedRange);
+        });
+        for(BufferState& state : m_bufferStates)
+            state.range = state.range.intersect(resolvedRange);
+        RetainSelectedStates(m_permanentBufferStates, [&](const BufferState& state){ return state.buffer == buffer; });
+        m_textureStates.clear();
+        m_permanentTextureStates.clear();
+    }
+    else{
+        m_textureStates.clear();
+        m_bufferStates.clear();
+        m_permanentTextureStates.clear();
+        m_permanentBufferStates.clear();
+        for(const BufferState& state : source.m_bufferStates){
+            if(state.buffer != buffer || !state.range.overlaps(resolvedRange))
+                continue;
+            BufferState selectedState = state;
+            selectedState.range = state.range.intersect(resolvedRange);
+            m_bufferStates.push_back(selectedState);
+        }
+        for(const BufferState& state : source.m_permanentBufferStates){
+            if(state.buffer == buffer)
+                m_permanentBufferStates.push_back(state);
+        }
+    }
+    m_deviceGeneration = sourceDeviceGeneration;
+    m_valid = true;
+    return true;
+}
+
 bool CommandListResourceStateHandoff::coversTextureRangeWithOwnership(
     Texture* const texture,
     const TextureSubresourceSet subresources,
@@ -722,7 +387,8 @@ bool CommandListResourceStateHandoff::coversTextureRangeWithOwnership(
 bool CommandListResourceStateHandoff::coversBufferWithOwnership(
     Buffer* const buffer,
     const GpuPhysicalQueueId expectedOwnerQueue,
-    const GpuPhysicalQueueId expectedReleaseDestinationQueue
+    const GpuPhysicalQueueId expectedReleaseDestinationQueue,
+    const BufferRange range
 )const{
     if(
         !m_valid
@@ -730,6 +396,10 @@ bool CommandListResourceStateHandoff::coversBufferWithOwnership(
         || !buffer
         || !expectedOwnerQueue.valid()
     )
+        return false;
+
+    const BufferRange resolvedRange = range.resolve(buffer->getCreationDescription());
+    if(!resolvedRange.hasExtent())
         return false;
 
     const BufferState* permanentState = nullptr;
@@ -751,23 +421,44 @@ bool CommandListResourceStateHandoff::coversBufferWithOwnership(
     if(permanentState)
         return true;
 
-    const BufferState* matchingState = nullptr;
-    for(const BufferState& state : m_bufferStates){
-        if(state.buffer != buffer)
-            continue;
-        if(
-            matchingState
-            || !__hidden_command_list_state_handoff::OwnershipMatches(
+    u64 coveredEnd = resolvedRange.byteOffset;
+    while(coveredEnd < resolvedRange.end()){
+        const BufferState* matchingState = nullptr;
+        for(const BufferState& state : m_bufferStates){
+            if(state.buffer != buffer || !state.range.overlaps(resolvedRange))
+                continue;
+            if(
+                state.releaseDestinationQueue.valid()
+                && !resolvedRange.contains(state.range.resolve(buffer->getCreationDescription()))
+            )
+                return false;
+            if(!__hidden_command_list_state_handoff::OwnershipMatches(
                 state.ownerQueue,
                 state.releaseDestinationQueue,
                 expectedOwnerQueue,
                 expectedReleaseDestinationQueue
-            )
-        )
+            ))
+                return false;
+            if(state.range.byteOffset > coveredEnd || state.range.end() <= coveredEnd)
+                continue;
+            if(matchingState)
+                return false;
+            matchingState = &state;
+        }
+        if(!matchingState)
             return false;
-        matchingState = &state;
+        const u64 nextCoveredEnd = Min(matchingState->range.end(), resolvedRange.end());
+        for(const BufferState& state : m_bufferStates){
+            if(
+                &state != matchingState
+                && state.buffer == buffer
+                && state.range.overlaps(BufferRange(coveredEnd, nextCoveredEnd - coveredEnd))
+            )
+                return false;
+        }
+        coveredEnd = nextCoveredEnd;
     }
-    return matchingState != nullptr;
+    return true;
 }
 
 bool CommandListResourceStateHandoff::copyFrom(const CommandListResourceStateHandoff& source){
@@ -822,6 +513,7 @@ bool CommandListResourceStateHandoff::equivalentTo(const CommandListResourceStat
             && lhs.queueSharing == rhs.queueSharing
             && lhs.ownerQueue == rhs.ownerQueue
             && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
+            && lhs.range == rhs.range
         ;
     };
     for(usize stateIndex = 0u; stateIndex < m_bufferStates.size(); ++stateIndex){

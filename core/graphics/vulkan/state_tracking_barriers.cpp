@@ -384,7 +384,8 @@ VkBufferMemoryBarrier2 BuildBufferOwnershipReleaseBarrier(
     const ResourceStates::Mask state,
     const u32 sourceQueueFamily,
     const u32 destinationQueueFamily,
-    const bool rayTracingStageAvailable
+    const bool rayTracingStageAvailable,
+    const BufferRange range
 ){
     const ResourceStates::Mask resolvedState = NormalizeOwnershipState(state);
     auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
@@ -395,8 +396,8 @@ VkBufferMemoryBarrier2 BuildBufferOwnershipReleaseBarrier(
     barrier.srcQueueFamilyIndex = sourceQueueFamily;
     barrier.dstQueueFamilyIndex = destinationQueueFamily;
     barrier.buffer = buffer;
-    barrier.offset = 0u;
-    barrier.size = VK_WHOLE_SIZE;
+    barrier.offset = range.byteOffset;
+    barrier.size = range.byteSize;
     return barrier;
 }
 
@@ -405,7 +406,8 @@ VkBufferMemoryBarrier2 BuildBufferOwnershipAcquireBarrier(
     const ResourceStates::Mask state,
     const u32 sourceQueueFamily,
     const u32 destinationQueueFamily,
-    const bool rayTracingStageAvailable
+    const bool rayTracingStageAvailable,
+    const BufferRange range
 ){
     const ResourceStates::Mask resolvedState = NormalizeOwnershipState(state);
     auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
@@ -416,8 +418,8 @@ VkBufferMemoryBarrier2 BuildBufferOwnershipAcquireBarrier(
     barrier.srcQueueFamilyIndex = sourceQueueFamily;
     barrier.dstQueueFamilyIndex = destinationQueueFamily;
     barrier.buffer = buffer;
-    barrier.offset = 0u;
-    barrier.size = VK_WHOLE_SIZE;
+    barrier.offset = range.byteOffset;
+    barrier.size = range.byteSize;
     return barrier;
 }
 
@@ -786,74 +788,6 @@ void CommandList::setTextureState(
     m_pendingImageBarriers.resize(firstBarrierIndex);
 }
 
-void CommandList::setBufferState(
-    Buffer* bufferResource,
-    ResourceStates::Mask stateBits,
-    const bool forceMemoryDependency
-){
-    if(!bufferResource)
-        return;
-    if(!validateCommandRecordingScope(NWB_TEXT("set buffer state")))
-        return;
-    if(!validateBufferForGpuState(bufferResource, stateBits, NWB_TEXT("set buffer state")))
-        return;
-
-    Buffer& buffer = *bufferResource;
-    const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(&buffer);
-
-    ResourceStates::Mask oldState = permanentState;
-    if(permanentState == ResourceStates::Unknown && !m_stateTracker.getTransientBufferState(buffer, oldState)){
-        rejectCommandRecording(NWB_TEXT("set buffer state"), NWB_TEXT("tracked buffer state could not be resolved"));
-        return;
-    }
-
-    if(
-        VulkanDetail::HasBufferDeviceWriteState(oldState)
-        || VulkanDetail::HasBufferDeviceWriteState(stateBits)
-    )
-        registerHostReadbackBuffer(buffer);
-
-    const bool needsUavBarrier =
-        oldState == stateBits
-        && ResourceStates::HasUnorderedAccess(stateBits)
-        && m_stateTracker.isUavBarrierEnabledForBuffer(buffer)
-    ;
-
-    if(!VulkanStateTrackingDetail::NeedsResourceStateBarrier(
-        oldState,
-        stateBits,
-        needsUavBarrier,
-        forceMemoryDependency
-    ))
-        return;
-    retainResource(&buffer);
-
-    auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
-    barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common, m_context.extensions.KHR_ray_tracing_pipeline);
-    barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
-    barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(stateBits, m_context.extensions.KHR_ray_tracing_pipeline);
-    barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(stateBits);
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.buffer = buffer.m_buffer;
-    barrier.offset = 0;
-    barrier.size = VK_WHOLE_SIZE;
-
-    if(permanentState == ResourceStates::Unknown)
-        m_stateTracker.beginTrackingTransientBuffer(buffer, stateBits);
-
-    if(!m_enableAutomaticBarriers){
-        m_pendingBufferBarriers.push_back(barrier);
-        return;
-    }
-
-    auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
-    depInfo.bufferMemoryBarrierCount = 1;
-    depInfo.pBufferMemoryBarriers = &barrier;
-
-    executePipelineBarrier(depInfo);
-}
-
 void CommandList::setAccelStructState(
     RayTracingAccelStruct* accelStructResource,
     ResourceStates::Mask stateBits,
@@ -958,73 +892,6 @@ void CommandList::releaseTextureOwnership(
         }
     }
     retainResource(&texture);
-}
-
-void CommandList::releaseBufferOwnership(Buffer* bufferResource, const CommandQueue::Enum destinationQueue){
-    if(!bufferResource)
-        return;
-    releaseBufferOwnership(bufferResource, m_device.getPrimaryPhysicalQueue(destinationQueue));
-}
-
-void CommandList::releaseBufferOwnership(
-    Buffer* bufferResource,
-    const GpuPhysicalQueueId destinationQueue
-){
-    if(!bufferResource)
-        return;
-    constexpr const tchar* s_OperationName = NWB_TEXT("release buffer ownership");
-    if(!validateCommandRecordingScope(s_OperationName))
-        return;
-
-    Buffer& buffer = *bufferResource;
-    if(!isBufferReadyForCommandQueue(&buffer)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("buffer is not ready for this exact command queue"));
-        return;
-    }
-    if(m_stateTracker.isPermanentBuffer(buffer)){
-        rejectCommandRecording(
-            s_OperationName,
-            NWB_TEXT("permanently tracked buffers cannot transfer ownership")
-        );
-        return;
-    }
-    if(buffer.m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
-        rejectCommandRecording(
-            s_OperationName,
-            NWB_TEXT("concurrently shared buffers do not have exclusive ownership")
-        );
-        return;
-    }
-
-    if(!m_device.getQueue(destinationQueue)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("destination queue is unavailable"));
-        return;
-    }
-
-    const auto existing = m_bufferOwnershipReleaseDestinations.find(&buffer);
-    if(existing != m_bufferOwnershipReleaseDestinations.end() && existing.value() != destinationQueue){
-        rejectCommandRecording(
-            s_OperationName,
-            NWB_TEXT("buffer already targets a conflicting destination queue")
-        );
-        return;
-    }
-
-    // Releases require an established state. Managed creation and explicitly known native provenance may provide
-    // one, but a native descriptor alone is not evidence of current ownership state.
-    ResourceStates::Mask state = m_stateTracker.getBufferState(&buffer);
-    if(state == ResourceStates::Unknown)
-        state = buffer.resolveTaskGraphImportInitialState();
-    if(state == ResourceStates::Unknown){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("final resource state is unknown"));
-        return;
-    }
-    if(!validateBufferForGpuState(&buffer, state, s_OperationName))
-        return;
-    m_stateTracker.beginTrackingBuffer(&buffer, state);
-
-    m_bufferOwnershipReleaseDestinations.insert_or_assign(&buffer, destinationQueue);
-    retainResource(&buffer);
 }
 
 void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mask stateBits){

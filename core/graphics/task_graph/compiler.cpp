@@ -157,9 +157,9 @@ struct InitialOwnershipCompletionRequirement{
         transferRange.bufferRange = s_EntireBuffer;
         break;
     case GpuGraphResourceType::Buffer:
-        if(!IsValidBufferRange(range.bufferRange))
+        if(!ResolveResourceRangeForPlanning(plan.graph, resource, range, transferRange))
             return false;
-        transferRange.bufferRange = range.bufferRange;
+        transferRange.textureSubresources = s_AllSubresources;
         break;
     case GpuGraphResourceType::AccelStruct:
         break;
@@ -421,9 +421,11 @@ bool GpuTaskGraphCompiler::compile(
             return false;
         }
         if(resource.initialOwnerHandoffSourceCount != 0u){
-            const Texture* const typedTexture = graph.textureForResource(resource.id);
             if(
-                resource.type != GpuGraphResourceType::Texture
+                (
+                    resource.type != GpuGraphResourceType::Texture
+                    && resource.type != GpuGraphResourceType::Buffer
+                )
                 || !resource.initialOwnerHandoffSources
                 || ResourceUsesConcurrentQueueSharing(resource, topology)
             ){
@@ -442,7 +444,7 @@ bool GpuTaskGraphCompiler::compile(
                     source.sourceQueue
                 );
                 if(
-                    !ResolveTextureRangeForPlanning(typedTexture, source.range, plannedSourceRange)
+                    !ResolveResourceRangeForPlanning(graph, resource, source.range, plannedSourceRange)
                     || !source.sourceQueue.valid()
                     || !source.destinationQueue.valid()
                     || !sourceQueueInfo
@@ -549,7 +551,7 @@ bool GpuTaskGraphCompiler::compile(
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialOwnershipDependencies(scratchArena);
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialAvailabilityDependencies(scratchArena);
     Vector<GpuPacketDependency, Alloc::ScratchArena> terminalFinalizationDependencies(scratchArena);
-    Vector<TrackedTextureStateFragment, Alloc::ScratchArena> stateFragments(scratchArena);
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena> stateFragments(scratchArena);
     Vector<GpuTaskResourceRange, Alloc::ScratchArena> taskFirstUseRanges(scratchArena);
     trackedResourceStates.reserve(graph.taskCount());
     pendingEpilogueBarriers.reserve(graph.taskCount());

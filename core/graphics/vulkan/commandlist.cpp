@@ -956,8 +956,12 @@ bool CommandList::validateTrackedResourcesReadyForSubmission()const{
 
 void CommandList::collectHostReadbackBuffers(){
     for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
-        if(it->first && VulkanDetail::HasBufferDeviceWriteState(it.value()))
-            registerHostReadbackBuffer(*it->first);
+        for(const StateTracker::BufferRangeState& state : it.value()){
+            if(it->first && VulkanDetail::HasBufferDeviceWriteState(state.state)){
+                registerHostReadbackBuffer(*it->first);
+                break;
+            }
+        }
     }
     for(
         auto it = m_stateTracker.m_permanentBufferStates.begin();

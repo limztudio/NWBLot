@@ -169,7 +169,7 @@ TEST(GpuStateTracker, DistinguishesRetainedDescriptorFallbackFromExplicitState){
         testArena.arena,
         context,
         allocator,
-        Graphics::BufferDesc().enableAutomaticStateTracking(Graphics::ResourceStates::ShaderResource),
+        Graphics::BufferDesc().setByteSize(256u).enableAutomaticStateTracking(Graphics::ResourceStates::ShaderResource),
         true
     );
     ASSERT_NE(bufferObject, nullptr);
@@ -235,13 +235,13 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
         testArena.arena,
         context,
         allocator,
-        Graphics::BufferDesc().setInitialState(Graphics::ResourceStates::Unknown)
+        Graphics::BufferDesc().setByteSize(64u).setInitialState(Graphics::ResourceStates::Unknown)
     );
     Graphics::Buffer* const writeBufferObject = NewMetadataOnlyBuffer(
         testArena.arena,
         context,
         allocator,
-        Graphics::BufferDesc().setInitialState(Graphics::ResourceStates::Unknown)
+        Graphics::BufferDesc().setByteSize(64u).setInitialState(Graphics::ResourceStates::Unknown)
     );
     Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
         testArena.arena,

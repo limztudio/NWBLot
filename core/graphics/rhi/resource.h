@@ -428,6 +428,17 @@ struct BufferRange{
     {}
 
     [[nodiscard]] BufferRange resolve(const BufferDesc& desc)const;
+    [[nodiscard]] constexpr bool hasExtent()const noexcept{
+        return byteSize != 0u && byteOffset < AllBytes && (byteSize == AllBytes || byteSize <= AllBytes - byteOffset);
+    }
+    [[nodiscard]] constexpr u64 end()const noexcept{ return byteSize == AllBytes ? AllBytes : byteOffset + byteSize; }
+    [[nodiscard]] constexpr bool overlaps(const BufferRange& other)const noexcept{
+        return hasExtent() && other.hasExtent() && byteOffset < other.end() && other.byteOffset < end();
+    }
+    [[nodiscard]] constexpr bool contains(const BufferRange& other)const noexcept{
+        return hasExtent() && other.hasExtent() && byteOffset <= other.byteOffset && end() >= other.end();
+    }
+    [[nodiscard]] BufferRange intersect(const BufferRange& other)const noexcept;
     [[nodiscard]] constexpr bool isEntireBuffer(const BufferDesc& desc)const{ return (!byteOffset) && (byteSize == AllBytes || byteSize == desc.byteSize); }
     constexpr bool operator==(const BufferRange& other)const{ return byteOffset == other.byteOffset && byteSize == other.byteSize; }
 

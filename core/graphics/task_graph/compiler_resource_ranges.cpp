@@ -54,12 +54,37 @@ namespace GpuTaskGraphCompilerDetail{
 }
 
 [[nodiscard]] bool IsValidBufferRange(const BufferRange& range)noexcept{
-    return range.byteSize != 0u
-        && (
-            range.byteSize == BufferRange::AllBytes
-            || range.byteOffset <= Limit<u64>::s_Max - range.byteSize
+    return range.hasExtent();
+}
+
+[[nodiscard]] bool ResolveResourceRangeForPlanning(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphResourceView& resource,
+    const GpuTaskResourceRange& range,
+    GpuTaskResourceRange& outRange
+)noexcept{
+    outRange = range;
+    if(resource.type == GpuGraphResourceType::Texture)
+        return ResolveTextureRangeForPlanning(graph.textureForResource(resource.id), range, outRange);
+    if(resource.type != GpuGraphResourceType::Buffer)
+        return true;
+    if(!range.bufferRange.hasExtent())
+        return false;
+    const Buffer* const buffer = graph.bufferForResource(resource.id);
+    if(!buffer)
+        return true;
+
+    const BufferDesc& description = buffer->getCreationDescription();
+    if(
+        range.bufferRange.byteOffset >= description.byteSize
+        || (
+            range.bufferRange.byteSize != BufferRange::AllBytes
+            && range.bufferRange.byteSize > description.byteSize - range.bufferRange.byteOffset
         )
-    ;
+    )
+        return false;
+    outRange.bufferRange = range.bufferRange.resolve(description);
+    return outRange.bufferRange.hasExtent();
 }
 
 [[nodiscard]] bool RangesOverlap(
@@ -67,12 +92,11 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskResourceRange& lhs,
     const GpuTaskResourceRange& rhs
 )noexcept{
-    // Buffers intentionally stay whole-resource in Phase 1. Their declared byte ranges become useful when the
-    // compiler grows a tested interval tracker; treating them as independent before then would be unsafe.
-    if(resource.type != GpuGraphResourceType::Texture)
-        return true;
-
-    return lhs.textureSubresources.overlaps(rhs.textureSubresources);
+    if(resource.type == GpuGraphResourceType::Texture)
+        return lhs.textureSubresources.overlaps(rhs.textureSubresources);
+    if(resource.type == GpuGraphResourceType::Buffer)
+        return lhs.bufferRange.overlaps(rhs.bufferRange);
+    return true;
 }
 
 [[nodiscard]] bool RangeContains(
@@ -80,138 +104,166 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskResourceRange& outer,
     const GpuTaskResourceRange& inner
 )noexcept{
-    if(resource.type != GpuGraphResourceType::Texture)
-        return true;
-
-    return outer.textureSubresources.contains(inner.textureSubresources);
+    if(resource.type == GpuGraphResourceType::Texture)
+        return outer.textureSubresources.contains(inner.textureSubresources);
+    if(resource.type == GpuGraphResourceType::Buffer)
+        return outer.bufferRange.contains(inner.bufferRange);
+    return true;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Texture state tracking is subresource-granular, but graph declarations can name rectangles that straddle several
-// independently produced regions. Keep the interval endpoints symbolic so metadata-only graphs retain the same
-// correct partition as typed textures whose physical mip/array bounds are only known at recording time.
-struct TextureRangeBounds{
-    u64 mipBegin = 0u;
-    u64 mipEnd = 0u;
-    u64 arrayBegin = 0u;
-    u64 arrayEnd = 0u;
+// Textures use mip/array rectangles; buffers use byte intervals with a single fixed secondary row. The shared
+// partition preserves every independently produced fragment, including symbolic tails in metadata-only graphs.
+struct ResourceRangeBounds{
+    u64 xBegin = 0u;
+    u64 xEnd = 0u;
+    u64 yBegin = 0u;
+    u64 yEnd = 0u;
 };
 
-[[nodiscard]] static bool TextureRangeBoundsFrom(
+[[nodiscard]] static bool ResourceRangeBoundsFrom(
+    const GpuGraphResourceType::Enum resourceType,
     const GpuTaskResourceRange& range,
-    TextureRangeBounds& outBounds
+    ResourceRangeBounds& outBounds
 )noexcept{
+    if(resourceType == GpuGraphResourceType::Buffer){
+        if(!range.bufferRange.hasExtent())
+            return false;
+        outBounds = ResourceRangeBounds{
+            .xBegin = range.bufferRange.byteOffset,
+            .xEnd = range.bufferRange.end(),
+            .yBegin = 0u,
+            .yEnd = 1u,
+        };
+        return true;
+    }
+    if(resourceType != GpuGraphResourceType::Texture)
+        return false;
     const TextureSubresourceSet& texture = range.textureSubresources;
-    outBounds = TextureRangeBounds{
-        .mipBegin = texture.baseMipLevel,
-        .mipEnd = texture.mipEnd(),
-        .arrayBegin = texture.baseArraySlice,
-        .arrayEnd = texture.arrayEnd(),
+    outBounds = ResourceRangeBounds{
+        .xBegin = texture.baseMipLevel,
+        .xEnd = texture.mipEnd(),
+        .yBegin = texture.baseArraySlice,
+        .yEnd = texture.arrayEnd(),
     };
-    return outBounds.mipBegin < outBounds.mipEnd && outBounds.arrayBegin < outBounds.arrayEnd;
+    return outBounds.xBegin < outBounds.xEnd && outBounds.yBegin < outBounds.yEnd;
 }
 
-[[nodiscard]] static bool TextureRangeBoundsTo(
-    const TextureRangeBounds& bounds,
+[[nodiscard]] static bool ResourceRangeBoundsTo(
+    const GpuGraphResourceType::Enum resourceType,
+    const ResourceRangeBounds& bounds,
     GpuTaskResourceRange& outRange
 )noexcept{
+    if(resourceType == GpuGraphResourceType::Buffer){
+        if(bounds.xBegin >= bounds.xEnd || bounds.yBegin != 0u || bounds.yEnd != 1u)
+            return false;
+        outRange = GpuTaskResourceRange{
+            .bufferRange = BufferRange(
+                bounds.xBegin,
+                bounds.xEnd == Limit<u64>::s_Max ? BufferRange::AllBytes : bounds.xEnd - bounds.xBegin
+            ),
+        };
+        return true;
+    }
+    if(resourceType != GpuGraphResourceType::Texture)
+        return false;
     if(
-        bounds.mipBegin >= bounds.mipEnd
-        || bounds.arrayBegin >= bounds.arrayEnd
-        || bounds.mipBegin > Limit<MipLevel>::s_Max
-        || bounds.arrayBegin > Limit<ArraySlice>::s_Max
+        bounds.xBegin >= bounds.xEnd
+        || bounds.yBegin >= bounds.yEnd
+        || bounds.xBegin > Limit<MipLevel>::s_Max
+        || bounds.yBegin > Limit<ArraySlice>::s_Max
     )
         return false;
 
-    const u64 mipCount = bounds.mipEnd == Limit<u64>::s_Max
+    const u64 mipCount = bounds.xEnd == Limit<u64>::s_Max
         ? TextureSubresourceSet::AllMipLevels
-        : bounds.mipEnd - bounds.mipBegin
+        : bounds.xEnd - bounds.xBegin
     ;
-    const u64 arrayCount = bounds.arrayEnd == Limit<u64>::s_Max
+    const u64 arrayCount = bounds.yEnd == Limit<u64>::s_Max
         ? TextureSubresourceSet::AllArraySlices
-        : bounds.arrayEnd - bounds.arrayBegin
+        : bounds.yEnd - bounds.yBegin
     ;
     if(
         mipCount == 0u
         || arrayCount == 0u
         || mipCount > Limit<MipLevel>::s_Max
         || arrayCount > Limit<ArraySlice>::s_Max
-        || (bounds.mipEnd != Limit<u64>::s_Max && mipCount == TextureSubresourceSet::AllMipLevels)
-        || (bounds.arrayEnd != Limit<u64>::s_Max && arrayCount == TextureSubresourceSet::AllArraySlices)
+        || (bounds.xEnd != Limit<u64>::s_Max && mipCount == TextureSubresourceSet::AllMipLevels)
+        || (bounds.yEnd != Limit<u64>::s_Max && arrayCount == TextureSubresourceSet::AllArraySlices)
     )
         return false;
 
     outRange = GpuTaskResourceRange{
         .textureSubresources = TextureSubresourceSet{
-            static_cast<MipLevel>(bounds.mipBegin),
+            static_cast<MipLevel>(bounds.xBegin),
             static_cast<MipLevel>(mipCount),
-            static_cast<ArraySlice>(bounds.arrayBegin),
+            static_cast<ArraySlice>(bounds.yBegin),
             static_cast<ArraySlice>(arrayCount),
         },
     };
     return true;
 }
 
-[[nodiscard]] static bool IntersectTextureRangeBounds(
-    const TextureRangeBounds& lhs,
-    const TextureRangeBounds& rhs,
-    TextureRangeBounds& outIntersection
+[[nodiscard]] static bool IntersectResourceRangeBounds(
+    const ResourceRangeBounds& lhs,
+    const ResourceRangeBounds& rhs,
+    ResourceRangeBounds& outIntersection
 )noexcept{
-    outIntersection = TextureRangeBounds{
-        .mipBegin = lhs.mipBegin > rhs.mipBegin ? lhs.mipBegin : rhs.mipBegin,
-        .mipEnd = lhs.mipEnd < rhs.mipEnd ? lhs.mipEnd : rhs.mipEnd,
-        .arrayBegin = lhs.arrayBegin > rhs.arrayBegin ? lhs.arrayBegin : rhs.arrayBegin,
-        .arrayEnd = lhs.arrayEnd < rhs.arrayEnd ? lhs.arrayEnd : rhs.arrayEnd,
+    outIntersection = ResourceRangeBounds{
+        .xBegin = lhs.xBegin > rhs.xBegin ? lhs.xBegin : rhs.xBegin,
+        .xEnd = lhs.xEnd < rhs.xEnd ? lhs.xEnd : rhs.xEnd,
+        .yBegin = lhs.yBegin > rhs.yBegin ? lhs.yBegin : rhs.yBegin,
+        .yEnd = lhs.yEnd < rhs.yEnd ? lhs.yEnd : rhs.yEnd,
     };
-    return outIntersection.mipBegin < outIntersection.mipEnd
-        && outIntersection.arrayBegin < outIntersection.arrayEnd
+    return outIntersection.xBegin < outIntersection.xEnd
+        && outIntersection.yBegin < outIntersection.yEnd
     ;
 }
 
-static void AppendTextureRangeRemainder(
-    const TextureRangeBounds& outer,
-    const TextureRangeBounds& cut,
-    Vector<TextureRangeBounds, Alloc::ScratchArena>& outRanges
+static void AppendResourceRangeRemainder(
+    const ResourceRangeBounds& outer,
+    const ResourceRangeBounds& cut,
+    Vector<ResourceRangeBounds, Alloc::ScratchArena>& outRanges
 ){
-    TextureRangeBounds intersection;
-    if(!IntersectTextureRangeBounds(outer, cut, intersection)){
+    ResourceRangeBounds intersection;
+    if(!IntersectResourceRangeBounds(outer, cut, intersection)){
         outRanges.push_back(outer);
         return;
     }
 
-    if(outer.mipBegin < intersection.mipBegin){
-        outRanges.push_back(TextureRangeBounds{
-            .mipBegin = outer.mipBegin,
-            .mipEnd = intersection.mipBegin,
-            .arrayBegin = outer.arrayBegin,
-            .arrayEnd = outer.arrayEnd,
+    if(outer.xBegin < intersection.xBegin){
+        outRanges.push_back(ResourceRangeBounds{
+            .xBegin = outer.xBegin,
+            .xEnd = intersection.xBegin,
+            .yBegin = outer.yBegin,
+            .yEnd = outer.yEnd,
         });
     }
-    if(intersection.mipEnd < outer.mipEnd){
-        outRanges.push_back(TextureRangeBounds{
-            .mipBegin = intersection.mipEnd,
-            .mipEnd = outer.mipEnd,
-            .arrayBegin = outer.arrayBegin,
-            .arrayEnd = outer.arrayEnd,
+    if(intersection.xEnd < outer.xEnd){
+        outRanges.push_back(ResourceRangeBounds{
+            .xBegin = intersection.xEnd,
+            .xEnd = outer.xEnd,
+            .yBegin = outer.yBegin,
+            .yEnd = outer.yEnd,
         });
     }
-    if(outer.arrayBegin < intersection.arrayBegin){
-        outRanges.push_back(TextureRangeBounds{
-            .mipBegin = intersection.mipBegin,
-            .mipEnd = intersection.mipEnd,
-            .arrayBegin = outer.arrayBegin,
-            .arrayEnd = intersection.arrayBegin,
+    if(outer.yBegin < intersection.yBegin){
+        outRanges.push_back(ResourceRangeBounds{
+            .xBegin = intersection.xBegin,
+            .xEnd = intersection.xEnd,
+            .yBegin = outer.yBegin,
+            .yEnd = intersection.yBegin,
         });
     }
-    if(intersection.arrayEnd < outer.arrayEnd){
-        outRanges.push_back(TextureRangeBounds{
-            .mipBegin = intersection.mipBegin,
-            .mipEnd = intersection.mipEnd,
-            .arrayBegin = intersection.arrayEnd,
-            .arrayEnd = outer.arrayEnd,
+    if(intersection.yEnd < outer.yEnd){
+        outRanges.push_back(ResourceRangeBounds{
+            .xBegin = intersection.xBegin,
+            .xEnd = intersection.xEnd,
+            .yBegin = intersection.yEnd,
+            .yEnd = outer.yEnd,
         });
     }
 }
@@ -219,72 +271,72 @@ static void AppendTextureRangeRemainder(
 // One task owns transitions between its own commands, but only for subresources it already declared earlier in that
 // task. A later overlapping range can also introduce previously untouched cells, which still need the graph's
 // packet-boundary state source or declared initial state before native task recording begins.
-[[nodiscard]] bool CollectTextureFirstUseRangesWithinTask(
+[[nodiscard]] bool CollectResourceFirstUseRangesWithinTask(
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
     const usize useIndex,
-    const GpuGraphResourceId& resource,
-    const Texture* const texture,
+    const GpuTaskGraphResourceView& resource,
     const GpuTaskResourceRange& range,
     Alloc::ScratchArena& scratchArena,
     Vector<GpuTaskResourceRange, Alloc::ScratchArena>& outRanges
 ){
     outRanges.clear();
 
-    TextureRangeBounds requestedBounds;
-    if(!TextureRangeBoundsFrom(range, requestedBounds))
+    ResourceRangeBounds requestedBounds;
+    if(!ResourceRangeBoundsFrom(resource.type, range, requestedBounds))
         return false;
 
-    Vector<TextureRangeBounds, Alloc::ScratchArena> uncovered(scratchArena);
-    Vector<TextureRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
+    Vector<ResourceRangeBounds, Alloc::ScratchArena> uncovered(scratchArena);
+    Vector<ResourceRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
     uncovered.push_back(requestedBounds);
 
     for(usize previousUseIndex = 0u; previousUseIndex < useIndex && !uncovered.empty(); ++previousUseIndex){
         const GpuTaskResourceUse& previousUse = task.resourceUses[previousUseIndex];
-        if(previousUse.resource != resource)
+        if(previousUse.resource != resource.id)
             continue;
 
         GpuTaskResourceRange previousRange;
-        if(!ResolveTextureRangeForPlanning(texture, previousUse.range, previousRange))
+        if(!ResolveResourceRangeForPlanning(graph, resource, previousUse.range, previousRange))
             return false;
 
-        TextureRangeBounds previousBounds;
-        if(!TextureRangeBoundsFrom(previousRange, previousBounds))
+        ResourceRangeBounds previousBounds;
+        if(!ResourceRangeBoundsFrom(resource.type, previousRange, previousBounds))
             return false;
 
         remainders.clear();
-        for(const TextureRangeBounds& uncoveredRange : uncovered)
-            AppendTextureRangeRemainder(uncoveredRange, previousBounds, remainders);
+        for(const ResourceRangeBounds& uncoveredRange : uncovered)
+            AppendResourceRangeRemainder(uncoveredRange, previousBounds, remainders);
 
         uncovered.clear();
         uncovered.reserve(remainders.size());
-        for(const TextureRangeBounds& remainder : remainders)
+        for(const ResourceRangeBounds& remainder : remainders)
             uncovered.push_back(remainder);
     }
 
     outRanges.reserve(uncovered.size());
-    for(const TextureRangeBounds& uncoveredRange : uncovered){
+    for(const ResourceRangeBounds& uncoveredRange : uncovered){
         GpuTaskResourceRange firstUseRange;
-        if(!TextureRangeBoundsTo(uncoveredRange, firstUseRange))
+        if(!ResourceRangeBoundsTo(resource.type, uncoveredRange, firstUseRange))
             return false;
         outRanges.push_back(firstUseRange);
     }
     return true;
 }
 
-static void AppendTextureStateFragmentsInStateOrder(
-    const Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& discovered,
+static void AppendResourceStateFragmentsInStateOrder(
+    const Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& discovered,
     const usize stateCount,
-    Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& outFragments
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments
 ){
     outFragments.clear();
     outFragments.reserve(discovered.size());
     for(usize stateIndex = 0u; stateIndex < stateCount; ++stateIndex){
-        for(const TrackedTextureStateFragment& fragment : discovered){
+        for(const TrackedResourceStateFragment& fragment : discovered){
             if(fragment.stateIndex == stateIndex)
                 outFragments.push_back(fragment);
         }
     }
-    for(const TrackedTextureStateFragment& fragment : discovered){
+    for(const TrackedResourceStateFragment& fragment : discovered){
         if(!fragment.state)
             outFragments.push_back(fragment);
     }
@@ -293,111 +345,111 @@ static void AppendTextureStateFragmentsInStateOrder(
 // Walk newest-to-oldest and consume only still-uncovered portions of the requested ranges. A selected state
 // therefore owns exactly the terminal cells that it actually produced; the remaining cells retain their declared
 // graph initial state rather than inheriting an unrelated adjacent producer.
-[[nodiscard]] bool CollectLatestTextureStateFragments(
+[[nodiscard]] bool CollectLatestResourceStateFragments(
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
-    const GpuGraphResourceId& resource,
+    const GpuTaskGraphResourceView& resource,
     const Vector<GpuTaskResourceRange, Alloc::ScratchArena>& requestedRanges,
     Alloc::ScratchArena& scratchArena,
-    Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& outFragments
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments
 ){
-    Vector<TextureRangeBounds, Alloc::ScratchArena> uncovered(scratchArena);
-    Vector<TextureRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
-    Vector<TrackedTextureStateFragment, Alloc::ScratchArena> discovered(scratchArena);
+    Vector<ResourceRangeBounds, Alloc::ScratchArena> uncovered(scratchArena);
+    Vector<ResourceRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena> discovered(scratchArena);
     for(const GpuTaskResourceRange& requestedRange : requestedRanges){
-        TextureRangeBounds requestedBounds;
-        if(!TextureRangeBoundsFrom(requestedRange, requestedBounds))
+        ResourceRangeBounds requestedBounds;
+        if(!ResourceRangeBoundsFrom(resource.type, requestedRange, requestedBounds))
             return false;
         uncovered.push_back(requestedBounds);
     }
 
     for(usize stateIndex = trackedStates.size(); stateIndex > 0u && !uncovered.empty(); --stateIndex){
         const TrackedCompiledResourceState& state = trackedStates[stateIndex - 1u];
-        if(state.resource != resource)
+        if(state.resource != resource.id)
             continue;
 
-        TextureRangeBounds stateBounds;
-        if(!TextureRangeBoundsFrom(state.range, stateBounds))
+        ResourceRangeBounds stateBounds;
+        if(!ResourceRangeBoundsFrom(resource.type, state.range, stateBounds))
             return false;
 
         remainders.clear();
-        for(const TextureRangeBounds& uncoveredRange : uncovered){
-            TextureRangeBounds intersection;
-            if(!IntersectTextureRangeBounds(uncoveredRange, stateBounds, intersection)){
+        for(const ResourceRangeBounds& uncoveredRange : uncovered){
+            ResourceRangeBounds intersection;
+            if(!IntersectResourceRangeBounds(uncoveredRange, stateBounds, intersection)){
                 remainders.push_back(uncoveredRange);
                 continue;
             }
 
             GpuTaskResourceRange fragmentRange;
-            if(!TextureRangeBoundsTo(intersection, fragmentRange))
+            if(!ResourceRangeBoundsTo(resource.type, intersection, fragmentRange))
                 return false;
-            discovered.push_back(TrackedTextureStateFragment{
+            discovered.push_back(TrackedResourceStateFragment{
                 .range = fragmentRange,
                 .state = &state,
                 .stateIndex = stateIndex - 1u,
             });
-            AppendTextureRangeRemainder(uncoveredRange, intersection, remainders);
+            AppendResourceRangeRemainder(uncoveredRange, intersection, remainders);
         }
         uncovered.clear();
         uncovered.reserve(remainders.size());
-        for(const TextureRangeBounds& remainder : remainders)
+        for(const ResourceRangeBounds& remainder : remainders)
             uncovered.push_back(remainder);
     }
 
-    for(const TextureRangeBounds& uncoveredRange : uncovered){
+    for(const ResourceRangeBounds& uncoveredRange : uncovered){
         GpuTaskResourceRange fragmentRange;
-        if(!TextureRangeBoundsTo(uncoveredRange, fragmentRange))
+        if(!ResourceRangeBoundsTo(resource.type, uncoveredRange, fragmentRange))
             return false;
-        discovered.push_back(TrackedTextureStateFragment{
+        discovered.push_back(TrackedResourceStateFragment{
             .range = fragmentRange,
         });
     }
 
-    AppendTextureStateFragmentsInStateOrder(discovered, trackedStates.size(), outFragments);
+    AppendResourceStateFragmentsInStateOrder(discovered, trackedStates.size(), outFragments);
     return true;
 }
 
 // Terminal graph-to-external exports have no one requested range. Subtract the union of every later declared
-// texture state from each earlier range, leaving only the portions whose final state snapshot still belongs to that
-// earlier task. This uses the same symbolic rectangle representation as inter-task consumer fan-in.
-[[nodiscard]] bool CollectTerminalTextureStateFragments(
+// resource state from each earlier range, leaving only the portions whose final state snapshot still belongs to that
+// earlier task. This uses the same symbolic interval/rectangle partition as inter-task consumer fan-in.
+[[nodiscard]] bool CollectTerminalResourceStateFragments(
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
-    const GpuGraphResourceId& resource,
+    const GpuTaskGraphResourceView& resource,
     Alloc::ScratchArena& scratchArena,
-    Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& outFragments
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments
 ){
-    Vector<TextureRangeBounds, Alloc::ScratchArena> covered(scratchArena);
-    Vector<TextureRangeBounds, Alloc::ScratchArena> remaining(scratchArena);
-    Vector<TextureRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
-    Vector<TrackedTextureStateFragment, Alloc::ScratchArena> discovered(scratchArena);
+    Vector<ResourceRangeBounds, Alloc::ScratchArena> covered(scratchArena);
+    Vector<ResourceRangeBounds, Alloc::ScratchArena> remaining(scratchArena);
+    Vector<ResourceRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena> discovered(scratchArena);
 
     for(usize stateIndex = trackedStates.size(); stateIndex > 0u; --stateIndex){
         const TrackedCompiledResourceState& state = trackedStates[stateIndex - 1u];
-        if(state.resource != resource)
+        if(state.resource != resource.id)
             continue;
 
-        TextureRangeBounds stateBounds;
-        if(!TextureRangeBoundsFrom(state.range, stateBounds))
+        ResourceRangeBounds stateBounds;
+        if(!ResourceRangeBoundsFrom(resource.type, state.range, stateBounds))
             return false;
 
         remaining.clear();
         remaining.push_back(stateBounds);
-        for(const TextureRangeBounds& coveredRange : covered){
+        for(const ResourceRangeBounds& coveredRange : covered){
             remainders.clear();
-            for(const TextureRangeBounds& remainingRange : remaining)
-                AppendTextureRangeRemainder(remainingRange, coveredRange, remainders);
+            for(const ResourceRangeBounds& remainingRange : remaining)
+                AppendResourceRangeRemainder(remainingRange, coveredRange, remainders);
             remaining.clear();
             remaining.reserve(remainders.size());
-            for(const TextureRangeBounds& remainder : remainders)
+            for(const ResourceRangeBounds& remainder : remainders)
                 remaining.push_back(remainder);
             if(remaining.empty())
                 break;
         }
 
-        for(const TextureRangeBounds& terminalRange : remaining){
+        for(const ResourceRangeBounds& terminalRange : remaining){
             GpuTaskResourceRange fragmentRange;
-            if(!TextureRangeBoundsTo(terminalRange, fragmentRange))
+            if(!ResourceRangeBoundsTo(resource.type, terminalRange, fragmentRange))
                 return false;
-            discovered.push_back(TrackedTextureStateFragment{
+            discovered.push_back(TrackedResourceStateFragment{
                 .range = fragmentRange,
                 .state = &state,
                 .stateIndex = stateIndex - 1u,
@@ -406,7 +458,7 @@ static void AppendTextureStateFragmentsInStateOrder(
         covered.push_back(stateBounds);
     }
 
-    AppendTextureStateFragmentsInStateOrder(discovered, trackedStates.size(), outFragments);
+    AppendResourceStateFragmentsInStateOrder(discovered, trackedStates.size(), outFragments);
     return true;
 }
 

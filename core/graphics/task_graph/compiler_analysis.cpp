@@ -426,11 +426,17 @@ bool GpuTaskGraphCompiler::analyze(
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
             const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
+            GpuTaskResourceRange plannedRange = use.range;
+            if(
+                resource.type == GpuGraphResourceType::Buffer
+                && !ResolveResourceRangeForPlanning(graph, resource, use.range, plannedRange)
+            )
+                return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, task.id, {}, use.resource);
             const auto overlaps = [&](const TrackedResourceAccess& access){
                 return access.active
                     && access.task != task.id
                     && access.resource == use.resource
-                    && RangesOverlap(resource, access.range, use.range)
+                    && RangesOverlap(resource, access.range, plannedRange)
                 ;
             };
 
@@ -474,7 +480,7 @@ bool GpuTaskGraphCompiler::analyze(
                     if(
                         writer.active
                         && writer.resource == use.resource
-                        && RangeContains(resource, use.range, writer.range)
+                        && RangeContains(resource, plannedRange, writer.range)
                     )
                         writer.active = false;
                 }
@@ -482,14 +488,14 @@ bool GpuTaskGraphCompiler::analyze(
                     if(
                         reader.active
                         && reader.resource == use.resource
-                        && RangeContains(resource, use.range, reader.range)
+                        && RangeContains(resource, plannedRange, reader.range)
                     )
                         reader.active = false;
                 }
                 writers.push_back(TrackedResourceAccess{
                     .task = task.id,
                     .resource = use.resource,
-                    .range = use.range,
+                    .range = plannedRange,
                 });
             }
             else if(IsReadAccess(use.access)){
@@ -499,7 +505,7 @@ bool GpuTaskGraphCompiler::analyze(
                         writer.active
                         && writer.task == task.id
                         && writer.resource == use.resource
-                        && RangeContains(resource, writer.range, use.range)
+                        && RangeContains(resource, writer.range, plannedRange)
                     ){
                         alreadyWrittenByTask = true;
                         break;
@@ -509,7 +515,7 @@ bool GpuTaskGraphCompiler::analyze(
                     readers.push_back(TrackedResourceAccess{
                         .task = task.id,
                         .resource = use.resource,
-                        .range = use.range,
+                        .range = plannedRange,
                     });
                 }
             }

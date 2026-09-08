@@ -236,8 +236,7 @@ inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
     case GpuGraphResourceType::Buffer:{
         Buffer* const buffer = declarationAccess.bufferForResource(barrier.resource);
         return buffer
-            && commandList.hasExplicitBufferState(buffer)
-            && commandList.getBufferState(buffer) != ResourceStates::Unknown
+            && commandList.hasExplicitBufferState(buffer, barrier.range.bufferRange, true)
         ;
     }
     case GpuGraphResourceType::AccelStruct:{

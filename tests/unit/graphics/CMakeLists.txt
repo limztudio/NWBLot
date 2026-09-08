@@ -17,6 +17,8 @@ target_link_libraries(nwb_graphics_presentation_tests PRIVATE
 nwb_declare_gtest_executable(nwb_graphics_task_graph_tests)
 target_sources(nwb_graphics_task_graph_tests PRIVATE
     "${CMAKE_SOURCE_DIR}/tests/common/gpu_task_graph_read_views.h"
+    "${CMAKE_CURRENT_LIST_DIR}/buffer_range_handoff_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/buffer_range_state_tracking_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/command_buffer_resource_references_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_crash_marker_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_metric_correlator_tests.cpp"
@@ -43,6 +45,7 @@ target_sources(nwb_graphics_task_graph_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_avboit_occupancy_emulation_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_avboit_packet_merge_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_barrier_planning_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph_buffer_range_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_caustics_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_command_ir_capture_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_command_ir_reader_tests.cpp"

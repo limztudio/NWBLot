@@ -288,6 +288,9 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             const BufferDesc& description = state.buffer->getCreationDescription();
             if(
                 !validateBufferForState(state.buffer, state.state)
+                || !state.range.hasExtent()
+                || state.range.byteOffset >= description.byteSize
+                || (state.range.byteSize != BufferRange::AllBytes && state.range.end() > description.byteSize)
                 || !validateOwnership(
                     state.queueSharing,
                     description.queueSharing,
@@ -301,7 +304,10 @@ bool GpuNativePacketRecorder::preflightPacketResources(
                 const CommandListResourceStateHandoff::BufferState& other =
                     initialStates->m_bufferStates[otherIndex]
                 ;
-                if(other.buffer == state.buffer && other.state != state.state)
+                if(
+                    other.buffer == state.buffer
+                    && other.range.overlaps(state.range)
+                )
                     return false;
             }
             ResourceStates::Mask permanentState = ResourceStates::Unknown;
@@ -505,11 +511,24 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             return false;
         if(permanentState != ResourceStates::Unknown)
             return true;
-        for(const CommandListResourceStateHandoff::BufferState& state : initialStates->m_bufferStates){
-            if(state.buffer == buffer && state.state != ResourceStates::Unknown)
-                return true;
+        const BufferRange range = barrier.range.bufferRange.resolve(buffer->getCreationDescription());
+        u64 coveredEnd = range.byteOffset;
+        while(coveredEnd < range.end()){
+            u64 nextEnd = coveredEnd;
+            for(const CommandListResourceStateHandoff::BufferState& state : initialStates->m_bufferStates){
+                if(
+                    state.buffer == buffer
+                    && state.state != ResourceStates::Unknown
+                    && state.range.byteOffset <= coveredEnd
+                    && state.range.end() > nextEnd
+                )
+                    nextEnd = state.range.end();
+            }
+            if(nextEnd == coveredEnd)
+                return false;
+            coveredEnd = nextEnd;
         }
-        return false;
+        return range.hasExtent();
     };
 
     const auto validateBarrierList = [&](const GpuCompiledBarrier* const barriers,

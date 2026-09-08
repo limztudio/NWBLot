@@ -53,7 +53,7 @@ struct TrackedCompiledResourceState{
     GpuPhysicalQueueId queue;
 };
 
-struct TrackedTextureStateFragment{
+struct TrackedResourceStateFragment{
     GpuTaskResourceRange range;
     const TrackedCompiledResourceState* state = nullptr;
     usize stateIndex = Limit<usize>::s_Max;
@@ -75,7 +75,7 @@ struct GpuTaskGraphResourceStatePlan{
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies;
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies;
     Vector<GpuPacketDependency, Alloc::ScratchArena>& terminalFinalizationDependencies;
-    Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& stateFragments;
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& stateFragments;
     Vector<GpuTaskResourceRange, Alloc::ScratchArena>& taskFirstUseRanges;
 };
 
@@ -240,6 +240,12 @@ struct GpuTaskQueueScoringData{
     GpuTaskResourceRange& outRange
 )noexcept;
 [[nodiscard]] bool IsValidBufferRange(const BufferRange& range)noexcept;
+[[nodiscard]] bool ResolveResourceRangeForPlanning(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphResourceView& resource,
+    const GpuTaskResourceRange& range,
+    GpuTaskResourceRange& outRange
+)noexcept;
 [[nodiscard]] bool RangesOverlap(
     const GpuTaskGraphResourceView& resource,
     const GpuTaskResourceRange& lhs,
@@ -258,29 +264,29 @@ struct GpuTaskQueueScoringData{
     Alloc::ScratchArena& scratchArena
 );
 
-[[nodiscard]] bool CollectTextureFirstUseRangesWithinTask(
+[[nodiscard]] bool CollectResourceFirstUseRangesWithinTask(
+    const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
     usize useIndex,
-    const GpuGraphResourceId& resource,
-    const Texture* texture,
+    const GpuTaskGraphResourceView& resource,
     const GpuTaskResourceRange& range,
     Alloc::ScratchArena& scratchArena,
     Vector<GpuTaskResourceRange, Alloc::ScratchArena>& outRanges
 );
 
-[[nodiscard]] bool CollectLatestTextureStateFragments(
+[[nodiscard]] bool CollectLatestResourceStateFragments(
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
-    const GpuGraphResourceId& resource,
+    const GpuTaskGraphResourceView& resource,
     const Vector<GpuTaskResourceRange, Alloc::ScratchArena>& requestedRanges,
     Alloc::ScratchArena& scratchArena,
-    Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& outFragments
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments
 );
 
-[[nodiscard]] bool CollectTerminalTextureStateFragments(
+[[nodiscard]] bool CollectTerminalResourceStateFragments(
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
-    const GpuGraphResourceId& resource,
+    const GpuTaskGraphResourceView& resource,
     Alloc::ScratchArena& scratchArena,
-    Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& outFragments
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments
 );
 
 

@@ -125,6 +125,7 @@ TEST(GpuTaskGraph, UploadBufferTaskPreflightsNativeAlignmentContract){
         ASSERT_EQ(copyDestView.resourceUseCount, 1u);
         ASSERT_NE(copyDestView.resourceUses, nullptr);
         EXPECT_EQ(copyDestView.resourceUses[0u].requiredState, Graphics::ResourceStates::CopyDest);
+        EXPECT_EQ(copyDestView.resourceUses[0u].range.bufferRange, Graphics::BufferRange(4u, sizeof(uploadBytes)));
     }
 
     Graphics::GpuTaskDesc finalStateDesc = desc;
@@ -150,9 +151,11 @@ TEST(GpuTaskGraph, UploadBufferTaskPreflightsNativeAlignmentContract){
     EXPECT_EQ(finalStateView.resourceUses[0u].resource, destinationResource);
     EXPECT_EQ(finalStateView.resourceUses[0u].requiredState, Graphics::ResourceStates::CopyDest);
     EXPECT_EQ(finalStateView.resourceUses[0u].access, Graphics::GpuTaskResourceAccess::Write);
+    EXPECT_EQ(finalStateView.resourceUses[0u].range.bufferRange, Graphics::BufferRange(0u, sizeof(uploadBytes)));
     EXPECT_EQ(finalStateView.resourceUses[1u].resource, destinationResource);
     EXPECT_EQ(finalStateView.resourceUses[1u].requiredState, Graphics::ResourceStates::ShaderResource);
     EXPECT_EQ(finalStateView.resourceUses[1u].access, Graphics::GpuTaskResourceAccess::Write);
+    EXPECT_EQ(finalStateView.resourceUses[1u].range.bufferRange, Graphics::BufferRange(0u, sizeof(uploadBytes)));
 }
 
 TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){
@@ -449,6 +452,137 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
 
     EXPECT_EQ(declarations.taskCount(), 2u);
+}
+
+TEST(GpuTaskGraph, CopyBufferRegionsDeclareExactIntervalsAndReplayOnlyCoveredBytes){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+    const Graphics::BufferDesc bufferDesc = Graphics::BufferDesc()
+        .setByteSize(128u)
+        .setInitialState(Graphics::ResourceStates::Common)
+    ;
+    Graphics::Buffer* const sourceObject = NewMetadataOnlyBuffer(testArena.arena, context, allocator, bufferDesc);
+    Graphics::Buffer* const destinationObject = NewMetadataOnlyBuffer(testArena.arena, context, allocator, bufferDesc);
+    ASSERT_NE(sourceObject, nullptr);
+    ASSERT_NE(destinationObject, nullptr);
+    Graphics::BufferHandle sourceBuffer(sourceObject, Graphics::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+    Graphics::BufferHandle destinationBuffer(
+        destinationObject,
+        Graphics::BufferHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId source = graph.importBuffer(
+        sourceBuffer,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/copy_buffer_regions_source"))
+            .setMarkerLabel("Copy Buffer Regions Source")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::Common)
+    );
+    const Graphics::GpuGraphResourceId destination = graph.importBuffer(
+        destinationBuffer,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/copy_buffer_regions_destination"))
+            .setMarkerLabel("Copy Buffer Regions Destination")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::Common)
+    );
+    ASSERT_TRUE(source.valid());
+    ASSERT_TRUE(destination.valid());
+    const Graphics::GpuCopyBufferTaskRegion regions[] = {
+        { source, 16u, destination, 32u, 8u },
+        { source, 64u, destination, 96u, 8u },
+        { source, 68u, destination, 100u, 4u },
+    };
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/copy_buffer_regions"))
+        .setMarkerLabel("Copy Buffer Regions")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+    const Graphics::GpuTaskId task = graph.addCopyBufferTask(
+        desc,
+        Graphics::GpuCopyBufferTaskDesc{ .regions = regions, .regionCount = LengthOf(regions) }
+    );
+    ASSERT_TRUE(task.valid());
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+    const Graphics::GpuTaskGraphTaskView taskView = reads.declarations.taskAt(task.index);
+    ASSERT_EQ(taskView.resourceUseCount, 4u);
+    const Graphics::BufferRange expectedRanges[] = { { 16u, 8u }, { 32u, 8u }, { 64u, 8u }, { 96u, 8u } };
+    for(usize index = 0u; index < LengthOf(expectedRanges); ++index){
+        const Graphics::GpuTaskResourceUse& use = taskView.resourceUses[index];
+        const bool sourceUse = (index & 1u) == 0u;
+        EXPECT_EQ(use.resource, sourceUse ? source : destination);
+        EXPECT_EQ(use.range.bufferRange, expectedRanges[index]);
+        EXPECT_EQ(use.requiredState, sourceUse ? Graphics::ResourceStates::CopySource : Graphics::ResourceStates::CopyDest);
+        EXPECT_EQ(use.access, sourceUse ? Graphics::GpuTaskResourceAccess::Read : Graphics::GpuTaskResourceAccess::Write);
+    }
+
+    const Graphics::GpuSubmissionPacketId packet = reads.compiled.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+    const Graphics::GpuPhysicalQueueId physicalQueue = reads.compiled.packet(packet).plan->queue;
+    Graphics::GpuCommandIrCapture capture(testArena.arena);
+    for(const Graphics::GpuCopyBufferTaskRegion& region : regions){
+        ASSERT_TRUE(capture.captureCopyBuffer(
+            task,
+            packet,
+            physicalQueue,
+            source,
+            region.sourceOffsetBytes,
+            destination,
+            region.destinationOffsetBytes,
+            region.dataSizeBytes
+        ));
+    }
+    EXPECT_EQ(
+        Graphics::PreflightGpuCommandIrPacket(capture.commandBytes(), reads.declarations, reads.compiled, packet).error,
+        Graphics::GpuCommandIrReplayError::None
+    );
+
+    const Graphics::GpuCopyBufferTaskRegion undeclaredRegions[] = {
+        { source, 0u, destination, 32u, 4u },
+        { source, 32u, destination, 32u, 4u },
+        { source, 16u, destination, 64u, 4u },
+        { source, 60u, destination, 96u, 8u },
+        { source, 64u, destination, 96u, 12u },
+    };
+    for(const Graphics::GpuCopyBufferTaskRegion& region : undeclaredRegions){
+        Graphics::GpuCommandIrCapture invalidCapture(testArena.arena);
+        ASSERT_TRUE(invalidCapture.captureCopyBuffer(
+            task,
+            packet,
+            physicalQueue,
+            source,
+            region.sourceOffsetBytes,
+            destination,
+            region.destinationOffsetBytes,
+            region.dataSizeBytes
+        ));
+        EXPECT_EQ(
+            Graphics::PreflightGpuCommandIrPacket(
+                invalidCapture.commandBytes(),
+                reads.declarations,
+                reads.compiled,
+                packet
+            ).error,
+            Graphics::GpuCommandIrReplayError::InvalidBufferCopy
+        );
+    }
 }
 
 TEST(GpuTaskGraph, CopyBufferTaskRequiresTypedBufferImports){

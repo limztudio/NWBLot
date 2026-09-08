@@ -424,6 +424,14 @@ BufferRange BufferRange::resolve(const BufferDesc& desc)const{
     return ret;
 }
 
+BufferRange BufferRange::intersect(const BufferRange& other)const noexcept{
+    if(!overlaps(other))
+        return {};
+    const u64 rangeBegin = Max(byteOffset, other.byteOffset);
+    const u64 rangeEnd = Min(end(), other.end());
+    return BufferRange(rangeBegin, rangeEnd == AllBytes ? AllBytes : rangeEnd - rangeBegin);
+}
+
 DescriptorWriteItem DescriptorWriteItem::ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range){
     const bool isVolatile = buffer && buffer->getCreationDescription().isVolatile;
 

@@ -2802,6 +2802,13 @@ private:
         BufferHandle buffer;
     };
 
+    struct BufferRangeState{
+        BufferRange range;
+        ResourceStates::Mask state = ResourceStates::Unknown;
+    };
+
+    using BufferRangeStates = Vector<BufferRangeState, Alloc::GlobalArena>;
+
     struct BufferUavBarrierPolicyValue{
         bool enableBarriers = true;
         BufferHandle buffer;
@@ -2860,14 +2867,14 @@ public:
     [[nodiscard]] ResourceStates::Mask getPermanentTextureState(Texture* texture)const;
     [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const;
     [[nodiscard]] ResourceStates::Mask getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
-    [[nodiscard]] ResourceStates::Mask getBufferState(Buffer* buffer)const;
+    [[nodiscard]] ResourceStates::Mask getBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer)const;
     // Explicit state comes from this command list or an imported packet handoff. A keep-initial-state descriptor
     // fallback deliberately does not count: graph lowering can still declare the first known graph state.
     [[nodiscard]] bool hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
-    [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer)const;
+    [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer, bool requireKnown = false)const;
 
     void beginTrackingTexture(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
-    void beginTrackingBuffer(Buffer* buffer, ResourceStates::Mask state);
+    void beginTrackingBuffer(Buffer* buffer, ResourceStates::Mask state, BufferRange range = s_EntireBuffer);
     void appendKeepInitialStateBarriers(
         TrackedCommandBuffer& commandBuffer,
         Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& imageBarriers,
@@ -2883,11 +2890,11 @@ public:
 private:
     [[nodiscard]] bool getTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel, ResourceStates::Mask& outState)const;
     [[nodiscard]] bool getResolvedTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel, ResourceStates::Mask& outState)const;
-    [[nodiscard]] bool getTransientBufferState(Buffer& buffer, ResourceStates::Mask& outState)const;
+    [[nodiscard]] bool getTransientBufferState(Buffer& buffer, ResourceStates::Mask& outState, BufferRange range = s_EntireBuffer)const;
 
     void beginTrackingTransientTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingResolvedTransientTexture(Texture& texture, const TextureSubresourceSet& resolvedSubresources, ResourceStates::Mask state);
-    void beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::Mask state);
+    void beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::Mask state, BufferRange range = s_EntireBuffer, bool seedOnly = false);
 
 
 private:
@@ -2896,7 +2903,7 @@ private:
     Vector<Texture*, Alloc::GlobalArena> m_attemptPermanentTextures;
     Vector<Buffer*, Alloc::GlobalArena> m_attemptPermanentBuffers;
     HashMap<TextureSubresourceStateKey, ResourceStates::Mask, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureStates;
-    HashMap<Buffer*, ResourceStates::Mask, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferStates;
+    HashMap<Buffer*, BufferRangeStates, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferStates;
     TextureUavBarrierPolicyMap m_textureUavBarriers;
     BufferUavBarrierPolicyMap m_bufferUavBarriers;
 
@@ -2922,6 +2929,12 @@ class CommandList final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 private:
+    struct BufferOwnershipRelease{
+        BufferRange range;
+        GpuPhysicalQueueId destinationQueue;
+    };
+
+
     struct MarkerStackEntry{
         CommandMarkerRecordingToken token;
         bool usesDebugUtils = false;
@@ -3075,7 +3088,8 @@ public:
     void setBufferState(
         Buffer* buffer,
         ResourceStates::Mask stateBits,
-        bool forceMemoryDependency = false
+        bool forceMemoryDependency = false,
+        BufferRange range = s_EntireBuffer
     );
     void setAccelStructState(
         RayTracingAccelStruct* as,
@@ -3084,9 +3098,9 @@ public:
     );
     // Exports an exclusive resource to an ordered physical consumer queue.
     void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, CommandQueue::Enum destinationQueue);
-    void releaseBufferOwnership(Buffer* buffer, CommandQueue::Enum destinationQueue);
+    void releaseBufferOwnership(Buffer* buffer, CommandQueue::Enum destinationQueue, BufferRange range = s_EntireBuffer);
     void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, GpuPhysicalQueueId destinationQueue);
-    void releaseBufferOwnership(Buffer* buffer, GpuPhysicalQueueId destinationQueue);
+    void releaseBufferOwnership(Buffer* buffer, GpuPhysicalQueueId destinationQueue, BufferRange range = s_EntireBuffer);
 
     void setPermanentTextureState(Texture* texture, ResourceStates::Mask stateBits);
     void setPermanentBufferState(Buffer* buffer, ResourceStates::Mask stateBits);
@@ -3199,13 +3213,14 @@ public:
     void setEnableUavBarriersForTexture(Texture* texture, bool enableBarriers);
     void setEnableUavBarriersForBuffer(Buffer* buffer, bool enableBarriers);
     void beginTrackingTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits);
-    void beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits);
+    void beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits, BufferRange range = s_EntireBuffer);
+    void seedBufferState(Buffer* buffer, ResourceStates::Mask stateBits, BufferRange range = s_EntireBuffer);
     ResourceStates::Mask getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel);
-    ResourceStates::Mask getBufferState(Buffer* buffer);
+    ResourceStates::Mask getBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer);
     [[nodiscard]] ResourceStates::Mask getPermanentTextureState(Texture* texture)const;
     [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const;
     [[nodiscard]] bool hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
-    [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer)const;
+    [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer, bool requireKnown = false)const;
 
     Device& getDevice(){ return m_device; }
     const CommandListParameters& getDescription(){ return m_desc; }
@@ -3469,7 +3484,7 @@ private:
     Vector<VkImageMemoryBarrier2, Alloc::GlobalArena> m_pendingImageBarriers;
     Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena> m_pendingBufferBarriers;
     HashMap<TextureSubresourceStateKey, GpuPhysicalQueueId, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureOwnershipReleaseDestinations;
-    HashMap<Buffer*, GpuPhysicalQueueId, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferOwnershipReleaseDestinations;
+    HashMap<Buffer*, Vector<BufferOwnershipRelease, Alloc::GlobalArena>, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferOwnershipReleaseDestinations;
 };
 
 

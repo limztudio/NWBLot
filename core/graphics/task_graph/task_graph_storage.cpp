@@ -376,7 +376,10 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
         || (
             hasMultiInitialOwnerHandoff
             && (
-                desc.type != GpuGraphResourceType::Texture
+                (
+                    desc.type != GpuGraphResourceType::Texture
+                    && desc.type != GpuGraphResourceType::Buffer
+                )
                 || !desc.initialOwnerHandoffSources
                 || desc.initialOwnerHandoffSourceCount == 0u
                 || hasInitialOwnerHandoff
@@ -419,7 +422,11 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
         for(usize sourceIndex = 0u; sourceIndex < desc.initialOwnerHandoffSourceCount; ++sourceIndex){
             const GpuGraphInitialOwnerHandoffSourceDesc& source = desc.initialOwnerHandoffSources[sourceIndex];
             if(
-                !source.range.textureSubresources.hasExtent()
+                (
+                    desc.type == GpuGraphResourceType::Texture
+                    && !source.range.textureSubresources.hasExtent()
+                )
+                || (desc.type == GpuGraphResourceType::Buffer && !source.range.bufferRange.hasExtent())
                 || !source.sourceQueue.valid()
                 || !source.destinationQueue.valid()
                 || !source.completion.valid()
@@ -445,7 +452,11 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
                     && source.sourceQueue != previousSource.sourceQueue
                 )
                     return {};
-                if(source.range.textureSubresources.overlaps(previousSource.range.textureSubresources))
+                const bool overlaps = desc.type == GpuGraphResourceType::Texture
+                    ? source.range.textureSubresources.overlaps(previousSource.range.textureSubresources)
+                    : source.range.bufferRange.overlaps(previousSource.range.bufferRange)
+                ;
+                if(overlaps)
                     return {};
             }
         }

@@ -132,11 +132,10 @@ struct GpuTaskTimingMetadata{
     return DeriveName(firstTaskIdentity, AStringView(".packet"));
 }
 
-// One immutable external ownership source for an imported texture range. Multiple sources let a later graph consume
-// a prior graph's disjoint terminal texture exports without collapsing them into one fake physical owner. Every
-// source supplies its exact releasing queue, the fixed first-consumer queue, a graph-local external completion, and
-// the native state snapshot that recorded the release. Buffer and AS ownership remain whole-allocation and use the
-// single-owner fields below instead.
+// One immutable external ownership source for an imported texture or buffer range. Multiple sources let a later
+// graph consume disjoint terminal exports while retaining each range's physical owner. Every source supplies its
+// releasing queue, first-consumer queue, graph-local completion, and native snapshot that recorded the release.
+// Acceleration structures use the whole-allocation single-owner fields below.
 struct GpuGraphInitialOwnerHandoffSourceDesc{
     GpuTaskResourceRange range;
     GpuPhysicalQueueId sourceQueue;
@@ -179,10 +178,10 @@ struct GpuGraphResourceDesc{
     GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
     GpuExternalCompletionId initialOwnerCompletion;
     // The bound completion may advance on the same source queue, but it must never precede this release token.
-    // This makes the legacy whole-resource handoff as race-safe as the texture multi-source form above.
+    // This makes the legacy whole-resource handoff as race-safe as the range multi-source form above.
     QueueSubmissionToken initialOwnerMinimumCompletionToken;
     const CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
-    // Texture-only multi-producer companion to the single-owner fields above. Sources must be non-overlapping and
+    // Texture/buffer multi-producer companion to the single-owner fields above. Sources must be non-overlapping and
     // must not be mixed with those legacy fields; the graph copies every state source at declaration time.
     const GpuGraphInitialOwnerHandoffSourceDesc* initialOwnerHandoffSources = nullptr;
     usize initialOwnerHandoffSourceCount = 0u;

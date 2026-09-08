@@ -477,6 +477,7 @@ TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwner
         AdoptRef
     );
     const Graphics::BufferDesc bufferDesc = Graphics::BufferDesc()
+        .setByteSize(64u)
         .setInitialState(Graphics::ResourceStates::Common)
         .setQueueSharing(Graphics::ResourceQueueSharing::Graphics)
     ;

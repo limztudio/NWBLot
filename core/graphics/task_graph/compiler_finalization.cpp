@@ -29,11 +29,11 @@ namespace GpuTaskGraphCompilerDetail{
     Vector<GpuPacketDependency, Alloc::ScratchArena>& terminalFinalizationDependencies =
         plan.terminalFinalizationDependencies
     ;
-    Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& stateFragments = plan.stateFragments;
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& stateFragments = plan.stateFragments;
 
     // Imported texture/buffer/acceleration-structure metadata can require a graph-owned terminal state for code
-    // that resumes outside this compiled graph. Texture exports retain every terminal subresource fragment; buffers
-    // and acceleration structures remain whole-allocation. The runtime lowers each export through the native state
+    // that resumes outside this compiled graph. Texture and buffer exports retain every terminal range fragment;
+    // acceleration structures remain whole-allocation. The runtime lowers each export through the native state
     // tracker and retains the requested state even when no native transition was required.
     for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
         const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
@@ -138,13 +138,11 @@ namespace GpuTaskGraphCompilerDetail{
                 ){
                     externalExportUsesOnePacket = false;
                 }
-                // Texture ownership and state snapshots are subresource-granular, so disjoint terminal mips may
-                // safely arrive from different physical queues. Buffer and acceleration-structure state tracking
-                // remains whole-allocation, so two packet-local external releases would publish contradictory native
-                // ownership/state snapshots even when their declared byte ranges do not overlap. Keep that existing
-                // rejection until range-granular Buffer/AS native handoffs exist.
+                // Texture and buffer ownership snapshots retain disjoint terminal ranges from different queues.
+                // Acceleration structures still have one allocation owner and cannot publish conflicting releases.
                 if(
                     resource.type != GpuGraphResourceType::Texture
+                    && resource.type != GpuGraphResourceType::Buffer
                     && (
                         externalExportPacket != terminalPacket
                         || externalExportSourceQueue != state.queue
@@ -207,16 +205,16 @@ namespace GpuTaskGraphCompilerDetail{
             return true;
         };
 
-        if(resource.type == GpuGraphResourceType::Texture){
+        if(resource.type == GpuGraphResourceType::Texture || resource.type == GpuGraphResourceType::Buffer){
             stateFragments.clear();
-            if(!CollectTerminalTextureStateFragments(
+            if(!CollectTerminalResourceStateFragments(
                 trackedResourceStates,
-                resource.id,
+                resource,
                 scratchArena,
                 stateFragments
             ))
                 return false;
-            for(const TrackedTextureStateFragment& fragment : stateFragments){
+            for(const TrackedResourceStateFragment& fragment : stateFragments){
                 if(
                     !fragment.state
                     || !appendTerminalState(*fragment.state, fragment.stateIndex, fragment.range)

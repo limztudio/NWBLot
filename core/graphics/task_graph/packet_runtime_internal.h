@@ -30,7 +30,7 @@ namespace GpuPacketRuntimeDetail{
     if(
         resource.initialOwnerHandoffSourceCount == 0u
         || !resource.initialOwnerHandoffSources
-        || resource.type != GpuGraphResourceType::Texture
+        || (resource.type != GpuGraphResourceType::Texture && resource.type != GpuGraphResourceType::Buffer)
     )
         return nullptr;
 
@@ -43,7 +43,10 @@ namespace GpuPacketRuntimeDetail{
         if(
             source.sourceQueue != barrier.sourceQueue
             || source.destinationQueue != barrier.destinationQueue
-            || !source.range.textureSubresources.contains(barrier.range.textureSubresources)
+            || (resource.type == GpuGraphResourceType::Texture
+                ? !source.range.textureSubresources.contains(barrier.range.textureSubresources)
+                : !source.range.bufferRange.contains(barrier.range.bufferRange)
+            )
         )
             continue;
         if(result)

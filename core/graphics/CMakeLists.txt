@@ -111,6 +111,8 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/shader.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/staging_texture.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/state_tracking.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/state_tracking_buffers.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/state_tracking_handoff_merge.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/state_tracking_handoff_data.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/state_tracking_handoff.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/state_tracking_barriers.cpp"

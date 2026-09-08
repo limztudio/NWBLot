@@ -137,6 +137,38 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
     }
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_StateHandoffArena);
+    Vector<const CommandListResourceStateHandoff::BufferState*, Alloc::ScratchArena> orderedBufferStates{scratchArena};
+    orderedBufferStates.reserve(states.m_bufferStates.size());
+    for(const CommandListResourceStateHandoff::BufferState& state : states.m_bufferStates){
+        if(!state.buffer)
+            continue;
+        if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(state.range, state.buffer->m_creationDesc)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported buffer byte range is empty or invalid"));
+            return false;
+        }
+        orderedBufferStates.push_back(&state);
+    }
+    Sort(orderedBufferStates.begin(), orderedBufferStates.end(), [](const auto* lhs, const auto* rhs){
+        return lhs->buffer != rhs->buffer
+            ? LessThan<Buffer*>()(lhs->buffer, rhs->buffer)
+            : lhs->range.byteOffset < rhs->range.byteOffset
+        ;
+    });
+    for(usize index = 1u; index < orderedBufferStates.size(); ++index){
+        const auto& previous = *orderedBufferStates[index - 1u];
+        const auto& current = *orderedBufferStates[index];
+        if(previous.buffer == current.buffer && previous.range.overlaps(current.range)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported buffer state contains overlapping byte intervals"));
+            return false;
+        }
+    }
+    for(const CommandListResourceStateHandoff::BufferState& state : states.m_permanentBufferStates){
+        if(state.buffer && !state.range.isEntireBuffer(state.buffer->m_creationDesc)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Permanent buffer state must cover the entire buffer"));
+            return false;
+        }
+    }
+
     Vector<VkImageMemoryBarrier2, Alloc::ScratchArena> acquireImageBarriers{scratchArena};
     Vector<VkBufferMemoryBarrier2, Alloc::ScratchArena> acquireBufferBarriers{scratchArena};
 
@@ -211,7 +243,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         }
         return true;
     };
-    const auto appendBufferAcquire = [&](Buffer& buffer, const ResourceStates::Mask state, const ResourceQueueSharing::Mask sharing, const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue) -> bool {
+    const auto appendBufferAcquire = [&](Buffer& buffer, const BufferRange range, const ResourceStates::Mask state, const ResourceQueueSharing::Mask sharing, const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue) -> bool {
         if(sharing != buffer.m_creationDesc.queueSharing){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff buffer sharing contract does not match the resource description"));
             return false;
@@ -273,7 +305,8 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
                 state,
                 sourceQueueFamily,
                 destinationQueueFamily,
-                m_context.extensions.KHR_ray_tracing_pipeline
+                m_context.extensions.KHR_ray_tracing_pipeline,
+                range
             ));
         }
         return true;
@@ -314,6 +347,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
 
         if(!appendBufferAcquire(
             *state.buffer,
+            state.range.resolve(state.buffer->m_creationDesc),
             state.state,
             state.queueSharing,
             state.ownerQueue,
@@ -379,6 +413,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
 
         if(!appendBufferAcquire(
             *state.buffer,
+            state.range.resolve(state.buffer->m_creationDesc),
             state.state,
             state.queueSharing,
             state.ownerQueue,
@@ -403,7 +438,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             continue;
 
         retainResource(state.buffer);
-        m_stateTracker.m_bufferStates.insert_or_assign(state.buffer, state.state);
+        m_stateTracker.beginTrackingTransientBuffer(*state.buffer, state.state, state.range);
     }
 
     ::ContainerDetail::ReserveAdditionalCapacity(m_stateTracker.m_permanentTextureStates, states.m_permanentTextureStates.size());
@@ -454,13 +489,8 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
     const auto getBufferOwnership = [&](Buffer* buffer, GpuPhysicalQueueId& outOwner, GpuPhysicalQueueId& outReleaseDestination){
         outOwner = {};
         outReleaseDestination = {};
-        if(!buffer || buffer->m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT)
-            return;
-
-        outOwner = m_creationDesc.physicalQueue;
-        const auto releaseIt = m_bufferOwnershipReleaseDestinations.find(buffer);
-        if(releaseIt != m_bufferOwnershipReleaseDestinations.end())
-            outReleaseDestination = releaseIt.value();
+        if(buffer && buffer->m_bufferInfo.sharingMode != VK_SHARING_MODE_CONCURRENT)
+            outOwner = m_creationDesc.physicalQueue;
     };
 
     states.m_textureStates.reserve(m_stateTracker.m_textureStates.size());
@@ -485,19 +515,36 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
 
     states.m_bufferStates.reserve(m_stateTracker.m_bufferStates.size());
     for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
-        if(!it->first)
+        Buffer* const buffer = it->first;
+        if(!buffer)
             continue;
-
         GpuPhysicalQueueId ownerQueue;
-        GpuPhysicalQueueId releaseDestinationQueue;
-        getBufferOwnership(it->first, ownerQueue, releaseDestinationQueue);
-        states.m_bufferStates.push_back(CommandListResourceStateHandoff::BufferState{
-            it->first,
-            it.value(),
-            it->first->m_creationDesc.queueSharing,
-            ownerQueue,
-            releaseDestinationQueue
-        });
+        GpuPhysicalQueueId unusedDestination;
+        getBufferOwnership(buffer, ownerQueue, unusedDestination);
+        const auto releases = m_bufferOwnershipReleaseDestinations.find(buffer);
+        const auto append = [&](const BufferRange range, const ResourceStates::Mask state, const GpuPhysicalQueueId destination){
+            if(range.hasExtent()){
+                states.m_bufferStates.push_back(CommandListResourceStateHandoff::BufferState{
+                    buffer, state, buffer->m_creationDesc.queueSharing, ownerQueue, destination, range
+                });
+            }
+        };
+        for(const StateTracker::BufferRangeState& state : it.value()){
+            u64 cursor = state.range.byteOffset;
+            if(releases != m_bufferOwnershipReleaseDestinations.end()){
+                for(const BufferOwnershipRelease& release : releases.value()){
+                    const BufferRange overlap = state.range.intersect(release.range);
+                    if(!overlap.hasExtent())
+                        continue;
+                    if(cursor < overlap.byteOffset)
+                        append(BufferRange(cursor, overlap.byteOffset - cursor), state.state, {});
+                    append(overlap, state.state, release.destinationQueue);
+                    cursor = overlap.end();
+                }
+            }
+            if(cursor < state.range.end())
+                append(BufferRange(cursor, state.range.end() - cursor), state.state, {});
+        }
     }
 
     states.m_permanentTextureStates.reserve(m_stateTracker.m_permanentTextureStates.size());
@@ -557,54 +604,28 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
     // Validate every pending buffer release before publishing any barrier or retention. This keeps a late descriptor drift or incompatible tracked state from partially mutating the command-list transaction.
     for(auto it = m_bufferOwnershipReleaseDestinations.begin(); it != m_bufferOwnershipReleaseDestinations.end(); ++it){
         Buffer* const buffer = it->first;
-        if(!buffer){
-            rejectCommandRecording(
-                NWB_TEXT("append ownership-release barriers"),
-                NWB_TEXT("pending buffer release has no resource")
-            );
+        if(!buffer || buffer->m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT || m_stateTracker.isPermanentBuffer(*buffer)){
+            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("pending buffer release has an invalid resource contract"));
             return;
         }
-        const BufferDesc& description = buffer->getCreationDescription();
-        if(buffer->m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
-            rejectCommandRecording(
-                NWB_TEXT("append ownership-release barriers"),
-                NWB_TEXT("concurrent buffer has a pending exclusive release")
-            );
-            return;
-        }
-        if(m_stateTracker.isPermanentBuffer(*buffer)){
-            rejectCommandRecording(
-                NWB_TEXT("append ownership-release barriers"),
-                NWB_TEXT("permanent buffer has a pending ownership release")
-            );
-            return;
-        }
-        if(m_device.getQueueFamilyIndex(it.value()) == VK_QUEUE_FAMILY_IGNORED){
-            rejectCommandRecording(
-                NWB_TEXT("append ownership-release barriers"),
-                NWB_TEXT("buffer destination queue family is unavailable")
-            );
-            return;
-        }
-
-        const ResourceStates::Mask state = m_stateTracker.getBufferState(buffer);
-        if(state == ResourceStates::Unknown){
-            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("buffer final state is unknown"));
-            return;
-        }
-        if(
-            !VulkanBufferDetail::IsBufferResourceStateMaskValid(state)
-            || !VulkanBufferDetail::IsBufferDescriptionCompatibleWithResourceStates(description, state)
-            || !isBufferReadyForCommandQueue(
-                buffer,
-                VulkanBufferDetail::RequiredBufferUsageForResourceStates(description, state)
-            )
-        ){
-            rejectCommandRecording(
-                NWB_TEXT("append ownership-release barriers"),
-                NWB_TEXT("buffer state is incompatible with its immutable creation contract")
-            );
-            return;
+        const auto tracked = m_stateTracker.m_bufferStates.find(buffer);
+        for(const BufferOwnershipRelease& release : it.value()){
+            if(m_device.getQueueFamilyIndex(release.destinationQueue) == VK_QUEUE_FAMILY_IGNORED){
+                rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("buffer destination queue family is unavailable"));
+                return;
+            }
+            if(!m_stateTracker.hasExplicitBufferState(buffer, release.range)){
+                rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("buffer final byte range state is unknown"));
+                return;
+            }
+            for(const StateTracker::BufferRangeState& state : tracked.value()){
+                if(!state.range.overlaps(release.range))
+                    continue;
+                if(state.state == ResourceStates::Unknown || !validateBufferForGpuState(buffer, state.state, NWB_TEXT("append ownership-release barriers"))){
+                    rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("buffer byte range state is incompatible with its creation contract"));
+                    return;
+                }
+            }
         }
     }
 
@@ -665,53 +686,25 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
 
     for(auto it = m_bufferOwnershipReleaseDestinations.begin(); it != m_bufferOwnershipReleaseDestinations.end(); ++it){
         Buffer* const buffer = it->first;
-        if(!buffer){
-            rejectCommandRecording(
-                NWB_TEXT("append ownership-release barriers"),
-                NWB_TEXT("pending buffer release has no resource")
-            );
-            return;
+        const auto tracked = m_stateTracker.m_bufferStates.find(buffer);
+        for(const BufferOwnershipRelease& release : it.value()){
+            const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(release.destinationQueue);
+            if(destinationQueueFamily == sourceQueueFamily)
+                continue;
+            for(const StateTracker::BufferRangeState& state : tracked.value()){
+                const BufferRange overlap = state.range.intersect(release.range);
+                if(!overlap.hasExtent())
+                    continue;
+                m_pendingBufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferOwnershipReleaseBarrier(
+                    buffer->m_buffer,
+                    state.state,
+                    sourceQueueFamily,
+                    destinationQueueFamily,
+                    m_context.extensions.KHR_ray_tracing_pipeline,
+                    overlap
+                ));
+            }
         }
-        if(buffer->m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
-            rejectCommandRecording(
-                NWB_TEXT("append ownership-release barriers"),
-                NWB_TEXT("concurrent buffer has a pending exclusive release")
-            );
-            return;
-        }
-        if(m_stateTracker.isPermanentBuffer(*buffer)){
-            rejectCommandRecording(
-                NWB_TEXT("append ownership-release barriers"),
-                NWB_TEXT("permanent buffer has a pending ownership release")
-            );
-            return;
-        }
-
-        const GpuPhysicalQueueId destinationQueue = it.value();
-        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(destinationQueue);
-        if(destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
-            rejectCommandRecording(
-                NWB_TEXT("append ownership-release barriers"),
-                NWB_TEXT("buffer destination queue family is unavailable")
-            );
-            return;
-        }
-
-        const ResourceStates::Mask state = m_stateTracker.getBufferState(buffer);
-        if(state == ResourceStates::Unknown){
-            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("buffer final state is unknown"));
-            return;
-        }
-        if(destinationQueueFamily == sourceQueueFamily)
-            continue;
-
-        m_pendingBufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferOwnershipReleaseBarrier(
-            buffer->m_buffer,
-            state,
-            sourceQueueFamily,
-            destinationQueueFamily,
-            m_context.extensions.KHR_ray_tracing_pipeline
-        ));
         retainResource(buffer);
     }
 

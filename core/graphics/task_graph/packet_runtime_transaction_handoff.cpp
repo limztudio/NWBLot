@@ -435,15 +435,16 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
             }
             case GpuGraphResourceType::Buffer:{
                 Buffer* const buffer = declarationAccess.bufferForResource(resource);
-                Buffer* const buffers[] = { buffer };
-                if(!buffer || !stateSubset.buildResourceSubset(
-                    *sourceStates,
-                    nullptr,
-                    0u,
-                    buffers,
-                    LengthOf(buffers),
-                    m_externalResourceHandoffBuildScratch
-                ))
+                if(
+                    !buffer
+                    || !sourceStates->coversBufferWithOwnership(
+                        buffer,
+                        source.sourceQueue,
+                        exportInfo.destinationQueue,
+                        source.range.bufferRange
+                    )
+                    || !stateSubset.buildBufferRangeSubset(*sourceStates, buffer, source.range.bufferRange)
+                )
                     return false;
                 break;
             }

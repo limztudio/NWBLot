@@ -139,11 +139,9 @@ struct GpuCompiledTaskView{
     }
 };
 
-// One terminal declared range that contributes to an explicit graph-to-external release.  Textures may have
-// several disjoint terminal subresource ranges, potentially recorded by different packets and physical queues.
-// The runtime turns every source into one acceptance-gated producer token and merges their exact exported state
-// ranges before handing the texture to native code. Buffer and AS releases remain one-packet because their native
-// tracking is whole-allocation.
+// One terminal declared range that contributes to an explicit graph-to-external release. Textures and buffers may
+// have disjoint terminal ranges recorded by different packets and physical queues. The runtime retains each
+// producer's acceptance token and exact exported range. Acceleration structures remain whole-allocation.
 struct GpuCompiledExternalResourceExportSource{
     GpuTaskId producerTask;
     GpuPhysicalQueueId sourceQueue;

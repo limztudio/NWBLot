@@ -612,13 +612,15 @@ TEST_F(GpuResourceReadinessTest, OrderedUploadCopyDestConflictRejectsMergedPacke
 }
 
 
-TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsBufferSpanBeyondImportedDescriptor){
+TEST_F(GpuResourceReadinessTest, CompilationRejectsBufferSpanBeyondImportedDescriptor){
     auto& device = GpuResourceReadinessTest::device();
     BufferHandle buffer = device.createBuffer(
         BufferDesc().setByteSize(16u).setInitialState(ResourceStates::Common)
     );
     ASSERT_TRUE(buffer);
 
+    bool recorded = false;
+    u32 discardedCount = 0u;
     GpuTaskGraph graph(GpuResourceReadinessTest::arena());
     const GpuGraphResourceId resource = graph.importBuffer(
         buffer,
@@ -649,8 +651,6 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsBufferSpanBeyondImportedD
         })
         .setResourceUses(&use, 1u)
     ;
-    bool recorded = false;
-    u32 discardedCount = 0u;
     const GpuTaskId task = graph.addTask<PacketPreflightProbeTask>(
         taskDesc,
         PacketPreflightProbeTask::Payload{
@@ -667,23 +667,12 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsBufferSpanBeyondImportedD
     Alloc::ScratchArena scratchArena(Name("tests/gpu_readiness/out_of_bounds_buffer_scratch"));
     const GpuTaskGraphCompiler compiler;
     const GpuTaskGraph::DeclarationReadView compilationDeclarations(graph);
-    ASSERT_TRUE(compiler.compile(compilationDeclarations, analysis, topology, assignments, compiledGraph, scratchArena));
-    const GpuTaskGraphReadViews views(graph, compiledGraph);
-    ASSERT_TRUE(views.valid());
-    const GpuSubmissionPacketId packet = views.compiled.packetForTask(task);
-    ASSERT_TRUE(packet.valid());
-
-    GpuRecordedGraph recordedGraph(GpuResourceReadinessTest::arena());
-    const GpuNativePacketRecorder recorder(device);
-    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        GpuSubmissionPacketRange{ .first = packet, .packetCount = 1u },
-        recordedGraph
-    ));
+    EXPECT_FALSE(compiler.compile(compilationDeclarations, analysis, topology, assignments, compiledGraph, scratchArena));
+    EXPECT_EQ(analysis.diagnostic().status, GpuTaskGraphAnalysisStatus::InvalidResourceUse);
+    EXPECT_EQ(analysis.diagnostic().task, task);
+    EXPECT_EQ(analysis.diagnostic().resource, resource);
     EXPECT_FALSE(recorded);
-    EXPECT_EQ(discardedCount, 1u);
-    EXPECT_FALSE(recordedGraph.packetSnapshot(packet).has_value());
+    EXPECT_EQ(discardedCount, 0u);
 }
 
 
